@@ -1,0 +1,11 @@
+- Try another solution by subclassing tensor and modifying __new__
+
+Performance considerations
+- Time: how many forward passes? Any network copying?
+- Does everything work when you shift to parallel processing?
+- Guaranteeing network unchanged: maybe have a network cleanup function, wrap in a try-except block? Just
+    need a way of clearing the forward hooks. This is easy, just keep a list of the handles in the module,
+    clear each when you clean up, then delete the list. Model should be unchanged.
+
+Testing:
+- Test with parallel, GPU, PyTorch Lightning, etc.
