@@ -1,5 +1,61 @@
 - Try another solution by subclassing tensor and modifying __new__
 
+Complications
+- Okay, I think mutating torch.Tensor will work actually. This will be the completely exhaustive solution.
+  And easy to fix: simply use the reload function to reload the torch namespace after. To go through all the functions,
+  use the overridable ones first and crawl through those, then manually do the ignored ones that return Tensors.
+  Won't take TOO long. Figure out how long it takes to do and undo; might be good to do this on import
+  rather than on each function call. Figure out how long it takes. Actually: maybe just strip off
+  the top level of the "torch" name, then put the right things back on. Perhaps that's the way. Okay
+  so have the mutant versions along with the original versions defined in the module, then in the actual
+  function can easily tack them on and off without too much trouble.
+  The only trick will be designing the decorator:
+    - Already made the lil hack for printing withou infinite recursion
+    - Check if output is a tensor, with a new grad_fn (need some kind of system for this). If so, save it.
+    - Let's additionally save any input tensors, and new tensors created inside the network.
+      The logic will be: mark a tensor as input when it comes in, and any outputs from a function
+      with at least one input tensor as input will also be marked as input. For each tensor argument to
+      a function not marked as input, it'll be marked as "new_tensor" and saved, and resulting tensors
+      will be marked as "internal_origin", until they run into a tensor marked "input tensor".
+      How about: origin: input or origin: internal. Okay can actually decorate EVERY function. Nice.
+      So all we have to do is, for these internally generated tensors, can get the literal function call and
+      annotate that way :] Prob good to include non-differentiable operations too. Can still
+      track the graph using the barcode trick; if tensor output doesn't have a barcode, stamp it with one and track it.
+      This suffices to fully generate the graph; store the edges as barcodes, and have them serve as pointers
+      to their corresponding records. Figure out how long this takes
+      - Nasty complication: anything created during the mutation keeps all the mutated definitions.
+        Either don't touch them again, or have a way of restoring them.
+      - Adopted solution of simply deepcopying user input, then mutate all tensors in the input
+      before passing into the forward pass. This keeps them unchanged, except for wrapping the functions
+      the way we'd like.
+- Have an option for setting a random seed. This will fully cover cases where there's randomness in
+  the network.
+  - Add module pre-hook for marking tensors with the module they're in.
+- Label the exhaustive/function graph based on the actual functions, no need for the grad_fn workaround.
+- Prob just ask that the user not run anything in parallel so as to avoid weird execution problems. Can
+  also just have a warning that says "don't run in parallel" and then have a flag to disable the warning.
+  This is a good idea, because it'll be a pain to debug if the user runs in parallel and gets weird results.
+- Dealing with fact that the final "nice" layer names might not be the same as the ones generated on the
+  fly, so how do we know whether to save them or not; can do two forward passes; during the first one,
+  generate a dictionary mapping from initial names to final nice names (saving nothing), and during
+  the second pass, use that dictionary to know which activations to actually save (only slightly wasteful).
+  Best way to mark: maybe annotate each tensor with how many computional steps have happened since each
+  input Tensor.
+- The relabeling is probably desirable, no guarantee of a nice ordering during the forward pass.
+  Do a post-hoc topological sort after the fact.
+- Need a function to recursively crawl the namespace of the input and find any tensors so they can be marked as input.
+  This is not needed for internally generated because they'll run into a Tensor operation at some point and get
+  marked that way.
+- Let's decide to only track TENSORS. Requiring everything else is simply impossible.
+
+Graph visuals:
+- Indicate nodes that have parameters (bold?)
+- Indicate nodes that are purely internally generated and haven't seen the input (maybe a light gray)?
+-
+
+Naming considerations:
+- Layer, operation, module, function... get clear and consistent on this.
+
 Performance considerations
 - Time: how many forward passes? Any network copying?
 - Does everything work when you shift to parallel processing?
