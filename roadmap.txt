@@ -31,6 +31,10 @@ Complications
 - Have an option for setting a random seed. This will fully cover cases where there's randomness in
   the network.
   - Add module pre-hook for marking tensors with the module they're in.
+- Need a function for finding tensors in any potentially-nested input so they can be tagged as input.
+  Maybe just check if it's iterable and do some nesting, and go through any non-underscore methods?
+  If it's hidden but also important it's their own fault.
+- Work on graph last once everything else is working since it doesn't depend on the rest.
 - Label the exhaustive/function graph based on the actual functions, no need for the grad_fn workaround.
 - Prob just ask that the user not run anything in parallel so as to avoid weird execution problems. Can
   also just have a warning that says "don't run in parallel" and then have a flag to disable the warning.
@@ -47,6 +51,14 @@ Complications
   This is not needed for internally generated because they'll run into a Tensor operation at some point and get
   marked that way.
 - Let's decide to only track TENSORS. Requiring everything else is simply impossible.
+- Which operations to track? We want to avoid going into the ugly guts of modules,
+  and have operations correspond to actually human-relevant ones.
+- Maybe we don't need to tag the C functions since the Python functions themselves call these functions?
+  REVERSIBLY remove these from the big list and see if anything is lost.
+
+
+Cleanup Tasks:
+- Remove the ignore functions that are pointless. This will require one tedious pass.
 
 Graph visuals:
 - Indicate nodes that have parameters (bold?)
@@ -65,3 +77,20 @@ Performance considerations
 
 Testing:
 - Test with parallel, GPU, PyTorch Lightning, etc.
+
+
+
+TO DO:
+- Add more annotation to the tensor log
+- Line up the modules and the tensors, they should annotate each other. Add the module pre-hooks.
+- Once the output for both is nice, add functions to clean up the annotations and graph
+- Remove redundant nodes (e.g. the double relus; see if the C stuff can be un-annotated without problems)
+- Do the graph visualization stuff
+- Test for multiple inputs.
+- Organize code better.
+- Do the wish list:
+    - sub-class support
+    - Add random seed
+    - Remove functions from the ignore list that aren't needed. Take a few hours for this on a slow day.
+    - Add warning if it's a parallel thread.
+- Test on a bunch of REAL models once it's the way you like it. And do some timing to make sure it's no slower.

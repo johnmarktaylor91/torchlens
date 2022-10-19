@@ -20,8 +20,12 @@ import types
 import warnings
 from typing import Dict, Set, List, Any, Callable, Iterable, Type, Iterator, Tuple
 import contextlib
+import inspect
 
 import torch
+
+from xray_utils import make_barcode, obj_contains_tensors, tensor_in_obj_has_mark, mark_tensors_in_obj, \
+    get_tensors_from_obj, get_marks_from_tensor_list
 
 print_funcs = ['__repr__', '__str__']
 
@@ -68,9 +72,6 @@ ignored_funcs = [
     ('torch', 'cudnn_convolution_add_relu'),
     ('torch', 'cudnn_grid_sampler'),
     ('torch', 'cudnn_is_acceptable'),
-    ('torch', 'empty'),
-    ('torch', 'empty_strided'),
-    ('torch', 'empty_quantized'),
     ('torch', 'eye'),
     ('torch.fft', 'fftfreq'),
     ('torch.fft', 'rfftfreq'),
@@ -135,7 +136,6 @@ ignored_funcs = [
     ('torch', 'vitals_enabled'),
     ('torch', 'set_vital'),
     ('torch.Tensor', '__delitem__'),
-    ('torch.Tensor', '__init__'),
     ('torch.Tensor', '__iter__'),
     ('torch.Tensor', '__init_subclass__'),
     ('torch.Tensor', '__torch_function__'),
@@ -268,15 +268,49 @@ def print_override(t: torch.Tensor, func_name: str):
     return np_str
 
 
-def torch_func_decorator(func, tensor_record):
+def get_enclosing_frame():
+    """Gets the frame of the caller of the caller of this function.
+
+    Returns:
+        The frame of the caller of the caller of this function.
+    """
+    return inspect.currentframe().f_back.f_back
+
+
+def torch_func_decorator(func, history_log):
     def wrapped_func(*args, **kwargs):
         func_name = func.__name__
-        if (func_name in print_funcs) and (type(args[0]) in [torch.Tensor, np.ndarray]):
+        if (func_name in print_funcs) and (type(args[0]) == torch.Tensor):
             out = print_override(args[0], func_name)
             return out
+
+        all_args = list(args) + list(kwargs.values())
+        arg_tensors = get_tensors_from_obj(all_args)
+
+        args_have_tensor = len(arg_tensors) > 0
+
+        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'xray_origin', 'input')
         out = func(*args, **kwargs)
         if type(out) == torch.Tensor:
-            tensor_record.append(out)
+            if not hasattr(out, 'xray_barcode'):
+                out.xray_barcode = make_barcode()
+                if came_from_input:
+                    origin = 'input'
+                else:
+                    origin = 'internal'
+                parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'xray_barcode')
+                log_entry = {'tensor': out,
+                             'funcs_applied': [func_name],
+                             'origin': origin,
+                             'parent_barcodes': parent_tensor_barcodes}
+                history_log['barcode_dict'][out.xray_barcode] = log_entry
+            else:
+                history_log['barcode_dict'][out.xray_barcode]['funcs_applied'].append(func_name)
+
+            if came_from_input:
+                out.xray_origin = 'input'
+            else:
+                out.xray_origin = 'internal'
         return out
 
     return wrapped_func
@@ -308,7 +342,7 @@ def nested_getattr(obj: Any, attr: str) -> Any:
 def mutate_pytorch(torch_module: types.ModuleType,
                    tensors_to_mutate: List[torch.Tensor],
                    orig_func_defs: List[Tuple],
-                   tensor_record: List[torch.Tensor]) -> List[Tuple]:
+                   history_log: Dict) -> List[Tuple]:
     """Mutates all PyTorch functions (TEMPORARILY!) so as to save the outputs of any functions
     that return Tensors, along with marking them with metadata. Returns a list of tuples that
     save the current state of the functions, such that they can be restored when done.
@@ -330,8 +364,10 @@ def mutate_pytorch(torch_module: types.ModuleType,
         namespace_name_notorch = namespace_name.replace('torch.', '')
         local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
         orig_func = getattr(local_func_namespace, func_name)
+        if hasattr(orig_func, '__name__') and orig_func.__name__ == 'wrapped_func':
+            continue
         orig_func_defs.append((namespace_name, func_name, orig_func))
-        new_func = torch_func_decorator(orig_func, tensor_record)
+        new_func = torch_func_decorator(orig_func, history_log)
         try:
             setattr(local_func_namespace, func_name, new_func)
         except (AttributeError, TypeError) as _:

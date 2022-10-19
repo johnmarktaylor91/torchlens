@@ -1,6 +1,7 @@
 import copy
 import random
 from collections import defaultdict, OrderedDict
+import multiprocessing as mp
 from sys import getsizeof
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -9,15 +10,7 @@ from torch import nn
 from torch import Tensor
 
 from torch_func_handling import ignored_funcs
-
-
-def make_barcode() -> int:
-    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
-
-    Returns:
-        Random hash.
-    """
-    return random.getrandbits(128)
+from xray_utils import get_tensors_from_obj
 
 
 def remove_list_duplicates(l: List) -> List:
@@ -545,6 +538,11 @@ def xray_model(model: nn.Module,
     Returns:
         activations: Dict of dicts with the activations from each layer.
     """
+    if mp.current_process().name != 'MainProcess':
+        print("WARNING: It looks like you are using parallel execution; it is strongly advised"
+              "to only run pytorch-xray in the main process, since certain operations "
+              "depend on execution order.")
+
     x = copy.deepcopy(x)
 
     if mode not in ['modules_only', 'exhaustive']:
