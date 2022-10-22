@@ -10,7 +10,7 @@ from torch import nn
 from torch import Tensor
 
 from torch_func_handling import ignored_funcs
-from xray_utils import get_tensors_from_obj
+from xray_utils import get_vars_of_type_from_obj
 
 
 def remove_list_duplicates(l: List) -> List:
@@ -191,14 +191,16 @@ def get_all_submodules(model: nn.Module) -> List[nn.Module]:
 
 
 def hook_bottom_level_modules(model: nn.Module,
-                              hook_fn: Callable,
+                              hook_fns: List[Callable],
+                              prehook_fns: List[Callable],
                               hook_handles: List) -> List:
     """Hook all bottom-level modules in a model with given function and return
     list of hook handles (so as to easily clear later).
 
     Args:
         model: PyTorch model.
-        hook_fn: Hook function.
+        hook_fns: List of hook functions to add.
+        prehook_fns: List of pre-hook functions to add.
         hook_handles: Pre-allocated list for storing the hook handles.
 
     Returns:
@@ -206,8 +208,12 @@ def hook_bottom_level_modules(model: nn.Module,
     """
     bottom_level_modules = get_bottom_level_modules(model)
     for module_address, module in bottom_level_modules.items():
-        hook_handle = module.register_forward_hook(hook_fn)
-        hook_handles.append(hook_handle)
+        for hook_fn in hook_fns:
+            hook_handle = module.register_forward_hook(hook_fn)
+            hook_handles.append(hook_handle)
+        for prehook_fn in prehook_fns:
+            hook_handle = module.register_forward_pre_hook(prehook_fn)
+            hook_handles.append(hook_handle)
     return hook_handles
 
 
@@ -278,6 +284,28 @@ def do_lists_intersect(l1, l2) -> bool:
     return len(list(set(l1) & set(l2))) > 0
 
 
+def module_pre_hook(module: nn.Module,
+                    input_: tuple):
+    """Pre-hook to attach to the modules: it marks the tensors as currently being inside a module, and
+    indicates which module it is.
+
+    Args:
+        module: PyTorch module.
+        input_: The input.
+
+    Returns:
+        The input, now marked with information about the module it's entering.
+    """
+    this_module_dict = module.xray_this_module_dict
+    module_address = this_module_dict['module_address']
+    input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
+    for t in input_tensors:
+        t.xray_tensor_in_these_modules.append(module_address)
+        t.xray_entered_module = True
+        t.xray_last_module_seen = module_address
+        t.xray_in_this_module = module_address
+
+
 def record_module_forward_pass(module: nn.Module,
                                input_,
                                output_):
@@ -318,7 +346,7 @@ def record_module_forward_pass(module: nn.Module,
                                   all_modules_dict['total_module_operation_num'])
     this_module_dict['module_name'] = module_name
 
-    operation_name = f"{module_name}:{all_modules_dict['pass_num']}"
+    operation_name = f"{module_name}:{this_module_dict['pass_num']}"
     this_module_dict['last_operation'] = operation_name
 
     # Get parent modules and module operations.
@@ -362,6 +390,16 @@ def record_module_forward_pass(module: nn.Module,
     this_module_dict['operation_logs'][operation_name] = operation_log_dict
     all_modules_dict['operation_logs'][operation_name] = operation_log_dict
 
+    # Now that the tensor is leaving the module, remove the tag; if it's now in no modules, mark it as such.
+
+    output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
+    for t in output_tensors:
+        t.xray_tensor_in_these_modules.pop()  # remove the last module address.
+        if len(t.xray_tensor_in_these_modules) == 0:
+            t.xray_entered_module = False
+        else:
+            t.xray_in_this_module = t.xray_tensor_in_these_modules[-1]
+    nn.Conv2d
     return output_
 
 
@@ -387,7 +425,7 @@ def prepare_model(model: nn.Module,
     xray_all_modules_dict = OrderedDict({'which_layers': which_layers,
                                          'mode': mode,
                                          'total_module_operation_num': 0,
-                                         'total_layer_num': 0,
+                                         'total_module_num': 0,
                                          'module_type_counter': defaultdict(lambda: 0),
                                          'operation_logs': OrderedDict()})
     for module_address, module in bottom_level_modules.items():
@@ -399,7 +437,8 @@ def prepare_model(model: nn.Module,
         # Pointer to dictionary of info for whole model.
         setattr(module, f'xray_all_modules_dict', xray_all_modules_dict)
     hook_handles = hook_bottom_level_modules(model,
-                                             hook_fn=record_module_forward_pass,
+                                             hook_fns=[record_module_forward_pass],
+                                             prehook_fns=[module_pre_hook],
                                              hook_handles=hook_handles)
     return hook_handles
 

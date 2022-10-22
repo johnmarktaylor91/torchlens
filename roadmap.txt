@@ -55,6 +55,37 @@ Complications
   and have operations correspond to actually human-relevant ones.
 - Maybe we don't need to tag the C functions since the Python functions themselves call these functions?
   REVERSIBLY remove these from the big list and see if anything is lost.
+- Idea: simplify the innards of it: if there's going to be two passes and graph cleanup anyways,
+  no need to save all the stuff on the first pass. Save the minimal amount.
+- Make sure same random seed for both passes (a "probe" pass and a "save" pass) to guarantee same output
+- Add function to check if being run in parallel and stop execution. Add a manual override if user is okay
+  with potential errors.
+- I THINK two forward passes is essential: if numbering is based on a topological sort that can't be known until
+  the pass is done, then you really need to do a pass first. This favors doing minimal labeling during
+  the initial pass, and only doing the full labeling afterward. Individuate things by inner barcodes and an operation counter,
+  and then after the probe pass create a mapping between the operation counter and these labels to figure out whether to
+  save or not. But do save any information that can't be recovered after: for example, the size of the tensors
+  and parameters, etc.
+- For the wrapped representation of the function view, stipulate that all parameter objects have to have been
+  seen the same number of times in order to count as the same object. Else don't wrap it.
+- Unwrapped version of graph is default, wrapped is extra.
+- Start being more minimal in what's saved.
+- No need for the extra module record: the tensor record suffices, along with a tag specifying if a tensor just
+  left a bottom-level module. But do crawl through and hook with their addresses.
+- Allow getting the output any module, not just the top-level ones, by specifying the address. That is,
+  the default will be the bottom-level modules, but the user can override this if desired.
+- Doesn't make sense to allow specifying addresses for functions since they can't be retrieved in that way,
+  but can follow the Torch syntax if people really want... not a critical feature.
+- What to tag on the tensor itself versus the log: tag stuff to the tensor itself if it's required for
+  any on-the-fly decisions about computations and so on.
+
+Modules Stuff:
+- Attributes: address and whether they're a bottom-level module
+- Hooks: tacking stuff onto a tensor on the way in or out.
+- Can easily generate the module-level graph from the tensor-level graph by just pruning in-between nodes.
+
+Tensor stuff:
+- Each tensor has a barcode, this links it to the tensor log, and also the tensors to each other.
 
 
 Cleanup Tasks:
@@ -80,6 +111,7 @@ Testing:
 
 
 
+
 TO DO:
 - Add more annotation to the tensor log
 - Line up the modules and the tensors, they should annotate each other. Add the module pre-hooks.
@@ -94,3 +126,11 @@ TO DO:
     - Remove functions from the ignore list that aren't needed. Take a few hours for this on a slow day.
     - Add warning if it's a parallel thread.
 - Test on a bunch of REAL models once it's the way you like it. And do some timing to make sure it's no slower.
+- Give access to a few people who want to try it.
+- Add option to save all function arguments too; this should make it possible to fully reconstruct the output
+  as a sanity check (tester function: crawl back from the output, keep crawling back and evaluating the output
+  from the saved tensors, functions, arguments). Do this for many networks, at least the full torch
+  model zoo.
+- Add functionality for specifying desired layers based on either network architecture or based
+  on the way I'm numbering it
+- Fix the decorator to inherit metadata from the function, clean things up.

@@ -1,13 +1,16 @@
 import numpy as np
 import random
 import torch
-from typing import Any, List
+from typing import Any, List, Type
 import copy
 
 from torch import nn
 
 import os
 import binascii
+
+import string
+import secrets
 
 
 def pprint_tensor_record(tensor_record):
@@ -32,7 +35,9 @@ def make_barcode() -> int:
     Returns:
         Random hash.
     """
-    return str(binascii.hexlify(os.urandom(16)))[3:13]
+    alphabet = string.ascii_letters + string.digits
+    barcode = ''.join(secrets.choice(alphabet) for _ in range(12))
+    return barcode
 
 
 def is_iterable(obj: Any) -> bool:
@@ -51,9 +56,11 @@ def is_iterable(obj: Any) -> bool:
         return False
 
 
-def get_tensors_from_obj(obj: Any, search_depth: int = 5) -> List[torch.Tensor]:
-    """Recursively finds all tensors in an object, searching up to a given depth
-    since there's no way to guarantee no infinite loops.
+def get_vars_of_type_from_obj(obj: Any,
+                              type: Type,
+                              search_depth: int = 5) -> List[torch.Tensor]:
+    """Recursively finds all objects of a given type, or a subclass of that type,
+    up to the given search depth.
 
     Args:
         obj: Object to search.
@@ -71,7 +78,7 @@ def get_tensors_from_obj(obj: Any, search_depth: int = 5) -> List[torch.Tensor]:
         while len(this_stack) > 0:
             item = this_stack.pop()
             item_class = type(item)
-            if issubclass(item_class, torch.Tensor):
+            if issubclass(item_class, type):
                 tensors_in_obj.append(item)
                 continue
             if hasattr(item, 'shape'):
@@ -105,7 +112,7 @@ def obj_contains_tensors(obj: Any) -> bool:
     Returns:
         True if object contains tensors, False otherwise.
     """
-    return len(get_tensors_from_obj(obj)) > 0
+    return len(get_vars_of_type_from_obj(obj)) > 0
 
 
 def unique_classes_in_list(list_: List[Any]) -> List[type]:
@@ -135,7 +142,7 @@ def mark_tensors_in_obj(x: Any, field_name: str, field_val: Any):
     Returns:
         Nothing.
     """
-    input_tensors = get_tensors_from_obj(x)
+    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for tensor in input_tensors:
         setattr(tensor, field_name, field_val)
 
@@ -149,7 +156,7 @@ def barcode_tensors_in_obj(x: Any):
     Returns:
         Nothing.
     """
-    input_tensors = get_tensors_from_obj(x)
+    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for tensor in input_tensors:
         setattr(tensor, 'xray_barcode', make_barcode())
 
@@ -165,7 +172,7 @@ def tensor_in_obj_has_mark(x: Any, field_name: str, field_val: Any):
     Returns:
         True if any tensors in the input have the given mark, False otherwise.
     """
-    input_tensors = get_tensors_from_obj(x)
+    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for tensor in input_tensors:
         if getattr(tensor, field_name, None) == field_val:
             return True

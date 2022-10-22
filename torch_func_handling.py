@@ -1,7 +1,9 @@
 import numpy as np
+import copy
 
 import torch
 from torch.overrides import *
+from functools import wraps
 
 import __future__
 
@@ -25,7 +27,7 @@ import inspect
 import torch
 
 from xray_utils import make_barcode, obj_contains_tensors, tensor_in_obj_has_mark, mark_tensors_in_obj, \
-    get_tensors_from_obj, get_marks_from_tensor_list
+    get_vars_of_type_from_obj, get_marks_from_tensor_list
 
 print_funcs = ['__repr__', '__str__']
 
@@ -140,7 +142,6 @@ ignored_funcs = [
     ('torch.Tensor', '__init_subclass__'),
     ('torch.Tensor', '__torch_function__'),
     ('torch.Tensor', '__new__'),
-    ('torch.Tensor', '__class__'),
     ('torch.Tensor', '__subclasshook__'),
     ('torch.Tensor', 'as_subclass'),
     ('torch.Tensor', 'reinforce'),
@@ -278,22 +279,55 @@ def get_enclosing_frame():
 
 
 def torch_func_decorator(func, history_log):
+    @wraps(func)
     def wrapped_func(*args, **kwargs):
         func_name = func.__name__
         if (func_name in print_funcs) and (type(args[0]) == torch.Tensor):
             out = print_override(args[0], func_name)
             return out
-
         all_args = list(args) + list(kwargs.values())
-        arg_tensors = get_tensors_from_obj(all_args)
-
+        arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor)
+        arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
         args_have_tensor = len(arg_tensors) > 0
+        # TODO when designing the graph cleanup, make sure any tensors created inside a module
+        # are indicated as being inside the module (check their descendents)
+        any_inputs_entered_module = tensor_in_obj_has_mark(arg_tensors, 'xray_entered_module', True)
+        if any_inputs_entered_module:
+            for t in arg_tensors:
+                if not hasattr(t, 'xray_tensor_in_these_modules'):
+                    continue
+                if len(t.xray_tensor_in_these_modules) > 0:
+                    containing_modules = t.xray_tensor_in_these_modules
+                    in_this_module = t.xray_in_this_module
+                    last_module_seen = t.xray_in_this_module
+                    break
+        else:
+            containing_modules = []
+            in_this_module = None
+            last_module_seen = None
+
+        # Mark any parameters.
+
+        parent_param_passes = {}
+        for param in arg_parameters:
+            if not hasattr(param, 'xray_param_barcode'):
+                param_barcode = make_barcode()
+                param.xray_param_barcode = param_barcode
+                param.xray_pass_num = 1
+            else:
+                param_barcode = param.xray_param_barcode
+                param.xray_pass_num += 1
+            parent_param_passes[param_barcode] = param.xray_pass_num
 
         came_from_input = tensor_in_obj_has_mark(arg_tensors, 'xray_origin', 'input')
         out = func(*args, **kwargs)
         if type(out) == torch.Tensor:
             if not hasattr(out, 'xray_barcode'):
                 out.xray_barcode = make_barcode()
+                out.xray_entered_module = any_inputs_entered_module
+                out.xray_tensor_in_these_modules = containing_modules
+                out.xray_in_this_module = in_this_module
+                out.xray_last_module_seen = last_module_seen
                 if came_from_input:
                     origin = 'input'
                 else:
@@ -302,7 +336,9 @@ def torch_func_decorator(func, history_log):
                 log_entry = {'tensor': out,
                              'funcs_applied': [func_name],
                              'origin': origin,
-                             'parent_barcodes': parent_tensor_barcodes}
+                             'containing_modules': copy.deepcopy(out.xray_tensor_in_these_modules),
+                             'parent_tensor_barcodes': parent_tensor_barcodes,
+                             'parent_param_passes': copy.deepcopy(parent_param_passes)}
                 history_log['barcode_dict'][out.xray_barcode] = log_entry
             else:
                 history_log['barcode_dict'][out.xray_barcode]['funcs_applied'].append(func_name)
