@@ -4,7 +4,7 @@ from sys import getsizeof
 import numpy as np
 import random
 import torch
-from typing import Any, List, Type
+from typing import Any, List, Tuple, Type
 import copy
 
 from torch import nn
@@ -14,6 +14,21 @@ import binascii
 
 import string
 import secrets
+
+
+def set_random_seed(seed: int):
+    """Sets the random seed for all random number generators.
+
+    Args:
+        seed: Seed to set.
+
+    Returns:
+        Nothing.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def pprint_tensor_record(tensor_record):
@@ -254,3 +269,21 @@ def readable_tensor_size(t: torch.Tensor) -> str:
 def do_lists_intersect(l1, l2) -> bool:
     """Utility function checking if two lists have any elements in common."""
     return len(list(set(l1) & set(l2))) > 0
+
+
+def text_num_split(s: str) -> Tuple[str, int]:
+    """Utility function that takes in a string that begins with letters and ends in a number,
+    and splits it into the letter part and the number part, returning both in a tuple.
+
+    Args:
+        s: String
+
+    Returns:
+        Tuple containing the beginning string and ending number.
+    """
+    s = s.strip()
+    num = ''
+    while s[-1].isdigit():
+        num = s[-1] + num
+        s = s[:-1]
+    return s, int(num)

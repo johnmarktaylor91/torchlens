@@ -1,6 +1,9 @@
 import os
 import torch
 from torch import nn
+
+import model_handling
+import tensor_tracking
 from torch_func_handling import orig_torch_funcs, mutate_pytorch, ignored_funcs, \
     overridable_funcs, \
     mark_tensors_in_obj
@@ -19,7 +22,7 @@ import pytorch_xray as ptx
 
 model = SimpleNetwork()
 hook_handles = []
-hook_handles = ptx.prepare_model(model, hook_handles)
+hook_handles = model_handling.prepare_model(model, hook_handles)
 tensor_record = {'barcode_dict': {}}
 orig_func_defs = []
 x = torch.Tensor([.5])
