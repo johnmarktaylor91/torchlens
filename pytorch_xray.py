@@ -2,66 +2,13 @@ import copy
 import random
 from collections import defaultdict, OrderedDict
 import multiprocessing as mp
-from sys import getsizeof
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 from torch import nn
-from torch import Tensor
 
-from torch_func_handling import ignored_funcs
-from xray_utils import get_vars_of_type_from_obj
-
-
-def remove_list_duplicates(l: List) -> List:
-    """Given a list, remove any duplicates preserving order of first apppearance of each element.
-    Args:
-        l: List to remove duplicates from.
-    Returns:
-        List with duplicates removed.
-    """
-    return list(OrderedDict.fromkeys(l))
-
-
-def get_tensor_memory_amount(t: torch.Tensor) -> int:
-    """Returns the size of a tensor in bytes.
-
-    Args:
-        t: Tensor.
-
-    Returns:
-        Size of tensor in bytes.
-    """
-    return getsizeof(t.storage())
-
-
-def human_readable_size(size: int, decimal_places: int = 2) -> str:
-    """Utility function to convert a size in bytes to a human-readable format.
-
-    Args:
-        size: Number of bytes.
-        decimal_places: Number of decimal places to use.
-
-    Returns:
-        String with human-readable size.
-    """
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
-        if size < 1024.0 or unit == 'PB':
-            break
-        size /= 1024.0
-    return f"{size:.{decimal_places}f} {unit}"
-
-
-def readable_tensor_size(t: torch.Tensor) -> str:
-    """Returns the size of a tensor in human-readable format.
-
-    Args:
-        t: Tensor.
-
-    Returns:
-        Human-readable size of tensor.
-    """
-    return human_readable_size(get_tensor_memory_amount(t))
+from torch_func_handling import log_tensor_metadata
+from xray_utils import get_vars_of_type_from_obj, remove_list_duplicates
 
 
 def get_module_from_address(model: nn.Module, address: str) -> nn.Module:
@@ -279,11 +226,6 @@ def find_tensor_list_parent_modules_and_operations(tensor_list: List[torch.Tenso
     return parent_modules, parent_operations
 
 
-def do_lists_intersect(l1, l2) -> bool:
-    """Utility function checking if two lists have any elements in common."""
-    return len(list(set(l1) & set(l2))) > 0
-
-
 def module_pre_hook(module: nn.Module,
                     input_: tuple):
     """Pre-hook to attach to the modules: it marks the tensors as currently being inside a module, and
@@ -296,21 +238,24 @@ def module_pre_hook(module: nn.Module,
     Returns:
         The input, now marked with information about the module it's entering.
     """
-    this_module_dict = module.xray_this_module_dict
-    module_address = this_module_dict['module_address']
+    module_address = module.xray_module_address
+    module.xray_module_pass_num += 1
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
-        t.xray_tensor_in_these_modules.append(module_address)
+        t.xray_containing_modules_nested.append(module_address)
+        t.xray_containing_module = module_address
         t.xray_entered_module = True
-        t.xray_last_module_seen = module_address
-        t.xray_in_this_module = module_address
+        t.xray_last_module_seen_address = module_address
+        t.xray_last_module_seen = module
+
+        log_tensor_metadata(t)  # Update tensor log with this new information.
 
 
-def record_module_forward_pass(module: nn.Module,
-                               input_,
-                               output_):
-    """Forward hook to make a module record all relevant information (metadata, activations
-    if the layer is saved, etc.) during the forward pass.
+def module_post_hook(module: nn.Module,
+                     input_,
+                     output_):
+    """Hook to run after the module is executed: it marks the tensors as no longer being inside a module,
+    and indicates which module it is.
 
     Args:
         module: The module.
@@ -321,85 +266,23 @@ def record_module_forward_pass(module: nn.Module,
         Nothing, but records all relevant data.
     """
 
-    # Unpack to save ink.
-    all_modules_dict = module.xray_all_modules_dict
-    this_module_dict = module.xray_this_module_dict
-
-    # Initial tallying and naming.
-    module_type = str(type(module).__name__)
-    module_address = this_module_dict['module_address']
-    this_module_dict['pass_num'] += 1
-    this_module_dict['module_type'] = module_type
-
-    all_modules_dict['current_module'] = module
-    all_modules_dict['total_module_operation_num'] += 1
-    if this_module_dict['pass_num'] == 1:
-        all_modules_dict['total_module_num'] += 1
-        all_modules_dict['module_type_counter'][module_type] += 1
-    module_num = all_modules_dict['total_module_num']
-    this_module_dict['module_num'] = module_num
-    module_type_num = all_modules_dict['module_type_counter'][module_type]
-    this_module_dict['module_type_num'] = module_type_num
-
-    module_name = make_layer_name(module_type,
-                                  module_type_num,
-                                  all_modules_dict['total_module_operation_num'])
-    this_module_dict['module_name'] = module_name
-
-    operation_name = f"{module_name}:{this_module_dict['pass_num']}"
-    this_module_dict['last_operation'] = operation_name
-
-    # Get parent modules and module operations.
-
-    prev_modules, prev_operations = find_tensor_list_parent_modules_and_operations(input_)
-
-    # Mark the grad_fn of the output so there's a record of where it came from.
-
-    output_.grad_fn.metadata['xray_module_parent'] = module_name
-    output_.grad_fn.metadata['xray_module_operation_parent'] = operation_name
-
-    # Record output information.
-
-    output_shape = tuple(output_.shape)
-    output_memory = get_tensor_memory_amount(output_)
-
-    # Check whether to record activations for this module.
-
-    if ((all_modules_dict['mode'] == 'modules_only') and
-            (do_lists_intersect([module_name, operation_name, module_address], all_modules_dict['which_layers']))):
-        # TODO: Figure out whether to detach this or not. While developing, keep as-is.
-        activations = output_
-        # activations = output_.detach().cpu().numpy()
-    else:
-        activations = None
-
-    operation_log_dict = {'module_operation_num': all_modules_dict['total_module_operation_num'],
-                          'module_num': module_num,
-                          'module_type': module_type,
-                          'module_type_num': module_type_num,
-                          'module_name': module_name,
-                          'layer_address': module_address,
-                          'input_modules': prev_modules,
-                          'module_pass_num': this_module_dict['pass_num'],
-                          'module_operation_name': operation_name,
-                          'input_operations': prev_operations,
-                          'activations': activations,
-                          'activation_shape': output_shape,
-                          'activation_memory': output_memory}
-
-    this_module_dict['operation_logs'][operation_name] = operation_log_dict
-    all_modules_dict['operation_logs'][operation_name] = operation_log_dict
-
-    # Now that the tensor is leaving the module, remove the tag; if it's now in no modules, mark it as such.
-
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
-        t.xray_tensor_in_these_modules.pop()  # remove the last module address.
+        t.xray_is_module_output = True
+        t.xray_containing_modules_nested.pop()  # remove the last module address.
+        if module.xray_is_bottom_level_module:
+            t.xray_is_bottom_level_module_output = True
+        else:
+            t.xray_is_bottom_level_module_output = False
+
         if len(t.xray_tensor_in_these_modules) == 0:
             t.xray_entered_module = False
+            t.xray_containing_module = None
         else:
-            t.xray_in_this_module = t.xray_tensor_in_these_modules[-1]
-    nn.Conv2d
+            t.xray_containing_module = t.xray_tensor_in_these_modules[-1]
+
+        log_tensor_metadata(t)  # Update tensor log with this new information.
+
     return output_
 
 
@@ -407,11 +290,11 @@ def prepare_model(model: nn.Module,
                   hook_handles: List,
                   mode: str = 'modules_only',
                   which_layers: Union[str, List] = 'all') -> List:
-    """Prepares the model to return its inner layer activations.
+    """Adds annotations and hooks to the model.
 
     Args:
         model: Model to prepare.
-        hook_handles: Pre-allocated list to store the hooks.
+        hook_handles: Pre-allocated list to store the hooks so they can be cleared even if execution fails.
         mode: Either 'modules_only' for just the modules, or 'exhaustive' for all function calls.
         which_layers: List of layers to include.
 
@@ -421,26 +304,28 @@ def prepare_model(model: nn.Module,
     if mode not in ['modules_only', 'exhaustive']:
         raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
 
-    bottom_level_modules = get_bottom_level_modules(model)
-    xray_all_modules_dict = OrderedDict({'which_layers': which_layers,
-                                         'mode': mode,
-                                         'total_module_operation_num': 0,
-                                         'total_module_num': 0,
-                                         'module_type_counter': defaultdict(lambda: 0),
-                                         'operation_logs': OrderedDict()})
-    for module_address, module in bottom_level_modules.items():
-        module_dict = OrderedDict({'module_address': module_address,
-                                   'pass_num': 0,
-                                   'operation_logs': OrderedDict()})
-        # Info for just this module.
-        setattr(module, f'xray_this_module_dict', module_dict)
-        # Pointer to dictionary of info for whole model.
-        setattr(module, f'xray_all_modules_dict', xray_all_modules_dict)
-    hook_handles = hook_bottom_level_modules(model,
-                                             hook_fns=[record_module_forward_pass],
-                                             prehook_fns=[module_pre_hook],
-                                             hook_handles=hook_handles)
-    return hook_handles
+    module_stack = list(model.named_children())  # list of tuples (name, module)
+    while len(module_stack) > 0:
+        address, module = module_stack.pop()
+        module_children = list(module.named_children())
+        # Annotate the children with the full address.
+        for child_name, child_module in module_children:
+            child_module.xray_module_address = f"{address}.{child_name}"
+        module_stack = module_children + module_stack
+        if len(module_children) == 0:
+            is_bottom_level_module = True
+        else:
+            is_bottom_level_module = False
+
+        module.xray_module_address = address
+        module.xray_module_type = str(type(module).__name__).lower()
+        module.xray_is_bottom_level_module = is_bottom_level_module
+        module.xray_module_pass_num = 0
+
+        # Add hooks.
+
+        hook_handles.append(module.register_forward_pre_hook(module_pre_hook))
+        hook_handles.append(module.register_forward_hook(module_post_hook))
 
 
 def clear_hooks(hook_handles: List):
@@ -487,66 +372,6 @@ def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
     clear_hooks(hook_handles)
     clear_model_keyword_attributes(model, attribute_keyword='xray')
     return model
-
-
-class HistoryTensor(torch.Tensor):
-    tensor_history = OrderedDict()
-
-    def __init__(self, *args, add_to_history=True):
-        super().__init__()
-        if add_to_history:
-            HistoryTensor.add_record(t)
-
-    @staticmethod
-    def strip_alias(gfn):
-        """Strip away the tedious aliasbackward operations from a grad_fn.
-
-        Args:
-            gfn: grad_fn object
-
-        Returns:
-            The gfn rolled back to the next "real" operation.
-        """
-        if gfn is None:
-            return gfn
-
-        while type(gfn).__name__ == 'AliasBackward':
-            gfn = gfn.next_functions[0][0]
-
-        return gfn
-
-    @classmethod
-    def add_record(cls, t):
-        barcode = make_barcode()
-        real_grad_fn = cls.strip_alias(t.grad_fn)
-        if real_grad_fn is not None:
-            real_grad_fn.metadata['barcode'] = barcode
-        HistoryTensor.tensor_history[barcode] = {'tensor': t,
-                                                 'real_grad_fn': real_grad_fn}
-
-    @classmethod
-    def clear_tensor_history(cls):
-        cls.tensor_history.clear()
-        cls.tidy_tensor_history.clear()
-        # TODO: Also have it scrub the new metadata off of all the grad_fns (leave no trace).
-
-    @classmethod
-    def __torch_function__(cls, func, types, args=(), kwargs=None):
-        func_output = super().__torch_function__(func, types, args, kwargs)
-
-        if (func in [torch.Tensor.__repr__, torch.Tensor.__str__]):
-            return func_output
-
-        # Do nothing if not a tensor or history tensor.
-        if type(func_output) not in [torch.Tensor, HistoryTensor]:
-            return func_output
-
-        # Make it a history tensor if it's a tensor.
-        if type(func_output) == torch.Tensor:
-            func_output = HistoryTensor(func_output, add_to_history=False)
-
-        HistoryTensor.add_record(func_output)
-        return func_output
 
 
 def xray_model(model: nn.Module,

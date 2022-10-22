@@ -1,3 +1,44 @@
+Data Structure Fields:
+
+History Dict:
+tensor_nums_to_save: indicates which tensor numbers to save.
+tensor_num: counter that keeps track of how many tensors have been made
+tensor_log: dictionary of tensors indexed by their barcodes
+  xray_barcode
+  xray_tensor_num
+  xray_containing_modules_nested
+  xray_containing_module
+  xray_entered_module
+  xray_last_module_seen
+  xray_last_module_seen_address
+  xray_tensor_args
+  xray_tensor_params
+  xray_tensor_activations
+  xray_tensor_size
+
+Tensor:
+xray_barcode
+xray_tensor_num
+xray_containing_modules_nested
+xray_containing_module
+xray_entered_module
+xray_last_module_seen
+xray_last_module_seen_address
+
+Module:
+xray_module_address
+xray_module_type
+xray_is_bottom_level_module
+xray_module_pass_number
+
+Package Organization:
+- torch_xray: The user-facing functions (this can import from everything, nothing imports from this)
+- graphs: For processing and visualizing the graphs
+- xray_utils: Random utility functions (everything imports from here)
+- torch_func_handling: For dealing with mutating the torch functions; imports only from xray_utils
+- tensor_logging: Any tensor-logging operations; AKA the heart of the package.
+
+
 - Try another solution by subclassing tensor and modifying __new__
 
 Complications
@@ -28,6 +69,7 @@ Complications
       - Adopted solution of simply deepcopying user input, then mutate all tensors in the input
       before passing into the forward pass. This keeps them unchanged, except for wrapping the functions
       the way we'd like.
+- Have it save the parameters too, if you save a layer. Completeness. Maybe a flag not to. But at least save the size of the params.
 - Have an option for setting a random seed. This will fully cover cases where there's randomness in
   the network.
   - Add module pre-hook for marking tensors with the module they're in.
@@ -78,6 +120,13 @@ Complications
   but can follow the Torch syntax if people really want... not a critical feature.
 - What to tag on the tensor itself versus the log: tag stuff to the tensor itself if it's required for
   any on-the-fly decisions about computations and so on.
+- Also include inputs and outputs in the tensor log for completeness: marked for each tensor, input1, input2, output1, output2, etc.
+- Add input tensors to the log, too.
+- Okay, individuate tensors by a single counter. This should be fool-proof as long as it executes everything the same order
+ (if random seed and no parallel processing this should be fine).
+- Have way of letting user specify the layer string format. Why not.
+- Mostly link up the tensor data and the tensor log data, with a function to easily update them.
+- Get the parameter sizes too, along with total file size.
 
 Modules Stuff:
 - Attributes: address and whether they're a bottom-level module

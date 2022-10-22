@@ -1,3 +1,6 @@
+from collections import OrderedDict
+from sys import getsizeof
+
 import numpy as np
 import random
 import torch
@@ -195,3 +198,59 @@ def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str)
         if mark is not None:
             marks.append(mark)
     return marks
+
+
+def remove_list_duplicates(l: List) -> List:
+    """Given a list, remove any duplicates preserving order of first apppearance of each element.
+    Args:
+        l: List to remove duplicates from.
+    Returns:
+        List with duplicates removed.
+    """
+    return list(OrderedDict.fromkeys(l))
+
+
+def get_tensor_memory_amount(t: torch.Tensor) -> int:
+    """Returns the size of a tensor in bytes.
+
+    Args:
+        t: Tensor.
+
+    Returns:
+        Size of tensor in bytes.
+    """
+    return getsizeof(t.storage())
+
+
+def human_readable_size(size: int, decimal_places: int = 2) -> str:
+    """Utility function to convert a size in bytes to a human-readable format.
+
+    Args:
+        size: Number of bytes.
+        decimal_places: Number of decimal places to use.
+
+    Returns:
+        String with human-readable size.
+    """
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+        if size < 1024.0 or unit == 'PB':
+            break
+        size /= 1024.0
+    return f"{size:.{decimal_places}f}{unit}"
+
+
+def readable_tensor_size(t: torch.Tensor) -> str:
+    """Returns the size of a tensor in human-readable format.
+
+    Args:
+        t: Tensor.
+
+    Returns:
+        Human-readable size of tensor.
+    """
+    return human_readable_size(get_tensor_memory_amount(t))
+
+
+def do_lists_intersect(l1, l2) -> bool:
+    """Utility function checking if two lists have any elements in common."""
+    return len(list(set(l1) & set(l2))) > 0
