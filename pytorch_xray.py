@@ -1,20 +1,30 @@
 import copy
 from collections import OrderedDict
 import multiprocessing as mp
-from typing import List, Union
+from typing import List, Union, Optional
 
 import torch
 from torch import nn
 
-from model_handling import cleanup_model, prepare_model
-from xray_utils import remove_list_duplicates
+from model_funcs import cleanup_model, prepare_model, run_model_and_save_specified_activations
+from util_funcs import remove_list_duplicates
+
+
+# TODO: Figure out best way to go from full graph functionality to just modules (for graph, list, activations);
+# TODO: And along with that figure out how to handle the rolled-up functionality for both the modules, and for the
+# function view (the latter requires checking the parameters). Have it count the number of passes.
+# Actually maybe save the rolled-up for later since it stands alone, it can be a final thing.
+# But at least individuate the functions that see the input multiple times so they can be labeled (this comes from
+# counting the parameter passes. Maybe fields like: module_num_passes, function_num_passes? Increment the
+# function_num_passes and module_num_passes as input passes through.
 
 
 def xray_model(model: nn.Module,
                x: torch.Tensor,
                mode: str = 'modules_only',
                which_layers: Union[str, List] = 'all',
-               visualize_opt: str = 'none') -> OrderedDict[str, OrderedDict]:
+               visualize_opt: str = 'none',
+               random_seed: Optional[int] = None) -> OrderedDict[str, OrderedDict]:
     """Run a forward pass through a model, and return activations of desired hidden layers.
     Specify mode as 'modules_only' to do so only for proper modules, or as 'exhaustive' to
     also return activations from non-module functions. If only a subset of layers
@@ -50,41 +60,32 @@ def xray_model(model: nn.Module,
     if visualize_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    hook_handles = []
-    HistoryTensor.clear_history()
-    x_history = HistoryTensor(x, mode, which_layers)
+    # If not saving all layers, do a probe pass.
 
-    # Wrap everything in a try-except block to guarantee the model remains unchanged in case of error.
-    try:
-        hook_handles = prepare_model(model, hook_handles)
-        output = model(x_history)
-        module_output_dict = model.xray_all_modules_dict
-        module_output_dict = postprocess_module_output_dict(module_output_dict)
-        HistoryTensor.postprocess_tensor_history()
-        tensor_history = HistoryTensor.copy_tidy_tensor_history()
-        if visualize_opt != 'none':
-            model_graph = make_model_graph(module_output_dict,
-                                           tensor_history,
-                                           mode,
-                                           visualize_opt)
-            render_model_graph(model_graph)
-        cleanup_model(model, hook_handles)
-        HistoryTensor.clear_history()
-        if mode == 'modules_only':
-            return module_output_dict
-        elif mode == 'exhaustive':
-            return tensor_history
-    finally:  # if anything fails, clean up the model and re-raise the error.
-        print("Execution failed somewhere, returning model to original state...")
-        cleanup_model(model, hook_handles)
-        HistoryTensor.clear_history()
-        raise e
+    if which_layers != 'all':
+        history_dict = run_model_and_save_specified_activations(model, x, mode, None, random_seed)
+        history_dict = postprocess_history_dict(history_dict)  # TODO: this function should also give module-level info.
+        tensor_nums_to_save = get_tensor_nums_from_layer_names(history_dict, mode, which_layers)
+    else:
+        tensor_nums_to_save = 'all'
+
+    # And now save the activations for real.
+
+    history_dict = run_model_and_save_specified_activations(model, x, tensor_nums_to_save, random_seed)
+
+    # Visualize if desired.
+    if visualize_opt != 'none':
+        render_model_graph(history_dict, mode, visualize_opt)
+
+    history_pretty = prettify_history_dict(history_dict, which_layers)  # for user readability
+    return history_pretty
 
 
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
                      mode: str = 'modules_only',
-                     visualize_opt: str = 'rolled') -> None:
+                     visualize_opt: str = 'rolled',
+                     random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
     Args:
@@ -95,6 +96,7 @@ def show_model_graph(model: nn.Module,
         visualize_opt: 'rolled' to show the graph in rolled-up format (one node
             per layer, even if multiple passes), or 'unrolled' to view with
             one node per operation.
+        random_seed: random seed in case model is stochastic
 
     Returns:
         Nothing.
@@ -105,13 +107,15 @@ def show_model_graph(model: nn.Module,
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     # Simply call xray_model without saving any layers.
-    _ = xray_model(model, x, mode, which_layers=[], visualize_opt=visualize_opt)
+    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
+    render_model_graph(history_dict, mode, visualize_opt)
 
 
 def list_model(model: nn.Module,
                x: torch.Tensor,
                mode: str = 'modules_only',
-               unrolled: bool = False) -> List[str]:
+               unrolled_opt: str = 'rolled',
+               random_seed: Optional[int] = None) -> List[str]:
     """List the layers in a model.
 
     Args:
@@ -119,20 +123,19 @@ def list_model(model: nn.Module,
         x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
         mode: 'modules_only' to only view modules, 'exhaustive' to
             view all tensor operations.
-        unrolled: Whether to list each layer once, or list each computational step (if recurrent).
+        unrolled_opt: Put 'rolled' to list each layer once, or 'unrolled' to list each computational step.
+        random_seed: random seed in case model is stochastic
 
     Returns:
         List of layer names.
     """
     if mode not in ['modules_only', 'exhaustive']:
         raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
+    if unrolled_opt not in ['none', 'rolled', 'unrolled']:
+        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     # Simply call xray_model without saving any layers.
-    layer_dict = xray_model(model, x, mode, which_layers=[], visualize_opt='none')
-    layer_list = list(layer_dict.keys())
-
-    if not unrolled:
-        layer_list = [layer.split(':')[0] for layer in layer_list]
-        layer_list = remove_list_duplicates(layer_list)
-
+    history_dict = run_model_and_save_specified_activations(model, x, mode, None, random_seed)
+    # TODO: maybe just wrap this into the post-processing function?
+    layer_list = get_layer_list_from_history(history_dict, mode, unrolled_opt)
     return layer_list

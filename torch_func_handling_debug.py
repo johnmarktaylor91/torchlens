@@ -4,7 +4,9 @@ from torch_func_handling import orig_torch_funcs, mutate_pytorch, ignored_funcs,
     overridable_funcs, \
     mark_tensors_in_obj
 import numpy as np
-from xray_utils import barcode_tensors_in_obj, pprint_tensor_record
+from util_funcs import barcode_tensors_in_obj, pprint_tensor_record
+
+
 
 # Fix the print nonsense
 

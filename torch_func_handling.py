@@ -1,3 +1,5 @@
+from functools import wraps
+
 import numpy as np
 
 from torch.overrides import *
@@ -12,9 +14,12 @@ import inspect
 
 import torch
 
-from tensor_tracking import torch_func_decorator
+from tensor_tracking_funcs import log_tensor_data, log_tensor_metadata
+from util_funcs import get_marks_from_tensor_list, get_tensor_memory_amount, get_vars_of_type_from_obj, make_barcode, \
+    tensor_in_obj_has_mark
 
 print_funcs = ['__repr__', '__str__']
+funcs_not_to_log = ['cpu', 'cuda']
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 
@@ -288,7 +293,7 @@ def nested_getattr(obj: Any, attr: str) -> Any:
 
 
 def mutate_pytorch(torch_module: types.ModuleType,
-                   tensors_to_mutate: List[torch.Tensor],
+                   tensors_to_mutate: List[torch.Tensor],  # TODO check if this is necessary or not.
                    orig_func_defs: List[Tuple],
                    history_log: Dict) -> List[Tuple]:
     """Mutates all PyTorch functions (TEMPORARILY!) so as to save the outputs of any functions
@@ -325,7 +330,9 @@ def mutate_pytorch(torch_module: types.ModuleType,
             for t in tensors_to_mutate:
                 try:
                     local_tensor_namespace = nested_getattr(t, namespace_name_notensor)
-                    setattr(local_tensor_namespace, func_name, new_func)
+                    orig_tensor_func = getattr(local_tensor_namespace, func_name)
+                    new_tensor_func = torch_func_decorator(orig_tensor_func, history_log)
+                    setattr(local_tensor_namespace, func_name, new_tensor_func)
                 except (AttributeError, TypeError, RuntimeError) as _:
                     pass
     return orig_func_defs
@@ -349,3 +356,97 @@ def unmutate_pytorch(torch_module,
             setattr(local_func_namespace, func_name, orig_func)
         except (AttributeError, TypeError) as _:
             continue
+
+
+def torch_func_decorator(func, history_dict):
+    @wraps(func)
+    def wrapped_func(*args, **kwargs):
+        func_name = func.__name__
+        if func_name in funcs_not_to_log:
+            out = func(*args, **kwargs)
+            return out
+
+        if (func_name in print_funcs) and (type(args[0]) in [torch.Tensor, torch.nn.parameter.Parameter]):
+            out = print_override(args[0], func_name)
+            return out
+        all_args = list(args) + list(kwargs.values())
+        arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor)
+        parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'xray_barcode')
+        arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
+        # TODO when designing the graph cleanup, make sure any tensors created inside a module
+        # are indicated as being inside the module (check their descendents)
+        any_inputs_entered_module = tensor_in_obj_has_mark(arg_tensors, 'xray_entered_module', True)
+        if any_inputs_entered_module:
+            for t in arg_tensors:
+                if not hasattr(t, 'xray_containing_modules_nested'):
+                    continue
+                if len(t.xray_containing_modules_nested) > 0:
+                    containing_modules = t.xray_containing_modules_nested[:]
+                    containing_module = t.xray_containing_module
+                    last_module_seen = t.xray_last_module_seen
+                    last_module_seen_address = t.xray_last_module_seen_address
+                    break
+        else:
+            containing_modules = []
+            containing_module = None
+            last_module_seen = None
+            last_module_seen_address = None
+
+        # Mark any parameters.
+
+        parent_param_passes = {}
+        for param in arg_parameters:
+            if not hasattr(param, 'xray_param_barcode'):
+                param_barcode = make_barcode()  # TODO also clean up all params with cleanup func.
+                param.xray_param_barcode = param_barcode
+                param.xray_pass_num = 1
+            else:
+                param_barcode = param.xray_param_barcode
+                param.xray_pass_num += 1
+            parent_param_passes[param_barcode] = param.xray_pass_num
+
+        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'xray_origin', 'input')
+        if came_from_input:
+            origin = 'input'
+        else:
+            origin = 'internal'
+        out = func(*args, **kwargs)
+        if type(out) == torch.Tensor:
+            out.xray_history_dict = history_dict
+            # If a new tensor, or has a new grad_fn, mark it with everything.
+            if not hasattr(out, 'xray_barcode') or (out.grad_fn not in out.xray_gradfuncs):
+                history_dict['tensor_counter'] += 1
+                out.xray_barcode = make_barcode()
+                out.xray_tensor_num = history_dict['tensor_counter']
+                out.xray_tensor_shape = out.shape
+                out.xray_tensor_dtype = out.dtype
+                out.xray_tensor_fsize = get_tensor_memory_amount(out)
+                out.xray_origin = origin
+                out.xray_parent_tensor_barcodes = parent_tensor_barcodes
+                out.xray_funcs_applied = [func]
+                out.xray_funcs_applied_names = [func_name]
+                out.xray_gradfuncs = [out.grad_fn]
+                out.xray_gradfuncs_names = [type(out.grad_fn).__name__]
+                out.xray_parent_params = arg_parameters[:]
+                out.xray_parent_param_passes = parent_param_passes.copy()
+
+                # Module stuff.
+
+                out.xray_entered_module = any_inputs_entered_module
+                out.xray_containing_modules_nested = containing_modules
+                out.xray_containing_module = containing_module
+                out.xray_last_module_seen = last_module_seen
+                out.xray_last_module_seen_address = last_module_seen_address
+                out.xray_is_module_output = False
+                out.xray_modules_exited = []
+                out.xray_is_bottom_level_module_output = False
+            else:  # This means that the function returned the same tensor (e.g., identity); just need to mark that.
+                out.xray_funcs_applied.append(func)
+                out.xray_funcs_applied_names.append(func_name)
+
+            log_tensor_data(out, args, kwargs, arg_parameters)
+            log_tensor_metadata(out)
+
+        return out
+
+    return wrapped_func

@@ -1,9 +1,18 @@
 Data Structure Fields:
 
+Non-Urgent Wishlist
+- Subclass support
+- Support chooosing layers by their nested address
+- Have the rolled-up graph display option
+
+
+Overall logic: saving all functions is the baseline and the first thing it does, pulling out modules
+    if desired after is done post-hoc based on stuff saved during the forward pass.
+
 History Dict:
 tensor_nums_to_save: indicates which tensor numbers to save.
 tensor_num: counter that keeps track of how many tensors have been made
-tensor_log: dictionary of tensors indexed by their barcodes
+tensor:
   xray_barcode
   xray_tensor_num
   xray_containing_modules_nested
@@ -15,15 +24,7 @@ tensor_log: dictionary of tensors indexed by their barcodes
   xray_tensor_params
   xray_tensor_activations
   xray_tensor_size
-
-Tensor:
-xray_barcode
-xray_tensor_num
-xray_containing_modules_nested
-xray_containing_module
-xray_entered_module
-xray_last_module_seen
-xray_last_module_seen_address
+tensor_log: same as tensor, but also saving the tensor itself and the arguments if so desired.
 
 Module:
 xray_module_address
@@ -31,17 +32,54 @@ xray_module_type
 xray_is_bottom_level_module
 xray_module_pass_number
 
+User-Facing Syntax:
+- Default is to only look at "bottom-level" modules and functions.
+- But to look at higher-level modules provide some override behaviors: mark the graph and the output
+  with their module location and whether they're the output of a module, allow user to specify this in the
+  layer list, and also have an option to list all of these in the list_layers function. Main thing is to
+  annotate tensors with the modules that they have left, this is sufficient to do all this.
+- Allow "input" and "output" as keywords.
+
+Testing:
+- Have a function that reconstructs the whole forward pass from each saved input, and checks whether it matches
+  the true output. This can be done by saving the arguments, checking the correspondence between node outputs and
+  next node inputs, and running the graph this way. Do this for several different arguments.
+
+Cleanup:
+- Cleanup the modules and params
+- Input tensors are fine since they're deepcopied.
+- Tensors created internally are detached first.
+
+Graph Functions:
+- Have a bunch of discrete operations that can be strung together.
+- Operations:
+    - strip_non_modules: removes all nodes that aren't the output of a module
+    - expand_identity_functions: adds nodes for tensors that went through identity functions, for fidelity to the graph
+    - add_input_nodes: Add nodes for the inputs
+    - add_output_nodes: Add nodes for the outputs
+    - add_parent_fields: Add fields for the node parents so it can be traversed either way
+    - strip_irrelevant_nodes: Remove nodes that don't affect the output of the model
+    - annotate_node_names: Go through and annotate the nodes with the nice naming system, closer to what user will see.
+    - roll_graph: Roll together recurrent operations, annotating how many passes they see (maybe do this per arrow)
+    - topological_sort_nodes: mark each node with its topological sort number
+    - connect_node_arguments: check which nodes outputs correspond to which node inputs (this is only
+      used for testing); goal is to find where that tensor appears in the arguments to the next function,
+      and then funnel it there. Just need some kind of recipe for doing this.
+    - Goal is to get ALL the information needed to either view the graph, fetch information, or return
+      information to the user (needn't be the final "pretty" version, this is a post-processed version
+      after the forward sweep).
+
 Package Organization:
 - torch_xray: The user-facing functions (this can import from everything, nothing imports from this)
 - graphs: For processing and visualizing the graphs
 - xray_utils: Random utility functions (everything imports from here)
 - torch_func_handling: For dealing with mutating the torch functions; imports only from xray_utils
 - tensor_logging: Any tensor-logging operations; AKA the heart of the package.
+- testing.py: My own internal testing functions for validating a model.
 
 
-- Try another solution by subclassing tensor and modifying __new__
 
-Complications
+Past Log (for reference)
 - Okay, I think mutating torch.Tensor will work actually. This will be the completely exhaustive solution.
   And easy to fix: simply use the reload function to reload the torch namespace after. To go through all the functions,
   use the overridable ones first and crawl through those, then manually do the ignored ones that return Tensors.

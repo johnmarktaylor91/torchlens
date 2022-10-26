@@ -1,12 +1,22 @@
 from collections import OrderedDict
-from typing import Any, Callable, Dict, List, Optional
+import copy
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 from torch import nn
 
-from tensor_tracking import log_tensor_metadata
-from xray_utils import get_vars_of_type_from_obj, text_num_split, set_random_seed
+from tensor_tracking_funcs import log_tensor_metadata, initialize_history_dict, prepare_input_tensors
+from torch_func_handling import mutate_pytorch, unmutate_pytorch
+from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
+    mark_tensors_in_obj
 
+
+# TODO think about best way to get non-leaf module activations if desired by user. Maybe just some kind of checker
+# when it's generating the module-level graph. Shouldn't be hard, it can just look at the address and that of
+# the successor. Remaining steps: make sure the on-the-fly log saves everything, then code up the
+# function to clean it up and make the graph, then just the functions to make the graph and make the output pretty.
+# Then finally a testing function; this will require saving enough information to "pick up" the forward pass
+# where it left off, with everything except the actual inputs.
 
 def get_module_from_address(model: nn.Module, address: str) -> nn.Module:
     """Given a model and an address to a layer, returns the module at that address.
@@ -183,20 +193,22 @@ def module_post_hook(module: nn.Module,
         Nothing, but records all relevant data.
     """
 
+    module_address = module.xray_module_address
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
         t.xray_is_module_output = True
+        t.xray_modules_exited.append(module_address)
         t.xray_containing_modules_nested.pop()  # remove the last module address.
         if module.xray_is_bottom_level_module:
             t.xray_is_bottom_level_module_output = True
         else:
             t.xray_is_bottom_level_module_output = False
 
-        if len(t.xray_tensor_in_these_modules) == 0:
+        if len(t.xray_containing_modules_nested) == 0:
             t.xray_entered_module = False
             t.xray_containing_module = None
         else:
-            t.xray_containing_module = t.xray_tensor_in_these_modules[-1]
+            t.xray_containing_module = t.xray_containing_modules_nested[-1]
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
@@ -219,20 +231,23 @@ def prepare_model(model: nn.Module,
     if mode not in ['modules_only', 'exhaustive']:
         raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
 
-    module_stack = list(model.named_children())  # list of tuples (name, module)
+    module_stack = [('', model)]  # list of tuples (name, module)
     while len(module_stack) > 0:
         address, module = module_stack.pop()
         module_children = list(module.named_children())
         # Annotate the children with the full address.
         for child_name, child_module in module_children:
-            child_module.xray_module_address = f"{address}.{child_name}"
+            child_module.xray_module_address = f"{address}.{child_name}" if address != '' else child_name
         module_stack = module_children + module_stack
+
+        if module == model:  # don't tag the model itself.
+            continue
+
         if len(module_children) == 0:
             is_bottom_level_module = True
         else:
             is_bottom_level_module = False
 
-        module.xray_module_address = address
         module.xray_module_type = str(type(module).__name__).lower()
         module.xray_is_bottom_level_module = is_bottom_level_module
         module.xray_module_pass_num = 0
@@ -259,6 +274,7 @@ def clear_hooks(hook_handles: List):
 
 def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'xray'):
     """Recursively clears the given attribute from all modules in the model.
+    TODO: have it clear the params too.
 
     Args:
         model: PyTorch model.
@@ -276,6 +292,7 @@ def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'x
 def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
     """Reverses all temporary changes to the model (namely, the forward hooks and added
     model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
+    TODO: cleanup params too.
 
     Args:
         model: PyTorch model.
@@ -289,25 +306,46 @@ def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
     return model
 
 
-def run_model_and_save_activations(model: nn.Module,
-                                   x: Any,
-                                   mode: str = 'modules_only') -> Dict:
-
-
-def probe_forward_pass(model: nn.Module,
-                       x: Any,
-                       random_seed: Optional[int] = None) -> Dict:
-    """Runs forward pass through model and gets all the graph metadata without saving any actual data.
+def run_model_and_save_specified_activations(model: nn.Module,
+                                             x: Any,
+                                             mode: str,
+                                             tensor_nums_to_save: Optional[Union[str, List[int]]] = None,
+                                             random_seed: Optional[int] = None) -> Dict:
+    """Internal function that runs the given input through the given model, and saves the
+    specified activations, as given by the internal tensor numbers (these will not be visible to the user;
+    they will be generated from the nicer human-readable names and then fed in). The output
+    will be nicely formatted.
 
     Args:
         model: PyTorch model.
-        x: Input to the PyTorch Model
-        random_seed: Random seed to set before running the forward pass.
+        x: Input to the model.
+        mode: Either 'modules_only' or 'exhaustive'
+        tensor_nums_to_save: List of tensor numbers to save.
+        mode: either 'modules_only' or 'exhaustive'.
+        random_seed: Which random seed to use.
 
     Returns:
-        Dictionary of the
+        history_dict
     """
     if random_seed is not None:
         set_random_seed(random_seed)
+    x = copy.deepcopy(x)
+    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
+    if tensor_nums_to_save is None:
+        tensor_nums_to_save = []
+    hook_handles = []
+    prepare_model(model, hook_handles)
+    history_dict = initialize_history_dict(tensor_nums_to_save)
+    orig_func_defs = []
+    try:  # TODO: replace with context manager.
+        orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)
+        prepare_input_tensors(x, history_dict)
+        _ = model(x)
+    except Exception as e:
+        print("Feature extraction failed; returning model and environment to normal")
+        unmutate_pytorch(torch, orig_func_defs)
+        model = cleanup_model(model, hook_handles)
+        raise e
 
-    output = model(x)
+    # history_dict = postprocess_history_dict(history_dict, mode)
+    return history_dict

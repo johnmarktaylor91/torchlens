@@ -31,15 +31,21 @@ def set_random_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
-def pprint_tensor_record(tensor_record):
+def pprint_tensor_record(tensor_record, show_tensor=False):
     """Debug sorta function to pretty print the tensor record.
 
     Args:
         tensor_record:
     """
-    for barcode, record in tensor_record['barcode_dict'].items():
+    fields_not_to_print = ['parent_params', 'creation_args', 'creation_kwargs', 'history_dict']
+
+    for barcode, record in tensor_record['tensor_log'].items():
         print(f"\n{barcode}")
         for field, val in record.items():
+            if field in fields_not_to_print:
+                continue
+            if (field == 'tensor_contents') and not show_tensor:
+                continue
             if type(val) == torch.Tensor:
                 val_nice = np.array(val.data).squeeze()
                 print(f'{field}: \n{val_nice}')
@@ -75,7 +81,7 @@ def is_iterable(obj: Any) -> bool:
 
 
 def get_vars_of_type_from_obj(obj: Any,
-                              type: Type,
+                              which_type: Type,
                               search_depth: int = 5) -> List[torch.Tensor]:
     """Recursively finds all objects of a given type, or a subclass of that type,
     up to the given search depth.
@@ -96,7 +102,7 @@ def get_vars_of_type_from_obj(obj: Any,
         while len(this_stack) > 0:
             item = this_stack.pop()
             item_class = type(item)
-            if issubclass(item_class, type):
+            if issubclass(item_class, which_type):
                 tensors_in_obj.append(item)
                 continue
             if hasattr(item, 'shape'):

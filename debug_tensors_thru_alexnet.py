@@ -1,6 +1,7 @@
 import os
 import torch
 from torch import nn
+import torchvision
 
 import model_funcs
 import tensor_tracking_funcs
@@ -20,9 +21,8 @@ from model_funcs import run_model_and_save_specified_activations
 # 4. Internally generated tensors.
 
 
-model = SimpleNetwork()
-x = torch.Tensor([.5])
-x.requires_grad = True
+model = torchvision.models.AlexNet()
+x = torch.rand(6, 3, 256, 256)
 tensor_record = run_model_and_save_specified_activations(model, x, 'exhaustive', 'all', None)
 
 pprint_tensor_record(tensor_record)
