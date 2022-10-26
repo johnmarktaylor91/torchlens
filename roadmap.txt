@@ -24,7 +24,7 @@ tensor:
   xray_tensor_params
   xray_tensor_activations
   xray_tensor_size
-tensor_log: same as tensor, but also saving the tensor itself and the arguments if so desired.
+tensor_log: same as tensor, but also saving the tensor itself, and the args, kwargs, and params if desired.
 
 Module:
 xray_module_address
@@ -34,11 +34,29 @@ xray_module_pass_number
 
 User-Facing Syntax:
 - Default is to only look at "bottom-level" modules and functions.
+- Okay, two modes: exhaustive and modules_only.
+#TODO: figure out the most natural syntax for handling modules versus functions that isn't too bulky.
+#      and figure out whether it's worth labeling functions in nested format too, like the torch version does.
+#      Just add a counter to the tensors that keeps track of how many functions have been called since entering a
+#      module. Eh the override is too confusing and they can do that themselves if fussy.
+#      Maybe dump functions-nested, just no good way to do it... maybe a prefix mod_ or fn_? But it's ugly extra ink.
+#      Combine simplicity and flexibility however you can. Do everything except this first, just make all the information
+#      present and easy to get. Trade off simplicity and flexibility. ACTUALLY maybe the best
+#      way is to have separate which_funcs, which_modules arguments. Figure it out once all is working.
+- And for which_layers, maybe have these as keywords too.
+- This determines the labeling scheme,
+  and the behavior of 'all' if supplied as argument for which_layers.
 - But to look at higher-level modules provide some override behaviors: mark the graph and the output
   with their module location and whether they're the output of a module, allow user to specify this in the
   layer list, and also have an option to list all of these in the list_layers function. Main thing is to
   annotate tensors with the modules that they have left, this is sufficient to do all this.
-- Allow "input" and "output" as keywords.
+- Allow "input" and "output" as numbered keywords for indexing (e.g., output1, output2, etc.)
+- Maybe the returned data structure should be indexable by either index or layer name? And multiple layer names?
+- Maybe have both sequential module mode, and nested module mode?
+- Returned dictionary should be topologically sorted and addressed in the desired manner.
+
+Inner syntax:
+- Separate barcodes for: operations
 
 Testing:
 - Have a function that reconstructs the whole forward pass from each saved input, and checks whether it matches

@@ -422,6 +422,8 @@ def torch_func_decorator(func, history_dict):
                 out.xray_tensor_dtype = out.dtype
                 out.xray_tensor_fsize = get_tensor_memory_amount(out)
                 out.xray_origin = origin
+                out.xray_is_model_output = False
+                out.xray_is_model_input = False
                 out.xray_parent_tensor_barcodes = parent_tensor_barcodes
                 out.xray_funcs_applied = [func]
                 out.xray_funcs_applied_names = [func_name]

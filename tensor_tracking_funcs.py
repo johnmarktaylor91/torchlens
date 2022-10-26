@@ -53,6 +53,8 @@ def prepare_input_tensors(x: Any,
         t.xray_tensor_dtype = t.dtype
         t.xray_tensor_fsize = get_tensor_memory_amount(t)
         t.xray_origin = 'input'
+        t.xray_is_model_input = True
+        t.xray_is_model_output = False
         t.xray_parent_tensor_barcodes = []
         t.xray_funcs_applied = []
         t.xray_funcs_applied_names = []

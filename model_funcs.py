@@ -7,8 +7,7 @@ from torch import nn
 
 from tensor_tracking_funcs import log_tensor_metadata, initialize_history_dict, prepare_input_tensors
 from torch_func_handling import mutate_pytorch, unmutate_pytorch
-from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
-    mark_tensors_in_obj
+from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj
 
 
 # TODO think about best way to get non-leaf module activations if desired by user. Maybe just some kind of checker
@@ -340,7 +339,9 @@ def run_model_and_save_specified_activations(model: nn.Module,
     try:  # TODO: replace with context manager.
         orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)
         prepare_input_tensors(x, history_dict)
-        _ = model(x)
+        outputs = model(x)
+        # mark_tensors_in_obj(outputs, 'xray_is_model_output', True)
+
     except Exception as e:
         print("Feature extraction failed; returning model and environment to normal")
         unmutate_pytorch(torch, orig_func_defs)

@@ -5,6 +5,7 @@ from typing import Dict
 torch.TEST_ATTRIBUTE = 'networks_script'
 
 
+# TODO: devise a set of test networks to make all the different edgecases bulletproof.
 class SimpleNetwork(nn.Module):
     def __init__(self):
         super(SimpleNetwork, self).__init__()
