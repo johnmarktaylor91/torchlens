@@ -5,9 +5,13 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from tensor_tracking_funcs import log_tensor_metadata, initialize_history_dict, prepare_input_tensors
-from torch_func_handling import mutate_pytorch, unmutate_pytorch
-from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj
+from tensor_tracking import log_tensor_metadata, initialize_history_dict, mutate_pytorch, prepare_input_tensors, \
+    unmutate_pytorch
+from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
+    mark_tensors_in_obj
+
+
+# TODO: think about best way to organize module vs tensor outputs; get clarity here
 
 
 # TODO think about best way to get non-leaf module activations if desired by user. Maybe just some kind of checker
@@ -130,7 +134,7 @@ def hook_bottom_level_modules(model: nn.Module,
                               prehook_fns: List[Callable],
                               hook_handles: List) -> List:
     """Hook all bottom-level modules in a model with given function and return
-    list of hook handles (so as to easily clear later).
+    list of hook handles (to easily clear later).
 
     Args:
         model: PyTorch model.
@@ -181,7 +185,7 @@ def module_post_hook(module: nn.Module,
                      input_,
                      output_):
     """Hook to run after the module is executed: it marks the tensors as no longer being inside a module,
-    and indicates which module it is.
+    indicates which module it is, and add
 
     Args:
         module: The module.
@@ -340,10 +344,13 @@ def run_model_and_save_specified_activations(model: nn.Module,
         orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)
         prepare_input_tensors(x, history_dict)
         outputs = model(x)
-        # mark_tensors_in_obj(outputs, 'xray_is_model_output', True)
+        output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
+        for t in output_tensors:
+            history_dict['output_tensors'].append(t)
+        mark_tensors_in_obj(output_tensors, 'xray_is_model_output', True)
 
     except Exception as e:
-        print("Feature extraction failed; returning model and environment to normal")
+        print("************\nFeature extraction failed; returning model and environment to normal\n*************")
         unmutate_pytorch(torch, orig_func_defs)
         model = cleanup_model(model, hook_handles)
         raise e

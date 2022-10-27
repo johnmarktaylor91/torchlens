@@ -3,9 +3,8 @@ import torch
 from torch import nn
 
 import model_funcs
-import tensor_tracking_funcs
-from torch_func_handling import orig_torch_funcs, mutate_pytorch, ignored_funcs, \
-    overridable_funcs
+import tensor_tracking
+from tensor_tracking import ignored_funcs, mutate_pytorch, orig_torch_funcs, overridable_funcs
 import numpy as np
 from util_funcs import barcode_tensors_in_obj, pprint_tensor_record, mark_tensors_in_obj
 from networks import SimpleNetwork

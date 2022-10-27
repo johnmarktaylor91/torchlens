@@ -1,8 +1,7 @@
 import os
 import torch
-from torch_func_handling import orig_torch_funcs, mutate_pytorch, unmutate_pytorch, ignored_funcs, \
-    overridable_funcs
-from tensor_tracking_funcs import initialize_history_dict
+from tensor_tracking import ignored_funcs, initialize_history_dict, mutate_pytorch, orig_torch_funcs, overridable_funcs, \
+    unmutate_pytorch
 import numpy as np
 from util_funcs import barcode_tensors_in_obj, pprint_tensor_record, get_tensor_memory_amount
 

@@ -1,5 +1,25 @@
 Data Structure Fields:
 
+Nomenclature:
+- Module: PyTorch object type
+- Function: anything that operates on a tensor and returns a tensor
+- Operation: any time a module or function does something on a tensor
+- Layer: a computational step that could meaningfully count as being stable across recurrent passes.
+- Default ontology is tensors that are the results of operations; everything else is packaging.
+  The tensor will however know what modules it came out of.
+
+- Barcode types
+  - tensor/operation (each tensor comes out of an operation)
+  - layer
+  - module
+  - parameter
+
+Ways of individuating layers (= "same" operation across passes)
+- Same module
+- Same parameter group
+- Same position in the outermost loop
+- Track the tensor barcodes for each of these so they can be independently indexed
+
 Non-Urgent Wishlist
 - Subclass support
 - Support chooosing layers by their nested address

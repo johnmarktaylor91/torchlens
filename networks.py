@@ -4,8 +4,20 @@ from typing import Dict
 
 torch.TEST_ATTRIBUTE = 'networks_script'
 
-
 # TODO: devise a set of test networks to make all the different edgecases bulletproof.
+# TODO: and somewhat overlapping: make some good demos
+
+"""
+Cases to test:
+
+- Nested looping
+- Complex branching 
+- Internally generated and internally terminated tensors 
+- Multiple inputs and outputs 
+- Nested modules with stuff before and after 
+"""
+
+
 class SimpleNetwork(nn.Module):
     def __init__(self):
         super(SimpleNetwork, self).__init__()
