@@ -203,6 +203,26 @@ def tensor_in_obj_has_mark(x: Any, field_name: str, field_val: Any):
     return False
 
 
+def get_tensors_in_obj_with_mark(x: Any, field_name: str, field_val: Any) -> List[torch.Tensor]:
+    """Get all tensors in an object that have a mark with a given value.
+
+    Args:
+        x: Input object.
+        field_name: Name of the field to check.
+        field_val: Value of the field that the tensor must have.
+
+    Returns:
+        List of tensors with the given mark.
+    """
+    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
+    tensors_with_mark = []
+    for tensor in input_tensors:
+        if getattr(tensor, field_name, None) == field_val:
+            tensors_with_mark.append(tensor)
+    return tensors_with_mark
+    """
+
+
 def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
     """Gets a list of marks from a list of tensors.
 
@@ -293,3 +313,39 @@ def text_num_split(s: str) -> Tuple[str, int]:
         num = s[-1] + num
         s = s[:-1]
     return s, int(num)
+
+
+def int_list_to_compact_str(int_list: List[int]) -> str:
+    """Given a list of integers, returns a compact string representation of the list, where
+    contiguous stretches of the integers are represented as ranges (e.g., [1 2 3 4] becomes "1-4"),
+    and all such ranges are separated by commas.
+
+    Args:
+        int_list: List of integers.
+
+    Returns:
+        Compact string representation of the list.
+    """
+    int_list = sorted(int_list)
+    if len(int_list) == 0:
+        return ''
+    if len(int_list) == 1:
+        return str(int_list[0])
+    ranges = []
+    start = int_list[0]
+    end = int_list[0]
+    for i in range(1, len(int_list)):
+        if int_list[i] == end + 1:
+            end = int_list[i]
+        else:
+            if start == end:
+                ranges.append(str(start))
+            else:
+                ranges.append(f'{start}-{end}')
+            start = int_list[i]
+            end = int_list[i]
+    if start == end:
+        ranges.append(str(start))
+    else:
+        ranges.append(f'{start}-{end}')
+    return ','.join(ranges)

@@ -12,7 +12,7 @@ from torch.overrides import get_ignored_functions, get_testing_overrides
 
 from util_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, mark_tensors_in_obj, \
     get_vars_of_type_from_obj, make_barcode, \
-    get_tensor_memory_amount, tensor_in_obj_has_mark
+    get_tensor_memory_amount, tensor_in_obj_has_mark, get_tensors_in_obj_with_mark
 
 import torch
 
@@ -363,6 +363,10 @@ def torch_func_decorator(func, history_dict):
             return out
         all_args = list(args) + list(kwargs.values())
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor)
+        if len(arg_tensors) > 0:
+            has_parents = True
+        else:
+            has_parents = False
         parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'xray_barcode')
         arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
         # TODO when designing the graph cleanup, make sure any tensors created inside a module
@@ -403,6 +407,14 @@ def torch_func_decorator(func, history_dict):
             origin = 'input'
         else:
             origin = 'internal'
+
+        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'xray_origin', 'internal')
+        parent_internal_tensor_barcodes = get_marks_from_tensor_list(parent_internal_tensors, 'xray_barcode')
+
+        internal_ancestors = []
+        for internal_parent in parent_internal_tensors:
+            internal_ancestors.extend(internal_parent.xray_internal_ancestors)
+
         out = func(*args, **kwargs)
         if type(out) == torch.Tensor:
             out.xray_history_dict = history_dict
@@ -411,7 +423,7 @@ def torch_func_decorator(func, history_dict):
                 # Update history_dict
 
                 history_dict['tensor_counter'] += 1
-                if origin == 'internal':
+                if not has_parents:
                     history_dict['internally_generated_tensors'].append(out.xray_barcode)
                 if len(arg_parameters) > 0:
                     history_dict['param_group_tensors'][param_group_barcode].append(out.xray_barcode)
@@ -426,6 +438,9 @@ def torch_func_decorator(func, history_dict):
                 out.xray_is_model_output = False
                 out.xray_is_model_input = False
                 out.xray_parent_tensor_barcodes = parent_tensor_barcodes
+                out.xray_has_parents = has_parents
+                out.xray_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
+                out.xray_internal_ancestors = internal_ancestors
                 out.xray_funcs_applied = [func]
                 out.xray_funcs_applied_names = [func_name]
                 out.xray_gradfuncs = [out.grad_fn]
@@ -434,12 +449,14 @@ def torch_func_decorator(func, history_dict):
                 out.xray_parent_param_passes = parent_param_passes.copy()
                 if len(arg_parameters) == 0:
                     out.xray_has_params = False
-                    out.xray_layer_pass_num = 1
-                    out.layer_barcode = out.xray_barcode
+                    out.xray_pass_num = 1
+                    out.xray_layer_barcode = out.xray_barcode
+                    out.xray_layer_type = 'no-param-function'
                 else:
                     out.xray_has_params = True
-                    out.xray_layer_pass_num = len(history_dict['param_group_tensors'][param_group_barcode])
-                    out.layer_barcode = param_group_barcode
+                    out.xray_pass_num = len(history_dict['param_group_tensors'][param_group_barcode])
+                    out.xray_layer_barcode = param_group_barcode
+                    out.xray_layer_type = 'param-function'
 
                 # Module stuff.
 
@@ -476,7 +493,7 @@ def initialize_tensor_log_entry() -> Dict:
 
 def initialize_history_dict(tensor_nums_to_save: Union[List[int], str]) -> Dict:
     """Convenience function for making the history dict. This will contain the tensor counter, which tensors to
-    save, and the log of the tensors. TODO: give it the input so it can save these tensors.
+    save, and the log of the tensors.
 
     Returns:
         Initialized history dict.
@@ -489,6 +506,7 @@ def initialize_history_dict(tensor_nums_to_save: Union[List[int], str]) -> Dict:
     history_dict['output_tensors'] = []
     history_dict['param_group_tensors'] = defaultdict(list)  # tensors output by each param group
     history_dict['module_output_tensors'] = defaultdict(list)
+    history_dict['bottom_level_module_output_tensors'] = defaultdict(list)
     history_dict['tensor_log'] = defaultdict(lambda: OrderedDict())  # TODO replace with above function when it's done.
     return history_dict
 
@@ -519,10 +537,19 @@ def prepare_input_tensors(x: Any,
         t.xray_is_model_input = True
         t.xray_is_model_output = False
         t.xray_parent_tensor_barcodes = []
+        t.xray_has_parents = False
+        t.xray_parent_internal_tensor_barcodes = []
+        t.xray_internal_ancestors = []
         t.xray_funcs_applied = []
         t.xray_funcs_applied_names = []
+        t.xray_gradfuncs = []
+        t.xray_gradfuncs_names = []
         t.xray_parent_params = []
         t.xray_parent_param_passes = {}
+        t.xray_has_params = False
+        t.xray_pass_num = 1
+        t.xray_layer_barcode = t.xray_barcode
+        t.xray_layer_type = 'input'
 
         # Module stuff.
 
@@ -534,6 +561,7 @@ def prepare_input_tensors(x: Any,
         t.xray_is_module_output = False
         t.xray_modules_exited = []
         t.xray_is_bottom_level_module_output = False
+        t.xray_linked_bottom_module = None
 
         history_dict['input_tensors'].append(t.xray_barcode)
         log_tensor_metadata(t)
@@ -560,6 +588,9 @@ def log_tensor_metadata(t: torch.Tensor):
     if t.xray_is_module_output:
         module_just_exited = t.xray_modules_exited[-1]
         history_dict['module_output_tensors'][module_just_exited].append(tensor_barcode)
+
+        if t.xray_is_bottom_level_module_output:
+            history_dict['bottom_level_module_output_tensors'][module_just_exited].append(tensor_barcode)
 
 
 def log_tensor_data(t: torch.Tensor,

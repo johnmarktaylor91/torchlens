@@ -1,5 +1,26 @@
 Data Structure Fields:
 
+Benchmarks to Meet Before Release:
+- Works on all models that Colin mentioned
+- Doesn't add TOO much time to forward pass
+- Works on different Torch versions, is stable
+- Make the code well-documented, pretty
+- Have a Colab notebook that shows it off
+- Good, and realistic pictures showing what it does
+- Crisp twitter thread.
+- Try different architectures: language, video, LSTM, transformers, RL.
+- Function that returns an informative but exhaustive graph representation for the user
+
+Graph Display: unrolled
+layer_name (pass 1/3)
+@layer_address
+dtype tensor_dimensions (tensor_filesize)
+param_dimensions
+
+Graph Display: rolled
+Same as unrolled, but edges annotated with the pass numbers in a nice way
+
+
 Nomenclature:
 - Module: PyTorch object type
 - Function: anything that operates on a tensor and returns a tensor
@@ -7,6 +28,13 @@ Nomenclature:
 - Layer: a computational step that could meaningfully count as being stable across recurrent passes.
 - Default ontology is tensors that are the results of operations; everything else is packaging.
   The tensor will however know what modules it came out of.
+
+Layer Semantics:
+- What counts as a layer? Determined in this order, each taking precedence over the next:
+    1. A lowest-level module, 'bottom-level-module'
+    2. A group of parameters, even if unattached to a module, 'param-function'
+    3. Function calls intervening between layers that are stable across passes, 'no-param-function'
+       This third one is the trickiest to handle.
 
 - Barcode types
   - tensor/operation (each tensor comes out of an operation)

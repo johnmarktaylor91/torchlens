@@ -11,6 +11,7 @@ from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_see
     mark_tensors_in_obj
 
 
+# TDOO: annotate tensor with their bottom-level modules they've left, and how many passes, too. Will help with module mode
 # TODO: think about best way to organize module vs tensor outputs; get clarity here
 
 
@@ -204,6 +205,9 @@ def module_post_hook(module: nn.Module,
         t.xray_containing_modules_nested.pop()  # remove the last module address.
         if module.xray_is_bottom_level_module:
             t.xray_is_bottom_level_module_output = True
+            t.xray_layer_type = 'bottom-level-module'
+            t.xray_layer_barcode = module_address
+            t.xray_linked_bottom_module = module
         else:
             t.xray_is_bottom_level_module_output = False
 
