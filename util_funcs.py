@@ -6,6 +6,7 @@ import random
 import torch
 from typing import Any, List, Tuple, Type
 import copy
+from IPython import get_ipython
 
 from torch import nn
 
@@ -31,17 +32,32 @@ def set_random_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
-def pprint_tensor_record(tensor_record, show_tensor=False):
+def pprint_tensor_record(history_dict, which_fields='all', show_tensor=True):
     """Debug sorta function to pretty print the tensor record.
 
     Args:
-        tensor_record:
+        history_dict: Dict with the history
+        which_fields: which fields to show
+        show_tensor: whether to show the actual tensor
     """
     fields_not_to_print = ['parent_params', 'creation_args', 'creation_kwargs', 'history_dict']
+    tensor_log = history_dict['tensor_log']
 
-    for barcode, record in tensor_record['tensor_log'].items():
+    for key, val in history_dict.items():
+        if key == 'tensor_log':
+            continue
+        print(f'{key}: {val}')
+    for barcode, record in tensor_log.items():
         print(f"\n{barcode}")
-        for field, val in record.items():
+        if which_fields == 'all':
+            field_list = record.keys()
+        else:
+            field_list = which_fields
+
+        for field in field_list:
+            if field not in record:
+                continue
+            val = record[field]
             if field in fields_not_to_print:
                 continue
             if (field == 'tensor_contents') and not show_tensor:
@@ -60,7 +76,7 @@ def make_barcode() -> int:
         Random hash.
     """
     alphabet = string.ascii_letters + string.digits
-    barcode = ''.join(secrets.choice(alphabet) for _ in range(12))
+    barcode = ''.join(secrets.choice(alphabet) for _ in range(6))
     return barcode
 
 
@@ -80,6 +96,17 @@ def is_iterable(obj: Any) -> bool:
         return False
 
 
+def in_notebook():
+    try:
+        if 'IPKernelApp' not in get_ipython().config:  # pragma: no cover
+            return False
+    except ImportError:
+        return False
+    except AttributeError:
+        return False
+    return True
+
+
 def get_vars_of_type_from_obj(obj: Any,
                               which_type: Type,
                               search_depth: int = 5) -> List[torch.Tensor]:
@@ -95,6 +122,7 @@ def get_vars_of_type_from_obj(obj: Any,
     """
     this_stack = [obj]
     tensors_in_obj = []
+    tensor_ids_in_obj = []
     for _ in range(search_depth):
         next_stack = []
         if len(this_stack) == 0:
@@ -103,7 +131,9 @@ def get_vars_of_type_from_obj(obj: Any,
             item = this_stack.pop()
             item_class = type(item)
             if issubclass(item_class, which_type):
-                tensors_in_obj.append(item)
+                if id(item) not in tensor_ids_in_obj:
+                    tensors_in_obj.append(item)
+                    tensor_ids_in_obj.append(id(item))
                 continue
             if hasattr(item, 'shape'):
                 continue
@@ -220,7 +250,6 @@ def get_tensors_in_obj_with_mark(x: Any, field_name: str, field_val: Any) -> Lis
         if getattr(tensor, field_name, None) == field_val:
             tensors_with_mark.append(tensor)
     return tensors_with_mark
-    """
 
 
 def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
@@ -263,7 +292,7 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     return getsizeof(t.storage())
 
 
-def human_readable_size(size: int, decimal_places: int = 2) -> str:
+def human_readable_size(size: int, decimal_places: int = 1) -> str:
     """Utility function to convert a size in bytes to a human-readable format.
 
     Args:
@@ -277,7 +306,11 @@ def human_readable_size(size: int, decimal_places: int = 2) -> str:
         if size < 1024.0 or unit == 'PB':
             break
         size /= 1024.0
-    return f"{size:.{decimal_places}f}{unit}"
+    if unit == 'B':
+        size = int(size)
+    else:
+        size = np.round(size, decimals=decimal_places)
+    return f"{size} {unit}"
 
 
 def readable_tensor_size(t: torch.Tensor) -> str:

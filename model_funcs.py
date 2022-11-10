@@ -9,6 +9,7 @@ from tensor_tracking import log_tensor_metadata, initialize_history_dict, mutate
     unmutate_pytorch
 from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
     mark_tensors_in_obj
+from graph_funcs import postprocess_history_dict
 
 
 # TDOO: annotate tensor with their bottom-level modules they've left, and how many passes, too. Will help with module mode
@@ -198,16 +199,18 @@ def module_post_hook(module: nn.Module,
     """
 
     module_address = module.xray_module_address
+    module_pass_num = module.xray_module_pass_num
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
         t.xray_is_module_output = True
         t.xray_modules_exited.append(module_address)
+        t.xray_module_passes_exited.append((module_address, module_pass_num))
         t.xray_containing_modules_nested.pop()  # remove the last module address.
         if module.xray_is_bottom_level_module:
             t.xray_is_bottom_level_module_output = True
-            t.xray_layer_type = 'bottom-level-module'
-            t.xray_layer_barcode = module_address
-            t.xray_linked_bottom_module = module
+            t.xray_bottom_module_barcode = module_address
+            t.xray_bottom_module_type = type(module).__name__
+            t.xray_bottom_module_pass_num = module_pass_num
         else:
             t.xray_is_bottom_level_module_output = False
 
@@ -217,34 +220,51 @@ def module_post_hook(module: nn.Module,
         else:
             t.xray_containing_module = t.xray_containing_modules_nested[-1]
 
+        if module.xray_module_type.lower() == 'identity':
+            t.xray_funcs_applied.append(lambda x: x)
+            t.xray_funcs_applied_names.append('identity')
+            t.xray_funcs_applied_modules.append(module_address)
+
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
     return output_
 
 
 def prepare_model(model: nn.Module,
+                  history_dict: Dict,
                   hook_handles: List,
                   mode: str = 'modules_only') -> List:
     """Adds annotations and hooks to the model.
 
     Args:
         model: Model to prepare.
+        history_dict: Dictionary with the tensor history.
         hook_handles: Pre-allocated list to store the hooks so they can be cleared even if execution fails.
+        device: Which device, 'cpu' or 'cuda', to put the model parameters.
         mode: Either 'modules_only' for just the modules, or 'exhaustive' for all function calls.
 
     Returns:
         Model with hooks and attributes added.
     """
+    # TODO keep running list of modules that were converted to dataparallel so they can be changed back.
+
+    history_dict['model_name'] = str(type(model).__name__)
+
     if mode not in ['modules_only', 'exhaustive']:
         raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
 
     module_stack = [('', model)]  # list of tuples (name, module)
+
     while len(module_stack) > 0:
-        address, module = module_stack.pop()
+        parent_address, module = module_stack.pop()
         module_children = list(module.named_children())
+
         # Annotate the children with the full address.
-        for child_name, child_module in module_children:
-            child_module.xray_module_address = f"{address}.{child_name}" if address != '' else child_name
+        for c, (child_name, child_module) in enumerate(module_children):
+            child_address = f"{parent_address}.{child_name}" if parent_address != '' else child_name
+            child_module.xray_module_address = child_address
+            history_dict['module_dict'][child_module.xray_module_address] = child_module
+            module_children[c] = (child_address, child_module)
         module_stack = module_children + module_stack
 
         if module == model:  # don't tag the model itself.
@@ -329,6 +349,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         mode: Either 'modules_only' or 'exhaustive'
         tensor_nums_to_save: List of tensor numbers to save.
         mode: either 'modules_only' or 'exhaustive'.
+        device: which device to put the model and inputs on
         random_seed: Which random seed to use.
 
     Returns:
@@ -341,17 +362,30 @@ def run_model_and_save_specified_activations(model: nn.Module,
     if tensor_nums_to_save is None:
         tensor_nums_to_save = []
     hook_handles = []
-    prepare_model(model, hook_handles)
     history_dict = initialize_history_dict(tensor_nums_to_save)
     orig_func_defs = []
     try:  # TODO: replace with context manager.
+        if type(model) == nn.DataParallel:
+            model = model.module  # TODO: note this so it can be changed back later.
+            model_is_dataparallel = True
+        else:
+            model_is_dataparallel = False
+        model_device = next(iter(model.parameters())).device
+        x = x.to(model_device)
+        prepare_model(model, history_dict, hook_handles)
         orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)
         prepare_input_tensors(x, history_dict)
         outputs = model(x)
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
-            history_dict['output_tensors'].append(t)
-        mark_tensors_in_obj(output_tensors, 'xray_is_model_output', True)
+            history_dict['output_tensors'].append(t.xray_barcode)
+            mark_tensors_in_obj(t, 'xray_is_model_output', True)
+            log_tensor_metadata(t)
+        if model_is_dataparallel:
+            model = nn.DataParallel(model)
+        unmutate_pytorch(torch, orig_func_defs)
+        history_dict = postprocess_history_dict(history_dict)
+        model = cleanup_model(model, hook_handles)
 
     except Exception as e:
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")
@@ -359,5 +393,4 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model = cleanup_model(model, hook_handles)
         raise e
 
-    # history_dict = postprocess_history_dict(history_dict, mode)
     return history_dict

@@ -362,6 +362,8 @@ def torch_func_decorator(func, history_dict):
             out = print_override(args[0], func_name)
             return out
         all_args = list(args) + list(kwargs.values())
+        non_tensor_args = [arg for arg in args if type(arg) != torch.Tensor]
+        non_tensor_kwargs = {key: val for key, val in kwargs.items() if type(val) != torch.Tensor}
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor)
         if len(arg_tensors) > 0:
             has_parents = True
@@ -391,6 +393,7 @@ def torch_func_decorator(func, history_dict):
         # Mark any parameters.
 
         parent_param_passes = {}
+        total_params_size = 0
         for param in arg_parameters:
             if not hasattr(param, 'xray_param_barcode'):
                 param_barcode = make_barcode()  # TODO also clean up all params with cleanup func.
@@ -400,26 +403,33 @@ def torch_func_decorator(func, history_dict):
                 param_barcode = param.xray_param_barcode
                 param.xray_pass_num += 1
             parent_param_passes[param_barcode] = param.xray_pass_num
+            total_params_size += get_tensor_memory_amount(param.data)
         param_group_barcode = '_'.join(param.xray_param_barcode for param in arg_parameters)
 
-        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'xray_origin', 'input')
+        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'xray_has_input_ancestor', True)
         if came_from_input:
-            origin = 'input'
+            has_input_ancestor = True
         else:
-            origin = 'internal'
+            has_input_ancestor = False
 
-        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'xray_origin', 'internal')
+        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'xray_has_internal_ancestor', True)
         parent_internal_tensor_barcodes = get_marks_from_tensor_list(parent_internal_tensors, 'xray_barcode')
 
         internal_ancestors = []
         for internal_parent in parent_internal_tensors:
             internal_ancestors.extend(internal_parent.xray_internal_ancestors)
+        if len(internal_ancestors) > 0:
+            has_internal_ancestor = True
+        else:
+            has_internal_ancestor = False
 
         out = func(*args, **kwargs)
         if type(out) == torch.Tensor:
             out.xray_history_dict = history_dict
             # If a new tensor, or has a new grad_fn, mark it with everything.
             if not hasattr(out, 'xray_barcode') or (out.grad_fn not in out.xray_gradfuncs):
+                out.xray_barcode = make_barcode()
+
                 # Update history_dict
 
                 history_dict['tensor_counter'] += 1
@@ -429,34 +439,43 @@ def torch_func_decorator(func, history_dict):
                     history_dict['param_group_tensors'][param_group_barcode].append(out.xray_barcode)
 
                 # Update tensor_log
-                out.xray_barcode = make_barcode()
                 out.xray_tensor_num = history_dict['tensor_counter']
-                out.xray_tensor_shape = out.shape
+                out.xray_tensor_shape = tuple(out.shape)
                 out.xray_tensor_dtype = out.dtype
                 out.xray_tensor_fsize = get_tensor_memory_amount(out)
-                out.xray_origin = origin
+                out.xray_has_input_ancestor = has_input_ancestor
                 out.xray_is_model_output = False
                 out.xray_is_model_input = False
                 out.xray_parent_tensor_barcodes = parent_tensor_barcodes
                 out.xray_has_parents = has_parents
+                if (not has_parents) and (not out.xray_is_model_input):
+                    out.xray_is_internally_generated = True
+                    out.xray_has_internal_ancestor = True
+                    out.xray_internal_ancestors = [out.xray_barcode]
+                else:
+                    out.xray_is_internally_generated = False
+                    out.xray_has_internal_ancestor = has_internal_ancestor
+                    out.xray_internal_ancestors = internal_ancestors
                 out.xray_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
-                out.xray_internal_ancestors = internal_ancestors
                 out.xray_funcs_applied = [func]
                 out.xray_funcs_applied_names = [func_name]
                 out.xray_gradfuncs = [out.grad_fn]
                 out.xray_gradfuncs_names = [type(out.grad_fn).__name__]
                 out.xray_parent_params = arg_parameters[:]
+                out.xray_parent_params_shape = [param.shape for param in arg_parameters]
                 out.xray_parent_param_passes = parent_param_passes.copy()
+                out.xray_params_memory_size = total_params_size
                 if len(arg_parameters) == 0:
                     out.xray_has_params = False
                     out.xray_pass_num = 1
                     out.xray_layer_barcode = out.xray_barcode
-                    out.xray_layer_type = 'no-param-function'
                 else:
                     out.xray_has_params = True
                     out.xray_pass_num = len(history_dict['param_group_tensors'][param_group_barcode])
                     out.xray_layer_barcode = param_group_barcode
-                    out.xray_layer_type = 'param-function'
+                out.xray_nontensor_args = non_tensor_args
+                out.xray_nontensor_kwargs = non_tensor_kwargs
+                out.xray_nontensor_all_args = non_tensor_args + list(non_tensor_kwargs.values())
 
                 # Module stuff.
 
@@ -464,9 +483,11 @@ def torch_func_decorator(func, history_dict):
                 out.xray_containing_modules_nested = containing_modules
                 out.xray_containing_module = containing_module
                 out.xray_last_module_seen = last_module_seen
+                out.xray_funcs_applied_modules = [last_module_seen]
                 out.xray_last_module_seen_address = last_module_seen_address
                 out.xray_is_module_output = False
                 out.xray_modules_exited = []
+                out.xray_module_passes_exited = []
                 out.xray_is_bottom_level_module_output = False
 
 
@@ -506,6 +527,7 @@ def initialize_history_dict(tensor_nums_to_save: Union[List[int], str]) -> Dict:
     history_dict['output_tensors'] = []
     history_dict['param_group_tensors'] = defaultdict(list)  # tensors output by each param group
     history_dict['module_output_tensors'] = defaultdict(list)
+    history_dict['module_dict'] = {}
     history_dict['bottom_level_module_output_tensors'] = defaultdict(list)
     history_dict['tensor_log'] = defaultdict(lambda: OrderedDict())  # TODO replace with above function when it's done.
     return history_dict
@@ -523,17 +545,18 @@ def prepare_input_tensors(x: Any,
         None; tensors changed in place.
     """
     barcode_tensors_in_obj(x)
-    mark_tensors_in_obj(x, 'xray_origin', 'input')
+    mark_tensors_in_obj(x, 'has_input_ancestor', True)
     input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for t in input_tensors:
         history_dict['tensor_counter'] += 1
         t.xray_history_dict = history_dict
         t.xray_barcode = make_barcode()
         t.xray_tensor_num = history_dict['tensor_counter']
-        t.xray_tensor_shape = t.shape
+        t.xray_tensor_shape = tuple(t.shape)
         t.xray_tensor_dtype = t.dtype
         t.xray_tensor_fsize = get_tensor_memory_amount(t)
-        t.xray_origin = 'input'
+        t.xray_has_input_ancestor = True
+        t.xray_has_internal_ancestor = False
         t.xray_is_model_input = True
         t.xray_is_model_output = False
         t.xray_parent_tensor_barcodes = []
@@ -542,14 +565,16 @@ def prepare_input_tensors(x: Any,
         t.xray_internal_ancestors = []
         t.xray_funcs_applied = []
         t.xray_funcs_applied_names = []
+        t.xray_funcs_applied_modules = []
         t.xray_gradfuncs = []
         t.xray_gradfuncs_names = []
         t.xray_parent_params = []
+        t.xray_parent_params_shape = []
         t.xray_parent_param_passes = {}
+        t.xray_params_memory_size = 0
         t.xray_has_params = False
         t.xray_pass_num = 1
         t.xray_layer_barcode = t.xray_barcode
-        t.xray_layer_type = 'input'
 
         # Module stuff.
 
@@ -582,14 +607,16 @@ def log_tensor_metadata(t: torch.Tensor):
     for field in dir(t):
         if not field.startswith('xray_'):  # xray is the keyword for marking relevant fields.
             continue
-        field_stripped = field.strip('xray_')
+        field_stripped = field.removeprefix('xray_')
         history_dict['tensor_log'][tensor_barcode][field_stripped] = getattr(t, field)
 
     if t.xray_is_module_output:
         module_just_exited = t.xray_modules_exited[-1]
-        history_dict['module_output_tensors'][module_just_exited].append(tensor_barcode)
+        if tensor_barcode not in history_dict['module_output_tensors'][module_just_exited]:
+            history_dict['module_output_tensors'][module_just_exited].append(tensor_barcode)
 
-        if t.xray_is_bottom_level_module_output:
+        if (t.xray_is_bottom_level_module_output and
+                tensor_barcode not in history_dict['bottom_level_module_output_tensors'][module_just_exited]):
             history_dict['bottom_level_module_output_tensors'][module_just_exited].append(tensor_barcode)
 
 

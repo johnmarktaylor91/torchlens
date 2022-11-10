@@ -21,6 +21,7 @@ from model_funcs import run_model_and_save_specified_activations
 
 
 model = torchvision.models.AlexNet()
+model = torchvision.models.ResNet()
 x = torch.rand(6, 3, 256, 256)
 tensor_record = run_model_and_save_specified_activations(model, x, 'exhaustive', 'all', None)
 

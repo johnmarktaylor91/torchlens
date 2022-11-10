@@ -8,6 +8,7 @@ from torch import nn
 
 from model_funcs import cleanup_model, prepare_model, run_model_and_save_specified_activations
 from util_funcs import remove_list_duplicates
+from graph_funcs import get_op_nums_from_layer_names, render_graph, postprocess_history_dict, prettify_history_dict
 
 
 # TODO: Figure out best way to go from full graph functionality to just modules (for graph, list, activations);
@@ -21,9 +22,8 @@ from util_funcs import remove_list_duplicates
 
 def xray_model(model: nn.Module,
                x: torch.Tensor,
-               mode: str = 'modules_only',
                which_layers: Union[str, List] = 'all',
-               visualize_opt: str = 'none',
+               vis_opt: str = 'unrolled',
                random_seed: Optional[int] = None) -> OrderedDict[str, OrderedDict]:
     """Run a forward pass through a model, and return activations of desired hidden layers.
     Specify mode as 'modules_only' to do so only for proper modules, or as 'exhaustive' to
@@ -37,13 +37,12 @@ def xray_model(model: nn.Module,
     Args:
         model: PyTorch model
         x: desired Tensor input.
-        mode: 'modules_only' to return activations only for module objects, or
-            'exhaustive' to do it for ALL tensor operations.
         which_layers: List of layers to include. If 'all', then include all layers.
-        visualize_opt: Whether, and how, to visualize the network; 'none' for
+        vis_opt: Whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
             in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        random_seed: Which random seed to use if desired (e.g., for networks with randomness)
 
     Returns:
         activations: Dict of dicts with the activations from each layer.
@@ -55,29 +54,27 @@ def xray_model(model: nn.Module,
 
     x = copy.deepcopy(x)
 
-    if mode not in ['modules_only', 'exhaustive']:
-        raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
-    if visualize_opt not in ['none', 'rolled', 'unrolled']:
+    if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     # If not saving all layers, do a probe pass.
 
     if which_layers != 'all':
         history_dict = run_model_and_save_specified_activations(model, x, mode, None, random_seed)
-        history_dict = postprocess_history_dict(history_dict)  # TODO: this function should also give module-level info.
-        tensor_nums_to_save = get_tensor_nums_from_layer_names(history_dict, mode, which_layers)
+        history_dict = postprocess_history_dict(history_dict)
+        tensor_nums_to_save = get_op_nums_from_layer_names(history_dict, which_layers)
     else:
         tensor_nums_to_save = 'all'
 
     # And now save the activations for real.
 
-    history_dict = run_model_and_save_specified_activations(model, x, tensor_nums_to_save, random_seed)
+    history_dict = run_model_and_save_specified_activations(model, x, 'exhaustive', tensor_nums_to_save, random_seed)
 
     # Visualize if desired.
-    if visualize_opt != 'none':
-        render_model_graph(history_dict, mode, visualize_opt)
+    if vis_opt != 'none':
+        render_graph(history_dict, vis_opt)  # change after adding options
 
-    history_pretty = prettify_history_dict(history_dict, which_layers)  # for user readability
+    history_pretty = prettify_history_dict(history_dict)  # for user readability
     return history_pretty
 
 
