@@ -8,7 +8,7 @@ from torch import nn
 from tensor_tracking import log_tensor_metadata, initialize_history_dict, mutate_pytorch, prepare_input_tensors, \
     unmutate_pytorch
 from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
-    mark_tensors_in_obj
+    mark_tensors_in_obj, make_barcode
 from graph_funcs import postprocess_history_dict
 
 
@@ -171,14 +171,27 @@ def module_pre_hook(module: nn.Module,
         The input, now marked with information about the module it's entering.
     """
     module_address = module.xray_module_address
+    module_entry_barcode = f"{module_address}_{make_barcode()}"
+    module.xray_module_entry_barcode = module_entry_barcode
     module.xray_module_pass_num += 1
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
-        t.xray_containing_modules_nested.append(module_address)
-        t.xray_containing_module = module_address
+        previous_module_seen_barcode = t.xray_last_module_seen_entry_barcode
+
+        t.xray_containing_modules_nested.append(module_entry_barcode)
+        t.xray_containing_module = module_entry_barcode
         t.xray_entered_module = True
         t.xray_last_module_seen_address = module_address
+        t.xray_last_module_seen_entry_barcode = module_entry_barcode
         t.xray_last_module_seen = module
+        t.xray_module_just_entered_address = module_address
+
+        if previous_module_seen_barcode is not None:
+            t.xray_containing_modules_threads[module_entry_barcode] = t.xray_containing_modules_threads[
+                                                                          previous_module_seen_barcode] + [
+                                                                          f"+{module_entry_barcode}"]
+        else:
+            t.xray_containing_modules_threads[module_entry_barcode] = [f"+{module_entry_barcode}"]
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
@@ -200,19 +213,44 @@ def module_post_hook(module: nn.Module,
 
     module_address = module.xray_module_address
     module_pass_num = module.xray_module_pass_num
+    module_entry_barcode = module.xray_module_entry_barcode
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
+        tensor_log = t.xray_history_dict['tensor_log']
         t.xray_is_module_output = True
+
+        # If it's not a bottom-level module output, check if it is one and tag it accordingly if so.
+
+        if not t.xray_is_bottom_level_module_output and (len(t.xray_modules_exited) == 0):
+            is_bottom_level_module_output = True
+            for parent_barcode in t.xray_parent_tensor_barcodes:
+                parent_tensor = tensor_log[parent_barcode]
+                if parent_tensor['module_just_entered_address'] != module_address:
+                    is_bottom_level_module_output = False
+                    break
+                if all([not parent_tensor['entered_module'], not parent_tensor['has_input_ancestor']]):
+                    is_bottom_level_module_output = False
+                    break
+
+            if is_bottom_level_module_output:
+                t.xray_is_bottom_level_module_output = True
+                t.xray_bottom_module_barcode = module_address
+                t.xray_bottom_module_type = type(module).__name__
+                t.xray_bottom_module_pass_num = module_pass_num
+
+        t.xray_containing_modules_nested.pop()  # remove the last module address.
         t.xray_modules_exited.append(module_address)
         t.xray_module_passes_exited.append((module_address, module_pass_num))
-        t.xray_containing_modules_nested.pop()  # remove the last module address.
-        if module.xray_is_bottom_level_module:
-            t.xray_is_bottom_level_module_output = True
-            t.xray_bottom_module_barcode = module_address
-            t.xray_bottom_module_type = type(module).__name__
-            t.xray_bottom_module_pass_num = module_pass_num
+
+        previous_module_seen_barcode = t.xray_last_module_seen_entry_barcode
+        if previous_module_seen_barcode is not None:
+            t.xray_containing_modules_threads[module_entry_barcode] = t.xray_containing_modules_threads[
+                                                                          previous_module_seen_barcode] + [
+                                                                          f"-{module_entry_barcode}"]
         else:
-            t.xray_is_bottom_level_module_output = False
+            t.xray_containing_modules_threads[module_entry_barcode] = [f"-{module_entry_barcode}"]
+
+        t.xray_last_module_seen_entry_barcode = module_entry_barcode
 
         if len(t.xray_containing_modules_nested) == 0:
             t.xray_entered_module = False
@@ -370,7 +408,10 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_is_dataparallel = True
         else:
             model_is_dataparallel = False
-        model_device = next(iter(model.parameters())).device
+        if len(list(model.parameters())) > 0:
+            model_device = next(iter(model.parameters())).device
+        else:
+            model_device = 'cpu'
         x = x.to(model_device)
         prepare_model(model, history_dict, hook_handles)
         orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)

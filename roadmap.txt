@@ -1,4 +1,47 @@
+To Do
+- Making it work with parallelism probably too hard (tracking the tensor module depends greatly on tensor state).
+Just stipulate NOT to do this.
+- Go through and make sure all naming etc. is consistent
+- Do profiling and figure out the slow parts
+- Add more options for the graph visualizer
+- Code the top-level user interface; optimize default options for speed and most common use cases.
+- Code the validator script, and all testing; the unit tests can employ this.
+- Package into a proper GitHub module
+- Make sure cleanup works properly, all tensors, modules, parameters, etc.
+- Figure out easiest way to install graphviz for users, this could be a pain point.
+- Make the CoLab notebook, visuals, twitter thread.
+- Name it
+- Add better support for jupyter visualizations
+- Think about away to indicate the hierarchical status of the module structure? Either with nested boxes,
+or by making arrows thicker to indicate leaving more nested modules? Whatever is easiest, not essential.
+Get everything else working well first.
+- Try to at least get output module to always show on top, or maybe vertically sort by their topological order?
+Figure out a good way to do this. Or, at least stipulate that the output module with highest order is on top.
+- Email Hebart folks
+- Add hierarchical clustering boxes for nested submodules. This shouldn't be too hard.
+- The stumbling blocks are the graph operations.
+
+A new complication: a computational bottom-level module need not be a bottom-level module at the level of indexing
+a module object. Have the convention of user-facing addresses be with respect to the indexing, but
+under the hood "bottom-level" means that a module only contains one tensor operation.
+
+
+
+
+
+Justification for it:
+- Module level can be MISLEADING! Module structure does not directly inform the control flow. 
+- Thus, handling of recurrent stuff is clunky.
+- Can't handle function calls. 
+- And can't handle inner branching logic. 
+- Branching handled clumsily. 
+- MAYBE don't index layers by modules? Since they lack parameters, there's no guarantee they'll correspond to meaningful computational steps. 
+
+
+Tensors, layers, nodes, modules
+
 Data Structure Fields:
+
 
 Benchmarks to Meet Before Release:
 - Works on all models that Colin mentioned
@@ -28,6 +71,7 @@ Nomenclature:
 - Layer: a computational step that could meaningfully count as being stable across recurrent passes.
 - Default ontology is tensors that are the results of operations; everything else is packaging.
   The tensor will however know what modules it came out of.
+- Modules are always indexed by their address (the double names are very confusing, don't do it)
 
 Layer Semantics:
 - What counts as a layer? Determined in this order, each taking precedence over the next:
@@ -74,6 +118,11 @@ tensor:
   xray_tensor_size
 tensor_log: same as tensor, but also saving the tensor itself, and the args, kwargs, and params if desired.
 
+Module barcode can simply be the address
+
+Distinction between passes through a module and passes through a set of parameters. The former is just
+for addressing
+
 Module:
 xray_module_address
 xray_module_type
@@ -82,6 +131,8 @@ xray_module_pass_number
 
 User-Facing Syntax:
 - Default is to only look at "bottom-level" modules and functions.
+- Still allow indexing repeated modules by pass number, but this doesn't factor into the visuals,
+  and is separate from their computational pass number.
 - Okay, two modes: exhaustive and modules_only.
 #TODO: figure out the most natural syntax for handling modules versus functions that isn't too bulky.
 #      and figure out whether it's worth labeling functions in nested format too, like the torch version does.

@@ -10,7 +10,7 @@ from IPython.display import display, Image
 import networkx as nx
 
 from collections import OrderedDict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from util_funcs import make_barcode, human_readable_size, in_notebook, int_list_to_compact_str
 
 from tensor_tracking import log_tensor_metadata, log_tensor_data
@@ -44,6 +44,9 @@ PARAMS_NODE_BG_COLOR = "#E6E6E6"
 DEFAULT_BG_COLOR = 'white'
 CONNECTING_NODE_LINE_COLOR = 'black'
 NONCONNECTING_NODE_LINE_COLOR = '#A0A0A0'
+MAX_MODULE_PENWIDTH = 5
+MIN_MODULE_PENWIDTH = 2
+PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):
@@ -143,7 +146,7 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                 new_node['funcs_applied_names'] = node['funcs_applied_names'][f:]
                 new_node['modules_exited'] = node['modules_exited'][func_applied_module_position:]
                 new_node['module_passes_exited'] = node['module_passes_exited'][func_applied_module_position:]
-                new_node['child_tensor_barcodes'] = node['child_tensor_barcodes']
+                new_node['child_tensor_barcodes'] = node['child_tensor_barcodes'][:]
                 new_node['parent_tensor_barcodes'] = [node['barcode']]
                 new_node['tensor_num'] = history_dict['tensor_counter']
                 new_node['has_params'] = False
@@ -298,6 +301,7 @@ def add_output_nodes(history_dict: Dict):
         new_output_node['parent_params'] = new_output_node['parent_params_shape'] = []
         new_output_node['parent_params_passes'] = {}
         new_output_node['tensor_num'] = history_dict['tensor_counter']
+        new_output_node['is_bottom_level_module_output'] = False
 
         # Change original output node:
 
@@ -478,6 +482,73 @@ def annotate_total_layer_passes(history_dict: Dict) -> Dict:
     return history_dict
 
 
+def traverse_graph(history_dict):
+    """Debugging function to traverse the graph and make sure nothing weird happens.
+
+    Args:
+        history_dict: Dict with the history.
+
+    Returns:
+        List of lists of all loops, listed as the tensor barcodes.
+    """
+
+    tensor_log = history_dict['tensor_log']
+    input_nodes = history_dict['input_tensors']
+
+    pairs_seen = set()
+
+    node_stack = input_nodes[:]
+    num_passes = 0
+    tensor_nums = []
+    while len(node_stack) > 0:
+        num_passes += 1
+        node_barcode = node_stack.pop()
+        node = tensor_log[node_barcode]
+        tensor_nums.append(node['tensor_num'])
+        node_children = node['child_tensor_barcodes']
+        for node_child_barcode in node_children:
+            node_stack.append(node_child_barcode)
+            new_pair = (node_barcode, node_child_barcode)
+            # if new_pair in pairs_seen:
+            #    return new_pair
+            pairs_seen.add(new_pair)
+    print(num_passes)
+
+
+def find_loops(history_dict) -> List[List]:
+    """Utility function to find all loops in the graph; returns list of lists of all loops.
+    This should never actually happen, so it's for debugging purposes.
+
+    Args:
+        history_dict: Dict with the history.
+
+    Returns:
+        List of lists of all loops, listed as the tensor barcodes.
+    """
+
+    tensor_log = history_dict['tensor_log']
+    input_nodes = history_dict['input_tensors']
+
+    node_stack = [(input_node, [input_node]) for input_node in input_nodes]  # stack annotated with any top-level loops.
+    loops = []
+    num_passes = 0
+    while len(node_stack) > 0:
+        num_passes += 1
+        node_barcode, nodes_seen = node_stack.pop()
+        node = tensor_log[node_barcode]
+        node_children = node['child_tensor_barcodes']
+        for node_child_barcode in node_children:
+            if node_child_barcode in nodes_seen:
+                loop = nodes_seen + [node_child_barcode]
+                loops.append(loop)
+                continue
+            node_child = tensor_log[node_child_barcode]
+            new_nodes_seen = nodes_seen + [node_child]
+            node_stack.append((node_child_barcode, new_nodes_seen))
+    print(num_passes)
+    return loops
+
+
 def find_outermost_loops(history_dict: Dict) -> Dict:
     """Utility function that tags the top-level loops in the graph. Specifically, it goes until it finds a 
     node that repeats, then gets all isntances of that repeated node, then finds the next one and does the same, etc.
@@ -496,8 +567,11 @@ def find_outermost_loops(history_dict: Dict) -> Dict:
     node_stack = [(input_node, None) for input_node in input_nodes]  # stack annotated with any top-level loops.
     enclosing_loop_nodes = defaultdict(lambda: [])
 
+    stack_lens = []
+    new_child_lens = []
+
     while len(node_stack) > 0:
-        node_tuple = node_stack.pop(0)
+        node_tuple = node_stack.pop()
         node_barcode, enclosing_loop_node = node_tuple
         node = tensor_log[node_barcode]
 
@@ -517,6 +591,8 @@ def find_outermost_loops(history_dict: Dict) -> Dict:
             children_enclosing_loop = enclosing_loop_node
 
         nodes_to_add = [(child_node, children_enclosing_loop) for child_node in node['child_tensor_barcodes']]
+        stack_lens.append(len(node_stack))
+        new_child_lens.append(len(nodes_to_add))
         node_stack.extend(nodes_to_add)
 
     return enclosing_loop_nodes
@@ -811,6 +887,11 @@ def identify_repeated_functions(history_dict: Dict) -> Dict:
     Returns:
         history_dict tagged with any repeated parameters
     """
+    # If there's no repeated parameters, there's nothing to do.
+    if (len(history_dict['param_group_tensors']) == 0) or \
+            (max([len(param_tensors) for param_tensors in history_dict['param_group_tensors'].values()]) < 2):
+        return history_dict
+
     tensor_log = history_dict['tensor_log']
     enclosing_loop_nodes = find_outermost_loops(history_dict)
 
@@ -972,6 +1053,171 @@ def tally_sizes_and_params(history_dict: Dict):
     return history_dict
 
 
+def find_equivalent_clusters(equiv_pairs: List[Tuple[Any, Any]]) -> Dict:
+    """Utility function that takes in a list of tuples, and assigns all values in all tuples to clusters such that
+    any values in the same cluster are in a pair together.
+
+    Args:
+        equiv_pairs: List of pairs of values that are to be in the same cluster.
+
+    Returns:
+        Dictionary mapping each value to the barcode of a cluster it's in.
+    """
+    value_to_cluster_dict = {}
+    for item1, item2 in equiv_pairs:
+        module = item1[0]
+        if (item1 in value_to_cluster_dict) and (item2 in value_to_cluster_dict):
+            continue
+        elif item1 in value_to_cluster_dict:
+            value_to_cluster_dict[item2] = value_to_cluster_dict[item1]
+        elif item2 in value_to_cluster_dict:
+            value_to_cluster_dict[item1] = value_to_cluster_dict[item2]
+        else:
+            new_barcode = make_barcode()
+            value_to_cluster_dict[item1] = (module, new_barcode)
+            value_to_cluster_dict[item2] = (module, new_barcode)
+
+    return value_to_cluster_dict
+
+
+def propagate_module_labels_for_two_nodes(parent_node: Dict,
+                                          neighbor_node: Dict,
+                                          nodes_seen: set,
+                                          all_module_barcodes: List,
+                                          module_equivalent_barcodes: Dict):
+    """Utility function that given a parent and neighbor node, propagates the modules between them.
+    If the neighboring node is unseen with the same module nesting, just copies from the parent;
+    if it's unseen with a different module nesting, the same ones are copied, but different ones
+    are given new barcode. If it's been seen, then go through and mark a
+
+    Args:
+        parent_node: The starting node
+        neighbor_node: The neighbor node
+        nodes_seen: Nodes seen so far
+        module_equivalent_barcodes: Mapping of equivalent module barcodes.
+    """
+    neighbor_barcode = neighbor_node['barcode']
+    parent_modules_nested = parent_node['function_call_modules_nested']
+    neighbor_modules_nested = neighbor_node['function_call_modules_nested']
+    if neighbor_modules_nested == parent_modules_nested:  # neighbors and in same module
+        if neighbor_barcode in nodes_seen:
+            for module in parent_modules_nested:  # mark them as equivalent
+                node_rough_barcode = parent_node['module_instance_rough_barcodes'][module]
+                neighbor_rough_barcode = neighbor_node['module_instance_rough_barcodes'][module]
+                module_equivalent_barcodes[module].append((node_rough_barcode, neighbor_rough_barcode))
+        else:
+            neighbor_node['module_instance_rough_barcodes'] = parent_node['module_instance_rough_barcodes'].copy()
+    else:
+        if neighbor_barcode in nodes_seen:  # if the neighbor has the same modules, indicate them as equivalent.
+            for module in neighbor_modules_nested:
+                if module not in parent_modules_nested:
+                    continue
+                node_rough_barcode = parent_node['module_instance_rough_barcodes'][module]
+                neighbor_rough_barcode = neighbor_node['module_instance_rough_barcodes'][module]
+                module_equivalent_barcodes[module].append((node_rough_barcode, neighbor_rough_barcode))
+        else:  # Generate the new barcodes for the neighboring node.
+            neighbor_node['module_instance_rough_barcodes'] = {}
+            for module in neighbor_modules_nested:
+                if module in parent_modules_nested:
+                    neighbor_node['module_instance_rough_barcodes'][module] = \
+                        parent_node['module_instance_rough_barcodes'][module]
+                else:
+                    new_barcode = (module, make_barcode())
+                    neighbor_node['module_instance_rough_barcodes'][module] = new_barcode
+                    all_module_barcodes.append(new_barcode)
+
+
+def cluster_modules(history_dict: Dict):
+    """Goes through the history dict and assigns 1) cluster IDs, and 2) cluster names that indicate
+    the nested module structure. These must be distinct because the same module can be applied multiple times,
+    and should have the same name, but can be genuinely different instances of the same module in
+    the computational graph. The name of the cluster will be the module address, the ID will be the
+    module address plus a barcode to make it distinct. So, each node will be tagged with this information, such
+    that during the visualization step, the subgraphs can be built and populated with each node.
+    This is NOT based on the programmer's structure, but on what modules are entered and left.
+
+    Args:
+        history_dict: Dictionary of the tensor history.
+    """
+
+    # TODO: populate the internally generated tensors with the right module address (inherit from children)
+
+    tensor_log = history_dict['tensor_log']
+    node_stack = history_dict['input_tensors']
+    for node_barcode in node_stack:
+        node = tensor_log[node_barcode]
+        node['module_instance_rough_barcodes'] = {}  # dict of each enclosing module and its rough barcode
+
+    module_equivalent_barcodes = defaultdict(list)  # for each module, pairs of equivalent trial barcodes
+    all_module_barcodes = []
+    nodes_seen = set()
+    node_pairs_seen = set()  # don't examine the same node pairs twice.
+
+    # Dynamically generate the module equivalence classes.
+
+    while len(node_stack) > 0:
+        node_barcode = node_stack.pop()
+        nodes_seen.add(node_barcode)
+        node = tensor_log[node_barcode]
+        adjacent_barcodes = node['child_tensor_barcodes'] + node['parent_tensor_barcodes']
+        for neighbor_barcode in adjacent_barcodes:
+            node_pair_label = '_'.join(sorted([node_barcode, neighbor_barcode]))
+            if node_pair_label in node_pairs_seen:
+                continue
+            node_pairs_seen.add(node_pair_label)
+
+            neighbor_node = tensor_log[neighbor_barcode]
+            propagate_module_labels_for_two_nodes(node, neighbor_node, nodes_seen,
+                                                  all_module_barcodes, module_equivalent_barcodes)
+            if neighbor_barcode not in nodes_seen:
+                node_stack.append(neighbor_barcode)
+                nodes_seen.add(neighbor_barcode)
+
+    # Now, for each module, greedily combine the equivalence classes, and generate their actual barcodes.
+
+    module_rough_to_final_barcodes = {}
+    for module in module_equivalent_barcodes:
+        module_rough_to_final_barcodes[module] = find_equivalent_clusters(module_equivalent_barcodes[module])
+
+    # Now go back through the network, and add these final barcodes, and also make note of all the parent-child
+    # cluster relationships, and annotate history_dict with it to make the right graph clusters when
+    # making the visuals.
+
+    cluster_children_dict = defaultdict(list)
+    top_level_module_clusters = []
+
+    for barcode, node in tensor_log.items():
+        module_instance_final_barcodes_dict = {}
+        module_instance_final_barcodes_list = []
+        for m, (module, rough_barcode) in enumerate(node['module_instance_rough_barcodes'].items()):
+            if (module in module_rough_to_final_barcodes) and (
+                    rough_barcode in module_rough_to_final_barcodes[module]):
+                final_barcode = (module, module_rough_to_final_barcodes[module][rough_barcode])
+            else:
+                final_barcode = rough_barcode
+            module_instance_final_barcodes_dict[module] = final_barcode
+            module_instance_final_barcodes_list.append(final_barcode)
+            if m == 0:  # if a top level module, add to the list.
+                if final_barcode not in top_level_module_clusters:
+                    top_level_module_clusters.append(final_barcode)
+            else:  # if a submodule and not a bottom-level module, add to the dict.
+                if final_barcode not in cluster_children_dict[last_module_instance_id]:
+                    cluster_children_dict[last_module_instance_id].append(final_barcode)
+
+            last_module_instance_id = final_barcode
+
+        if not node['is_model_output']:
+            node['module_instance_final_barcodes_dict'] = module_instance_final_barcodes_dict
+            node['module_instance_final_barcodes_list'] = module_instance_final_barcodes_list
+        else:
+            node['module_instance_final_barcodes_dict'] = {}
+            node['module_instance_final_barcodes_list'] = []
+
+    history_dict['top_level_module_clusters'] = top_level_module_clusters
+    history_dict['module_cluster_children_dict'] = cluster_children_dict
+    return history_dict
+
+
 def subset_graph(history_dict: Dict, nodes_to_keep: List[str]) -> Dict:
     """Subsets the nodes of the graph, inheriting the parent/children of omitted nodes.
 
@@ -1036,7 +1282,8 @@ def roll_graph(history_dict: Dict) -> Dict:
     fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
                       'is_model_input', 'is_model_output', 'is_last_output_layer', 'connects_input_and_output',
                       'tensor_shape', 'tensor_fsize', 'has_params', 'param_total_passes', 'parent_params_shape',
-                      'modules_exited', 'module_total_passes']
+                      'is_bottom_level_module_output', 'modules_exited',
+                      'module_total_passes', 'module_instance_final_barcodes_list']
 
     tensor_log = history_dict['tensor_log']
     rolled_tensor_log = OrderedDict({})
@@ -1096,7 +1343,8 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
         identify_repeated_functions,  # find repeated functions between repeated param nodes
         annotate_node_names,  # make the nodes names more human-readable
         map_layer_names_to_op_nums,  # get the operation numbers for any human-readable layer labels
-        tally_sizes_and_params,  # tally total sizes of tensors and params
+        cluster_modules,  # identify the unique module instances and the right mappings
+        tally_sizes_and_params  # tally total sizes of tensors and params
     ]
 
     for graph_transform in graph_transforms:
@@ -1132,14 +1380,41 @@ def prettify_history_dict(history_dict: Dict) -> Dict:
     return pretty_tensor_log
 
 
+def get_lowest_containing_module_for_two_nodes(node1: Dict,
+                                               node2: Dict):
+    """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
+
+    Args:
+        node1: The first node.
+        node2: The second node.
+
+    Returns:
+        Barcode of lowest-level module containing both nodes.
+    """
+    node1_modules = node1['module_instance_final_barcodes_list']
+    node2_modules = node2['module_instance_final_barcodes_list']
+
+    if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
+        return -1  # no submodule contains them both.
+
+    containing_module = node1_modules[0]
+    for m in range(min([len(node1_modules), len(node2_modules)])):
+        if node1_modules[m] != node2_modules[m]:
+            break
+        containing_module = node1_modules[m]
+    return containing_module
+
+
 def add_rolled_edges_for_node(node: Dict,
                               graphviz_graph,
+                              module_cluster_dict: Dict,
                               tensor_log: Dict):
     """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
 
     Args:
         node: The node to add edges for.
         graphviz_graph: The graphviz graph object.
+        module_cluster_dict: Dictionary mapping each cluster to the edges it contains.
         tensor_log: The tensor log.
     """
 
@@ -1151,27 +1426,36 @@ def add_rolled_edges_for_node(node: Dict,
             child_layer_passes[child_layer_barcode].append(pass_num)
 
     for child_layer_barcode, pass_nums in child_layer_passes.items():
+        child_node = tensor_log[child_layer_barcode]
         if node['param_total_passes'] > 1:
             edge_label = f"#{int_list_to_compact_str(pass_nums)}"
         else:
             edge_label = ''
 
-        if tensor_log[child_layer_barcode]['connects_input_and_output'] and node['connects_input_and_output']:
+        if child_node['connects_input_and_output'] and node['connects_input_and_output']:
             edge_color = CONNECTING_NODE_LINE_COLOR
             edge_style = 'solid'
         else:
             edge_color = CONNECTING_NODE_LINE_COLOR  # NONCONNECTING_NODE_LINE_COLOR
             edge_style = 'dashed'
-        graphviz_graph.edge(node['layer_barcode'],
-                            child_layer_barcode,
-                            color=edge_color,
-                            style=edge_style,
-                            label=edge_label)
+
+        edge_dict = {'tail_name': node['layer_barcode'],
+                     'head_name': child_layer_barcode,
+                     'color': edge_color,
+                     'style': edge_style,
+                     'label': edge_label}
+
+        containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
+        if containing_module != -1:
+            module_cluster_dict[containing_module].append(edge_dict)
+        else:
+            graphviz_graph.edge(**edge_dict)
 
 
 def add_node_to_graphviz(node_barcode: Dict,
                          graphviz_graph,
                          vis_opt: str,
+                         module_cluster_dict: Dict,
                          tensor_log: Dict,
                          history_dict: Dict):
     """Addes a node and its relevant edges to the graphviz figure.
@@ -1179,15 +1463,20 @@ def add_node_to_graphviz(node_barcode: Dict,
     Args:
         node_barcode: Barcode of the node to add.
         graphviz_graph: The graphviz object to add the node to.
-        rolled: Whether to roll the graph or not
-        history_dict: Dict of history
+        vis_opt: Whether to roll the graph or not
+        module_cluster_dict: Dictionary of the module clusters.
+        tensor_log: log of tensors
+        history_dict: The history_dict
+
+        #TODO figure out the subgraph stuff. Either the context method or the new graph method, add labels,
+        #TODO don't override the default node labels.
 
     Returns:
         Nothing, but updates the graphviz_graph
     """
     node = tensor_log[node_barcode]
 
-    if len(node['modules_exited']) > 0:
+    if node['is_bottom_level_module_output']:
         last_module_seen = "<br/>@" + node['modules_exited'][0]
         last_module_seen = f"{last_module_seen}"
         last_module_total_passes = node['module_total_passes']
@@ -1251,7 +1540,7 @@ def add_node_to_graphviz(node_barcode: Dict,
     node_label = (f'<{node_title}<br/>{tensor_shape_str} '
                   f'({tensor_fsize}){param_label}{last_module_seen}>')
 
-    graphviz_graph.node(node_barcode, label=f"{node_label}",
+    graphviz_graph.node(name=node_barcode, label=f"{node_label}",
                         fontcolor=node_color,
                         color=node_color,
                         style=f"filled,{line_style}",
@@ -1259,24 +1548,138 @@ def add_node_to_graphviz(node_barcode: Dict,
                         shape=node_shape)
 
     if vis_opt == 'rolled':
-        add_rolled_edges_for_node(node, graphviz_graph, tensor_log)
+        add_rolled_edges_for_node(node, graphviz_graph, module_cluster_dict, tensor_log)
     else:
         for child_barcode in node['child_tensor_barcodes']:
+            child_node = tensor_log[child_barcode]
             if tensor_log[child_barcode]['connects_input_and_output'] and node['connects_input_and_output']:
                 edge_color = CONNECTING_NODE_LINE_COLOR
                 edge_style = 'solid'
             else:
                 edge_color = CONNECTING_NODE_LINE_COLOR  # NONCONNECTING_NODE_LINE_COLOR
                 edge_style = 'dashed'
-            graphviz_graph.edge(node_barcode, child_barcode, color=edge_color, style=edge_style)
+            edge_dict = {'tail_name': node_barcode,
+                         'head_name': child_barcode,
+                         'color': edge_color,
+                         'style': edge_style}
+            containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
+            if containing_module != -1:
+                module_cluster_dict[containing_module].append(edge_dict)
+            else:
+                graphviz_graph.edge(**edge_dict)
 
-    # Finally, if it's the final output layer, force it to be on top by drawing invisible, unconstrained
-    # edges to every other node.
+    # Finally, if it's the final output layer, force it to be on top for visual niceness.
 
     if node['is_last_output_layer'] and vis_opt == 'rolled':
         with graphviz_graph.subgraph() as s:
             s.attr(rank='sink')
             s.node(node_barcode)
+
+
+def setup_subgraphs_recurse(parent_graph,
+                            subgraph_tuple,
+                            module_cluster_dict: Dict[str, List],
+                            module_cluster_children_dict: Dict,
+                            nesting_depth: int,
+                            max_nesting_depth: int,
+                            history_dict: Dict):
+    """Inner recursive function to set up the subgraphs; this is needed in order to handle arbitrarily nested
+    "with" statements.
+
+    Args:
+        parent_graph: Parent of the subgraph being added.
+        subgraph_tuple: Name of subgraph being processed.
+        module_cluster_dict: Dict that maps each subgraph to list of edges in the subgraph.
+        module_cluster_children_dict: Dict mapping each cluster to its children clusters.
+        nesting_depth: How many submodules deep you are. This is used to determine the edge thickness
+        max_nesting_depth: The deepest nesting depth of modules in the network.
+        history_dict: Dict of the history
+    """
+    nesting_depth += 1
+    pen_width = MIN_MODULE_PENWIDTH + ((max_nesting_depth - nesting_depth) / max_nesting_depth) * PENWIDTH_RANGE
+
+    subgraph_module, subgraph_barcode = subgraph_tuple
+    subgraph_name = '_'.join(subgraph_tuple)
+    cluster_name = f"cluster_{subgraph_name}"
+    module_type = str(type(history_dict['module_dict'][subgraph_module]).__name__)
+
+    with parent_graph.subgraph(name=cluster_name) as s:
+        s.attr(label=f"<<B>@{subgraph_module}</B><br align='left'/>{module_type}<br align='left'/>>",
+               labelloc='b',
+               penwidth=str(pen_width))
+        subgraph_edges = module_cluster_dict[subgraph_tuple]
+        for edge_dict in subgraph_edges:
+            s.edge(**edge_dict)
+        subgraph_children = module_cluster_children_dict[subgraph_tuple]
+        for subgraph_child in subgraph_children:
+            setup_subgraphs_recurse(s, subgraph_child,
+                                    module_cluster_dict, module_cluster_children_dict,
+                                    nesting_depth, max_nesting_depth, history_dict)
+
+
+def get_max_nesting_depth(top_graphs,
+                          module_cluster_dict,
+                          module_cluster_children_dict):
+    """Utility function to get the max nesting depth of the nested modules in the network; works by
+    recursively crawling down the stack of modules till it hits one with no children and at least one edge.
+
+    Args:
+        top_graphs: Top-level modules
+        module_cluster_dict: Edges in each module.
+        module_cluster_children_dict: Mapping from each module to any children.
+
+    Returns:
+        Max nesting depth.
+    """
+    max_nesting_depth = 1
+    module_stack = [(graph, 1) for graph in top_graphs]
+
+    while len(module_stack) > 0:
+        module, module_depth = module_stack.pop()
+        module_edges = module_cluster_dict[module]
+        module_children = module_cluster_children_dict[module]
+
+        if len(module_edges) == 0:  # can ignore if no edges.
+            continue
+        elif len(module_children) == 0:
+            max_nesting_depth = max([module_depth, max_nesting_depth])
+        else:
+            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
+    return max_nesting_depth
+
+
+def set_up_subgraphs(graphviz_graph,
+                     module_cluster_dict: Dict[str, List],
+                     history_dict: Dict):
+    """Given a dictionary specifying teh edges in each cluster, the graphviz graph object, and the history_dict,
+    set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
+    recursive logic to set up the nested context managers.
+
+    Args:
+        graphviz_graph: Graphviz graph object.
+        module_cluster_dict: Dictionary mapping each cluster name to the list of edges it contains, with each
+            edge specified as a dict with all necessary arguments for creating that edge.
+        history_dict: History dict.
+    """
+    module_cluster_children_dict = history_dict['module_cluster_children_dict']
+    subgraphs = history_dict['top_level_module_clusters']
+
+    nesting_depth = 0
+
+    # Get the max nesting depth; it'll be the depth of the deepest module that has no edges.
+
+    max_nesting_depth = get_max_nesting_depth(subgraphs,
+                                              module_cluster_dict,
+                                              module_cluster_children_dict)
+
+    for subgraph_tuple in subgraphs:
+        setup_subgraphs_recurse(graphviz_graph,
+                                subgraph_tuple,
+                                module_cluster_dict,
+                                module_cluster_children_dict,
+                                nesting_depth,
+                                max_nesting_depth,
+                                history_dict)
 
 
 def render_graph(history_dict: Dict,
@@ -1305,25 +1708,34 @@ def render_graph(history_dict: Dict,
         f"<<B>{history_dict['model_name']}</B><br align='left'/>{num_tensors} tensors total ({total_tensor_fsize})"
         f"<br align='left'/>{total_params} params total ({total_params_fsize})<br align='left'/>>")
 
-    dot = graphviz.Digraph(comment='Computational graph for the feedforward sweep',
+    dot = graphviz.Digraph(name='model', comment='Computational graph for the feedforward sweep',
                            filename='model.png', format='png')
     dot.graph_attr.update({'rankdir': 'BT',
                            'label': graph_caption,
                            'labelloc': 't',
                            'labeljust': 'left'})
     dot.node_attr.update({'shape': 'box'})
+
+    module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.
+
     for node_barcode, node in tensor_log.items():
         add_node_to_graphviz(node_barcode,
                              dot,
                              vis_opt,
+                             module_cluster_dict,
                              tensor_log,
                              history_dict)
 
-    # from IPython.display import Image
-    # graphviz.Source(dot).view()
-    # Image(dot)
+    # Finally, set up the subgraphs.
+
+    set_up_subgraphs(dot, module_cluster_dict, history_dict)
+
     if in_notebook():
+        # TODO get this to work
         print("printing in notebook")
+        # from IPython.display import Image
+        # graphviz.Source(dot).view()
+        # Image(dot)
     else:
         # dot.render(directory='doctest-output').replace('\\', '/')
         dot.render('graph.gv', view=True)

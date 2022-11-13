@@ -4,7 +4,7 @@ from sys import getsizeof
 import numpy as np
 import random
 import torch
-from typing import Any, List, Tuple, Type
+from typing import Any, List, Optional, Tuple, Type
 import copy
 from IPython import get_ipython
 
@@ -109,17 +109,22 @@ def in_notebook():
 
 def get_vars_of_type_from_obj(obj: Any,
                               which_type: Type,
+                              subclass_exceptions: Optional[List] = None,
                               search_depth: int = 5) -> List[torch.Tensor]:
     """Recursively finds all objects of a given type, or a subclass of that type,
     up to the given search depth.
 
     Args:
         obj: Object to search.
+        which_type: type of object to pull out
+        subclass_exceptions: subclasses that you don't want to pull out.
         search_depth: How many layers deep to search before giving up.
 
     Returns:
-        List of tensors found in the object.
+        List of objects of desired type found in the input object.
     """
+    if subclass_exceptions is None:
+        subclass_exceptions = []
     this_stack = [obj]
     tensors_in_obj = []
     tensor_ids_in_obj = []
@@ -130,11 +135,11 @@ def get_vars_of_type_from_obj(obj: Any,
         while len(this_stack) > 0:
             item = this_stack.pop()
             item_class = type(item)
-            if issubclass(item_class, which_type):
-                if id(item) not in tensor_ids_in_obj:
-                    tensors_in_obj.append(item)
-                    tensor_ids_in_obj.append(id(item))
+            if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
                 continue
+            if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
+                tensors_in_obj.append(item)
+                tensor_ids_in_obj.append(id(item))
             if hasattr(item, 'shape'):
                 continue
             if is_iterable(item):

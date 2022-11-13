@@ -43,7 +43,7 @@ simple_ff = networks.SimpleFF()
 
 # x = torch.rand(6, 3, 256, 256)
 
-# network = torchvision.models.resnet18()
+# network = torchvision.models.GoogLeNet()
 # history_dict = run_model_and_save_specified_activations(network, x, 'exhaustive', 'all', None)
 # history_dict = gf.postprocess_history_dict(history_dict)
 # gf.render_graph(history_dict)
@@ -54,17 +54,17 @@ simple_ff = networks.SimpleFF()
 # history_dict = run_model_and_save_specified_activations(network, x, 'exhaustive', 'all', None)
 # gf.render_graph(history_dict)
 
-# x = torch.rand(6, 3, 256, 256)
-# network = torchvision.models.AlexNet()
-# tensor_log = xray_model(network, x)
-# print(tensor_log['conv2d_2_5']['tensor_contents'])
+x = torch.rand(6, 3, 256, 256)
+# network = torchvision.models.vgg19()
+network = torchvision.models.GoogLeNet()
+tensor_log = xray_model(network, x)
 
 # x = torch.rand(1, 1, 3, 3)
 
-x = torch.zeros(5, 5)
+# x = torch.zeros(5, 5)
 
-network = networks.RecurrentSameFuncs()
-xray_model(network, x, vis_opt='rolled')
+# network = networks.NestedModulesSimple()
+# xray_model(network, x, vis_opt='rolled')
 
 # x = torch.rand(6, 3, 256, 256)
 

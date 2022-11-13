@@ -350,9 +350,32 @@ def unmutate_pytorch(torch_module,
             continue
 
 
+def update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
+    """Utility function that updates the containing modules of a Tensor by starting from the containing modules
+    as of the last function call, then looks at the sequence of module transitions (in or out of a module) as of
+    the last module it saw, and updates accordingly.
+
+    Args:
+        t: Tensor to check.
+
+    Returns:
+        List of the updated containing modules.
+    """
+    containing_modules = t.xray_function_call_modules_nested[:]
+    thread_modules = t.xray_containing_modules_threads[t.xray_last_module_seen_entry_barcode]
+    for thread_module in thread_modules:
+        if thread_module.startswith('+'):
+            containing_modules.append(thread_module[1:])
+        elif thread_module.startswith('-'):
+            if thread_module[1:] in containing_modules:
+                containing_modules.remove(thread_module[1:])
+    return containing_modules
+
+
 def torch_func_decorator(func, history_dict):
     @wraps(func)
     def wrapped_func(*args, **kwargs):
+        tensor_log = history_dict['tensor_log']
         func_name = func.__name__
         if func_name in funcs_not_to_log:
             out = func(*args, **kwargs)
@@ -364,7 +387,8 @@ def torch_func_decorator(func, history_dict):
         all_args = list(args) + list(kwargs.values())
         non_tensor_args = [arg for arg in args if type(arg) != torch.Tensor]
         non_tensor_kwargs = {key: val for key, val in kwargs.items() if type(val) != torch.Tensor}
-        arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor)
+        arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.parameter.Parameter])
+        # TODO: remove tensors that aren't tracked or created, sometimes there are miscelanneous ones
         if len(arg_tensors) > 0:
             has_parents = True
         else:
@@ -374,21 +398,32 @@ def torch_func_decorator(func, history_dict):
         # TODO when designing the graph cleanup, make sure any tensors created inside a module
         # are indicated as being inside the module (check their descendents)
         any_inputs_entered_module = tensor_in_obj_has_mark(arg_tensors, 'xray_entered_module', True)
-        if any_inputs_entered_module:
-            for t in arg_tensors:
+        if any_inputs_entered_module:  # TODO make this a function
+            # Use the tensor with the most nested containing module (in case of internally generated ones).
+            max_input_module_nesting = 0
+            most_nested_arg_tensor_index = None
+            most_nested_containing_modules = []
+            for i, t in enumerate(arg_tensors):
                 if not hasattr(t, 'xray_containing_modules_nested'):
                     continue
-                if len(t.xray_containing_modules_nested) > 0:
-                    containing_modules = t.xray_containing_modules_nested[:]
-                    containing_module = t.xray_containing_module
-                    last_module_seen = t.xray_last_module_seen
-                    last_module_seen_address = t.xray_last_module_seen_address
-                    break
+                containing_modules = update_tensor_containing_modules(t)
+                if len(containing_modules) > max_input_module_nesting:
+                    max_input_module_nesting = len(containing_modules)
+                    most_nested_arg_tensor_index = i
+                    most_nested_containing_modules = containing_modules[:]
+            reference_arg_tensor = arg_tensors[most_nested_arg_tensor_index]
+            containing_module = reference_arg_tensor.xray_containing_module
+            last_module_seen = reference_arg_tensor.xray_last_module_seen
+            last_module_seen_address = reference_arg_tensor.xray_last_module_seen_address
+            last_module_seen_entry_barcode = reference_arg_tensor.xray_last_module_seen_entry_barcode
+            containing_modules = most_nested_containing_modules
+
         else:
             containing_modules = []
             containing_module = None
             last_module_seen = None
             last_module_seen_address = None
+            last_module_seen_entry_barcode = None
 
         # Mark any parameters.
 
@@ -481,10 +516,14 @@ def torch_func_decorator(func, history_dict):
 
                 out.xray_entered_module = any_inputs_entered_module
                 out.xray_containing_modules_nested = containing_modules
+                out.xray_function_call_modules_nested = containing_modules[:]
+                out.xray_containing_modules_threads = defaultdict(list)  # containing_modules_threads
                 out.xray_containing_module = containing_module
                 out.xray_last_module_seen = last_module_seen
+                out.xray_module_just_entered_address = None
                 out.xray_funcs_applied_modules = [last_module_seen]
                 out.xray_last_module_seen_address = last_module_seen_address
+                out.xray_last_module_seen_entry_barcode = last_module_seen_entry_barcode
                 out.xray_is_module_output = False
                 out.xray_modules_exited = []
                 out.xray_module_passes_exited = []
@@ -495,8 +534,8 @@ def torch_func_decorator(func, history_dict):
                 out.xray_funcs_applied.append(func)
                 out.xray_funcs_applied_names.append(func_name)
 
-            log_tensor_data(out, args, kwargs, arg_parameters)
             log_tensor_metadata(out)
+            log_tensor_data(out, args, kwargs, arg_parameters)
 
         return out
 
@@ -559,6 +598,7 @@ def prepare_input_tensors(x: Any,
         t.xray_has_internal_ancestor = False
         t.xray_is_model_input = True
         t.xray_is_model_output = False
+        t.xray_module_just_entered_address = None
         t.xray_parent_tensor_barcodes = []
         t.xray_has_parents = False
         t.xray_parent_internal_tensor_barcodes = []
@@ -580,9 +620,12 @@ def prepare_input_tensors(x: Any,
 
         t.xray_entered_module = False
         t.xray_containing_modules_nested = []
+        t.xray_containing_modules_threads = defaultdict(list)
+        t.xray_function_call_modules_nested = []
         t.xray_containing_module = None
         t.xray_last_module_seen = None
         t.xray_last_module_seen_address = None
+        t.xray_last_module_seen_entry_barcode = None
         t.xray_is_module_output = False
         t.xray_modules_exited = []
         t.xray_is_bottom_level_module_output = False

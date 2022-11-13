@@ -412,6 +412,84 @@ class RecurrentNestedInternal(nn.Module):
         return x
 
 
+# Test how the nested module functionality works.
+
+class Level0_1(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        x = torch.tan(x)
+        x = torch.sin(x)
+        return x
+
+
+class Level1_1(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.level0_1 = Level0_1()
+
+    def forward(self, x):
+        x = x + 1
+        x = x * 2
+        x = self.level0_1(x)
+        return x
+
+
+class Level1_2(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        x = x ** 3
+        x = x / 5
+        return x
+
+
+class Level2_1(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.level1_1 = Level1_1()
+        self.level1_2 = Level1_2()
+
+    def forward(self, x):
+        x = x + 1
+        x = self.level1_1(x)
+        x = x + 9
+        x = self.level1_2(x)
+        x = x / 5
+        return x
+
+
+class Level2_2(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.level1_1 = Level1_1()
+        self.level1_2 = Level1_2()
+
+    def forward(self, x):
+        x = x + 9
+        x = self.level1_2(x)
+        x = x - 5
+        x = self.level1_2(x)
+        x = x / 5
+        return x
+
+
+class NestedModulesSimple(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.level2_1 = Level2_1()
+        self.level2_2 = Level2_2()
+
+    def forward(self, x):
+        x = torch.cos(x)
+        x = self.level2_1(x)
+        x = x - 5
+        x = self.level2_2(x)
+        return x
+
+
 # Next: recurrent with internal branching.
 
 # And recurrent with internal branching and internally generated.
