@@ -25,7 +25,9 @@ A new complication: a computational bottom-level module need not be a bottom-lev
 a module object. Have the convention of user-facing addresses be with respect to the indexing, but
 under the hood "bottom-level" means that a module only contains one tensor operation.
 
-
+Logic for my own reference:
+- The whole challenge, the one and only main challenge, is keeping track of which functions are entered and left,
+  and which modules are entered and left. That's it.
 
 
 

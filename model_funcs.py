@@ -171,13 +171,11 @@ def module_pre_hook(module: nn.Module,
         The input, now marked with information about the module it's entering.
     """
     module_address = module.xray_module_address
-    module_entry_barcode = f"{module_address}_{make_barcode()}"
-    module.xray_module_entry_barcode = module_entry_barcode
+    module_entry_barcode = (module_address, make_barcode())
+    module.xray_module_entry_barcodes.append(module_entry_barcode)
     module.xray_module_pass_num += 1
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
-        previous_module_seen_barcode = t.xray_last_module_seen_entry_barcode
-
         t.xray_containing_modules_nested.append(module_entry_barcode)
         t.xray_containing_module = module_entry_barcode
         t.xray_entered_module = True
@@ -185,13 +183,7 @@ def module_pre_hook(module: nn.Module,
         t.xray_last_module_seen_entry_barcode = module_entry_barcode
         t.xray_last_module_seen = module
         t.xray_module_just_entered_address = module_address
-
-        if previous_module_seen_barcode is not None:
-            t.xray_containing_modules_threads[module_entry_barcode] = t.xray_containing_modules_threads[
-                                                                          previous_module_seen_barcode] + [
-                                                                          f"+{module_entry_barcode}"]
-        else:
-            t.xray_containing_modules_threads[module_entry_barcode] = [f"+{module_entry_barcode}"]
+        t.xray_containing_modules_thread.append(f"+{module_entry_barcode}")
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
@@ -213,7 +205,8 @@ def module_post_hook(module: nn.Module,
 
     module_address = module.xray_module_address
     module_pass_num = module.xray_module_pass_num
-    module_entry_barcode = module.xray_module_entry_barcode
+    module_entry_barcode = module.xray_module_entry_barcodes.pop()
+    input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
         tensor_log = t.xray_history_dict['tensor_log']
@@ -242,14 +235,7 @@ def module_post_hook(module: nn.Module,
         t.xray_modules_exited.append(module_address)
         t.xray_module_passes_exited.append((module_address, module_pass_num))
 
-        previous_module_seen_barcode = t.xray_last_module_seen_entry_barcode
-        if previous_module_seen_barcode is not None:
-            t.xray_containing_modules_threads[module_entry_barcode] = t.xray_containing_modules_threads[
-                                                                          previous_module_seen_barcode] + [
-                                                                          f"-{module_entry_barcode}"]
-        else:
-            t.xray_containing_modules_threads[module_entry_barcode] = [f"-{module_entry_barcode}"]
-
+        t.xray_containing_modules_thread.append(f"-{module_entry_barcode}")
         t.xray_last_module_seen_entry_barcode = module_entry_barcode
 
         if len(t.xray_containing_modules_nested) == 0:
@@ -264,6 +250,12 @@ def module_post_hook(module: nn.Module,
             t.xray_funcs_applied_modules.append(module_address)
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
+
+    for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
+        input_module_thread = t.xray_containing_modules_thread[:]
+        if f"+{module_entry_barcode}" in input_module_thread:
+            module_entry_ix = input_module_thread.index(f"+{module_entry_barcode}")
+            t.xray_containing_modules_thread = t.xray_containing_modules_thread[:module_entry_ix]
 
     return output_
 
@@ -316,6 +308,7 @@ def prepare_model(model: nn.Module,
         module.xray_module_type = str(type(module).__name__).lower()
         module.xray_is_bottom_level_module = is_bottom_level_module
         module.xray_module_pass_num = 0
+        module.xray_module_entry_barcodes = []
 
         # Add hooks.
 

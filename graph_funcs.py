@@ -1192,7 +1192,7 @@ def cluster_modules(history_dict: Dict):
         for m, (module, rough_barcode) in enumerate(node['module_instance_rough_barcodes'].items()):
             if (module in module_rough_to_final_barcodes) and (
                     rough_barcode in module_rough_to_final_barcodes[module]):
-                final_barcode = (module, module_rough_to_final_barcodes[module][rough_barcode])
+                final_barcode = module_rough_to_final_barcodes[module][rough_barcode]
             else:
                 final_barcode = rough_barcode
             module_instance_final_barcodes_dict[module] = final_barcode

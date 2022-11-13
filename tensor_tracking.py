@@ -362,7 +362,7 @@ def update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
         List of the updated containing modules.
     """
     containing_modules = t.xray_function_call_modules_nested[:]
-    thread_modules = t.xray_containing_modules_threads[t.xray_last_module_seen_entry_barcode]
+    thread_modules = t.xray_containing_modules_thread[:]
     for thread_module in thread_modules:
         if thread_module.startswith('+'):
             containing_modules.append(thread_module[1:])
@@ -517,7 +517,7 @@ def torch_func_decorator(func, history_dict):
                 out.xray_entered_module = any_inputs_entered_module
                 out.xray_containing_modules_nested = containing_modules
                 out.xray_function_call_modules_nested = containing_modules[:]
-                out.xray_containing_modules_threads = defaultdict(list)  # containing_modules_threads
+                out.xray_containing_modules_thread = []
                 out.xray_containing_module = containing_module
                 out.xray_last_module_seen = last_module_seen
                 out.xray_module_just_entered_address = None
@@ -620,7 +620,7 @@ def prepare_input_tensors(x: Any,
 
         t.xray_entered_module = False
         t.xray_containing_modules_nested = []
-        t.xray_containing_modules_threads = defaultdict(list)
+        t.xray_containing_modules_thread = []
         t.xray_function_call_modules_nested = []
         t.xray_containing_module = None
         t.xray_last_module_seen = None
