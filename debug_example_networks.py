@@ -64,7 +64,7 @@ tensor_log = xray_model(network, x)
 # x = torch.zeros(5, 5)
 
 # network = networks.NestedModulesSimple()
-# xray_model(network, x, vis_opt='rolled')
+# tensor_log = xray_model(network, x, vis_opt='unrolled')
 
 # x = torch.rand(6, 3, 256, 256)
 

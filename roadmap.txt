@@ -1,4 +1,15 @@
 To Do
+- Fix topological sort for extended internally generated tensors
+- Propagate nested modules to internally generated tensors
+- Make topological sort follow operation order; if there's branching, then the order of the first
+  nodes in the branch determine the rest.
+- Make sure that the rolled view plays nice with the module view.
+- Email Hebart et al.
+- Validation script, unit tests.
+- Lil photo gallery
+- Write out a schematic of the code, go back through and make it pretty; remove worthless stuff.
+- Make the demos, and a quick, nice readme, CoLab, twitter thread
+- Roll out by Wednesday
 - Making it work with parallelism probably too hard (tracking the tensor module depends greatly on tensor state).
 Just stipulate NOT to do this.
 - Go through and make sure all naming etc. is consistent
@@ -12,13 +23,7 @@ Just stipulate NOT to do this.
 - Make the CoLab notebook, visuals, twitter thread.
 - Name it
 - Add better support for jupyter visualizations
-- Think about away to indicate the hierarchical status of the module structure? Either with nested boxes,
-or by making arrows thicker to indicate leaving more nested modules? Whatever is easiest, not essential.
-Get everything else working well first.
-- Try to at least get output module to always show on top, or maybe vertically sort by their topological order?
-Figure out a good way to do this. Or, at least stipulate that the output module with highest order is on top.
 - Email Hebart folks
-- Add hierarchical clustering boxes for nested submodules. This shouldn't be too hard.
 - The stumbling blocks are the graph operations.
 
 A new complication: a computational bottom-level module need not be a bottom-level module at the level of indexing

@@ -364,9 +364,9 @@ def update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
     containing_modules = t.xray_function_call_modules_nested[:]
     thread_modules = t.xray_containing_modules_thread[:]
     for thread_module in thread_modules:
-        if thread_module.startswith('+'):
+        if thread_module[0] == '+':
             containing_modules.append(thread_module[1:])
-        elif thread_module.startswith('-'):
+        elif thread_module[0] == '-':
             if thread_module[1:] in containing_modules:
                 containing_modules.remove(thread_module[1:])
     return containing_modules

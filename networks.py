@@ -412,7 +412,7 @@ class RecurrentNestedInternal(nn.Module):
         return x
 
 
-# Test how the nested module functionality works.
+# Test how the nested module functionality works. TODO: Try with trickier nesting/branching to be sure nothing breaks.
 
 class Level0_1(nn.Module):
     def __init__(self):
@@ -471,7 +471,7 @@ class Level2_2(nn.Module):
         x = x + 9
         x = self.level1_2(x)
         x = x - 5
-        x = self.level1_2(x)
+        x = self.level1_2(self.level1_2(x))
         x = x / 5
         return x
 
@@ -484,46 +484,15 @@ class NestedModulesSimple(nn.Module):
 
     def forward(self, x):
         x = torch.cos(x)
-        x = self.level2_1(x)
-        x = x - 5
+        x1 = self.level2_1(x)
+        x2 = self.level2_1(x)
+        x3 = self.level2_1(x)
+        x = x1 * x2 + x3
         x = self.level2_2(x)
         return x
-
 
 # Next: recurrent with internal branching.
 
 # And recurrent with internal branching and internally generated.
 
 # And some nested loops.
-
-
-class SimpleNetwork(nn.Module):
-    def __init__(self):
-        super(SimpleNetwork, self).__init__()
-        self.conv1 = nn.Conv2d(1, 2, 2)
-        self.linear = nn.Linear(4, 8)
-        self.relu_module = nn.ReLU()
-        self.conv2 = nn.Conv2d(2, 2, 1)
-        self.module_block = nn.Sequential(self.conv2, nn.ReLU(), nn.ReLU(), nn.ReLU())
-
-    def forward(self, x):
-        if x < 1:
-            x = x + 1
-        else:
-            x = x * 2
-        tensor_internal = torch.ones(2, 1, 2, 2)
-        tensor_internal = tensor_internal + 1
-        x = x + tensor_internal
-        x = nn.functional.relu(x)
-        x = self.conv1(x)
-        x = x.flatten()
-        x = self.linear(x)
-        x = x.reshape(2, 1, 2, 2)
-        x = self.conv1(x)
-        x = self.relu_module(x)
-        x = self.conv2(x)
-        x = self.conv2(x)
-        x = self.conv2(x)
-        x = self.conv2(x)
-        x = self.module_block(x)
-        return x

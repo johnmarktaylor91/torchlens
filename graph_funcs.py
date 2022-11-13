@@ -73,8 +73,34 @@ def annihilate_node(node_barcode: Dict, history_dict: Dict):
             field.remove(node_barcode)
 
 
+def insert_sorted_child_node(parent_node, child_node, tensor_log):
+    """Utility function to insert a child node into sorted order into a parent node's child list,
+    ordering based on the operation order.
+
+    Args:
+        parent_node: The parent node.
+        child_node: Child node to insert.
+        tensor_log: The tensor log.
+    """
+    child_barcode = child_node['barcode']
+    if 'child_tensor_barcodes' not in parent_node:
+        parent_node['child_tensor_barcodes'] = [child_barcode]
+        return
+    other_child_nodes = [tensor_log[other_child_barcode] for other_child_barcode in
+                         parent_node['child_tensor_barcodes']]
+    child_barcodes = parent_node['child_tensor_barcodes']
+    for c, other_child_node in enumerate(other_child_nodes):
+        if child_node['tensor_num'] < other_child_node['tensor_num']:
+            child_barcodes = child_barcodes[0:] + [child_barcode] + child_barcodes[c:]
+            parent_node['child_tensor_barcodes'] = child_barcodes[:]
+            return
+    parent_node['child_tensor_barcodes'] = parent_node['child_tensor_barcodes'] + [child_barcode]
+    return
+
+
 def annotate_node_children(history_dict: Dict) -> Dict:
-    """Annotates each node with the addresses of its child nodes.
+    """Annotates each node with the addresses of its child nodes, keeping them in sorted order of their
+    operation number to make sure they are rendered in the right execution order.
 
     Args:
         history_dict: dictionary with all the data
@@ -88,9 +114,8 @@ def annotate_node_children(history_dict: Dict) -> Dict:
         if len(node['parent_tensor_barcodes']) == 0:
             continue
         for parent_barcode in node['parent_tensor_barcodes']:
-            if 'child_tensor_barcodes' not in tensor_log[parent_barcode]:
-                tensor_log[parent_barcode]['child_tensor_barcodes'] = []
-            tensor_log[parent_barcode]['child_tensor_barcodes'].append(barcode)
+            parent_node = tensor_log[parent_barcode]
+            insert_sorted_child_node(parent_node, node, tensor_log)
     for barcode, node in tensor_log.items():
         if 'child_tensor_barcodes' not in node:
             node['child_tensor_barcodes'] = []
@@ -312,6 +337,7 @@ def add_output_nodes(history_dict: Dict):
 
         new_output_node['parent_tensor_barcodes'] = [output_node['barcode']]
         new_output_node['is_model_output'] = True
+        new_output_node['function_call_modules_nested'] = []
         new_output_node['modules_exited'] = []
 
         tensor_log[new_output_node['barcode']] = new_output_node
@@ -425,13 +451,13 @@ def topological_sort_nodes(history_dict: Dict) -> Dict:
         if node['barcode'] in ordered_tensor_log:
             continue
 
-        node_count += 1
         node['operation_num_exhaustive'] = node_count
+        node_count += 1
         ordered_tensor_log[node['barcode']] = node
 
         if node['is_module_output']:  # if it's a module output, also annotate the order for that.
-            module_node_count += 1
             node['operation_num_module'] = module_node_count
+            module_node_count += 1
         else:
             node['operation_num_module'] = None
 
@@ -937,10 +963,10 @@ def annotate_node_names(history_dict: Dict) -> Dict:
 
         if layer_barcode not in layer_type_inds:
             layer_type_counter[layer_type] += 1
-            layer_counter += 1
             layer_type_count = layer_type_counter[layer_type]
             layer_type_inds[layer_barcode] = layer_type_count
             layer_total_inds[layer_barcode] = layer_total_count = layer_counter
+            layer_counter += 1
         else:
             layer_type_count = layer_type_inds[layer_barcode]
             layer_total_count = layer_total_inds[layer_barcode]
@@ -1143,75 +1169,21 @@ def cluster_modules(history_dict: Dict):
     # TODO: populate the internally generated tensors with the right module address (inherit from children)
 
     tensor_log = history_dict['tensor_log']
-    node_stack = history_dict['input_tensors']
-    for node_barcode in node_stack:
-        node = tensor_log[node_barcode]
-        node['module_instance_rough_barcodes'] = {}  # dict of each enclosing module and its rough barcode
-
-    module_equivalent_barcodes = defaultdict(list)  # for each module, pairs of equivalent trial barcodes
-    all_module_barcodes = []
-    nodes_seen = set()
-    node_pairs_seen = set()  # don't examine the same node pairs twice.
-
-    # Dynamically generate the module equivalence classes.
-
-    while len(node_stack) > 0:
-        node_barcode = node_stack.pop()
-        nodes_seen.add(node_barcode)
-        node = tensor_log[node_barcode]
-        adjacent_barcodes = node['child_tensor_barcodes'] + node['parent_tensor_barcodes']
-        for neighbor_barcode in adjacent_barcodes:
-            node_pair_label = '_'.join(sorted([node_barcode, neighbor_barcode]))
-            if node_pair_label in node_pairs_seen:
-                continue
-            node_pairs_seen.add(node_pair_label)
-
-            neighbor_node = tensor_log[neighbor_barcode]
-            propagate_module_labels_for_two_nodes(node, neighbor_node, nodes_seen,
-                                                  all_module_barcodes, module_equivalent_barcodes)
-            if neighbor_barcode not in nodes_seen:
-                node_stack.append(neighbor_barcode)
-                nodes_seen.add(neighbor_barcode)
-
-    # Now, for each module, greedily combine the equivalence classes, and generate their actual barcodes.
-
-    module_rough_to_final_barcodes = {}
-    for module in module_equivalent_barcodes:
-        module_rough_to_final_barcodes[module] = find_equivalent_clusters(module_equivalent_barcodes[module])
-
-    # Now go back through the network, and add these final barcodes, and also make note of all the parent-child
-    # cluster relationships, and annotate history_dict with it to make the right graph clusters when
-    # making the visuals.
-
     cluster_children_dict = defaultdict(list)
     top_level_module_clusters = []
 
     for barcode, node in tensor_log.items():
         module_instance_final_barcodes_dict = {}
         module_instance_final_barcodes_list = []
-        for m, (module, rough_barcode) in enumerate(node['module_instance_rough_barcodes'].items()):
-            if (module in module_rough_to_final_barcodes) and (
-                    rough_barcode in module_rough_to_final_barcodes[module]):
-                final_barcode = module_rough_to_final_barcodes[module][rough_barcode]
-            else:
-                final_barcode = rough_barcode
-            module_instance_final_barcodes_dict[module] = final_barcode
-            module_instance_final_barcodes_list.append(final_barcode)
+        for m, module_barcode in enumerate(node['function_call_modules_nested']):
             if m == 0:  # if a top level module, add to the list.
-                if final_barcode not in top_level_module_clusters:
-                    top_level_module_clusters.append(final_barcode)
+                if module_barcode not in top_level_module_clusters:
+                    top_level_module_clusters.append(module_barcode)
             else:  # if a submodule and not a bottom-level module, add to the dict.
-                if final_barcode not in cluster_children_dict[last_module_instance_id]:
-                    cluster_children_dict[last_module_instance_id].append(final_barcode)
+                if module_barcode not in cluster_children_dict[last_module_barcode]:
+                    cluster_children_dict[last_module_barcode].append(module_barcode)
 
-            last_module_instance_id = final_barcode
-
-        if not node['is_model_output']:
-            node['module_instance_final_barcodes_dict'] = module_instance_final_barcodes_dict
-            node['module_instance_final_barcodes_list'] = module_instance_final_barcodes_list
-        else:
-            node['module_instance_final_barcodes_dict'] = {}
-            node['module_instance_final_barcodes_list'] = []
+            last_module_barcode = module_barcode
 
     history_dict['top_level_module_clusters'] = top_level_module_clusters
     history_dict['module_cluster_children_dict'] = cluster_children_dict
@@ -1282,7 +1254,7 @@ def roll_graph(history_dict: Dict) -> Dict:
     fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
                       'is_model_input', 'is_model_output', 'is_last_output_layer', 'connects_input_and_output',
                       'tensor_shape', 'tensor_fsize', 'has_params', 'param_total_passes', 'parent_params_shape',
-                      'is_bottom_level_module_output', 'modules_exited',
+                      'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
                       'module_total_passes', 'module_instance_final_barcodes_list']
 
     tensor_log = history_dict['tensor_log']
@@ -1369,6 +1341,7 @@ def prettify_history_dict(history_dict: Dict) -> Dict:
         Nicely organized/labeled final dict.
     """
     # which_fields =
+    return history_dict['tensor_log']
 
     tensor_log = history_dict['tensor_log']
     pretty_tensor_log = OrderedDict()
@@ -1391,8 +1364,8 @@ def get_lowest_containing_module_for_two_nodes(node1: Dict,
     Returns:
         Barcode of lowest-level module containing both nodes.
     """
-    node1_modules = node1['module_instance_final_barcodes_list']
-    node2_modules = node2['module_instance_final_barcodes_list']
+    node1_modules = node1['function_call_modules_nested']
+    node2_modules = node2['function_call_modules_nested']
 
     if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
         return -1  # no submodule contains them both.
@@ -1545,7 +1518,8 @@ def add_node_to_graphviz(node_barcode: Dict,
                         color=node_color,
                         style=f"filled,{line_style}",
                         fillcolor=bg_color,
-                        shape=node_shape)
+                        shape=node_shape,
+                        ordering='out')
 
     if vis_opt == 'rolled':
         add_rolled_edges_for_node(node, graphviz_graph, module_cluster_dict, tensor_log)
@@ -1604,7 +1578,7 @@ def setup_subgraphs_recurse(parent_graph,
     module_type = str(type(history_dict['module_dict'][subgraph_module]).__name__)
 
     with parent_graph.subgraph(name=cluster_name) as s:
-        s.attr(label=f"<<B>@{subgraph_module}</B><br align='left'/>{module_type}<br align='left'/>>",
+        s.attr(label=f"<<B>@{subgraph_module}</B><br align='left'/>({module_type})<br align='left'/>>",
                labelloc='b',
                penwidth=str(pen_width))
         subgraph_edges = module_cluster_dict[subgraph_tuple]
@@ -1639,11 +1613,14 @@ def get_max_nesting_depth(top_graphs,
         module_edges = module_cluster_dict[module]
         module_children = module_cluster_children_dict[module]
 
-        if len(module_edges) == 0:  # can ignore if no edges.
+        if (len(module_edges) == 0) and (len(module_children) == 0):  # can ignore if no edges and no children.
             continue
-        elif len(module_children) == 0:
+        elif (len(module_edges) > 0) and (len(module_children) == 0):
             max_nesting_depth = max([module_depth, max_nesting_depth])
+        elif (len(module_edges) == 0) and (len(module_children) > 0):
+            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
         else:
+            max_nesting_depth = max([module_depth, max_nesting_depth])
             module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
     return max_nesting_depth
 
@@ -1651,7 +1628,7 @@ def get_max_nesting_depth(top_graphs,
 def set_up_subgraphs(graphviz_graph,
                      module_cluster_dict: Dict[str, List],
                      history_dict: Dict):
-    """Given a dictionary specifying teh edges in each cluster, the graphviz graph object, and the history_dict,
+    """Given a dictionary specifying the edges in each cluster, the graphviz graph object, and the history_dict,
     set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
     recursive logic to set up the nested context managers.
 
@@ -1680,6 +1657,55 @@ def set_up_subgraphs(graphviz_graph,
                                 nesting_depth,
                                 max_nesting_depth,
                                 history_dict)
+
+
+def align_sibling_nodes(graphviz_graph, vis_opt, tensor_log):
+    """Utility function that vertically aligns sibling nodes.
+
+    Args:
+        graphviz_graph: Graphviz graph object.
+        vis_opt: "rolled" or "unrolled"
+        tensor_log: Log of tensors
+    """
+    if vis_opt == 'unrolled':
+        sibling_keys = ['child_tensor_barcodes']  # , 'parent_tensor_barcodes']
+    elif vis_opt == 'rolled':
+        sibling_keys = ['child_layer_barcodes']  # , 'parent_layer_barcodes']
+
+    for node_barcode, node in tensor_log.items():
+        for sibling_key in sibling_keys:
+            node_sibling_barcodes = node[sibling_key]
+            if len(node_sibling_barcodes) < 2:
+                continue
+            # Strategy: set up a subgroup of scaffold nodes at the same level with a HUGE weight.
+
+            subgraph_name = f"{node_barcode}_child_scaffold_layer"
+            with graphviz_graph.subgraph(name=subgraph_name) as s:
+                s.attr(rank='same')
+                for c, child_barcode in enumerate(node_sibling_barcodes):
+                    scaffold_node_name = f"{child_barcode}_child_scaffold_node"
+                    # graphviz_graph.node(scaffold_node_name, label='', style='invisible')
+                    s.node(scaffold_node_name, label='', style='invisible', shape='point', height='0')
+                    graphviz_graph.edge(scaffold_node_name, child_barcode, weight='1000', style='invisible',
+                                        dir='none', constraint='false')
+                    # graphviz_graph.edge(node_barcode, scaffold_node_name, weight='1000', style='invisible',
+                    #                    dir='none')
+                    if c > 0:
+                        s.edge(previous_scaffold_node_name, scaffold_node_name,
+                               weight='1000', style='invisible', dir='none', constraint='false')
+                    previous_scaffold_node_name = scaffold_node_name
+
+            # for c in range(1, len(node_sibling_barcodes)):
+            #    graphviz_graph.edge(node_sibling_barcodes[c - 1],
+            #                        node_sibling_barcodes[c],
+            #                        weight='1000')
+            # node_children_barcodes_str = ' '.join(node_sibling_barcodes)
+            # graphviz_graph.graph_attr.update({'rank': f'same {node_children_barcodes_str}'})
+            # subgraph_name = f"{sibling_key}_subgraph_{node_barcode}"
+            # with graphviz_graph.subgraph(name=subgraph_name) as s:
+            #    s.attr(rank='same')
+            #    for child_barcode in node_sibling_barcodes:
+            #        s.node(child_barcode)
 
 
 def render_graph(history_dict: Dict,
@@ -1713,8 +1739,9 @@ def render_graph(history_dict: Dict,
     dot.graph_attr.update({'rankdir': 'BT',
                            'label': graph_caption,
                            'labelloc': 't',
-                           'labeljust': 'left'})
-    dot.node_attr.update({'shape': 'box'})
+                           'labeljust': 'left',
+                           'ordering': 'out'})
+    dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
 
     module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.
 
@@ -1729,6 +1756,10 @@ def render_graph(history_dict: Dict,
     # Finally, set up the subgraphs.
 
     set_up_subgraphs(dot, module_cluster_dict, history_dict)
+
+    # Finally, add extra invisible edges to enforce horizontal node order if there's branching.
+
+    # align_sibling_nodes(dot, vis_opt, tensor_log)
 
     if in_notebook():
         # TODO get this to work

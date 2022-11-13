@@ -183,7 +183,7 @@ def module_pre_hook(module: nn.Module,
         t.xray_last_module_seen_entry_barcode = module_entry_barcode
         t.xray_last_module_seen = module
         t.xray_module_just_entered_address = module_address
-        t.xray_containing_modules_thread.append(f"+{module_entry_barcode}")
+        t.xray_containing_modules_thread.append(('+', module_entry_barcode[0], module_entry_barcode[1]))
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
@@ -235,7 +235,7 @@ def module_post_hook(module: nn.Module,
         t.xray_modules_exited.append(module_address)
         t.xray_module_passes_exited.append((module_address, module_pass_num))
 
-        t.xray_containing_modules_thread.append(f"-{module_entry_barcode}")
+        t.xray_containing_modules_thread.append(('-', module_entry_barcode[0], module_entry_barcode[1]))
         t.xray_last_module_seen_entry_barcode = module_entry_barcode
 
         if len(t.xray_containing_modules_nested) == 0:
@@ -253,8 +253,8 @@ def module_post_hook(module: nn.Module,
 
     for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
         input_module_thread = t.xray_containing_modules_thread[:]
-        if f"+{module_entry_barcode}" in input_module_thread:
-            module_entry_ix = input_module_thread.index(f"+{module_entry_barcode}")
+        if ('+', module_entry_barcode[0], module_entry_barcode[1]) in input_module_thread:
+            module_entry_ix = input_module_thread.index(('+', module_entry_barcode[0], module_entry_barcode[1]))
             t.xray_containing_modules_thread = t.xray_containing_modules_thread[:module_entry_ix]
 
     return output_
