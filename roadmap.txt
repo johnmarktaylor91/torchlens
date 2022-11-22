@@ -1,4 +1,48 @@
+Wishlist:
+- Horizontally sort branching layers in the graph visual based on execution order (this is quite hard
+  to do along with clusters)
+- Deal with graph clutter, arrows running over stuff, etc.
+- Aggregate multiple add/multiply/etc. operations into a single one for conciseness
+- Annotate pass numbers for higher level modules too
+- Have nodes in the pretty dict be their own nice class.
+- Ditch the annoying nested dicts and multiple rounds of transformation, make everything nice and object-oriented;
+  along with better way of unmutating things after the fact. One tensor log is enough. And it should have enough
+  for all plotting and not require references to modules, these should simply be tagged. The prettify
+  TensorLog function should be a method that just removes extraneous interim information that was useful
+  when generating the graph but not otherwise; it should still contain all relevant information for making the
+  figures, etc. And it should be inspectable at any time for debugging purposes without it yelling.
+- Track all the module information in a nicer way as you go, have nicer names for things. Make everything as
+  transparent as possible with better debugging tools.
+- Better way of handling the identity functions
+- Ditch the c-bindings, don't tag them. The top-level python functions are plenty.
+- Refactor complex functions to be nicer.
+- Add a "debug/validation" mode that exhaustively saves all arguments.
+- Consistent handling of module "passes"
+- The object-based refactor should go one step at a time to make sure it all works.
+- Do more stuff on the fly, less post-processing. Instead of your "3-4 magic functions", just two:
+  one to get the graph object (which can be plotted at will), and then one to get any activations.
+- Have it save the operation numbers as part of that object so they can be easily added after.
+- Some kind of API that separates the saved activations, and the full graph, for easy inspection.
+- Maybe: indexing by default pulls out anything, activation or no, but can iterate through saved activations,
+  get keys for saved activations, etc.
+- The tensor log is defined arond one pass for one input.
+- Maybe a final function that replaces raw barcodes with the new ones.
+- Get clear on the different "states" of the tensorlog: on-the-fly kinda raw one, validation one, processed one,
+  pretty user-facing one.
+- How to handle multiple instances/passes of the same module; the entry stamp concept is a good one.
+- Save all func args and kwargs by default, as long as activations are also saved. Can be pointers to the arg parameters;
+  no need for separate validation mode, if tensor is saved then save these too.
+- Also a function to clear activations while keeping the graph. Have nicer syntax for indicating this. Actually
+  once this is present, redoing the feedforward sweep is very easy.
+- Basically, the abstraction is a saved full graph, from which you can attach activations with another feedforward
+  pass.
+- Also a nice function to rigorously clear all activations so they don't clutter things.
+
 To Do
+- Make sure unmutate pytorch works, it's being weird.
+- Do some profiling to see which steps are and aren't necessary.
+- Inspect cornet_s closely to make sure recurrent stuff works. It's quite close, just check how it
+  does the layer correspondence
 - Fix topological sort for extended internally generated tensors
 - Propagate nested modules to internally generated tensors
 - Make topological sort follow operation order; if there's branching, then the order of the first
