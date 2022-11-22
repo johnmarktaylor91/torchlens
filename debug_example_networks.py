@@ -4,7 +4,7 @@ from util_funcs import pprint_tensor_record
 import torch
 import torchvision
 import graph_funcs as gf
-from pytorch_xray import xray_model
+from pytorch_xray import get_model_activations, get_model_structure
 from cornet import cornet_s
 
 x = torch.rand(1, 1, 3, 3)
@@ -48,16 +48,16 @@ simple_ff = networks.SimpleFF()
 # history_dict = gf.postprocess_history_dict(history_dict)
 # gf.render_graph(history_dict)
 
-# x = torch.rand(5, 5)
+x = torch.rand(5, 5)
 
-# network = networks.RecurrentNestedInternal()
-# history_dict = run_model_and_save_specified_activations(network, x, 'exhaustive', 'all', None)
-# gf.render_graph(history_dict)
+network = networks.RecurrentNestedInternal()
+tensor_log = get_model_activations(network, x, vis_opt='rolled')
 
-x = torch.rand(6, 3, 256, 256)
-# network = torchvision.models.vgg19()
-network = torchvision.models.GoogLeNet()
-tensor_log = xray_model(network, x)
+# x = torch.rand(6, 3, 256, 256)
+# network = torchvision.models.AlexNet()
+# network = torchvision.models.resnet50()
+# network = cornet_s()
+# tensor_log = get_model_structure(network, x)
 
 # x = torch.rand(1, 1, 3, 3)
 
@@ -69,4 +69,5 @@ tensor_log = xray_model(network, x)
 # x = torch.rand(6, 3, 256, 256)
 
 # network = cornet_s()
-# xray_model(network, x, vis_opt='rolled')
+# tensor_log = get_model_structure(network, x)
+# tensor_log = get_model_activations(network, x, vis_opt='rolled')

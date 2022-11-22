@@ -1,12 +1,14 @@
 from collections import OrderedDict
 import copy
+import random
 from typing import Any, Callable, Dict, List, Optional, Union
 
+import time
 import torch
 from torch import nn
 
 from tensor_tracking import log_tensor_metadata, initialize_history_dict, mutate_pytorch, prepare_input_tensors, \
-    unmutate_pytorch
+    unmutate_pytorch, update_tensor_containing_modules
 from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
     mark_tensors_in_obj, make_barcode
 from graph_funcs import postprocess_history_dict
@@ -231,6 +233,14 @@ def module_post_hook(module: nn.Module,
                 t.xray_bottom_module_type = type(module).__name__
                 t.xray_bottom_module_pass_num = module_pass_num
 
+        if module.xray_module_type.lower() == 'identity':
+            t.xray_funcs_applied.append(lambda x: x)
+            t.xray_funcs_applied_names.append('identity')
+            t.xray_funcs_applied_modules.append(module_address)
+            t.xray_function_call_modules_nested = update_tensor_containing_modules(t)
+            t.xray_function_call_modules_nested_multfuncs.append(t.xray_function_call_modules_nested[:])
+            t.xray_containing_modules_thread = []
+
         t.xray_containing_modules_nested.pop()  # remove the last module address.
         t.xray_modules_exited.append(module_address)
         t.xray_module_passes_exited.append((module_address, module_pass_num))
@@ -243,11 +253,6 @@ def module_post_hook(module: nn.Module,
             t.xray_containing_module = None
         else:
             t.xray_containing_module = t.xray_containing_modules_nested[-1]
-
-        if module.xray_module_type.lower() == 'identity':
-            t.xray_funcs_applied.append(lambda x: x)
-            t.xray_funcs_applied_names.append('identity')
-            t.xray_funcs_applied_modules.append(module_address)
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
@@ -366,7 +371,6 @@ def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
 
 def run_model_and_save_specified_activations(model: nn.Module,
                                              x: Any,
-                                             mode: str,
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = None,
                                              random_seed: Optional[int] = None) -> Dict:
     """Internal function that runs the given input through the given model, and saves the
@@ -386,14 +390,16 @@ def run_model_and_save_specified_activations(model: nn.Module,
     Returns:
         history_dict
     """
-    if random_seed is not None:
-        set_random_seed(random_seed)
+    if random_seed is None:
+        random_seed = random.randint(1, 4294967294)
+    set_random_seed(random_seed)
+
     x = copy.deepcopy(x)
-    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     if tensor_nums_to_save is None:
         tensor_nums_to_save = []
     hook_handles = []
     history_dict = initialize_history_dict(tensor_nums_to_save)
+    history_dict['random_seed'] = random_seed
     orig_func_defs = []
     try:  # TODO: replace with context manager.
         if type(model) == nn.DataParallel:
@@ -406,10 +412,13 @@ def run_model_and_save_specified_activations(model: nn.Module,
         else:
             model_device = 'cpu'
         x = x.to(model_device)
+        input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
         prepare_model(model, history_dict, hook_handles)
         orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)
         prepare_input_tensors(x, history_dict)
+        start_time = time.time()
         outputs = model(x)
+        history_dict['elapsed_time'] = time.time() - start_time
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
             history_dict['output_tensors'].append(t.xray_barcode)

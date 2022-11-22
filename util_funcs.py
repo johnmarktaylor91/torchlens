@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from sys import getsizeof
 
+import multiprocessing as mp
 import numpy as np
 import random
 import torch
@@ -30,6 +31,16 @@ def set_random_seed(seed: int):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def warn_parallel():
+    """
+    Utility function to give raise error if it's being run in parallel processing.
+    """
+    if mp.current_process().name != 'MainProcess':
+        raise RuntimeError("WARNING: It looks like you are using parallel execution; it is strongly advised"
+                           "to only run pytorch-xray in the main process, since certain operations "
+                           "depend on execution order.")
 
 
 def pprint_tensor_record(history_dict, which_fields='all', show_tensor=True):

@@ -4,18 +4,14 @@ from collections import defaultdict
 import graphviz
 import numpy as np
 import torch
-import copy
-from graphlib import TopologicalSorter
-from IPython.display import display, Image
-import networkx as nx
+import random
 
 from collections import OrderedDict
 from typing import Any, Dict, List, Tuple
-from util_funcs import make_barcode, human_readable_size, in_notebook, int_list_to_compact_str
-
-from tensor_tracking import log_tensor_metadata, log_tensor_data
+from util_funcs import make_barcode, human_readable_size
 
 graphviz.set_jupyter_format('png')
+
 
 # TODO: make the nodes record so the titles pop more nicely
 # TODO: Make the visualization code a bit prettier; try out some recurrent networks next.
@@ -23,8 +19,6 @@ graphviz.set_jupyter_format('png')
 # Add an indicator if they're outputs of a bottom-level module.
 # Color inputs, outputs (green and red?), and any bottom-level module outputs
 # Add another annotation for whether a node is an output ancestor.
-
-# TODO: for cases like a + b + c, aggregate these into a single step instead of the converged binary operations.
 
 
 # TODO annotate the graph log with useful metadata instead of making it denovo every time; e.g., the
@@ -37,16 +31,6 @@ graphviz.set_jupyter_format('png')
 # Get more consistent language for different kinds of barcodes, nodes, operations, etc.
 
 # Hard-code the colors up here
-
-INPUT_COLOR = "#98FB98"
-OUTPUT_COLOR = "#ff9999"
-PARAMS_NODE_BG_COLOR = "#E6E6E6"
-DEFAULT_BG_COLOR = 'white'
-CONNECTING_NODE_LINE_COLOR = 'black'
-NONCONNECTING_NODE_LINE_COLOR = '#A0A0A0'
-MAX_MODULE_PENWIDTH = 5
-MIN_MODULE_PENWIDTH = 2
-PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):
@@ -169,6 +153,8 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                 new_node['tensor_num'] = None
                 new_node['funcs_applied'] = node['funcs_applied'][f:]
                 new_node['funcs_applied_names'] = node['funcs_applied_names'][f:]
+                new_node['function_call_modules_nested_multfuncs'] = node['function_call_modules_nested_multfuncs'][f:]
+                new_node['function_call_modules_nested'] = node['function_call_modules_nested_multfuncs'][f]
                 new_node['modules_exited'] = node['modules_exited'][func_applied_module_position:]
                 new_node['module_passes_exited'] = node['module_passes_exited'][func_applied_module_position:]
                 new_node['child_tensor_barcodes'] = node['child_tensor_barcodes'][:]
@@ -198,6 +184,8 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                 node['funcs_applied_names'] = node['funcs_applied_names'][:f]
                 node['modules_exited'] = node['modules_exited'][:func_applied_module_position]
                 node['module_passes_exited'] = node['module_passes_exited'][:func_applied_module_position]
+                node['function_call_modules_nested'] = node['function_call_modules_nested_multfuncs'][f - 1]
+                node['function_call_modules_nested_multfuncs'] = node['function_call_modules_nested_multfuncs'][:f]
                 node['child_tensor_barcodes'] = [new_node['barcode']]
                 node['is_model_output'] = False
 
@@ -494,8 +482,8 @@ def annotate_total_layer_passes(history_dict: Dict) -> Dict:
     param_group_tensors = history_dict['param_group_tensors']
     module_tensors = history_dict['bottom_level_module_output_tensors']
     for node_barcode, node in tensor_log.items():  # Default to None, replace any as needed.
-        node['param_total_passes'] = 0
-        node['module_total_passes'] = 0
+        node['param_total_passes'] = 1
+        node['module_total_passes'] = 1
     for param_group_barcode, tensors in param_group_tensors.items():
         param_group_num_passes = len(tensors)
         for tensor_barcode in tensors:
@@ -593,32 +581,33 @@ def find_outermost_loops(history_dict: Dict) -> Dict:
     node_stack = [(input_node, None) for input_node in input_nodes]  # stack annotated with any top-level loops.
     enclosing_loop_nodes = defaultdict(lambda: [])
 
-    stack_lens = []
-    new_child_lens = []
-
     while len(node_stack) > 0:
-        node_tuple = node_stack.pop()
+        node_tuple = node_stack.pop(0)
         node_barcode, enclosing_loop_node = node_tuple
         node = tensor_log[node_barcode]
 
-        if all([node['has_params'], node['param_total_passes'] > 1, enclosing_loop_node is None]):
+        if all([node['has_params'], node['param_total_passes'] > 1, node['pass_num'] == 1,
+                enclosing_loop_node is None]):
             #  We've hit the start of an enclosing loop, make that loop the label.
             children_enclosing_loop = node['layer_barcode']
-            enclosing_loop_nodes[node['layer_barcode']].append(node)
-        elif (node['layer_barcode'] == enclosing_loop_node) and (node['pass_num'] < node['param_total_passes']):
+            if node['layer_barcode'] not in enclosing_loop_nodes:
+                enclosing_loop_nodes[node['layer_barcode']].append(node)
+        elif all([node['layer_barcode'] == enclosing_loop_node,
+                  node['pass_num'] < node['param_total_passes'],
+                  node['layer_barcode'] in enclosing_loop_nodes]):
             # We've hit another occurrence of the enclosing loop.
             children_enclosing_loop = enclosing_loop_node
-            enclosing_loop_nodes[node['layer_barcode']].append(node)
-        elif (node['layer_barcode'] == enclosing_loop_node) and (node['pass_num'] == node['param_total_passes']):
+            if node not in enclosing_loop_nodes[node['layer_barcode']]:
+                enclosing_loop_nodes[node['layer_barcode']].append(node)
+        elif all([node['layer_barcode'] == enclosing_loop_node, node['pass_num'] == node['param_total_passes']]):
             # We've hit the end of an enclosing loop, remove that as the label.
-            enclosing_loop_nodes[node['layer_barcode']].append(node)
             children_enclosing_loop = None
-        else:  # We're inside an enclosing loop.
+            if node not in enclosing_loop_nodes[node['layer_barcode']]:
+                enclosing_loop_nodes[node['layer_barcode']].append(node)
+        else:  # We're inside or outside an enclosing loop.
             children_enclosing_loop = enclosing_loop_node
 
         nodes_to_add = [(child_node, children_enclosing_loop) for child_node in node['child_tensor_barcodes']]
-        stack_lens.append(len(node_stack))
-        new_child_lens.append(len(nodes_to_add))
         node_stack.extend(nodes_to_add)
 
     return enclosing_loop_nodes
@@ -682,14 +671,17 @@ def do_two_pass_items_match(pass1_start_barcode: str,
     pass2_funcs = pass2_nth_item['funcs_applied']
     pass1_args = pass1_nth_item['nontensor_all_args']
     pass2_args = pass2_nth_item['nontensor_all_args']
-    if (pass1_funcs != pass2_funcs) or not are_args_equal(pass1_args, pass2_args):  # the two passes aren't the same.
+    if any([(pass1_funcs != pass2_funcs), not are_args_equal(pass1_args, pass2_args),
+            pass1_nth_item['parent_param_barcodes'] != pass2_nth_item[
+                'parent_param_barcodes']]):  # the two passes aren't the same.
         diverged_pass_pairs.add(pass_pair_key)
         return False
     return True
 
 
 def group_matching_layers(nth_item_per_stack: Dict,
-                          diverged_pass_pairs: set) -> Dict[str, List[Dict]]:
+                          diverged_pass_pairs: set,
+                          tensor_log: Dict) -> Dict[str, List[Dict]]:
     """Utility function that takes in the nth item per stack, and the mapping of passes that have already diverged,
     and groups together corresponding layers.
 
@@ -697,6 +689,7 @@ def group_matching_layers(nth_item_per_stack: Dict,
         nth_item_per_stack: Dict mapping the barcode for the start of each pass to the nth item in the stack
             for that pass.
         diverged_pass_pairs: Set of passes that have already diverged.
+        tensor_log: The tensor log.
 
     Returns:
         Dictionary mapping the layer name to all tensor barcodes for that layer.
@@ -706,8 +699,12 @@ def group_matching_layers(nth_item_per_stack: Dict,
     same_layer_barcode_mapper = {}  # maps each node to the layer group it's part of
     same_layer_barcode_lists = defaultdict(list)  # list of layers for each group
 
-    for p1, (pass1_start_barcode, pass1_nth_item) in enumerate(nth_item_per_stack.items()):
-        for p2, (pass2_start_barcode, pass2_nth_item) in enumerate(nth_item_per_stack.items()):
+    for p1, (pass1_start_barcode, pass1_nth_item_barcode) in enumerate(nth_item_per_stack.items()):
+        for p2, (pass2_start_barcode, pass2_nth_item_barcode) in enumerate(nth_item_per_stack.items()):
+            if any([pass1_nth_item_barcode is None, pass2_nth_item_barcode is None]):
+                continue
+            pass1_nth_item = tensor_log[pass1_nth_item_barcode]
+            pass2_nth_item = tensor_log[pass2_nth_item_barcode]
             if p2 <= p1:
                 continue
 
@@ -750,7 +747,7 @@ def mark_corresponding_pass_layers(nth_item_per_stack: Dict, diverged_pass_pairs
 
     # Check if it's a param node, if so then skip it (because it has its own numbering)
 
-    same_layer_barcode_lists = group_matching_layers(nth_item_per_stack, diverged_pass_pairs)
+    same_layer_barcode_lists = group_matching_layers(nth_item_per_stack, diverged_pass_pairs, tensor_log)
 
     # Now we have which of the nodes in each pass correspond and can mark them as such.
 
@@ -787,23 +784,24 @@ def update_pass_stack(pass_barcode: str,
         Nothing, but updates the new_pass_stacks dictionary.
     """
     pass_start_nodes = list(pass_stacks.keys())
-    for node in pass_stack:
+    for node_barcode in pass_stack:
+        node = tensor_log[node_barcode]
         for child_barcode in node['child_tensor_barcodes']:
             if child_barcode not in nodes_seen:
-                new_pass_stacks[pass_barcode]['children'].append(tensor_log[child_barcode])
+                new_pass_stacks[pass_barcode]['children'].append(child_barcode)
                 nodes_seen.add(child_barcode)
             elif child_barcode in pass_start_nodes:  # if we hit a node starting the stack, add that node's parents.
                 nodes_seen.add(child_barcode)
                 start_node = tensor_log[child_barcode]
                 for parent_barcode in start_node['parent_tensor_barcodes']:
                     if parent_barcode not in nodes_seen:
-                        new_pass_stacks[child_barcode]['parents'].append(tensor_log[parent_barcode])
+                        new_pass_stacks[child_barcode]['parents'].append(parent_barcode)
                         nodes_seen.add(parent_barcode)
         for parent_barcode in node['parent_internal_tensor_barcodes']:
             if first_stack:
                 continue
             if parent_barcode not in nodes_seen:
-                new_pass_stacks[pass_barcode]['parents'].append(tensor_log[parent_barcode])
+                new_pass_stacks[pass_barcode]['parents'].append(parent_barcode)
                 nodes_seen.add(parent_barcode)
 
 
@@ -876,7 +874,7 @@ def identify_repeated_functions_in_loop(repeated_node_occurrences: List[Dict],
     Returns:
         Nothing, but the nodes have been tagged accordingly.
     """
-    pass_stacks = {node['barcode']: {'children': [node],
+    pass_stacks = {node['barcode']: {'children': [node['barcode']],
                                      'parents': []}
                    for node in repeated_node_occurrences}
     diverged_pass_pairs = set()
@@ -920,6 +918,10 @@ def identify_repeated_functions(history_dict: Dict) -> Dict:
 
     tensor_log = history_dict['tensor_log']
     enclosing_loop_nodes = find_outermost_loops(history_dict)
+    history_dict['enclosing_loop_nodes'] = {}
+    for loop_nodes in enclosing_loop_nodes.values():
+        history_dict['enclosing_loop_nodes'][loop_nodes[0]['barcode']] = [loop_node['barcode'] for loop_node in
+                                                                          loop_nodes]
 
     for loop_start_barcode, repeated_node_occurrences in enclosing_loop_nodes.items():  # go through each outer loop
         identify_repeated_functions_in_loop(repeated_node_occurrences, tensor_log)
@@ -936,8 +938,6 @@ def annotate_node_names(history_dict: Dict) -> Dict:
 
     Returns:
         history_dict with all the node names annotated.
-
-    # TODO: have it also mark the name of child/parent layers.
     """
     tensor_log = history_dict['tensor_log']
     layer_type_counter = defaultdict(lambda: 0)
@@ -957,7 +957,7 @@ def annotate_node_names(history_dict: Dict) -> Dict:
         elif node['is_model_input']:
             layer_type = 'input'
         else:
-            layer_type = node['funcs_applied_names'][0].strip('_')
+            layer_type = node['funcs_applied_names'][0].replace('_', '')
 
         node['layer_type'] = layer_type
 
@@ -975,8 +975,8 @@ def annotate_node_names(history_dict: Dict) -> Dict:
         node['layer_total_ind'] = layer_total_count
         pass_num = node['pass_num']
 
-        node['layer_label'] = f'{layer_type}_{layer_type_count}_{layer_counter}'
-        node['layer_label_w_pass'] = f'{layer_type}_{layer_type_count}_{layer_counter}:{pass_num}'
+        node['layer_label'] = f'{layer_type}_{layer_type_count}_{layer_total_count}'
+        node['layer_label_w_pass'] = f'{layer_type}_{layer_type_count}_{layer_total_count}:{pass_num}'
 
         if node['is_bottom_level_module_output']:
             node_module_address = node['bottom_module_barcode']
@@ -1063,6 +1063,8 @@ def tally_sizes_and_params(history_dict: Dict):
     tensor_log = history_dict['tensor_log']
 
     total_params = 0
+    total_param_tensors = 0
+    total_param_groups = 0
     total_params_fsize = 0
     total_tensor_size = 0
 
@@ -1071,9 +1073,14 @@ def tally_sizes_and_params(history_dict: Dict):
         total_params_fsize += node['params_memory_size']
         for param_shape in node['parent_params_shape']:
             total_params += np.prod(param_shape)
+        total_param_tensors += len(node['parent_params_shape'])
+        if len(node['parent_params_shape']) > 0:
+            total_param_groups += 1
 
     history_dict['total_tensor_fsize'] = total_tensor_size
     history_dict['total_params'] = total_params
+    history_dict['total_param_tensors'] = total_param_tensors
+    history_dict['total_param_groups'] = total_param_groups
     history_dict['total_params_fsize'] = total_params_fsize
 
     return history_dict
@@ -1239,55 +1246,51 @@ def connect_node_arguments(history_dict: Dict) -> Dict:
     raise NotImplementedError
 
 
-def roll_graph(history_dict: Dict) -> Dict:
-    """Converts the graph to rolled-up format for plotting purposes. This means that the nodes of the graph
-    are now not tensors, but layers, with the layer children for each pass indicated. This is only done
-    for visualization purposes; no tensor data is saved.
+def unmutate_tensor(t):
+    """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
 
     Args:
-        history_dict: The history_dict
+        t: tensor or parameter object
 
     Returns:
-        Rolled-up tensor log.
+        Unmutated tensor.
     """
+    if type(t) == torch.Tensor:
+        new_t = torch.from_numpy(t.data.detach().cpu().numpy())
+    elif type(t) == torch.nn.Parameter:
+        new_t_data = torch.from_numpy(t.data.detach().cpu().numpy())
+        new_t = torch.nn.Parameter(new_t_data)
+    else:
+        new_t = t
+    return new_t
 
-    fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
-                      'is_model_input', 'is_model_output', 'is_last_output_layer', 'connects_input_and_output',
-                      'tensor_shape', 'tensor_fsize', 'has_params', 'param_total_passes', 'parent_params_shape',
-                      'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
-                      'module_total_passes', 'module_instance_final_barcodes_list']
 
+def unmutate_tensors_in_history(history_dict: Dict):
+    """Returns all tensors in the history dict to normal, unmutated versions.
+
+    Args:
+        history_dict: Dictionary of history.
+
+    Returns:
+        history_dict with all tensors unmutated.
+    """
     tensor_log = history_dict['tensor_log']
-    rolled_tensor_log = OrderedDict({})
+    for node in tensor_log.values():
+        node['tensor_contents'] = unmutate_tensor(node['tensor_contents'])
+        for p, parent_param in enumerate(node['parent_params']):
+            node['parent_params'][p] = unmutate_tensor(parent_param)
 
-    for node_barcode, node in tensor_log.items():
-        # Get relevant information from each node.
+        for a in range(len(node['creation_args'])):
+            arg = node['creation_args'][a]
+            if issubclass(type(arg), torch.Tensor):
+                new_arg = unmutate_tensor(arg)
+                node['creation_args'] = node['creation_args'][:a] + tuple([new_arg]) + node['creation_args'][a + 1:]
 
-        layer_barcode = node['layer_barcode']
-        if layer_barcode in rolled_tensor_log:
-            rolled_node = rolled_tensor_log[layer_barcode]
-        else:
-            rolled_node = OrderedDict({})
-            for field in fields_to_copy:
-                if field in node:
-                    rolled_node[field] = node[field]
-            rolled_node['child_layer_barcodes'] = {}  # each key is pass_num, each value list of children
-            rolled_node['parent_layer_barcodes'] = {}  # each key is pass_num, each value list of parents
-            rolled_tensor_log[layer_barcode] = rolled_node
+        for key, val in node['creation_kwargs'].items():
+            if issubclass(type(val), torch.Tensor):
+                node['creation_kwargs'][key] = unmutate_tensor(val)
 
-        # Only difference is that now the parents and children are layer barcodes, not tensor barcodes,
-        # and they are linked to each pass of the layer.
-
-        pass_num = node['pass_num']
-        child_layer_barcodes = [tensor_log[child_tensor_barcode]['layer_barcode']
-                                for child_tensor_barcode in node['child_tensor_barcodes']]
-        rolled_node['child_layer_barcodes'][pass_num] = child_layer_barcodes
-
-        parent_layer_barcodes = [tensor_log[parent_tensor_barcode]['layer_barcode']
-                                 for parent_tensor_barcode in node['parent_tensor_barcodes']]
-        rolled_node['parent_layer_barcodes'][pass_num] = parent_layer_barcodes
-
-    return rolled_tensor_log
+    return history_dict
 
 
 def postprocess_history_dict(history_dict: Dict) -> Dict:
@@ -1305,6 +1308,7 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
     # TODO: Figure out how much time this part takes, how many graph_traversals; try to only traverse graph once.
 
     graph_transforms = [
+        unmutate_tensors_in_history,  # return any tensors in history dict to their original definition
         annotate_node_children,  # note the children of each node
         strip_irrelevant_nodes,  # remove island nodes unconnected to inputs or outputs
         expand_multiple_functions,  # expand identity functions
@@ -1331,16 +1335,497 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
     return history_dict
 
 
-def prettify_history_dict(history_dict: Dict) -> Dict:
+def rough_barcode_to_final_barcode(node_barcode,
+                                   history_dict):
+    """Utility function that goes from the internal rough barcode to the final, human-readable barcode;
+    this will be {layer_type}_{layer_type_num}_{layer_total} num with :{pass} too if there's multiple passes.
+
+    Args:
+        node_barcode: Rough barcode of node in question.
+        history_dict: Dict of history.
+
+    Returns:
+        Human readable final barcode.
+    """
+    node = history_dict['tensor_log'][node_barcode]
+    if node['param_total_passes'] > 1:
+        final_barcode = node['layer_label_w_pass']
+    else:
+        final_barcode = node['layer_label']
+    return final_barcode
+
+
+class TensorLogEntry:
+    def __init__(self,
+                 rough_barcode: str,
+                 node_index: int,
+                 num_tensors_to_keep: int,
+                 activations_only: bool,
+                 history_dict: dict,
+                 model_history):
+        """Log entry for a single tensor computed in the network.
+
+        Args:
+            rough_barcode: Rough barcode for the tensor.
+            history_dict: Dictionary of history.
+        """
+        # TODO: get the mapping of module types, not just the addresses, if not done already.
+        orig_tensor_log = history_dict['tensor_log']
+        orig_node = orig_tensor_log[rough_barcode]
+
+        # Initial unpacking:
+
+        module_passes_exited = [f"{module}:{pass_num}" for module, pass_num in
+                                orig_node['module_passes_exited']]
+
+        # Tensor labeling:
+        new_barcode = rough_barcode_to_final_barcode(rough_barcode, history_dict)
+        self.layer_barcode = new_barcode
+        self.layer_label_w_pass = orig_node['layer_label_w_pass']
+        self.layer_label_no_pass = orig_node['layer_label']
+        self.layer_type = orig_node['layer_type']
+        self.num_layer_type_seen_so_far = orig_node['layer_type_ind']
+        self.num_layers_total_seen_so_far = orig_node['layer_total_ind']
+        self.layer_pass_num = orig_node['pass_num']
+        self.layer_passes_total = orig_node['param_total_passes']
+        self.num_operations_so_far = orig_node['operation_num_exhaustive']
+
+        # Set the possible lookup keys:
+
+        lookup_keys = [node_index, node_index - num_tensors_to_keep, self.layer_barcode]
+        if self.layer_type != 'output':
+            lookup_keys += module_passes_exited[:]
+        if self.layer_passes_total == 1:  # for generality, allow indexing non-recurrent layers w/ pass
+            lookup_keys.append(self.layer_label_w_pass)
+
+        # if just one pass for a module, allow indexing w/out pass
+        for module_address in orig_node['modules_exited']:
+            if (len(history_dict['module_output_tensors'][module_address]) == 1) and (self.layer_type != 'output'):
+                lookup_keys.append(module_address)
+
+        self.lookup_keys = sorted(lookup_keys, key=str)
+
+        # Tensor data info:
+        self.tensor_shape = orig_node['tensor_shape']
+        self.tensor_dtype = orig_node['tensor_dtype']
+        self.tensor_fsize = orig_node['tensor_fsize']
+        self.tensor_fsize_nice = human_readable_size(orig_node['tensor_fsize'])
+        if activations_only:
+            self.tensor_contents = orig_node['tensor_contents']
+        else:
+            self.tensor_contents = 'none'
+
+        # Tensor operation info.
+        self.is_input_tensor = orig_node['is_model_input']
+        self.is_output_tensor = orig_node['is_model_output']
+        self.is_input_descendant = orig_node['has_input_ancestor']
+        self.is_output_ancestor = orig_node['is_output_ancestor']
+        self.initialized_in_model = orig_node['is_internally_generated']
+        self.parent_layers = [rough_barcode_to_final_barcode(barcode, history_dict)
+                              for barcode in orig_node['parent_tensor_barcodes']]
+        self.child_layers = [rough_barcode_to_final_barcode(barcode, history_dict)
+                             for barcode in orig_node['child_tensor_barcodes']]
+        self.computed_from_params = orig_node['has_params']
+        self.num_param_parent_tensors = len(orig_node['parent_params_shape'])
+        self.parent_params_shapes = orig_node['parent_params_shape']
+        self.num_params_total = np.sum(
+            [np.prod(param_shape) for param_shape in orig_node['parent_params_shape']])
+        self.parent_params_fsize = orig_node['params_memory_size']
+        self.parent_params_fsize_nice = human_readable_size(orig_node['params_memory_size'])
+        if len(orig_node['funcs_applied']) > 0:
+            self.func_applied = orig_node['funcs_applied'][0]
+            self.func_applied_name = orig_node['funcs_applied_names'][0]
+        else:
+            self.func_applied = 'none'
+            self.func_applied_name = 'none'
+
+        self.num_func_args_total = orig_node['num_args'] + orig_node['num_kwargs']
+        self.func_args_non_tensor = orig_node['nontensor_args']
+        self.func_kwargs_non_tensor = orig_node['nontensor_kwargs']
+        if len(orig_node['gradfuncs_names']) > 0:
+            self.gradfunc_name = orig_node['gradfuncs_names'][0]
+        else:
+            self.gradfunc_name = 'none'
+
+        # Tensor module info:
+        if len(orig_node['function_call_modules_nested']) > 0:
+            self.containing_origin_module = orig_node['function_call_modules_nested'][-1][0]
+        else:
+            self.containing_origin_module = 'none'
+        self.containing_origin_modules_nested = [mod_tuple[0] for mod_tuple in
+                                                 orig_node['function_call_modules_nested']]
+        self.is_computed_inside_module = (len(orig_node['function_call_modules_nested']) > 0)
+        self.is_module_output = orig_node['is_module_output']
+        self.modules_exited = orig_node['modules_exited']
+        self.module_passes_exited = module_passes_exited
+        self.is_bottom_level_module_output = orig_node['is_bottom_level_module_output']
+        if self.is_bottom_level_module_output:
+            self.bottom_level_module_exited = orig_node['modules_exited'][0]
+        else:
+            self.bottom_level_module_exited = 'none'
+        self.source_model_history = model_history
+
+    def get_child_layers(self):
+        return [self.source_model_history[child_label] for child_label in self.child_layers]
+
+    def get_parent_layers(self):
+        return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
+
+    def __str__(self):
+        s = f"{self.source_model_history.model_name} layer {self.layer_label_no_pass}, " \
+            f"pass {self.layer_pass_num}/{self.layer_passes_total} (operation {self.num_operations_so_far + 1}/" \
+            f"{self.source_model_history.model_num_tensors_total}):"
+        s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
+        if self.tensor_contents != 'none':
+            if len(self.tensor_shape) == 0:
+                tensor_slice = self.tensor_contents
+            elif len(self.tensor_shape) == 1:
+                num_dims = min(5, self.tensor_shape)
+                tensor_slice = self.tensor_contents[0:num_dims]
+            elif len(self.tensor_shape) == 2:
+                num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
+                tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
+            else:
+                num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
+                tensor_slice = self.tensor_contents.data.clone()
+                for _ in range(len(self.tensor_shape) - 2):
+                    tensor_slice = tensor_slice[0]
+                tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
+            s += f"\n\t\t{str(tensor_slice)}..."
+        if not self.is_input_descendant:
+            s += f"\n\t(tensor was created de novo inside the model, not computed from input)"
+        if not self.is_output_ancestor:
+            s += f"\n\t(tensor is not an ancestor of the model output; it terminates within the model)"
+        if len(self.parent_params_shapes) > 0:
+            params_shapes_str = ', '.join(str(param_shape) for param_shape in self.parent_params_shapes)
+            s += f"\n\tParams: Computed from params with shape {params_shapes_str}; {self.num_params_total} params total " \
+                 f"({self.parent_params_fsize_nice})"
+        else:
+            s += f"\n\tParams: no params used"
+        if len(self.parent_layers) > 0:
+            parent_layers_str = ', '.join(self.parent_layers)
+        else:
+            parent_layers_str = "no parent layers"
+        s += f"\n\tParent Layers: {parent_layers_str}"
+        if len(self.child_layers) > 0:
+            child_layers_str = ', '.join(self.child_layers)
+        else:
+            child_layers_str = "no child layers"
+        s += f"\n\tChild Layers: {child_layers_str}"
+        if self.containing_origin_module == 'none':
+            module_str = "\n\tComputed inside module: not computed inside a module"
+        else:
+            module_str = f"\n\tComputed inside module: {self.containing_origin_module}"
+        if not self.is_input_tensor:
+            s += f"\n\tFunction: {self.func_applied_name} (gradfunc={self.gradfunc_name}) " \
+                 f"{module_str}"
+        if len(self.modules_exited) > 0:
+            modules_exited_str = ', '.join(self.modules_exited)
+            s += f"\n\tOutput of modules: {modules_exited_str}"
+        else:
+            s += f"\n\tOutput of modules: none"
+        if self.is_bottom_level_module_output:
+            s += f"\n\tOutput of bottom-level module: {self.bottom_level_module_exited}"
+        lookup_keys_str = ', '.join([str(key) for key in self.lookup_keys])
+        s += f"\n\tLookup keys: {lookup_keys_str}"
+
+        return s
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class ModelHistory:
+    def __init__(self,
+                 history_dict: dict,
+                 activations_only: bool):
+        """An object that conveniently stores all the tensor history in easily accessible format.
+        This will be how saved activations, and also the full graph without activations, are encoded for the user.
+        The internal barcodes are now replaced by the nicely formatted layer labels (including the pass).
+        It can be indexed by the layer label, by the module address, or via the topoological sort index
+        to pull out entries, each of which is an OrderedDict with the following fields:
+
+        Args:
+            history_dict: The history_dict
+            activations_only: Whether to only include the nodes with saved activations, or to include all
+                nodes and no activations.
+        """
+        # Crawl through and get the desired tensors:
+
+        orig_tensor_log = history_dict['tensor_log']
+        pretty_tensor_log = OrderedDict()
+        tensor_list = []  # Ordered list of tensors.
+        tensor_mapper_dict = {}  # Mapping for any user index to the appropriate tensor
+        layer_labels = []  # list of layer labels without pass numbers
+        layer_passes = []  # list of layer labels with pass numbers.
+        layer_num_passes = {}  # for each layer, how many total passes it has
+        layer_barcodes = []
+        module_addresses = []  # list of module addresses without pass numbers
+        module_passes = []  # list of module addresses with pass numbers
+
+        model_is_recurrent = False
+        model_max_recurrent_loops = 1
+        model_is_branching = False
+
+        node_index = 0
+
+        # Get number of tensors to keep:
+        if activations_only:
+            num_tensors_to_keep = 0
+            for tensor_entry in orig_tensor_log.values():
+                if tensor_entry['tensor_contents'] != 'none':
+                    num_tensors_to_keep += 1
+        else:
+            num_tensors_to_keep = len(orig_tensor_log)
+
+        for rough_barcode, node in orig_tensor_log.items():
+            new_pretty_node = TensorLogEntry(rough_barcode,
+                                             node_index,
+                                             num_tensors_to_keep,
+                                             activations_only,
+                                             history_dict,
+                                             self)
+
+            if new_pretty_node.layer_passes_total > model_max_recurrent_loops:
+                model_max_recurrent_loops = new_pretty_node.layer_passes_total
+                model_is_recurrent = True
+
+            if len(new_pretty_node.child_layers) > 1:
+                model_is_branching = True
+
+            # Check whether to keep this entry or not.
+            if activations_only and (node['tensor_contents'] is None):
+                continue
+
+            node_index += 1
+
+            # Finally, log it
+            pretty_tensor_log[new_pretty_node.layer_barcode] = new_pretty_node
+            tensor_list.append(new_pretty_node)
+            layer_barcodes.append(new_pretty_node.layer_barcode)
+            layer_labels.append(new_pretty_node.layer_label_no_pass)
+            layer_passes.append(new_pretty_node.layer_label_w_pass)
+            layer_num_passes[new_pretty_node.layer_label_no_pass] = new_pretty_node.layer_passes_total
+            for module in new_pretty_node.modules_exited:
+                if module not in module_addresses:
+                    module_addresses.append(module)
+            for module_pass in new_pretty_node.module_passes_exited:
+                if module_pass not in module_passes:
+                    module_passes.append(module_pass)
+                elif new_pretty_node.layer_type != 'output':
+                    raise ValueError("There appear to be two overlapping module passes for different layers;"
+                                     "check for bugs.")
+
+            for key in new_pretty_node.lookup_keys:
+                if key in tensor_mapper_dict:
+                    raise ValueError("There appear to be overlapping keys in two layers; check for bugs.")
+                tensor_mapper_dict[key] = new_pretty_node
+
+        # Whole-model info.
+        self.model_name = history_dict['model_name']
+        self.model_is_branching = model_is_branching
+        self.model_is_recurrent = model_is_recurrent
+        self.model_max_recurrent_loops = model_max_recurrent_loops
+
+        self.model_num_tensors_total = len(history_dict['tensor_log'])
+        self.model_tensor_fsize_total = history_dict['total_tensor_fsize']
+        self.model_tensor_fsize_total_nice = human_readable_size(history_dict['total_tensor_fsize'])
+        self.pass_elapsed_time = history_dict['elapsed_time']
+        self.random_seed_used = history_dict['random_seed']
+        if activations_only:
+            self.model_num_tensors_saved = len(tensor_list)
+            self.model_tensor_fsize_saved = np.sum([t.tensor_fsize for t in tensor_list])
+            self.model_tensor_fsize_saved_nice = human_readable_size(self.model_tensor_fsize_saved)
+        else:
+            self.model_num_tensors_saved = 0
+            self.model_tensor_fsize_saved = 0
+            self.model_tensor_fsize_saved_nice = human_readable_size(self.model_tensor_fsize_saved)
+
+        self.model_total_param_tensors = history_dict['total_param_tensors']
+        self.model_total_param_groups = history_dict['total_param_groups']
+        self.model_total_params = history_dict['total_params']
+        self.model_total_params_fsize = history_dict['total_params_fsize']
+        self.model_total_params_fsize_nice = human_readable_size(history_dict['total_params_fsize'])
+
+        # Module info.
+        self.model_module_list = list(history_dict['module_dict'].keys())
+
+        # Saved layers info.
+
+        self.input_tensors = [rough_barcode_to_final_barcode(t, history_dict) for t in history_dict['input_tensors']]
+        self.output_tensors = [rough_barcode_to_final_barcode(t, history_dict) for t in history_dict['output_tensors']]
+        self.internally_generated_tensors = [rough_barcode_to_final_barcode(t, history_dict)
+                                             for t in history_dict['internally_generated_tensors']]
+
+        self.enclosing_loop_nodes = OrderedDict()
+        for start_node, loop_nodes in history_dict['enclosing_loop_nodes'].items():
+            self.enclosing_loop_nodes[rough_barcode_to_final_barcode(start_node, history_dict)] = \
+                [rough_barcode_to_final_barcode(n, history_dict) for n in loop_nodes]
+
+        # Finally, the logged tensor information.
+        self.tensor_log = pretty_tensor_log
+        self.tensor_list = tensor_list
+        self.tensor_mapper_dict = tensor_mapper_dict
+        self.layer_labels = layer_barcodes
+        self.layer_labels_no_pass = layer_labels
+        self.layer_labels_w_pass = layer_passes
+        self.layer_num_passes = layer_num_passes
+        self.module_addresses = module_addresses
+        self.module_passes = module_passes
+        self.top_level_modules = history_dict['top_level_module_clusters']
+        self.module_children = history_dict['module_cluster_children_dict']
+
+        # for each module, how many passes it has
+        module_num_passes = {module: len(history_dict['module_output_tensors'][module])
+                             for module in self.module_addresses}
+        self.module_num_passes = module_num_passes
+
+    def __getitem__(self, ix):
+        """
+        Overloaded such that entries can be fetched either by their position in the tensor log, their layer label,
+        or their module address.
+        #it should say so and tell them which labels are valid.
+        """
+        if ix in self.tensor_mapper_dict:
+            return self.tensor_mapper_dict[ix]
+        elif (type(ix) == int) and (ix > len(self.tensor_list)):
+            raise ValueError(f"You specified the layer with index {ix}, but there are only {len(self.tensor_list)} "
+                             f"layers; please specify a smaller number.")
+        elif ix in self.module_addresses:
+            module_num_passes = self.module_num_passes[ix]
+            raise ValueError(f"You specified output of module {ix}, but it has {module_num_passes} passes; "
+                             f"please specify e.g. {ix}:2 for the second pass of {ix}.")
+        elif ix.split(':')[0] in self.module_addresses:
+            module, pass_num = ix.split(':')
+            module_num_passes = self.module_num_passes[module]
+            raise ValueError(f"You specified module {module} pass {pass_num}, but {module} only has "
+                             f"{module_num_passes} passes; specify a lower number.")
+        elif ix in self.layer_labels_no_pass:
+            layer_num_passes = self.layer_num_passes[ix]
+            raise ValueError(f"You specified output of layer {ix}, but it has {layer_num_passes} passes; "
+                             f"please specify e.g. {ix}:2 for the second pass of {ix}.")
+        elif ix.split(':')[0] in self.layer_labels_no_pass:
+            layer_label, pass_num = ix.split(':')
+            layer_num_passes = self.layer_num_passes[layer_label]
+            raise ValueError(f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
+                             f"{layer_num_passes} passes. Specify a lower number.")
+        else:
+            sample_layer1 = random.choice(self.layer_labels_w_pass)
+            sample_layer2 = random.choice(self.layer_labels_no_pass)
+            if len(self.module_addresses) > 0:
+                sample_module1 = random.choice(self.module_addresses)
+                sample_module2 = random.choice(self.module_passes)
+                module_str = f"(e.g., {sample_module1}, {sample_module2}"
+            raise ValueError(f"Layer index not recognized; please specify either \n\t1) an integer giving "
+                             f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
+                             f"{sample_layer2}), \n\t3) the module address {module_str}"
+                             f"\n(conv2d_3_4:2 means the second pass of layer conv2d_3_4)")
+
+    def __len__(self):
+        return len(self.tensor_list)
+
+    def __iter__(self):
+        """
+        Returns the entries in their topological sort order.
+        """
+        return iter(self.tensor_list)
+
+    def __str__(self):
+        s = f"Log of {self.model_name} forward pass ({np.round(self.pass_elapsed_time, 3)}s elapsed):"
+        if self.model_is_branching:
+            branch_str = "with branching"
+        else:
+            branch_str = 'without branching'
+        if self.model_is_recurrent:
+            s += f"\n\tModel structure: recurrent (at most {self.model_max_recurrent_loops} loops), {branch_str}; " \
+                 f"{len(self.module_addresses)} total modules."
+        else:
+            s += f"\n\tModel structure: purely feedforward, {branch_str}; {len(self.module_addresses)} total modules."
+        s += f"\n\t{self.model_num_tensors_total} tensors ({self.model_tensor_fsize_total_nice}) computed in forward pass; " \
+             f"{self.model_num_tensors_saved} tensors ({self.model_tensor_fsize_saved_nice}) saved."
+        s += f"\n\t{self.model_total_param_tensors} parameter operations ({self.model_total_params} params total; " \
+             f"{self.model_total_params_fsize_nice})."
+        s += f"\n\tRandom seed: {self.random_seed_used}"
+
+        # Print the module hierarchy.
+        s += f"\n\tModule Hierarchy (based on computation order, not on the model object structure):"
+        s += self._module_hierarchy_str()
+
+        # Now print all layers.
+        s += f"\n\tLayers:"
+        for l, layer_barcode in enumerate(self.layer_labels):
+            pass_num = self.tensor_log[layer_barcode].layer_pass_num
+            total_passes = self.tensor_log[layer_barcode].layer_passes_total
+            if total_passes > 1:
+                pass_str = f" ({pass_num}/{total_passes} passes)"
+            else:
+                pass_str = ''
+            s += f"\n\t\t{l}: {layer_barcode} {pass_str}"
+
+        return s
+
+    def __repr__(self):
+        return self.__str__()
+
+    def _module_hierarchy_str(self):
+        """
+        Utility function to print the nested module hierarchy.
+        """
+        s = ''
+        for module in self.top_level_modules:
+            s += f"\n\t\t{module[0]}"
+            if len(self.module_children[module]) > 0:
+                s += ':'
+            s += self._module_hierarchy_str_helper(module, 1)
+        return s
+
+    def _module_hierarchy_str_helper(self, module, level):
+        """
+        Helper function for _module_hierarchy_str.
+        """
+        s = ''
+        any_grandchild_modules = any([len(self.module_children[sub_module]) > 0
+                                      for sub_module in self.module_children[module]])
+        if any_grandchild_modules or len(self.module_children[module]) == 0:
+            for sub_module in self.module_children[module]:
+                s += f"\n\t\t{'    ' * level}{sub_module[0]}"
+                if len(self.module_children[sub_module]) == 0:
+                    s += ':'
+                s += self._module_hierarchy_str_helper(sub_module, level + 1)
+        else:
+            s += self.pretty_print_list_w_line_breaks(
+                [module_child[0] for module_child in self.module_children[module]],
+                line_break_every=8,
+                indent_chars=f"\t\t{'    ' * level}")
+        return s
+
+    @staticmethod
+    def pretty_print_list_w_line_breaks(lst, indent_chars: str, line_break_every=5):
+        """
+        Utility function to pretty print a list with line breaks, adding indent_chars every line.
+        """
+        s = f'\n{indent_chars}'
+        for i, item in enumerate(lst):
+            s += f"{item}"
+            if i < len(lst) - 1:
+                s += ', '
+            if (i + 1) % line_break_every == 0:
+                s += f'\n{indent_chars}'
+        return s
+
+
+def prettify_history_dict(
+        history_dict: Dict) -> Dict:  # TODO make this a nice object that can be indexed in different ways
     """Returns the final user-readable version of tensor_log for the user, omitting all the ugly internal stuff.
 
     Args:
         history_dict: Input history_dict
 
     Returns:
-        Nicely organized/labeled final dict.
+        Nicely organized/labeled final dict. Fields to include:
+
     """
-    # which_fields =
+
     return history_dict['tensor_log']
 
     tensor_log = history_dict['tensor_log']
@@ -1351,422 +1836,3 @@ def prettify_history_dict(history_dict: Dict) -> Dict:
         else:
             pretty_tensor_log[tensor['layer_label']] = tensor
     return pretty_tensor_log
-
-
-def get_lowest_containing_module_for_two_nodes(node1: Dict,
-                                               node2: Dict):
-    """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
-
-    Args:
-        node1: The first node.
-        node2: The second node.
-
-    Returns:
-        Barcode of lowest-level module containing both nodes.
-    """
-    node1_modules = node1['function_call_modules_nested']
-    node2_modules = node2['function_call_modules_nested']
-
-    if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
-        return -1  # no submodule contains them both.
-
-    containing_module = node1_modules[0]
-    for m in range(min([len(node1_modules), len(node2_modules)])):
-        if node1_modules[m] != node2_modules[m]:
-            break
-        containing_module = node1_modules[m]
-    return containing_module
-
-
-def add_rolled_edges_for_node(node: Dict,
-                              graphviz_graph,
-                              module_cluster_dict: Dict,
-                              tensor_log: Dict):
-    """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
-
-    Args:
-        node: The node to add edges for.
-        graphviz_graph: The graphviz graph object.
-        module_cluster_dict: Dictionary mapping each cluster to the edges it contains.
-        tensor_log: The tensor log.
-    """
-
-    # First determine for which passes of the node each edge happens for, then add the edges.
-
-    child_layer_passes = defaultdict(list)  # for each layer, which passes they happen for.
-    for pass_num, child_layer_barcodes in node['child_layer_barcodes'].items():
-        for child_layer_barcode in child_layer_barcodes:
-            child_layer_passes[child_layer_barcode].append(pass_num)
-
-    for child_layer_barcode, pass_nums in child_layer_passes.items():
-        child_node = tensor_log[child_layer_barcode]
-        if node['param_total_passes'] > 1:
-            edge_label = f"#{int_list_to_compact_str(pass_nums)}"
-        else:
-            edge_label = ''
-
-        if child_node['connects_input_and_output'] and node['connects_input_and_output']:
-            edge_color = CONNECTING_NODE_LINE_COLOR
-            edge_style = 'solid'
-        else:
-            edge_color = CONNECTING_NODE_LINE_COLOR  # NONCONNECTING_NODE_LINE_COLOR
-            edge_style = 'dashed'
-
-        edge_dict = {'tail_name': node['layer_barcode'],
-                     'head_name': child_layer_barcode,
-                     'color': edge_color,
-                     'style': edge_style,
-                     'label': edge_label}
-
-        containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
-        if containing_module != -1:
-            module_cluster_dict[containing_module].append(edge_dict)
-        else:
-            graphviz_graph.edge(**edge_dict)
-
-
-def add_node_to_graphviz(node_barcode: Dict,
-                         graphviz_graph,
-                         vis_opt: str,
-                         module_cluster_dict: Dict,
-                         tensor_log: Dict,
-                         history_dict: Dict):
-    """Addes a node and its relevant edges to the graphviz figure.
-
-    Args:
-        node_barcode: Barcode of the node to add.
-        graphviz_graph: The graphviz object to add the node to.
-        vis_opt: Whether to roll the graph or not
-        module_cluster_dict: Dictionary of the module clusters.
-        tensor_log: log of tensors
-        history_dict: The history_dict
-
-        #TODO figure out the subgraph stuff. Either the context method or the new graph method, add labels,
-        #TODO don't override the default node labels.
-
-    Returns:
-        Nothing, but updates the graphviz_graph
-    """
-    node = tensor_log[node_barcode]
-
-    if node['is_bottom_level_module_output']:
-        last_module_seen = "<br/>@" + node['modules_exited'][0]
-        last_module_seen = f"{last_module_seen}"
-        last_module_total_passes = node['module_total_passes']
-        if (last_module_total_passes > 1) and (vis_opt == 'unrolled'):
-            last_module_num_passes = node['module_passes_exited'][0][1]
-            last_module_seen += f":{last_module_num_passes}"
-        node_shape = 'box'
-    else:
-        last_module_seen = ''
-        node_shape = 'oval'
-
-    if node['is_model_input']:
-        bg_color = INPUT_COLOR
-    elif node['is_model_output']:
-        bg_color = OUTPUT_COLOR
-    elif node['has_params']:
-        bg_color = PARAMS_NODE_BG_COLOR
-    else:
-        bg_color = DEFAULT_BG_COLOR
-
-    tensor_shape = node['tensor_shape']
-    layer_type = node['layer_type']
-    layer_type_str = layer_type.replace('_', '')
-    layer_type_ind = node['layer_type_ind']
-    layer_total_ind = node['layer_total_ind']
-    if node['connects_input_and_output']:
-        node_color = CONNECTING_NODE_LINE_COLOR
-        line_style = 'solid'
-    else:
-        node_color = CONNECTING_NODE_LINE_COLOR
-        line_style = 'dashed'  # NONCONNECTING_NODE_LINE_COLOR
-    if (node['param_total_passes'] > 1) and (vis_opt != 'rolled'):
-        pass_num = node['pass_num']
-        pass_label = f":{pass_num}"
-    else:
-        pass_label = ''
-    if len(tensor_shape) > 1:
-        tensor_shape_str = 'x'.join([str(x) for x in tensor_shape])
-    elif len(tensor_shape) == 1:
-        tensor_shape_str = f'x{tensor_shape[0]}'
-    else:
-        tensor_shape_str = 'x1'
-    tensor_shape_str = f"{tensor_shape_str}"
-
-    if node['has_params']:
-        each_param_shape = []
-        for param_shape in node['parent_params_shape']:
-            if len(param_shape) > 1:
-                each_param_shape.append('x'.join([str(s) for s in param_shape]))
-            else:
-                each_param_shape.append('x1')
-        param_label = "<br/>params: " + ', '.join([param_shape for param_shape in each_param_shape])
-    else:
-        param_label = ''
-
-    tensor_fsize = human_readable_size(node['tensor_fsize'])
-
-    node_title = f"{layer_type_str}_{layer_type_ind}_{layer_total_ind}{pass_label}"
-    node_title = f'<b>{node_title}</b>'
-
-    node_label = (f'<{node_title}<br/>{tensor_shape_str} '
-                  f'({tensor_fsize}){param_label}{last_module_seen}>')
-
-    graphviz_graph.node(name=node_barcode, label=f"{node_label}",
-                        fontcolor=node_color,
-                        color=node_color,
-                        style=f"filled,{line_style}",
-                        fillcolor=bg_color,
-                        shape=node_shape,
-                        ordering='out')
-
-    if vis_opt == 'rolled':
-        add_rolled_edges_for_node(node, graphviz_graph, module_cluster_dict, tensor_log)
-    else:
-        for child_barcode in node['child_tensor_barcodes']:
-            child_node = tensor_log[child_barcode]
-            if tensor_log[child_barcode]['connects_input_and_output'] and node['connects_input_and_output']:
-                edge_color = CONNECTING_NODE_LINE_COLOR
-                edge_style = 'solid'
-            else:
-                edge_color = CONNECTING_NODE_LINE_COLOR  # NONCONNECTING_NODE_LINE_COLOR
-                edge_style = 'dashed'
-            edge_dict = {'tail_name': node_barcode,
-                         'head_name': child_barcode,
-                         'color': edge_color,
-                         'style': edge_style}
-            containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
-            if containing_module != -1:
-                module_cluster_dict[containing_module].append(edge_dict)
-            else:
-                graphviz_graph.edge(**edge_dict)
-
-    # Finally, if it's the final output layer, force it to be on top for visual niceness.
-
-    if node['is_last_output_layer'] and vis_opt == 'rolled':
-        with graphviz_graph.subgraph() as s:
-            s.attr(rank='sink')
-            s.node(node_barcode)
-
-
-def setup_subgraphs_recurse(parent_graph,
-                            subgraph_tuple,
-                            module_cluster_dict: Dict[str, List],
-                            module_cluster_children_dict: Dict,
-                            nesting_depth: int,
-                            max_nesting_depth: int,
-                            history_dict: Dict):
-    """Inner recursive function to set up the subgraphs; this is needed in order to handle arbitrarily nested
-    "with" statements.
-
-    Args:
-        parent_graph: Parent of the subgraph being added.
-        subgraph_tuple: Name of subgraph being processed.
-        module_cluster_dict: Dict that maps each subgraph to list of edges in the subgraph.
-        module_cluster_children_dict: Dict mapping each cluster to its children clusters.
-        nesting_depth: How many submodules deep you are. This is used to determine the edge thickness
-        max_nesting_depth: The deepest nesting depth of modules in the network.
-        history_dict: Dict of the history
-    """
-    nesting_depth += 1
-    pen_width = MIN_MODULE_PENWIDTH + ((max_nesting_depth - nesting_depth) / max_nesting_depth) * PENWIDTH_RANGE
-
-    subgraph_module, subgraph_barcode = subgraph_tuple
-    subgraph_name = '_'.join(subgraph_tuple)
-    cluster_name = f"cluster_{subgraph_name}"
-    module_type = str(type(history_dict['module_dict'][subgraph_module]).__name__)
-
-    with parent_graph.subgraph(name=cluster_name) as s:
-        s.attr(label=f"<<B>@{subgraph_module}</B><br align='left'/>({module_type})<br align='left'/>>",
-               labelloc='b',
-               penwidth=str(pen_width))
-        subgraph_edges = module_cluster_dict[subgraph_tuple]
-        for edge_dict in subgraph_edges:
-            s.edge(**edge_dict)
-        subgraph_children = module_cluster_children_dict[subgraph_tuple]
-        for subgraph_child in subgraph_children:
-            setup_subgraphs_recurse(s, subgraph_child,
-                                    module_cluster_dict, module_cluster_children_dict,
-                                    nesting_depth, max_nesting_depth, history_dict)
-
-
-def get_max_nesting_depth(top_graphs,
-                          module_cluster_dict,
-                          module_cluster_children_dict):
-    """Utility function to get the max nesting depth of the nested modules in the network; works by
-    recursively crawling down the stack of modules till it hits one with no children and at least one edge.
-
-    Args:
-        top_graphs: Top-level modules
-        module_cluster_dict: Edges in each module.
-        module_cluster_children_dict: Mapping from each module to any children.
-
-    Returns:
-        Max nesting depth.
-    """
-    max_nesting_depth = 1
-    module_stack = [(graph, 1) for graph in top_graphs]
-
-    while len(module_stack) > 0:
-        module, module_depth = module_stack.pop()
-        module_edges = module_cluster_dict[module]
-        module_children = module_cluster_children_dict[module]
-
-        if (len(module_edges) == 0) and (len(module_children) == 0):  # can ignore if no edges and no children.
-            continue
-        elif (len(module_edges) > 0) and (len(module_children) == 0):
-            max_nesting_depth = max([module_depth, max_nesting_depth])
-        elif (len(module_edges) == 0) and (len(module_children) > 0):
-            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
-        else:
-            max_nesting_depth = max([module_depth, max_nesting_depth])
-            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
-    return max_nesting_depth
-
-
-def set_up_subgraphs(graphviz_graph,
-                     module_cluster_dict: Dict[str, List],
-                     history_dict: Dict):
-    """Given a dictionary specifying the edges in each cluster, the graphviz graph object, and the history_dict,
-    set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
-    recursive logic to set up the nested context managers.
-
-    Args:
-        graphviz_graph: Graphviz graph object.
-        module_cluster_dict: Dictionary mapping each cluster name to the list of edges it contains, with each
-            edge specified as a dict with all necessary arguments for creating that edge.
-        history_dict: History dict.
-    """
-    module_cluster_children_dict = history_dict['module_cluster_children_dict']
-    subgraphs = history_dict['top_level_module_clusters']
-
-    nesting_depth = 0
-
-    # Get the max nesting depth; it'll be the depth of the deepest module that has no edges.
-
-    max_nesting_depth = get_max_nesting_depth(subgraphs,
-                                              module_cluster_dict,
-                                              module_cluster_children_dict)
-
-    for subgraph_tuple in subgraphs:
-        setup_subgraphs_recurse(graphviz_graph,
-                                subgraph_tuple,
-                                module_cluster_dict,
-                                module_cluster_children_dict,
-                                nesting_depth,
-                                max_nesting_depth,
-                                history_dict)
-
-
-def align_sibling_nodes(graphviz_graph, vis_opt, tensor_log):
-    """Utility function that vertically aligns sibling nodes.
-
-    Args:
-        graphviz_graph: Graphviz graph object.
-        vis_opt: "rolled" or "unrolled"
-        tensor_log: Log of tensors
-    """
-    if vis_opt == 'unrolled':
-        sibling_keys = ['child_tensor_barcodes']  # , 'parent_tensor_barcodes']
-    elif vis_opt == 'rolled':
-        sibling_keys = ['child_layer_barcodes']  # , 'parent_layer_barcodes']
-
-    for node_barcode, node in tensor_log.items():
-        for sibling_key in sibling_keys:
-            node_sibling_barcodes = node[sibling_key]
-            if len(node_sibling_barcodes) < 2:
-                continue
-            # Strategy: set up a subgroup of scaffold nodes at the same level with a HUGE weight.
-
-            subgraph_name = f"{node_barcode}_child_scaffold_layer"
-            with graphviz_graph.subgraph(name=subgraph_name) as s:
-                s.attr(rank='same')
-                for c, child_barcode in enumerate(node_sibling_barcodes):
-                    scaffold_node_name = f"{child_barcode}_child_scaffold_node"
-                    # graphviz_graph.node(scaffold_node_name, label='', style='invisible')
-                    s.node(scaffold_node_name, label='', style='invisible', shape='point', height='0')
-                    graphviz_graph.edge(scaffold_node_name, child_barcode, weight='1000', style='invisible',
-                                        dir='none', constraint='false')
-                    # graphviz_graph.edge(node_barcode, scaffold_node_name, weight='1000', style='invisible',
-                    #                    dir='none')
-                    if c > 0:
-                        s.edge(previous_scaffold_node_name, scaffold_node_name,
-                               weight='1000', style='invisible', dir='none', constraint='false')
-                    previous_scaffold_node_name = scaffold_node_name
-
-            # for c in range(1, len(node_sibling_barcodes)):
-            #    graphviz_graph.edge(node_sibling_barcodes[c - 1],
-            #                        node_sibling_barcodes[c],
-            #                        weight='1000')
-            # node_children_barcodes_str = ' '.join(node_sibling_barcodes)
-            # graphviz_graph.graph_attr.update({'rank': f'same {node_children_barcodes_str}'})
-            # subgraph_name = f"{sibling_key}_subgraph_{node_barcode}"
-            # with graphviz_graph.subgraph(name=subgraph_name) as s:
-            #    s.attr(rank='same')
-            #    for child_barcode in node_sibling_barcodes:
-            #        s.node(child_barcode)
-
-
-def render_graph(history_dict: Dict,
-                 vis_opt: str = 'unrolled') -> None:
-    """Given the history_dict, renders the computational graph.
-    #TODO: add rolled up option, subsetting options.
-    #TODO: Add summary info about the whole graph, such as the total size of all activations.
-    #TODO: Add jupyter visualization options, make it autodetect
-
-    Args:
-        history_dict:
-
-    """
-    if vis_opt not in ['rolled', 'unrolled']:
-        raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
-
-    if vis_opt == 'unrolled':
-        tensor_log = history_dict['tensor_log']
-    elif vis_opt == 'rolled':
-        tensor_log = roll_graph(history_dict)
-    total_tensor_fsize = human_readable_size(history_dict['total_tensor_fsize'])
-    total_params = history_dict['total_params']
-    total_params_fsize = human_readable_size(history_dict['total_params_fsize'])
-    num_tensors = len(tensor_log)
-    graph_caption = (
-        f"<<B>{history_dict['model_name']}</B><br align='left'/>{num_tensors} tensors total ({total_tensor_fsize})"
-        f"<br align='left'/>{total_params} params total ({total_params_fsize})<br align='left'/>>")
-
-    dot = graphviz.Digraph(name='model', comment='Computational graph for the feedforward sweep',
-                           filename='model.png', format='png')
-    dot.graph_attr.update({'rankdir': 'BT',
-                           'label': graph_caption,
-                           'labelloc': 't',
-                           'labeljust': 'left',
-                           'ordering': 'out'})
-    dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
-
-    module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.
-
-    for node_barcode, node in tensor_log.items():
-        add_node_to_graphviz(node_barcode,
-                             dot,
-                             vis_opt,
-                             module_cluster_dict,
-                             tensor_log,
-                             history_dict)
-
-    # Finally, set up the subgraphs.
-
-    set_up_subgraphs(dot, module_cluster_dict, history_dict)
-
-    # Finally, add extra invisible edges to enforce horizontal node order if there's branching.
-
-    # align_sibling_nodes(dot, vis_opt, tensor_log)
-
-    if in_notebook():
-        # TODO get this to work
-        print("printing in notebook")
-        # from IPython.display import Image
-        # graphviz.Source(dot).view()
-        # Image(dot)
-    else:
-        # dot.render(directory='doctest-output').replace('\\', '/')
-        dot.render('graph.gv', view=True)

@@ -7,8 +7,9 @@ import torch
 from torch import nn
 
 from model_funcs import cleanup_model, prepare_model, run_model_and_save_specified_activations
-from util_funcs import remove_list_duplicates
-from graph_funcs import get_op_nums_from_layer_names, render_graph, postprocess_history_dict, prettify_history_dict
+from util_funcs import remove_list_duplicates, warn_parallel
+from graph_funcs import get_op_nums_from_layer_names, postprocess_history_dict, ModelHistory
+from vis_funcs import render_graph
 
 
 # TODO: Figure out best way to go from full graph functionality to just modules (for graph, list, activations);
@@ -20,11 +21,31 @@ from graph_funcs import get_op_nums_from_layer_names, render_graph, postprocess_
 # function_num_passes and module_num_passes as input passes through.
 
 
-def xray_model(model: nn.Module,
-               x: torch.Tensor,
-               which_layers: Union[str, List] = 'all',
-               vis_opt: str = 'unrolled',
-               random_seed: Optional[int] = None) -> OrderedDict[str, OrderedDict]:
+def get_model_structure(model: nn.Module,
+                        x: torch.Tensor,
+                        random_seed: Optional[int] = None):
+    """
+    Get the metadata for the model graph without saving any activations.
+
+    Args:
+        model: PyTorch model.
+        x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
+        random_seed: random seed in case model is stochastic
+
+    Returns:
+        history_dict: Dict of dicts with the activations from each layer.
+    """
+    warn_parallel()
+    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
+    history_pretty = ModelHistory(history_dict, activations_only=False)
+    return history_pretty
+
+
+def get_model_activations(model: nn.Module,
+                          x: torch.Tensor,
+                          which_layers: Union[str, List] = 'all',
+                          vis_opt: str = 'unrolled',
+                          random_seed: Optional[int] = None) -> ModelHistory:
     """Run a forward pass through a model, and return activations of desired hidden layers.
     Specify mode as 'modules_only' to do so only for proper modules, or as 'exhaustive' to
     also return activations from non-module functions. If only a subset of layers
@@ -47,34 +68,31 @@ def xray_model(model: nn.Module,
     Returns:
         activations: Dict of dicts with the activations from each layer.
     """
-    if mp.current_process().name != 'MainProcess':
-        print("WARNING: It looks like you are using parallel execution; it is strongly advised"
-              "to only run pytorch-xray in the main process, since certain operations "
-              "depend on execution order.")
-
-    x = copy.deepcopy(x)
+    warn_parallel()
 
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     # If not saving all layers, do a probe pass.
 
-    if which_layers != 'all':
-        history_dict = run_model_and_save_specified_activations(model, x, mode, None, random_seed)
+    if which_layers not in ['all', 'none', None, []]:
+        history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
         history_dict = postprocess_history_dict(history_dict)
         tensor_nums_to_save = get_op_nums_from_layer_names(history_dict, which_layers)
-    else:
+    elif which_layers == 'all':
         tensor_nums_to_save = 'all'
+    elif which_layers in ['none', None, []]:
+        tensor_nums_to_save = None
 
     # And now save the activations for real.
 
-    history_dict = run_model_and_save_specified_activations(model, x, 'exhaustive', tensor_nums_to_save, random_seed)
+    history_dict = run_model_and_save_specified_activations(model, x, tensor_nums_to_save, random_seed)
 
     # Visualize if desired.
     if vis_opt != 'none':
         render_graph(history_dict, vis_opt)  # change after adding options
 
-    history_pretty = prettify_history_dict(history_dict)  # for user readability
+    history_pretty = ModelHistory(history_dict, activations_only=True)
     return history_pretty
 
 
