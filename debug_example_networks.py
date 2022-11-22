@@ -50,7 +50,7 @@ simple_ff = networks.SimpleFF()
 
 x = torch.rand(5, 5)
 
-network = networks.RecurrentNestedInternal()
+network = networks.NestedModulesSimple()
 tensor_log = get_model_activations(network, x, vis_opt='rolled')
 
 # x = torch.rand(6, 3, 256, 256)

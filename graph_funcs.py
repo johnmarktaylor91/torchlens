@@ -911,6 +911,8 @@ def identify_repeated_functions(history_dict: Dict) -> Dict:
     Returns:
         history_dict tagged with any repeated parameters
     """
+    history_dict['enclosing_loop_nodes'] = {}
+
     # If there's no repeated parameters, there's nothing to do.
     if (len(history_dict['param_group_tensors']) == 0) or \
             (max([len(param_tensors) for param_tensors in history_dict['param_group_tensors'].values()]) < 2):
@@ -918,7 +920,6 @@ def identify_repeated_functions(history_dict: Dict) -> Dict:
 
     tensor_log = history_dict['tensor_log']
     enclosing_loop_nodes = find_outermost_loops(history_dict)
-    history_dict['enclosing_loop_nodes'] = {}
     for loop_nodes in enclosing_loop_nodes.values():
         history_dict['enclosing_loop_nodes'][loop_nodes[0]['barcode']] = [loop_node['barcode'] for loop_node in
                                                                           loop_nodes]
@@ -1160,6 +1161,50 @@ def propagate_module_labels_for_two_nodes(parent_node: Dict,
                     all_module_barcodes.append(new_barcode)
 
 
+def annotate_internal_tensor_modules(history_dict: Dict):
+    """Annotate any internally generated tensors with the relevant containing modules by tracing back from their children.
+
+    Args:
+        history_dict: The history dict.
+
+    Returns:
+        History dict where tensor log now has the internally generated tensors annotated with the containing modules.
+    """
+    tensor_log = history_dict['tensor_log']
+
+    # Get the initial stack; any nodes that come from the input, but have at least one parent who doesn't.
+    node_stack = []
+    for node_barcode, node in tensor_log.items():
+        if not node['has_input_ancestor']:
+            continue
+        for parent_node_barcode in node['parent_tensor_barcodes']:
+            parent_node = tensor_log[parent_node_barcode]
+            if not parent_node['has_input_ancestor']:
+                node_stack.append(node_barcode)
+                break
+
+    # Now go through the stack; for each node, mark the parents with the right containing module, and add these parents
+    # to the stack.
+
+    while len(node_stack) > 0:
+        node_barcode = node_stack.pop()
+        node = tensor_log[node_barcode]
+        for parent_node_barcode in node['parent_tensor_barcodes']:
+            parent_node = tensor_log[parent_node_barcode]
+            if not parent_node['has_input_ancestor']:
+                # Annotate the containing module hierarchy: the rule is, start from the child node,
+                # and apply in reverse any modules that were entered or exited.
+                parent_node['function_call_modules_nested'] = node['function_call_modules_nested'].copy()
+                thread_modules = node['containing_modules_thread']
+                for enter_or_exist, module_address, entry_barcode in thread_modules:
+                    module_entry_barcode = (module_address, entry_barcode)
+                    if enter_or_exist == '+':  # if it entered a module, remove that from parent nested modules.
+                        parent_node['function_call_modules_nested'].remove(module_entry_barcode)
+                    elif enter_or_exist == '-':  # if it exited a module, add that to the parent nested modules.
+                        parent_node['function_call_modules_nested'].append(module_entry_barcode)
+                node_stack.append(parent_node_barcode)
+
+
 def cluster_modules(history_dict: Dict):
     """Goes through the history dict and assigns 1) cluster IDs, and 2) cluster names that indicate
     the nested module structure. These must be distinct because the same module can be applied multiple times,
@@ -1319,18 +1364,13 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
         identify_repeated_functions,  # find repeated functions between repeated param nodes
         annotate_node_names,  # make the nodes names more human-readable
         map_layer_names_to_op_nums,  # get the operation numbers for any human-readable layer labels
+        annotate_internal_tensor_modules,  # marks the internally generated tensors with contaning modules
         cluster_modules,  # identify the unique module instances and the right mappings
         tally_sizes_and_params  # tally total sizes of tensors and params
     ]
 
     for graph_transform in graph_transforms:
         history_dict = graph_transform(history_dict)
-
-    # TODO: Figure out which fields to keep.
-
-    # fields_to_keep = []  # ordered list of fields to keep; can remove irrelevant fields.
-    # tensor_log = OrderedDict({k: OrderedDict({f: v[f] for f in fields_to_keep}) for k, v in tensor_log.items()})
-    # history_dict['tensor_log'] = tensor_log
 
     return history_dict
 
@@ -1438,6 +1478,7 @@ class TensorLogEntry:
         else:
             self.func_applied = 'none'
             self.func_applied_name = 'none'
+        self.func_time_elapsed = orig_node['func_time_elapsed']
 
         self.num_func_args_total = orig_node['num_args'] + orig_node['num_kwargs']
         self.func_args_non_tensor = orig_node['nontensor_args']
@@ -1472,13 +1513,18 @@ class TensorLogEntry:
         return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
 
     def __str__(self):
-        s = f"{self.source_model_history.model_name} layer {self.layer_label_no_pass}, " \
-            f"pass {self.layer_pass_num}/{self.layer_passes_total} (operation {self.num_operations_so_far + 1}/" \
-            f"{self.source_model_history.model_num_tensors_total}):"
+        if self.layer_passes_total > 1:
+            pass_str = f"(pass {self.layer_pass_num}/{self.layer_passes_total}), "
+        else:
+            pass_str = ", "
+        s = f"Layer {self.layer_label_no_pass}" \
+            f"{pass_str}operation {self.num_operations_so_far + 1}/" \
+            f"{self.source_model_history.model_num_tensors_total} ({self.func_time_elapsed:.3E}s elapsed):"
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
         if self.tensor_contents != 'none':
             if len(self.tensor_shape) == 0:
                 tensor_slice = self.tensor_contents
+                num_dims = 0
             elif len(self.tensor_shape) == 1:
                 num_dims = min(5, self.tensor_shape)
                 tensor_slice = self.tensor_contents[0:num_dims]
@@ -1491,7 +1537,9 @@ class TensorLogEntry:
                 for _ in range(len(self.tensor_shape) - 2):
                     tensor_slice = tensor_slice[0]
                 tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
-            s += f"\n\t\t{str(tensor_slice)}..."
+            s += f"\n\t\t{str(tensor_slice)}"
+            if num_dims > 5:
+                s += '...'
         if not self.is_input_descendant:
             s += f"\n\t(tensor was created de novo inside the model, not computed from input)"
         if not self.is_output_ancestor:

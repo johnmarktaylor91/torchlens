@@ -3,6 +3,7 @@ import __future__
 import collections
 import functools
 import inspect
+import time
 import types
 from collections import OrderedDict, defaultdict
 from functools import wraps
@@ -474,7 +475,9 @@ def torch_func_decorator(func, history_dict):
         else:
             has_internal_ancestor = False
 
+        start_time = time.time()
         out = func(*args, **kwargs)
+        time_elapsed = time.time() - start_time
         if type(out) == torch.Tensor:
             out.xray_history_dict = history_dict
             # If a new tensor, or has a new grad_fn, mark it with everything.
@@ -510,6 +513,7 @@ def torch_func_decorator(func, history_dict):
                 out.xray_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
                 out.xray_funcs_applied = [func]
                 out.xray_funcs_applied_names = [func_name]
+                out.xray_func_time_elapsed = time_elapsed
                 out.xray_gradfuncs = [out.grad_fn]
                 out.xray_gradfuncs_names = [type(out.grad_fn).__name__]
                 out.xray_parent_params = arg_parameters[:]
@@ -548,6 +552,7 @@ def torch_func_decorator(func, history_dict):
                 out.xray_modules_exited = []
                 out.xray_module_passes_exited = []
                 out.xray_is_bottom_level_module_output = False
+                out.xray_bottom_module_barcode = None
 
 
             else:  # This means that the function returned the same tensor (e.g., identity); just need to mark that.
@@ -651,6 +656,7 @@ def prepare_input_tensors(x: Any,
         t.xray_containing_modules_thread = []
         t.xray_function_call_modules_nested = []
         t.xray_function_call_modules_nested_multfuncs = []
+        t.xray_func_time_elapsed = 0
         t.xray_containing_module = None
         t.xray_last_module_seen = None
         t.xray_last_module_seen_address = None
@@ -659,6 +665,7 @@ def prepare_input_tensors(x: Any,
         t.xray_modules_exited = []
         t.xray_module_passes_exited = []
         t.xray_is_bottom_level_module_output = False
+        t.xray_bottom_module_barcode = None
         t.xray_linked_bottom_module = None
 
         history_dict['input_tensors'].append(t.xray_barcode)

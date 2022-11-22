@@ -441,7 +441,7 @@ class Level1_2(nn.Module):
         super().__init__()
 
     def forward(self, x):
-        x = x ** 3
+        x = x ** 3 + torch.ones(x.shape)
         x = x / 5
         return x
 
