@@ -15,8 +15,8 @@ from typing import Dict, List
 import torch
 from tqdm import tqdm
 
-from torchlens import ModelHistory, get_all_tensor_lookup_keys, rough_barcode_to_final_barcode
-from torchlens import get_rng_states, set_rng_states, tuple_assign
+from torchlens.graph_handling import ModelHistory, get_all_tensor_lookup_keys, rough_barcode_to_final_barcode
+from torchlens.helper_funcs import get_rng_states, set_rng_states, tuple_assign
 
 
 def validate_lookup_keys(history_dict: Dict,

@@ -3,11 +3,11 @@ from typing import List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
-from torchlens import run_model_and_save_specified_activations
-from torchlens import warn_parallel
-from validate import validate_model_history
-from torchlens import render_graph
+from torchlens.graph_handling import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
+from torchlens.helper_funcs import warn_parallel
+from torchlens.model_funcs import run_model_and_save_specified_activations
+from torchlens.validate import validate_model_history
+from torchlens.vis import render_graph
 
 
 def get_model_activations(model: nn.Module,

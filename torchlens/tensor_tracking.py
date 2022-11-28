@@ -1,6 +1,6 @@
 import __future__
-import copy
 import collections
+import copy
 import functools
 import inspect
 import time
@@ -13,9 +13,9 @@ import numpy as np
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
-from torchlens import barcode_tensors_in_obj, get_marks_from_tensor_list, get_tensor_memory_amount, \
-    get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, tensor_in_obj_has_mark, \
-    get_rng_states
+from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, get_rng_states, \
+    get_tensor_memory_amount, get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
+    mark_tensors_in_obj, tensor_in_obj_has_mark
 
 clean_from_numpy = copy.deepcopy(torch.from_numpy)
 clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
