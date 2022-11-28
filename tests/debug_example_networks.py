@@ -1,7 +1,7 @@
 import torch
 import torchvision
 
-from src.torchlens.torchlens import get_model_activations
+from src.torchlens.user_funcs import get_model_activations
 
 x = torch.rand(1, 1, 3, 3)
 x = torch.zeros(1, 1, 3, 3)

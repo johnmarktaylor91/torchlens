@@ -15,8 +15,8 @@ from typing import Dict, List, Tuple
 import torch
 from tqdm import tqdm
 
-from graph_handling import ModelHistory, get_all_tensor_lookup_keys, rough_barcode_to_final_barcode
-from helper_funcs import get_rng_states, set_rng_states, tuple_assign
+from torchlens.graph_handling import ModelHistory, get_all_tensor_lookup_keys, rough_barcode_to_final_barcode
+from torchlens.helper_funcs import get_rng_states, set_rng_states, tuple_assign
 
 
 def validate_lookup_keys(history_dict: Dict,
@@ -385,10 +385,10 @@ def saved_activations_match_child_args(history_dict: Dict,
     return True
 
 
-def validate_saved_activations(history_dict: Dict,
-                               pretty_history: ModelHistory,
-                               min_proportion_consequential_layers: float = 0,
-                               verbose: bool = False) -> bool:
+def validate_model_history(history_dict: Dict,
+                           pretty_history: ModelHistory,
+                           min_proportion_consequential_layers: float = 0,
+                           verbose: bool = False) -> bool:
     """Given the raw history_dict and saved user-facing pretty_history, confirms 1) that all saved activations
     in the pretty history match those in the raw history_dict, based on all possible lookup keys, and
     2) that running a forward pass of the model from any of the saved activations yields the exact same

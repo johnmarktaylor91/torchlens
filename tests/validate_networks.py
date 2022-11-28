@@ -5,7 +5,7 @@ import cornet
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from src.torchlens.torchlens import validate_saved_activations_for_model_input
+from src.torchlens.user_funcs import validate_saved_activations
 
 # Assemble the models and associated inputs to test.
 
@@ -74,7 +74,6 @@ torchvision_model_names = [
 
 failed_model_inputs = []
 for model_name in torchvision_model_names:
-    break
     try:
         model = getattr(torchvision.models, model_name)(pretrained=False)
         del model
@@ -122,11 +121,11 @@ for model_name in cornet_model_names:
     print(f"Testing {model_name}")
     for input_name, input_tensor in image_inputs.items():
         model = getattr(cornet, model_name)(pretrained=False)
-        saved_activations_are_valid = validate_saved_activations_for_model_input(model,
-                                                                                 input_tensor,
-                                                                                 random_seed=None,
-                                                                                 min_proportion_consequential_layers=.9,
-                                                                                 verbose=False)
+        saved_activations_are_valid = validate_saved_activations(model,
+                                                                 input_tensor,
+                                                                 random_seed=None,
+                                                                 min_proportion_consequential_layers=.9,
+                                                                 verbose=False)
         if saved_activations_are_valid:
             msg = 'passed'
         else:

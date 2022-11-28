@@ -3,31 +3,11 @@ from typing import List, Optional, Union
 import torch
 from torch import nn
 
-from graph_handling import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
-from model_funcs import run_model_and_save_specified_activations
-from helper_funcs import warn_parallel
-from validate import validate_saved_activations
-from vis import render_graph
-
-
-def get_model_structure(model: nn.Module,
-                        x: torch.Tensor,
-                        random_seed: Optional[int] = None):
-    """
-    Get the metadata for the model graph without saving any activations.
-
-    Args:
-        model: PyTorch model.
-        x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
-        random_seed: random seed in case model is stochastic
-
-    Returns:
-        history_dict: Dict of dicts with the activations from each layer.
-    """
-    warn_parallel()
-    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    history_pretty = ModelHistory(history_dict, activations_only=False)
-    return history_pretty
+from torchlens.graph_handling import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
+from torchlens.model_funcs import run_model_and_save_specified_activations
+from torchlens.helper_funcs import warn_parallel
+from torchlens.validate import validate_model_history
+from torchlens.vis import render_graph
 
 
 def get_model_activations(model: nn.Module,
@@ -88,6 +68,26 @@ def get_model_activations(model: nn.Module,
     return history_pretty
 
 
+def get_model_structure(model: nn.Module,
+                        x: torch.Tensor,
+                        random_seed: Optional[int] = None):
+    """
+    Get the metadata for the model graph without saving any activations.
+
+    Args:
+        model: PyTorch model.
+        x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
+        random_seed: random seed in case model is stochastic
+
+    Returns:
+        history_dict: Dict of dicts with the activations from each layer.
+    """
+    warn_parallel()
+    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
+    history_pretty = ModelHistory(history_dict, activations_only=False)
+    return history_pretty
+
+
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
                      visualize_opt: str = 'rolled',
@@ -112,11 +112,11 @@ def show_model_graph(model: nn.Module,
     render_graph(history_dict, visualize_opt)
 
 
-def validate_saved_activations_for_model_input(model: nn.Module,
-                                               x: torch.Tensor,
-                                               random_seed: Union[int, None] = None,
-                                               min_proportion_consequential_layers=0,
-                                               verbose: bool = False) -> bool:
+def validate_saved_activations(model: nn.Module,
+                               x: torch.Tensor,
+                               random_seed: Union[int, None] = None,
+                               min_proportion_consequential_layers=.9,
+                               verbose: bool = False) -> bool:
     """Validate that the saved model activations correctly reproduce the ground truth output.
 
     Args:
@@ -133,10 +133,10 @@ def validate_saved_activations_for_model_input(model: nn.Module,
     warn_parallel()
     history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
     history_pretty = ModelHistory(history_dict, activations_only=True)
-    activations_are_valid = validate_saved_activations(history_dict,
-                                                       history_pretty,
-                                                       min_proportion_consequential_layers,
-                                                       verbose)
+    activations_are_valid = validate_model_history(history_dict,
+                                                   history_pretty,
+                                                   min_proportion_consequential_layers,
+                                                   verbose)
     for node in history_pretty:
         del node.tensor_contents
         del node
