@@ -1530,7 +1530,7 @@ class TensorLogEntry:
                     tensor_slice = tensor_slice[0]
                 tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
             s += f"\n\t\t{str(tensor_slice)}"
-            if num_dims > 5:
+            if max(self.tensor_shape) > 5:
                 s += '...'
         if not self.is_input_descendant:
             s += f"\n\t(tensor was created de novo inside the model, not computed from input)"
@@ -1758,7 +1758,7 @@ class ModelHistory:
                 module_str = f"(e.g., {sample_module1}, {sample_module2}"
             raise ValueError(f"Layer index not recognized; please specify either \n\t1) an integer giving "
                              f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
-                             f"{sample_layer2}), \n\t3) the module address {module_str}"
+                             f"{sample_layer2}), \n\t3) the module address {module_str})"
                              f"\n(conv2d_3_4:2 means the second pass of layer conv2d_3_4)")
 
     def __len__(self):

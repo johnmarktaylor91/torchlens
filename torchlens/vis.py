@@ -2,6 +2,7 @@ from collections import OrderedDict, defaultdict
 from typing import Dict, List
 
 import graphviz
+from IPython.display import display
 
 from torchlens.helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str
 
@@ -576,11 +577,7 @@ def render_graph(history_dict: Dict,
     # align_sibling_nodes(dot, vis_opt, tensor_log)
 
     if in_notebook():
-        # TODO get this to work
-        print("printing in notebook")
-        # from IPython.display import Image
-        # graphviz.Source(dot).view()
-        # Image(dot)
+        display(dot)
     else:
         # dot.render(directory='doctest-output').replace('\\', '/')
         dot.render('graph.gv', view=True)

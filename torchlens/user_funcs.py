@@ -13,7 +13,7 @@ from torchlens.vis import render_graph
 def get_model_activations(model: nn.Module,
                           x: torch.Tensor,
                           which_layers: Union[str, List] = 'all',
-                          vis_opt: str = 'unrolled',
+                          vis_opt: str = 'none',
                           random_seed: Optional[int] = None) -> ModelHistory:
     """Run a forward pass through a model, and return activations of desired hidden layers.
     Specify mode as 'modules_only' to do so only for proper modules, or as 'exhaustive' to

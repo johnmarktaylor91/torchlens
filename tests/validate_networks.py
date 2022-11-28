@@ -86,11 +86,11 @@ for model_name in torchvision_model_names:
         if model_name == 'inception_v3':
             image_size = (299, 299)
             input_tensor = transforms.Resize(image_size)(input_tensor)
-        saved_activations_are_valid = validate_saved_activations_for_model_input(model,
-                                                                                 input_tensor,
-                                                                                 random_seed=None,
-                                                                                 min_proportion_consequential_layers=.9,
-                                                                                 verbose=False)
+        saved_activations_are_valid = validate_saved_activations(model,
+                                                                 input_tensor,
+                                                                 random_seed=None,
+                                                                 min_proportion_consequential_layers=.9,
+                                                                 verbose=False)
         if saved_activations_are_valid:
             msg = 'passed'
         else:

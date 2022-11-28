@@ -8,6 +8,7 @@ import types
 from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple, Union
+import warnings
 
 import numpy as np
 import torch
@@ -302,10 +303,18 @@ def nested_getattr(obj: Any, attr: str) -> Any:
 
     attributes = attr.split(".")
     for i, a in enumerate(attributes):
-        if i == 0:
-            out = getattr(obj, a)
+        if a == 'volatile':  # avoid annoying warning; if there's more, make a list
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                if i == 0:
+                    out = getattr(obj, a)
+                else:
+                    out = getattr(out, a)
         else:
-            out = getattr(out, a)
+            if i == 0:
+                out = getattr(obj, a)
+            else:
+                out = getattr(out, a)
     return out
 
 
