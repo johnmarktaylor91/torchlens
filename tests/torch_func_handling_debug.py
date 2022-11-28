@@ -1,8 +1,8 @@
 import torch
 from torch_func_handling import mark_tensors_in_obj
 
-from tensor_tracking import mutate_pytorch
-from util_funcs import barcode_tensors_in_obj, pprint_tensor_record
+from src.torchlens.tensor_tracking import mutate_pytorch
+from src.torchlens.helper_funcs import barcode_tensors_in_obj, pprint_tensor_record
 
 # Fix the print nonsense
 

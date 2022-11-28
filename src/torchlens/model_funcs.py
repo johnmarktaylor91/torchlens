@@ -7,22 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from graph_funcs import postprocess_history_dict
+from graph_handling import postprocess_history_dict
 from tensor_tracking import initialize_history_dict, log_tensor_metadata, mutate_pytorch, prepare_input_tensors, \
     unmutate_pytorch, update_tensor_containing_modules
-from util_funcs import get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, set_random_seed, text_num_split
+from helper_funcs import get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, set_random_seed, text_num_split
 
-
-# TDOO: annotate tensor with their bottom-level modules they've left, and how many passes, too. Will help with module mode
-# TODO: think about best way to organize module vs tensor outputs; get clarity here
-
-
-# TODO think about best way to get non-leaf module activations if desired by user. Maybe just some kind of checker
-# when it's generating the module-level graph. Shouldn't be hard, it can just look at the address and that of
-# the successor. Remaining steps: make sure the on-the-fly log saves everything, then code up the
-# function to clean it up and make the graph, then just the functions to make the graph and make the output pretty.
-# Then finally a testing function; this will require saving enough information to "pick up" the forward pass
-# where it left off, with everything except the actual inputs.
 
 def get_module_from_address(model: nn.Module, address: str) -> nn.Module:
     """Given a model and an address to a layer, returns the module at that address.

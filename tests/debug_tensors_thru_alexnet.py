@@ -1,9 +1,8 @@
 import torch
-import torch
 import torchvision
 
-from model_funcs import run_model_and_save_specified_activations
-from util_funcs import pprint_tensor_record
+from src.torchlens.model_funcs import run_model_and_save_specified_activations
+from src.torchlens.helper_funcs import pprint_tensor_record
 
 # Now let's actually make a dummy network and make it work. Give it all the challenge points:
 

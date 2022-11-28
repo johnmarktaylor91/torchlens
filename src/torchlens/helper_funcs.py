@@ -65,44 +65,7 @@ def warn_parallel():
                            "depend on execution order.")
 
 
-def pprint_tensor_record(history_dict, which_fields='all', show_tensor=True):
-    """Debug sorta function to pretty print the tensor record.
-
-    Args:
-        history_dict: Dict with the history
-        which_fields: which fields to show
-        show_tensor: whether to show the actual tensor
-    """
-    fields_not_to_print = ['parent_params', 'creation_args', 'creation_kwargs', 'history_dict']
-    tensor_log = history_dict['tensor_log']
-
-    for key, val in history_dict.items():
-        if key == 'tensor_log':
-            continue
-        print(f'{key}: {val}')
-    for barcode, record in tensor_log.items():
-        print(f"\n{barcode}")
-        if which_fields == 'all':
-            field_list = record.keys()
-        else:
-            field_list = which_fields
-
-        for field in field_list:
-            if field not in record:
-                continue
-            val = record[field]
-            if field in fields_not_to_print:
-                continue
-            if (field == 'tensor_contents') and not show_tensor:
-                continue
-            if type(val) == torch.Tensor:
-                val_nice = np.array(val.data).squeeze()
-                print(f'{field}: \n{val_nice}')
-            else:
-                print(f'{field}: {val}')
-
-
-def make_barcode() -> int:
+def make_barcode() -> str:
     """Generates a random integer hash for a layer to use as internal label (invisible from user side).
 
     Returns:

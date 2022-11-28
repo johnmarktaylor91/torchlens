@@ -1,7 +1,7 @@
 import torch
 
-from tensor_tracking import initialize_history_dict, mutate_pytorch, unmutate_pytorch
-from util_funcs import get_tensor_memory_amount
+from src.torchlens.tensor_tracking import initialize_history_dict, mutate_pytorch, unmutate_pytorch
+from src.torchlens.helper_funcs import get_tensor_memory_amount
 
 # Fix the print nonsense
 

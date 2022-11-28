@@ -3,11 +3,11 @@ from typing import List, Optional, Union
 import torch
 from torch import nn
 
-from graph_funcs import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
+from graph_handling import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
 from model_funcs import run_model_and_save_specified_activations
-from util_funcs import warn_parallel
-from validation import validate_saved_activations
-from vis_funcs import render_graph
+from helper_funcs import warn_parallel
+from validate import validate_saved_activations
+from vis import render_graph
 
 
 def get_model_structure(model: nn.Module,

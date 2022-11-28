@@ -1,11 +1,6 @@
 import torch
 from torch import nn
 
-torch.TEST_ATTRIBUTE = 'networks_script'
-
-# TODO: devise a set of test networks to make all the different edgecases bulletproof.
-# TODO: and somewhat overlapping: make some good demos
-
 """
 Cases to test:
 

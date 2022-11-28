@@ -1,8 +1,8 @@
 import torch
 
-from model_funcs import run_model_and_save_specified_activations
-from networks import SimpleNetwork
-from util_funcs import pprint_tensor_record
+from src.torchlens.model_funcs import run_model_and_save_specified_activations
+from test_networks import SimpleNetwork
+from src.torchlens.helper_funcs import pprint_tensor_record
 
 # Now let's actually make a dummy network and make it work. Give it all the challenge points:
 

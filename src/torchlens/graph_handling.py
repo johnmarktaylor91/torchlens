@@ -9,29 +9,9 @@ import numpy as np
 import torch
 
 from tensor_tracking import safe_copy
-from util_funcs import human_readable_size, make_barcode
+from helper_funcs import human_readable_size, make_barcode
 
 graphviz.set_jupyter_format('png')
-
-
-# TODO: make the nodes record so the titles pop more nicely
-# TODO: Make the visualization code a bit prettier; try out some recurrent networks next.
-# Visualization: put nodes in greyscale if they don't both come from the input and lead to the output.
-# Add an indicator if they're outputs of a bottom-level module.
-# Color inputs, outputs (green and red?), and any bottom-level module outputs
-# Add another annotation for whether a node is an output ancestor.
-
-
-# TODO annotate the graph log with useful metadata instead of making it denovo every time; e.g., the
-# input and output nodes. Inputs, outputs, graph, dictionary of repeated nodes, counter of node types?
-
-# Maybe tensor barcode, layer barcode?
-
-# Get clear about when to do the barcodes vs the nodes themselves, be consistent.
-
-# Get more consistent language for different kinds of barcodes, nodes, operations, etc.
-
-# Hard-code the colors up here
 
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):

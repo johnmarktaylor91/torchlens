@@ -1,9 +1,7 @@
 import torch
 import torchvision
-from cornet import cornet_s
 
-import networks
-from pytorch_xray import get_model_activations, validate_saved_activations_for_model_input
+from src.torchlens.torchlens import get_model_activations
 
 x = torch.rand(1, 1, 3, 3)
 x = torch.zeros(1, 1, 3, 3)

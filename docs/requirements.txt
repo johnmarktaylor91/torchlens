@@ -1,0 +1,7 @@
+numpy
+pandas
+torch
+tqdm
+torchvision
+ipython
+graphviz

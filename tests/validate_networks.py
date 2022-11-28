@@ -3,10 +3,9 @@
 
 import cornet
 import torch
-from torch import nn
 import torchvision
 import torchvision.transforms as transforms
-from pytorch_xray import validate_saved_activations_for_model_input
+from src.torchlens.torchlens import validate_saved_activations_for_model_input
 
 # Assemble the models and associated inputs to test.
 
