@@ -160,20 +160,20 @@ def module_pre_hook(module: nn.Module,
     Returns:
         The input, now marked with information about the module it's entering.
     """
-    module_address = module.xray_module_address
+    module_address = module.tl_module_address
     module_entry_barcode = (module_address, make_barcode())
-    module.xray_module_entry_barcodes.append(module_entry_barcode)
-    module.xray_module_pass_num += 1
+    module.tl_module_entry_barcodes.append(module_entry_barcode)
+    module.tl_module_pass_num += 1
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
-        t.xray_containing_modules_nested.append(module_entry_barcode)
-        t.xray_containing_module = module_entry_barcode
-        t.xray_entered_module = True
-        t.xray_last_module_seen_address = module_address
-        t.xray_last_module_seen_entry_barcode = module_entry_barcode
-        t.xray_last_module_seen = module
-        t.xray_module_just_entered_address = module_address
-        t.xray_containing_modules_thread.append(('+', module_entry_barcode[0], module_entry_barcode[1]))
+        t.tl_containing_modules_nested.append(module_entry_barcode)
+        t.tl_containing_module = module_entry_barcode
+        t.tl_entered_module = True
+        t.tl_last_module_seen_address = module_address
+        t.tl_last_module_seen_entry_barcode = module_entry_barcode
+        t.tl_last_module_seen = module
+        t.tl_module_just_entered_address = module_address
+        t.tl_containing_modules_thread.append(('+', module_entry_barcode[0], module_entry_barcode[1]))
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
@@ -193,20 +193,20 @@ def module_post_hook(module: nn.Module,
         Nothing, but records all relevant data.
     """
 
-    module_address = module.xray_module_address
-    module_pass_num = module.xray_module_pass_num
-    module_entry_barcode = module.xray_module_entry_barcodes.pop()
+    module_address = module.tl_module_address
+    module_pass_num = module.tl_module_pass_num
+    module_entry_barcode = module.tl_module_entry_barcodes.pop()
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
-        tensor_log = t.xray_history_dict['tensor_log']
-        t.xray_is_module_output = True
+        tensor_log = t.tl_history_dict['tensor_log']
+        t.tl_is_module_output = True
 
         # If it's not a bottom-level module output, check if it is one and tag it accordingly if so.
 
-        if not t.xray_is_bottom_level_module_output and (len(t.xray_modules_exited) == 0):
+        if not t.tl_is_bottom_level_module_output and (len(t.tl_modules_exited) == 0):
             is_bottom_level_module_output = True
-            for parent_barcode in t.xray_parent_tensor_barcodes:
+            for parent_barcode in t.tl_parent_tensor_barcodes:
                 parent_tensor = tensor_log[parent_barcode]
                 if parent_tensor['module_just_entered_address'] != module_address:
                     is_bottom_level_module_output = False
@@ -216,40 +216,40 @@ def module_post_hook(module: nn.Module,
                     break
 
             if is_bottom_level_module_output:
-                t.xray_is_bottom_level_module_output = True
-                t.xray_bottom_module_barcode = module_address
-                t.xray_bottom_module_type = type(module).__name__
-                t.xray_bottom_module_pass_num = module_pass_num
+                t.tl_is_bottom_level_module_output = True
+                t.tl_bottom_module_barcode = module_address
+                t.tl_bottom_module_type = type(module).__name__
+                t.tl_bottom_module_pass_num = module_pass_num
 
-        if module.xray_module_type.lower() == 'identity':
-            t.xray_funcs_applied.append(lambda x: x)
-            t.xray_funcs_applied_names.append('identity')
-            t.xray_funcs_applied_modules.append(module_address)
-            t.xray_function_call_modules_nested = update_tensor_containing_modules(t)
-            t.xray_function_call_modules_nested_multfuncs.append(t.xray_function_call_modules_nested[:])
-            t.xray_containing_modules_thread = []
+        if module.tl_module_type.lower() == 'identity':
+            t.tl_funcs_applied.append(lambda x: x)
+            t.tl_funcs_applied_names.append('identity')
+            t.tl_funcs_applied_modules.append(module_address)
+            t.tl_function_call_modules_nested = update_tensor_containing_modules(t)
+            t.tl_function_call_modules_nested_multfuncs.append(t.tl_function_call_modules_nested[:])
+            t.tl_containing_modules_thread = []
 
-        if len(t.xray_containing_modules_nested) > 0:
-            t.xray_containing_modules_nested.pop()  # remove the last module address.
-        t.xray_modules_exited.append(module_address)
-        t.xray_module_passes_exited.append((module_address, module_pass_num))
+        if len(t.tl_containing_modules_nested) > 0:
+            t.tl_containing_modules_nested.pop()  # remove the last module address.
+        t.tl_modules_exited.append(module_address)
+        t.tl_module_passes_exited.append((module_address, module_pass_num))
 
-        t.xray_containing_modules_thread.append(('-', module_entry_barcode[0], module_entry_barcode[1]))
-        t.xray_last_module_seen_entry_barcode = module_entry_barcode
+        t.tl_containing_modules_thread.append(('-', module_entry_barcode[0], module_entry_barcode[1]))
+        t.tl_last_module_seen_entry_barcode = module_entry_barcode
 
-        if len(t.xray_containing_modules_nested) == 0:
-            t.xray_entered_module = False
-            t.xray_containing_module = None
+        if len(t.tl_containing_modules_nested) == 0:
+            t.tl_entered_module = False
+            t.tl_containing_module = None
         else:
-            t.xray_containing_module = t.xray_containing_modules_nested[-1]
+            t.tl_containing_module = t.tl_containing_modules_nested[-1]
 
         log_tensor_metadata(t)  # Update tensor log with this new information.
 
     for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
-        input_module_thread = t.xray_containing_modules_thread[:]
+        input_module_thread = t.tl_containing_modules_thread[:]
         if ('+', module_entry_barcode[0], module_entry_barcode[1]) in input_module_thread[::-1]:
             module_entry_ix = input_module_thread.index(('+', module_entry_barcode[0], module_entry_barcode[1]))
-            t.xray_containing_modules_thread = t.xray_containing_modules_thread[:module_entry_ix]
+            t.tl_containing_modules_thread = t.tl_containing_modules_thread[:module_entry_ix]
 
     return output_
 
@@ -286,8 +286,8 @@ def prepare_model(model: nn.Module,
         # Annotate the children with the full address.
         for c, (child_name, child_module) in enumerate(module_children):
             child_address = f"{parent_address}.{child_name}" if parent_address != '' else child_name
-            child_module.xray_module_address = child_address
-            history_dict['module_dict'][child_module.xray_module_address] = child_module
+            child_module.tl_module_address = child_address
+            history_dict['module_dict'][child_module.tl_module_address] = child_module
             module_children[c] = (child_address, child_module)
         module_stack = module_children + module_stack
 
@@ -299,10 +299,10 @@ def prepare_model(model: nn.Module,
         else:
             is_bottom_level_module = False
 
-        module.xray_module_type = str(type(module).__name__).lower()
-        module.xray_is_bottom_level_module = is_bottom_level_module
-        module.xray_module_pass_num = 0
-        module.xray_module_entry_barcodes = []
+        module.tl_module_type = str(type(module).__name__).lower()
+        module.tl_is_bottom_level_module = is_bottom_level_module
+        module.tl_module_pass_num = 0
+        module.tl_module_entry_barcodes = []
 
         # Add hooks.
 
@@ -417,8 +417,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
         history_dict['elapsed_time'] = time.time() - start_time
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
-            history_dict['output_tensors'].append(t.xray_barcode)
-            mark_tensors_in_obj(t, 'xray_is_model_output', True)
+            history_dict['output_tensors'].append(t.tl_barcode)
+            mark_tensors_in_obj(t, 'tl_is_model_output', True)
             log_tensor_metadata(t)
         if model_is_dataparallel:
             model = nn.DataParallel(model)

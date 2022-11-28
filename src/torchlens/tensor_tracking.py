@@ -354,7 +354,7 @@ def mutate_pytorch(torch_module: types.ModuleType,
         if hasattr(orig_func, '__name__') and orig_func.__name__ == 'wrapped_func':
             continue
         new_func = torch_func_decorator(orig_func, history_log)
-        new_func.xray_is_mutant_function = True
+        new_func.tl_is_mutant_function = True
         mutant_to_orig_funcs_dict[new_func] = orig_func
         try:
             setattr(local_func_namespace, func_name, new_func)
@@ -404,8 +404,8 @@ def update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
     Returns:
         List of the updated containing modules.
     """
-    containing_modules = t.xray_function_call_modules_nested[:]
-    thread_modules = t.xray_containing_modules_thread[:]
+    containing_modules = t.tl_function_call_modules_nested[:]
+    thread_modules = t.tl_containing_modules_thread[:]
     for thread_module in thread_modules:
         if thread_module[0] == '+':
             containing_modules.append(thread_module[1:])
@@ -434,30 +434,30 @@ def get_parent_tensor_function_call_location(parent_tensors: List[torch.Tensor],
     tensor_kwarg_positions = {}
 
     for parent_tensor in parent_tensors:
-        if not hasattr(parent_tensor, 'xray_barcode'):
+        if not hasattr(parent_tensor, 'tl_barcode'):
             continue
         for arg_position, arg in enumerate(args):
             if arg is parent_tensor:
-                tensor_arg_positions[arg_position] = parent_tensor.xray_barcode
+                tensor_arg_positions[arg_position] = parent_tensor.tl_barcode
             elif type(arg) in [list, tuple]:
                 for sub_arg_position, sub_arg in enumerate(arg):
                     if sub_arg is parent_tensor:
-                        tensor_arg_positions[(arg_position, sub_arg_position)] = parent_tensor.xray_barcode
+                        tensor_arg_positions[(arg_position, sub_arg_position)] = parent_tensor.tl_barcode
             elif type(arg) == dict:
                 for key, value in arg.items():
                     if value is parent_tensor:
-                        tensor_arg_positions[(arg_position, key)] = parent_tensor.xray_barcode
+                        tensor_arg_positions[(arg_position, key)] = parent_tensor.tl_barcode
         for kwarg_key, kwarg_value in kwargs.items():
             if kwarg_value is parent_tensor:
-                tensor_kwarg_positions[kwarg_key] = parent_tensor.xray_barcode
+                tensor_kwarg_positions[kwarg_key] = parent_tensor.tl_barcode
             elif type(kwarg_value) in [list, tuple]:
                 for sub_arg_position, sub_arg in enumerate(kwarg_value):
                     if sub_arg is parent_tensor:
-                        tensor_arg_positions[(kwarg_key, sub_arg_position)] = parent_tensor.xray_barcode
+                        tensor_arg_positions[(kwarg_key, sub_arg_position)] = parent_tensor.tl_barcode
             elif type(kwarg_value) == dict:
                 for key, value in kwarg_value.items():
                     if value is parent_tensor:
-                        tensor_arg_positions[(kwarg_key, key)] = parent_tensor.xray_barcode
+                        tensor_arg_positions[(kwarg_key, key)] = parent_tensor.tl_barcode
     tensor_all_arg_positions = {'args': tensor_arg_positions, 'kwargs': tensor_kwarg_positions}
     return tensor_all_arg_positions
 
@@ -502,20 +502,20 @@ def torch_func_decorator(func, history_dict):
             has_parents = True
         else:
             has_parents = False
-        parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'xray_barcode')
+        parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'tl_barcode')
 
         # Figure out where the parent tensors are used in the function call args and kwargs.
         parent_tensor_arg_locations = get_parent_tensor_function_call_location(arg_tensors, args, kwargs)
 
         arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
-        any_inputs_entered_module = tensor_in_obj_has_mark(arg_tensors, 'xray_entered_module', True)
+        any_inputs_entered_module = tensor_in_obj_has_mark(arg_tensors, 'tl_entered_module', True)
         if any_inputs_entered_module:  # TODO make this a function
             # Use the tensor with the most nested containing module (in case of internally generated ones).
             max_input_module_nesting = 0
             most_nested_arg_tensor_index = None
             most_nested_containing_modules = []
             for i, t in enumerate(arg_tensors):
-                if not hasattr(t, 'xray_containing_modules_nested'):
+                if not hasattr(t, 'tl_containing_modules_nested'):
                     continue
                 containing_modules = update_tensor_containing_modules(t)
                 if len(containing_modules) > max_input_module_nesting:
@@ -523,10 +523,10 @@ def torch_func_decorator(func, history_dict):
                     most_nested_arg_tensor_index = i
                     most_nested_containing_modules = containing_modules[:]
             reference_arg_tensor = arg_tensors[most_nested_arg_tensor_index]
-            containing_module = reference_arg_tensor.xray_containing_module
-            last_module_seen = reference_arg_tensor.xray_last_module_seen
-            last_module_seen_address = reference_arg_tensor.xray_last_module_seen_address
-            last_module_seen_entry_barcode = reference_arg_tensor.xray_last_module_seen_entry_barcode
+            containing_module = reference_arg_tensor.tl_containing_module
+            last_module_seen = reference_arg_tensor.tl_last_module_seen
+            last_module_seen_address = reference_arg_tensor.tl_last_module_seen_address
+            last_module_seen_entry_barcode = reference_arg_tensor.tl_last_module_seen_entry_barcode
             containing_modules = most_nested_containing_modules
 
         else:
@@ -541,29 +541,29 @@ def torch_func_decorator(func, history_dict):
         parent_param_passes = {}
         total_params_size = 0
         for param in arg_parameters:
-            if not hasattr(param, 'xray_param_barcode'):
+            if not hasattr(param, 'tl_param_barcode'):
                 param_barcode = make_barcode()  # TODO also clean up all params with cleanup func.
-                param.xray_param_barcode = param_barcode
-                param.xray_pass_num = 1
+                param.tl_param_barcode = param_barcode
+                param.tl_pass_num = 1
             else:
-                param_barcode = param.xray_param_barcode
-                param.xray_pass_num += 1
-            parent_param_passes[param_barcode] = param.xray_pass_num
+                param_barcode = param.tl_param_barcode
+                param.tl_pass_num += 1
+            parent_param_passes[param_barcode] = param.tl_pass_num
             total_params_size += get_tensor_memory_amount(param.data)
-        param_group_barcode = '_'.join(param.xray_param_barcode for param in arg_parameters)
+        param_group_barcode = '_'.join(param.tl_param_barcode for param in arg_parameters)
 
-        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'xray_has_input_ancestor', True)
+        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'tl_has_input_ancestor', True)
         if came_from_input:
             has_input_ancestor = True
         else:
             has_input_ancestor = False
 
-        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'xray_has_internal_ancestor', True)
-        parent_internal_tensor_barcodes = get_marks_from_tensor_list(parent_internal_tensors, 'xray_barcode')
+        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'tl_has_internal_ancestor', True)
+        parent_internal_tensor_barcodes = get_marks_from_tensor_list(parent_internal_tensors, 'tl_barcode')
 
         internal_ancestors = []
         for internal_parent in parent_internal_tensors:
-            internal_ancestors.extend(internal_parent.xray_internal_ancestors)
+            internal_ancestors.extend(internal_parent.tl_internal_ancestors)
         if len(internal_ancestors) > 0:
             has_internal_ancestor = True
         else:
@@ -579,94 +579,94 @@ def torch_func_decorator(func, history_dict):
         out_iter = make_output_iterable(out_orig)  # so we can iterate through it
         for i, out in enumerate(out_iter):
             if type(out) == torch.Tensor:
-                out.xray_history_dict = history_dict
+                out.tl_history_dict = history_dict
                 # If a new tensor, or has a new grad_fn, mark it with everything.
-                if not hasattr(out, 'xray_barcode') or (out.grad_fn not in out.xray_gradfuncs):
-                    out.xray_barcode = make_barcode()
+                if not hasattr(out, 'tl_barcode') or (out.grad_fn not in out.tl_gradfuncs):
+                    out.tl_barcode = make_barcode()
 
                     # Update history_dict
 
                     history_dict['tensor_counter'] += 1
                     if not has_parents:
-                        history_dict['internally_generated_tensors'].append(out.xray_barcode)
+                        history_dict['internally_generated_tensors'].append(out.tl_barcode)
                     if len(arg_parameters) > 0:
-                        history_dict['param_group_tensors'][param_group_barcode].append(out.xray_barcode)
+                        history_dict['param_group_tensors'][param_group_barcode].append(out.tl_barcode)
 
                     # Update tensor_log
-                    out.xray_tensor_num = history_dict['tensor_counter']
-                    out.xray_tensor_shape = tuple(out.shape)
-                    out.xray_tensor_dtype = out.dtype
-                    out.xray_tensor_fsize = get_tensor_memory_amount(out)
-                    out.xray_has_input_ancestor = has_input_ancestor
-                    out.xray_is_model_output = False
-                    out.xray_is_model_input = False
-                    out.xray_parent_tensor_barcodes = parent_tensor_barcodes
-                    out.xray_has_parents = has_parents
-                    if (not has_parents) and (not out.xray_is_model_input):
-                        out.xray_is_internally_generated = True
-                        out.xray_has_internal_ancestor = True
-                        out.xray_internal_ancestors = [out.xray_barcode]
+                    out.tl_tensor_num = history_dict['tensor_counter']
+                    out.tl_tensor_shape = tuple(out.shape)
+                    out.tl_tensor_dtype = out.dtype
+                    out.tl_tensor_fsize = get_tensor_memory_amount(out)
+                    out.tl_has_input_ancestor = has_input_ancestor
+                    out.tl_is_model_output = False
+                    out.tl_is_model_input = False
+                    out.tl_parent_tensor_barcodes = parent_tensor_barcodes
+                    out.tl_has_parents = has_parents
+                    if (not has_parents) and (not out.tl_is_model_input):
+                        out.tl_is_internally_generated = True
+                        out.tl_has_internal_ancestor = True
+                        out.tl_internal_ancestors = [out.tl_barcode]
                     else:
-                        out.xray_is_internally_generated = False
-                        out.xray_has_internal_ancestor = has_internal_ancestor
-                        out.xray_internal_ancestors = internal_ancestors
-                    out.xray_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
-                    out.xray_funcs_applied = [func]
-                    out.xray_funcs_applied_names = [func_name]
-                    out.xray_parent_tensor_arg_locs = parent_tensor_arg_locations
+                        out.tl_is_internally_generated = False
+                        out.tl_has_internal_ancestor = has_internal_ancestor
+                        out.tl_internal_ancestors = internal_ancestors
+                    out.tl_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
+                    out.tl_funcs_applied = [func]
+                    out.tl_funcs_applied_names = [func_name]
+                    out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
                     if type(out_orig) in [list, tuple]:  # in case the function returned a tuple/list of tensors
-                        out.xray_out_index = i
+                        out.tl_out_index = i
                     else:
-                        out.xray_out_index = None
-                    out.xray_func_time_elapsed = time_elapsed
-                    out.xray_func_rng_states = rng_states
-                    out.xray_gradfuncs = [out.grad_fn]
-                    out.xray_gradfuncs_names = [type(out.grad_fn).__name__]
-                    out.xray_parent_params = arg_parameters[:]
-                    out.xray_parent_param_barcodes = [param.xray_param_barcode for param in arg_parameters]
-                    out.xray_parent_params_shape = [tuple(param.shape) for param in arg_parameters]
-                    out.xray_parent_param_passes = parent_param_passes.copy()
-                    out.xray_params_memory_size = total_params_size
+                        out.tl_out_index = None
+                    out.tl_func_time_elapsed = time_elapsed
+                    out.tl_func_rng_states = rng_states
+                    out.tl_gradfuncs = [out.grad_fn]
+                    out.tl_gradfuncs_names = [type(out.grad_fn).__name__]
+                    out.tl_parent_params = arg_parameters[:]
+                    out.tl_parent_param_barcodes = [param.tl_param_barcode for param in arg_parameters]
+                    out.tl_parent_params_shape = [tuple(param.shape) for param in arg_parameters]
+                    out.tl_parent_param_passes = parent_param_passes.copy()
+                    out.tl_params_memory_size = total_params_size
                     if len(arg_parameters) == 0:
-                        out.xray_has_params = False
-                        out.xray_pass_num = 1
-                        out.xray_layer_barcode = out.xray_barcode
+                        out.tl_has_params = False
+                        out.tl_pass_num = 1
+                        out.tl_layer_barcode = out.tl_barcode
                     else:
-                        out.xray_has_params = True
-                        out.xray_pass_num = len(history_dict['param_group_tensors'][param_group_barcode])
-                        out.xray_layer_barcode = param_group_barcode
-                    out.xray_nontensor_args = non_tensor_args
-                    out.xray_nontensor_kwargs = non_tensor_kwargs
-                    out.xray_nontensor_all_args = non_tensor_args + list(non_tensor_kwargs.values())
-                    out.xray_num_args = len(args)
-                    out.xray_num_kwargs = len(kwargs)
+                        out.tl_has_params = True
+                        out.tl_pass_num = len(history_dict['param_group_tensors'][param_group_barcode])
+                        out.tl_layer_barcode = param_group_barcode
+                    out.tl_nontensor_args = non_tensor_args
+                    out.tl_nontensor_kwargs = non_tensor_kwargs
+                    out.tl_nontensor_all_args = non_tensor_args + list(non_tensor_kwargs.values())
+                    out.tl_num_args = len(args)
+                    out.tl_num_kwargs = len(kwargs)
 
                     # Module stuff.
 
-                    out.xray_entered_module = any_inputs_entered_module
-                    out.xray_containing_modules_nested = containing_modules[:]
-                    out.xray_function_call_modules_nested = containing_modules[:]
-                    out.xray_function_call_modules_nested_multfuncs = [containing_modules[:]]
-                    out.xray_containing_modules_thread = []
-                    out.xray_containing_module = containing_module
-                    out.xray_last_module_seen = last_module_seen
-                    out.xray_module_just_entered_address = None
-                    out.xray_funcs_applied_modules = [last_module_seen]
-                    out.xray_last_module_seen_address = last_module_seen_address
-                    out.xray_last_module_seen_entry_barcode = last_module_seen_entry_barcode
-                    out.xray_is_module_output = False
-                    out.xray_modules_exited = []
-                    out.xray_module_passes_exited = []
-                    out.xray_is_bottom_level_module_output = False
-                    out.xray_bottom_module_barcode = None
+                    out.tl_entered_module = any_inputs_entered_module
+                    out.tl_containing_modules_nested = containing_modules[:]
+                    out.tl_function_call_modules_nested = containing_modules[:]
+                    out.tl_function_call_modules_nested_multfuncs = [containing_modules[:]]
+                    out.tl_containing_modules_thread = []
+                    out.tl_containing_module = containing_module
+                    out.tl_last_module_seen = last_module_seen
+                    out.tl_module_just_entered_address = None
+                    out.tl_funcs_applied_modules = [last_module_seen]
+                    out.tl_last_module_seen_address = last_module_seen_address
+                    out.tl_last_module_seen_entry_barcode = last_module_seen_entry_barcode
+                    out.tl_is_module_output = False
+                    out.tl_modules_exited = []
+                    out.tl_module_passes_exited = []
+                    out.tl_is_bottom_level_module_output = False
+                    out.tl_bottom_module_barcode = None
 
                 else:  # This means that the function returned the same tensor (e.g., identity); just need to mark that.
-                    out.xray_funcs_applied.append(func)
-                    out.xray_funcs_applied_names.append(func_name)
-                    out.xray_func_rng_states = rng_states
-                    out.xray_parent_tensor_arg_locs = parent_tensor_arg_locations
-                    out.xray_funcs_applied_modules.append(last_module_seen)
-                    out.xray_function_call_modules_nested_multfuncs.append(out.xray_function_call_modules_nested[:])
+                    out.tl_funcs_applied.append(func)
+                    out.tl_funcs_applied_names.append(func_name)
+                    out.tl_func_rng_states = rng_states
+                    out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
+                    out.tl_funcs_applied_modules.append(last_module_seen)
+                    out.tl_function_call_modules_nested_multfuncs.append(out.tl_function_call_modules_nested[:])
 
                 log_tensor_metadata(out)
                 log_tensor_data(out, arg_copies, kwarg_copies, arg_parameters)
@@ -714,63 +714,63 @@ def prepare_input_tensors(x: Any,
     # TODO make sure all these fields match the others
     for t in input_tensors:
         history_dict['tensor_counter'] += 1
-        t.xray_history_dict = history_dict
-        t.xray_barcode = make_barcode()
-        t.xray_tensor_num = history_dict['tensor_counter']
-        t.xray_tensor_shape = tuple(t.shape)
-        t.xray_tensor_dtype = t.dtype
-        t.xray_tensor_fsize = get_tensor_memory_amount(t)
-        t.xray_has_input_ancestor = True
-        t.xray_is_internally_generated = False
-        t.xray_has_internal_ancestor = False
-        t.xray_is_model_input = True
-        t.xray_is_model_output = False
-        t.xray_module_just_entered_address = None
-        t.xray_parent_tensor_barcodes = []
-        t.xray_has_parents = False
-        t.xray_parent_internal_tensor_barcodes = []
-        t.xray_internal_ancestors = []
-        t.xray_funcs_applied = []
-        t.xray_funcs_applied_names = []
-        t.xray_funcs_applied_modules = []
-        t.xray_func_rng_states = get_rng_states()
-        t.xray_parent_tensor_arg_locs = {'args': {}, 'kwargs': {}}
-        t.xray_gradfuncs = []
-        t.xray_gradfuncs_names = []
-        t.xray_num_args = 0
-        t.xray_num_kwargs = 0
-        t.xray_nontensor_args = []
-        t.xray_nontensor_kwargs = {}
-        t.xray_parent_params = []
-        t.xray_parent_param_barcodes = []
-        t.xray_parent_params_shape = []
-        t.xray_parent_param_passes = {}
-        t.xray_params_memory_size = 0
-        t.xray_has_params = False
-        t.xray_pass_num = 1
-        t.xray_layer_barcode = t.xray_barcode
+        t.tl_history_dict = history_dict
+        t.tl_barcode = make_barcode()
+        t.tl_tensor_num = history_dict['tensor_counter']
+        t.tl_tensor_shape = tuple(t.shape)
+        t.tl_tensor_dtype = t.dtype
+        t.tl_tensor_fsize = get_tensor_memory_amount(t)
+        t.tl_has_input_ancestor = True
+        t.tl_is_internally_generated = False
+        t.tl_has_internal_ancestor = False
+        t.tl_is_model_input = True
+        t.tl_is_model_output = False
+        t.tl_module_just_entered_address = None
+        t.tl_parent_tensor_barcodes = []
+        t.tl_has_parents = False
+        t.tl_parent_internal_tensor_barcodes = []
+        t.tl_internal_ancestors = []
+        t.tl_funcs_applied = []
+        t.tl_funcs_applied_names = []
+        t.tl_funcs_applied_modules = []
+        t.tl_func_rng_states = get_rng_states()
+        t.tl_parent_tensor_arg_locs = {'args': {}, 'kwargs': {}}
+        t.tl_gradfuncs = []
+        t.tl_gradfuncs_names = []
+        t.tl_num_args = 0
+        t.tl_num_kwargs = 0
+        t.tl_nontensor_args = []
+        t.tl_nontensor_kwargs = {}
+        t.tl_parent_params = []
+        t.tl_parent_param_barcodes = []
+        t.tl_parent_params_shape = []
+        t.tl_parent_param_passes = {}
+        t.tl_params_memory_size = 0
+        t.tl_has_params = False
+        t.tl_pass_num = 1
+        t.tl_layer_barcode = t.tl_barcode
 
         # Module stuff.
 
-        t.xray_entered_module = False
-        t.xray_containing_modules_nested = []
-        t.xray_containing_modules_thread = []
-        t.xray_function_call_modules_nested = []
-        t.xray_function_call_modules_nested_multfuncs = []
-        t.xray_func_time_elapsed = 0
-        t.xray_containing_module = None
-        t.xray_containing_modules_nested = []
-        t.xray_last_module_seen = None
-        t.xray_last_module_seen_address = None
-        t.xray_last_module_seen_entry_barcode = None
-        t.xray_is_module_output = False
-        t.xray_modules_exited = []
-        t.xray_module_passes_exited = []
-        t.xray_is_bottom_level_module_output = False
-        t.xray_bottom_module_barcode = None
-        t.xray_linked_bottom_module = None
+        t.tl_entered_module = False
+        t.tl_containing_modules_nested = []
+        t.tl_containing_modules_thread = []
+        t.tl_function_call_modules_nested = []
+        t.tl_function_call_modules_nested_multfuncs = []
+        t.tl_func_time_elapsed = 0
+        t.tl_containing_module = None
+        t.tl_containing_modules_nested = []
+        t.tl_last_module_seen = None
+        t.tl_last_module_seen_address = None
+        t.tl_last_module_seen_entry_barcode = None
+        t.tl_is_module_output = False
+        t.tl_modules_exited = []
+        t.tl_module_passes_exited = []
+        t.tl_is_bottom_level_module_output = False
+        t.tl_bottom_module_barcode = None
+        t.tl_linked_bottom_module = None
 
-        history_dict['input_tensors'].append(t.xray_barcode)
+        history_dict['input_tensors'].append(t.tl_barcode)
         log_tensor_metadata(t)
         log_tensor_data(t, [], {}, [])
 
@@ -781,25 +781,25 @@ def log_tensor_metadata(t: torch.Tensor):
     Args:
         t: tensor to log
     """
-    history_dict = t.xray_history_dict
-    tensor_barcode = t.xray_barcode
+    history_dict = t.tl_history_dict
+    tensor_barcode = t.tl_barcode
 
     # Save any relevant fields.
 
     for field in dir(t):
-        if not field.startswith('xray_'):  # xray is the keyword for marking relevant fields.
+        if not field.startswith('tl_'):  # xray is the keyword for marking relevant fields.
             continue
-        field_stripped = field.removeprefix('xray_')
+        field_stripped = field.removeprefix('tl_')
         history_dict['tensor_log'][tensor_barcode][field_stripped] = getattr(t, field)
 
-    if t.xray_is_module_output:
-        module_just_exited = t.xray_modules_exited[-1]
+    if t.tl_is_module_output:
+        module_just_exited = t.tl_modules_exited[-1]
         if tensor_barcode not in history_dict['module_output_tensors'][module_just_exited]:
             history_dict['module_output_tensors'][module_just_exited].append(tensor_barcode)
 
-        if all([t.xray_is_bottom_level_module_output,
+        if all([t.tl_is_bottom_level_module_output,
                 tensor_barcode not in history_dict['bottom_level_module_output_tensors'][module_just_exited],
-                module_just_exited == t.xray_bottom_module_barcode]):
+                module_just_exited == t.tl_bottom_module_barcode]):
             history_dict['bottom_level_module_output_tensors'][module_just_exited].append(tensor_barcode)
 
 
@@ -816,9 +816,9 @@ def log_tensor_data(t: torch.Tensor,
         t_params: params used to create the tensor.
         history_dict: The dictionary with the history of what's happened in the model.
     """
-    history_dict = t.xray_history_dict
-    tensor_barcode = t.xray_barcode
-    tensor_num = t.xray_tensor_num
+    history_dict = t.tl_history_dict
+    tensor_barcode = t.tl_barcode
+    tensor_num = t.tl_tensor_num
 
     if (history_dict['tensor_nums_to_save'] == 'all') or (tensor_num in history_dict['tensor_nums_to_save']):
         # Get tensor contents

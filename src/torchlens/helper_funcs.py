@@ -229,7 +229,7 @@ def barcode_tensors_in_obj(x: Any):
     """
     input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for tensor in input_tensors:
-        setattr(tensor, 'xray_barcode', make_barcode())
+        setattr(tensor, 'tl_barcode', make_barcode())
 
 
 def tensor_in_obj_has_mark(x: Any, field_name: str, field_val: Any):

@@ -181,7 +181,7 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                 node['is_model_output'] = False
 
                 if ((len(node['modules_exited']) > 0)
-                        and history_dict['module_dict'][node['modules_exited'][-1]].xray_is_bottom_level_module):
+                        and history_dict['module_dict'][node['modules_exited'][-1]].tl_is_bottom_level_module):
                     node['is_bottom_level_module_output'] = True
                 else:
                     node['is_bottom_level_module_output'] = False

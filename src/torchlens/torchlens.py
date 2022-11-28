@@ -108,7 +108,6 @@ def show_model_graph(model: nn.Module,
     if visualize_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    # Simply call xray_model without saving any layers.
     history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
     render_graph(history_dict, visualize_opt)
 
