@@ -7,11 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.graph_handling import postprocess_history_dict
-from torchlens.tensor_tracking import initialize_history_dict, log_tensor_metadata, mutate_pytorch, \
+from torchlens import postprocess_history_dict
+from torchlens import initialize_history_dict, log_tensor_metadata, mutate_pytorch, \
     prepare_input_tensors, \
     unmutate_pytorch, update_tensor_containing_modules
-from torchlens.helper_funcs import get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, set_random_seed, \
+from torchlens import get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, set_random_seed, \
     text_num_split
 
 

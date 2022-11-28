@@ -8,8 +8,8 @@ import graphviz
 import numpy as np
 import torch
 
-from torchlens.tensor_tracking import safe_copy
-from torchlens.helper_funcs import human_readable_size, make_barcode
+from torchlens import safe_copy
+from torchlens import human_readable_size, make_barcode
 
 graphviz.set_jupyter_format('png')
 

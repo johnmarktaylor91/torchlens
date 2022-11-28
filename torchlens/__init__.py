@@ -2,4 +2,4 @@
 """
 from .user_funcs import get_model_activations, get_model_structure, show_model_graph, \
     validate_saved_activations
-from . import graph_handling, helper_funcs, model_funcs, tensor_tracking, validate, vis
+from torchlens import graph_handling, helper_funcs, model_funcs, tensor_tracking, validate, vis
