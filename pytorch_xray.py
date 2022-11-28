@@ -1,24 +1,13 @@
-import copy
-from collections import OrderedDict
-import multiprocessing as mp
-from typing import List, Union, Optional
+from typing import List, Optional, Union
 
 import torch
 from torch import nn
 
-from model_funcs import cleanup_model, prepare_model, run_model_and_save_specified_activations
-from util_funcs import remove_list_duplicates, warn_parallel
-from graph_funcs import get_op_nums_from_layer_names, postprocess_history_dict, ModelHistory
+from graph_funcs import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
+from model_funcs import run_model_and_save_specified_activations
+from util_funcs import warn_parallel
+from validation import validate_saved_activations
 from vis_funcs import render_graph
-
-
-# TODO: Figure out best way to go from full graph functionality to just modules (for graph, list, activations);
-# TODO: And along with that figure out how to handle the rolled-up functionality for both the modules, and for the
-# function view (the latter requires checking the parameters). Have it count the number of passes.
-# Actually maybe save the rolled-up for later since it stands alone, it can be a final thing.
-# But at least individuate the functions that see the input multiple times so they can be labeled (this comes from
-# counting the parameter passes. Maybe fields like: module_num_passes, function_num_passes? Increment the
-# function_num_passes and module_num_passes as input passes through.
 
 
 def get_model_structure(model: nn.Module,
@@ -75,14 +64,17 @@ def get_model_activations(model: nn.Module,
 
     # If not saving all layers, do a probe pass.
 
-    if which_layers not in ['all', 'none', None, []]:
-        history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-        history_dict = postprocess_history_dict(history_dict)
-        tensor_nums_to_save = get_op_nums_from_layer_names(history_dict, which_layers)
-    elif which_layers == 'all':
+    if which_layers == 'all':
         tensor_nums_to_save = 'all'
+        activations_only = True
     elif which_layers in ['none', None, []]:
         tensor_nums_to_save = None
+        activations_only = False
+    else:
+        history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
+        history_dict = postprocess_history_dict(history_dict)
+        tensor_nums_to_save = get_op_nums_from_layer_names(history_dict, which_layers)  # TODO fix this.
+        activations_only = True
 
     # And now save the activations for real.
 
@@ -92,13 +84,12 @@ def get_model_activations(model: nn.Module,
     if vis_opt != 'none':
         render_graph(history_dict, vis_opt)  # change after adding options
 
-    history_pretty = ModelHistory(history_dict, activations_only=True)
+    history_pretty = ModelHistory(history_dict, activations_only=activations_only)
     return history_pretty
 
 
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
-                     mode: str = 'modules_only',
                      visualize_opt: str = 'rolled',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
@@ -106,8 +97,6 @@ def show_model_graph(model: nn.Module,
     Args:
         model: PyTorch model.
         x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
-        mode: 'modules_only' to only view modules, 'exhaustive' to
-            view all tensor operations.
         visualize_opt: 'rolled' to show the graph in rolled-up format (one node
             per layer, even if multiple passes), or 'unrolled' to view with
             one node per operation.
@@ -116,41 +105,44 @@ def show_model_graph(model: nn.Module,
     Returns:
         Nothing.
     """
-    if mode not in ['modules_only', 'exhaustive']:
-        raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
     if visualize_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     # Simply call xray_model without saving any layers.
     history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    render_model_graph(history_dict, mode, visualize_opt)
+    render_graph(history_dict, visualize_opt)
 
 
-def list_model(model: nn.Module,
-               x: torch.Tensor,
-               mode: str = 'modules_only',
-               unrolled_opt: str = 'rolled',
-               random_seed: Optional[int] = None) -> List[str]:
-    """List the layers in a model.
+def validate_saved_activations_for_model_input(model: nn.Module,
+                                               x: torch.Tensor,
+                                               random_seed: Union[int, None] = None,
+                                               min_proportion_consequential_layers=0,
+                                               verbose: bool = False) -> bool:
+    """Validate that the saved model activations correctly reproduce the ground truth output.
 
     Args:
         model: PyTorch model.
-        x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
-        mode: 'modules_only' to only view modules, 'exhaustive' to
-            view all tensor operations.
-        unrolled_opt: Put 'rolled' to list each layer once, or 'unrolled' to list each computational step.
+        x: Input for which to validate the saved activations.
         random_seed: random seed in case model is stochastic
+        min_proportion_consequential_layers: The percentage of layers for which perturbing them must change the output
+            in order for the model to count as validated; if 0, doesn't check.
+        verbose: Whether to have messages during the validation process.
 
     Returns:
-        List of layer names.
+        True if the saved activations correctly reproduce the ground truth output, false otherwise.
     """
-    if mode not in ['modules_only', 'exhaustive']:
-        raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
-    if unrolled_opt not in ['none', 'rolled', 'unrolled']:
-        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
-
-    # Simply call xray_model without saving any layers.
-    history_dict = run_model_and_save_specified_activations(model, x, mode, None, random_seed)
-    # TODO: maybe just wrap this into the post-processing function?
-    layer_list = get_layer_list_from_history(history_dict, mode, unrolled_opt)
-    return layer_list
+    warn_parallel()
+    history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
+    history_pretty = ModelHistory(history_dict, activations_only=True)
+    activations_are_valid = validate_saved_activations(history_dict,
+                                                       history_pretty,
+                                                       min_proportion_consequential_layers,
+                                                       verbose)
+    for node in history_pretty:
+        del node.tensor_contents
+        del node
+    del history_pretty
+    for node in history_dict['tensor_log'].values():
+        node.clear()
+    history_dict.clear()
+    return activations_are_valid

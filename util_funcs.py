@@ -1,21 +1,15 @@
+import multiprocessing as mp
+import random
+import secrets
+import string
 from collections import OrderedDict
 from sys import getsizeof
+from typing import Any, Dict, List, Optional, Tuple, Type
 
-import multiprocessing as mp
 import numpy as np
-import random
 import torch
-from typing import Any, List, Optional, Tuple, Type
-import copy
 from IPython import get_ipython
-
 from torch import nn
-
-import os
-import binascii
-
-import string
-import secrets
 
 
 def set_random_seed(seed: int):
@@ -33,13 +27,41 @@ def set_random_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
+def get_rng_states() -> Dict:
+    """Utility function to fetch sufficient information from all RNG states to recover the same state later.
+
+    Returns:
+        Dict with sufficient information to recover all RNG states.
+    """
+    rng_dict = {'random': random.getstate(),
+                'np': np.random.get_state(),
+                'torch': torch.random.get_rng_state(),
+                'torch_cuda': torch.cuda.get_rng_state('cuda')}
+    return rng_dict
+
+
+def set_rng_states(rng_states: Dict):
+    """Utility function to set the state of random seeds to a cached value.
+
+    Args:
+        rng_states: Dict of rng_states saved by get_random_seed_states
+
+    Returns:
+        Nothing, but correctly sets all random seed states.
+    """
+    random.setstate(rng_states['random'])
+    np.random.set_state(rng_states['np'])
+    torch.random.set_rng_state(rng_states['torch'])
+    torch.cuda.set_rng_state(rng_states['torch_cuda'], 'cuda')
+
+
 def warn_parallel():
     """
     Utility function to give raise error if it's being run in parallel processing.
     """
     if mp.current_process().name != 'MainProcess':
-        raise RuntimeError("WARNING: It looks like you are using parallel execution; it is strongly advised"
-                           "to only run pytorch-xray in the main process, since certain operations "
+        raise RuntimeError("WARNING: It looks like you are using parallel execution; only run "
+                           "pytorch-xray in the main process, since certain operations "
                            "depend on execution order.")
 
 
@@ -105,6 +127,22 @@ def is_iterable(obj: Any) -> bool:
         return True
     except TypeError:
         return False
+
+
+def tuple_assign(tuple_: tuple, ind: int, new_value: any):
+    """Utility function to assign an entry of a tuple to a new value.
+
+    Args:
+        tuple_: Tuple to change.
+        ind: Index to change.
+        new_value: The new value.
+
+    Returns:
+        Tuple with the new value swapped out.
+    """
+    list_ = list(tuple_)
+    list_[ind] = new_value
+    return tuple(list_)
 
 
 def in_notebook():

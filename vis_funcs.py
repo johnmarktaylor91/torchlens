@@ -1,5 +1,6 @@
 from collections import OrderedDict, defaultdict
 from typing import Dict, List
+
 import graphviz
 
 from util_funcs import human_readable_size, in_notebook, int_list_to_compact_str

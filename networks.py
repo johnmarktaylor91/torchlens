@@ -1,6 +1,5 @@
-from torch import nn
 import torch
-from typing import Dict
+from torch import nn
 
 torch.TEST_ATTRIBUTE = 'networks_script'
 

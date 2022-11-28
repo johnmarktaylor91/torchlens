@@ -1,17 +1,16 @@
-from collections import OrderedDict
 import copy
 import random
+import time
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import time
 import torch
 from torch import nn
 
-from tensor_tracking import log_tensor_metadata, initialize_history_dict, mutate_pytorch, prepare_input_tensors, \
-    unmutate_pytorch, update_tensor_containing_modules
-from util_funcs import get_vars_of_type_from_obj, text_num_split, set_random_seed, barcode_tensors_in_obj, \
-    mark_tensors_in_obj, make_barcode
 from graph_funcs import postprocess_history_dict
+from tensor_tracking import initialize_history_dict, log_tensor_metadata, mutate_pytorch, prepare_input_tensors, \
+    unmutate_pytorch, update_tensor_containing_modules
+from util_funcs import get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, set_random_seed, text_num_split
 
 
 # TDOO: annotate tensor with their bottom-level modules they've left, and how many passes, too. Will help with module mode
@@ -241,7 +240,8 @@ def module_post_hook(module: nn.Module,
             t.xray_function_call_modules_nested_multfuncs.append(t.xray_function_call_modules_nested[:])
             t.xray_containing_modules_thread = []
 
-        t.xray_containing_modules_nested.pop()  # remove the last module address.
+        if len(t.xray_containing_modules_nested) > 0:
+            t.xray_containing_modules_nested.pop()  # remove the last module address.
         t.xray_modules_exited.append(module_address)
         t.xray_module_passes_exited.append((module_address, module_pass_num))
 
@@ -258,7 +258,7 @@ def module_post_hook(module: nn.Module,
 
     for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
         input_module_thread = t.xray_containing_modules_thread[:]
-        if ('+', module_entry_barcode[0], module_entry_barcode[1]) in input_module_thread:
+        if ('+', module_entry_barcode[0], module_entry_barcode[1]) in input_module_thread[::-1]:
             module_entry_ix = input_module_thread.index(('+', module_entry_barcode[0], module_entry_barcode[1]))
             t.xray_containing_modules_thread = t.xray_containing_modules_thread[:module_entry_ix]
 
@@ -337,7 +337,6 @@ def clear_hooks(hook_handles: List):
 
 def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'xray'):
     """Recursively clears the given attribute from all modules in the model.
-    TODO: have it clear the params too.
 
     Args:
         model: PyTorch model.
@@ -351,11 +350,15 @@ def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'x
             if attribute_keyword in attribute_name:
                 delattr(module, attribute_name)
 
+    for param in model.parameters():
+        for attribute_name in dir(param):
+            if attribute_keyword in attribute_name:
+                delattr(param, attribute_name)
+
 
 def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
     """Reverses all temporary changes to the model (namely, the forward hooks and added
     model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
-    TODO: cleanup params too.
 
     Args:
         model: PyTorch model.
@@ -414,7 +417,11 @@ def run_model_and_save_specified_activations(model: nn.Module,
         x = x.to(model_device)
         input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
         prepare_model(model, history_dict, hook_handles)
-        orig_func_defs = mutate_pytorch(torch, input_tensors, orig_func_defs, history_dict)
+        orig_func_defs, mutant_to_orig_funcs_dict = mutate_pytorch(torch,
+                                                                   input_tensors,
+                                                                   orig_func_defs,
+                                                                   history_dict)
+        history_dict['mutant_to_orig_funcs_dict'] = mutant_to_orig_funcs_dict
         prepare_input_tensors(x, history_dict)
         start_time = time.time()
         outputs = model(x)
@@ -429,6 +436,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
         unmutate_pytorch(torch, orig_func_defs)
         history_dict = postprocess_history_dict(history_dict)
         model = cleanup_model(model, hook_handles)
+        del output_tensors
+        del x
 
     except Exception as e:
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")

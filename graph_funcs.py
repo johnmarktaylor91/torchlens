@@ -1,14 +1,15 @@
 # This module has functions for processing the computation graphs that come out of the other functions.
 
-from collections import defaultdict
+import random
+from collections import OrderedDict, defaultdict
+from typing import Any, Dict, List, Tuple, Union
+
 import graphviz
 import numpy as np
 import torch
-import random
 
-from collections import OrderedDict
-from typing import Any, Dict, List, Tuple
-from util_funcs import make_barcode, human_readable_size
+from tensor_tracking import safe_copy
+from util_funcs import human_readable_size, make_barcode
 
 graphviz.set_jupyter_format('png')
 
@@ -79,7 +80,6 @@ def insert_sorted_child_node(parent_node, child_node, tensor_log):
             parent_node['child_tensor_barcodes'] = child_barcodes[:]
             return
     parent_node['child_tensor_barcodes'] = parent_node['child_tensor_barcodes'] + [child_barcode]
-    return
 
 
 def annotate_node_children(history_dict: Dict) -> Dict:
@@ -150,7 +150,6 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                 new_node = node.copy()
                 new_node['barcode'] = make_barcode()
                 new_node['layer_barcode'] = new_node['barcode']
-                new_node['tensor_num'] = None
                 new_node['funcs_applied'] = node['funcs_applied'][f:]
                 new_node['funcs_applied_names'] = node['funcs_applied_names'][f:]
                 new_node['function_call_modules_nested_multfuncs'] = node['function_call_modules_nested_multfuncs'][f:]
@@ -159,6 +158,12 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                 new_node['module_passes_exited'] = node['module_passes_exited'][func_applied_module_position:]
                 new_node['child_tensor_barcodes'] = node['child_tensor_barcodes'][:]
                 new_node['parent_tensor_barcodes'] = [node['barcode']]
+                new_node['parent_tensor_arg_locs'] = {'args': {0: node['barcode']},
+                                                      'kwargs': {}}
+                new_node['args_all'] = [safe_copy(tensor_log[new_node['parent_tensor_barcodes'][0]]['tensor_contents'])]
+                new_node['creation_args'] = [
+                    safe_copy(tensor_log[new_node['parent_tensor_barcodes'][0]]['tensor_contents'])]
+                new_node['creation_kwargs'] = {}
                 new_node['tensor_num'] = history_dict['tensor_counter']
                 new_node['has_params'] = False
                 new_node['parent_params'] = []
@@ -177,6 +182,12 @@ def expand_multiple_functions(history_dict: Dict) -> Dict:
                     for p, child_parent_barcode in enumerate(child_node['parent_tensor_barcodes']):
                         if child_parent_barcode == node['barcode']:
                             child_node['parent_tensor_barcodes'][p] = new_node['barcode']
+                    for arg_position, arg_barcode in child_node['parent_tensor_arg_locs']['args'].items():
+                        if arg_barcode == node['barcode']:
+                            child_node['parent_tensor_arg_locs']['args'][arg_position] = new_node['barcode']
+                    for kwarg_key, kwarg_barcode in child_node['parent_tensor_arg_locs']['kwargs'].items():
+                        if kwarg_barcode == node['barcode']:
+                            child_node['parent_tensor_arg_locs']['kwargs'][kwarg_key] = new_node['barcode']
 
                 # And finally fix the original node.
 
@@ -494,39 +505,6 @@ def annotate_total_layer_passes(history_dict: Dict) -> Dict:
             tensor_log[tensor_barcode]['module_total_passes'] = module_num_passes
 
     return history_dict
-
-
-def traverse_graph(history_dict):
-    """Debugging function to traverse the graph and make sure nothing weird happens.
-
-    Args:
-        history_dict: Dict with the history.
-
-    Returns:
-        List of lists of all loops, listed as the tensor barcodes.
-    """
-
-    tensor_log = history_dict['tensor_log']
-    input_nodes = history_dict['input_tensors']
-
-    pairs_seen = set()
-
-    node_stack = input_nodes[:]
-    num_passes = 0
-    tensor_nums = []
-    while len(node_stack) > 0:
-        num_passes += 1
-        node_barcode = node_stack.pop()
-        node = tensor_log[node_barcode]
-        tensor_nums.append(node['tensor_num'])
-        node_children = node['child_tensor_barcodes']
-        for node_child_barcode in node_children:
-            node_stack.append(node_child_barcode)
-            new_pair = (node_barcode, node_child_barcode)
-            # if new_pair in pairs_seen:
-            #    return new_pair
-            pairs_seen.add(new_pair)
-    print(num_passes)
 
 
 def find_loops(history_dict) -> List[List]:
@@ -1196,13 +1174,15 @@ def annotate_internal_tensor_modules(history_dict: Dict):
                 # and apply in reverse any modules that were entered or exited.
                 parent_node['function_call_modules_nested'] = node['function_call_modules_nested'].copy()
                 thread_modules = node['containing_modules_thread']
-                for enter_or_exist, module_address, entry_barcode in thread_modules:
+                for enter_or_exit, module_address, entry_barcode in thread_modules[::-1]:
                     module_entry_barcode = (module_address, entry_barcode)
-                    if enter_or_exist == '+':  # if it entered a module, remove that from parent nested modules.
+                    if enter_or_exit == '+':  # if it entered a module, remove that from parent nested modules.
                         parent_node['function_call_modules_nested'].remove(module_entry_barcode)
-                    elif enter_or_exist == '-':  # if it exited a module, add that to the parent nested modules.
+                    elif enter_or_exit == '-':  # if it exited a module, add that to the parent nested modules.
                         parent_node['function_call_modules_nested'].append(module_entry_barcode)
                 node_stack.append(parent_node_barcode)
+
+    return history_dict
 
 
 def cluster_modules(history_dict: Dict):
@@ -1301,16 +1281,15 @@ def unmutate_tensor(t):
         Unmutated tensor.
     """
     if type(t) == torch.Tensor:
-        new_t = torch.from_numpy(t.data.detach().cpu().numpy())
+        new_t = safe_copy(t)
     elif type(t) == torch.nn.Parameter:
-        new_t_data = torch.from_numpy(t.data.detach().cpu().numpy())
-        new_t = torch.nn.Parameter(new_t_data)
+        new_t = torch.nn.Parameter(safe_copy(t))
     else:
         new_t = t
     return new_t
 
 
-def unmutate_tensors_in_history(history_dict: Dict):
+def unmutate_tensors_and_funcs_in_history(history_dict: Dict):
     """Returns all tensors in the history dict to normal, unmutated versions.
 
     Args:
@@ -1320,6 +1299,7 @@ def unmutate_tensors_in_history(history_dict: Dict):
         history_dict with all tensors unmutated.
     """
     tensor_log = history_dict['tensor_log']
+    mutant_to_orig_funcs_dict = history_dict['mutant_to_orig_funcs_dict']
     for node in tensor_log.values():
         node['tensor_contents'] = unmutate_tensor(node['tensor_contents'])
         for p, parent_param in enumerate(node['parent_params']):
@@ -1327,13 +1307,17 @@ def unmutate_tensors_in_history(history_dict: Dict):
 
         for a in range(len(node['creation_args'])):
             arg = node['creation_args'][a]
-            if issubclass(type(arg), torch.Tensor):
+            if issubclass(type(arg), (torch.Tensor, torch.nn.parameter.Parameter, torch.nn.Parameter)):
                 new_arg = unmutate_tensor(arg)
                 node['creation_args'] = node['creation_args'][:a] + tuple([new_arg]) + node['creation_args'][a + 1:]
 
         for key, val in node['creation_kwargs'].items():
-            if issubclass(type(val), torch.Tensor):
+            if issubclass(type(val), (torch.Tensor, torch.nn.parameter.Parameter, torch.nn.Parameter)):
                 node['creation_kwargs'][key] = unmutate_tensor(val)
+
+        for f, func in enumerate(node['funcs_applied']):
+            if func in mutant_to_orig_funcs_dict:
+                node['funcs_applied'][f] = mutant_to_orig_funcs_dict[func]
 
     return history_dict
 
@@ -1353,7 +1337,7 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
     # TODO: Figure out how much time this part takes, how many graph_traversals; try to only traverse graph once.
 
     graph_transforms = [
-        unmutate_tensors_in_history,  # return any tensors in history dict to their original definition
+        unmutate_tensors_and_funcs_in_history,  # return any tensors in history dict to their original definition
         annotate_node_children,  # note the children of each node
         strip_irrelevant_nodes,  # remove island nodes unconnected to inputs or outputs
         expand_multiple_functions,  # expand identity functions
@@ -1395,6 +1379,38 @@ def rough_barcode_to_final_barcode(node_barcode,
     return final_barcode
 
 
+def get_all_tensor_lookup_keys(node: Dict,
+                               node_index: int,
+                               num_tensors_to_keep: int,
+                               history_dict: dict) -> List[Union[str, int]]:
+    """Gets all the keys that can be used to look up a tensor in the final tensor log.
+
+    Args:
+        node: Node in question.
+        node_index: Index of node in question.
+        num_tensors_to_keep: Number of tensors to keep.
+        history_dict: Dict of history.
+
+    Returns:
+        List of keys that can be used to look up a tensor in the tensor log.
+    """
+    main_pretty_barcode = rough_barcode_to_final_barcode(node['barcode'], history_dict)
+    module_passes_exited = [f"{module}:{pass_num}" for module, pass_num in
+                            node['module_passes_exited']]
+    lookup_keys = [main_pretty_barcode, node_index, node_index - num_tensors_to_keep]
+    if node['layer_type'] != 'output':
+        lookup_keys += module_passes_exited[:]
+    if node['param_total_passes'] == 1:  # for generality, allow indexing non-recurrent layers w/ pass
+        lookup_keys.append(node['layer_label_w_pass'])
+
+    # if just one pass for a module, allow indexing w/out pass
+    for module_address in node['modules_exited']:
+        if (len(history_dict['module_output_tensors'][module_address]) == 1) and (node['layer_type'] != 'output'):
+            lookup_keys.append(module_address)
+
+    return lookup_keys
+
+
 class TensorLogEntry:
     def __init__(self,
                  rough_barcode: str,
@@ -1421,6 +1437,8 @@ class TensorLogEntry:
         # Tensor labeling:
         new_barcode = rough_barcode_to_final_barcode(rough_barcode, history_dict)
         self.layer_barcode = new_barcode
+        self.layer_raw_barcode = rough_barcode
+        self.layer_raw_tensor_num = orig_node['tensor_num']
         self.layer_label_w_pass = orig_node['layer_label_w_pass']
         self.layer_label_no_pass = orig_node['layer_label']
         self.layer_type = orig_node['layer_type']
@@ -1432,16 +1450,10 @@ class TensorLogEntry:
 
         # Set the possible lookup keys:
 
-        lookup_keys = [node_index, node_index - num_tensors_to_keep, self.layer_barcode]
-        if self.layer_type != 'output':
-            lookup_keys += module_passes_exited[:]
-        if self.layer_passes_total == 1:  # for generality, allow indexing non-recurrent layers w/ pass
-            lookup_keys.append(self.layer_label_w_pass)
-
-        # if just one pass for a module, allow indexing w/out pass
-        for module_address in orig_node['modules_exited']:
-            if (len(history_dict['module_output_tensors'][module_address]) == 1) and (self.layer_type != 'output'):
-                lookup_keys.append(module_address)
+        lookup_keys = get_all_tensor_lookup_keys(orig_node,
+                                                 node_index,
+                                                 num_tensors_to_keep,
+                                                 history_dict)
 
         self.lookup_keys = sorted(lookup_keys, key=str)
 
