@@ -489,7 +489,7 @@ def make_output_iterable(x):
         return list(x.values())
     else:
         return [x]
-    
+
 
 def torch_func_decorator(func, history_dict):
     @wraps(func)
@@ -802,7 +802,7 @@ def log_tensor_metadata(t: torch.Tensor):
     for field in dir(t):
         if not field.startswith('tl_'):  # tl is the keyword for marking relevant fields.
             continue
-        field_stripped = field.removeprefix('tl_')
+        field_stripped = field[3:]
         history_dict['tensor_log'][tensor_barcode][field_stripped] = getattr(t, field)
 
     if t.tl_is_module_output:
