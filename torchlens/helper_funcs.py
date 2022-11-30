@@ -35,8 +35,9 @@ def get_rng_states() -> Dict:
     """
     rng_dict = {'random': random.getstate(),
                 'np': np.random.get_state(),
-                'torch': torch.random.get_rng_state(),
-                'torch_cuda': torch.cuda.get_rng_state('cuda')}
+                'torch': torch.random.get_rng_state()}
+    if torch.cuda.is_available():
+        rng_dict['torch_cuda'] = torch.cuda.get_rng_state('cuda')
     return rng_dict
 
 
@@ -52,7 +53,8 @@ def set_rng_states(rng_states: Dict):
     random.setstate(rng_states['random'])
     np.random.set_state(rng_states['np'])
     torch.random.set_rng_state(rng_states['torch'])
-    torch.cuda.set_rng_state(rng_states['torch_cuda'], 'cuda')
+    if torch.cuda.is_available():
+        torch.cuda.set_rng_state(rng_states['torch_cuda'], 'cuda')
 
 
 def warn_parallel():
