@@ -185,7 +185,6 @@ class NestedComplexBranching(nn.Module):
 class ConditionalBranching(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(in_features=5, out_features=5)
 
     def forward(self, x):
         if torch.sum(x) > 0:

@@ -544,7 +544,7 @@ def render_graph(history_dict: Dict,
     total_tensor_fsize = human_readable_size(history_dict['total_tensor_fsize'])
     total_params = history_dict['total_params']
     total_params_fsize = human_readable_size(history_dict['total_params_fsize'])
-    num_tensors = len(tensor_log)
+    num_tensors = len(history_dict['tensor_log'])
     graph_caption = (
         f"<<B>{history_dict['model_name']}</B><br align='left'/>{num_tensors} tensors total ({total_tensor_fsize})"
         f"<br align='left'/>{total_params} params total ({total_params_fsize})<br align='left'/>>")

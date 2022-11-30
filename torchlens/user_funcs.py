@@ -96,14 +96,14 @@ def get_model_structure(model: nn.Module,
 
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
-                     visualize_opt: str = 'rolled',
+                     vis_opt: str = 'rolled',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
     Args:
         model: PyTorch model.
         x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
-        visualize_opt: 'rolled' to show the graph in rolled-up format (one node
+        vis_opt: 'rolled' to show the graph in rolled-up format (one node
             per layer, even if multiple passes), or 'unrolled' to view with
             one node per operation.
         random_seed: random seed in case model is stochastic
@@ -111,11 +111,11 @@ def show_model_graph(model: nn.Module,
     Returns:
         Nothing.
     """
-    if visualize_opt not in ['none', 'rolled', 'unrolled']:
+    if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    render_graph(history_dict, visualize_opt)
+    render_graph(history_dict, vis_opt)
 
 
 def validate_saved_activations(model: nn.Module,
