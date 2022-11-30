@@ -11,8 +11,6 @@ import torch
 from torchlens.helper_funcs import human_readable_size, make_barcode
 from torchlens.tensor_tracking import safe_copy
 
-graphviz.set_jupyter_format('png')
-
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):
     """Removes a node from the graph, removes it as a parent and as a child from any connected nodes, and removes
