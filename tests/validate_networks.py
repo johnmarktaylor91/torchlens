@@ -6,6 +6,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torchlens.user_funcs import validate_saved_activations
+import visualpriors
 
 # Assemble the models and associated inputs to test.
 
@@ -133,3 +134,23 @@ for model_name in cornet_model_names:
             del param
         del model
         print(f"\t{input_name}: {msg}")
+
+# Now the taskonomy network:
+
+taskonomy_model = visualpriors.taskonomy_network.TaskonomyNetwork()
+for input_name, input_tensor in image_inputs.items():
+    model = taskonomy_model
+    saved_activations_are_valid = validate_saved_activations(model,
+                                                             input_tensor,
+                                                             random_seed=None,
+                                                             min_proportion_consequential_layers=.9,
+                                                             verbose=True)
+    if saved_activations_are_valid:
+        msg = 'passed'
+    else:
+        msg = 'failed'
+        failed_model_inputs.append((model_name, input_name))
+    for param in model.parameters():
+        del param
+    del model
+    print(f"\t{input_name}: {msg}")

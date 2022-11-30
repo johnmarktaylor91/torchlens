@@ -94,6 +94,7 @@ def annotate_node_children(history_dict: Dict) -> Dict:
 def expand_multiple_functions(history_dict: Dict) -> Dict:
     """For nodes that have had multiple functions applied to them (e.g., the identity function), expands
     them to multiple nodes for fidelity to the graph. If the functions have the same name, then only use the one node.
+    #TODO: Refactor this nonsense.
 
     Args:
         history_dict: the history dict

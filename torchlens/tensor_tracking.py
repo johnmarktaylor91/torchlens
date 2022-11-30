@@ -489,7 +489,7 @@ def make_output_iterable(x):
         return list(x.values())
     else:
         return [x]
-
+    
 
 def torch_func_decorator(func, history_dict):
     @wraps(func)
@@ -660,7 +660,7 @@ def torch_func_decorator(func, history_dict):
                     out.tl_containing_module = containing_module
                     out.tl_last_module_seen = last_module_seen
                     out.tl_module_just_entered_address = None
-                    out.tl_funcs_applied_modules = [last_module_seen]
+                    out.tl_funcs_applied_modules = [last_module_seen_address]
                     out.tl_last_module_seen_address = last_module_seen_address
                     out.tl_last_module_seen_entry_barcode = last_module_seen_entry_barcode
                     out.tl_is_module_output = False
@@ -674,7 +674,7 @@ def torch_func_decorator(func, history_dict):
                     out.tl_funcs_applied_names.append(func_name)
                     out.tl_func_rng_states = rng_states
                     out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
-                    out.tl_funcs_applied_modules.append(last_module_seen)
+                    out.tl_funcs_applied_modules.append(last_module_seen_address)
                     out.tl_function_call_modules_nested_multfuncs.append(out.tl_function_call_modules_nested[:])
 
                 log_tensor_metadata(out)

@@ -311,6 +311,11 @@ def prepare_model(model: nn.Module,
         hook_handles.append(module.register_forward_pre_hook(module_pre_hook))
         hook_handles.append(module.register_forward_hook(module_post_hook))
 
+    # Mark all parameters with requires_grad = True, and mark what they were before so they can be restored on cleanup.
+    for param in model.parameters():
+        param.tl_requires_grad = param.requires_grad
+        param.requires_grad = True
+
 
 def clear_hooks(hook_handles: List):
     """Takes in a list of tuples (module, hook_handle), and clears the hook at that
@@ -326,7 +331,7 @@ def clear_hooks(hook_handles: List):
         hook_handle.remove()
 
 
-def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
+def restore_model_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
     """Recursively clears the given attribute from all modules in the model.
 
     Args:
@@ -342,6 +347,7 @@ def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 't
                 delattr(module, attribute_name)
 
     for param in model.parameters():
+        param.requires_grad = param.tl_requires_grad
         for attribute_name in dir(param):
             if attribute_name.startswith(attribute_keyword):
                 delattr(param, attribute_name)
@@ -378,7 +384,7 @@ def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
         Original version of the model.
     """
     clear_hooks(hook_handles)
-    clear_model_keyword_attributes(model, attribute_keyword='tl')
+    restore_model_attributes(model, attribute_keyword='tl')
     unmutate_model_tensors(model)
     return model
 
@@ -406,6 +412,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     Returns:
         history_dict
     """
+    model.requires_grad = True
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
