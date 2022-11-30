@@ -25,7 +25,7 @@ clean_clone = copy.deepcopy(torch.clone)
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 
 print_funcs = ['__repr__', '__str__']
-funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'from_numpy']
+funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'from_numpy', 'to']
 ignored_funcs = [
     ('torch', 'load'),
     ('torch', 'parse_ir'),
@@ -496,7 +496,7 @@ def torch_func_decorator(func, history_dict):
     def wrapped_func(*args, **kwargs):
         tensor_log = history_dict['tensor_log']
         func_name = func.__name__
-        if func_name in funcs_not_to_log:
+        if (func_name in funcs_not_to_log) or not history_dict['track_tensors']:
             out = func(*args, **kwargs)
             return out
 
@@ -551,7 +551,7 @@ def torch_func_decorator(func, history_dict):
         total_params_size = 0
         for param in arg_parameters:
             if not hasattr(param, 'tl_param_barcode'):
-                param_barcode = make_barcode()  # TODO also clean up all params with cleanup func.
+                param_barcode = make_barcode()
                 param.tl_param_barcode = param_barcode
                 param.tl_pass_num = 1
             else:
@@ -685,16 +685,21 @@ def torch_func_decorator(func, history_dict):
     return wrapped_func
 
 
-def initialize_history_dict(tensor_nums_to_save: Union[List[int], str]) -> Dict:
+def initialize_history_dict(tensor_nums_to_save: Union[List[int], str],
+                            tensor_nums_to_save_temporarily: List) -> Dict:
     """Convenience function for making the history dict. This will contain the tensor counter, which tensors to
     save, and the log of the tensors.
 
     Returns:
         Initialized history dict.
     """
+    if tensor_nums_to_save_temporarily is None:
+        tensor_nums_to_save_temporarily = []
+
     history_dict = OrderedDict()
     history_dict['tensor_counter'] = 0
     history_dict['tensor_nums_to_save'] = tensor_nums_to_save
+    history_dict['tensor_nums_to_save_temporarily'] = tensor_nums_to_save_temporarily
     history_dict['input_tensors'] = []
     history_dict['internally_generated_tensors'] = []
     history_dict['output_tensors'] = []
@@ -720,7 +725,6 @@ def prepare_input_tensors(x: Any,
     barcode_tensors_in_obj(x)
     mark_tensors_in_obj(x, 'has_input_ancestor', True)
     input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
-    # TODO make sure all these fields match the others
     for t in input_tensors:
         history_dict['tensor_counter'] += 1
         t.tl_history_dict = history_dict
@@ -796,7 +800,7 @@ def log_tensor_metadata(t: torch.Tensor):
     # Save any relevant fields.
 
     for field in dir(t):
-        if not field.startswith('tl_'):  # xray is the keyword for marking relevant fields.
+        if not field.startswith('tl_'):  # tl is the keyword for marking relevant fields.
             continue
         field_stripped = field.removeprefix('tl_')
         history_dict['tensor_log'][tensor_barcode][field_stripped] = getattr(t, field)
@@ -829,7 +833,8 @@ def log_tensor_data(t: torch.Tensor,
     tensor_barcode = t.tl_barcode
     tensor_num = t.tl_tensor_num
 
-    if (history_dict['tensor_nums_to_save'] == 'all') or (tensor_num in history_dict['tensor_nums_to_save']):
+    if (history_dict['tensor_nums_to_save'] == 'all') or (tensor_num in history_dict['tensor_nums_to_save']) or \
+            (tensor_num in history_dict['tensor_nums_to_save_temporarily']):
         # Get tensor contents
         history_dict['tensor_log'][tensor_barcode]['tensor_contents'] = safe_copy(t)
 

@@ -47,6 +47,7 @@ def insert_sorted_child_node(parent_node, child_node, tensor_log):
         child_node: Child node to insert.
         tensor_log: The tensor log.
     """
+    orig_len = len(tensor_log)
     child_barcode = child_node['barcode']
     if 'child_tensor_barcodes' not in parent_node:
         parent_node['child_tensor_barcodes'] = [child_barcode]
@@ -60,6 +61,9 @@ def insert_sorted_child_node(parent_node, child_node, tensor_log):
             parent_node['child_tensor_barcodes'] = child_barcodes[:]
             return
     parent_node['child_tensor_barcodes'] = parent_node['child_tensor_barcodes'] + [child_barcode]
+    if len(tensor_log) != orig_len:
+        print("STOP")
+        abc = 1 + 1
 
 
 def annotate_node_children(history_dict: Dict) -> Dict:
@@ -73,6 +77,7 @@ def annotate_node_children(history_dict: Dict) -> Dict:
         Tensor log annotated with the child node addresses.
     """
     tensor_log = history_dict['tensor_log']
+    orig_len = len(tensor_log)
 
     for barcode, node in tensor_log.items():
         if len(node['parent_tensor_barcodes']) == 0:
@@ -1287,12 +1292,12 @@ def unmutate_tensors_and_funcs_in_history(history_dict: Dict):
 
         for a in range(len(node['creation_args'])):
             arg = node['creation_args'][a]
-            if issubclass(type(arg), (torch.Tensor, torch.nn.parameter.Parameter, torch.nn.Parameter)):
+            if issubclass(type(arg), (torch.Tensor, torch.nn.Parameter)):
                 new_arg = unmutate_tensor(arg)
                 node['creation_args'] = node['creation_args'][:a] + tuple([new_arg]) + node['creation_args'][a + 1:]
 
         for key, val in node['creation_kwargs'].items():
-            if issubclass(type(val), (torch.Tensor, torch.nn.parameter.Parameter, torch.nn.Parameter)):
+            if issubclass(type(val), (torch.Tensor, torch.nn.Parameter)):
                 node['creation_kwargs'][key] = unmutate_tensor(val)
 
         for f, func in enumerate(node['funcs_applied']):
@@ -1511,7 +1516,7 @@ class TensorLogEntry:
             pass_str = ", "
         s = f"Layer {self.layer_label_no_pass}" \
             f"{pass_str}operation {self.num_operations_so_far + 1}/" \
-            f"{self.source_model_history.model_num_tensors_total} ({self.func_time_elapsed:.3E}s elapsed):"
+            f"{self.source_model_history.model_num_tensors_total}:"
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
         if self.tensor_contents != 'none':
             if len(self.tensor_shape) == 0:
@@ -1559,6 +1564,7 @@ class TensorLogEntry:
         if not self.is_input_tensor:
             s += f"\n\tFunction: {self.func_applied_name} (gradfunc={self.gradfunc_name}) " \
                  f"{module_str}"
+            s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
             modules_exited_str = ', '.join(self.modules_exited)
             s += f"\n\tOutput of modules: {modules_exited_str}"
@@ -1613,7 +1619,8 @@ class ModelHistory:
         if activations_only:
             num_tensors_to_keep = 0
             for tensor_entry in orig_tensor_log.values():
-                if tensor_entry['tensor_contents'] != 'none':
+                if all([(tensor_entry['tensor_contents'] is not None),
+                        (tensor_entry['tensor_num'] not in history_dict['tensor_nums_to_save_temporarily'])]):
                     num_tensors_to_keep += 1
         else:
             num_tensors_to_keep = len(orig_tensor_log)
@@ -1634,7 +1641,9 @@ class ModelHistory:
                 model_is_branching = True
 
             # Check whether to keep this entry or not.
-            if activations_only and (node['tensor_contents'] is None):
+            if activations_only and ((node['tensor_contents'] is None) or
+                                     ((history_dict['tensor_nums_to_save'] != 'all') and
+                                      node['tensor_num'] not in history_dict['tensor_nums_to_save'])):
                 continue
 
             node_index += 1
@@ -1653,7 +1662,7 @@ class ModelHistory:
                 if module_pass not in module_passes:
                     module_passes.append(module_pass)
                 elif new_pretty_node.layer_type != 'output':
-                    raise ValueError("There appear to be two overlapping module passes for different layers;"
+                    raise ValueError("There appear to be two overlapping module passes for different layers; "
                                      "check for bugs.")
 
             for key in new_pretty_node.lookup_keys:
@@ -1750,16 +1759,7 @@ class ModelHistory:
             raise ValueError(f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
                              f"{layer_num_passes} passes. Specify a lower number.")
         else:
-            sample_layer1 = random.choice(self.layer_labels_w_pass)
-            sample_layer2 = random.choice(self.layer_labels_no_pass)
-            if len(self.module_addresses) > 0:
-                sample_module1 = random.choice(self.module_addresses)
-                sample_module2 = random.choice(self.module_passes)
-                module_str = f"(e.g., {sample_module1}, {sample_module2}"
-            raise ValueError(f"Layer index not recognized; please specify either \n\t1) an integer giving "
-                             f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
-                             f"{sample_layer2}), \n\t3) the module address {module_str})"
-                             f"\n(conv2d_3_4:2 means the second pass of layer conv2d_3_4)")
+            raise ValueError(self._get_lookup_help_str(ix))
 
     def __len__(self):
         return len(self.tensor_list)
@@ -1771,7 +1771,7 @@ class ModelHistory:
         return iter(self.tensor_list)
 
     def __str__(self):
-        s = f"Log of {self.model_name} forward pass ({np.round(self.pass_elapsed_time, 3)}s elapsed):"
+        s = f"Log of {self.model_name} forward pass:"
         if self.model_is_branching:
             branch_str = "with branching"
         else:
@@ -1786,9 +1786,10 @@ class ModelHistory:
         s += f"\n\t{self.model_total_param_tensors} parameter operations ({self.model_total_params} params total; " \
              f"{self.model_total_params_fsize_nice})."
         s += f"\n\tRandom seed: {self.random_seed_used}"
+        s += f"\n\tTime elapsed: {np.round(self.pass_elapsed_time, 3)}s"
 
         # Print the module hierarchy.
-        s += f"\n\tModule Hierarchy (based on computation order, not on the model object structure):"
+        s += f"\n\tModule Hierarchy:"
         s += self._module_hierarchy_str()
 
         # Now print all layers.
@@ -1849,30 +1850,84 @@ class ModelHistory:
             s += f"{item}"
             if i < len(lst) - 1:
                 s += ', '
-            if (i + 1) % line_break_every == 0:
+            if ((i + 1) % line_break_every == 0) and (i < len(lst) - 1):
                 s += f'\n{indent_chars}'
         return s
 
-
-def prettify_history_dict(
-        history_dict: Dict) -> Dict:  # TODO make this a nice object that can be indexed in different ways
-    """Returns the final user-readable version of tensor_log for the user, omitting all the ugly internal stuff.
-
-    Args:
-        history_dict: Input history_dict
-
-    Returns:
-        Nicely organized/labeled final dict. Fields to include:
-
-    """
-
-    return history_dict['tensor_log']
-
-    tensor_log = history_dict['tensor_log']
-    pretty_tensor_log = OrderedDict()
-    for tensor_barcode, tensor in tensor_log.items():
-        if tensor['param_total_passes'] > 1:
-            pretty_tensor_log[tensor['layer_label_w_pass']] = tensor
+    def _get_lookup_help_str(self, layer_label):
+        """Generates a help string to be used in error messages when indexing fails.
+        """
+        sample_layer1 = random.choice(self.layer_labels_w_pass)
+        sample_layer2 = random.choice(self.layer_labels_no_pass)
+        if len(self.module_addresses) > 0:
+            sample_module1 = random.choice(self.module_addresses)
+            sample_module2 = random.choice(self.module_passes)
         else:
-            pretty_tensor_log[tensor['layer_label']] = tensor
-    return pretty_tensor_log
+            sample_module1 = 'features.3'
+            sample_module2 = 'features.3:2'
+        module_str = f"(e.g., {sample_module1}, {sample_module2}"
+        help_str = (f"Layer {layer_label} not recognized; please specify either \n\t1) an integer giving "
+                    f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
+                    f"{sample_layer2}), \n\t3) the module address {module_str})"
+                    f"\n(conv2d_3_4:2 means the second pass of layer conv2d_3_4)")
+        return help_str
+
+    def get_op_nums_from_user_labels(self, which_layers):
+        """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
+        the numbers that were generated on the fly during the forward pass, such that they can be
+        saved on a subsequent pass). Raises an error if the user's labels don't correspond to any layers.
+
+        Args:
+            which_layers: List of layers to include, using any indexing desired: either the layer label,
+            the module label, or the ordinal position of the layer. If a layer has multiple passes and
+            none is specified, will return all of them.
+
+        Returns:
+            Ordered, unique list of raw tensor numbers associated with the specified layers.
+        """
+        raw_tensor_nums_to_save = set()
+        num_layers = len(self.tensor_list)
+        for layer_key in which_layers:
+            if type(layer_key) == int:  # if user specifies ordinal position
+                if not -num_layers <= layer_key < num_layers:
+                    raise ValueError(f"You specified the {layer_key}th layer, but there are only "
+                                     f"{num_layers} layers in the model.")
+                raw_tensor_nums_to_save.add(self[layer_key].layer_raw_tensor_num)
+            elif layer_key in self.layer_labels:  # if it's a primary layer key just grab it
+                raw_tensor_nums_to_save.add(self[layer_key].layer_raw_tensor_num)
+            elif ':' in layer_key:  # if specific pass given, either add or complain if there aren't that many passes
+                label, pass_num = layer_key.split(':')
+                if (layer_key in self.layer_labels_w_pass) or (layer_key in self.module_passes):
+                    raw_tensor_nums_to_save.add(self[layer_key].layer_raw_tensor_num)
+                elif label in self.layer_labels_no_pass:
+                    first_pass_address = f"{label}:1"
+                    raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
+                                     f"{self[first_pass_address].layer_passes_total} passes in {label}; "
+                                     f"please specify a pass in range 1-{self[first_pass_address].layer_passes_total}.")
+                elif label in self.module_addresses:
+                    raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
+                                     f"{self.module_num_passes[label]} passes in {label}; "
+                                     f"please specify a pass in range 1-{self.module_num_passes[label]}.")
+                else:
+                    raise ValueError(self._get_lookup_help_str(label))
+            elif layer_key in self.layer_labels_no_pass:  # if it's a layer address, add all passes of the layer
+                for layer_label_w_pass in self.layer_labels_w_pass:
+                    if layer_label_w_pass.startswith(f"{layer_key}:"):
+                        raw_tensor_nums_to_save.add(self[layer_label_w_pass].layer_raw_tensor_num)
+            elif layer_key in self.module_addresses:  # if it's a module address, add all passes
+                for pass_num in range(1, self.module_num_passes[layer_key] + 1):
+                    raw_tensor_nums_to_save.add(self[f"{layer_key}:{pass_num}"].layer_raw_tensor_num)
+            else:
+                raise ValueError(self._get_lookup_help_str(layer_key))
+
+        raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
+        # Check for any identity functions; if so, add their parent tensor to the list, and flag parent
+        # tensor not to be saved if applicable. #TODO: refactor identity stuff and get rid of this nonsense.
+        raw_tensor_nums_to_save_temporarily = set()
+        for node in self:
+            if (node.layer_raw_tensor_num in raw_tensor_nums_to_save) and node.func_applied_name.lower() == 'identity':
+                node_parent = node.get_parent_layers()[0]
+                if node_parent.layer_raw_tensor_num not in raw_tensor_nums_to_save:
+                    raw_tensor_nums_to_save_temporarily.add(node_parent.layer_raw_tensor_num)
+
+        return raw_tensor_nums_to_save, raw_tensor_nums_to_save_temporarily

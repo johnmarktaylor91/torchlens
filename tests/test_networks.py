@@ -485,6 +485,22 @@ class NestedModulesSimple(nn.Module):
         x = self.level2_2(x)
         return x
 
+
+class BatchNormExample(nn.Module):
+    def __init__(self, track_running_stats=True):
+        super().__init__()
+        self.fc1 = nn.Linear(in_features=5, out_features=5)
+        self.bn1 = nn.BatchNorm2d(5, track_running_stats=track_running_stats)
+        self.fc2 = nn.Linear(in_features=5, out_features=5)
+        self.bn2 = nn.BatchNorm2d(5, track_running_stats=track_running_stats)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.bn1(x)
+        x = self.fc2(x)
+        x = self.bn2(x)
+        return x
+
 # Next: recurrent with internal branching.
 
 # And recurrent with internal branching and internally generated.

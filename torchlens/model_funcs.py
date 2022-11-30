@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.graph_handling import postprocess_history_dict
+from torchlens.graph_handling import postprocess_history_dict, unmutate_tensor
 from torchlens.helper_funcs import get_vars_of_type_from_obj, make_barcode, mark_tensors_in_obj, set_random_seed, \
     text_num_split
 from torchlens.tensor_tracking import initialize_history_dict, log_tensor_metadata, mutate_pytorch, \
@@ -326,7 +326,7 @@ def clear_hooks(hook_handles: List):
         hook_handle.remove()
 
 
-def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'xray'):
+def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
     """Recursively clears the given attribute from all modules in the model.
 
     Args:
@@ -338,13 +338,32 @@ def clear_model_keyword_attributes(model: nn.Module, attribute_keyword: str = 'x
     """
     for module in get_all_submodules(model):
         for attribute_name in dir(module):
-            if attribute_keyword in attribute_name:
+            if attribute_name.startswith(attribute_keyword):
                 delattr(module, attribute_name)
 
     for param in model.parameters():
         for attribute_name in dir(param):
-            if attribute_keyword in attribute_name:
+            if attribute_name.startswith(attribute_keyword):
                 delattr(param, attribute_name)
+
+
+def unmutate_model_tensors(model: nn.Module):
+    """Goes through a model and all its submodules, and unmutates any tensor attributes. Normally just clearing
+    parameters would have done this, but some module types (e.g., batchnorm) contain attributes that are tensors,
+    but not parameteres.
+
+    Args:
+        model: PyTorch model
+
+    Returns:
+        PyTorch model with unmutated versions of all tensor attributes.
+    """
+    submodules = get_all_submodules(model)
+    for submodule in submodules:
+        for attribute_name in dir(submodule):
+            attribute = getattr(submodule, attribute_name)
+            if issubclass(type(attribute), torch.Tensor):
+                setattr(submodule, attribute_name, unmutate_tensor(attribute))
 
 
 def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
@@ -359,13 +378,15 @@ def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:
         Original version of the model.
     """
     clear_hooks(hook_handles)
-    clear_model_keyword_attributes(model, attribute_keyword='xray')
+    clear_model_keyword_attributes(model, attribute_keyword='tl')
+    unmutate_model_tensors(model)
     return model
 
 
 def run_model_and_save_specified_activations(model: nn.Module,
                                              x: Any,
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = None,
+                                             tensor_nums_to_save_temporarily: Optional[Union[str, List[int]]] = None,
                                              random_seed: Optional[int] = None) -> Dict:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the internal tensor numbers (these will not be visible to the user;
@@ -377,6 +398,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         x: Input to the model.
         mode: Either 'modules_only' or 'exhaustive'
         tensor_nums_to_save: List of tensor numbers to save.
+        tensor_nums_to_save_temporarily: List of tensor nums to save temporarily, but not at the end (for identity funcs)
         mode: either 'modules_only' or 'exhaustive'.
         device: which device to put the model and inputs on
         random_seed: Which random seed to use.
@@ -392,7 +414,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     if tensor_nums_to_save is None:
         tensor_nums_to_save = []
     hook_handles = []
-    history_dict = initialize_history_dict(tensor_nums_to_save)
+    history_dict = initialize_history_dict(tensor_nums_to_save, tensor_nums_to_save_temporarily)
     history_dict['random_seed'] = random_seed
     orig_func_defs = []
     try:  # TODO: replace with context manager.
@@ -413,9 +435,11 @@ def run_model_and_save_specified_activations(model: nn.Module,
                                                                    orig_func_defs,
                                                                    history_dict)
         history_dict['mutant_to_orig_funcs_dict'] = mutant_to_orig_funcs_dict
+        history_dict['track_tensors'] = True
         prepare_input_tensors(x, history_dict)
         start_time = time.time()
         outputs = model(x)
+        history_dict['track_tensors'] = False
         history_dict['elapsed_time'] = time.time() - start_time
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
@@ -429,11 +453,10 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model = cleanup_model(model, hook_handles)
         del output_tensors
         del x
+        return history_dict
 
     except Exception as e:
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")
         unmutate_pytorch(torch, orig_func_defs)
         model = cleanup_model(model, hook_handles)
         raise e
-
-    return history_dict

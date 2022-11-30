@@ -26,9 +26,7 @@ cifar = torchvision.datasets.CIFAR10(root='./data', train=True,
 image_inputs = {'zeros': torch.zeros(image_size),
                 'ones': torch.ones(image_size),
                 'rand1': torch.rand(image_size),
-                'rand2': torch.rand(image_size),
-                'cifar1': torch.stack([cifar[0][0], cifar[1][0]]),
-                'cifar2': torch.stack([cifar[2][0], cifar[3][0]])}
+                'cifar1': torch.stack([cifar[0][0], cifar[1][0]])}
 
 # Assemble torchvision models:
 

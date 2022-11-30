@@ -1,7 +1,9 @@
 import torch
 import torchvision
+from cornet import cornet_s
 
-from src.torchlens.user_funcs import get_model_activations
+from torchlens.user_funcs import get_model_activations
+import test_networks
 
 x = torch.rand(1, 1, 3, 3)
 x = torch.zeros(1, 1, 3, 3)
@@ -11,7 +13,7 @@ fields_to_print = ['tensor_num', 'operation_num_exhaustive', 'operation_num_modu
                    'tensor_contents', 'tensor_shape', 'funcs_applied_names']
 # Simple feedforward
 
-simple_ff = networks.SimpleFF()
+# simple_ff = networks.SimpleFF()
 # history_dict = run_model_and_save_specified_activations(simple_ff, x, 'exhaustive', 'all', None)
 # pprint_tensor_record(history_dict,
 #                     which_fields=fields_to_print)
@@ -61,13 +63,22 @@ simple_ff = networks.SimpleFF()
 
 # x = torch.rand(1, 1, 3, 3)
 
-x = torch.ones(6, 3, 256, 256)
+# x = torch.ones(6, 3, 256, 256)
 
-network = torchvision.models.squeezenet1_0()
-tensor_log = get_model_activations(network, x, vis_opt='unrolled')
+# network = torchvision.models.squeezenet1_0()
+# tensor_log = get_model_activations(network, x, vis_opt='unrolled')
 
-# x = torch.rand(6, 3, 256, 256)
+x = torch.rand(6, 3, 256, 256)
+network = cornet_s()
+# network = torch.nn.DataParallel(torchvision.models.alexnet(pretrained=True).to('cuda'))
+# network = torchvision.models.googlenet(pretrained=True)
+# network = test_networks.BatchNormExample()
+tensor_log = get_model_activations(network, x, which_layers=['conv2d_17_78', 'iadd_8_88:1', -2, 'V1:1', 'V2'])
+# tensor_log3 = get_model_activations(network, x)
+# tensor_log4 = get_model_activations(network, x)
 
-# network = cornet_s()
-# tensor_log = get_model_structure(network, x)
-# tensor_log = get_model_activations(network, x, vis_opt='rolled')
+
+# x = torch.rand(5, 5, 5, 5)
+# network = test_networks.BatchNormExample(track_running_stats=True)
+# tensor_log1 = get_model_activations(network, x)
+# tensor_log2 = get_model_activations(network, x)

@@ -46,19 +46,25 @@ def get_model_activations(model: nn.Module,
 
     if which_layers == 'all':
         tensor_nums_to_save = 'all'
+        tensor_nums_to_save_temporarily = []
         activations_only = True
     elif which_layers in ['none', None, []]:
         tensor_nums_to_save = None
+        tensor_nums_to_save_temporarily = []
         activations_only = False
     else:
         history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-        history_dict = postprocess_history_dict(history_dict)
-        tensor_nums_to_save = get_op_nums_from_layer_names(history_dict, which_layers)  # TODO fix this.
+        history_pretty = ModelHistory(history_dict, activations_only=False)
+        tensor_nums_to_save, tensor_nums_to_save_temporarily = history_pretty.get_op_nums_from_user_labels(which_layers)
         activations_only = True
 
     # And now save the activations for real.
 
-    history_dict = run_model_and_save_specified_activations(model, x, tensor_nums_to_save, random_seed)
+    history_dict = run_model_and_save_specified_activations(model,
+                                                            x,
+                                                            tensor_nums_to_save,
+                                                            tensor_nums_to_save_temporarily,
+                                                            random_seed)
 
     # Visualize if desired.
     if vis_opt != 'none':
