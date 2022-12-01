@@ -1864,11 +1864,13 @@ class ModelHistory:
         else:
             sample_module1 = 'features.3'
             sample_module2 = 'features.3:2'
-        module_str = f"(e.g., {sample_module1}, {sample_module2}"
+        module_str = f"(e.g., {sample_module1}, {sample_module2})"
         help_str = (f"Layer {layer_label} not recognized; please specify either \n\t1) an integer giving "
                     f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
-                    f"{sample_layer2}), \n\t3) the module address {module_str})"
-                    f"\n(conv2d_3_4:2 means the second pass of layer conv2d_3_4)")
+                    f"{sample_layer2}), \n\t3) the module address {module_str}"
+                    f"\n\t4) The beginning of any desired layer labels (e.g., conv2d for all conv2d layers)."
+                    f"\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer,"
+                    f"and fourth layer overall in the model.)")
         return help_str
 
     def get_op_nums_from_user_labels(self, which_layers):
@@ -1916,8 +1918,14 @@ class ModelHistory:
             elif layer_key in self.module_addresses:  # if it's a module address, add all passes
                 for pass_num in range(1, self.module_num_passes[layer_key] + 1):
                     raw_tensor_nums_to_save.add(self[f"{layer_key}:{pass_num}"].layer_raw_tensor_num)
-            else:
-                raise ValueError(self._get_lookup_help_str(layer_key))
+            elif type(layer_key) == str:  # as last resort check if any layer labels begin with the provided substring
+                found_a_match = False
+                for layer in self:
+                    if layer.layer_label_w_pass.startswith(layer_key):
+                        raw_tensor_nums_to_save.add(layer.layer_raw_tensor_num)
+                        found_a_match = True
+                if not found_a_match:
+                    raise ValueError(self._get_lookup_help_str(layer_key))
 
         raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
         # Check for any identity functions; if so, add their parent tensor to the list, and flag parent
