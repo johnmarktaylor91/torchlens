@@ -264,7 +264,7 @@ def nested_getattr(obj: Any, attr: str) -> Any:
 
     attributes = attr.split(".")
     for i, a in enumerate(attributes):
-        if a == 'volatile':  # avoid annoying warning; if there's more, make a list
+        if a in ['volatile', 'T']:  # avoid annoying warning; if there's more, make a list
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 if i == 0:
