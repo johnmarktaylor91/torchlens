@@ -169,7 +169,8 @@ def add_rolled_edges_for_node(node: Dict,
                      'color': edge_color,
                      'style': edge_style,
                      'headlabel': head_label,
-                     'taillabel': tail_label}
+                     'taillabel': tail_label,
+                     'arrowsize': '.5'}
 
         containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
         if containing_module != -1:
@@ -291,7 +292,8 @@ def add_node_to_graphviz(node_barcode: Dict,
             edge_dict = {'tail_name': node_barcode,
                          'head_name': child_barcode,
                          'color': edge_color,
-                         'style': edge_style}
+                         'style': edge_style,
+                         'arrowsize': '.5'}
             containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
             if containing_module != -1:
                 module_cluster_dict[containing_module].append(edge_dict)
@@ -555,8 +557,7 @@ def render_graph(history_dict: Dict,
                            'label': graph_caption,
                            'labelloc': 't',
                            'labeljust': 'left',
-                           'ordering': 'out',
-                           'arrowsize': '.5'})
+                           'ordering': 'out'})
     dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
 
     module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.
