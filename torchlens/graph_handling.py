@@ -1160,7 +1160,7 @@ def annotate_internal_tensor_modules(history_dict: Dict):
                 thread_modules = node['containing_modules_thread']
                 for enter_or_exit, module_address, entry_barcode in thread_modules[::-1]:
                     module_entry_barcode = (module_address, entry_barcode)
-                    if enter_or_exit == '+':  # if it entered a module, remove that from parent nested modules.
+                    if enter_or_exit == '+' and module_entry_barcode in parent_node['function_call_modules_nested']:
                         parent_node['function_call_modules_nested'].remove(module_entry_barcode)
                     elif enter_or_exit == '-':  # if it exited a module, add that to the parent nested modules.
                         parent_node['function_call_modules_nested'].append(module_entry_barcode)
