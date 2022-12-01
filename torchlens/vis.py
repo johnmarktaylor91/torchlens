@@ -555,7 +555,8 @@ def render_graph(history_dict: Dict,
                            'label': graph_caption,
                            'labelloc': 't',
                            'labeljust': 'left',
-                           'ordering': 'out'})
+                           'ordering': 'out',
+                           'arrowsize': '.5'})
     dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
 
     module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.

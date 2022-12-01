@@ -6,7 +6,7 @@ with open('README.md') as readme_file:
 requirements = [
     "numpy",
     "pandas",
-    "torch",
+    "torch>=1.8.0",
     "torchvision",
     "tqdm",
     "ipython",
