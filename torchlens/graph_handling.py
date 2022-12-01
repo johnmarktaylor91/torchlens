@@ -1868,7 +1868,8 @@ class ModelHistory:
         help_str = (f"Layer {layer_label} not recognized; please specify either \n\t1) an integer giving "
                     f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
                     f"{sample_layer2}), \n\t3) the module address {module_str}"
-                    f"\n\t4) The beginning of any desired layer labels (e.g., conv2d for all conv2d layers)."
+                    f"\n\t4) A substring of any desired layer labels (e.g., 'pool' will grab all maxpool2d "
+                    f"or avgpool2d layers, 'maxpool' with grab all 'maxpool2d' layers, etc.)."
                     f"\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer,"
                     f"and fourth layer overall in the model.)")
         return help_str
@@ -1921,7 +1922,7 @@ class ModelHistory:
             elif type(layer_key) == str:  # as last resort check if any layer labels begin with the provided substring
                 found_a_match = False
                 for layer in self:
-                    if layer.layer_label_w_pass.startswith(layer_key):
+                    if layer_key in layer.layer_label_w_pass:
                         raw_tensor_nums_to_save.add(layer.layer_raw_tensor_num)
                         found_a_match = True
                 if not found_a_match:
