@@ -148,12 +148,12 @@ def add_rolled_edges_for_node(node: Dict,
         # Annotate passes for the child and parent nodes for the edge only if they vary across passes.
 
         if node['edges_vary_across_passes']:
-            tail_label = f"<<td bgcolor='white'> Out #{int_list_to_compact_str(parent_pass_nums)} </td>>"
+            tail_label = f"<<td bgcolor=\"white\"> Out #{int_list_to_compact_str(parent_pass_nums)} </td>>"
         else:
             tail_label = ''
 
         if child_node['edges_vary_across_passes'] and not child_node['is_model_output']:
-            head_label = f"<<td bgcolor='white'> In #{int_list_to_compact_str(child_pass_nums)} </td>>"
+            head_label = f"<<td bgcolor=\"white\"> In #{int_list_to_compact_str(child_pass_nums)} </td>>"
         else:
             head_label = ''
 
