@@ -1,7 +1,7 @@
 numpy
 pandas
 torch
-tqdm
 torchvision
+tqdm
 ipython
 graphviz
