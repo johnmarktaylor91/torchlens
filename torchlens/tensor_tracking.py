@@ -125,9 +125,10 @@ def my_get_overridable_functions() -> Tuple[Dict[Any, List[Callable]], Dict[Call
         ("torch.nn.init", torch.nn.init, dir(torch.nn.init)),
         ("torch.Tensor", torch.Tensor, dir(torch.Tensor)),
         ("torch.linalg", torch.linalg, dir(torch.linalg)),
-        ("torch.fft", torch.fft, dir(torch.fft)),
-        ("torch.special", torch.special, dir(torch.special)),
+        ("torch.fft", torch.fft, dir(torch.fft))
     ]
+    if hasattr(torch, 'special'):
+        tested_namespaces.append(("torch.special", torch.special, dir(torch.special)))
     for namespace_str, namespace, ns_funcs in tested_namespaces:
         for func_name in ns_funcs:
             ignore = False
