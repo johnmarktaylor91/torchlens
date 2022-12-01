@@ -170,7 +170,8 @@ def add_rolled_edges_for_node(node: Dict,
                      'style': edge_style,
                      'headlabel': head_label,
                      'taillabel': tail_label,
-                     'arrowsize': '.7'}
+                     'arrowsize': '.7',
+                     'labelfontsize': '8'}
 
         containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
         if containing_module != -1:
