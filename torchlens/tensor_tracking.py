@@ -307,6 +307,8 @@ def mutate_pytorch(torch_module: types.ModuleType,
     for namespace_name, func_name in orig_torch_funcs:
         namespace_name_notorch = namespace_name.replace('torch.', '')
         local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
+        if not hasattr(local_func_namespace, func_name):
+            continue
         orig_func = getattr(local_func_namespace, func_name)
         # try:
         #    try:
@@ -320,6 +322,8 @@ def mutate_pytorch(torch_module: types.ModuleType,
     for namespace_name, func_name in orig_torch_funcs:
         namespace_name_notorch = namespace_name.replace('torch.', '')
         local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
+        if not hasattr(local_func_namespace, func_name):
+            continue
         orig_func = getattr(local_func_namespace, func_name)
         if hasattr(orig_func, '__name__') and orig_func.__name__ == 'wrapped_func':
             continue
