@@ -26,7 +26,7 @@ the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPF
 
 Calling get_model_activations on a model and input will return a ModelHistory object containing the intermediate
 layer activations and accompanying metadata, along with a visual representation of every operation that
-ocurred during the forward pass:
+occurred during the forward pass:
 
 ```python
 import torch
