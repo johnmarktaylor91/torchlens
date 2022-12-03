@@ -80,7 +80,6 @@ Log of AlexNet forward pass:
 '''
 ```
 
-![img.png](alexnet.png)
 <img src="alexnet.png" width=50% height=50%>
 
 You can pull out information about a given layer, including its activations and helpful metadata, by indexing
