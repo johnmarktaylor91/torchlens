@@ -24,7 +24,7 @@ Torchlens is compatible with versions 1.8.0+ of PyTorch.
 Below is a quick demo of how to use it; for an interactive tutorial, see
 the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing):
 
-The main function of torchlens is get_model_activations: when called on a model and input, it returns
+The main function of torchlens is **get_model_activations**: when called on a model and input, it returns
 a ModelHistory object containing the intermediate layer activations and accompanying metadata,
 along with a visual representation of every operation that occurred during the forward pass:
 
@@ -134,12 +134,13 @@ model_history = tl.get_model_activations(alexnet, x, vis_opt='unrolled',
 print(model_history.layer_labels)
 ```
 
-The main function of torchlens is get_model_activations; the remaining functions are:
+The main function of torchlens is **get_model_activations**; the remaining functions are:
 
-1) get_model_structure, to retrieve all model metadata without saving any activations (e.g., to figure out which layers
+1) **get_model_structure**, to retrieve all model metadata without saving any activations (e.g., to figure out which
+   layers
    you wish to save)
-2) show_model_graph, which visualizes the model graph without saving any activations,
-3) validate_model_activations, which runs a procedure to check that the activations are correct: specifically,
+2) **show_model_graph**, which visualizes the model graph without saving any activations,
+3) **validate_model_activations**, which runs a procedure to check that the activations are correct: specifically,
    it runs a forward pass and saves all intermediate activations, re-runs the forward pass from each intermediate
    layer, and checks that the resulting output matches the ground-truth output. It also checks that swapping in
    random nonsense activations instead of the saved activations generates the wrong output. **If this function ever
