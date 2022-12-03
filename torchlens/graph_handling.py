@@ -1510,7 +1510,7 @@ class TensorLogEntry:
 
     def __str__(self):
         if self.layer_passes_total > 1:
-            pass_str = f"(pass {self.layer_pass_num}/{self.layer_passes_total}), "
+            pass_str = f" (pass {self.layer_pass_num}/{self.layer_passes_total}), "
         else:
             pass_str = ", "
         s = f"Layer {self.layer_label_no_pass}" \
@@ -1522,7 +1522,7 @@ class TensorLogEntry:
                 tensor_slice = self.tensor_contents
                 num_dims = 0
             elif len(self.tensor_shape) == 1:
-                num_dims = min(5, self.tensor_shape)
+                num_dims = min(5, self.tensor_shape[0])
                 tensor_slice = self.tensor_contents[0:num_dims]
             elif len(self.tensor_shape) == 2:
                 num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
@@ -1533,6 +1533,8 @@ class TensorLogEntry:
                 for _ in range(len(self.tensor_shape) - 2):
                     tensor_slice = tensor_slice[0]
                 tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
+            tensor_slice = tensor_slice.detach()
+            tensor_slice.requires_grad = False
             s += f"\n\t\t{str(tensor_slice)}"
             if max(self.tensor_shape) > 5:
                 s += '...'

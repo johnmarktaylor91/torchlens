@@ -68,12 +68,14 @@ fields_to_print = ['tensor_num', 'operation_num_exhaustive', 'operation_num_modu
 # network = torchvision.models.squeezenet1_0()
 # tensor_log = get_model_activations(network, x, vis_opt='unrolled')
 
-x = torch.rand(6, 3, 256, 256)
-network = cornet_s()
+x = torch.rand(6, 3, 224, 224)
 # network = torch.nn.DataParallel(torchvision.models.alexnet(pretrained=True).to('cuda'))
-# network = torchvision.models.googlenet(pretrained=True)
+network = torchvision.models.googlenet(pretrained=True)
+network = torchvision.models.vit_b_16(pretrained=True)
 # network = test_networks.BatchNormExample()
-tensor_log = get_model_activations(network, x, which_layers=['conv2d_17_78', 'iadd_8_88:1', -2, 'V1:1', 'V2'])
+tensor_log = get_model_activations(network, x)
+
+# tensor_log = get_model_activations(network, x, which_layers=['conv2d_17_78', 'iadd_8_88:1', -2, 'V1:1', 'V2'])
 # tensor_log3 = get_model_activations(network, x)
 # tensor_log4 = get_model_activations(network, x)
 

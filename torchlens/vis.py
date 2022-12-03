@@ -1,5 +1,5 @@
 from collections import OrderedDict, defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import graphviz
 from IPython.display import display
@@ -528,10 +528,9 @@ def align_sibling_nodes(graphviz_graph, vis_opt, tensor_log):
 
 
 def render_graph(history_dict: Dict,
-                 vis_opt: str = 'unrolled') -> None:
+                 vis_opt: str = 'unrolled',
+                 vis_outpath: str = 'graph.gv') -> None:
     """Given the history_dict, renders the computational graph.
-    #TODO: Add subsetting options.
-    #TODO: Add jupyter visualization options, make it autodetect
 
     Args:
         history_dict:
@@ -553,7 +552,7 @@ def render_graph(history_dict: Dict,
         f"<br align='left'/>{total_params} params total ({total_params_fsize})<br align='left'/>>")
 
     dot = graphviz.Digraph(name='model', comment='Computational graph for the feedforward sweep',
-                           filename='model.png', format='png')
+                           filename=vis_outpath, format='pdf')
     dot.graph_attr.update({'rankdir': 'BT',
                            'label': graph_caption,
                            'labelloc': 't',
@@ -581,6 +580,6 @@ def render_graph(history_dict: Dict,
 
     if in_notebook():
         display(dot)
+        dot.render(vis_outpath, view=False)
     else:
-        # dot.render(directory='doctest-output').replace('\\', '/')
-        dot.render('graph.gv', view=True)
+        dot.render(vis_outpath, view=True)

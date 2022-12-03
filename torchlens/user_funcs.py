@@ -3,7 +3,7 @@ from typing import List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.graph_handling import ModelHistory, get_op_nums_from_layer_names, postprocess_history_dict
+from torchlens.graph_handling import ModelHistory
 from torchlens.helper_funcs import warn_parallel
 from torchlens.model_funcs import run_model_and_save_specified_activations
 from torchlens.validate import validate_model_history
@@ -14,25 +14,28 @@ def get_model_activations(model: nn.Module,
                           x: torch.Tensor,
                           which_layers: Union[str, List] = 'all',
                           vis_opt: str = 'none',
+                          vis_outpath: str = 'graph.gv',
                           random_seed: Optional[int] = None) -> ModelHistory:
-    """Run a forward pass through a model, and return activations of desired hidden layers.
-    Specify mode as 'modules_only' to do so only for proper modules, or as 'exhaustive' to
-    also return activations from non-module functions. If only a subset of layers
-    is desired, specify the list of layer names (e.g., 'conv1_5') in which_layers; if you wish to
-    further specify that only certain passes through a layer should be saved
-    (i.e., in a recurrent network, only save the third pass through a layer), then
-    add :{pass_number} to the layer name (e.g., 'conv1_5:3'). Additionally, the graph
-    can be visualized if desire to see the architecture and easily reference the names.
+    """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
+    (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
+    and optionally visualizes the model graph if vis_opt is set to 'rolled' or 'unrolled'.
+
+    In which_layers, can specify 'all', for all layers (default), or a list containing any combination of:
+    1) desired layer names (e.g., 'conv2d_1_1'; if a layer has multiple passes, this includes all passes),
+    2) a layer pass (e.g., conv2d_1_1:2 for just the second pass), 3) a module name to fetch the output of a particular
+    module, 4) the ordinal index of a layer in the model (e.g. 3 for the third layer, -2 for the second to last, etc.),
+    or 5) a desired substring with which to filter desired layers (e.g., 'conv2d' for all conv2d layers).
 
     Args:
         model: PyTorch model
-        x: desired Tensor input.
-        which_layers: List of layers to include. If 'all', then include all layers.
-        vis_opt: Whether, and how, to visualize the network; 'none' for
+        x: model input
+        which_layers: list of layers to include (described above), or 'all' to include all layers.
+        vis_opt: whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
             in unrolled format (i.e., one node per pass through a layer if a recurrent)
-        random_seed: Which random seed to use if desired (e.g., for networks with randomness)
+        vis_outpath: file path to save the graph visualization
+        random_seed: which random seed to use in case model involves randomness
 
     Returns:
         activations: Dict of dicts with the activations from each layer.
@@ -68,7 +71,7 @@ def get_model_activations(model: nn.Module,
 
     # Visualize if desired.
     if vis_opt != 'none':
-        render_graph(history_dict, vis_opt)  # change after adding options
+        render_graph(history_dict, vis_opt, vis_outpath)  # change after adding options
 
     history_pretty = ModelHistory(history_dict, activations_only=activations_only)
     return history_pretty
@@ -78,12 +81,12 @@ def get_model_structure(model: nn.Module,
                         x: torch.Tensor,
                         random_seed: Optional[int] = None):
     """
-    Get the metadata for the model graph without saving any activations.
+    Equivalent to get_model_activations, but only fetches layer metadata without saving activations.
 
     Args:
         model: PyTorch model.
-        x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
-        random_seed: random seed in case model is stochastic
+        x: model input
+        random_seed: which random seed to use in case model involves randomness
 
     Returns:
         history_dict: Dict of dicts with the activations from each layer.
@@ -97,16 +100,18 @@ def get_model_structure(model: nn.Module,
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
                      vis_opt: str = 'rolled',
+                     vis_outpath: str = 'graph.gv',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
     Args:
-        model: PyTorch model.
-        x: Input for which you want to visualize the graph (this is needed in case the graph varies based on input)
-        vis_opt: 'rolled' to show the graph in rolled-up format (one node
-            per layer, even if multiple passes), or 'unrolled' to view with
-            one node per operation.
-        random_seed: random seed in case model is stochastic
+        model: PyTorch model
+        x: model input
+        vis_opt: how to visualize the network; 'none' for no visualization,
+            'rolled' to show the graph in rolled-up format (i.e., one node per layer if a recurrent network),
+            or 'unrolled' to show the graph in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        vis_outpath: file path to save the graph visualization
+        random_seed: which random seed to use in case model involves randomness
 
     Returns:
         Nothing.
@@ -115,22 +120,27 @@ def show_model_graph(model: nn.Module,
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    render_graph(history_dict, vis_opt)
+    render_graph(history_dict, vis_opt, vis_outpath)
 
 
 def validate_saved_activations(model: nn.Module,
                                x: torch.Tensor,
-                               random_seed: Union[int, None] = None,
                                min_proportion_consequential_layers=.9,
+                               random_seed: Union[int, None] = None,
                                verbose: bool = False) -> bool:
-    """Validate that the saved model activations correctly reproduce the ground truth output.
+    """Validate that the saved model activations correctly reproduce the ground truth output. This function works by
+    running a forward pass through the model, saving all activations, re-running the forward pass starting from
+    the saved activations in each layer, and checking that the resulting output matches the original output.
+    Additionally, it substitutes in random activations and checks whether the output changes accordingly, for
+    at least min_proportion_consequential_layers of the layers (in case some layers do not change the output for some
+    reason). Returns True if a model passes these tests for the given input, and False otherwise.
 
     Args:
         model: PyTorch model.
         x: Input for which to validate the saved activations.
         random_seed: random seed in case model is stochastic
         min_proportion_consequential_layers: The percentage of layers for which perturbing them must change the output
-            in order for the model to count as validated; if 0, doesn't check.
+            in order for the model to count as validated.
         verbose: Whether to have messages during the validation process.
 
     Returns:

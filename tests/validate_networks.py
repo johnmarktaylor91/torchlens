@@ -74,22 +74,20 @@ torchvision_model_names = [
 failed_model_inputs = []
 for model_name in torchvision_model_names:
     try:
-        model = getattr(torchvision.models, model_name)(pretrained=False)
+        model = getattr(torchvision.models, model_name)()
         del model
     except:
         print(f"{model_name} is not a model, skipping...")
         continue
     print(f"Testing {model_name}")
     for input_name, input_tensor in image_inputs.items():
-        model = getattr(torchvision.models, model_name)(pretrained=False)
+        model = getattr(torchvision.models, model_name)()
         if model_name == 'inception_v3':
             image_size = (299, 299)
             input_tensor = transforms.Resize(image_size)(input_tensor)
-        saved_activations_are_valid = validate_saved_activations(model,
-                                                                 input_tensor,
-                                                                 random_seed=None,
+        saved_activations_are_valid = validate_saved_activations(model, input_tensor,
                                                                  min_proportion_consequential_layers=.9,
-                                                                 verbose=False)
+                                                                 random_seed=None, verbose=False)
         if saved_activations_are_valid:
             msg = 'passed'
         else:
@@ -112,19 +110,17 @@ cornet_model_names = [
 failed_model_inputs = []
 for model_name in cornet_model_names:
     try:
-        model = getattr(cornet, model_name)(pretrained=False)
+        model = getattr(cornet, model_name)()
         del model
     except:
         print(f"{model_name} is not a model, skipping...")
         continue
     print(f"Testing {model_name}")
     for input_name, input_tensor in image_inputs.items():
-        model = getattr(cornet, model_name)(pretrained=False)
-        saved_activations_are_valid = validate_saved_activations(model,
-                                                                 input_tensor,
-                                                                 random_seed=None,
+        model = getattr(cornet, model_name)()
+        saved_activations_are_valid = validate_saved_activations(model, input_tensor,
                                                                  min_proportion_consequential_layers=.9,
-                                                                 verbose=False)
+                                                                 random_seed=None, verbose=False)
         if saved_activations_are_valid:
             msg = 'passed'
         else:
@@ -140,10 +136,8 @@ for model_name in cornet_model_names:
 taskonomy_model = visualpriors.taskonomy_network.TaskonomyNetwork()
 for input_name, input_tensor in image_inputs.items():
     model = taskonomy_model
-    saved_activations_are_valid = validate_saved_activations(model,
-                                                             input_tensor,
-                                                             random_seed=None,
-                                                             min_proportion_consequential_layers=.9,
+    saved_activations_are_valid = validate_saved_activations(model, input_tensor,
+                                                             min_proportion_consequential_layers=.9, random_seed=None,
                                                              verbose=True)
     if saved_activations_are_valid:
         msg = 'passed'
