@@ -89,8 +89,9 @@ the ModelHistory object in any of these equivalent ways:
 2) the name of a module (e.g., 'features' or 'classifier.3') for which that layer is an output, or
 3) the ordinal position of the layer (e.g., 2 for the 2nd layer, -5 for the fifth-to-last; inputs and outputs count as
    layers here).
-   To quickly get these names, you can look at the graph visualization, or at the output of printing the ModelHistory
-   object (both shown above)
+
+To quickly get these names, you can look at the graph visualization, or at the output of printing the ModelHistory
+object (both shown above)
 
 ```python
 print(model_history['conv2d_3_7'])
