@@ -140,8 +140,8 @@ The main function of torchlens is get_model_activations; the remaining functions
    you wish to save)
 2) show_model_graph, which visualizes the model graph without saving any activations,
 3) validate_model_activations, which runs a procedure to check that the activations are correct: specifically,
-   it runs a forward pass and saves all intermediate activations, re-running the forward pass from each intermediate
-   layer, and checking that the resulting output matches the ground-truth output. It also checks that swapping in
+   it runs a forward pass and saves all intermediate activations, re-runs the forward pass from each intermediate
+   layer, and checks that the resulting output matches the ground-truth output. It also checks that swapping in
    random nonsense activations instead of the saved activations generates the wrong output. **If this function ever
    returns False (i.e., the saved activations are wrong), please contact me via email (johnmarkedwardtaylor@gmail.com)
    or on this GitHub page with a description of the
