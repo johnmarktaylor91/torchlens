@@ -22,7 +22,7 @@ Torchlens is compatible with versions 1.8.0+ of PyTorch.
 ## How-To Guide
 
 Below is a quick demo of how to use it; for an interactive tutorial, see
-the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing):
+the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing).
 
 The main function of torchlens is **get_model_activations**: when called on a model and input, it returns
 a ModelHistory object containing the intermediate layer activations and accompanying metadata,
