@@ -80,7 +80,7 @@ Log of AlexNet forward pass:
 '''
 ```
 
-![alexnet.png](alexnet.png | width = 200)
+<img src="alexnet.png" width=50% height=50%>
 
 You can pull out information about a given layer, including its activations and helpful metadata, by indexing
 the ModelHistory object in any of these equivalent ways:
