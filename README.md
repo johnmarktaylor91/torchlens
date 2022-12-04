@@ -1,4 +1,4 @@
-# <img src="resources/logo.png" width=12% height=12%> Torchlens
+# <img src="resources/logo.png" width=8% height=8%> Torchlens
 
 Torchlens is a package for doing exactly two things:
 
