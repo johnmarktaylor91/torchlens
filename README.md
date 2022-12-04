@@ -143,7 +143,7 @@ Layer conv2d_3_7, operation 8/24:
 
 If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
 with the
-which_layers argument when calling get_model_activations; you can either indicate layers in the same way
+which_layers argument when calling **get_model_activations**; you can either indicate layers in the same way
 as indexing them above, or by passing in a desired substring for filtering the layers (e.g., 'conv'
 will pull out all conv layers):
 
