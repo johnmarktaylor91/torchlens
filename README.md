@@ -2,7 +2,7 @@
 
 Torchlens is a package for doing exactly two things:
 
-1) Easily extracting the results of every single intermediate operation from a PyTorch model—no
+1) Easily extracting the activations from every single intermediate operation from a PyTorch model—no
    modifications needed—in one line of code. "Every" means every.
 2) Understanding the model's computational structure via an intuitive automatic visualization and extensive metadata
    about the network's computational graph.
