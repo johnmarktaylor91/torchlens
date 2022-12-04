@@ -8,7 +8,9 @@ Torchlens is a package for doing exactly two things:
    about the network's computational graph.
 
 ```python
-model_history = tl.get_model_activations(simple_recurrent, x, which_layers='all', vis_opt='rolled')
+model_history = tl.get_model_activations(simple_recurrent, x,
+                                         which_layers='all',
+                                         vis_opt='rolled')
 print(model_history['linear_1_1:2'].tensor_contents)
 '''
 tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
