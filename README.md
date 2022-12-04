@@ -109,10 +109,16 @@ the ModelHistory object in any of these equivalent ways:
    layers here).
 
 To quickly figure out these names, you can look at the graph visualization, or at the output of printing the
-ModelHistory object (both shown above)
+ModelHistory object (both shown above). Here are some examples of how to pull out information about a
+particular layer, and also how to pull out the actual activations from that layer:
 
 ```python
-print(model_history['conv2d_3_7'])
+print(model_history['conv2d_3_7'])  # pulling out layer by its name 
+# The following commented lines pull out the same layer::
+# model_history['conv2d_3_7:1'] colon indicates the pass of a layer (here just one)
+# model_history['features.6'] can grab a layer by the module for which it is an output
+# model_history[7] the 7th layer overall
+# model_history[-17] the 17th-to-last layer
 '''
 Layer conv2d_3_7, operation 8/24:
 	Output tensor: shape=(1, 384, 13, 13), dype=torch.float32, size=253.5 KB
@@ -131,14 +137,10 @@ Layer conv2d_3_7, operation 8/24:
 	Output of bottom-level module: features.6
 	Lookup keys: -17, 7, conv2d_3_7, conv2d_3_7:1, features.6, features.6:1
 '''
-# model_history['conv2d_3_7'].tensor_contents  # pulls out the actual tensor output of the layer
+print(model_history['conv2d_3_7'].tensor_contents)  # pulls out the actual tensor output of the layer
 
 # All of these are equivalent ways of pulling out the same layer:
 
-# model_history['conv2d_3_7:1'] colon indicates the pass of a layer (here just one)
-# model_history['features.6'] can grab a layer by the module for which it is an output
-# model_history[7] the 7th layer overall
-# model_history[-17] the 17th-to-last layer
 ```
 
 If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
