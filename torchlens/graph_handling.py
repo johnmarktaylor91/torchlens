@@ -4,7 +4,6 @@ import random
 from collections import OrderedDict, defaultdict
 from typing import Any, Dict, List, Tuple, Union
 
-import graphviz
 import numpy as np
 import torch
 

@@ -5,8 +5,9 @@ import cornet
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from torchlens.user_funcs import validate_saved_activations
 import visualpriors
+
+from torchlens.user_funcs import validate_saved_activations
 
 # Assemble the models and associated inputs to test.
 

@@ -1,5 +1,5 @@
 from collections import OrderedDict, defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import graphviz
 from IPython.display import display

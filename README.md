@@ -23,12 +23,12 @@ tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
 '''
 ```
 
-<img src="simple_recurrent.png" width=30% height=30%>
+<img src="resources/simple_recurrent.png" width=30% height=30%>
 
 ## Installation
 
-To install torchlens, first install graphviz if you haven't already (required to generate the network visualizations),
-and then install torchlens from GitHub using pip:
+To install Torchlens, first install graphviz if you haven't already (required to generate the network visualizations),
+and then install Torchlens from GitHub using pip:
 
 ```bash
 sudo apt install graphviz
@@ -42,7 +42,7 @@ Torchlens is compatible with versions 1.8.0+ of PyTorch.
 Below is a quick demo of how to use it; for an interactive demonstration, see
 the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing).
 
-The main function of torchlens is **get_model_activations**: when called on a model and input, it runs a
+The main function of Torchlens is **get_model_activations**: when called on a model and input, it runs a
 forward pass on the model and returns a ModelHistory object containing the intermediate layer activations and
 accompanying metadata, along with a visual representation of every operation that occurred during the forward pass:
 
@@ -98,7 +98,7 @@ Log of AlexNet forward pass:
 '''
 ```
 
-<img src="alexnet.png" width=30% height=30%>
+<img src="resources/alexnet.png" width=30% height=30%>
 
 You can pull out information about a given layer, including its activations and helpful metadata, by indexing
 the ModelHistory object in any of these equivalent ways:
@@ -172,8 +172,18 @@ And that's it. Torchlens remains in active development, and the goal is for it t
 whatosever without exception. As of the time of this writing, it has not been tested with transformers (coming soon),
 but reliably works with typical feedforward and recurrent neural networks.
 
+## Acknowledgments
+
+The development of Torchlens benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
+Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University.
+
+## Citing Torchlens
+
+The plan is for Torchlens to be described in a preprint shortly and later as a published journal article; as these
+become available, Torchlens can be cited by citing them.
+
 ## Contact
 
-As torchlens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
+As Torchlens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
 or post on the issues or discussion page for this GitHub repository, if you have any questions, comments, or
 suggestions.

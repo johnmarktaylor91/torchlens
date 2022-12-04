@@ -5,10 +5,10 @@ import functools
 import inspect
 import time
 import types
+import warnings
 from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple, Union
-import warnings
 
 import numpy as np
 import torch
