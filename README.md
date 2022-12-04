@@ -161,8 +161,11 @@ will pull out all conv layers):
 ```python
 # Pull out conv2d_3_7, the output of the 'features' module, the fifth-to-last layer, and all linear (i.e., fc) layers:
 model_history = tl.get_model_activations(alexnet, x, vis_opt='unrolled',
-                                         which_layers=['conv2d_3_7', 'features', -5, 'linear')
+                                         which_layers=['conv2d_3_7', 'features', -5, 'linear'])
 print(model_history.layer_labels)
+'''
+['conv2d_3_7', 'maxpool2d_3_13', 'linear_1_17', 'dropout_2_19', 'linear_2_20', 'linear_3_22']
+'''
 ```
 
 The main function of torchlens is **get_model_activations**; the remaining functions are:
