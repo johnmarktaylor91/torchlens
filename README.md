@@ -186,7 +186,8 @@ but reliably works with typical feedforward and recurrent neural networks.
 ## Acknowledgments
 
 The development of Torchlens benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
-Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University.
+Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. All network
+visualizations were created with graphviz; logo created with DALL-E 2.
 
 ## Citing Torchlens
 
