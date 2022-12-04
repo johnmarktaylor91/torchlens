@@ -137,10 +137,19 @@ Layer conv2d_3_7, operation 8/24:
 	Output of bottom-level module: features.6
 	Lookup keys: -17, 7, conv2d_3_7, conv2d_3_7:1, features.6, features.6:1
 '''
-print(model_history['conv2d_3_7'].tensor_contents)  # pulls out the actual tensor output of the layer
 
-# All of these are equivalent ways of pulling out the same layer:
+# You can pull out the actual output activations from a layer with the tensor_contents field: 
+print(model_history['conv2d_3_7'].tensor_contents)
 
+'''
+tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
+          [-0.1213, -0.1130, -0.1386,  ..., -0.1331, -0.1118, -0.0520],
+          [-0.0959, -0.0973, -0.1078,  ..., -0.1103, -0.1091, -0.0760],
+          ...,
+          [-0.0906, -0.1146, -0.1308,  ..., -0.1076, -0.1129, -0.0689],
+          [-0.1017, -0.1256, -0.1100,  ..., -0.1160, -0.1035, -0.0801],
+          [-0.1006, -0.0941, -0.1204,  ..., -0.1146, -0.1065, -0.0631]]...
+'''
 ```
 
 If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
