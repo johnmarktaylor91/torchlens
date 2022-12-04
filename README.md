@@ -7,6 +7,31 @@ Torchlens is a package for doing exactly two things:
 2) Understanding the model's computational structure via an intuitive automatic visualization and extensive metadata
    about the network's computational graph.
 
+```python
+model_history = tl.get_model_activations(simple_recurrent, x, which_layers='all', vis_opt='rolled')
+print(model_history['linear_1_1:2'])
+'''
+Layer linear_1_1 (pass 2/4), operation 5/12:
+	Output tensor: shape=(6, 5), dype=torch.float32, size=168 B
+		tensor([[ 0.0640, -0.4773,  0.4255,  0.2256,  0.5078],
+        [ 0.0865, -0.8236,  0.3226, -0.0867,  0.5777],
+        [-0.0760, -0.6050,  0.5602,  0.1852,  0.4501],
+        [ 0.0873, -0.7165,  0.3737, -0.0044,  0.5929],
+        [ 0.0806, -1.1610,  0.1152, -0.3117,  0.4676]])...
+	Params: Computed from params with shape (5,), (5, 5); 30 params total (216 B)
+	Parent Layers: mul_1_3:1
+	Child Layers: add_1_2:2
+	Function: linear (gradfunc=AddmmBackward0) 
+	Computed inside module: fc
+	Time elapsed:  9.060E-05s
+	Output of modules: fc
+	Output of bottom-level module: fc
+	Lookup keys: -8, 4, fc:2, linear_1_1:2
+'''
+```
+
+<img src="simple_recurrent.png" width=50% height=50%>
+
 ## Installation
 
 To install torchlens, first install graphviz if you haven't already (required to generate the network visualizations),
