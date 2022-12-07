@@ -553,12 +553,19 @@ def torch_func_decorator(func, history_dict):
         rng_states = get_rng_states()
         out_orig = func(*args, **kwargs)
         time_elapsed = time.time() - start_time
+        if history_dict['current_function_call_barcode'] == func_call_barcode:
+            is_bottom_level_func = True
+        else:
+            is_bottom_level_func = False
         out_iter = make_output_iterable(out_orig)  # so we can iterate through it
         for i, out in enumerate(out_iter):
-            if (type(out) == torch.Tensor) and history_dict['current_function_call_barcode'] == func_call_barcode:
+            if type(out) == torch.Tensor:
                 out.tl_history_dict = history_dict
+                if (hasattr(out, 'tl_barcode')) and (not is_bottom_level_func) \
+                        and out.grad_fn in out.tl_gradfuncs:  # remove silly extra nested functions
+                    continue
                 # If a new tensor, or has a new grad_fn, mark it with everything.
-                if not hasattr(out, 'tl_barcode') or (out.grad_fn not in out.tl_gradfuncs):
+                if (not hasattr(out, 'tl_barcode')) or (out.grad_fn not in out.tl_gradfuncs):
                     out.tl_barcode = make_barcode()
 
                     # Update history_dict
@@ -645,7 +652,7 @@ def torch_func_decorator(func, history_dict):
                     out.tl_func_rng_states = rng_states
                     out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
                     out.tl_funcs_applied_modules.append(last_module_seen_address)
-                    out.tl_function_call_modules_nested_multfuncs.append(out.tl_function_call_modules_nested[:])
+                    out.tl_function_call_modules_nested_multfuncs.append(containing_modules[:])
 
                 log_tensor_metadata(out)
                 log_tensor_data(out, arg_copies, kwarg_copies, arg_parameters)

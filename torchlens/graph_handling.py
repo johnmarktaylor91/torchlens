@@ -74,7 +74,6 @@ def annotate_node_children(history_dict: Dict) -> Dict:
         Tensor log annotated with the child node addresses.
     """
     tensor_log = history_dict['tensor_log']
-    orig_len = len(tensor_log)
 
     for barcode, node in tensor_log.items():
         if len(node['parent_tensor_barcodes']) == 0:
