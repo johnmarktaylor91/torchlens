@@ -461,6 +461,7 @@ def torch_func_decorator(func, history_dict):
     @wraps(func)
     def wrapped_func(*args, **kwargs):
         tensor_log = history_dict['tensor_log']
+        history_dict['current_function_call_barcode'] = 0
         func_name = func.__name__
         if (func_name in funcs_not_to_log) or not history_dict['track_tensors']:
             out = func(*args, **kwargs)
@@ -546,14 +547,15 @@ def torch_func_decorator(func, history_dict):
 
         arg_copies = [safe_copy(arg) for arg in args]
         kwarg_copies = {key: safe_copy(value) for key, value in kwargs.items()}
+        func_call_barcode = make_barcode()
+        history_dict['current_function_call_barcode'] = func_call_barcode
         start_time = time.time()
         rng_states = get_rng_states()
         out_orig = func(*args, **kwargs)
         time_elapsed = time.time() - start_time
-
         out_iter = make_output_iterable(out_orig)  # so we can iterate through it
         for i, out in enumerate(out_iter):
-            if type(out) == torch.Tensor:
+            if (type(out) == torch.Tensor) and history_dict['current_function_call_barcode'] == func_call_barcode:
                 out.tl_history_dict = history_dict
                 # If a new tensor, or has a new grad_fn, mark it with everything.
                 if not hasattr(out, 'tl_barcode') or (out.grad_fn not in out.tl_gradfuncs):
@@ -638,6 +640,8 @@ def torch_func_decorator(func, history_dict):
                 else:  # This means that the function returned the same tensor (e.g., identity); just need to mark that.
                     out.tl_funcs_applied.append(func)
                     out.tl_funcs_applied_names.append(func_name)
+                    out.tl_gradfuncs.append(None)
+                    out.tl_gradfuncs_names.append('none')
                     out.tl_func_rng_states = rng_states
                     out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
                     out.tl_funcs_applied_modules.append(last_module_seen_address)

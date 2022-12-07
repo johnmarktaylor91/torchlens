@@ -140,7 +140,6 @@ Layer conv2d_3_7, operation 8/24:
 
 # You can pull out the actual output activations from a layer with the tensor_contents field: 
 print(model_history['conv2d_3_7'].tensor_contents)
-
 '''
 tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
           [-0.1213, -0.1130, -0.1386,  ..., -0.1331, -0.1118, -0.0520],
