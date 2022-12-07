@@ -418,6 +418,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     set_random_seed(random_seed)
 
     x = copy.deepcopy(x)
+    x.requires_grad = True  # have it require_grad so as to autopopulate the grad_fns to help with book-keeping
     if tensor_nums_to_save is None:
         tensor_nums_to_save = []
     hook_handles = []
