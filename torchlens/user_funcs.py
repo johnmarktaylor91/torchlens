@@ -147,12 +147,21 @@ def validate_saved_activations(model: nn.Module,
         True if the saved activations correctly reproduce the ground truth output, false otherwise.
     """
     warn_parallel()
+
+    # To guard against "zeroing out", set any all-zero parameters to random numbers (but change back later):
+    zero_params = [p for p in model.parameters() if torch.all(p == 0)]
+    for param in zero_params:
+        param.data = torch.rand_like(param)
+
     history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
     history_pretty = ModelHistory(history_dict, activations_only=True)
     activations_are_valid = validate_model_history(history_dict,
                                                    history_pretty,
                                                    min_proportion_consequential_layers,
                                                    verbose)
+    # Now change back the zero params to what they were:
+    for param in zero_params:
+        param.data = torch.zeros_like(param)
     for node in history_pretty:
         del node.tensor_contents
         del node
