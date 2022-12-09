@@ -474,11 +474,11 @@ def torch_func_decorator(func, history_dict):
         non_tensor_args = [arg for arg in args if not issubclass(type(arg), torch.Tensor)]
         non_tensor_kwargs = {key: val for key, val in kwargs.items() if not issubclass(type(val), torch.Tensor)}
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.parameter.Parameter])
-        if len(arg_tensors) > 0:
+        parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'tl_barcode')
+        if len(parent_tensor_barcodes) > 0:
             has_parents = True
         else:
             has_parents = False
-        parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'tl_barcode')
 
         # Figure out where the parent tensors are used in the function call args and kwargs.
         parent_tensor_arg_locations = get_parent_tensor_function_call_location(arg_tensors, args, kwargs)
@@ -537,9 +537,9 @@ def torch_func_decorator(func, history_dict):
         parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'tl_has_internal_ancestor', True)
         parent_internal_tensor_barcodes = get_marks_from_tensor_list(parent_internal_tensors, 'tl_barcode')
 
-        internal_ancestors = []
+        internal_ancestors = set([])
         for internal_parent in parent_internal_tensors:
-            internal_ancestors.extend(internal_parent.tl_internal_ancestors)
+            internal_ancestors = internal_ancestors.union(internal_parent.tl_internal_ancestors)
         if len(internal_ancestors) > 0:
             has_internal_ancestor = True
         else:
@@ -557,7 +557,12 @@ def torch_func_decorator(func, history_dict):
             is_bottom_level_func = True
         else:
             is_bottom_level_func = False
+
+        # TODO: Come up with more general logic for dealing with this.
+        if func_name == '__setitem__':
+            out_orig = args[0]
         out_iter = make_output_iterable(out_orig)  # so we can iterate through it
+
         for i, out in enumerate(out_iter):
             if type(out) == torch.Tensor and (not hasattr(out, 'tl_barcode') or
                                               out.grad_fn not in out.tl_gradfuncs or
@@ -568,6 +573,7 @@ def torch_func_decorator(func, history_dict):
                 # Update history_dict
 
                 history_dict['tensor_counter'] += 1
+
                 if not has_parents:
                     history_dict['internally_generated_tensors'].append(out.tl_barcode)
                 if len(arg_parameters) > 0:
@@ -586,7 +592,7 @@ def torch_func_decorator(func, history_dict):
                 if (not has_parents) and (not out.tl_is_model_input):
                     out.tl_is_internally_generated = True
                     out.tl_has_internal_ancestor = True
-                    out.tl_internal_ancestors = [out.tl_barcode]
+                    out.tl_internal_ancestors = {out.tl_barcode}
                 else:
                     out.tl_is_internally_generated = False
                     out.tl_has_internal_ancestor = has_internal_ancestor
@@ -647,6 +653,9 @@ def torch_func_decorator(func, history_dict):
                 out.tl_module_passes_exited = []
                 out.tl_is_bottom_level_module_output = False
                 out.tl_bottom_module_barcode = None
+                out.tl_bottom_module_type = None
+                out.tl_bottom_module_pass_num = None
+                out.tl_linked_bottom_module = None
 
                 log_tensor_metadata(out)
                 log_tensor_data(out, arg_copies, kwarg_copies, arg_parameters)
@@ -723,7 +732,7 @@ def prepare_input_tensors(x: Any,
         t.tl_parent_tensor_barcodes = []
         t.tl_has_parents = False
         t.tl_parent_internal_tensor_barcodes = []
-        t.tl_internal_ancestors = []
+        t.tl_internal_ancestors = {}
         t.tl_funcs_applied = []
         t.tl_funcs_applied_names = []
         t.tl_funcs_applied_modules = []
@@ -762,6 +771,8 @@ def prepare_input_tensors(x: Any,
         t.tl_module_passes_exited = []
         t.tl_is_bottom_level_module_output = False
         t.tl_bottom_module_barcode = None
+        t.tl_bottom_module_type = None
+        t.tl_bottom_module_pass_num = None
         t.tl_linked_bottom_module = None
 
         history_dict['input_tensors'].append(t.tl_barcode)

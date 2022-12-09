@@ -151,7 +151,7 @@ def validate_saved_activations(model: nn.Module,
     # To guard against "zeroing out", set any all-zero parameters to random numbers (but change back later):
     zero_params = [p for p in model.parameters() if torch.all(p == 0)]
     for param in zero_params:
-        param.data = torch.rand_like(param)
+        param.data = torch.randint(0, 2, param.shape, dtype=param.dtype, device=param.device)
 
     history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
     history_pretty = ModelHistory(history_dict, activations_only=True)
@@ -169,4 +169,5 @@ def validate_saved_activations(model: nn.Module,
     for node in history_dict['tensor_log'].values():
         node.clear()
     history_dict.clear()
+    torch.cuda.empty_cache()
     return activations_are_valid

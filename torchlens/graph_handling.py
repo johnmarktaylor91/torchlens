@@ -383,6 +383,8 @@ def get_next_node(node_stack: List,
             found_converge = True
 
     if not found_converge:
+        if len(node_stack) == 0:
+            print("STOP HERE!")
         node = tensor_log[node_stack.pop(0)]
 
     return node
@@ -969,6 +971,7 @@ def map_layer_names_to_op_nums(history_dict: Dict) -> Dict[str, List[int]]:
 
     Returns:
         history_dict with the layer-to-operation-numbers mapping.
+    #TODO: nix this, no longer needed.
     """
     tensor_log = history_dict['tensor_log']
     module_output_tensors = history_dict['module_output_tensors']
@@ -1146,16 +1149,17 @@ def annotate_internal_tensor_modules(history_dict: Dict):
     # Now go through the stack; for each node, mark the parents with the right containing module, and add these parents
     # to the stack.
 
+    nodes_seen = set()
     while len(node_stack) > 0:
         node_barcode = node_stack.pop()
         node = tensor_log[node_barcode]
         for parent_node_barcode in node['parent_tensor_barcodes']:
             parent_node = tensor_log[parent_node_barcode]
-            if not parent_node['has_input_ancestor']:
+            if (not parent_node['has_input_ancestor']) and (parent_node_barcode not in nodes_seen):
                 # Annotate the containing module hierarchy: the rule is, start from the child node,
                 # and apply in reverse any modules that were entered or exited.
                 parent_node['function_call_modules_nested'] = node['function_call_modules_nested'].copy()
-                thread_modules = node['containing_modules_thread']
+                thread_modules = parent_node['containing_modules_thread']
                 for enter_or_exit, module_address, entry_barcode in thread_modules[::-1]:
                     module_entry_barcode = (module_address, entry_barcode)
                     if enter_or_exit == '+' and module_entry_barcode in parent_node['function_call_modules_nested']:
@@ -1163,6 +1167,7 @@ def annotate_internal_tensor_modules(history_dict: Dict):
                     elif enter_or_exit == '-':  # if it exited a module, add that to the parent nested modules.
                         parent_node['function_call_modules_nested'].append(module_entry_barcode)
                 node_stack.append(parent_node_barcode)
+                nodes_seen.add(parent_node_barcode)
 
     return history_dict
 

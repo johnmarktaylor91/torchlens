@@ -154,6 +154,9 @@ def compute_forward_step(node_barcode: str,
     set_rng_states(node_rng_states)
     new_tensor_val = node_func(*func_args, **func_kwargs)
     set_rng_states(current_rng_states)
+    if node_func.__name__ == '__setitem__':  # TODO: fix this
+        new_tensor_val = func_args[0]
+
     if type(new_tensor_val) in [list, tuple]:
         new_tensor_val = new_tensor_val[node['out_index']]
 
@@ -200,10 +203,14 @@ def update_node_children(node_barcode: str,
                 new_forward_pass_activations[child_node_barcode] = child_activation.clone()
                 new_node_stack.append(child_node_barcode)
 
-    # keep the node around if not all children added yet.
+    # keep the node around if not all children added yet; if all children are added, clear the memory
     if not all([child_node_barcode in new_forward_pass_activations
                 for child_node_barcode in node['child_tensor_barcodes']]) and (node_barcode not in new_node_stack):
         new_node_stack.append(node_barcode)
+    else:
+        del new_forward_pass_activations[node_barcode]
+        new_forward_pass_activations[node_barcode] = None
+        torch.cuda.empty_cache()
 
 
 def validate_single_forward_pass(history_dict: Dict,
@@ -228,8 +235,9 @@ def validate_single_forward_pass(history_dict: Dict,
         new_forward_pass_activations = {barcode: tensor_log[barcode]['tensor_contents'].clone() for barcode in
                                         node_stack}
     else:
-        new_forward_pass_activations = {barcode: torch.rand(tensor_log[barcode]['tensor_contents'].shape,
-                                                            device=tensor_log[barcode]['tensor_contents'].device)
+        new_forward_pass_activations = {barcode: torch.randint(0, 2, tensor_log[barcode]['tensor_contents'].shape,
+                                                               dtype=tensor_log[barcode]['tensor_contents'].dtype,
+                                                               device=tensor_log[barcode]['tensor_contents'].device)
                                         for barcode in node_stack}
     output_node_barcodes = history_dict['output_tensors']
 
