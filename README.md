@@ -7,11 +7,28 @@ Torchlens is a package for doing exactly two things:
 2) Understanding the model's computational structure via an intuitive automatic visualization and extensive metadata
    about the network's computational graph.
 
+The goal of Torchlens is to work for any PyTorch model whatsoever. Here it is in action for a very
+simple recurrent model:
+
 ```python
+class SimpleRecurrent(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(in_features=5, out_features=5)
+
+    def forward(self, x):
+        for r in range(4):
+            x = self.fc(x)
+            x = x + 1
+            x = x * 2
+        return x
+
+
+simple_recurrent = SimpleRecurrent
 model_history = tl.get_model_activations(simple_recurrent, x,
                                          which_layers='all',
                                          vis_opt='rolled')
-print(model_history['linear_1_1:2'].tensor_contents)
+print(model_history['linear_1_1:2'].tensor_contents)  # second pass of first linear layer
 
 '''
 tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
@@ -24,6 +41,11 @@ tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
 ```
 
 <img src="gallery/simple_demo_examples/simple_recurrent.png" width=30% height=30%>
+
+And here it is for a very complex transformer model (swin_v2_b) with 1932 operations
+in its forward pass:
+
+<img src="gallery/transformers/swin_v2_b_demo.jpg" width=50% height=50%>
 
 ## Installation
 
