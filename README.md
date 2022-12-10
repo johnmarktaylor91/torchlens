@@ -43,7 +43,7 @@ tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
 <img src="gallery/simple_demo_examples/simple_recurrent.png" width=30% height=30%>
 
 And here it is for a very complex transformer model ([swin_v2_b](https://arxiv.org/abs/2103.14030)) with 1932 operations
-in its forward pass (you can grab the saved outputs of every last one):
+in its forward pass; you can grab the saved outputs of every last one:
 
 <img src="gallery/transformers/swin_v2_b_demo.jpg" width=70% height=70%>
 
