@@ -203,7 +203,7 @@ The main function of torchlens is `get_model_activations`; the remaining functio
    random nonsense activations instead of the saved activations generates the wrong output. **If this function ever
    returns False (i.e., the saved activations are wrong), please contact me via email (johnmarkedwardtaylor@gmail.com)
    or on this GitHub page with a description of the
-   problem, and I will update torchlens to fix the problem.**
+   problem, and I will update Torchlens to fix the problem.**
 
 And that's it. Torchlens remains in active development, and the goal is for it to work with any PyTorch model
 whatosever without exception. As of the time of this writing, it has been tested with common
