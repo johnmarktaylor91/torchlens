@@ -11,6 +11,7 @@ from torchlens.helper_funcs import human_readable_size, in_notebook, int_list_to
 INPUT_COLOR = "#98FB98"
 OUTPUT_COLOR = "#ff9999"
 PARAMS_NODE_BG_COLOR = "#E6E6E6"
+BUFFER_NODE_COLOR = "#888888"
 DEFAULT_BG_COLOR = 'white'
 CONNECTING_NODE_LINE_COLOR = 'black'
 NONCONNECTING_NODE_LINE_COLOR = '#A0A0A0'
@@ -35,7 +36,8 @@ def roll_graph(history_dict: Dict) -> Dict:
 
     fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
                       'is_model_input', 'is_model_output', 'is_last_output_layer', 'connects_input_and_output',
-                      'tensor_shape', 'tensor_fsize', 'has_params', 'param_total_passes', 'parent_params_shape',
+                      'is_buffer_tensor', 'buffer_address', 'tensor_shape', 'tensor_fsize',
+                      'has_params', 'param_total_passes', 'parent_params_shape',
                       'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
                       'module_total_passes', 'module_instance_final_barcodes_list']
 
@@ -158,15 +160,19 @@ def add_rolled_edges_for_node(node: Dict,
             head_label = ''
 
         if child_node['connects_input_and_output'] and node['connects_input_and_output']:
-            edge_color = CONNECTING_NODE_LINE_COLOR
             edge_style = 'solid'
         else:
-            edge_color = CONNECTING_NODE_LINE_COLOR
             edge_style = 'dashed'
+
+        if node['is_buffer_tensor']:
+            node_color = BUFFER_NODE_COLOR
+        else:
+            node_color = 'black'
 
         edge_dict = {'tail_name': node['layer_barcode'],
                      'head_name': child_layer_barcode,
-                     'color': edge_color,
+                     'color': node_color,
+                     'fontcolor': node_color,
                      'style': edge_style,
                      'headlabel': head_label,
                      'taillabel': tail_label,
@@ -205,16 +211,22 @@ def add_node_to_graphviz(node_barcode: Dict,
     node = tensor_log[node_barcode]
 
     if node['is_bottom_level_module_output']:
-        last_module_seen = '<br/>@' + node['modules_exited'][0]
-        last_module_seen = f"{last_module_seen}"
+        node_address = '<br/>@' + node['modules_exited'][0]
+        node_address = f"{node_address}"
         last_module_total_passes = node['module_total_passes']
         if (last_module_total_passes > 1) and (vis_opt == 'unrolled'):
             last_module_num_passes = node['module_passes_exited'][0][1]
-            last_module_seen += f":{last_module_num_passes}"
+            node_address += f":{last_module_num_passes}"
         node_shape = 'box'
-    else:
-        last_module_seen = ''
+        node_color = 'black'
+    elif node['is_buffer_tensor']:
+        node_address = '<br/>@' + node['buffer_address']
         node_shape = 'oval'
+        node_color = BUFFER_NODE_COLOR
+    else:
+        node_address = ''
+        node_shape = 'oval'
+        node_color = 'black'
 
     if node['is_model_input']:
         bg_color = INPUT_COLOR
@@ -231,11 +243,9 @@ def add_node_to_graphviz(node_barcode: Dict,
     layer_type_ind = node['layer_type_ind']
     layer_total_ind = node['layer_total_ind']
     if node['connects_input_and_output']:
-        node_color = CONNECTING_NODE_LINE_COLOR
         line_style = 'solid'
     else:
-        node_color = CONNECTING_NODE_LINE_COLOR
-        line_style = 'dashed'  # NONCONNECTING_NODE_LINE_COLOR
+        line_style = 'dashed'
     if (node['param_total_passes'] > 1) and (vis_opt == 'unrolled'):
         pass_num = node['pass_num']
         pass_label = f":{pass_num}"
@@ -269,7 +279,7 @@ def add_node_to_graphviz(node_barcode: Dict,
     node_title = f'<b>{node_title}</b>'
 
     node_label = (f'<{node_title}<br/>{tensor_shape_str} '
-                  f'({tensor_fsize}){param_label}{last_module_seen}>')
+                  f'({tensor_fsize}){param_label}{node_address}>')
 
     graphviz_graph.node(name=node_barcode, label=f"{node_label}",
                         fontcolor=node_color,
@@ -285,14 +295,12 @@ def add_node_to_graphviz(node_barcode: Dict,
         for child_barcode in node['child_tensor_barcodes']:
             child_node = tensor_log[child_barcode]
             if tensor_log[child_barcode]['connects_input_and_output'] and node['connects_input_and_output']:
-                edge_color = CONNECTING_NODE_LINE_COLOR
                 edge_style = 'solid'
             else:
-                edge_color = CONNECTING_NODE_LINE_COLOR  # NONCONNECTING_NODE_LINE_COLOR
                 edge_style = 'dashed'
             edge_dict = {'tail_name': node_barcode,
                          'head_name': child_barcode,
-                         'color': edge_color,
+                         'color': node_color,
                          'style': edge_style,
                          'arrowsize': '.7'}
             containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)

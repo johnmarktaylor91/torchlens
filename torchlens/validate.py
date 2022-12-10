@@ -154,6 +154,7 @@ def compute_forward_step(node_barcode: str,
     set_rng_states(node_rng_states)
     new_tensor_val = node_func(*func_args, **func_kwargs)
     set_rng_states(current_rng_states)
+
     if node_func.__name__ == '__setitem__':  # TODO: fix this
         new_tensor_val = func_args[0]
 
@@ -235,10 +236,14 @@ def validate_single_forward_pass(history_dict: Dict,
         new_forward_pass_activations = {barcode: tensor_log[barcode]['tensor_contents'].clone() for barcode in
                                         node_stack}
     else:
-        new_forward_pass_activations = {barcode: torch.randint(0, 2, tensor_log[barcode]['tensor_contents'].shape,
-                                                               dtype=tensor_log[barcode]['tensor_contents'].dtype,
-                                                               device=tensor_log[barcode]['tensor_contents'].device)
-                                        for barcode in node_stack}
+        new_forward_pass_activations = {}
+        for barcode in node_stack:
+            node = tensor_log[barcode]
+            if node['is_buffer_tensor']:
+                continue
+            new_forward_pass_activations[barcode] = torch.randn(tensor_log[barcode]['tensor_contents'].shape,
+                                                                dtype=tensor_log[barcode]['tensor_contents'].dtype,
+                                                                device=tensor_log[barcode]['tensor_contents'].device)
     output_node_barcodes = history_dict['output_tensors']
 
     # Keep populating the regenereated forward pass values from the starting nodes, until all output

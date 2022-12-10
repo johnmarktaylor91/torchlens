@@ -12,7 +12,7 @@ from torchlens.helper_funcs import get_vars_of_type_from_obj, make_barcode, mark
     text_num_split
 from torchlens.tensor_tracking import initialize_history_dict, log_tensor_metadata, mutate_pytorch, \
     prepare_input_tensors, \
-    unmutate_pytorch, update_tensor_containing_modules
+    unmutate_pytorch, update_tensor_containing_modules, register_buffer_tensor
 
 
 def get_module_from_address(model: nn.Module, address: str) -> nn.Module:
@@ -106,20 +106,24 @@ def get_bottom_level_modules(model: nn.Module) -> Dict[str, nn.Module]:
     return module_dict
 
 
-def get_all_submodules(model: nn.Module) -> List[nn.Module]:
+def get_all_submodules(model: nn.Module,
+                       is_top_level_model: bool = True) -> List[nn.Module]:
     """Recursively gets list of all submodules for given module, no matter their level in the
     hierarchy; this includes the model itself.
 
     Args:
         model: PyTorch model.
+        is_top_level_model: Whether it's the top-level model; just for the recursive logic of it.
 
     Returns:
         List of all submodules.
     """
-    submodules = [model]
+    submodules = []
+    if is_top_level_model:
+        submodules.append(model)
     for module in model.children():
         submodules.append(module)
-        submodules += get_all_submodules(module)
+        submodules += get_all_submodules(module, is_top_level_model=False)
     return submodules
 
 
@@ -316,6 +320,8 @@ def prepare_model(model: nn.Module,
         param.tl_requires_grad = param.requires_grad
         param.requires_grad = True
 
+    prepare_buffer_tensors(model, history_dict)
+
 
 def clear_hooks(hook_handles: List):
     """Takes in a list of tuples (module, hook_handle), and clears the hook at that
@@ -370,6 +376,27 @@ def unmutate_model_tensors(model: nn.Module):
             attribute = getattr(submodule, attribute_name)
             if issubclass(type(attribute), torch.Tensor):
                 setattr(submodule, attribute_name, unmutate_tensor(attribute))
+
+
+def prepare_buffer_tensors(model: nn.Module,
+                           history_dict: Dict):
+    """Goes through a model and all its submodules, and prepares any "buffer" tensors: tensors
+    attached to the module that aren't model parameters.
+
+    Args:
+        model: PyTorch model
+        history_dict: Dict of history
+
+    Returns:
+        PyTorch model with all buffer tensors prepared and ready to track.
+    """
+    submodules = get_all_submodules(model)
+    for submodule in submodules:
+        for attribute_name in dir(submodule):
+            attribute = getattr(submodule, attribute_name)
+            if issubclass(type(attribute), torch.Tensor) and not issubclass(type(attribute), torch.nn.Parameter):
+                buffer_address = submodule.tl_module_address + '.' + attribute_name
+                register_buffer_tensor(attribute, buffer_address, history_dict)
 
 
 def cleanup_model(model: nn.Module, hook_handles: List) -> nn.Module:

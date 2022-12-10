@@ -5,7 +5,7 @@ from torch import nn
 
 from torchlens.graph_handling import ModelHistory
 from torchlens.helper_funcs import warn_parallel
-from torchlens.model_funcs import run_model_and_save_specified_activations
+from torchlens.model_funcs import run_model_and_save_specified_activations, get_all_submodules
 from torchlens.validate import validate_model_history
 from torchlens.vis import render_graph
 
@@ -148,10 +148,16 @@ def validate_saved_activations(model: nn.Module,
     """
     warn_parallel()
 
-    # To guard against "zeroing out", set any all-zero parameters to random numbers (but change back later):
-    zero_params = [p for p in model.parameters() if torch.all(p == 0)]
-    for param in zero_params:
-        param.data = torch.randint(0, 2, param.shape, dtype=param.dtype, device=param.device)
+    submodules = get_all_submodules(model)
+    parameters_to_restore = []
+    for submodule in submodules:
+        for attr in dir(submodule):
+            attr_val = getattr(submodule, attr)
+            if (type(attr_val) == torch.nn.Parameter) and (torch.all(attr_val == 0)):
+                new_vals = torch.nn.Parameter(
+                    torch.randint(0, 2, attr_val.shape, dtype=attr_val.dtype, device=attr_val.device))
+                setattr(submodule, attr, new_vals)
+                parameters_to_restore.append((submodule, attr, attr_val))
 
     history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
     history_pretty = ModelHistory(history_dict, activations_only=True)
@@ -160,8 +166,9 @@ def validate_saved_activations(model: nn.Module,
                                                    min_proportion_consequential_layers,
                                                    verbose)
     # Now change back the zero params to what they were:
-    for param in zero_params:
-        param.data = torch.zeros_like(param)
+    for submodule, param_fieldname, orig_param in parameters_to_restore:
+        setattr(submodule, param_fieldname, orig_param)
+
     for node in history_pretty:
         del node.tensor_contents
         del node

@@ -598,6 +598,8 @@ def torch_func_decorator(func, history_dict):
                     out.tl_has_internal_ancestor = has_internal_ancestor
                     out.tl_internal_ancestors = internal_ancestors
                 out.tl_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
+                out.tl_is_buffer_tensor = False
+                out.tl_buffer_address = None
                 out.tl_funcs_applied = [func]
                 out.tl_funcs_applied_names = [func_name]
                 out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
@@ -692,6 +694,7 @@ def initialize_history_dict(tensor_nums_to_save: Union[List[int], str],
     history_dict['tensor_nums_to_save_temporarily'] = tensor_nums_to_save_temporarily
     history_dict['input_tensors'] = []
     history_dict['internally_generated_tensors'] = []
+    history_dict['buffer_tensors'] = []
     history_dict['output_tensors'] = []
     history_dict['param_group_tensors'] = defaultdict(list)  # tensors output by each param group
     history_dict['module_output_tensors'] = defaultdict(list)
@@ -726,6 +729,8 @@ def prepare_input_tensors(x: Any,
         t.tl_has_input_ancestor = True
         t.tl_is_internally_generated = False
         t.tl_has_internal_ancestor = False
+        t.tl_is_buffer_tensor = False
+        t.tl_buffer_address = None
         t.tl_is_model_input = True
         t.tl_is_model_output = False
         t.tl_module_just_entered_address = None
@@ -778,6 +783,85 @@ def prepare_input_tensors(x: Any,
         history_dict['input_tensors'].append(t.tl_barcode)
         log_tensor_metadata(t)
         log_tensor_data(t, [], {}, [])
+
+
+def register_buffer_tensor(t: torch.Tensor,
+                           buffer_address: str,
+                           history_dict: Dict):
+    """Registers a buffer tensor (tensor attached to a module that's not a parameter) so it's ready to be tracked
+
+    Args:
+        t: Buffer tensor
+        buffer_address: Address of buffer tensor
+        history_dict: Dict of history
+
+    Returns:
+        Nothing; the tensor is modified in place.
+    """
+    history_dict['tensor_counter'] += 1
+    t.tl_history_dict = history_dict
+    t.tl_barcode = make_barcode()
+    t.tl_tensor_num = history_dict['tensor_counter']
+    t.tl_tensor_shape = tuple(t.shape)
+    t.tl_tensor_dtype = t.dtype
+    t.tl_tensor_fsize = get_tensor_memory_amount(t)
+    t.tl_has_input_ancestor = False
+    t.tl_is_internally_generated = True
+    t.tl_has_internal_ancestor = True
+    t.tl_is_buffer_tensor = True
+    t.tl_buffer_address = buffer_address
+    t.tl_is_model_input = False
+    t.tl_is_model_output = False
+    t.tl_module_just_entered_address = None
+    t.tl_parent_tensor_barcodes = []
+    t.tl_has_parents = False
+    t.tl_parent_internal_tensor_barcodes = []
+    t.tl_internal_ancestors = {t.tl_barcode}
+    t.tl_funcs_applied = []
+    t.tl_funcs_applied_names = []
+    t.tl_funcs_applied_modules = []
+    t.tl_func_rng_states = get_rng_states()
+    t.tl_parent_tensor_arg_locs = {'args': {}, 'kwargs': {}}
+    t.tl_gradfuncs = []
+    t.tl_gradfuncs_names = []
+    t.tl_num_args = 0
+    t.tl_num_kwargs = 0
+    t.tl_nontensor_args = []
+    t.tl_nontensor_kwargs = {}
+    t.tl_parent_params = []
+    t.tl_parent_param_barcodes = []
+    t.tl_parent_params_shape = []
+    t.tl_parent_param_passes = {}
+    t.tl_params_memory_size = 0
+    t.tl_has_params = False
+    t.tl_pass_num = 1
+    t.tl_layer_barcode = t.tl_barcode
+
+    # Module stuff.
+
+    t.tl_entered_module = False
+    t.tl_containing_modules_nested = []
+    t.tl_containing_modules_thread = []
+    t.tl_function_call_modules_nested = []
+    t.tl_function_call_modules_nested_multfuncs = []
+    t.tl_func_time_elapsed = 0
+    t.tl_containing_module = None
+    t.tl_containing_modules_nested = []
+    t.tl_last_module_seen = None
+    t.tl_last_module_seen_address = None
+    t.tl_last_module_seen_entry_barcode = None
+    t.tl_is_module_output = False
+    t.tl_modules_exited = []
+    t.tl_module_passes_exited = []
+    t.tl_is_bottom_level_module_output = False
+    t.tl_bottom_module_barcode = None
+    t.tl_bottom_module_type = None
+    t.tl_bottom_module_pass_num = None
+    t.tl_linked_bottom_module = None
+
+    history_dict['buffer_tensors'].append(t.tl_barcode)
+    log_tensor_metadata(t)
+    log_tensor_data(t, [], {}, [])
 
 
 def log_tensor_metadata(t: torch.Tensor):

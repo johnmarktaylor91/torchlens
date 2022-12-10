@@ -919,6 +919,8 @@ def annotate_node_names(history_dict: Dict) -> Dict:
             layer_type = 'output'
         elif node['is_model_input']:
             layer_type = 'input'
+        elif node['is_buffer_tensor']:
+            layer_type = 'buffer'
         else:
             layer_type = node['funcs_applied_names'][0].replace('_', '')
 
@@ -1169,6 +1171,17 @@ def annotate_internal_tensor_modules(history_dict: Dict):
                 node_stack.append(parent_node_barcode)
                 nodes_seen.add(parent_node_barcode)
 
+        # Also propagate modules for any children of these internally generated nodes:
+        for child_node_barcode in node['child_tensor_barcodes']:
+            child_node = tensor_log[child_node_barcode]
+            if node['has_input_ancestor'] or child_node['has_input_ancestor'] or child_node_barcode in nodes_seen:
+                continue
+            outermost_modules = node['function_call_modules_nested'].copy()
+            innermost_modules = child_node['function_call_modules_nested'].copy()
+            child_node['function_call_modules_nested'] = outermost_modules + innermost_modules
+            node_stack.append(child_node_barcode)
+            nodes_seen.add(child_node_barcode)
+
     return history_dict
 
 
@@ -1394,6 +1407,11 @@ def get_all_tensor_lookup_keys(node: Dict,
     for module_address in node['modules_exited']:
         if (len(history_dict['module_output_tensors'][module_address]) == 1) and (node['layer_type'] != 'output'):
             lookup_keys.append(module_address)
+
+    # Finally, if buffer tensor, allow buffer address as lookup key.
+
+    if node['is_buffer_tensor']:
+        lookup_keys.append(node['buffer_address'])
 
     return lookup_keys
 
