@@ -215,7 +215,7 @@ feedforward and recurrent visual networks, as well as transformers.
 3) In the further future, I am considering adding functionality to not just save activations,
    but counterfactually intervene on them (e.g., how would the output have changed if these parameters
    were different or if a different nonlinearity were used). Let me know if you'd find this useful
-   and what specific kind of functionality you'd want.
+   and if so, what specific kind of functionality you'd want.
 
 ## Acknowledgments
 
