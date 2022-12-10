@@ -8,7 +8,7 @@ Torchlens is a package for doing exactly two things:
    about the network's computational graph.
 
 The goal of Torchlens is to work for any PyTorch model whatsoever. Here it is in action for a very
-simple recurrent model:
+simple recurrent model (as you can see, you just define it like normal and pass it in):
 
 ```python
 class SimpleRecurrent(nn.Module):
