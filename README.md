@@ -45,7 +45,7 @@ tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
 And here it is for a very complex transformer model (swin_v2_b) with 1932 operations
 in its forward pass:
 
-<img src="gallery/transformers/swin_v2_b_demo.jpg" width=50% height=50%>
+<img src="gallery/transformers/swin_v2_b_demo.jpg" width=70% height=70%>
 
 ## Installation
 
