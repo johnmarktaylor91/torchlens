@@ -25,7 +25,7 @@ class SimpleRecurrent(nn.Module):
         return x
 
 
-simple_recurrent = SimpleRecurrent
+simple_recurrent = SimpleRecurrent()
 model_history = tl.get_model_activations(simple_recurrent, x,
                                          which_layers='all',
                                          vis_opt='rolled')
