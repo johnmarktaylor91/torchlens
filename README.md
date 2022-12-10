@@ -42,7 +42,7 @@ tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
 
 <img src="gallery/simple_demo_examples/simple_recurrent.png" width=30% height=30%>
 
-And here it is for a very complex transformer model (swin_v2_b) with 1932 operations
+And here it is for a very complex transformer model ([swin_v2_b](https://arxiv.org/abs/2103.14030)) with 1932 operations
 in its forward pass:
 
 <img src="gallery/transformers/swin_v2_b_demo.jpg" width=70% height=70%>
@@ -194,8 +194,7 @@ print(model_history.layer_labels)
 The main function of torchlens is `get_model_activations`; the remaining functions are:
 
 1) `get_model_structure`, to retrieve all model metadata without saving any activations (e.g., to figure out which
-   layers
-   you wish to save)
+   layers you wish to save),
 2) `show_model_graph`, which visualizes the model graph without saving any activations,
 3) `validate_model_activations`, which runs a procedure to check that the activations are correct: specifically,
    it runs a forward pass and saves all intermediate activations, re-runs the forward pass from each intermediate
