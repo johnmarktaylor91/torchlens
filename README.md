@@ -23,7 +23,7 @@ tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
 '''
 ```
 
-<img src="resources/simple_recurrent.png" width=30% height=30%>
+<img src="gallery/simple_demo_examples/simple_recurrent.png" width=30% height=30%>
 
 ## Installation
 
@@ -98,7 +98,7 @@ Log of AlexNet forward pass:
 '''
 ```
 
-<img src="resources/alexnet.png" width=30% height=30%>
+<img src="gallery/feedforward_recognition/alexnet.png" width=30% height=30%>
 
 You can pull out information about a given layer, including its activations and helpful metadata, by indexing
 the ModelHistory object in any of these equivalent ways:
