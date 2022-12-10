@@ -3,11 +3,12 @@
 Torchlens is a package for doing exactly two things:
 
 1) Easily extracting the activations from every single intermediate operation in a PyTorch model—no
-   modifications needed—in one line of code. "Every" means every; "one" means one.
+   modifications needed—in one line of code. "Every operation" means every operation; "one line" means one line.
 2) Understanding the model's computational structure via an intuitive automatic visualization and extensive metadata
    about the network's computational graph.
 
-Here it is in action for a very simple recurrent model; as you can see, you just define it like normal and pass it in,
+Here it is in action for a very simple recurrent model; as you can see, you just define the model like normal and pass
+it in,
 and Torchlens returns a full log of the forward pass along with a visualization:
 
 ```python
@@ -194,8 +195,8 @@ print(model_history.layer_labels)
 The main function of torchlens is `get_model_activations`; the remaining functions are:
 
 1) `get_model_structure`, to retrieve all model metadata without saving any activations (e.g., to figure out which
-   layers you wish to save),
-2) `show_model_graph`, which visualizes the model graph without saving any activations,
+   layers you wish to save)
+2) `show_model_graph`, which visualizes the model graph without saving any activations
 3) `validate_model_activations`, which runs a procedure to check that the activations are correct: specifically,
    it runs a forward pass and saves all intermediate activations, re-runs the forward pass from each intermediate
    layer, and checks that the resulting output matches the ground-truth output. It also checks that swapping in
