@@ -7,8 +7,7 @@ Torchlens is a package for doing exactly two things:
 2) Understanding the model's computational structure via an intuitive automatic visualization and extensive metadata
    about the network's computational graph.
 
-The goal of Torchlens is to work for any PyTorch model whatsoever. Here it is in action for a very
-simple recurrent model; as you can see, you just define it like normal and pass it in,
+Here it is in action for a very simple recurrent model; as you can see, you just define it like normal and pass it in,
 and it returns a full log of the forward pass along with a visualization:
 
 ```python
@@ -47,6 +46,8 @@ And here it is for a very complex transformer model (swin_v2_b) with 1932 operat
 in its forward pass:
 
 <img src="gallery/transformers/swin_v2_b_demo.jpg" width=70% height=70%>
+
+The goal of Torchlens is to do this for any PyTorch model whatsoever.
 
 ## Installation
 
