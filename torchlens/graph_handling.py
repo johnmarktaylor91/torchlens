@@ -860,6 +860,59 @@ def identify_repeated_functions_in_loop(repeated_node_occurrences: List[Dict],
         first_stack = False
 
 
+def mark_conditional_branches(history_dict: Dict) -> Dict:
+    """Finds branches that are involved in evaluating conditionals in the graph by first finding
+    operations whose outputs are booleans, and then tracing back parent layers until finding an ancestor
+    that's also an ancestor of the output; wherever this transition happens is the beginning of an "if" branch.
+
+    Args:
+        history_dict:
+    """
+    tensor_log = history_dict['tensor_log']
+    terminal_bool_nodes = []
+
+    # Get the terminal boolean nodes.
+    for node in tensor_log.values():
+        if node['output_is_bool'] and (len(node['child_tensor_barcodes']) == 0):
+            node['in_cond_branch'] = True
+            node['output_is_terminal_bool'] = True
+            terminal_bool_nodes.append(node['barcode'])
+        else:
+            node['in_cond_branch'] = False
+            node['output_is_terminal_bool'] = False
+        node['cond_branch_start_children'] = []  # for children that begin a conditional branch (to mark in visual)
+    history_dict['terminal_bool_nodes'] = terminal_bool_nodes
+
+    nodes_seen = set()
+    node_stack = terminal_bool_nodes.copy()
+    while len(node_stack) > 0:
+        node_barcode = node_stack.pop()
+        node = tensor_log[node_barcode]
+        if node_barcode in nodes_seen:
+            continue
+        for parent_barcode in node['parent_tensor_barcodes']:
+            parent_node = tensor_log[parent_barcode]
+            if parent_node['is_output_ancestor']:  # we found the beginning of a conditional branch
+                parent_node['cond_branch_start_children'].append(node_barcode)
+                parent_node['in_cond_branch'] = False
+                nodes_seen.add(parent_barcode)
+            else:
+                if parent_barcode in nodes_seen:
+                    continue
+                parent_node['in_cond_branch'] = True
+                node_stack.append(parent_barcode)
+        for child_barcode in node['child_tensor_barcodes']:  # add any children and their children to the cond branch
+            child_node = tensor_log[child_barcode]
+            if child_barcode in nodes_seen:
+                continue
+            child_node['in_cond_branch'] = True
+            node_stack.append(child_barcode)
+
+        nodes_seen.add(node_barcode)
+
+    return history_dict
+
+
 def identify_repeated_functions(history_dict: Dict) -> Dict:
     """Goes through the graph and identifies nodes that have params, and whose params are repeated.
     This requires that the same set of ALL params be involved in each computation to count as "the same".
@@ -1346,6 +1399,7 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
         topological_sort_nodes,  # sort nodes topologically
         annotate_total_layer_passes,  # note the total passes of the param nodes
         identify_repeated_functions,  # find repeated functions between repeated param nodes
+        mark_conditional_branches,  # mark branches that are involved in evaluating conditionals
         annotate_node_names,  # make the nodes names more human-readable
         map_layer_names_to_op_nums,  # get the operation numbers for any human-readable layer labels
         annotate_internal_tensor_modules,  # marks the internally generated tensors with contaning modules

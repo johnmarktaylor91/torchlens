@@ -21,6 +21,7 @@ from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor
 clean_from_numpy = copy.deepcopy(torch.from_numpy)
 clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
 clean_clone = copy.deepcopy(torch.clone)
+clean_new_tensor = copy.deepcopy(torch.tensor)
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 
@@ -558,9 +559,19 @@ def torch_func_decorator(func, history_dict):
         else:
             is_bottom_level_func = False
 
-        # TODO: Come up with more general logic for dealing with this.
-        if func_name == '__setitem__':
+        # TODO: Come up with more general logic for dealing with in-place functions:
+        if func_name in ['__setitem__', 'zero_']:
             out_orig = args[0]
+
+        # Check if single boolean tensor:
+
+        if (type(out_orig) == torch.Tensor) and (out_orig.dtype == torch.bool) and (out_orig.dim()) == 0:
+            output_is_single_bool = True
+            output_bool_val = out_orig.item()
+        else:
+            output_is_single_bool = False
+            output_bool_val = None
+
         out_iter = make_output_iterable(out_orig)  # so we can iterate through it
 
         for i, out in enumerate(out_iter):
@@ -602,6 +613,8 @@ def torch_func_decorator(func, history_dict):
                 out.tl_buffer_address = None
                 out.tl_funcs_applied = [func]
                 out.tl_funcs_applied_names = [func_name]
+                out.tl_output_is_bool = output_is_single_bool
+                out.tl_output_bool_val = output_bool_val
                 out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
                 if type(out_orig) in [list, tuple]:  # in case the function returned a tuple/list of tensors
                     out.tl_out_index = i
@@ -741,6 +754,8 @@ def prepare_input_tensors(x: Any,
         t.tl_funcs_applied = []
         t.tl_funcs_applied_names = []
         t.tl_funcs_applied_modules = []
+        t.tl_output_is_bool = False
+        t.tl_output_bool_val = None
         t.tl_func_rng_states = get_rng_states()
         t.tl_parent_tensor_arg_locs = {'args': {}, 'kwargs': {}}
         t.tl_gradfuncs = []
@@ -819,6 +834,8 @@ def register_buffer_tensor(t: torch.Tensor,
     t.tl_internal_ancestors = {t.tl_barcode}
     t.tl_funcs_applied = []
     t.tl_funcs_applied_names = []
+    t.tl_output_is_bool = False
+    t.tl_output_bool_val = None
     t.tl_funcs_applied_modules = []
     t.tl_func_rng_states = get_rng_states()
     t.tl_parent_tensor_arg_locs = {'args': {}, 'kwargs': {}}
