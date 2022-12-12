@@ -35,7 +35,8 @@ def roll_graph(history_dict: Dict) -> Dict:
     """
 
     fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
-                      'is_model_input', 'is_model_output', 'is_last_output_layer', 'connects_input_and_output',
+                      'is_model_input', 'is_model_output', 'is_last_output_layer',
+                      'connects_input_and_output', 'has_input_ancestor',
                       'is_buffer_tensor', 'buffer_address', 'tensor_shape', 'tensor_fsize',
                       'has_params', 'param_total_passes', 'parent_params_shape',
                       'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
@@ -159,7 +160,7 @@ def add_rolled_edges_for_node(node: Dict,
         else:
             head_label = ''
 
-        if child_node['connects_input_and_output'] and node['connects_input_and_output']:
+        if node['has_input_ancestor']:
             edge_style = 'solid'
         else:
             edge_style = 'dashed'
@@ -221,7 +222,7 @@ def add_node_to_graphviz(node_barcode: Dict,
         node_color = 'black'
     elif node['is_buffer_tensor']:
         node_address = '<br/>@' + node['buffer_address']
-        node_shape = 'oval'
+        node_shape = 'box'
         node_color = BUFFER_NODE_COLOR
     else:
         node_address = ''
@@ -242,7 +243,7 @@ def add_node_to_graphviz(node_barcode: Dict,
     layer_type_str = layer_type.replace('_', '')
     layer_type_ind = node['layer_type_ind']
     layer_total_ind = node['layer_total_ind']
-    if node['connects_input_and_output']:
+    if node['has_input_ancestor']:
         line_style = 'solid'
     else:
         line_style = 'dashed'
@@ -294,7 +295,7 @@ def add_node_to_graphviz(node_barcode: Dict,
     else:
         for child_barcode in node['child_tensor_barcodes']:
             child_node = tensor_log[child_barcode]
-            if tensor_log[child_barcode]['connects_input_and_output'] and node['connects_input_and_output']:
+            if node['has_input_ancestor']:
                 edge_style = 'solid'
             else:
                 edge_style = 'dashed'
