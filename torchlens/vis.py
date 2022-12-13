@@ -20,6 +20,8 @@ MAX_MODULE_PENWIDTH = 5
 MIN_MODULE_PENWIDTH = 2
 PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 
+commute_funcs = ['add', 'mul', 'cat', 'eq', 'ne']
+
 
 def roll_graph(history_dict: Dict) -> Dict:
     """Converts the graph to rolled-up format for plotting purposes. This means that the nodes of the graph
@@ -37,7 +39,7 @@ def roll_graph(history_dict: Dict) -> Dict:
 
     fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
                       'is_model_input', 'is_model_output', 'is_last_output_layer',
-                      'connects_input_and_output', 'has_input_ancestor',
+                      'connects_input_and_output', 'has_input_ancestor', 'parent_tensor_arg_locs',
                       'cond_branch_start_children', 'output_is_terminal_bool', 'in_cond_branch',
                       'is_buffer_tensor', 'buffer_address', 'tensor_shape', 'tensor_fsize',
                       'has_params', 'param_total_passes', 'parent_params_shape',
@@ -47,10 +49,13 @@ def roll_graph(history_dict: Dict) -> Dict:
     tensor_log = history_dict['tensor_log']
     rolled_tensor_log = OrderedDict({})
 
+    tensor_to_layer_dict = {}
+
     for node_barcode, node in tensor_log.items():
         # Get relevant information from each node.
 
         layer_barcode = node['layer_barcode']
+        tensor_to_layer_dict[node_barcode] = layer_barcode
         if layer_barcode in rolled_tensor_log:
             rolled_node = rolled_tensor_log[layer_barcode]
         else:
@@ -103,6 +108,15 @@ def roll_graph(history_dict: Dict) -> Dict:
                 parent_edge_passes[parent_layer_barcode].append(pass_num)
         rolled_node['child_layer_passes'] = child_edge_passes
         rolled_node['parent_layer_passes'] = parent_edge_passes
+
+    # And replace the arg locations with the layer, rather than tensor barcodes.
+
+    for layer_barcode, rolled_node in rolled_tensor_log.items():
+        new_parent_arg_locs = {'args': {}, 'kwargs': {}}
+        for arg_type in ['args', 'kwargs']:
+            for arg_loc, arg_barcode in rolled_node['parent_tensor_arg_locs'][arg_type].items():
+                new_parent_arg_locs[arg_type][arg_loc] = tensor_to_layer_dict[arg_barcode]
+        rolled_node['parent_tensor_arg_locs'] = new_parent_arg_locs
 
     return rolled_tensor_log
 
@@ -157,6 +171,8 @@ def add_rolled_edges_for_node(node: Dict,
         else:
             tail_label = ''
 
+        # Mark the head label with the argument if need be:
+
         if child_node['edges_vary_across_passes'] and not child_node['is_model_output']:
             head_label = f'  In {int_list_to_compact_str(child_pass_nums)}  '
         else:
@@ -181,6 +197,27 @@ def add_rolled_edges_for_node(node: Dict,
                      'taillabel': tail_label,
                      'arrowsize': '.7',
                      'labelfontsize': '8'}
+
+        if child_layer_barcode in node['cond_branch_start_children']:  # Mark with "if" if the edge starts a cond branch
+            edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+
+        # Label the arguments to the next node if multiple inputs: TODO make this a function
+        child_node_layer_type = child_node['layer_type'].replace('_', '')
+        if (len(child_node['parent_layer_barcodes']) > 1) and (child_node_layer_type not in commute_funcs):
+            found_it = False
+            for arg_type in ['args', 'kwargs']:
+                for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
+                    if arg_barcode == parent_node_barcode:
+                        arg_label = arg_type[:-1] + ' ' + str(arg_loc)
+                        arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_label}</b></FONT>>"
+                        if 'label' not in edge_dict:
+                            edge_dict['label'] = arg_label
+                        else:
+                            edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+                        found_it = True
+                        break
+                    if found_it:
+                        break
 
         containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
         if containing_module != -1:
@@ -283,38 +320,23 @@ def add_node_to_graphviz(node_barcode: str,
     node_title = f"{layer_type_str}_{layer_type_ind}_{layer_total_ind}{pass_label}"
     node_title = f'<b>{node_title}</b>'
 
-    node_label = (f'<{node_title}<br/>{tensor_shape_str} '
+    if node['output_is_terminal_bool']:
+        label_text = str(node['output_bool_val']).upper()
+        bool_label = f"<b><u>{label_text}:</u></b><br/><br/>"
+    else:
+        bool_label = ''
+
+    node_label = (f'<{bool_label}{node_title}<br/>{tensor_shape_str} '
                   f'({tensor_fsize}){param_label}{node_address}>')
 
-    if not node['output_is_terminal_bool']:
-        graphviz_graph.node(name=node_barcode,
-                            label=f"{node_label}",
-                            fontcolor=node_color,
-                            color=node_color,
-                            style=f"filled,{line_style}",
-                            fillcolor=bg_color,
-                            shape=node_shape,
-                            ordering='out')
-    else:  # If a boolean node, put TRUE or FALSE on top of it: TODO make sure this works with nested modules.
-        label_text = str(node['output_bool_val']).upper()
-        label = f"<<b><u><br/>{label_text}</u></b>>"
-        dummy_bool_graph = graphviz.Digraph(name=f"cluster_{node_barcode}_dummybool")
-        dummy_bool_graph.graph_attr.update({'label': label,
-                                            'labelloc': 'b',
-                                            'color': 'transparent',
-                                            'margin': '0',
-                                            'labeljust': 'c',
-                                            'ordering': 'out'})
-        dummy_bool_graph.node(name=node_barcode,
-                              label=node_label,
-                              fontcolor=node_color,
-                              color=node_color,
-                              style=f"filled,{line_style}",
-                              fillcolor=bg_color,
-                              shape=node_shape,
-                              ordering='out')
-
-        graphviz_graph.subgraph(dummy_bool_graph)
+    graphviz_graph.node(name=node_barcode,
+                        label=f"{node_label}",
+                        fontcolor=node_color,
+                        color=node_color,
+                        style=f"filled,{line_style}",
+                        fillcolor=bg_color,
+                        shape=node_shape,
+                        ordering='out')
 
     if vis_opt == 'rolled':
         add_rolled_edges_for_node(node, graphviz_graph, module_cluster_dict, tensor_log)
@@ -330,36 +352,33 @@ def add_node_to_graphviz(node_barcode: str,
                          'color': node_color,
                          'style': edge_style,
                          'arrowsize': '.7'}
+
             if child_barcode in node['cond_branch_start_children']:  # Mark with "if" if the edge starts a cond branch
-                edge_dict['label'] = '<<FONT POINT-SIZE="20"><b><u>IF</u></b></FONT>>'
+                edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+
+            # Label the arguments to the next node if multiple inputs: TODO make this a function and allow same arg to appear multiple times
+            child_node_layer_type = child_node['layer_type'].replace('_', '')
+            if (len(child_node['parent_tensor_barcodes']) > 1) and (child_node_layer_type not in commute_funcs):
+                found_it = False
+                for arg_type in ['args', 'kwargs']:
+                    for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
+                        if arg_barcode == node_barcode:
+                            arg_label = arg_type[:-1] + ' ' + str(arg_loc)
+                            arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_label}</b></FONT>>"
+                            if 'label' not in edge_dict:
+                                edge_dict['label'] = arg_label
+                            else:
+                                edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+                            found_it = True
+                            break
+                        if found_it:
+                            break
 
             containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
             if containing_module != -1:
                 module_cluster_dict[containing_module].append(edge_dict)
             else:
                 graphviz_graph.edge(**edge_dict)
-
-        if node['output_is_terminal_bool'] and False:
-            label_text = str(node['output_bool_val']).upper() + ':'
-            label = f"<<b><u>{label_text}</u></b>>"
-            dummy_barcode = f"{node_barcode}_dummybooldisplay"
-            graphviz_graph.node(name=dummy_barcode,
-                                label=label,
-                                fontcolor=node_color,
-                                color=node_color,
-                                shape='rectangle',
-                                edgewidth='.1')
-
-            edge_dict = {'tail_name': node_barcode,
-                         'head_name': dummy_barcode,
-                         'style': 'invis',
-                         'weight': '100'}
-
-            containing_modules = node['function_call_modules_nested']
-            if len(containing_modules) == 0:
-                graphviz_graph.edge(**edge_dict)
-            else:
-                module_cluster_dict[containing_modules[-1]].append(edge_dict)
 
     # Finally, if it's the final output layer, force it to be on top for visual niceness.
 
