@@ -2,6 +2,7 @@ from collections import OrderedDict, defaultdict
 from typing import Dict, List
 
 import graphviz
+import inspect
 from IPython.display import display
 
 from torchlens.helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str
@@ -40,11 +41,11 @@ def roll_graph(history_dict: Dict) -> Dict:
     fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
                       'is_model_input', 'is_model_output', 'is_last_output_layer',
                       'connects_input_and_output', 'has_input_ancestor', 'parent_tensor_arg_locs',
-                      'cond_branch_start_children', 'output_is_terminal_bool', 'in_cond_branch',
+                      'cond_branch_start_children', 'output_is_terminal_bool', 'in_cond_branch', 'output_bool_val',
                       'is_buffer_tensor', 'buffer_address', 'tensor_shape', 'tensor_fsize',
                       'has_params', 'param_total_passes', 'parent_params_shape',
                       'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
-                      'module_total_passes', 'module_instance_final_barcodes_list']
+                      'module_total_passes', 'module_instance_final_barcodes_list', 'funcs_applied']
 
     tensor_log = history_dict['tensor_log']
     rolled_tensor_log = OrderedDict({})
