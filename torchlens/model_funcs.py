@@ -284,6 +284,7 @@ def prepare_model(model: nn.Module,
         raise ValueError("Mode must be either 'modules_only' or 'exhaustive'.")
 
     module_stack = [('', model)]  # list of tuples (name, module)
+    model.tl_module_address = ''
 
     while len(module_stack) > 0:
         parent_address, module = module_stack.pop()
@@ -395,7 +396,10 @@ def prepare_buffer_tensors(model: nn.Module,
         for attribute_name in dir(submodule):
             attribute = getattr(submodule, attribute_name)
             if issubclass(type(attribute), torch.Tensor) and not issubclass(type(attribute), torch.nn.Parameter):
-                buffer_address = submodule.tl_module_address + '.' + attribute_name
+                if submodule.tl_module_address == '':
+                    buffer_address = attribute_name
+                else:
+                    buffer_address = submodule.tl_module_address + '.' + attribute_name
                 register_buffer_tensor(attribute, buffer_address, history_dict)
 
 

@@ -65,6 +65,7 @@ def roll_graph(history_dict: Dict) -> Dict:
                     rolled_node[field] = node[field]
             rolled_node['child_layer_barcodes'] = {}  # each key is pass_num, each value list of children
             rolled_node['parent_layer_barcodes'] = {}  # each key is pass_num, each value list of parents
+            rolled_node['args_per_layer'] = len(node['parent_tensor_barcodes'])
             rolled_tensor_log[layer_barcode] = rolled_node
 
         # Only difference is that now the parents and children are layer barcodes, not tensor barcodes,
@@ -203,7 +204,7 @@ def add_rolled_edges_for_node(node: Dict,
 
         # Label the arguments to the next node if multiple inputs: TODO make this a function
         child_node_layer_type = child_node['layer_type'].replace('_', '')
-        if (len(child_node['parent_layer_barcodes']) > 1) and (child_node_layer_type not in commute_funcs):
+        if (child_node['args_per_layer'] > 1) and (child_node_layer_type not in commute_funcs):
             found_it = False
             for arg_type in ['args', 'kwargs']:
                 for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
