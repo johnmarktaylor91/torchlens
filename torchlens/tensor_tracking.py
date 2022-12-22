@@ -24,6 +24,7 @@ clean_clone = copy.deepcopy(torch.clone)
 clean_new_tensor = copy.deepcopy(torch.tensor)
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
+# This branch will be for refactoring everything nicely.
 
 print_funcs = ['__repr__', '__str__']
 funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to']
