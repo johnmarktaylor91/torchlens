@@ -58,9 +58,6 @@ def insert_sorted_child_node(parent_node, child_node, tensor_log):
             parent_node['child_tensor_barcodes'] = child_barcodes[:]
             return
     parent_node['child_tensor_barcodes'] = parent_node['child_tensor_barcodes'] + [child_barcode]
-    if len(tensor_log) != orig_len:
-        print("STOP")
-        abc = 1 + 1
 
 
 def annotate_node_children(history_dict: Dict) -> Dict:
@@ -1273,55 +1270,6 @@ def cluster_modules(history_dict: Dict):
     history_dict['top_level_module_clusters'] = top_level_module_clusters
     history_dict['module_cluster_children_dict'] = cluster_children_dict
     return history_dict
-
-
-def subset_graph(history_dict: Dict, nodes_to_keep: List[str]) -> Dict:
-    """Subsets the nodes of the graph, inheriting the parent/children of omitted nodes.
-
-    Args:
-        tensor_log: The input tensor log.
-        nodes to keep: which nodes to keep
-    Returns:
-        output tensor_log with only the desired nodes.
-    """
-    raise NotImplementedError
-
-
-def reduce_graph_to_modules_only(history_dict: Dict) -> Dict:
-    """Reduces the graph to just tensors that are the output of lowest-level modules.
-
-    Args:
-        history_dict: The input history_dict
-    Returns:
-        output history_dict with only the lowest-level modules kept
-    """
-    raise NotImplementedError
-
-
-def get_tensor_nums_for_layers(history_dict: Dict) -> Dict:
-    """Fetches the tensor numbers (that is, the order in which the tensors were made for the network pass
-    for all the labels the user might want to use; this is used for subsetting the graph in
-    the subsequent pass that actually gets the activations.
-
-    Args:
-        history_dict: The input history_dict
-    Returns:
-        dict that maps layer labels (human-readable) to tensor nums.
-    """
-    raise NotImplementedError
-
-
-def connect_node_arguments(history_dict: Dict) -> Dict:
-    """Determines the mapping between the output of one node and the input to the next node.
-    This is used for validating and debugging the models.
-
-    Args:
-        tensor_log: The tensor log.
-
-    Returns:
-        Tensor log annotated with the mapping between the outputs of one node and the inputs to child nodes.
-    """
-    raise NotImplementedError
 
 
 def unmutate_tensor(t):

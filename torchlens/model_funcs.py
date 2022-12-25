@@ -40,44 +40,6 @@ def get_module_from_address(model: nn.Module, address: str) -> nn.Module:
     return module
 
 
-def make_layer_name(layer_type: str,
-                    layer_type_num: int,
-                    layer_num: int,
-                    pass_num: Optional[int] = None) -> str:
-    """Makes a string name for a layer, given its type, type number, layer number, and pass number."""
-    layer_name = f"{layer_type}{layer_type_num}_{layer_num}"
-    if pass_num is not None:
-        layer_name += f":{pass_num}"
-    return layer_name
-
-
-def parse_layer_name(layer_name: str) -> OrderedDict:
-    """Given layer name, decomposes it into the relevant values.
-
-    Args:
-        layer_name: Name of the layer in format {layer_type}{layer_type_num}_{layer_num}:{pass_num},
-            with pass_num optional. For example, conv4_9:2 is the second pass through the 4th convolutional
-            layer, which is the 9th layer overall.
-    Returns:
-        Dict with layer_type, layer_type_num, layer_num, and pass_num if it's there.
-    """
-    layer_dict = OrderedDict()
-    if ':' in layer_name:
-        layer_name, pass_num = layer_name.split(':')
-        layer_dict['pass_num'] = int(pass_num)
-    else:
-        pass_num = None
-
-    type_label, layer_num = layer_name.split('_')
-    layer_type, layer_type_num = text_num_split(type_label)
-    layer_dict['layer_type'] = layer_type
-    layer_dict['layer_type_num'] = layer_type_num
-    layer_dict['layer_num'] = layer_num
-    if pass_num:
-        layer_dict['pass_num'] = pass_num
-    return layer_dict
-
-
 def get_bottom_level_modules(model: nn.Module) -> Dict[str, nn.Module]:
     """Recursively crawls through a given model, and returns a dict of the bottom-level
     modules, with keys corresponding to their address, and values corresponding to the

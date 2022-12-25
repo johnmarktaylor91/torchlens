@@ -176,41 +176,13 @@ def get_vars_of_type_from_obj(obj: Any,
     return tensors_in_obj
 
 
-def obj_contains_tensors(obj: Any) -> bool:
-    """Checks if an object contains any tensors.
-
-    Args:
-        obj: Object to search.
-
-    Returns:
-        True if object contains tensors, False otherwise.
-    """
-    return len(get_vars_of_type_from_obj(obj)) > 0
-
-
-def unique_classes_in_list(list_: List[Any]) -> List[type]:
-    """Returns a list of unique classes in a list.
-
-    Args:
-        l: List to search.
-
-    Returns:
-        List of unique classes in the list.
-    """
-    classes = []
-    for item in list_:
-        if type(item) not in classes:
-            classes.append(type(item))
-    return classes
-
-
 def mark_tensors_in_obj(x: Any, field_name: str, field_val: Any):
-    """Marks all tensors in the input saying they came as input.
+    """Marks all tensors in an object with a specified field attribute.
 
     Args:
-        x: Input to the model.
-        field_name: Name of the field to add to the tensor.
-        field_val: Value of the field to add to the tensor.
+        x: the input object
+        field_name: name of the field to add to the tensor.
+        field_val: value of the field to add to the tensor.
 
     Returns:
         Nothing.
@@ -289,14 +261,14 @@ def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str)
     return marks
 
 
-def remove_list_duplicates(l: List) -> List:
+def remove_list_duplicates(list_: List) -> List:
     """Given a list, remove any duplicates preserving order of first apppearance of each element.
     Args:
-        l: List to remove duplicates from.
+        list_: List to remove duplicates from.
     Returns:
         List with duplicates removed.
     """
-    return list(OrderedDict.fromkeys(l))
+    return list(OrderedDict.fromkeys(list_))
 
 
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
@@ -330,23 +302,6 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     else:
         size = np.round(size, decimals=decimal_places)
     return f"{size} {unit}"
-
-
-def readable_tensor_size(t: torch.Tensor) -> str:
-    """Returns the size of a tensor in human-readable format.
-
-    Args:
-        t: Tensor.
-
-    Returns:
-        Human-readable size of tensor.
-    """
-    return human_readable_size(get_tensor_memory_amount(t))
-
-
-def do_lists_intersect(l1, l2) -> bool:
-    """Utility function checking if two lists have any elements in common."""
-    return len(list(set(l1) & set(l2))) > 0
 
 
 def text_num_split(s: str) -> Tuple[str, int]:
