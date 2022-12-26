@@ -453,13 +453,14 @@ def make_output_iterable(x):
         return [x]
 
 
-def torch_func_decorator(func, history_dict):
+def torch_func_decorator(func: Callable,
+                         model_history: ModelHistory):
     @wraps(func)
     def wrapped_func(*args, **kwargs):
-        tensor_log = history_dict['tensor_log']
-        history_dict['current_function_call_barcode'] = 0
+        tensor_log = model_history['tensor_log']
+        model_history['current_function_call_barcode'] = 0
         func_name = func.__name__
-        if (func_name in funcs_not_to_log) or not history_dict['track_tensors']:
+        if (func_name in funcs_not_to_log) or not model_history['track_tensors']:
             out = func(*args, **kwargs)
             return out
 
@@ -544,18 +545,18 @@ def torch_func_decorator(func, history_dict):
         arg_copies = [safe_copy(arg) for arg in args]
         kwarg_copies = {key: safe_copy(value) for key, value in kwargs.items()}
         func_call_barcode = make_barcode()
-        history_dict['current_function_call_barcode'] = func_call_barcode
+        model_history['current_function_call_barcode'] = func_call_barcode
         start_time = time.time()
         rng_states = get_rng_states()
         out_orig = func(*args, **kwargs)
         time_elapsed = time.time() - start_time
-        if history_dict['current_function_call_barcode'] == func_call_barcode:
+        if model_history['current_function_call_barcode'] == func_call_barcode:
             is_bottom_level_func = True
         else:
             is_bottom_level_func = False
 
         # TODO: Come up with more general logic for dealing with in-place functions:
-        if func_name in ['__setitem__', 'zero_']:
+        if func_name in ['__setitem__', 'zero_', '__delitem__']:
             out_orig = args[0]
 
         # Check if single boolean tensor:
@@ -569,106 +570,37 @@ def torch_func_decorator(func, history_dict):
 
         out_iter = make_output_iterable(out_orig)  # so we can iterate through it
 
+        # Initial processing
+
+        # Get func info
+
+        # Get argument info
+
+        # Get output info
+
+        # Get module info
+
         for i, out in enumerate(out_iter):
             if type(out) == torch.Tensor and (not hasattr(out, 'tl_barcode') or
                                               out.grad_fn not in out.tl_gradfuncs or
                                               is_bottom_level_func):
-                out.tl_history_dict = history_dict
-                out.tl_barcode = make_barcode()
-
-                # Update history_dict
-
-                history_dict['tensor_counter'] += 1
-
-                if not has_parents:
-                    history_dict['internally_generated_tensors'].append(out.tl_barcode)
-                if len(arg_parameters) > 0:
-                    history_dict['param_group_tensors'][param_group_barcode].append(out.tl_barcode)
-
-                # Update tensor_log
-                out.tl_tensor_num = history_dict['tensor_counter']
-                out.tl_tensor_shape = tuple(out.shape)
-                out.tl_tensor_dtype = out.dtype
-                out.tl_tensor_fsize = get_tensor_memory_amount(out)
-                out.tl_has_input_ancestor = has_input_ancestor
-                out.tl_is_model_output = False
-                out.tl_is_model_input = False
-                out.tl_parent_tensor_barcodes = parent_tensor_barcodes
-                out.tl_has_parents = has_parents
-                if (not has_parents) and (not out.tl_is_model_input):
-                    out.tl_is_internally_generated = True
-                    out.tl_has_internal_ancestor = True
-                    out.tl_internal_ancestors = {out.tl_barcode}
-                else:
-                    out.tl_is_internally_generated = False
-                    out.tl_has_internal_ancestor = has_internal_ancestor
-                    out.tl_internal_ancestors = internal_ancestors
-                out.tl_parent_internal_tensor_barcodes = parent_internal_tensor_barcodes
-                out.tl_is_buffer_tensor = False
-                out.tl_buffer_address = None
-                out.tl_funcs_applied = [func]
-                out.tl_funcs_applied_names = [func_name]
-                out.tl_output_is_bool = output_is_single_bool
-                out.tl_output_bool_val = output_bool_val
-                out.tl_parent_tensor_arg_locs = parent_tensor_arg_locations
-                if type(out_orig) in [list, tuple]:  # in case the function returned a tuple/list of tensors
-                    out.tl_out_index = i
-                else:
-                    out.tl_out_index = None
-                out.tl_func_time_elapsed = time_elapsed
-                out.tl_func_rng_states = rng_states
-
-                # if the function applied a new grad_fn
-                if not hasattr(out, 'tl_gradfuncs') or (out.grad_fn not in out.tl_gradfuncs):
-                    out.tl_gradfuncs = [out.grad_fn]
-                    out.tl_gradfuncs_names = [type(out.grad_fn).__name__]
-                else:  # if it's 'identity-like' and just let the function pass through
-                    out.tl_gradfuncs = [lambda x: x]
-                    out.tl_gradfuncs_names = ['identity']
-
-                out.tl_parent_params = arg_parameters[:]
-                out.tl_parent_param_barcodes = [param.tl_param_barcode for param in arg_parameters]
-                out.tl_parent_params_shape = [tuple(param.shape) for param in arg_parameters]
-                out.tl_parent_param_passes = parent_param_passes.copy()
-                out.tl_params_memory_size = total_params_size
-                if len(arg_parameters) == 0:
-                    out.tl_has_params = False
-                    out.tl_pass_num = 1
-                    out.tl_layer_barcode = out.tl_barcode
-                else:
-                    out.tl_has_params = True
-                    out.tl_pass_num = len(history_dict['param_group_tensors'][param_group_barcode])
-                    out.tl_layer_barcode = param_group_barcode
-                out.tl_nontensor_args = non_tensor_args
-                out.tl_nontensor_kwargs = non_tensor_kwargs
-                out.tl_nontensor_all_args = non_tensor_args + list(non_tensor_kwargs.values())
-                out.tl_num_args = len(args)
-                out.tl_num_kwargs = len(kwargs)
-
-                # Module stuff.
-
-                out.tl_entered_module = any_inputs_entered_module
-                out.tl_containing_modules_nested = containing_modules[:]
-                out.tl_function_call_modules_nested = containing_modules[:]
-                out.tl_function_call_modules_nested_multfuncs = [containing_modules[:]]
-                out.tl_containing_modules_thread = []
-                out.tl_containing_module = containing_module
-                out.tl_last_module_seen = last_module_seen
-                out.tl_module_just_entered_address = None
-                out.tl_funcs_applied_modules = [last_module_seen_address]
-                out.tl_last_module_seen_address = last_module_seen_address
-                out.tl_last_module_seen_entry_barcode = last_module_seen_entry_barcode
-                out.tl_is_module_output = False
-                out.tl_modules_exited = []
-                out.tl_module_passes_exited = []
-                out.tl_is_bottom_level_module_output = False
-                out.tl_bottom_module_barcode = None
-                out.tl_bottom_module_type = None
-                out.tl_bottom_module_pass_num = None
-                out.tl_linked_bottom_module = None
-
-                log_tensor_metadata(out)
-                log_tensor_data(out, arg_copies, kwarg_copies, arg_parameters)
+                model_history.log_function_output_tensor(out, func, func_name, func_changes_input, func_time_elapsed,
+                                                         func_rng_states, args, kwargs,
+                                                         parent_tensor_barcodes, parent_tensor_arg_locs,
+                                                         nontensor_args, nontensor_kwargs, parent_params,
+                                                         parent_param_passes, input_ancestors,
+                                                         internally_initialized_parents,
+                                                         internally_initialized_ancestors, orig_ancestors,
+                                                         is_part_of_iterable_output, iterable_output_index,
+                                                         containing_modules_origin_nested,
+                                                         containing_modules_final_nested,
+                                                         module_passes_entered, module_passes_exited,
+                                                         module_entry_exit_thread)
+                model_history.log_function_output_tensor_func_info()
+                model_history.log_function_output_tensor_param_info()
+                model_history.log_function_output_tensor_graph_info()
+                model_history.log_function_output_tensor_module_info()
+                model_history.make_tensor_log_entry(out, t_args=[], t_kwargs={})
 
         return out_orig
 
