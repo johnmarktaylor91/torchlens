@@ -7,15 +7,13 @@ import pandas as pd
 import torch
 from typing import Callable, Dict, List, Optional, Union, Tuple, Set
 
-from tensor_tracking import safe_copy
+from torchlens.decorator import safe_copy
 
 from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, get_rng_states, \
     get_tensor_memory_amount, get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
-    mark_tensors_in_obj, tensor_in_obj_has_mark, human_readable_size
+    mark_tensors_in_obj, tensor_in_obj_has_mark, human_readable_size, identity
 
 
-def identity(x):
-    return x
 
 
 class TensorLogEntry:
@@ -120,6 +118,10 @@ class ModelHistory:
         self.internally_terminated_bool_tensors = []
         self.tensors_computed_with_params = {}
         self.conditional_branch_edges = []
+
+        # Tracking info
+        self.track_tensors = True
+        self.current_function_call_barcode = None
 
     def summarize(self):
         """
@@ -249,7 +251,7 @@ class ModelHistory:
             raise ValueError("source must be either 'input' or 'buffer'")
 
         # General info
-        t.tl_layer_label_raw = t.tensor_label_raw
+        t.tl_layer_label_raw = t.tl_tensor_label_raw
         t.tl_layer_type = source
         t.tl_source_model_history = self
         t.tl_tensor_shape = tuple(t.shape)
@@ -328,7 +330,7 @@ class ModelHistory:
 
     def log_function_output_tensor_func_info(self,
                                              t: torch.Tensor,
-                                             args: List,
+                                             args: Tuple,
                                              kwargs: Dict,
                                              func: Callable,
                                              func_name: str,
@@ -348,6 +350,9 @@ class ModelHistory:
         else:
             grad_fn = identity
             grad_fn_name = 'identity'
+
+        if not is_part_of_iterable_output:
+            iterable_output_index = None
 
         if (t.dtype == torch.bool) and (t.dim()) == 0:
             output_is_single_bool = True
@@ -479,37 +484,27 @@ class ModelHistory:
     @staticmethod
     def log_function_output_tensor_module_info(self,
                                                t: torch.Tensor,
-                                               containing_modules_origin_nested: List[str],
-                                               containing_modules_final_nested: List[str],
-                                               module_passes_entered: List[str],
-                                               module_passes_exited: List[str],
-                                               module_entry_exit_thread: List[Tuple]):
+                                               containing_modules_origin_nested: List[str]):
         """Takes in a tensor that's a function output and marks it in-place with module information.
 
         Args:
             t: an input tensor.
+            containing_modules_origin_nested: a list of module names that the tensor is contained in.
         """
         if len(containing_modules_origin_nested) > 0:
             is_computed_inside_submodule = True
         else:
             is_computed_inside_submodule = False
 
-        if len(module_passes_exited) > 0:
-            is_submodule_output = True
-        else:
-            is_submodule_output = False
-
         t.tl_is_computed_inside_submodule = is_computed_inside_submodule
         t.tl_containing_module_origin = containing_modules_origin_nested[-1]
         t.tl_containing_modules_origin_nested = containing_modules_origin_nested
-        t.tl_containing_module_final = containing_modules_final_nested[-1]
-        t.tl_containing_modules_final_nested = containing_modules_final_nested
-        t.tl_modules_entered = [mod[0] for mod in module_passes_entered]
-        t.tl_module_passes_entered = module_passes_entered
+        t.tl_modules_entered = []
+        t.tl_module_passes_entered = []
         t.tl_is_submodule_input = False
-        t.tl_modules_exited = [mod[0] for mod in module_passes_exited]
-        t.tl_module_passes_exited = module_passes_exited
-        t.tl_is_submodule_output = is_submodule_output
+        t.tl_modules_exited = []
+        t.tl_module_passes_exited = []
+        t.tl_is_submodule_output = False
         t.tl_is_bottom_level_submodule_output = False
         t.tl_module_entry_exit_thread = []
 

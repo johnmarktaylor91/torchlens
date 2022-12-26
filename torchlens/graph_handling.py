@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from torchlens.helper_funcs import human_readable_size, make_barcode
-from torchlens.tensor_tracking import safe_copy
+from torchlens.decorator import safe_copy
 
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):

@@ -17,9 +17,11 @@ import numpy as np
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
+
+from torchlens.model_history import ModelHistory
 from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, get_rng_states, \
     get_tensor_memory_amount, get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
-    mark_tensors_in_obj, tensor_in_obj_has_mark
+    mark_tensors_in_obj, tensor_in_obj_has_mark, identity, is_iterable, make_var_iterabl
 
 clean_from_numpy = copy.deepcopy(torch.from_numpy)
 clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
@@ -27,7 +29,7 @@ clean_clone = copy.deepcopy(torch.clone)
 clean_new_tensor = copy.deepcopy(torch.tensor)
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
-# This branch will be for refactoring everything nicely.
+
 
 print_funcs = ['__repr__', '__str__']
 funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to']
@@ -119,12 +121,12 @@ ignored_funcs = [
 
 
 @functools.lru_cache(None)
-def my_get_overridable_functions() -> Tuple[Dict[Any, List[Callable]], Dict[Callable, str]]:
+def my_get_overridable_functions() -> List:
     overridable_funcs = collections.defaultdict(list)
     index = {}
     func_names = []
     tested_namespaces = [
-        ("torch", torch, torch.__all__ + dir(torch._C._VariableFunctions)),
+        ("torch", torch, torch.__all__),
         ("torch.functional", torch.functional, torch.functional.__all__),
         ("torch.nn.functional", torch.nn.functional, dir(torch.nn.functional)),
         ("torch.nn.init", torch.nn.init, dir(torch.nn.init)),
@@ -200,7 +202,7 @@ def my_get_overridable_functions() -> Tuple[Dict[Any, List[Callable]], Dict[Call
 
 
 overridable_funcs = my_get_overridable_functions()
-orig_torch_funcs = overridable_funcs + ignored_funcs
+orig_torch_funcs = overridable_funcs + ignored_funcs + [('', identity)]
 
 
 def print_override(t: torch.Tensor, func_name: str):
@@ -364,6 +366,66 @@ def unmutate_pytorch(torch_module,
             continue
 
 
+def find_arg_positions_for_single_parent(parent_tensor: torch.Tensor,
+                                         arg_type: str,
+                                         arg_struct: Union[List, Tuple, Dict],
+                                         tensor_all_arg_positions: Dict):
+    """Helper function that finds where a single parent tensor is used in either the args or kwargs of a function,
+    and updates a dict that tracks this information.
+
+    Args:
+        parent_tensor: Parent tensor
+        arg_type: 'args' or 'kwargs'
+        arg_struct: args or kwargs
+        tensor_all_arg_positions: dict tracking where the tensors are used
+    """
+    iterfunc_dict = {'args': enumerate,
+                     'kwargs': lambda x: x.items(),
+                     list: enumerate,
+                     tuple: enumerate,
+                     dict: lambda x: x.items()}
+    iterfunc = iterfunc_dict[arg_type]
+
+    for arg_key, arg in iterfunc(arg_struct):
+        if arg is parent_tensor:
+            tensor_all_arg_positions[arg_type][arg_key] = parent_tensor.tl_tensor_label_raw
+        elif type(arg) in [list, tuple, dict]:
+            iterfunc2 = iterfunc_dict[type(arg)]
+            for sub_arg_key, sub_arg in iterfunc2(arg):
+                if sub_arg is parent_tensor:
+                    tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = parent_tensor.tl_tensor_label_raw
+
+
+def get_parent_tensor_function_call_location(parent_tensors: List[torch.Tensor],
+                                             args: Tuple[Any],
+                                             kwargs: Dict[Any, Any]) -> Dict:
+    """Utility function that takes in the parent tensors, the args, and kwargs, and returns a dict specifying
+    where in the function call the parent tensors were used.
+
+    Args:
+        parent_tensors: List of parent tensors.
+        args: Tuple of function args
+        kwargs: Dict of function kwargs
+
+    Returns:
+        Dict that itself contains two dicts, one specifing which args are associated with parent tensors,
+        and another specifing which kwargs are associated with parent tensors.
+    """
+    tensor_all_arg_positions = {'args': {}, 'kwargs': {}}
+
+    for parent_tensor in parent_tensors:
+        if not hasattr(parent_tensor, 'tl_barcode'):
+            continue
+        for arg_type in ['args', 'kwargs']:
+            if arg_type == 'args':
+                arg_struct = args
+            elif arg_type == 'kwargs':
+                arg_struct = kwargs
+            find_arg_positions_for_single_parent(parent_tensor, arg_type, arg_struct, tensor_all_arg_positions)
+
+    return tensor_all_arg_positions
+
+
 def update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
     """Utility function that updates the containing modules of a Tensor by starting from the containing modules
     as of the last function call, then looks at the sequence of module transitions (in or out of a module) as of
@@ -375,233 +437,159 @@ def update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
     Returns:
         List of the updated containing modules.
     """
-    containing_modules = t.tl_function_call_modules_nested[:]
-    thread_modules = t.tl_containing_modules_thread[:]
+    containing_modules = t.tl_containing_modules_origin_nested[:]
+    thread_modules = t.tl_module_entry_exit_thread[:]
     for thread_module in thread_modules:
         if thread_module[0] == '+':
             containing_modules.append(thread_module[1:])
-        elif thread_module[0] == '-':
-            if thread_module[1:] in containing_modules:
-                containing_modules.remove(thread_module[1:])
+        elif (thread_module[0] == '-') and (thread_module[1:] in containing_modules):
+            containing_modules.remove(thread_module[1:])
     return containing_modules
 
 
-def get_parent_tensor_function_call_location(parent_tensors: List[torch.Tensor],
-                                             args: Tuple[Any],
-                                             kwargs: Dict[Any, Any]) -> Dict:
-    """Utility function that takes in the parent tensors, the args, and kwargs, and returns a list of tuples
-    specifying where in the args or kwargs the parent tensors enter in.
+def get_input_module_info(arg_tensors):
+    """Utility function to extract information about module entry/exit from input tensors.
 
     Args:
-        parent_tensors: List of parent tensors.
-        args: Tuple of function args
-        kwargs: Dict of function kwargs
+        arg_tensors: List of input tensors
 
     Returns:
-        Dict that itself contains two dicts, one specifing which args are associated with parent tensors,
-        and another specifing which kwargs are associated with parent tensors.
+        Variables with module entry/exit information
     """
-    tensor_arg_positions = {}
-    tensor_kwarg_positions = {}
-
-    for parent_tensor in parent_tensors:
-        if not hasattr(parent_tensor, 'tl_barcode'):
+    max_input_module_nesting = 0
+    most_nested_containing_modules = []
+    for t in arg_tensors:
+        if not hasattr(t, 'tl_containing_modules_origin_nested'):
             continue
-        for arg_position, arg in enumerate(args):
-            if arg is parent_tensor:
-                tensor_arg_positions[arg_position] = parent_tensor.tl_barcode
-            elif type(arg) in [list, tuple]:
-                for sub_arg_position, sub_arg in enumerate(arg):
-                    if sub_arg is parent_tensor:
-                        tensor_arg_positions[(arg_position, sub_arg_position)] = parent_tensor.tl_barcode
-            elif type(arg) == dict:
-                for key, value in arg.items():
-                    if value is parent_tensor:
-                        tensor_arg_positions[(arg_position, key)] = parent_tensor.tl_barcode
-        for kwarg_key, kwarg_value in kwargs.items():
-            if kwarg_value is parent_tensor:
-                tensor_kwarg_positions[kwarg_key] = parent_tensor.tl_barcode
-            elif type(kwarg_value) in [list, tuple]:
-                for sub_arg_position, sub_arg in enumerate(kwarg_value):
-                    if sub_arg is parent_tensor:
-                        tensor_arg_positions[(kwarg_key, sub_arg_position)] = parent_tensor.tl_barcode
-            elif type(kwarg_value) == dict:
-                for key, value in kwarg_value.items():
-                    if value is parent_tensor:
-                        tensor_arg_positions[(kwarg_key, key)] = parent_tensor.tl_barcode
-    tensor_all_arg_positions = {'args': tensor_arg_positions, 'kwargs': tensor_kwarg_positions}
-    return tensor_all_arg_positions
+        containing_modules = update_tensor_containing_modules(t)
+        if len(containing_modules) > max_input_module_nesting:
+            max_input_module_nesting = len(containing_modules)
+            most_nested_containing_modules = containing_modules[:]
+    return most_nested_containing_modules
 
 
-def make_output_iterable(x):
-    """Utility function to facilitate dealing with outputs:
-    - If not a list, tuple, or dict, make it a list of length 1
-    - If a dict, make it a list of the values
-    - If a list or tuple, keep it.
+def get_ancestors_from_parents(arg_tensors: List[torch.Tensor]) -> Tuple[set[str], set[str]]:
+    """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
     Args:
-        x: Output of the function
+        arg_tensors: list of parent tensors
 
     Returns:
-        Iterable output
+        List of input ancestors and internally initialized ancestors.
     """
-    if type(x) in [tuple, list, set]:
-        return x
-    if issubclass(type(x), dict):
-        return list(x.values())
-    else:
-        return [x]
+    input_ancestors = set()
+    internally_initialized_ancestors = set()
+    for arg_tensor in arg_tensors:
+        if hasattr(arg_tensor, 'tl_input_ancestors'):
+            input_ancestors.update(arg_tensor.tl_input_ancestors)
+        if hasattr(arg_tensor, 'tl_internally_initialized_ancestors'):
+            internally_initialized_ancestors.update(arg_tensor.tl_internally_initialized_ancestors)
+    return input_ancestors, internally_initialized_ancestors
+
+
+def process_parent_param_passes(arg_parameters: List[torch.nn.Parameter]) -> Dict[str, int]:
+    """Utility function to mark the parameters with barcodes, and log which pass they're on.
+
+    Args:
+        arg_parameters: List of arg parameters
+
+    Returns:
+
+    """
+    parent_param_passes = {}
+    for param in arg_parameters:
+        if not hasattr(param, 'tl_param_barcode'):
+            param_barcode = make_barcode()
+            param.tl_param_barcode = param_barcode
+            param.tl_pass_num = 1
+        else:
+            param_barcode = param.tl_param_barcode
+            param.tl_pass_num += 1
+        parent_param_passes[param_barcode] = param.tl_pass_num
+    return parent_param_passes
 
 
 def torch_func_decorator(func: Callable,
                          model_history: ModelHistory):
     @wraps(func)
     def wrapped_func(*args, **kwargs):
-        tensor_log = model_history['tensor_log']
-        model_history['current_function_call_barcode'] = 0
-        func_name = func.__name__
-        if (func_name in funcs_not_to_log) or not model_history['track_tensors']:
-            out = func(*args, **kwargs)
-            return out
 
-        if (func_name in print_funcs) and (type(args[0]) in [torch.Tensor, torch.nn.parameter.Parameter]):
-            out = print_override(args[0], func_name)
+        # Initial bookkeeping; check if it's a special function, organize the arguments
+        model_history.current_function_call_barcode = 0
+        func_name = func.__name__
+        if (func_name in funcs_not_to_log) or not model_history.track_tensors:
+            out = func(*args, **kwargs)
             return out
         all_args = list(args) + list(kwargs.values())
         non_tensor_args = [arg for arg in args if not issubclass(type(arg), torch.Tensor)]
         non_tensor_kwargs = {key: val for key, val in kwargs.items() if not issubclass(type(val), torch.Tensor)}
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.parameter.Parameter])
-        parent_tensor_barcodes = get_marks_from_tensor_list(arg_tensors, 'tl_barcode')
-        if len(parent_tensor_barcodes) > 0:
-            has_parents = True
-        else:
-            has_parents = False
+        arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
+        if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
+            out = print_override(args[0], func_name)
+            return out
 
-        # Figure out where the parent tensors are used in the function call args and kwargs.
-        parent_tensor_arg_locations = get_parent_tensor_function_call_location(arg_tensors, args, kwargs)
+        parent_tensor_labels = get_marks_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
+        parent_tensor_arg_locs = get_parent_tensor_function_call_location(arg_tensors, args, kwargs)
+
+        # Handle modules:
+        containing_modules_origin_nested = get_input_module_info(arg_tensors)
+
+        # Handle parameters:
 
         arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
-        any_inputs_entered_module = tensor_in_obj_has_mark(arg_tensors, 'tl_entered_module', True)
-        if any_inputs_entered_module:  # TODO make this a function
-            # Use the tensor with the most nested containing module (in case of internally generated ones).
-            max_input_module_nesting = 0
-            most_nested_arg_tensor_index = None
-            most_nested_containing_modules = []
-            for i, t in enumerate(arg_tensors):
-                if not hasattr(t, 'tl_containing_modules_nested'):
-                    continue
-                containing_modules = update_tensor_containing_modules(t)
-                if len(containing_modules) > max_input_module_nesting:
-                    max_input_module_nesting = len(containing_modules)
-                    most_nested_arg_tensor_index = i
-                    most_nested_containing_modules = containing_modules[:]
-            reference_arg_tensor = arg_tensors[most_nested_arg_tensor_index]
-            containing_module = reference_arg_tensor.tl_containing_module
-            last_module_seen = reference_arg_tensor.tl_last_module_seen
-            last_module_seen_address = reference_arg_tensor.tl_last_module_seen_address
-            last_module_seen_entry_barcode = reference_arg_tensor.tl_last_module_seen_entry_barcode
-            containing_modules = most_nested_containing_modules
+        parent_param_passes = process_parent_param_passes(arg_parameters)
 
-        else:
-            containing_modules = []
-            containing_module = None
-            last_module_seen = None
-            last_module_seen_address = None
-            last_module_seen_entry_barcode = None
+        # Handle ancestry:
 
-        # Mark any parameters.
+        input_ancestors, internally_initialized_ancestors = get_ancestors_from_parents(arg_tensors)
+        orig_ancestors = input_ancestors.union(internally_initialized_ancestors)
+        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors,
+                                                               'tl_has_internally_initialialized_ancestor',
+                                                               True)
+        parent_internal_tensor_labels = get_marks_from_tensor_list(parent_internal_tensors, 'tl_tensor_label_raw')
 
-        parent_param_passes = {}
-        total_params_size = 0
-        for param in arg_parameters:
-            if not hasattr(param, 'tl_param_barcode'):
-                param_barcode = make_barcode()
-                param.tl_param_barcode = param_barcode
-                param.tl_pass_num = 1
-            else:
-                param_barcode = param.tl_param_barcode
-                param.tl_pass_num += 1
-            parent_param_passes[param_barcode] = param.tl_pass_num
-            total_params_size += get_tensor_memory_amount(param.data)
-        param_group_barcode = '_'.join(param.tl_param_barcode for param in arg_parameters)
-
-        came_from_input = tensor_in_obj_has_mark(arg_tensors, 'tl_has_input_ancestor', True)
-        if came_from_input:
-            has_input_ancestor = True
-        else:
-            has_input_ancestor = False
-
-        parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors, 'tl_has_internal_ancestor', True)
-        parent_internal_tensor_barcodes = get_marks_from_tensor_list(parent_internal_tensors, 'tl_barcode')
-
-        internal_ancestors = set([])
-        for internal_parent in parent_internal_tensors:
-            internal_ancestors = internal_ancestors.union(internal_parent.tl_internal_ancestors)
-        if len(internal_ancestors) > 0:
-            has_internal_ancestor = True
-        else:
-            has_internal_ancestor = False
-
+        # Copy the arguments.
         arg_copies = [safe_copy(arg) for arg in args]
         kwarg_copies = {key: safe_copy(value) for key, value in kwargs.items()}
+
+        # Call the function.
         func_call_barcode = make_barcode()
-        model_history['current_function_call_barcode'] = func_call_barcode
+        model_history.current_function_call_barcode = func_call_barcode
         start_time = time.time()
-        rng_states = get_rng_states()
+        func_rng_states = get_rng_states()
         out_orig = func(*args, **kwargs)
-        time_elapsed = time.time() - start_time
-        if model_history['current_function_call_barcode'] == func_call_barcode:
+        func_time_elapsed = time.time() - start_time
+
+        if model_history.current_function_call_barcode == func_call_barcode:
             is_bottom_level_func = True
         else:
             is_bottom_level_func = False
 
-        # TODO: Come up with more general logic for dealing with in-place functions:
         if func_name in ['__setitem__', 'zero_', '__delitem__']:
             out_orig = args[0]
 
-        # Check if single boolean tensor:
-
-        if (type(out_orig) == torch.Tensor) and (out_orig.dtype == torch.bool) and (out_orig.dim()) == 0:
-            output_is_single_bool = True
-            output_bool_val = out_orig.item()
-        else:
-            output_is_single_bool = False
-            output_bool_val = None
-
-        out_iter = make_output_iterable(out_orig)  # so we can iterate through it
-
-        # Initial processing
-
-        # Get func info
-
-        # Get argument info
-
-        # Get output info
-
-        # Get module info
+        out_iter = make_var_iterabl(out_orig)  # so we can iterate through it
+        is_part_of_iterable_output = is_iterable(out_orig)
 
         for i, out in enumerate(out_iter):
-            if type(out) == torch.Tensor and (not hasattr(out, 'tl_barcode') or
-                                              out.grad_fn not in out.tl_gradfuncs or
-                                              is_bottom_level_func):
-                model_history.log_function_output_tensor(out, func, func_name, func_changes_input, func_time_elapsed,
-                                                         func_rng_states, args, kwargs,
-                                                         parent_tensor_barcodes, parent_tensor_arg_locs,
-                                                         nontensor_args, nontensor_kwargs, parent_params,
-                                                         parent_param_passes, input_ancestors,
-                                                         internally_initialized_parents,
-                                                         internally_initialized_ancestors, orig_ancestors,
-                                                         is_part_of_iterable_output, iterable_output_index,
-                                                         containing_modules_origin_nested,
-                                                         containing_modules_final_nested,
-                                                         module_passes_entered, module_passes_exited,
-                                                         module_entry_exit_thread)
-                model_history.log_function_output_tensor_func_info()
-                model_history.log_function_output_tensor_param_info()
-                model_history.log_function_output_tensor_graph_info()
-                model_history.log_function_output_tensor_module_info()
-                model_history.make_tensor_log_entry(out, t_args=[], t_kwargs={})
+            if out.gradfn == out.tl_gradfunc:
+                func_changes_input = False
+            else:
+                func_changes_input = True
+            if type(out) == torch.Tensor and any([not hasattr(out, 'tl_barcode'),
+                                                  func_changes_input, is_bottom_level_func]):
 
+                model_history.log_function_output_tensor_func_info(out, args, kwargs, func, func_name,
+                                                                   func_changes_input, func_time_elapsed, func_rng_states,
+                                                                   non_tensor_args, non_tensor_kwargs,
+                                                                   is_part_of_iterable_output, i)
+                model_history.log_function_output_tensor_param_info(out, arg_parameters, parent_param_passes)
+                model_history.log_function_output_tensor_graph_info(out, parent_tensor_labels, parent_tensor_arg_locs,
+                                                                    input_ancestors, parent_internal_tensor_labels,
+                                                                    internally_initialized_ancestors, orig_ancestors)
+                model_history.log_function_output_tensor_module_info(out, containing_modules_origin_nested)
+                model_history.make_tensor_log_entry(out, t_args=arg_copies, t_kwargs=kwarg_copies)
         return out_orig
 
     return wrapped_func

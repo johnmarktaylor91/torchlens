@@ -12,6 +12,9 @@ from IPython import get_ipython
 from torch import nn
 
 
+def identity(x):
+    return x
+
 def set_random_seed(seed: int):
     """Sets the random seed for all random number generators.
 
@@ -78,6 +81,25 @@ def make_barcode() -> str:
     return barcode
 
 
+def make_var_iterabl(x):
+    """Utility function to facilitate dealing with outputs:
+    - If not a list, tuple, or dict, make it a list of length 1
+    - If a dict, make it a list of the values
+    - If a list or tuple, keep it.
+
+    Args:
+        x: Output of the function
+
+    Returns:
+        Iterable output
+    """
+    if type(x) in [tuple, list, set]:
+        return x
+    if issubclass(type(x), dict):
+        return list(x.values())
+    else:
+        return [x]
+
 def is_iterable(obj: Any) -> bool:
     """ Checks if an object is iterable.
 
@@ -124,7 +146,7 @@ def in_notebook():
 def get_vars_of_type_from_obj(obj: Any,
                               which_type: Type,
                               subclass_exceptions: Optional[List] = None,
-                              search_depth: int = 5) -> List[torch.Tensor]:
+                              search_depth: int = 5) -> List:
     """Recursively finds all objects of a given type, or a subclass of that type,
     up to the given search depth.
 
