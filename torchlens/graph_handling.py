@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from torchlens.helper_funcs import human_readable_size, make_barcode
-from torchlens.decorator import safe_copy
+from torchlens.torch_decorate import safe_copy
 
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):
@@ -1272,7 +1272,7 @@ def cluster_modules(history_dict: Dict):
     return history_dict
 
 
-def unmutate_tensor(t):
+def undecorate_tensor(t):
     """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
 
     Args:
@@ -1287,6 +1287,9 @@ def unmutate_tensor(t):
         new_t = torch.nn.Parameter(safe_copy(t))
     else:
         new_t = t
+    for attr in dir(new_t):
+        if attr.startswith('tl_'):
+            delattr(new_t, attr)
     return new_t
 
 
@@ -1302,19 +1305,19 @@ def unmutate_tensors_and_funcs_in_history(history_dict: Dict):
     tensor_log = history_dict['tensor_log']
     mutant_to_orig_funcs_dict = history_dict['mutant_to_orig_funcs_dict']
     for node in tensor_log.values():
-        node['tensor_contents'] = unmutate_tensor(node['tensor_contents'])
+        node['tensor_contents'] = undecorate_tensor(node['tensor_contents'])
         for p, parent_param in enumerate(node['parent_params']):
-            node['parent_params'][p] = unmutate_tensor(parent_param)
+            node['parent_params'][p] = undecorate_tensor(parent_param)
 
         for a in range(len(node['creation_args'])):
             arg = node['creation_args'][a]
             if issubclass(type(arg), (torch.Tensor, torch.nn.Parameter)):
-                new_arg = unmutate_tensor(arg)
+                new_arg = undecorate_tensor(arg)
                 node['creation_args'] = node['creation_args'][:a] + tuple([new_arg]) + node['creation_args'][a + 1:]
 
         for key, val in node['creation_kwargs'].items():
             if issubclass(type(val), (torch.Tensor, torch.nn.Parameter)):
-                node['creation_kwargs'][key] = unmutate_tensor(val)
+                node['creation_kwargs'][key] = undecorate_tensor(val)
 
         for f, func in enumerate(node['funcs_applied']):
             if func in mutant_to_orig_funcs_dict:

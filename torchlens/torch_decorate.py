@@ -278,10 +278,10 @@ def nested_getattr(obj: Any, attr: str) -> Any:
     return out
 
 
-def mutate_pytorch(torch_module: types.ModuleType,
-                   tensors_to_mutate: List[torch.Tensor],  # TODO check if this is necessary or not.
-                   orig_func_defs: List[Tuple],
-                   history_log: Dict) -> Tuple[List[Tuple], Dict]:
+def decorate_pytorch(torch_module: types.ModuleType,
+                     tensors_to_mutate: List[torch.Tensor],  # TODO check if this is necessary or not.
+                     orig_func_defs: List[Tuple],
+                     model_history: ModelHistory) -> Tuple[List[Tuple], Dict]:
     """Mutates all PyTorch functions (TEMPORARILY!) so as to save the outputs of any functions
     that return Tensors, along with marking them with metadata. Returns a list of tuples that
     save the current state of the functions, such that they can be restored when done.
@@ -326,7 +326,7 @@ def mutate_pytorch(torch_module: types.ModuleType,
         orig_func = getattr(local_func_namespace, func_name)
         if hasattr(orig_func, '__name__') and orig_func.__name__ == 'wrapped_func':
             continue
-        new_func = torch_func_decorator(orig_func, history_log)
+        new_func = torch_func_decorator(orig_func, model_history)
         new_func.tl_is_mutant_function = True
         mutant_to_orig_funcs_dict[new_func] = orig_func
         try:
@@ -339,15 +339,15 @@ def mutate_pytorch(torch_module: types.ModuleType,
                 try:
                     local_tensor_namespace = nested_getattr(t, namespace_name_notensor)
                     orig_tensor_func = getattr(local_tensor_namespace, func_name)
-                    new_tensor_func = torch_func_decorator(orig_tensor_func, history_log)
+                    new_tensor_func = torch_func_decorator(orig_tensor_func, model_history)
                     setattr(local_tensor_namespace, func_name, new_tensor_func)
                 except (AttributeError, TypeError, RuntimeError) as _:
                     pass
     return orig_func_defs, mutant_to_orig_funcs_dict
 
 
-def unmutate_pytorch(torch_module,
-                     orig_func_defs: List[Tuple]):
+def undecorate_pytorch(torch_module,
+                       orig_func_defs: List[Tuple]):
     """
     Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
     This is done for the output tensors and history_dict too to avoid ugliness.
@@ -543,7 +543,6 @@ def torch_func_decorator(func: Callable,
         # Handle ancestry:
 
         input_ancestors, internally_initialized_ancestors = get_ancestors_from_parents(arg_tensors)
-        orig_ancestors = input_ancestors.union(internally_initialized_ancestors)
         parent_internal_tensors = get_tensors_in_obj_with_mark(arg_tensors,
                                                                'tl_has_internally_initialialized_ancestor',
                                                                True)
@@ -587,7 +586,7 @@ def torch_func_decorator(func: Callable,
                 model_history.log_function_output_tensor_param_info(out, arg_parameters, parent_param_passes)
                 model_history.log_function_output_tensor_graph_info(out, parent_tensor_labels, parent_tensor_arg_locs,
                                                                     input_ancestors, parent_internal_tensor_labels,
-                                                                    internally_initialized_ancestors, orig_ancestors)
+                                                                    internally_initialized_ancestors)
                 model_history.log_function_output_tensor_module_info(out, containing_modules_origin_nested)
                 model_history.make_tensor_log_entry(out, t_args=arg_copies, t_kwargs=kwarg_copies)
         return out_orig

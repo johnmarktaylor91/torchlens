@@ -5,9 +5,9 @@ import itertools as it
 import numpy as np
 import pandas as pd
 import torch
-from typing import Callable, Dict, List, Optional, Union, Tuple, Set
+from typing import Any, Callable, Dict, List, Optional, Union, Tuple, Set
 
-from torchlens.decorator import safe_copy
+from torchlens.torch_decorate import safe_copy
 
 from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, get_rng_states, \
     get_tensor_memory_amount, get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
@@ -395,14 +395,22 @@ class ModelHistory:
                                               parent_tensor_arg_locs: Dict,
                                               input_ancestors: Set[str],
                                               internally_initialized_parents: List[str],
-                                              internally_initialized_ancestors: Set[str],
-                                              orig_ancestors: Set[str]):
+                                              internally_initialized_ancestors: Set[str]):
         """Takes in a tensor that's a function output, marks it in-place with info about its
         connections in the computational graph, and logs it.
 
         Args:
             t: an input tensor.
+            parent_tensor_labels: a list of labels for the parent tensors.
+            parent_tensor_arg_locs: a dict mapping parent tensor labels to their argument position
+                in the function call.
+            input_ancestors: a set of labels for the input ancestors of the tensor
+            internally_initialized_parents: a list of labels for the parent tensors that were
+                internally initialized.
+            internally_initialized_ancestors: a set of labels for the ancestors of the tensor that
+                were internally initialized.
         """
+        orig_ancestors = input_ancestors.union(internally_initialized_ancestors)
         if len(parent_tensor_labels) > 0:
             has_parents = True
             initialized_inside_model = False
