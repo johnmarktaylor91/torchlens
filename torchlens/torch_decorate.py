@@ -3,30 +3,21 @@
 
 import __future__
 import collections
-import copy
 import functools
-import inspect
 import time
 import types
 import warnings
-from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple, Union
 
-import numpy as np
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
-
+from helper_funcs import print_override, safe_copy
 from torchlens.model_history import ModelHistory
-from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, get_rng_states, \
-    get_tensor_memory_amount, get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
-    mark_tensors_in_obj, tensor_in_obj_has_mark, identity, is_iterable, make_var_iterabl
-
-clean_from_numpy = copy.deepcopy(torch.from_numpy)
-clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
-clean_clone = copy.deepcopy(torch.clone)
-clean_new_tensor = copy.deepcopy(torch.tensor)
+from torchlens.helper_funcs import get_marks_from_tensor_list, get_rng_states, \
+    get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
+    identity, is_iterable, make_var_iterable
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 
@@ -202,49 +193,7 @@ def my_get_overridable_functions() -> List:
 
 
 overridable_funcs = my_get_overridable_functions()
-orig_torch_funcs = overridable_funcs + ignored_funcs + [('', identity)]
-
-
-def print_override(t: torch.Tensor, func_name: str):
-    """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
-
-    Args:
-        t: Tensor
-        func_name: Either "__str__" or "__repr__"
-
-    Returns:
-        The string representation of the tensor.
-    """
-    n = np.array(t.data.cpu())
-    np_str = getattr(n, func_name)()
-    np_str = np_str.replace('array', 'tensor')
-    np_str = np_str.replace('\n', '\n ')
-    if t.grad_fn is not None:
-        grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
-        np_str = np_str[0:-1] + grad_fn_str
-    elif t.requires_grad:
-        np_str = np_str[0:-1] + ", requires_grad=True)"
-    return np_str
-
-
-def safe_copy(x):
-    """Utility function to make a copy of a tensor or parameter when torch is in mutated mode, or just copy
-    the thing if it's not a tensor.
-
-    Args:
-        x: Input
-
-    Returns:
-        Safely copied variant of the input with same values and same class, but different memory
-    """
-    if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
-        vals = clean_clone(x)
-        if type(x) == torch.Tensor:
-            return vals
-        elif type(x) == torch.nn.Parameter:
-            return torch.nn.Parameter(vals)
-    else:
-        return copy.copy(x)
+orig_torch_funcs = overridable_funcs + ignored_funcs + [('', 'identity')]
 
 
 def nested_getattr(obj: Any, attr: str) -> Any:
@@ -568,19 +517,21 @@ def torch_func_decorator(func: Callable,
         if func_name in ['__setitem__', 'zero_', '__delitem__']:
             out_orig = args[0]
 
-        out_iter = make_var_iterabl(out_orig)  # so we can iterate through it
+        out_iter = make_var_iterable(out_orig)  # so we can iterate through it
         is_part_of_iterable_output = is_iterable(out_orig)
 
         for i, out in enumerate(out_iter):
-            if out.gradfn == out.tl_gradfunc:
+            if type(out) != torch.Tensor:
+                continue
+            if out.grad_fn == out.tl_gradfunc:
                 func_changes_input = False
             else:
                 func_changes_input = True
-            if type(out) == torch.Tensor and any([not hasattr(out, 'tl_barcode'),
-                                                  func_changes_input, is_bottom_level_func]):
-
+            if any([not hasattr(out, 'tl_barcode'),
+                    func_changes_input, is_bottom_level_func]):
                 model_history.log_function_output_tensor_func_info(out, args, kwargs, func, func_name,
-                                                                   func_changes_input, func_time_elapsed, func_rng_states,
+                                                                   func_changes_input, func_time_elapsed,
+                                                                   func_rng_states,
                                                                    non_tensor_args, non_tensor_kwargs,
                                                                    is_part_of_iterable_output, i)
                 model_history.log_function_output_tensor_param_info(out, arg_parameters, parent_param_passes)

@@ -1,19 +1,78 @@
+import copy
 import multiprocessing as mp
 import random
 import secrets
 import string
-from collections import OrderedDict
 from sys import getsizeof
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Type
 
 import numpy as np
 import torch
 from IPython import get_ipython
 from torch import nn
 
+clean_from_numpy = copy.deepcopy(torch.from_numpy)
+clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
+clean_clone = copy.deepcopy(torch.clone)
+clean_new_tensor = copy.deepcopy(torch.tensor)
+
 
 def identity(x):
     return x
+
+
+def make_barcode() -> str:
+    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
+
+    Returns:
+        Random hash.
+    """
+    alphabet = string.ascii_letters + string.digits
+    barcode = ''.join(secrets.choice(alphabet) for _ in range(6))
+    return barcode
+
+
+def print_override(t: torch.Tensor, func_name: str):
+    """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
+
+    Args:
+        t: Tensor
+        func_name: Either "__str__" or "__repr__"
+
+    Returns:
+        The string representation of the tensor.
+    """
+    n = np.array(t.data.cpu())
+    np_str = getattr(n, func_name)()
+    np_str = np_str.replace('array', 'tensor')
+    np_str = np_str.replace('\n', '\n ')
+    if t.grad_fn is not None:
+        grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
+        np_str = np_str[0:-1] + grad_fn_str
+    elif t.requires_grad:
+        np_str = np_str[0:-1] + ", requires_grad=True)"
+    return np_str
+
+
+def safe_copy(x):
+    """Utility function to make a copy of a tensor or parameter when torch is in mutated mode, or just copy
+    the thing if it's not a tensor.
+
+    Args:
+        x: Input
+
+    Returns:
+        Safely copied variant of the input with same values and same class, but different memory
+    """
+    if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
+        vals = clean_clone(x)
+        if type(x) == torch.Tensor:
+            return vals
+        elif type(x) == torch.nn.Parameter:
+            return torch.nn.Parameter(vals)
+    else:
+        return copy.copy(x)
+
 
 def set_random_seed(seed: int):
     """Sets the random seed for all random number generators.
@@ -70,18 +129,23 @@ def warn_parallel():
                            "depend on execution order.")
 
 
-def make_barcode() -> str:
-    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
+def is_iterable(obj: Any) -> bool:
+    """ Checks if an object is iterable.
+
+    Args:
+        obj: Object to check.
 
     Returns:
-        Random hash.
+        True if object is iterable, False otherwise.
     """
-    alphabet = string.ascii_letters + string.digits
-    barcode = ''.join(secrets.choice(alphabet) for _ in range(6))
-    return barcode
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
 
 
-def make_var_iterabl(x):
+def make_var_iterable(x):
     """Utility function to facilitate dealing with outputs:
     - If not a list, tuple, or dict, make it a list of length 1
     - If a dict, make it a list of the values
@@ -99,21 +163,6 @@ def make_var_iterabl(x):
         return list(x.values())
     else:
         return [x]
-
-def is_iterable(obj: Any) -> bool:
-    """ Checks if an object is iterable.
-
-    Args:
-        obj: Object to check.
-
-    Returns:
-        True if object is iterable, False otherwise.
-    """
-    try:
-        iter(obj)
-        return True
-    except TypeError:
-        return False
 
 
 def tuple_assign(tuple_: tuple, ind: int, new_value: any):
@@ -143,16 +192,76 @@ def in_notebook():
     return True
 
 
+def extend_search_stack_from_item(item: Any,
+                                  next_stack: List):
+    """Utility function to iterate through a single item to populate the next stack to search for.
+
+    Args:
+        item: The item
+        next_stack: Stack to add to
+    """
+    if is_iterable(item):
+        for i in item:
+            next_stack.append(i)
+    for attr_name in dir(item):
+        if attr_name.startswith('__'):
+            continue
+        try:
+            attr = getattr(item, attr_name)
+        except AttributeError:
+            continue
+        attr_cls = type(attr)
+        if attr_cls in [str, int, float, bool, np.ndarray]:
+            continue
+        if callable(attr) and not issubclass(attr_cls, nn.Module):
+            continue
+        next_stack.append(attr)
+
+
+def search_stack_for_vars_of_type(current_stack: List,
+                                  which_type: Type,
+                                  tensors_in_obj: List,
+                                  tensor_ids_in_obj: List,
+                                  subclass_exceptions: List):
+    """Helper function that searches current stack for vars of a given type, and
+    returns the next stack to search.
+
+    Args:
+        current_stack: The current stack.
+        which_type: Type of variable to pull out
+        tensors_in_obj: List of tensors found in the object so far
+        tensor_ids_in_obj: List of tensor ids found in the object so far
+        subclass_exceptions: Subclasses of tensors not to use.
+
+    Returns:
+        The next stack.
+    """
+    next_stack = []
+    if len(current_stack) == 0:
+        return current_stack
+    while len(current_stack) > 0:
+        item = current_stack.pop()
+        item_class = type(item)
+        if (any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or
+                hasattr(item, 'shape')):
+            continue
+        if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
+            tensors_in_obj.append(item)
+            tensor_ids_in_obj.append(id(item))
+        extend_search_stack_from_item(item, next_stack)
+    return next_stack
+
+
 def get_vars_of_type_from_obj(obj: Any,
                               which_type: Type,
                               subclass_exceptions: Optional[List] = None,
                               search_depth: int = 5) -> List:
-    """Recursively finds all objects of a given type, or a subclass of that type,
+    """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
 
     Args:
         obj: Object to search.
-        which_type: type of object to pull out
+        which_type: Type of variable to pull out
         subclass_exceptions: subclasses that you don't want to pull out.
         search_depth: How many layers deep to search before giving up.
 
@@ -165,36 +274,11 @@ def get_vars_of_type_from_obj(obj: Any,
     tensors_in_obj = []
     tensor_ids_in_obj = []
     for _ in range(search_depth):
-        next_stack = []
-        if len(this_stack) == 0:
-            break
-        while len(this_stack) > 0:
-            item = this_stack.pop()
-            item_class = type(item)
-            if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
-                continue
-            if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
-                tensors_in_obj.append(item)
-                tensor_ids_in_obj.append(id(item))
-            if hasattr(item, 'shape'):
-                continue
-            if is_iterable(item):
-                for i in item:
-                    next_stack.append(i)
-            for attr_name in dir(item):
-                if attr_name.startswith('__'):
-                    continue
-                try:
-                    attr = getattr(item, attr_name)
-                except AttributeError:
-                    continue
-                attr_cls = type(attr)
-                if attr_cls in [str, int, float, bool, np.ndarray]:
-                    continue
-                if callable(attr) and not issubclass(attr_cls, nn.Module):
-                    continue
-                next_stack.append(attr)
-        this_stack = next_stack
+        this_stack = search_stack_for_vars_of_type(this_stack,
+                                                   which_type,
+                                                   tensors_in_obj,
+                                                   tensor_ids_in_obj,
+                                                   subclass_exceptions)
     return tensors_in_obj
 
 
@@ -226,24 +310,6 @@ def barcode_tensors_in_obj(x: Any):
     input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for tensor in input_tensors:
         setattr(tensor, 'tl_barcode', make_barcode())
-
-
-def tensor_in_obj_has_mark(x: Any, field_name: str, field_val: Any):
-    """Checks if any tensors in the input have a given mark.
-
-    Args:
-        x: Input to the model.
-        field_name: Name of the field to check in the tensor.
-        field_val: Value of the field to check in the tensor.
-
-    Returns:
-        True if any tensors in the input have the given mark, False otherwise.
-    """
-    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
-    for tensor in input_tensors:
-        if getattr(tensor, field_name, None) == field_val:
-            return True
-    return False
 
 
 def get_tensors_in_obj_with_mark(x: Any, field_name: str, field_val: Any) -> List[torch.Tensor]:
@@ -283,16 +349,6 @@ def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str)
     return marks
 
 
-def remove_list_duplicates(list_: List) -> List:
-    """Given a list, remove any duplicates preserving order of first apppearance of each element.
-    Args:
-        list_: List to remove duplicates from.
-    Returns:
-        List with duplicates removed.
-    """
-    return list(OrderedDict.fromkeys(list_))
-
-
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """Returns the size of a tensor in bytes.
 
@@ -324,24 +380,6 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     else:
         size = np.round(size, decimals=decimal_places)
     return f"{size} {unit}"
-
-
-def text_num_split(s: str) -> Tuple[str, int]:
-    """Utility function that takes in a string that begins with letters and ends in a number,
-    and splits it into the letter part and the number part, returning both in a tuple.
-
-    Args:
-        s: String
-
-    Returns:
-        Tuple containing the beginning string and ending number.
-    """
-    s = s.strip()
-    num = ''
-    while s[-1].isdigit():
-        num = s[-1] + num
-        s = s[:-1]
-    return s, int(num)
 
 
 def int_list_to_compact_str(int_list: List[int]) -> str:

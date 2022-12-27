@@ -1,19 +1,16 @@
 # This file is for defining the ModelHistory class that stores the representation of the forward pass.
 
-from collections import OrderedDict, defaultdict
 import itertools as it
+from collections import OrderedDict, defaultdict
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
+
 import numpy as np
 import pandas as pd
 import torch
-from typing import Any, Callable, Dict, List, Optional, Union, Tuple, Set
 
-from torchlens.torch_decorate import safe_copy
-
-from torchlens.helper_funcs import barcode_tensors_in_obj, get_marks_from_tensor_list, get_rng_states, \
-    get_tensor_memory_amount, get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
-    mark_tensors_in_obj, tensor_in_obj_has_mark, human_readable_size, identity
-
-
+from helper_funcs import print_override, safe_copy
+from torchlens.helper_funcs import get_rng_states, \
+    get_tensor_memory_amount, human_readable_size, identity
 
 
 class TensorLogEntry:
@@ -29,7 +26,7 @@ class TensorLogEntry:
                 continue
             field_stripped = field[3:]
             setattr(self, field_stripped, getattr(t, field))
-        self.pass_done = False
+        self.pass_finished = False
         self.linked_tensor = t  # TODO: make sure this is cleared in the postprocessing step.
         self.tensor_contents = None
         self.creation_args = []
@@ -45,7 +42,6 @@ class TensorLogEntry:
             t: the tensor.
             t_args: tensor positional arguments for the operation
             t_kwargs: tensor keyword arguments for the operation
-            t_params: list of param arguments for the operation; these are stored as references, not copies.
         """
         # The tensor itself:
         self.tensor_contents = safe_copy(t)
@@ -80,12 +76,44 @@ class TensorLogEntry:
             field_stripped = field[3:]
             setattr(self, field_stripped, getattr(t, field))
 
+    def _str_during_pass(self):
+        s = f"Tensor {self.tensor_label_raw} (layer {self.layer_label_raw}) (***PASS NOT FINISHED***):"
+        s += f"\n\tPass {self.pass_num}"
+        s += f"\n\tTensor info: shape {self.tensor_shape}, dtype {self.tensor_dtype}"
+        s += f"\n\tComputed from params: {self.computed_from_params}"
+        s += f"\n\tComputed in Modules: {self.containing_modules_origin_nested}"
+        s += f"\n\tOutput of Modules: {self.module_passes_exited}"
+        if self.is_bottom_level_submodule_output:
+            s += f"(bottom-level submodule output)"
+        else:
+            s += f"(not bottom-level submodule output)"
+        s += f"\n\tFamily info:"
+        s += f"\n\t\tParents: {','.join(self.parent_tensors)}"
+        s += f"\n\t\tChildren: {','.join(self.child_tensors)}"
+        s += f"\n\t\tSpouses: {','.join(self.spouse_tensors)}"
+        s += f"\n\t\tSiblings: {','.join(self.sibling_tensors)}"
+        s += f"\n\t\tOriginal Ancestors: {','.join(self.orig_ancestors)}"
+        s += f"\n\t\tInput Ancestors: {','.join(self.input_ancestors)}"
+        s += f"\n\t\tInternal Ancestors: {','.join(self.internally_initialized_ancestors)}"
+        if self.tensor_contents is not None:
+            s += f"\n\tTensor contents: \n{print_override(self.tensor_contents, '__str__')}"
+        return s
+
+    def __str__(self):
+        if self.pass_finished:
+            return self._str_after_pass()
+        else:
+            return self._str_during_pass()
+
+    def __repr__(self):
+        return self.__str__()
+
 
 class ModelHistory:
     def __init__(self,
                  model_name: str,
                  random_seed_used: int,
-                 tensor_nums_to_save: Union[List[int], str] = None):
+                 tensor_nums_to_save: Union[List[int], str] = 'all'):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
         representation of the full history for the user afterward.
@@ -166,6 +194,8 @@ class ModelHistory:
 
         Args:
             t: tensor to log
+            t_args: positional arguments to the function that created the tensor
+            t_kwargs: keyword arguments to the function that created the tensor
         """
         if t_args is None:
             t_args = []
@@ -461,6 +491,8 @@ class ModelHistory:
 
         Args:
             t: an input tensor.
+            parent_params: list of parameter objects used in the function call
+            parent_param_passes: Dict matching param barcodes to how many passes they've had
         """
         layer_type = t.tl_layer_type
         tensor_label = t.tl_tensor_label_raw
@@ -490,8 +522,7 @@ class ModelHistory:
         t.tl_parent_params_fsize_nice = human_readable_size(t.tl_parent_params_fsize)
 
     @staticmethod
-    def log_function_output_tensor_module_info(self,
-                                               t: torch.Tensor,
+    def log_function_output_tensor_module_info(t: torch.Tensor,
                                                containing_modules_origin_nested: List[str]):
         """Takes in a tensor that's a function output and marks it in-place with module information.
 
@@ -684,7 +715,40 @@ class ModelHistory:
         Returns:
             String summarizing the model.
         """
-        pass
+        s = f"Log of {self.model_name} forward pass:"
+        if self.model_is_branching:
+            branch_str = "with branching"
+        else:
+            branch_str = 'without branching'
+        if self.model_is_recurrent:
+            s += f"\n\tModel structure: recurrent (at most {self.model_max_recurrent_loops} loops), {branch_str}; " \
+                 f"{len(self.module_addresses)} total modules."
+        else:
+            s += f"\n\tModel structure: purely feedforward, {branch_str}; {len(self.module_addresses)} total modules."
+        s += f"\n\t{self.model_num_tensors_total} tensors ({self.model_tensor_fsize_total_nice}) " \
+             f"computed in forward pass; {self.model_num_tensors_saved} tensors " \
+             f"({self.model_tensor_fsize_saved_nice}) saved."
+        s += f"\n\t{self.model_total_param_tensors} parameter operations ({self.model_total_params} params total; " \
+             f"{self.model_total_params_fsize_nice})."
+        s += f"\n\tRandom seed: {self.random_seed_used}"
+        s += f"\n\tTime elapsed: {np.round(self.pass_elapsed_time, 3)}s"
+
+        # Print the module hierarchy.
+        s += f"\n\tModule Hierarchy:"
+        s += self._module_hierarchy_str()
+
+        # Now print all layers.
+        s += f"\n\tLayers:"
+        for layer_ind, layer_barcode in enumerate(self.layer_labels):
+            pass_num = self.tensor_log[layer_barcode].layer_pass_num
+            total_passes = self.tensor_log[layer_barcode].layer_passes_total
+            if total_passes > 1:
+                pass_str = f" ({pass_num}/{total_passes} passes)"
+            else:
+                pass_str = ''
+            s += f"\n\t\t{layer_ind}: {layer_barcode} {pass_str}"
+
+        return s
 
     def _str_during_pass(self) -> str:
         """Readable summary of the model history during the pass, as a debugging aid.
@@ -692,13 +756,21 @@ class ModelHistory:
         Returns:
             String summarizing the model.
         """
-        pass
+        s = f"Log of {self.model_name} forward pass:\n***PASS STILL ONGOING***"
+        s += f"\n\tRandom seed: {self.random_seed_used}"
+        s += f"\n\tRaw layer labels:"
+        for layer in self.raw_tensor_labels_list:
+            s += f"\n\t\t{layer}"
+        return s
 
     def __str__(self) -> str:
         if self.pass_finished:
             return self._str_after_pass()
         else:
             return self._str_during_pass()
+
+    def __repr__(self):
+        return self.__str__()
 
     @staticmethod
     def _pretty_print_list_w_line_breaks(lst, indent_chars: str, line_break_every=5) -> str:

@@ -51,11 +51,11 @@ def module_pre_hook(module: nn.Module,
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
         model_history = t.tl_source_model_history
-        module.tl_tensors_entered.append(t.tl_tensor_label_raw)
+        module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
         t.tl_modules_entered.append(module_address)
         t.tl_module_passes_entered.append(module_pass_label)
         t.tl_is_submodule_input = True
-        t.tl_containing_modules_thread.append(('+', module_pass_label[0], module_pass_label[1]))
+        t.tl_modules_entered_exited_thread.append(('+', module_pass_label[0], module_pass_label[1]))
         model_history.update_tensor_metadata(t)  # Update tensor log with this new information.
 
 
@@ -75,7 +75,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     submodule_address = submodule.tl_module_address
 
     # If it was initialized inside the model and nothing entered the module, it's bottom-level.
-    if t.tl_initialized_inside_model and len(submodule.tl_tensors_entered) == 0:
+    if t.tl_initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
         t.tl_is_bottom_level_submodule_output = True
         return True
 
@@ -108,7 +108,7 @@ def module_post_hook(module: nn.Module,
     """
     module_address = module.tl_module_address
     module_pass_num = module.tl_module_pass_num
-    module_entry_label = module.tl_module_entry_labels.pop()
+    module_entry_label = module.tl_module_pass_labels.pop()
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
@@ -122,13 +122,14 @@ def module_post_hook(module: nn.Module,
         t.tl_modules_exited.append(module_address)
         t.tl_module_passes_exited.append((module_address, module_pass_num))
         t.tl_module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
+        module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
         model_history.update_tensor_metadata(t)  # Update tensor log with this new information.
 
     for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
-        input_module_thread = t.tl_containing_modules_thread[:]
+        input_module_thread = t.tl_module_entry_exit_thread[:]
         if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
             module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-            t.tl_containing_modules_thread = t.tl_containing_modules_thread[:module_entry_ix]
+            t.tl_module_entry_exit_thread = t.tl_module_entry_exit_thread[:module_entry_ix]
 
     return output_
 
@@ -279,7 +280,7 @@ def cleanup_model(model: nn.Module, hook_handles: List):
 
 def run_model_and_save_specified_activations(model: nn.Module,
                                              x: Any,
-                                             tensor_nums_to_save: Optional[Union[str, List[int]]] = None,
+                                             tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
                                              random_seed: Optional[int] = None) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
