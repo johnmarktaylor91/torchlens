@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 
-from torchlens.helper_funcs import human_readable_size, make_barcode
-from helper_funcs import safe_copy
+from torch_decorate import undecorate_tensor
+from torchlens.helper_funcs import human_readable_size, make_random_barcode
 
 
 def annihilate_node(node_barcode: Dict, history_dict: Dict):
@@ -33,163 +33,6 @@ def annihilate_node(node_barcode: Dict, history_dict: Dict):
     for field_name, field in history_dict.items():
         if (type(field) in [list, tuple]) and node_barcode in field:
             field.remove(node_barcode)
-
-
-def insert_sorted_child_node(parent_node, child_node, tensor_log):
-    """Utility function to insert a child node into sorted order into a parent node's child list,
-    ordering based on the operation order.
-
-    Args:
-        parent_node: The parent node.
-        child_node: Child node to insert.
-        tensor_log: The tensor log.
-    """
-    orig_len = len(tensor_log)
-    child_barcode = child_node['barcode']
-    if 'child_tensor_barcodes' not in parent_node:
-        parent_node['child_tensor_barcodes'] = [child_barcode]
-        return
-    other_child_nodes = [tensor_log[other_child_barcode] for other_child_barcode in
-                         parent_node['child_tensor_barcodes']]
-    child_barcodes = parent_node['child_tensor_barcodes']
-    for c, other_child_node in enumerate(other_child_nodes):
-        if child_node['tensor_num'] < other_child_node['tensor_num']:
-            child_barcodes = child_barcodes[0:] + [child_barcode] + child_barcodes[c:]
-            parent_node['child_tensor_barcodes'] = child_barcodes[:]
-            return
-    parent_node['child_tensor_barcodes'] = parent_node['child_tensor_barcodes'] + [child_barcode]
-
-
-def annotate_node_children(history_dict: Dict) -> Dict:
-    """Annotates each node with the addresses of its child nodes, keeping them in sorted order of their
-    operation number to make sure they are rendered in the right execution order.
-
-    Args:
-        history_dict: dictionary with all the data
-
-    Returns:
-        Tensor log annotated with the child node addresses.
-    """
-    tensor_log = history_dict['tensor_log']
-
-    for barcode, node in tensor_log.items():
-        if len(node['parent_tensor_barcodes']) == 0:
-            continue
-        for parent_barcode in node['parent_tensor_barcodes']:
-            parent_node = tensor_log[parent_barcode]
-            insert_sorted_child_node(parent_node, node, tensor_log)
-    for barcode, node in tensor_log.items():
-        if 'child_tensor_barcodes' not in node:
-            node['child_tensor_barcodes'] = []
-    return history_dict
-
-
-def expand_multiple_functions(history_dict: Dict) -> Dict:
-    """For nodes that have had multiple functions applied to them (e.g., the identity function), expands
-    them to multiple nodes for fidelity to the graph. If the functions have the same name, then only use the one node.
-    #TODO: Refactor this nonsense.
-
-    Args:
-        history_dict: the history dict
-
-    Returns:
-        Tensor log with the multiple functions expanded where applicable.
-    """
-    tensor_log = history_dict['tensor_log']
-
-    node_stack = list(tensor_log.values())
-    new_tensor_log = OrderedDict()
-
-    # Go through each node and expand the nodes that have multiple, non-identically-named functions.
-
-    while len(node_stack) > 0:
-        node = node_stack.pop(0)
-        new_tensor_log[node['barcode']] = node
-        num_funcs = len(node['funcs_applied'])
-        if num_funcs < 2:
-            continue
-
-        # Go through the list of functions; if any has a new name, then make a new node for it, and add that one to the stack.
-
-        func_names_seen = []
-        for f, func_name, func in zip(range(num_funcs), node['funcs_applied_names'], node['funcs_applied']):
-            if f == 0:
-                func_names_seen.append(func_name)
-                continue
-            if func_name not in func_names_seen:
-                func_applied_module = node['funcs_applied_modules'][f]
-                func_applied_module_position = node['modules_exited'].index(func_applied_module)
-
-                # if it's a new function, make a new node for it and modify fields as needed,
-                # for the old node, for its original children, and for the new node inserted between the two.
-
-                # New node:
-                history_dict['tensor_counter'] += 1
-
-                new_node = node.copy()
-                new_node['barcode'] = make_barcode()
-                new_node['layer_barcode'] = new_node['barcode']
-                new_node['funcs_applied'] = node['funcs_applied'][f:]
-                new_node['funcs_applied_names'] = node['funcs_applied_names'][f:]
-                new_node['function_call_modules_nested_multfuncs'] = node['function_call_modules_nested_multfuncs'][f:]
-                new_node['function_call_modules_nested'] = node['function_call_modules_nested_multfuncs'][f]
-                new_node['modules_exited'] = node['modules_exited'][func_applied_module_position:]
-                new_node['module_passes_exited'] = node['module_passes_exited'][func_applied_module_position:]
-                new_node['child_tensor_barcodes'] = node['child_tensor_barcodes'][:]
-                new_node['parent_tensor_barcodes'] = [node['barcode']]
-                new_node['parent_tensor_arg_locs'] = {'args': {0: node['barcode']},
-                                                      'kwargs': {}}
-                new_node['args_all'] = [safe_copy(tensor_log[new_node['parent_tensor_barcodes'][0]]['tensor_contents'])]
-                new_node['creation_args'] = [
-                    safe_copy(tensor_log[new_node['parent_tensor_barcodes'][0]]['tensor_contents'])]
-                new_node['creation_kwargs'] = {}
-                new_node['tensor_num'] = history_dict['tensor_counter']
-                new_node['has_params'] = False
-                new_node['parent_params'] = []
-                new_node['parent_params_shape'] = []
-                new_node['parent_param_passes'] = {}
-                new_node['params_memory_size'] = 0
-                if node['is_model_output']:
-                    new_node['is_model_output'] = True
-                    history_dict['output_tensors'].remove(node['barcode'])
-                    history_dict['output_tensors'].append(new_node['barcode'])
-
-                # Tweak parent barcodes of child nodes to point to the new node.
-
-                for child_barcode in new_node['child_tensor_barcodes']:
-                    child_node = tensor_log[child_barcode]
-                    for p, child_parent_barcode in enumerate(child_node['parent_tensor_barcodes']):
-                        if child_parent_barcode == node['barcode']:
-                            child_node['parent_tensor_barcodes'][p] = new_node['barcode']
-                    for arg_position, arg_barcode in child_node['parent_tensor_arg_locs']['args'].items():
-                        if arg_barcode == node['barcode']:
-                            child_node['parent_tensor_arg_locs']['args'][arg_position] = new_node['barcode']
-                    for kwarg_key, kwarg_barcode in child_node['parent_tensor_arg_locs']['kwargs'].items():
-                        if kwarg_barcode == node['barcode']:
-                            child_node['parent_tensor_arg_locs']['kwargs'][kwarg_key] = new_node['barcode']
-
-                # And finally fix the original node.
-
-                node['funcs_applied'] = node['funcs_applied'][:f]
-                node['funcs_applied_names'] = node['funcs_applied_names'][:f]
-                node['modules_exited'] = node['modules_exited'][:func_applied_module_position]
-                node['module_passes_exited'] = node['module_passes_exited'][:func_applied_module_position]
-                node['function_call_modules_nested'] = node['function_call_modules_nested_multfuncs'][f - 1]
-                node['function_call_modules_nested_multfuncs'] = node['function_call_modules_nested_multfuncs'][:f]
-                node['child_tensor_barcodes'] = [new_node['barcode']]
-                node['is_model_output'] = False
-
-                if ((len(node['modules_exited']) > 0)
-                        and history_dict['module_dict'][node['modules_exited'][-1]].tl_is_bottom_level_module):
-                    node['is_bottom_level_module_output'] = True
-                else:
-                    node['is_bottom_level_module_output'] = False
-
-                node_stack = [new_node] + node_stack
-                break
-
-    history_dict['tensor_log'] = new_tensor_log
-    return history_dict
 
 
 def get_all_connected_nodes(tensor_log: Dict,
@@ -279,53 +122,6 @@ def mark_output_ancestors(history_dict: Dict):
     return history_dict
 
 
-def add_output_nodes(history_dict: Dict):
-    """Adds explicit output nodes
-
-    Args:
-        history_dict: The history dict.
-
-    Returns:
-        Nothing, but new nodes are added for the output layers.
-    """
-    tensor_log = history_dict['tensor_log']
-
-    # For each current output layer, unmark it as an output, clone it, and add a child.
-
-    new_output_tensors = []
-
-    for b, output_node_barcode in enumerate(history_dict['output_tensors']):
-        history_dict['tensor_counter'] += 1
-        output_node = tensor_log[output_node_barcode]
-        new_output_node = output_node.copy()
-        new_output_node['barcode'] = make_barcode()
-        new_output_node['layer_barcode'] = make_barcode()
-        new_output_node['has_params'] = False
-        new_output_node['parent_params'] = new_output_node['parent_params_shape'] = []
-        new_output_node['parent_params_passes'] = {}
-        new_output_node['tensor_num'] = history_dict['tensor_counter']
-        new_output_node['is_bottom_level_module_output'] = False
-
-        # Change original output node:
-
-        output_node['is_model_output'] = False
-        output_node['child_tensor_barcodes'] = [new_output_node['barcode']]
-
-        # And now tweak the new output node.
-
-        new_output_node['parent_tensor_barcodes'] = [output_node['barcode']]
-        new_output_node['is_model_output'] = True
-        new_output_node['function_call_modules_nested'] = []
-        new_output_node['modules_exited'] = []
-
-        tensor_log[new_output_node['barcode']] = new_output_node
-        new_output_tensors.append(new_output_node['barcode'])
-
-    history_dict['output_tensors'] = new_output_tensors
-    history_dict['tensor_log'] = tensor_log
-    return history_dict
-
-
 def get_internal_ancestors_for_remaining_parents(converge_nodes: List[str],
                                                  internal_ancestors_added: set,
                                                  nodes_seen: set,
@@ -356,111 +152,6 @@ def get_internal_ancestors_for_remaining_parents(converge_nodes: List[str],
     return ancestors_to_add
 
 
-def get_next_node(node_stack: List,
-                  converge_nodes: List,
-                  tensor_log: Dict,
-                  ordered_tensor_log: Dict) -> Dict:
-    """Utility function for the topological sort function; gets the next node to look at. This will
-    either be the first convergent node with all its parents computed, or if not, the next node in the stack.
-
-    Args:
-        node_stack: Stack of non-converge nodes.
-        converge_nodes: Stack of converge nodes.
-        tensor_log: The tensor log.
-        ordered_tensor_log: The new tensor log (here used just to record which nodes have been computed).
-
-    Returns:
-        The next node to look at.
-    """
-    found_converge = False
-    for c, converge_node_barcode in enumerate(converge_nodes):
-        converge_node = tensor_log[converge_node_barcode]
-        if all([parent_node in ordered_tensor_log for parent_node in converge_node['parent_tensor_barcodes']]):
-            node = tensor_log[converge_nodes.pop(c)]
-            found_converge = True
-
-    if not found_converge:
-        if len(node_stack) == 0:
-            print("STOP HERE!")
-        node = tensor_log[node_stack.pop(0)]
-
-    return node
-
-
-def topological_sort_nodes(history_dict: Dict) -> Dict:
-    """Given the tensor log, applies a topological sort to the graph, annotating the nodes with their sorted position.
-    The additional constraint is applied that for parallel branches, ordering reflects how many computational
-    steps have been applied since the branching began (i.e., nodes that are more computational steps along
-    have a higher sorted value); the convergence point of the graph is not added until its children are.
-
-    Args:
-        history_dict: input history dict
-
-    Returns:
-        tensor_log where the nodes are annotated with their topologically sorted order.
-    """
-    tensor_log = history_dict['tensor_log']
-
-    node_stack = history_dict['input_tensors'][:]
-    nodes_seen = set()
-    internal_ancestors_added = set()
-    converge_nodes = []
-    node_count = 0
-    module_node_count = 0
-    bottom_module_node_count = 0
-    ordered_tensor_log = OrderedDict({})  # re-order the tensor log in topological order.
-    while len(node_stack) > 0 or len(converge_nodes) > 0:
-        # Check for any converge nodes in the stack and move them over if so.
-        for node_barcode in node_stack:
-            node = tensor_log[node_barcode]
-            if not all([parent_node in ordered_tensor_log for parent_node in node['parent_tensor_barcodes']]):
-                converge_nodes.append(node['barcode'])
-                node_stack.remove(node['barcode'])
-
-        # For any converge nodes, check if they have all parents computed except for internally generated ones;
-        # if so, add these to the stack.
-
-        ancestors_to_add = get_internal_ancestors_for_remaining_parents(converge_nodes, internal_ancestors_added,
-                                                                        nodes_seen, tensor_log)
-        node_stack.extend(ancestors_to_add)
-
-        # Get the next node: either the first converge node with all parents computed, or the first node in the stack.
-
-        node = get_next_node(node_stack, converge_nodes, tensor_log, ordered_tensor_log)
-
-        if node['barcode'] in ordered_tensor_log:
-            continue
-
-        node['operation_num_exhaustive'] = node_count
-        node_count += 1
-        ordered_tensor_log[node['barcode']] = node
-
-        if node['is_module_output']:  # if it's a module output, also annotate the order for that.
-            node['operation_num_module'] = module_node_count
-            module_node_count += 1
-        else:
-            node['operation_num_module'] = None
-
-        if node['is_bottom_level_module_output']:  # if it's a module output, also annotate the order for that.
-            bottom_module_node_count += 1
-            node['operation_num_bottom_module'] = bottom_module_node_count
-        else:
-            node['operation_num_bottom_module'] = None
-
-        nodes_seen.add(node['barcode'])
-        node_stack.extend(node['child_tensor_barcodes'])
-
-    # Get the final output node and tag it as the final node, this is used for plotting purposes.
-    for n, node in enumerate(ordered_tensor_log.values()):
-        if n == len(ordered_tensor_log) - 1:
-            node['is_last_output_layer'] = True
-        else:
-            node['is_last_output_layer'] = False
-
-    history_dict['tensor_log'] = ordered_tensor_log
-    return history_dict
-
-
 def annotate_total_layer_passes(history_dict: Dict) -> Dict:
     """Annotates tensors in the log with the total number of passes their layer goes through in the network.
 
@@ -486,40 +177,6 @@ def annotate_total_layer_passes(history_dict: Dict) -> Dict:
             tensor_log[tensor_barcode]['module_total_passes'] = module_num_passes
 
     return history_dict
-
-
-def find_loops(history_dict) -> List[List]:
-    """Utility function to find all loops in the graph; returns list of lists of all loops.
-    This should never actually happen, so it's for debugging purposes.
-
-    Args:
-        history_dict: Dict with the history.
-
-    Returns:
-        List of lists of all loops, listed as the tensor barcodes.
-    """
-
-    tensor_log = history_dict['tensor_log']
-    input_nodes = history_dict['input_tensors']
-
-    node_stack = [(input_node, [input_node]) for input_node in input_nodes]  # stack annotated with any top-level loops.
-    loops = []
-    num_passes = 0
-    while len(node_stack) > 0:
-        num_passes += 1
-        node_barcode, nodes_seen = node_stack.pop()
-        node = tensor_log[node_barcode]
-        node_children = node['child_tensor_barcodes']
-        for node_child_barcode in node_children:
-            if node_child_barcode in nodes_seen:
-                loop = nodes_seen + [node_child_barcode]
-                loops.append(loop)
-                continue
-            node_child = tensor_log[node_child_barcode]
-            new_nodes_seen = nodes_seen + [node_child]
-            node_stack.append((node_child_barcode, new_nodes_seen))
-    print(num_passes)
-    return loops
 
 
 def find_outermost_loops(history_dict: Dict) -> Dict:
@@ -857,59 +514,6 @@ def identify_repeated_functions_in_loop(repeated_node_occurrences: List[Dict],
         first_stack = False
 
 
-def mark_conditional_branches(history_dict: Dict) -> Dict:
-    """Finds branches that are involved in evaluating conditionals in the graph by first finding
-    operations whose outputs are booleans, and then tracing back parent layers until finding an ancestor
-    that's also an ancestor of the output; wherever this transition happens is the beginning of an "if" branch.
-
-    Args:
-        history_dict:
-    """
-    tensor_log = history_dict['tensor_log']
-    terminal_bool_nodes = []
-
-    # Get the terminal boolean nodes.
-    for node in tensor_log.values():
-        if node['output_is_bool'] and (len(node['child_tensor_barcodes']) == 0):
-            node['in_cond_branch'] = True
-            node['output_is_terminal_bool'] = True
-            terminal_bool_nodes.append(node['barcode'])
-        else:
-            node['in_cond_branch'] = False
-            node['output_is_terminal_bool'] = False
-        node['cond_branch_start_children'] = []  # for children that begin a conditional branch (to mark in visual)
-    history_dict['terminal_bool_nodes'] = terminal_bool_nodes
-
-    nodes_seen = set()
-    node_stack = terminal_bool_nodes.copy()
-    while len(node_stack) > 0:
-        node_barcode = node_stack.pop()
-        node = tensor_log[node_barcode]
-        if node_barcode in nodes_seen:
-            continue
-        for parent_barcode in node['parent_tensor_barcodes']:
-            parent_node = tensor_log[parent_barcode]
-            if parent_node['is_output_ancestor']:  # we found the beginning of a conditional branch
-                parent_node['cond_branch_start_children'].append(node_barcode)
-                parent_node['in_cond_branch'] = False
-                nodes_seen.add(parent_barcode)
-            else:
-                if parent_barcode in nodes_seen:
-                    continue
-                parent_node['in_cond_branch'] = True
-                node_stack.append(parent_barcode)
-        for child_barcode in node['child_tensor_barcodes']:  # add any children and their children to the cond branch
-            child_node = tensor_log[child_barcode]
-            if child_barcode in nodes_seen:
-                continue
-            child_node['in_cond_branch'] = True
-            node_stack.append(child_barcode)
-
-        nodes_seen.add(node_barcode)
-
-    return history_dict
-
-
 def identify_repeated_functions(history_dict: Dict) -> Dict:
     """Goes through the graph and identifies nodes that have params, and whose params are repeated.
     This requires that the same set of ALL params be involved in each computation to count as "the same".
@@ -1012,61 +616,6 @@ def annotate_node_names(history_dict: Dict) -> Dict:
     return history_dict
 
 
-def map_layer_names_to_op_nums(history_dict: Dict) -> Dict[str, List[int]]:
-    """Generates a dictionary that maps from all possible layer names a user might provide (whether based
-    on a function, a module, with or without specifying the pass, etc.), to the operation number
-    for that layer name (i.e., how many tensors had been created at that point during the pass).
-    This is to allow specific layers to be saved in subsequent passes.
-
-    Args:
-        history_dict: The history dict.
-
-    Returns:
-        history_dict with the layer-to-operation-numbers mapping.
-    #TODO: nix this, no longer needed.
-    """
-    tensor_log = history_dict['tensor_log']
-    module_output_tensors = history_dict['module_output_tensors']
-
-    label_to_op_num_dict = defaultdict(list)
-
-    for barcode, tensor in tensor_log.items():
-        label_to_op_num_dict[tensor['layer_label']].append(tensor['tensor_num'])
-        label_to_op_num_dict[tensor['layer_label_w_pass']].append(tensor['tensor_num'])
-
-    # And now fetch for all modules too.
-
-    for module, module_tensors in module_output_tensors.items():
-        label_to_op_num_dict[module] = [tensor_log[mt]['tensor_num'] for mt in module_tensors]
-        for t, tensor_barcode in enumerate(module_tensors):
-            module_pass_label = f"{module}:{t + 1}"
-            label_to_op_num_dict[module_pass_label] = tensor_log[tensor_barcode]['tensor_num']
-
-    history_dict['label_to_op_num_dict'] = label_to_op_num_dict
-    return history_dict
-
-
-def get_op_nums_from_layer_names(history_dict: Dict,
-                                 layer_names: List[str]) -> List[int]:
-    """Given a list of human-readable layer names and the history_dict, gets all the operation numbers
-    for those layer names.
-
-    Args:
-        history_dict: Dictionary with the tensor history.
-        layer_names: List of human-readable layer names.
-
-    Returns:
-        List of the operation numbers for all desired layers.
-    """
-    op_nums = []
-    for layer_name in layer_names:
-        if layer_name in history_dict['label_to_op_num_dict']:
-            op_nums.extend(history_dict['label_to_op_num_dict'])
-        else:
-            raise ValueError("One of the layers you specified doesn't exist; try double-checking the layer names.")
-    return op_nums
-
-
 def tally_sizes_and_params(history_dict: Dict):
     """Adds up the total size of all tensors in the network, and the total number of params.
 
@@ -1122,7 +671,7 @@ def find_equivalent_clusters(equiv_pairs: List[Tuple[Any, Any]]) -> Dict:
         elif item2 in value_to_cluster_dict:
             value_to_cluster_dict[item1] = value_to_cluster_dict[item2]
         else:
-            new_barcode = make_barcode()
+            new_barcode = make_random_barcode()
             value_to_cluster_dict[item1] = (module, new_barcode)
             value_to_cluster_dict[item2] = (module, new_barcode)
 
@@ -1171,7 +720,7 @@ def propagate_module_labels_for_two_nodes(parent_node: Dict,
                     neighbor_node['module_instance_rough_barcodes'][module] = \
                         parent_node['module_instance_rough_barcodes'][module]
                 else:
-                    new_barcode = (module, make_barcode())
+                    new_barcode = (module, make_random_barcode())
                     neighbor_node['module_instance_rough_barcodes'][module] = new_barcode
                     all_module_barcodes.append(new_barcode)
 
@@ -1272,27 +821,6 @@ def cluster_modules(history_dict: Dict):
     return history_dict
 
 
-def undecorate_tensor(t):
-    """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
-
-    Args:
-        t: tensor or parameter object
-
-    Returns:
-        Unmutated tensor.
-    """
-    if type(t) == torch.Tensor:
-        new_t = safe_copy(t)
-    elif type(t) == torch.nn.Parameter:
-        new_t = torch.nn.Parameter(safe_copy(t))
-    else:
-        new_t = t
-    for attr in dir(new_t):
-        if attr.startswith('tl_'):
-            delattr(new_t, attr)
-    return new_t
-
-
 def unmutate_tensors_and_funcs_in_history(history_dict: Dict):
     """Returns all tensors in the history dict to normal, unmutated versions.
 
@@ -1342,12 +870,9 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
 
     graph_transforms = [
         unmutate_tensors_and_funcs_in_history,  # return any tensors in history dict to their original definition
-        annotate_node_children,  # note the children of each node
         strip_irrelevant_nodes,  # remove island nodes unconnected to inputs or outputs
-        expand_multiple_functions,  # expand identity functions
         mark_output_ancestors,  # mark nodes as ancestors of the output
         add_output_nodes,  # add explicit output nodes
-        topological_sort_nodes,  # sort nodes topologically
         annotate_total_layer_passes,  # note the total passes of the param nodes
         identify_repeated_functions,  # find repeated functions between repeated param nodes
         mark_conditional_branches,  # mark branches that are involved in evaluating conditionals

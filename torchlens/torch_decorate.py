@@ -3,6 +3,7 @@
 
 import __future__
 import collections
+import copy
 import functools
 import time
 import types
@@ -13,17 +14,17 @@ from typing import Any, Callable, Dict, List, Tuple, Union
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
-from helper_funcs import print_override, safe_copy
+import helper_funcs as hf
+from helper_funcs import safe_copy
 from torchlens.model_history import ModelHistory
 from torchlens.helper_funcs import get_marks_from_tensor_list, get_rng_states, \
-    get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_barcode, \
+    get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_random_barcode, \
     identity, is_iterable, make_var_iterable
 
+print_funcs = ['__repr__', '__str__', '_str']
+funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to', '__array__']
+
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
-
-
-print_funcs = ['__repr__', '__str__']
-funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to']
 ignored_funcs = [
     ('torch', 'load'),
     ('torch', 'as_tensor'),
@@ -276,7 +277,7 @@ def decorate_pytorch(torch_module: types.ModuleType,
         if hasattr(orig_func, '__name__') and orig_func.__name__ == 'wrapped_func':
             continue
         new_func = torch_func_decorator(orig_func, model_history)
-        new_func.tl_is_mutant_function = True
+        new_func.tl_is_decorated_function = True
         mutant_to_orig_funcs_dict[new_func] = orig_func
         try:
             setattr(local_func_namespace, func_name, new_func)
@@ -292,6 +293,10 @@ def decorate_pytorch(torch_module: types.ModuleType,
                     setattr(local_tensor_namespace, func_name, new_tensor_func)
                 except (AttributeError, TypeError, RuntimeError) as _:
                     pass
+
+    # Bolt on the identity function
+    new_identity = torch_func_decorator(identity, model_history)
+    torch.identity = new_identity
     return orig_func_defs, mutant_to_orig_funcs_dict
 
 
@@ -313,6 +318,7 @@ def undecorate_pytorch(torch_module,
             setattr(local_func_namespace, func_name, orig_func)
         except (AttributeError, TypeError) as _:
             continue
+    delattr(torch, 'identity')
 
 
 def find_arg_positions_for_single_parent(parent_tensor: torch.Tensor,
@@ -448,7 +454,7 @@ def process_parent_param_passes(arg_parameters: List[torch.nn.Parameter]) -> Dic
     parent_param_passes = {}
     for param in arg_parameters:
         if not hasattr(param, 'tl_param_barcode'):
-            param_barcode = make_barcode()
+            param_barcode = make_random_barcode()
             param.tl_param_barcode = param_barcode
             param.tl_pass_num = 1
         else:
@@ -463,7 +469,8 @@ def torch_func_decorator(func: Callable,
     @wraps(func)
     def wrapped_func(*args, **kwargs):
 
-        # Initial bookkeeping; check if it's a special function, organize the arguments
+        # Initial bookkeeping; check if it's a special function, organize the arguments.
+
         model_history.current_function_call_barcode = 0
         func_name = func.__name__
         if (func_name in funcs_not_to_log) or not model_history.track_tensors:
@@ -475,13 +482,14 @@ def torch_func_decorator(func: Callable,
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.parameter.Parameter])
         arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
-            out = print_override(args[0], func_name)
+            out = hf.print_override(args[0], func_name)
             return out
 
         parent_tensor_labels = get_marks_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
         parent_tensor_arg_locs = get_parent_tensor_function_call_location(arg_tensors, args, kwargs)
 
         # Handle modules:
+
         containing_modules_origin_nested = get_input_module_info(arg_tensors)
 
         # Handle parameters:
@@ -498,11 +506,13 @@ def torch_func_decorator(func: Callable,
         parent_internal_tensor_labels = get_marks_from_tensor_list(parent_internal_tensors, 'tl_tensor_label_raw')
 
         # Copy the arguments.
-        arg_copies = [safe_copy(arg) for arg in args]
-        kwarg_copies = {key: safe_copy(value) for key, value in kwargs.items()}
+
+        arg_copies = [hf.safe_copy(arg) for arg in args]
+        kwarg_copies = {key: hf.safe_copy(value) for key, value in kwargs.items()}
 
         # Call the function.
-        func_call_barcode = make_barcode()
+
+        func_call_barcode = make_random_barcode()
         model_history.current_function_call_barcode = func_call_barcode
         start_time = time.time()
         func_rng_states = get_rng_states()
@@ -518,28 +528,52 @@ def torch_func_decorator(func: Callable,
             out_orig = args[0]
 
         out_iter = make_var_iterable(out_orig)  # so we can iterate through it
-        is_part_of_iterable_output = is_iterable(out_orig)
+        if type(out_orig) in [list, tuple, dict, set]:
+            is_part_of_iterable_output = True
+        else:
+            is_part_of_iterable_output = False
 
         for i, out in enumerate(out_iter):
-            if type(out) != torch.Tensor:
+            if not (type(out) == torch.Tensor and (not hasattr(out, 'tl_tensor_label_raw') or
+                                                   out.grad_fn != out.tl_gradfunc or
+                                                   is_bottom_level_func)):
                 continue
-            if out.grad_fn == out.tl_gradfunc:
+            if hasattr(out, 'tl_gradfunc') and (out.grad_fn == out.tl_gradfunc):
                 func_changes_input = False
             else:
                 func_changes_input = True
-            if any([not hasattr(out, 'tl_barcode'),
-                    func_changes_input, is_bottom_level_func]):
-                model_history.log_function_output_tensor_func_info(out, args, kwargs, func, func_name,
-                                                                   func_changes_input, func_time_elapsed,
-                                                                   func_rng_states,
-                                                                   non_tensor_args, non_tensor_kwargs,
-                                                                   is_part_of_iterable_output, i)
-                model_history.log_function_output_tensor_param_info(out, arg_parameters, parent_param_passes)
-                model_history.log_function_output_tensor_graph_info(out, parent_tensor_labels, parent_tensor_arg_locs,
-                                                                    input_ancestors, parent_internal_tensor_labels,
-                                                                    internally_initialized_ancestors)
-                model_history.log_function_output_tensor_module_info(out, containing_modules_origin_nested)
-                model_history.make_tensor_log_entry(out, t_args=arg_copies, t_kwargs=kwarg_copies)
+            model_history.log_function_output_tensor_func_info(out, args, kwargs, func, func_name,
+                                                               func_changes_input, func_time_elapsed,
+                                                               func_rng_states,
+                                                               non_tensor_args, non_tensor_kwargs,
+                                                               is_part_of_iterable_output, i)
+            model_history.log_function_output_tensor_param_info(out, arg_parameters, parent_param_passes)
+            model_history.log_function_output_tensor_graph_info(out, parent_tensor_labels, parent_tensor_arg_locs,
+                                                                input_ancestors, parent_internal_tensor_labels,
+                                                                internally_initialized_ancestors)
+            model_history.log_function_output_tensor_module_info(out, containing_modules_origin_nested)
+            model_history.make_tensor_log_entry(out, t_args=arg_copies, t_kwargs=kwarg_copies)
         return out_orig
 
     return wrapped_func
+
+
+def undecorate_tensor(t):
+    """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
+
+    Args:
+        t: tensor or parameter object
+
+    Returns:
+        Unmutated tensor.
+    """
+    if type(t) == torch.Tensor:
+        new_t = safe_copy(t)
+    elif type(t) == torch.nn.Parameter:
+        new_t = torch.nn.Parameter(safe_copy(t))
+    else:
+        new_t = t
+    for attr in dir(new_t):
+        if attr.startswith('tl_'):
+            delattr(new_t, attr)
+    return new_t

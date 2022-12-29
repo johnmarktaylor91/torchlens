@@ -1,3 +1,4 @@
+import base64
 import copy
 import multiprocessing as mp
 import random
@@ -15,21 +16,7 @@ clean_from_numpy = copy.deepcopy(torch.from_numpy)
 clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
 clean_clone = copy.deepcopy(torch.clone)
 clean_new_tensor = copy.deepcopy(torch.tensor)
-
-
-def identity(x):
-    return x
-
-
-def make_barcode() -> str:
-    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
-
-    Returns:
-        Random hash.
-    """
-    alphabet = string.ascii_letters + string.digits
-    barcode = ''.join(secrets.choice(alphabet) for _ in range(6))
-    return barcode
+clean_new_param = copy.deepcopy(torch.nn.Parameter)
 
 
 def print_override(t: torch.Tensor, func_name: str):
@@ -65,13 +52,52 @@ def safe_copy(x):
         Safely copied variant of the input with same values and same class, but different memory
     """
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
-        vals = clean_clone(x)
+        vals_np = np.array(x.data.cpu())
+        vals_tensor = clean_from_numpy(vals_np)
         if type(x) == torch.Tensor:
-            return vals
+            return vals_tensor
         elif type(x) == torch.nn.Parameter:
-            return torch.nn.Parameter(vals)
+            return clean_new_param(vals_tensor)
     else:
         return copy.copy(x)
+
+
+def identity(x):
+    return x
+
+
+def make_short_barcode_from_input(things_to_hash: List[Any],
+                                  barcode_len: int = 24) -> str:
+    """Utility function that takes a list of anything and returns a short hash of it.
+
+    Args:
+        things_to_hash: List of things to hash; they must all be convertible to a string.
+        barcode_len:
+
+    Returns:
+        Short hash of the input.
+    """
+    barcode = ''.join([str(x) for x in things_to_hash])
+    barcode = str(hash(barcode))
+    barcode = barcode.encode('utf-8')
+    barcode = base64.urlsafe_b64encode(barcode)
+    barcode = barcode.decode('utf-8')
+    barcode = barcode[0:barcode_len]
+    return barcode
+
+
+def make_random_barcode(barcode_len: int = 24) -> str:
+    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
+
+    Args:
+        barcode_len: Length of the desired barcode
+
+    Returns:
+        Random hash.
+    """
+    alphabet = string.ascii_letters + string.digits
+    barcode = ''.join(secrets.choice(alphabet) for _ in range(barcode_len))
+    return barcode
 
 
 def set_random_seed(seed: int):
@@ -242,12 +268,13 @@ def search_stack_for_vars_of_type(current_stack: List,
     while len(current_stack) > 0:
         item = current_stack.pop()
         item_class = type(item)
-        if (any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or
-                hasattr(item, 'shape')):
+        if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
             continue
         if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
             tensors_in_obj.append(item)
             tensor_ids_in_obj.append(id(item))
+        if hasattr(item, 'shape'):
+            continue
         extend_search_stack_from_item(item, next_stack)
     return next_stack
 
@@ -309,7 +336,7 @@ def barcode_tensors_in_obj(x: Any):
     """
     input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
     for tensor in input_tensors:
-        setattr(tensor, 'tl_barcode', make_barcode())
+        setattr(tensor, 'tl_barcode', make_random_barcode())
 
 
 def get_tensors_in_obj_with_mark(x: Any, field_name: str, field_val: Any) -> List[torch.Tensor]:

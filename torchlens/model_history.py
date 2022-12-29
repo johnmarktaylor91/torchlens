@@ -1,5 +1,6 @@
 # This file is for defining the ModelHistory class that stores the representation of the forward pass.
 
+import copy
 import itertools as it
 from collections import OrderedDict, defaultdict
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
@@ -8,9 +9,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from helper_funcs import print_override, safe_copy
-from torchlens.helper_funcs import get_rng_states, \
-    get_tensor_memory_amount, human_readable_size, identity
+from torchlens.helper_funcs import get_rng_states, make_var_iterable, \
+    get_tensor_memory_amount, human_readable_size, identity, print_override, safe_copy, make_short_barcode_from_input
 
 
 class TensorLogEntry:
@@ -27,10 +27,22 @@ class TensorLogEntry:
             field_stripped = field[3:]
             setattr(self, field_stripped, getattr(t, field))
         self.pass_finished = False
-        self.linked_tensor = t  # TODO: make sure this is cleared in the postprocessing step.
         self.tensor_contents = None
         self.creation_args = []
         self.creation_kwargs = {}
+
+    def copy(self):
+        """Return a copy of itself.
+
+        Returns:
+            Copy of itself.
+        """
+        copied_entry = copy.copy(self)
+        for field in dir(self):
+            if field.startswith('_'):
+                continue
+            setattr(copied_entry, field, getattr(self, field))
+        return copied_entry
 
     def save_tensor_data(self,
                          t: torch.Tensor,
@@ -77,24 +89,27 @@ class TensorLogEntry:
             setattr(self, field_stripped, getattr(t, field))
 
     def _str_during_pass(self):
-        s = f"Tensor {self.tensor_label_raw} (layer {self.layer_label_raw}) (***PASS NOT FINISHED***):"
-        s += f"\n\tPass {self.pass_num}"
+        s = f"Tensor {self.tensor_label_raw} (layer {self.layer_label_raw}) (PASS NOT FINISHED):"
+        s += f"\n\tPass: {self.pass_num}"
         s += f"\n\tTensor info: shape {self.tensor_shape}, dtype {self.tensor_dtype}"
         s += f"\n\tComputed from params: {self.computed_from_params}"
-        s += f"\n\tComputed in Modules: {self.containing_modules_origin_nested}"
-        s += f"\n\tOutput of Modules: {self.module_passes_exited}"
+        s += f"\n\tComputed in modules: {self.containing_modules_origin_nested}"
+        s += f"\n\tOutput of modules: {self.module_passes_exited}"
         if self.is_bottom_level_submodule_output:
-            s += f"(bottom-level submodule output)"
+            s += f" (bottom-level submodule output)"
         else:
-            s += f"(not bottom-level submodule output)"
+            s += f" (not bottom-level submodule output)"
         s += f"\n\tFamily info:"
-        s += f"\n\t\tParents: {','.join(self.parent_tensors)}"
-        s += f"\n\t\tChildren: {','.join(self.child_tensors)}"
-        s += f"\n\t\tSpouses: {','.join(self.spouse_tensors)}"
-        s += f"\n\t\tSiblings: {','.join(self.sibling_tensors)}"
-        s += f"\n\t\tOriginal Ancestors: {','.join(self.orig_ancestors)}"
-        s += f"\n\t\tInput Ancestors: {','.join(self.input_ancestors)}"
-        s += f"\n\t\tInternal Ancestors: {','.join(self.internally_initialized_ancestors)}"
+        s += f"\n\t\tParents: {self.parent_tensors}"
+        s += f"\n\t\tChildren: {self.child_tensors}"
+        s += f"\n\t\tSpouses: {self.spouse_tensors}"
+        s += f"\n\t\tSiblings: {self.sibling_tensors}"
+        s += f"\n\t\tOriginal Ancestors: {self.orig_ancestors} " \
+             f"(min dist {self.min_distance_from_input} nodes, max dist {self.max_distance_from_input} nodes)"
+        s += f"\n\t\tInput Ancestors: {self.input_ancestors}"
+        s += f"\n\t\tInternal Ancestors: {self.internally_initialized_ancestors}"
+        s += f"\n\t\tOutput Descendents: {self.output_descendents} " \
+             f"(min dist {self.min_distance_from_output} nodes, max dist {self.max_distance_from_output} nodes)"
         if self.tensor_contents is not None:
             s += f"\n\tTensor contents: \n{print_override(self.tensor_contents, '__str__')}"
         return s
@@ -107,6 +122,94 @@ class TensorLogEntry:
 
     def __repr__(self):
         return self.__str__()
+
+
+class RepeatedSubgraph:
+    def __init__(self,
+                 subgraph_structure: set[Tuple[str, str]],
+                 subgraph_hash: str,
+                 subgraph_tensors: List[TensorLogEntry]):
+        """
+        A single repeated subgraph type: a sorted tuple of tuples encoding the types of edges, a compact hash of that
+        tuple for lookup, and a list of the instances of that subgraph, where each instance is itself a
+        list of the actual nodes in that subgraph. Initialized using an instance of that subgraph type as a template,
+        but does not populate the list just yet; the input list of nodes is just a "template".
+
+        Args:
+            subgraph_structure: sorted list of tuples, where each tuple is (parent_label, child_label)
+            subgraph_hash: Lookup hash of the subgraph structure.
+            subgraph_tensors: list of actual nodes for the instance of the subgraph.
+        """
+        self.subgraph_structure = subgraph_structure
+        self.subgraph_hash = subgraph_hash
+        self.subgraph_instances = [subgraph_tensors]
+
+    def add_instance(self, node_list: List[TensorLogEntry]):
+        """
+        Adds an instance of the subgraph to the list of instances.
+
+        Args:
+            node_list: List of nodes in the new subgraph.
+        """
+        self.subgraph_instances.append(node_list)
+
+
+
+class RepeatedSubgraphs:
+    def __init__(self):
+        """
+        Class that stores the repeated subgraphs in a model. The overall structure is: there are multiple
+        types of repeated subgraphs, each of which has multiple instances, each of which has multiple nodes.
+        The types are defined by the structure of the subgraph, which is encoded by a sorted hash of
+        the tokens involved in the subgraph.
+        """
+        self.subgraph_dict = {}
+
+
+    def add_subgraph_instance(self, node_list: List[TensorLogEntry]):
+        """Given a list of nodes constituting a new subgraph instance, checks if the instance matches
+        an existing subgraph type; if so, adds it to the list of instances for that type, and if not, makes a new
+        type.
+
+        TODO: check if an existing subgraph is a strict subset of the new subgraph being added; if so, replace it.
+
+        Args:
+            node_list: List of nodes in the subgraph
+        """
+        subgraph_structure, subgraph_hash = self._get_subgraph_structure_and_hash(node_list)
+        if subgraph_hash in self.subgraph_dict:
+            self.subgraph_dict[subgraph_hash].add_instance(node_list)
+        else:
+            self.subgraph_dict[subgraph_hash] = RepeatedSubgraph(subgraph_structure, subgraph_hash, node_list)
+
+    @staticmethod
+    def _get_subgraph_structure_and_hash(node_list: List[TensorLogEntry]):
+        """Given a list of nodes constituting a new subgraph instance, returns the sorted hash of the
+        subgraph structure.
+
+        Args:
+            node_list: List of nodes in the subgraph
+
+        Returns:
+            The list of tuples constituting the edges that define the node structure, and the hash
+            of that list.
+        """
+        node_set = set([node.tensor_label_raw for node in node_list])
+        node_dict = {node.tensor_label_raw: node for node in node_list}
+        subgraph_edges = []
+        for node in node_list:
+            for child_label in node.child_tensors:
+                child_node = node_dict[child_label]
+                if child_label in node_set:
+                    subgraph_edges.append((node.layer_grouping_token, child_node.layer_grouping_token))
+
+        # Sort the list of tuples:
+
+        subgraph_edges_list = sorted(subgraph_edges, key=lambda x: ''.join(str(i) for i in x))
+        subgraph_edges_set = set(subgraph_edges_list)
+        subgraph_hash = make_short_barcode_from_input(subgraph_edges)
+        return subgraph_edges_set, subgraph_hash
+
 
 
 class ModelHistory:
@@ -144,7 +247,7 @@ class ModelHistory:
         self.internally_initialized_tensors = []
         self.internally_terminated_tensors = []
         self.internally_terminated_bool_tensors = []
-        self.tensors_computed_with_params = {}
+        self.tensors_computed_with_params = defaultdict(list)
         self.conditional_branch_edges = []
 
         # Tracking info
@@ -165,11 +268,269 @@ class ModelHistory:
         """
         pass
 
+    #########################################
+    ####### Post-Processing Functions #######
+    #########################################
+
+    def _add_output_nodes(self):
+        """
+        Adds dedicated output nodes to the graph.
+        """
+        new_output_tensors = []
+        for i, output_tensor_label in enumerate(self.output_tensors):
+            output_node = self[output_tensor_label]
+            new_output_node = output_node.copy()
+            new_output_node.tensor_label_raw = f"output_{i + 1}_{self.tensor_counter}_raw"
+            new_output_node.tensor_num = self.tensor_counter
+            self.tensor_counter += 1
+
+            # Fix function information:
+
+            new_output_node.func_applied = None
+            new_output_node.func_applied_name = 'none'
+            new_output_node.func_time_elapsed = 0
+            new_output_node.func_rng_states = get_rng_states()
+            new_output_node.num_func_args_total = 0
+            new_output_node.num_position_args = 0
+            new_output_node.num_keyword_args = 0
+            new_output_node.func_position_args_non_tensor = []
+            new_output_node.func_keyword_args_non_tensor = {}
+            new_output_node.func_all_args_non_tensor = []
+            new_output_node.gradfunc = None
+            new_output_node.gradfunc_name = 'none'
+
+            # Strip any params:
+
+            new_output_node.computed_from_params = False
+            new_output_node.parent_params = []
+            new_output_node.parent_param_barcodes = []
+            new_output_node.parent_param_passes = {}
+            new_output_node.num_param_tensors = 0
+            new_output_node.parent_param_shapes = []
+            new_output_node.num_params_total = 0
+            new_output_node.parent_params_fsize = 0
+            new_output_node.parent_params_fsize_nice = human_readable_size(0)
+
+            # Strip module info:
+
+            new_output_node.is_computed_inside_submodule = False
+            new_output_node.containing_module_origin = None
+            new_output_node.containing_modules_origin_nested = []
+            new_output_node.containing_module_final = None
+            new_output_node.containing_modules_final_nested = []
+            new_output_node.modules_entered = []
+            new_output_node.module_passes_entered = []
+            new_output_node.is_submodule_input = False
+            new_output_node.modules_exited = False
+            new_output_node.module_passes_exited = []
+            new_output_node.is_submodule_output = False
+            new_output_node.is_bottom_level_submodule_output = False
+            new_output_node.module_entry_exit_thread = []
+
+            # Fix ancestry information:
+
+            new_output_node.parent_tensors = [output_node.tensor_label_raw]
+            new_output_node.sibling_tensors = []
+            new_output_node.has_sibling_tensors = False
+
+            # Change original output node:
+
+            output_node.is_output_tensor = False
+            output_node.child_tensors = [new_output_node.tensor_label_raw]
+
+            self.raw_tensor_dict[new_output_node.tensor_label_raw] = new_output_node
+            self.raw_tensor_labels_list.append(new_output_node.tensor_label_raw)
+
+            new_output_tensors.append(new_output_node.tensor_label_raw)
+
+        self.output_tensors = new_output_tensors
+
+    def _remove_orphan_nodes(self):
+        """
+        Removes nodes that are connected to neither the input nor the output by flooding in both directions
+        from the input and output nodes.
+        """
+        orig_nodes = set(self.raw_tensor_labels_list)
+        nodes_seen = set()
+        node_stack = self.input_tensors + self.output_tensors
+        while len(node_stack) > 0:
+            tensor_label = node_stack.pop()
+            nodes_seen.add(tensor_label)
+            tensor_entry = self[tensor_label]
+            for next_label in tensor_entry.child_tensors + tensor_entry.parent_tensors:
+                if next_label not in nodes_seen:
+                    node_stack.append(next_label)
+        orphan_nodes = orig_nodes - nodes_seen
+
+        # Now remove all orphaned nodes.
+
+        new_tensor_dict = OrderedDict()
+        new_tensor_list = []
+        for tensor_label in self.raw_tensor_labels_list:
+            tensor_entry = self[tensor_label]
+            if tensor_label not in orphan_nodes:
+                new_tensor_dict[tensor_label] = tensor_entry
+                new_tensor_list.append(tensor_label)
+            else:
+                self.remove_log_entry(tensor_entry)
+        self.raw_tensor_labels_list = new_tensor_list
+        self.raw_tensor_dict = new_tensor_dict
+
+    def _log_internally_terminated_tensor(self, tensor_label: str):
+        tensor_entry = self[tensor_label]
+        tensor_entry.terminated_inside_model = True
+        if tensor_label not in self.internally_terminated_tensors:
+            self.internally_terminated_tensors.append(tensor_label)
+            if tensor_entry.is_atomic_bool_tensor and (tensor_label not in self.internally_terminated_bool_tensors):
+                self.internally_terminated_bool_tensors.append(tensor_label)
+                tensor_entry.is_terminal_bool_tensor = True
+
+    def _flood_graph_from_input_or_output_nodes(self, mode: str):
+        """Floods the graph from either the input or output nodes, tracking nodes that aren't seen,
+        and the min and max distance from the starting nodes of each node. Traversal is unidirectional
+        UNLESS going in the direction of a termin
+
+        Args:
+            mode: either 'input' or 'output'
+
+        Returns:
+            Set of nodes seen during the traversal
+        """
+        if mode == 'input':
+            starting_nodes = self.input_tensors[:]
+            min_field = 'min_distance_from_input'
+            max_field = 'max_distance_from_input'
+            direction = 'forwards'
+            marker_field = 'has_input_ancestor'
+            forward_field = 'child_tensors'
+        elif mode == 'output':
+            starting_nodes = self.output_tensors[:]
+            min_field = 'min_distance_from_output'
+            max_field = 'max_distance_from_output'
+            direction = 'backwards'
+            marker_field = 'is_output_ancestor'
+            forward_field = 'parent_tensors'
+        else:
+            raise ValueError("Mode but be either 'input' or 'output'")
+
+        nodes_seen = set()
+
+        # Tuples in format node_label, nodes_since_start, traversal_direction
+        node_stack = [(starting_node_label, 0, direction) for starting_node_label in starting_nodes]
+        while len(node_stack) > 0:
+            current_node_label, nodes_since_start, traversal_direction = node_stack.pop()
+            current_node = self[current_node_label]
+            nodes_seen.add(current_node_label)
+            if getattr(current_node, min_field) is None:
+                setattr(current_node, min_field, nodes_since_start)
+            else:
+                setattr(current_node, min_field, min([nodes_since_start, getattr(current_node, min_field)]))
+
+            if getattr(current_node, max_field) is None:
+                setattr(current_node, max_field, nodes_since_start)
+            else:
+                setattr(current_node, max_field, max([nodes_since_start, getattr(current_node, max_field)]))
+
+            setattr(current_node, marker_field, True)
+
+            if (len(current_node.child_tensors) == 0) and (not current_node.is_output_tensor):
+                self._log_internally_terminated_tensor(current_node_label)
+
+            for next_node_label in getattr(current_node, forward_field):
+                node_stack.append((next_node_label, nodes_since_start + 1, traversal_direction))
+
+    def _mark_input_output_distances(self):
+        """
+        Traverses the graph forward and backward, marks the minimum and maximum distances of each
+        node from the input and output, and removes any orphan nodes.
+        """
+        self._flood_graph_from_input_or_output_nodes('input')
+        self._flood_graph_from_input_or_output_nodes('output')
+
+    def _mark_conditional_branches(self):
+        """Starting from any terminal boolean nodes, backtracks until it finds the beginning of any
+        conditional branches.
+        """
+        terminal_bool_nodes = self.internally_terminated_bool_tensors[:]
+
+        nodes_seen = set()
+        node_stack = terminal_bool_nodes.copy()
+        while len(node_stack) > 0:
+            node_label = node_stack.pop()
+            node = self[node_label]
+            if node_label in nodes_seen:
+                continue
+            for next_tensor_label in node.parent_tensors + node.child_tensors:
+                next_node = self[next_tensor_label]
+                if next_node.is_output_ancestor:  # we found the beginning of a conditional branch
+                    next_node.cond_branch_start_children.append(node_label)
+                    next_node.in_cond_branch = False
+                    nodes_seen.add(next_tensor_label)
+                    self.conditional_branch_edges.append((next_tensor_label, node_label))
+                else:
+                    if next_tensor_label in nodes_seen:
+                        continue
+                    next_node.in_cond_branch = True
+                    node_stack.append(next_tensor_label)
+
+            nodes_seen.add(node_label)
+
+    def _find_repeated_subgraphs_with_params(self):
+        """
+        Finds all repeated subgraphs in the network that contain params, under the constraints that these
+        subgraphs be maximally large. They are allowed to contain multiple params each, they just have
+        to be as big as possible to count, such that no subgraph is a subgraph of any other.
+        Produces a list of lists of subgraphs, where each list is a list of isomorphic subgraphs, which itself
+        is a (consistently ordered) list of the tensors in each subgraph.
+        """
+        param_subraphs = []
+        for param_operation, param_operation_tensors in self.tensors_computed_with_params.items():
+            # Crawl backwards from all the tensors either until hitting another parameter operation,
+            # or until
+
+
+        self.param_chunks = []
+
+    def _find_repeated_layers(self):
+        """Post-processing function that finds any "repeated" layers. Specifically, it first takes all
+        tensors with parameters, and "yokes" them to any contiguous tensors that perform the same operations.
+        Then, it looks within, and outside, these "yoked" groups for any loops, and marks these as repeated
+        instances as well.
+        """
+        self._find_repeated_subgraphs_with_params()
+        self._find_loops_in_layers_yoked_to_params()
+        self._find_loops_in_layers_not_yoked_to_params()
+
     def postprocess(self):
         """
         After the forward pass, cleans up the log into its final form.
         """
-        pass
+        # Step 1: Add dedicated output nodes
+
+        self._add_output_nodes()
+
+        # Step 2: Remove orphan nodes.
+
+        self._remove_orphan_nodes()
+
+        # Step 3: Find mix/max distance from input and output nodes, find nodes that don't terminate in an output node.
+
+        self._mark_input_output_distances()
+
+        # Step 4: Starting from terminal single boolean tensors, mark the conditional branches.
+
+        self._mark_conditional_branches()
+
+        # Step 5: Identify all loops, mark repeated layers.
+
+        self._find_repeated_layers()
+
+        # Step 6: Annotate the containing modules for all internally-generated tensors.
+
+        # Step 7: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+
+        # Step 8: go down the tensor list, undecorate all tensors, add output nodes, do any tallying/totals/labeling,
+        # log the module hierarchy, rename all tensors, get the operation numbers for all layer labels.
 
     def get_op_nums_from_user_labels(self, which_layers: List[str]) -> List[int]:
         """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
@@ -215,7 +576,7 @@ class ModelHistory:
         Args:
             t: tensor for which to update the log entry
         """
-        log_entry = self.raw_tensor_dict[t.tensor_label_raw]
+        log_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
         log_entry.update_tensor_metadata(t)
 
     def add_raw_label_to_tensor(self,
@@ -266,6 +627,7 @@ class ModelHistory:
             has_internally_initialized_ancestor = False
             input_ancestors = {tensor_label}
             internally_initialized_ancestors = set()
+            layer_grouping_token = f"input_{'_'.join(tuple(str(s) for s in t.shape))}_{str(t.dtype)}"
             self.input_tensors.append(tensor_label)
         elif source == 'buffer':
             is_input_tensor = False
@@ -275,6 +637,7 @@ class ModelHistory:
             has_internally_initialized_ancestor = True
             internally_initialized_ancestors = {tensor_label}
             input_ancestors = set()
+            layer_grouping_token = f"buffer_{buffer_addr}"
             self.buffer_tensors.append(tensor_label)
             self.internally_initialized_tensors.append(tensor_label)
         else:
@@ -282,6 +645,9 @@ class ModelHistory:
 
         # General info
         t.tl_layer_label_raw = t.tl_tensor_label_raw
+        t.tl_layer_grouping_token = layer_grouping_token
+        t.tl_grouping_chunk = None
+        t.tl_pass_num = 1
         t.tl_layer_type = source
         t.tl_source_model_history = self
         t.tl_tensor_shape = tuple(t.shape)
@@ -305,7 +671,13 @@ class ModelHistory:
         t.tl_is_input_tensor = is_input_tensor
         t.tl_has_input_ancestor = has_input_ancestor
         t.tl_input_ancestors = input_ancestors
+        t.tl_min_distance_from_input = None
+        t.tl_max_distance_from_input = None
         t.tl_is_output_tensor = False
+        t.tl_is_output_ancestor = False
+        t.tl_output_descendents = set()
+        t.tl_min_distance_from_output = None
+        t.tl_max_distance_from_output = None
         t.tl_is_buffer_tensor = is_buffer_tensor
         t.tl_buffer_address = buffer_addr
         t.tl_is_atomic_bool_tensor = False
@@ -314,6 +686,10 @@ class ModelHistory:
         t.tl_has_internally_initialized_ancestor = has_internally_initialized_ancestor
         t.tl_internally_initialized_parents = []
         t.tl_internally_initialized_ancestors = internally_initialized_ancestors
+        t.tl_terminated_inside_model = False
+        t.tl_is_terminal_bool_tensor = False
+        t.tl_in_cond_branch = False
+        t.tl_cond_branch_start_children = []
 
         # Param info
         t.tl_computed_from_params = False
@@ -358,6 +734,21 @@ class ModelHistory:
 
         self.make_tensor_log_entry(t, t_args=[], t_kwargs={})
 
+    @staticmethod
+    def _get_hash_from_untracked_args(args, kwargs):
+        """
+        Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
+        """
+        args_to_hash = []
+        for arg in list(args) + list(kwargs.values()):
+            arg_iter = make_var_iterable(arg)
+            for arg_elem in arg_iter:
+                if not hasattr(arg, 'tl_tensor_label_raw') and not isinstance(arg_elem, torch.nn.Parameter):
+                    args_to_hash.append(arg_elem)
+
+        arg_hash = make_short_barcode_from_input(args_to_hash)
+        return arg_hash
+
     def log_function_output_tensor_func_info(self,
                                              t: torch.Tensor,
                                              args: Tuple,
@@ -391,10 +782,10 @@ class ModelHistory:
             output_is_single_bool = False
             output_bool_val = None
 
-        self.add_raw_label_to_tensor(t, layer_type)
-
         # General info
         t.tl_layer_type = layer_type
+        t.tl_layer_grouping_token = f"{layer_type}_{self._get_hash_from_untracked_args(args, kwargs)}"
+        t.tl_grouping_chunk = None
         t.tl_source_model_history = self
         t.tl_tensor_shape = tuple(t.shape)
         t.tl_tensor_dtype = t.dtype
@@ -473,13 +864,23 @@ class ModelHistory:
         t.tl_is_input_tensor = False
         t.tl_has_input_ancestor = has_input_ancestor
         t.tl_input_ancestors = input_ancestors
+        t.tl_min_distance_from_input = None
+        t.tl_max_distance_from_input = None
         t.tl_is_output_tensor = False
+        t.tl_is_output_ancestor = False
+        t.tl_output_descendents = set()
+        t.tl_min_distance_from_output = None
+        t.tl_max_distance_from_output = None
         t.tl_is_buffer_tensor = False
         t.tl_buffer_address = None
         t.tl_initialized_inside_model = initialized_inside_model
         t.tl_has_internally_initialized_ancestor = has_internally_initialized_ancestor
         t.tl_internally_initialized_parents = internally_initialized_parents
         t.tl_internally_initialized_ancestors = internally_initialized_ancestors
+        t.tl_terminated_inside_model = False
+        t.tl_is_terminal_bool_tensor = False
+        t.tl_in_cond_branch = False
+        t.tl_cond_branch_start_children = []
 
         self._update_tensor_family_links(t)
 
@@ -503,13 +904,17 @@ class ModelHistory:
             layer_label = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
             self.tensors_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
             pass_num = len(self.tensors_computed_with_params[layer_label])
+            layer_grouping_token = layer_label[:]
+            t.tl_layer_grouping_token = layer_label  # replace with the param label
         else:
             computed_from_params = False
             layer_label = tensor_label
+            layer_grouping_token = t.tl_layer_grouping_token  # keep it the same if no params
             pass_num = 1
 
         # General info
         t.tl_layer_label_raw = layer_label
+        t.tl_layer_grouping_token = layer_grouping_token
         t.tl_pass_num = pass_num
         t.tl_computed_from_params = computed_from_params
         t.tl_parent_params = parent_params
@@ -532,11 +937,13 @@ class ModelHistory:
         """
         if len(containing_modules_origin_nested) > 0:
             is_computed_inside_submodule = True
+            containing_module_origin = containing_modules_origin_nested[-1]
         else:
             is_computed_inside_submodule = False
+            containing_module_origin = None
 
         t.tl_is_computed_inside_submodule = is_computed_inside_submodule
-        t.tl_containing_module_origin = containing_modules_origin_nested[-1]
+        t.tl_containing_module_origin = containing_module_origin
         t.tl_containing_modules_origin_nested = containing_modules_origin_nested
         t.tl_modules_entered = []
         t.tl_module_passes_entered = []
@@ -559,35 +966,26 @@ class ModelHistory:
 
         """
 
-    def log_model_output_tensor(self, t: torch.Tensor):
-        """Takes in a model output tensor, and adds model output nodes.
-
-        Args:
-            t: Model output tensor.
-        """
-
-    def log_module_entry(self, t: torch.Tensor):
-        """Logs a tensor leaving a module.
-
-        Args:
-            t: Tensor leaving a module
-        """
-        pass
-
-    def log_module_exit(self, t: torch.Tensor):
-        """Logs a tensor leaving a module.
-
-        Args:
-            t: Tensor leaving a module
-        """
-        pass
-
     def remove_log_entry(self, log_entry: TensorLogEntry):
-        """Given a TensorLogEntry, destroys it and all references to it. #TODO: test whether this cleans up the garbage
+        """Given a TensorLogEntry, destroys it and all references to it.
 
         Args:
             log_entry: Tensor log entry to remove.
         """
+        tensor_label = log_entry.tensor_label_raw
+        for attr in dir(log_entry):
+            if not attr.startswith('_') and not callable(getattr(log_entry, attr)):
+                delattr(log_entry, attr)
+        del log_entry
+
+        # Clear any fields in ModelHistory referring to the entry.
+        fields_to_delete = ['input_tensors', 'output_tensors', 'buffer_tensors', 'internally_initialized_tensors',
+                            'internally_terminated_tensors', 'internally_terminated_bool_tensors',
+                            'tensors_computed_with_params']
+        for field in fields_to_delete:
+            field_list = getattr(self, field)
+            if tensor_label in field_list:
+                field_list.remove(tensor_label)
 
     @staticmethod
     def _make_raw_param_group_barcode(indiv_param_barcodes, layer_type):
@@ -756,8 +1154,14 @@ class ModelHistory:
         Returns:
             String summarizing the model.
         """
-        s = f"Log of {self.model_name} forward pass:\n***PASS STILL ONGOING***"
+        s = f"Log of {self.model_name} forward pass (pass still ongoing):"
         s += f"\n\tRandom seed: {self.random_seed_used}"
+        s += f"\n\tInput tensors: {self.input_tensors}"
+        s += f"\n\tOutput tensors: {self.output_tensors}"
+        s += f"\n\tInternally initialized tensors: {self.internally_initialized_tensors}"
+        s += f"\n\tInternally terminated tensors: {self.internally_terminated_tensors}"
+        s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_tensors}"
+        s += f"\n\tBuffer tensors: {self.buffer_tensors}"
         s += f"\n\tRaw layer labels:"
         for layer in self.raw_tensor_labels_list:
             s += f"\n\t\t{layer}"

@@ -6,8 +6,9 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.graph_handling import postprocess_history_dict, undecorate_tensor
-from torchlens.helper_funcs import get_vars_of_type_from_obj, mark_tensors_in_obj, set_random_seed, identity
+from torchlens.graph_handling import postprocess_history_dict
+from torch_decorate import undecorate_tensor
+from torchlens.helper_funcs import get_vars_of_type_from_obj, mark_tensors_in_obj, set_random_seed
 from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, update_tensor_containing_modules
 from torchlens.model_history import ModelHistory
 
@@ -55,8 +56,8 @@ def module_pre_hook(module: nn.Module,
         t.tl_modules_entered.append(module_address)
         t.tl_module_passes_entered.append(module_pass_label)
         t.tl_is_submodule_input = True
-        t.tl_modules_entered_exited_thread.append(('+', module_pass_label[0], module_pass_label[1]))
-        model_history.update_tensor_metadata(t)  # Update tensor log with this new information.
+        t.tl_module_entry_exit_thread.append(('+', module_pass_label[0], module_pass_label[1]))
+        model_history.update_tensor_log_entry(t)  # Update tensor log with this new information.
 
 
 def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
@@ -74,6 +75,9 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     model_history = t.tl_source_model_history
     submodule_address = submodule.tl_module_address
 
+    if t.tl_is_bottom_level_submodule_output:
+        return True
+
     # If it was initialized inside the model and nothing entered the module, it's bottom-level.
     if t.tl_initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
         t.tl_is_bottom_level_submodule_output = True
@@ -82,7 +86,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
     for parent_label in t.tl_parent_tensors:
         parent_tensor = model_history[parent_label]
-        parent_modules_entered = parent_tensor.tl_modules_entered
+        parent_modules_entered = parent_tensor.modules_entered
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):
             t.tl_is_bottom_level_submodule_output = False
             return False
@@ -116,14 +120,14 @@ def module_post_hook(module: nn.Module,
         t.tl_is_submodule_output = True
 
         if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
-            t = identity(t)
+            t = torch.identity(t)
 
         t.tl_is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
         t.tl_modules_exited.append(module_address)
         t.tl_module_passes_exited.append((module_address, module_pass_num))
         t.tl_module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
-        model_history.update_tensor_metadata(t)  # Update tensor log with this new information.
+        model_history.update_tensor_log_entry(t)  # Update tensor log with this new information.
 
     for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
         input_module_thread = t.tl_module_entry_exit_thread[:]
@@ -300,7 +304,6 @@ def run_model_and_save_specified_activations(model: nn.Module,
     set_random_seed(random_seed)
 
     x = copy.deepcopy(x)
-    x.requires_grad = True  # have it require_grad to autopopulate the grad_fns to help with bookkeeping
     hook_handles = []
     model_name = str(type(model).__name__)
     model_history = ModelHistory(model_name, random_seed, tensor_nums_to_save)
@@ -315,7 +318,6 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_device = next(iter(model.parameters())).device
         else:
             model_device = 'cpu'
-        x = x.to(model_device)
         input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
         prepare_model(model, hook_handles, model_history)
         orig_func_defs, mutant_to_orig_funcs_dict = decorate_pytorch(torch,
@@ -325,6 +327,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_history.mutant_to_orig_funcs_dict = mutant_to_orig_funcs_dict
         model_history.track_tensors = True
         for t in input_tensors:
+            t.requires_grad = True
+            t = t.to(model_device)
             model_history.log_source_tensor(t, 'input')
         start_time = time.time()
         outputs = model(x)
@@ -332,7 +336,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
-            model_history.output_tensors.append(t.tl_barcode)
+            model_history.output_tensors.append(t.tl_tensor_label_raw)
             t.tl_is_output_tensor = True
             model_history.update_tensor_log_entry(t)
         if model_is_dataparallel:
