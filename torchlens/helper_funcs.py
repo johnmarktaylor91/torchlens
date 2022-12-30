@@ -67,7 +67,7 @@ def identity(x):
 
 
 def make_short_barcode_from_input(things_to_hash: List[Any],
-                                  barcode_len: int = 24) -> str:
+                                  barcode_len: int = 8) -> str:
     """Utility function that takes a list of anything and returns a short hash of it.
 
     Args:
@@ -86,7 +86,7 @@ def make_short_barcode_from_input(things_to_hash: List[Any],
     return barcode
 
 
-def make_random_barcode(barcode_len: int = 24) -> str:
+def make_random_barcode(barcode_len: int = 8) -> str:  # TODO: set the barcode length to a longer number when done
     """Generates a random integer hash for a layer to use as internal label (invisible from user side).
 
     Args:

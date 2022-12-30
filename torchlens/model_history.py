@@ -2,7 +2,7 @@
 
 import copy
 import itertools as it
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, namedtuple, defaultdict
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -124,94 +124,6 @@ class TensorLogEntry:
         return self.__str__()
 
 
-class RepeatedSubgraph:
-    def __init__(self,
-                 subgraph_structure: set[Tuple[str, str]],
-                 subgraph_hash: str,
-                 subgraph_tensors: List[TensorLogEntry]):
-        """
-        A single repeated subgraph type: a sorted tuple of tuples encoding the types of edges, a compact hash of that
-        tuple for lookup, and a list of the instances of that subgraph, where each instance is itself a
-        list of the actual nodes in that subgraph. Initialized using an instance of that subgraph type as a template,
-        but does not populate the list just yet; the input list of nodes is just a "template".
-
-        Args:
-            subgraph_structure: sorted list of tuples, where each tuple is (parent_label, child_label)
-            subgraph_hash: Lookup hash of the subgraph structure.
-            subgraph_tensors: list of actual nodes for the instance of the subgraph.
-        """
-        self.subgraph_structure = subgraph_structure
-        self.subgraph_hash = subgraph_hash
-        self.subgraph_instances = [subgraph_tensors]
-
-    def add_instance(self, node_list: List[TensorLogEntry]):
-        """
-        Adds an instance of the subgraph to the list of instances.
-
-        Args:
-            node_list: List of nodes in the new subgraph.
-        """
-        self.subgraph_instances.append(node_list)
-
-
-
-class RepeatedSubgraphs:
-    def __init__(self):
-        """
-        Class that stores the repeated subgraphs in a model. The overall structure is: there are multiple
-        types of repeated subgraphs, each of which has multiple instances, each of which has multiple nodes.
-        The types are defined by the structure of the subgraph, which is encoded by a sorted hash of
-        the tokens involved in the subgraph.
-        """
-        self.subgraph_dict = {}
-
-
-    def add_subgraph_instance(self, node_list: List[TensorLogEntry]):
-        """Given a list of nodes constituting a new subgraph instance, checks if the instance matches
-        an existing subgraph type; if so, adds it to the list of instances for that type, and if not, makes a new
-        type.
-
-        TODO: check if an existing subgraph is a strict subset of the new subgraph being added; if so, replace it.
-
-        Args:
-            node_list: List of nodes in the subgraph
-        """
-        subgraph_structure, subgraph_hash = self._get_subgraph_structure_and_hash(node_list)
-        if subgraph_hash in self.subgraph_dict:
-            self.subgraph_dict[subgraph_hash].add_instance(node_list)
-        else:
-            self.subgraph_dict[subgraph_hash] = RepeatedSubgraph(subgraph_structure, subgraph_hash, node_list)
-
-    @staticmethod
-    def _get_subgraph_structure_and_hash(node_list: List[TensorLogEntry]):
-        """Given a list of nodes constituting a new subgraph instance, returns the sorted hash of the
-        subgraph structure.
-
-        Args:
-            node_list: List of nodes in the subgraph
-
-        Returns:
-            The list of tuples constituting the edges that define the node structure, and the hash
-            of that list.
-        """
-        node_set = set([node.tensor_label_raw for node in node_list])
-        node_dict = {node.tensor_label_raw: node for node in node_list}
-        subgraph_edges = []
-        for node in node_list:
-            for child_label in node.child_tensors:
-                child_node = node_dict[child_label]
-                if child_label in node_set:
-                    subgraph_edges.append((node.layer_grouping_token, child_node.layer_grouping_token))
-
-        # Sort the list of tuples:
-
-        subgraph_edges_list = sorted(subgraph_edges, key=lambda x: ''.join(str(i) for i in x))
-        subgraph_edges_set = set(subgraph_edges_list)
-        subgraph_hash = make_short_barcode_from_input(subgraph_edges)
-        return subgraph_edges_set, subgraph_hash
-
-
-
 class ModelHistory:
     def __init__(self,
                  model_name: str,
@@ -248,6 +160,8 @@ class ModelHistory:
         self.internally_terminated_tensors = []
         self.internally_terminated_bool_tensors = []
         self.tensors_computed_with_params = defaultdict(list)
+        self.equivalent_operations = defaultdict(set)
+        self.same_layer_tensors = defaultdict(list)
         self.conditional_branch_edges = []
 
         # Tracking info
@@ -475,31 +389,188 @@ class ModelHistory:
 
             nodes_seen.add(node_label)
 
-    def _find_repeated_subgraphs_with_params(self):
-        """
-        Finds all repeated subgraphs in the network that contain params, under the constraints that these
-        subgraphs be maximally large. They are allowed to contain multiple params each, they just have
-        to be as big as possible to count, such that no subgraph is a subgraph of any other.
-        Produces a list of lists of subgraphs, where each list is a list of isomorphic subgraphs, which itself
-        is a (consistently ordered) list of the tensors in each subgraph.
-        """
-        param_subraphs = []
-        for param_operation, param_operation_tensors in self.tensors_computed_with_params.items():
-            # Crawl backwards from all the tensors either until hitting another parameter operation,
-            # or until
+    def _label_corresponding_layers(self,
+                                    subgraphs_dict: Dict,
+                                    node_to_subgraph_dict: Dict,
+                                    iso_node_groups: OrderedDict[str, List],
+                                    node_to_iso_group_dict: OrderedDict[str, str],
+                                    adjacent_subgraphs: List[set]):
+        """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
+        goes through and labels the layers as corresponding to each other. The rule is that nodes will be
+        labeled as corresponding if 1) they are isomorphic with respect to the starting node, and
+        2) the subgraphs either contain a param node, or are adjacent.
 
-
-        self.param_chunks = []
-
-    def _find_repeated_layers(self):
-        """Post-processing function that finds any "repeated" layers. Specifically, it first takes all
-        tensors with parameters, and "yokes" them to any contiguous tensors that perform the same operations.
-        Then, it looks within, and outside, these "yoked" groups for any loops, and marks these as repeated
-        instances as well.
+        Args:
+            subgraphs_dict: Dict containing entries with information for each subgraph
+            node_to_subgraph_dict: Dict mapping each node to the subgraph its in. 
+            iso_node_groups: Dict specifying list of isomorphic nodes in each group
+            node_to_iso_group_dict: Reverse of the previous dict: maps each node to the group its in.
+            adjacent_subgraphs: List of sets of adjacent subgraphs, where adjacency is transitive
         """
-        self._find_repeated_subgraphs_with_params()
-        self._find_loops_in_layers_yoked_to_params()
-        self._find_loops_in_layers_not_yoked_to_params()
+        pass
+
+    def _fetch_and_process_next_isomorphic_nodes(self,
+                                                 current_iso_nodes: List[str],
+                                                 iso_node_groups: Dict[str, List[str]],
+                                                 node_to_iso_group_dict: Dict[str, str],
+                                                 subgraphs_dict: Dict,
+                                                 node_to_subgraph_dict: Dict,
+                                                 adjacent_subgraphs: List[set],
+                                                 is_first_node: bool,
+                                                 node_stack: List[List[str]]):
+        """Function that takes a set of isomorphic nodes, finds all sets of isomorphic successor nodes,
+        then processes them and adds them to the stack.
+
+        Args:
+            current_iso_nodes: Current set of isomorphic nodes to get the next nodes from.
+            iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
+            node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
+            subgraphs_dict: Dict of information about each subgraph
+            node_to_subgraph_dict: Dict mapping each node to its subgraph
+            adjacent_subgraphs: List of sets of adjacent subgraphs
+            is_first_node: Whether it's the first node in the subgraph; if so, just do children, not parents to start.
+            node_stack: List of lists of isomorphic nodes in the stack.
+        """
+        # First, get all children and parents of the current nodes, with constraint of not being added
+        # to their own subgraph yet to avoid backtracking.
+        successor_nodes_dict = OrderedDict()
+        for node_label in current_iso_nodes:
+            node = self[node_label]
+            other_subgraph_nodes = node_to_subgraph_dict[node_label].node_set
+            successor_nodes_dict[node] = {'children': [child for child in node.child_tensors
+                                                       if child not in other_subgraph_nodes],
+                                          'parents': [parent for parent in node.parent_tensors
+                                                      if parent not in other_subgraph_nodes]}
+            if is_first_node:
+                successor_nodes_dict[node]['parents'] = []
+
+            for neighbor_type in ['children', 'parents']:
+                # Find the new sets of isomorphic nodes for the neighbors of the current nodes, process & add to stack.
+
+                # Tidy up:
+                neighbor_nodes = {node_label: successor_nodes_dict[node_label][neighbor_type] for
+                                  node_label in successor_nodes_dict}
+
+                # Sort together nodes that have the same operation equivalence type; these will
+                # be the new sets of isomorphic nodes. Process them and add to the stack.
+
+    def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLogEntry):
+        """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
+        and crawls forward, finding and marking corresponding operations until there are none left.
+        At the end of this, nodes that have the same position with respect to the original node
+        are labeled as the same layer either if 1) the subgraph contains a parameter node,
+        or 2) the nodes belong to adjacent subgraphs.
+
+        Args:
+            node: node to start from
+        """
+        # Bookkeeping regarding nodes, subgraphs, isomorphic nodes, adjacent subgraphs:
+        # Label each subgraph by its starting node label.
+        equivalent_operation_starting_labels = sorted(list(node.equivalent_operations))
+
+        # Dictionary specifying isomorphic nodes: key is earliest such node, value is list of isomorphic nodes
+        iso_node_groups = OrderedDict({equivalent_operation_starting_labels[0]: equivalent_operation_starting_labels})
+
+        # Reverse dictionary mapping each node to its isomorphism group
+        node_to_iso_group_dict = OrderedDict({label: equivalent_operation_starting_labels[0] for label in
+                                              equivalent_operation_starting_labels})
+
+        # Dictionary of information about each subgraph
+        subgraphs_dict = {}
+        subgraph_info = namedtuple('SubgraphInfo', ['starting_node',
+                                                    'has_param_node',
+                                                    'adjacent_subgraphs',
+                                                    'node_set'])
+        for starting_label in equivalent_operation_starting_labels:
+            subgraphs_dict[starting_label] = subgraph_info(starting_node=starting_label,
+                                                           has_param_node=node.computed_from_params,
+                                                           adjacent_subgraphs=[],
+                                                           node_set=set(starting_label))
+
+        # Dictionary mapping each node to the subgraph it is in
+        node_to_subgraph_dict = OrderedDict({label: subgraphs_dict[label] for label in
+                                             equivalent_operation_starting_labels})
+
+        # List of sets of adjacent subgraphs
+        adjacent_subgraphs = []
+
+        # The stack will be a list of lists, where each latter list is a list of isomorphic nodes.
+        # When adding to the stack, only isomorphic nodes will be added.
+
+        node_stack = [equivalent_operation_starting_labels[:]]
+        is_first_node = True
+
+        while node_stack:
+            # Pop a set of isomorphic nodes off of the stack, then add and process the next nodes in the stack.
+            isomorphic_nodes = sorted(node_stack.pop(0))
+            self._fetch_and_process_next_isomorphic_nodes(isomorphic_nodes,
+                                                          iso_node_groups,
+                                                          node_to_iso_group_dict,
+                                                          subgraphs_dict,
+                                                          node_to_subgraph_dict,
+                                                          adjacent_subgraphs,
+                                                          is_first_node,
+                                                          node_stack)
+            is_first_node = False
+
+        self._label_corresponding_layers(subgraphs_dict,
+                                         node_to_subgraph_dict,
+                                         iso_node_groups,
+                                         node_to_iso_group_dict,
+                                         adjacent_subgraphs)
+
+    def _assign_corresponding_tensors_to_same_layer(self):
+        """
+        Post-processing function that yokes together operations corresponding to the same layer, based on
+        the following rule:
+        1) Operations invoking the same parameters are always assigned to the same layer.
+        2) Any contiguous operations surrounding repeated parameters are assigned to the same layer
+            (e.g., if a ReLU always follows every pass of an FC layer, then all instances of that ReLU
+            operation are considered part of the same layer; continue for all such contiguous
+            equivalent operations)
+        3) Any groups of contiguous operations that "loop" back to back, irrespective of whether
+            they include a parameter or not (e.g., in ABCABCABC, then all As count as the same layer, all
+            Bs count as the same layer, and all Cs cound as the same layer, but if a D or an F were inserted
+            between these triplets, they would no longer be grouped together, since the repeats
+            are no longer contiguous)
+        It works by starting from root nodes, and starting from the earliest one, going forward one node at a time,
+        and checking if there are equivalent operations. If so, it builds forward one node at a time, until
+        it no longer finds equivalent operations. If these subgraphs include a parameter node, these nodes
+        are then grouped together no matter what. If they don't, they're only grouped together if contiguous.
+        To allow for the possibility that a node might have more "equivalent" layers as a subset of some bigger
+        subgraph, then while advancing forward, the function checks the number of equivalent layers it has been
+        assigned is equal to the number of operations of that type. If so, it's definitely found everything;
+        if not, it runs the procedure again to check if more equivalent operations can be found.
+        """
+        node_stack = self.input_tensors + self.internally_initialized_tensors
+        node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
+        operation_equivalence_types_seen = set()
+        while len(node_stack) > 0:
+            # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
+            node_label = node_stack.pop(0)
+            node = self[node_label]
+            node_operation_equivalence_type = node.operation_equivalence_type
+            node_stack.extend(node.child_tensors)
+            node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
+
+            # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
+            if node_operation_equivalence_type in operation_equivalence_types_seen:
+                continue
+            operation_equivalence_types_seen.add(node_operation_equivalence_type)
+
+            # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
+            if len(node.equivalent_operations) == 1:
+                node.same_layer_tensors = [node_label]
+                continue
+
+            # If we've already found the same-layer tensors for this node, and it equals the number of
+            # equivalent operations, skip it; the work is already done:
+            if len(node.equivalent_operations) == len(node.same_layer_tensors):
+                continue
+
+            # Else, start from this node and any equivalent operations, and work forward, finding
+            # more equivalent operations:
+            self._find_and_mark_same_layer_operations_starting_from_node(node)
 
     def postprocess(self):
         """
@@ -523,7 +594,7 @@ class ModelHistory:
 
         # Step 5: Identify all loops, mark repeated layers.
 
-        self._find_repeated_layers()
+        self._assign_corresponding_tensors_to_same_layer()
 
         # Step 6: Annotate the containing modules for all internally-generated tensors.
 
@@ -627,7 +698,7 @@ class ModelHistory:
             has_internally_initialized_ancestor = False
             input_ancestors = {tensor_label}
             internally_initialized_ancestors = set()
-            layer_grouping_token = f"input_{'_'.join(tuple(str(s) for s in t.shape))}_{str(t.dtype)}"
+            operation_equivalence_type = f"input_{'_'.join(tuple(str(s) for s in t.shape))}_{str(t.dtype)}"
             self.input_tensors.append(tensor_label)
         elif source == 'buffer':
             is_input_tensor = False
@@ -637,18 +708,21 @@ class ModelHistory:
             has_internally_initialized_ancestor = True
             internally_initialized_ancestors = {tensor_label}
             input_ancestors = set()
-            layer_grouping_token = f"buffer_{buffer_addr}"
+            operation_equivalence_type = f"buffer_{buffer_addr}"
             self.buffer_tensors.append(tensor_label)
             self.internally_initialized_tensors.append(tensor_label)
         else:
             raise ValueError("source must be either 'input' or 'buffer'")
 
+        self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
+
         # General info
         t.tl_layer_label_raw = t.tl_tensor_label_raw
-        t.tl_layer_grouping_token = layer_grouping_token
-        t.tl_grouping_chunk = None
+        t.tl_operation_equivalence_type = operation_equivalence_type
+        t.tl_equivalent_operations = self.equivalent_operations[operation_equivalence_type]
         t.tl_pass_num = 1
         t.tl_layer_type = source
+        t.tl_same_layer_tensors = []
         t.tl_source_model_history = self
         t.tl_tensor_shape = tuple(t.shape)
         t.tl_tensor_dtype = t.dtype
@@ -746,6 +820,8 @@ class ModelHistory:
                 if not hasattr(arg, 'tl_tensor_label_raw') and not isinstance(arg_elem, torch.nn.Parameter):
                     args_to_hash.append(arg_elem)
 
+        if len(args_to_hash) == 0:
+            return 'no_args'
         arg_hash = make_short_barcode_from_input(args_to_hash)
         return arg_hash
 
@@ -763,6 +839,7 @@ class ModelHistory:
                                              is_part_of_iterable_output: bool,
                                              iterable_output_index: Optional[int]):
         layer_type = func_name.lower().replace('_', '')
+        operation_equivalence_type = f"{layer_type}_{self._get_hash_from_untracked_args(args, kwargs)}"
         self.add_raw_label_to_tensor(t, layer_type)
 
         if func_changes_input:
@@ -784,8 +861,8 @@ class ModelHistory:
 
         # General info
         t.tl_layer_type = layer_type
-        t.tl_layer_grouping_token = f"{layer_type}_{self._get_hash_from_untracked_args(args, kwargs)}"
-        t.tl_grouping_chunk = None
+        t.tl_operation_equivalence_type = operation_equivalence_type
+        t.tl_same_layer_tensors = []
         t.tl_source_model_history = self
         t.tl_tensor_shape = tuple(t.shape)
         t.tl_tensor_dtype = t.dtype
@@ -904,17 +981,20 @@ class ModelHistory:
             layer_label = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
             self.tensors_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
             pass_num = len(self.tensors_computed_with_params[layer_label])
-            layer_grouping_token = layer_label[:]
+            operation_equivalence_type = layer_label[:]
             t.tl_layer_grouping_token = layer_label  # replace with the param label
         else:
             computed_from_params = False
             layer_label = tensor_label
-            layer_grouping_token = t.tl_layer_grouping_token  # keep it the same if no params
+            operation_equivalence_type = t.tl_operation_equivalence_type  # keep it the same if no params
             pass_num = 1
+
+        self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
 
         # General info
         t.tl_layer_label_raw = layer_label
-        t.tl_layer_grouping_token = layer_grouping_token
+        t.tl_operation_equivalence_type = operation_equivalence_type
+        t.tl_equivalent_operations = self.equivalent_operations[operation_equivalence_type]
         t.tl_pass_num = pass_num
         t.tl_computed_from_params = computed_from_params
         t.tl_parent_params = parent_params
@@ -925,6 +1005,8 @@ class ModelHistory:
         t.tl_num_params_total = np.sum([np.prod(shape) for shape in t.tl_parent_param_shapes])
         t.tl_parent_params_fsize = get_tensor_memory_amount(t)
         t.tl_parent_params_fsize_nice = human_readable_size(t.tl_parent_params_fsize)
+
+        # Now that parameter stuff done, can tag the
 
     @staticmethod
     def log_function_output_tensor_module_info(t: torch.Tensor,
@@ -966,6 +1048,30 @@ class ModelHistory:
 
         """
 
+    def remove_log_entry_references(self, tensor_label: TensorLogEntry):
+        """Removes all references to a given TensorLogEntry in the ModelHistory object.
+
+        Args:
+            tensor_label: The log entry to remove.
+        """
+        # Clear any fields in ModelHistory referring to the entry.
+        fields_to_delete = ['input_tensors', 'output_tensors', 'buffer_tensors', 'internally_initialized_tensors',
+                            'internally_terminated_tensors', 'internally_terminated_bool_tensors']
+        for field in fields_to_delete:
+            field_list = getattr(self, field)
+            if tensor_label in field_list:
+                field_list.remove(tensor_label)
+
+        # Now handle the nested fields:
+        nested_fields_to_delete = ['tensor_computed_with_params', 'equivalent_operations']
+
+        for nested_field in nested_fields_to_delete:
+            for group_label, group_tensors in getattr(self, nested_field).items():
+                if tensor_label in group_tensors:
+                    group_tensors.remove(tensor_label)
+                if len(group_tensors) == 0:
+                    del getattr(self, nested_field)[group_label]
+
     def remove_log_entry(self, log_entry: TensorLogEntry):
         """Given a TensorLogEntry, destroys it and all references to it.
 
@@ -977,23 +1083,15 @@ class ModelHistory:
             if not attr.startswith('_') and not callable(getattr(log_entry, attr)):
                 delattr(log_entry, attr)
         del log_entry
-
-        # Clear any fields in ModelHistory referring to the entry.
-        fields_to_delete = ['input_tensors', 'output_tensors', 'buffer_tensors', 'internally_initialized_tensors',
-                            'internally_terminated_tensors', 'internally_terminated_bool_tensors',
-                            'tensors_computed_with_params']
-        for field in fields_to_delete:
-            field_list = getattr(self, field)
-            if tensor_label in field_list:
-                field_list.remove(tensor_label)
+        self.remove_log_entry_references(tensor_label)
 
     @staticmethod
-    def _make_raw_param_group_barcode(indiv_param_barcodes, layer_type):
+    def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: str):
         """Given list of param barcodes and layer type, returns the raw barcode for the
         param_group; e.g., conv2d_abcdef_uvwxyz
 
         Args:
-            param_group_list: List of the barcodes for each param in the group.
+            indiv_param_barcodes: List of barcodes for each individual parameter tensor
             layer_type: The layer type.
 
         Returns:
@@ -1053,7 +1151,7 @@ class ModelHistory:
         for parent_tensor_label in parent_tensor_labels:
             self._add_sibling_labels_for_new_tensor(t, self[parent_tensor_label])
 
-    def _getitem_after_pass(self, ix):
+    def _getitem_after_pass(self, ix) -> TensorLogEntry:
         """Fetches a layer flexibly based on the different lookup options.
 
         Args:
@@ -1064,7 +1162,7 @@ class ModelHistory:
         """
         pass
 
-    def _getitem_during_pass(self, ix):
+    def _getitem_during_pass(self, ix) -> TensorLogEntry:
         """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
         Args:
@@ -1078,7 +1176,7 @@ class ModelHistory:
         else:
             raise ValueError(f"{ix} not found in the ModelHistory object.")
 
-    def __getitem__(self, ix):
+    def __getitem__(self, ix) -> TensorLogEntry:
         """Returns an object logging a model layer given an index. If the pass is finished,
         it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
 
