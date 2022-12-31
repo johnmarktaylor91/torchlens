@@ -1,51 +1,14 @@
 # This module has functions for processing the computation graphs that come out of the other functions.
 
 import random
-from collections import OrderedDict, defaultdict
-from typing import Any, Dict, List, Tuple, Union
+from collections import OrderedDict
+from typing import Dict, List, Union
 
 import numpy as np
 import torch
 
 from torch_decorate import undecorate_tensor
-from torchlens.helper_funcs import human_readable_size, make_random_barcode
-
-
-def cluster_modules(history_dict: Dict):
-    """Goes through the history dict and assigns 1) cluster IDs, and 2) cluster names that indicate
-    the nested module structure. These must be distinct because the same module can be applied multiple times,
-    and should have the same name, but can be genuinely different instances of the same module in
-    the computational graph. The name of the cluster will be the module address, the ID will be the
-    module address plus a barcode to make it distinct. So, each node will be tagged with this information, such
-    that during the visualization step, the subgraphs can be built and populated with each node.
-    This is NOT based on the programmer's structure, but on what modules are entered and left.
-
-    Args:
-        history_dict: Dictionary of the tensor history.
-    """
-
-    # TODO: populate the internally generated tensors with the right module address (inherit from children)
-
-    tensor_log = history_dict['tensor_log']
-    cluster_children_dict = defaultdict(list)
-    top_level_module_clusters = []
-
-    for barcode, node in tensor_log.items():
-        module_instance_final_barcodes_dict = {}
-        module_instance_final_barcodes_list = []
-        for m, module_barcode in enumerate(node['function_call_modules_nested']):
-            if m == 0:  # if a top level module, add to the list.
-                if module_barcode not in top_level_module_clusters:
-                    top_level_module_clusters.append(module_barcode)
-            else:  # if a submodule and not a bottom-level module, add to the dict.
-                if module_barcode not in cluster_children_dict[last_module_barcode]:
-                    cluster_children_dict[last_module_barcode].append(module_barcode)
-
-            last_module_barcode = module_barcode
-
-    history_dict['top_level_module_clusters'] = top_level_module_clusters
-    history_dict['module_cluster_children_dict'] = cluster_children_dict
-    return history_dict
+from torchlens.helper_funcs import human_readable_size
 
 
 def unmutate_tensors_and_funcs_in_history(history_dict: Dict):
@@ -114,26 +77,6 @@ def postprocess_history_dict(history_dict: Dict) -> Dict:
         history_dict = graph_transform(history_dict)
 
     return history_dict
-
-
-def rough_barcode_to_final_barcode(node_barcode,
-                                   history_dict):
-    """Utility function that goes from the internal rough barcode to the final, human-readable barcode;
-    this will be {layer_type}_{layer_type_num}_{layer_total} num with :{pass} too if there's multiple passes.
-
-    Args:
-        node_barcode: Rough barcode of node in question.
-        history_dict: Dict of history.
-
-    Returns:
-        Human readable final barcode.
-    """
-    node = history_dict['tensor_log'][node_barcode]
-    if node['param_total_passes'] > 1:
-        final_barcode = node['layer_label_w_pass']
-    else:
-        final_barcode = node['layer_label']
-    return final_barcode
 
 
 def get_all_tensor_lookup_keys(node: Dict,

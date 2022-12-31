@@ -5,7 +5,7 @@ from torch import nn
 
 from torchlens.graph_handling import ModelHistory
 from torchlens.helper_funcs import warn_parallel
-from torchlens.model_funcs import run_model_and_save_specified_activations, get_all_submodules
+from torchlens.model_funcs import get_all_submodules, run_model_and_save_specified_activations
 from torchlens.validate import validate_model_history
 from torchlens.vis import render_graph
 

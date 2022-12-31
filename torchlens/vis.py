@@ -2,7 +2,6 @@ from collections import OrderedDict, defaultdict
 from typing import Dict, List
 
 import graphviz
-import inspect
 from IPython.display import display
 
 from torchlens.helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str

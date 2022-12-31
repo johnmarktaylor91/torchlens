@@ -10,13 +10,15 @@
 # As a "debug mode", keep ALL functions applied and their arguments without discarding (this might
 # require tweaking the logic of expand_multiple_functions).
 
+# TODO: this should only have top-level validation functions; the rest should be methods of ModelHistory
+
 from typing import Dict, List
 
 import torch
 from tqdm import tqdm
 
 from torchlens.graph_handling import ModelHistory, get_all_tensor_lookup_keys, rough_barcode_to_final_barcode
-from torchlens.helper_funcs import get_rng_states, set_rng_states, tuple_assign
+from torchlens.helper_funcs import get_rng_states, set_saved_rng_states, tuple_assign
 
 
 def validate_lookup_keys(history_dict: Dict,
@@ -151,9 +153,9 @@ def compute_forward_step(node_barcode: str,
             func_kwargs[kwarg_key] = new_forward_pass_activations[kwarg_barcode].clone()
 
     current_rng_states = get_rng_states()
-    set_rng_states(node_rng_states)
+    set_saved_rng_states(node_rng_states)
     new_tensor_val = node_func(*func_args, **func_kwargs)
-    set_rng_states(current_rng_states)
+    set_saved_rng_states(current_rng_states)
 
     if node_func.__name__ == '__setitem__':  # TODO: fix this
         new_tensor_val = func_args[0]

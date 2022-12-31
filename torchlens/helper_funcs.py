@@ -4,6 +4,7 @@ import multiprocessing as mp
 import random
 import secrets
 import string
+import warnings
 from sys import getsizeof
 from typing import Any, Dict, List, Optional, Type
 
@@ -19,85 +20,8 @@ clean_new_tensor = copy.deepcopy(torch.tensor)
 clean_new_param = copy.deepcopy(torch.nn.Parameter)
 
 
-def print_override(t: torch.Tensor, func_name: str):
-    """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
-
-    Args:
-        t: Tensor
-        func_name: Either "__str__" or "__repr__"
-
-    Returns:
-        The string representation of the tensor.
-    """
-    n = np.array(t.data.cpu())
-    np_str = getattr(n, func_name)()
-    np_str = np_str.replace('array', 'tensor')
-    np_str = np_str.replace('\n', '\n ')
-    if t.grad_fn is not None:
-        grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
-        np_str = np_str[0:-1] + grad_fn_str
-    elif t.requires_grad:
-        np_str = np_str[0:-1] + ", requires_grad=True)"
-    return np_str
-
-
-def safe_copy(x):
-    """Utility function to make a copy of a tensor or parameter when torch is in mutated mode, or just copy
-    the thing if it's not a tensor.
-
-    Args:
-        x: Input
-
-    Returns:
-        Safely copied variant of the input with same values and same class, but different memory
-    """
-    if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
-        vals_np = np.array(x.data.cpu())
-        vals_tensor = clean_from_numpy(vals_np)
-        if type(x) == torch.Tensor:
-            return vals_tensor
-        elif type(x) == torch.nn.Parameter:
-            return clean_new_param(vals_tensor)
-    else:
-        return copy.copy(x)
-
-
 def identity(x):
     return x
-
-
-def make_short_barcode_from_input(things_to_hash: List[Any],
-                                  barcode_len: int = 8) -> str:
-    """Utility function that takes a list of anything and returns a short hash of it.
-
-    Args:
-        things_to_hash: List of things to hash; they must all be convertible to a string.
-        barcode_len:
-
-    Returns:
-        Short hash of the input.
-    """
-    barcode = ''.join([str(x) for x in things_to_hash])
-    barcode = str(hash(barcode))
-    barcode = barcode.encode('utf-8')
-    barcode = base64.urlsafe_b64encode(barcode)
-    barcode = barcode.decode('utf-8')
-    barcode = barcode[0:barcode_len]
-    return barcode
-
-
-def make_random_barcode(barcode_len: int = 8) -> str:  # TODO: set the barcode length to a longer number when done
-    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
-
-    Args:
-        barcode_len: Length of the desired barcode
-
-    Returns:
-        Random hash.
-    """
-    alphabet = string.ascii_letters + string.digits
-    barcode = ''.join(secrets.choice(alphabet) for _ in range(barcode_len))
-    return barcode
 
 
 def set_random_seed(seed: int):
@@ -129,7 +53,7 @@ def get_rng_states() -> Dict:
     return rng_dict
 
 
-def set_rng_states(rng_states: Dict):
+def set_saved_rng_states(rng_states: Dict):
     """Utility function to set the state of random seeds to a cached value.
 
     Args:
@@ -145,14 +69,38 @@ def set_rng_states(rng_states: Dict):
         torch.cuda.set_rng_state(rng_states['torch_cuda'], 'cuda')
 
 
-def warn_parallel():
+def make_random_barcode(barcode_len: int = 16) -> str:
+    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
+
+    Args:
+        barcode_len: Length of the desired barcode
+
+    Returns:
+        Random hash.
     """
-    Utility function to give raise error if it's being run in parallel processing.
+    alphabet = string.ascii_letters + string.digits
+    barcode = ''.join(secrets.choice(alphabet) for _ in range(barcode_len))
+    return barcode
+
+
+def make_short_barcode_from_input(things_to_hash: List[Any],
+                                  barcode_len: int = 16) -> str:
+    """Utility function that takes a list of anything and returns a short hash of it.
+
+    Args:
+        things_to_hash: List of things to hash; they must all be convertible to a string.
+        barcode_len:
+
+    Returns:
+        Short hash of the input.
     """
-    if mp.current_process().name != 'MainProcess':
-        raise RuntimeError("WARNING: It looks like you are using parallel execution; only run "
-                           "pytorch-xray in the main process, since certain operations "
-                           "depend on execution order.")
+    barcode = ''.join([str(x) for x in things_to_hash])
+    barcode = str(hash(barcode))
+    barcode = barcode.encode('utf-8')
+    barcode = base64.urlsafe_b64encode(barcode)
+    barcode = barcode.decode('utf-8')
+    barcode = barcode[0:barcode_len]
+    return barcode
 
 
 def is_iterable(obj: Any) -> bool:
@@ -207,15 +155,40 @@ def tuple_assign(tuple_: tuple, ind: int, new_value: any):
     return tuple(list_)
 
 
-def in_notebook():
-    try:
-        if 'IPKernelApp' not in get_ipython().config:  # pragma: no cover
-            return False
-    except ImportError:
-        return False
-    except AttributeError:
-        return False
-    return True
+def int_list_to_compact_str(int_list: List[int]) -> str:
+    """Given a list of integers, returns a compact string representation of the list, where
+    contiguous stretches of the integers are represented as ranges (e.g., [1 2 3 4] becomes "1-4"),
+    and all such ranges are separated by commas.
+
+    Args:
+        int_list: List of integers.
+
+    Returns:
+        Compact string representation of the list.
+    """
+    int_list = sorted(int_list)
+    if len(int_list) == 0:
+        return ''
+    if len(int_list) == 1:
+        return str(int_list[0])
+    ranges = []
+    start = int_list[0]
+    end = int_list[0]
+    for i in range(1, len(int_list)):
+        if int_list[i] == end + 1:
+            end = int_list[i]
+        else:
+            if start == end:
+                ranges.append(str(start))
+            else:
+                ranges.append(f'{start}-{end}')
+            start = int_list[i]
+            end = int_list[i]
+    if start == end:
+        ranges.append(str(start))
+    else:
+        ranges.append(f'{start}-{end}')
+    return ','.join(ranges)
 
 
 def extend_search_stack_from_item(item: Any,
@@ -309,36 +282,6 @@ def get_vars_of_type_from_obj(obj: Any,
     return tensors_in_obj
 
 
-def mark_tensors_in_obj(x: Any, field_name: str, field_val: Any):
-    """Marks all tensors in an object with a specified field attribute.
-
-    Args:
-        x: the input object
-        field_name: name of the field to add to the tensor.
-        field_val: value of the field to add to the tensor.
-
-    Returns:
-        Nothing.
-    """
-    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
-    for tensor in input_tensors:
-        setattr(tensor, field_name, field_val)
-
-
-def barcode_tensors_in_obj(x: Any):
-    """Marks all tensors in the input saying they came as input.
-
-    Args:
-        x: Input to the model.
-
-    Returns:
-        Nothing.
-    """
-    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
-    for tensor in input_tensors:
-        setattr(tensor, 'tl_barcode', make_random_barcode())
-
-
 def get_tensors_in_obj_with_mark(x: Any, field_name: str, field_val: Any) -> List[torch.Tensor]:
     """Get all tensors in an object that have a mark with a given value.
 
@@ -376,6 +319,51 @@ def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str)
     return marks
 
 
+def nested_getattr(obj: Any, attr: str) -> Any:
+    """Helper function that takes in an object, and a string of attributes separated by '.' and recursively
+    returns the attribute.
+
+    Args:
+        obj: Any object, e.g. "torch"
+        attr: String specifying the nested attribute, e.g. "nn.functional"
+
+    Returns:
+        The attribute specified by the string.
+    """
+    if attr == '':
+        return obj
+
+    attributes = attr.split(".")
+    for i, a in enumerate(attributes):
+        if a in ['volatile', 'T']:  # avoid annoying warning; if there's more, make a list
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                if i == 0:
+                    out = getattr(obj, a)
+                else:
+                    out = getattr(out, a)
+        else:
+            if i == 0:
+                out = getattr(obj, a)
+            else:
+                out = getattr(out, a)
+    return out
+
+
+def remove_attributes_starting_with_str(obj: Any,
+                                        s: str):
+    """Given an object removes, any attributes for that object beginning with a given
+    substring.
+
+    Args:
+        obj: object
+        s: string that marks fields to remove
+    """
+    for field in dir(obj):
+        if field.startswith(s):
+            delattr(obj, field)
+
+
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """Returns the size of a tensor in bytes.
 
@@ -409,37 +397,65 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     return f"{size} {unit}"
 
 
-def int_list_to_compact_str(int_list: List[int]) -> str:
-    """Given a list of integers, returns a compact string representation of the list, where
-    contiguous stretches of the integers are represented as ranges (e.g., [1 2 3 4] becomes "1-4"),
-    and all such ranges are separated by commas.
+def print_override(t: torch.Tensor, func_name: str):
+    """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
 
     Args:
-        int_list: List of integers.
+        t: Tensor
+        func_name: Either "__str__" or "__repr__"
 
     Returns:
-        Compact string representation of the list.
+        The string representation of the tensor.
     """
-    int_list = sorted(int_list)
-    if len(int_list) == 0:
-        return ''
-    if len(int_list) == 1:
-        return str(int_list[0])
-    ranges = []
-    start = int_list[0]
-    end = int_list[0]
-    for i in range(1, len(int_list)):
-        if int_list[i] == end + 1:
-            end = int_list[i]
-        else:
-            if start == end:
-                ranges.append(str(start))
-            else:
-                ranges.append(f'{start}-{end}')
-            start = int_list[i]
-            end = int_list[i]
-    if start == end:
-        ranges.append(str(start))
+    n = np.array(t.data.cpu())
+    np_str = getattr(n, func_name)()
+    np_str = np_str.replace('array', 'tensor')
+    np_str = np_str.replace('\n', '\n ')
+    if t.grad_fn is not None:
+        grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
+        np_str = np_str[0:-1] + grad_fn_str
+    elif t.requires_grad:
+        np_str = np_str[0:-1] + ", requires_grad=True)"
+    return np_str
+
+
+def safe_copy(x):
+    """Utility function to make a copy of a tensor or parameter when torch is in mutated mode, or just copy
+    the thing if it's not a tensor.
+
+    Args:
+        x: Input
+
+    Returns:
+        Safely copied variant of the input with same values and same class, but different memory
+    """
+    if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
+        vals_np = np.array(x.data.cpu())
+        vals_tensor = clean_from_numpy(vals_np)
+        if type(x) == torch.Tensor:
+            return vals_tensor
+        elif type(x) == torch.nn.Parameter:
+            return clean_new_param(vals_tensor)
     else:
-        ranges.append(f'{start}-{end}')
-    return ','.join(ranges)
+        return copy.copy(x)
+
+
+def in_notebook():
+    try:
+        if 'IPKernelApp' not in get_ipython().config:
+            return False
+    except ImportError:
+        return False
+    except AttributeError:
+        return False
+    return True
+
+
+def warn_parallel():
+    """
+    Utility function to give raise error if it's being run in parallel processing.
+    """
+    if mp.current_process().name != 'MainProcess':
+        raise RuntimeError("WARNING: It looks like you are using parallel execution; only run "
+                           "pytorch-xray in the main process, since certain operations "
+                           "depend on execution order.")

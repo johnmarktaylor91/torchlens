@@ -1,16 +1,16 @@
 import copy
 import random
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import torch
 from torch import nn
 
-from torchlens.graph_handling import postprocess_history_dict
+from helper_funcs import remove_attributes_starting_with_str
 from torch_decorate import undecorate_tensor
-from torchlens.helper_funcs import get_vars_of_type_from_obj, mark_tensors_in_obj, set_random_seed
-from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, update_tensor_containing_modules
+from torchlens.helper_funcs import get_vars_of_type_from_obj, set_random_seed
 from torchlens.model_history import ModelHistory
+from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch
 
 
 def get_all_submodules(model: nn.Module,
@@ -263,7 +263,10 @@ def undecorate_model_tensors(model: nn.Module):
         for attribute_name in dir(submodule):
             attribute = getattr(submodule, attribute_name)
             if issubclass(type(attribute), torch.Tensor):
-                setattr(submodule, attribute_name, undecorate_tensor(attribute))
+                if not issubclass(type(attribute), torch.nn.Parameter):
+                    setattr(submodule, attribute_name, undecorate_tensor(attribute))
+                else:
+                    remove_attributes_starting_with_str(attribute, 'tl_')
 
 
 def cleanup_model(model: nn.Module, hook_handles: List):
@@ -320,11 +323,11 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_device = 'cpu'
         input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
         prepare_model(model, hook_handles, model_history)
-        orig_func_defs, mutant_to_orig_funcs_dict = decorate_pytorch(torch,
-                                                                     input_tensors,
-                                                                     orig_func_defs,
-                                                                     model_history)
-        model_history.mutant_to_orig_funcs_dict = mutant_to_orig_funcs_dict
+        orig_func_defs, decorated_to_orig_funcs_dict = decorate_pytorch(torch,
+                                                                        input_tensors,
+                                                                        orig_func_defs,
+                                                                        model_history)
+        model_history.decorated_to_orig_funcs_dict = decorated_to_orig_funcs_dict
         model_history.track_tensors = True
         for t in input_tensors:
             t.requires_grad = True
@@ -346,6 +349,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_history.postprocess()
         del output_tensors
         del x
+        torch.cuda.empty_cache()
         return model_history
 
     except Exception as e:

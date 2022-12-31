@@ -3,11 +3,9 @@
 
 import __future__
 import collections
-import copy
 import functools
 import time
 import types
-import warnings
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple, Union
 
@@ -15,11 +13,10 @@ import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
 import helper_funcs as hf
-from helper_funcs import safe_copy
+from helper_funcs import nested_getattr, safe_copy
+from torchlens.helper_funcs import get_marks_from_tensor_list, get_rng_states, get_tensors_in_obj_with_mark, \
+    get_vars_of_type_from_obj, identity, make_random_barcode, make_var_iterable
 from torchlens.model_history import ModelHistory
-from torchlens.helper_funcs import get_marks_from_tensor_list, get_rng_states, \
-    get_tensors_in_obj_with_mark, get_vars_of_type_from_obj, make_random_barcode, \
-    identity, is_iterable, make_var_iterable
 
 print_funcs = ['__repr__', '__str__', '_str']
 funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to', '__array__']
@@ -197,37 +194,6 @@ overridable_funcs = my_get_overridable_functions()
 orig_torch_funcs = overridable_funcs + ignored_funcs + [('', 'identity')]
 
 
-def nested_getattr(obj: Any, attr: str) -> Any:
-    """Helper function that takes in an object, and a string of attributes separated by '.' and recursively
-    returns the attribute.
-
-    Args:
-        obj: Any object, e.g. "torch"
-        attr: String specifying the nested attribute, e.g. "nn.functional"
-
-    Returns:
-        The attribute specified by the string.
-    """
-    if attr == '':
-        return obj
-
-    attributes = attr.split(".")
-    for i, a in enumerate(attributes):
-        if a in ['volatile', 'T']:  # avoid annoying warning; if there's more, make a list
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                if i == 0:
-                    out = getattr(obj, a)
-                else:
-                    out = getattr(out, a)
-        else:
-            if i == 0:
-                out = getattr(obj, a)
-            else:
-                out = getattr(out, a)
-    return out
-
-
 def decorate_pytorch(torch_module: types.ModuleType,
                      tensors_to_mutate: List[torch.Tensor],  # TODO check if this is necessary or not.
                      orig_func_defs: List[Tuple],
@@ -300,6 +266,27 @@ def decorate_pytorch(torch_module: types.ModuleType,
     new_identity = torch_func_decorator(identity, model_history)
     torch.identity = new_identity
     return orig_func_defs, mutant_to_orig_funcs_dict
+
+
+def undecorate_tensor(t):
+    """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
+
+    Args:
+        t: tensor or parameter object
+
+    Returns:
+        Unmutated tensor.
+    """
+    if type(t) == torch.Tensor:
+        new_t = safe_copy(t)
+    elif type(t) == torch.nn.Parameter:
+        new_t = torch.nn.Parameter(safe_copy(t))
+    else:
+        new_t = t
+    for attr in dir(new_t):
+        if attr.startswith('tl_'):
+            delattr(new_t, attr)
+    return new_t
 
 
 def undecorate_pytorch(torch_module,
@@ -558,24 +545,3 @@ def torch_func_decorator(func: Callable,
         return out_orig
 
     return wrapped_func
-
-
-def undecorate_tensor(t):
-    """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
-
-    Args:
-        t: tensor or parameter object
-
-    Returns:
-        Unmutated tensor.
-    """
-    if type(t) == torch.Tensor:
-        new_t = safe_copy(t)
-    elif type(t) == torch.nn.Parameter:
-        new_t = torch.nn.Parameter(safe_copy(t))
-    else:
-        new_t = t
-    for attr in dir(new_t):
-        if attr.startswith('tl_'):
-            delattr(new_t, attr)
-    return new_t
