@@ -7,8 +7,6 @@ from IPython.display import display
 
 from torchlens.helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str
 
-# TODO: Annotate passes for both entering and leaving nodes for the rolled-up view; hard to follow right now.
-
 INPUT_COLOR = "#98FB98"
 OUTPUT_COLOR = "#ff9999"
 PARAMS_NODE_BG_COLOR = "#E6E6E6"

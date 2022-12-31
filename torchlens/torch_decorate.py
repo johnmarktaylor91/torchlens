@@ -248,6 +248,8 @@ def decorate_pytorch(torch_module: types.ModuleType,
     returns:
         List of tuples consisting of [namespace, func_name, orig_func], sufficient
         to return torch to normal when finished, and also a dict mapping mutated functions to original functions.
+
+    TODO: refactor this
     """
 
     # Do a pass to save the original func defs.
