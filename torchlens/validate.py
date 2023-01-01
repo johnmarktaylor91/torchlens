@@ -17,7 +17,6 @@ from typing import Dict, List
 import torch
 from tqdm import tqdm
 
-from torchlens.graph_handling import ModelHistory, get_all_tensor_lookup_keys, rough_barcode_to_final_barcode
 from torchlens.helper_funcs import get_rng_states, set_saved_rng_states, tuple_assign
 
 
@@ -453,3 +452,9 @@ def validate_model_history(history_dict: Dict,
             return False
 
     return True
+
+
+def validate_multiple_images_for_model():
+    pass
+
+def validate_batch_of_models_and_inputs()

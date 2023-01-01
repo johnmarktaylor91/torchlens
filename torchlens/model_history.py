@@ -3,6 +3,8 @@
 import copy
 import itertools as it
 from collections import OrderedDict, defaultdict, namedtuple
+import random
+import time
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -16,7 +18,8 @@ from torchlens.helper_funcs import get_rng_states, get_tensor_memory_amount, hum
 class TensorLogEntry:
     def __init__(self, t: torch.Tensor):
         """Object that stores information about a single tensor operation in the forward pass,
-        including metadata and the tensor itself (if specified).
+        including metadata and the tensor itself (if specified). Initialized by passing in the tensor
+        to log, which already contains all the relevant fields.
 
         Args:
             t: the tensor
@@ -31,6 +34,10 @@ class TensorLogEntry:
         self.has_saved_activations = False
         self.creation_args = []
         self.creation_kwargs = {}
+
+    ###########################################
+    ########### Logging Functions #############
+    ###########################################
 
     def copy(self):
         """Return a copy of itself.
@@ -90,6 +97,25 @@ class TensorLogEntry:
             field_stripped = field[3:]
             setattr(self, field_stripped, getattr(t, field))
 
+    ###########################################
+    ########### Fetcher Functions #############
+    ###########################################
+    def get_child_layers(self):
+        return [self.source_model_history[child_label] for child_label in self.child_layers]
+
+    def get_parent_layers(self):
+        return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
+
+    ###########################################
+    ########### Built-in Methods ##############
+    ###########################################
+
+    def __str__(self):
+        if self.pass_finished:
+            return self._str_after_pass()
+        else:
+            return self._str_during_pass()
+
     def _str_during_pass(self):
         s = f"Tensor {self.tensor_label_raw} (layer {self.layer_label_raw}) (PASS NOT FINISHED):"
         s += f"\n\tPass: {self.pass_num}"
@@ -116,11 +142,75 @@ class TensorLogEntry:
             s += f"\n\tTensor contents: \n{print_override(self.tensor_contents, '__str__')}"
         return s
 
-    def __str__(self):
-        if self.pass_finished:
-            return self._str_after_pass()
+    def _str_after_pass(self):
+        if self.layer_passes_total > 1:
+            pass_str = f" (pass {self.layer_pass_num}/{self.layer_passes_total}), "
         else:
-            return self._str_during_pass()
+            pass_str = ", "
+        s = f"Layer {self.layer_label_no_pass}" \
+            f"{pass_str}operation {self.num_operations_so_far + 1}/" \
+            f"{self.source_model_history.model_num_tensors_total}:"
+        s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
+        if self.tensor_contents != 'none':
+            if len(self.tensor_shape) == 0:
+                tensor_slice = self.tensor_contents
+                num_dims = 0
+            elif len(self.tensor_shape) == 1:
+                num_dims = min(5, self.tensor_shape[0])
+                tensor_slice = self.tensor_contents[0:num_dims]
+            elif len(self.tensor_shape) == 2:
+                num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
+                tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
+            else:
+                num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
+                tensor_slice = self.tensor_contents.data.clone()
+                for _ in range(len(self.tensor_shape) - 2):
+                    tensor_slice = tensor_slice[0]
+                tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
+            tensor_slice = tensor_slice.detach()
+            tensor_slice.requires_grad = False
+            s += f"\n\t\t{str(tensor_slice)}"
+            if max(self.tensor_shape) > 5:
+                s += '...'
+        if not self.is_input_descendant:
+            s += f"\n\t(tensor was created de novo inside the model, not computed from input)"
+        if not self.is_output_ancestor:
+            s += f"\n\t(tensor is not an ancestor of the model output; it terminates within the model)"
+        if len(self.parent_params_shapes) > 0:
+            params_shapes_str = ', '.join(str(param_shape) for param_shape in self.parent_params_shapes)
+            s += f"\n\tParams: Computed from params with shape {params_shapes_str}; {self.num_params_total} params total " \
+                 f"({self.parent_params_fsize_nice})"
+        else:
+            s += f"\n\tParams: no params used"
+        if len(self.parent_layers) > 0:
+            parent_layers_str = ', '.join(self.parent_layers)
+        else:
+            parent_layers_str = "no parent layers"
+        s += f"\n\tParent Layers: {parent_layers_str}"
+        if len(self.child_layers) > 0:
+            child_layers_str = ', '.join(self.child_layers)
+        else:
+            child_layers_str = "no child layers"
+        s += f"\n\tChild Layers: {child_layers_str}"
+        if self.containing_origin_module == 'none':
+            module_str = "\n\tComputed inside module: not computed inside a module"
+        else:
+            module_str = f"\n\tComputed inside module: {self.containing_origin_module}"
+        if not self.is_input_tensor:
+            s += f"\n\tFunction: {self.func_applied_name} (gradfunc={self.gradfunc_name}) " \
+                 f"{module_str}"
+            s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
+        if len(self.modules_exited) > 0:
+            modules_exited_str = ', '.join(self.modules_exited)
+            s += f"\n\tOutput of modules: {modules_exited_str}"
+        else:
+            s += f"\n\tOutput of modules: none"
+        if self.is_bottom_level_module_output:
+            s += f"\n\tOutput of bottom-level module: {self.bottom_level_module_exited}"
+        lookup_keys_str = ', '.join([str(key) for key in self.lookup_keys])
+        s += f"\n\tLookup keys: {lookup_keys_str}"
+
+        return s
 
     def __repr__(self):
         return self.__str__()
@@ -189,158 +279,6 @@ class ModelHistory:
 
         Returns:
             Pandas dataframe with info about each layer.
-        """
-        pass
-
-    ########################################
-    ########## Built-in Methods ############
-    ########################################
-    def __len__(self):
-        if self.pass_finished:
-            return len(self.tensor_list)
-        else:
-            return len(self.raw_tensor_dict)
-
-    def _getitem_after_pass(self, ix) -> TensorLogEntry:
-        """Fetches a layer flexibly based on the different lookup options.
-
-        Args:
-            ix: A valid index for fetching a layer
-
-        Returns:
-            Tensor log entry object with info about specified layer.
-        """
-        pass
-
-    def _getitem_during_pass(self, ix) -> TensorLogEntry:
-        """Fetches an item when the pass is unfinished, only based on its raw barcode.
-
-        Args:
-            ix: layer's barcode
-
-        Returns:
-            Tensor log entry object with info about specified layer.
-        """
-        if ix in self.raw_tensor_dict:
-            return self.raw_tensor_dict[ix]
-        else:
-            raise ValueError(f"{ix} not found in the ModelHistory object.")
-
-    def __getitem__(self, ix) -> TensorLogEntry:
-        """Returns an object logging a model layer given an index. If the pass is finished,
-        it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
-
-        Args:
-            ix: desired index
-
-        Returns:
-            Tensor log entry object with info about specified layer.
-        """
-        if self.pass_finished:
-            return self._getitem_after_pass(ix)
-        else:
-            return self._getitem_during_pass(ix)
-
-    def __iter__(self):
-        """Loops through all tensors in the log.
-        """
-        if self.pass_finished:
-            return iter(self.tensor_list)
-        else:
-            return iter(list(self.raw_tensor_dict.values()))
-
-    def _str_after_pass(self) -> str:
-        """Readable summary of the model history after the pass is finished.
-
-        Returns:
-            String summarizing the model.
-        """
-        s = f"Log of {self.model_name} forward pass:"
-        if self.model_is_branching:
-            branch_str = "with branching"
-        else:
-            branch_str = 'without branching'
-        if self.model_is_recurrent:
-            s += f"\n\tModel structure: recurrent (at most {self.model_max_recurrent_loops} loops), {branch_str}; " \
-                 f"{len(self.module_addresses)} total modules."
-        else:
-            s += f"\n\tModel structure: purely feedforward, {branch_str}; {len(self.module_addresses)} total modules."
-        s += f"\n\t{self.model_num_tensors_total} tensors ({self.model_tensor_fsize_total_nice}) " \
-             f"computed in forward pass; {self.model_num_tensors_saved} tensors " \
-             f"({self.model_tensor_fsize_saved_nice}) saved."
-        s += f"\n\t{self.model_total_param_tensors} parameter operations ({self.model_total_params} params total; " \
-             f"{self.model_total_params_fsize_nice})."
-        s += f"\n\tRandom seed: {self.random_seed_used}"
-        s += f"\n\tTime elapsed: {np.round(self.pass_elapsed_time, 3)}s"
-
-        # Print the module hierarchy.
-        s += f"\n\tModule Hierarchy:"
-        s += self._module_hierarchy_str()
-
-        # Now print all layers.
-        s += f"\n\tLayers:"
-        for layer_ind, layer_barcode in enumerate(self.layer_labels):
-            pass_num = self.tensor_log[layer_barcode].layer_pass_num
-            total_passes = self.tensor_log[layer_barcode].layer_passes_total
-            if total_passes > 1:
-                pass_str = f" ({pass_num}/{total_passes} passes)"
-            else:
-                pass_str = ''
-            s += f"\n\t\t{layer_ind}: {layer_barcode} {pass_str}"
-
-        return s
-
-    def _str_during_pass(self) -> str:
-        """Readable summary of the model history during the pass, as a debugging aid.
-
-        Returns:
-            String summarizing the model.
-        """
-        s = f"Log of {self.model_name} forward pass (pass still ongoing):"
-        s += f"\n\tRandom seed: {self.random_seed_used}"
-        s += f"\n\tInput tensors: {self.input_tensors}"
-        s += f"\n\tOutput tensors: {self.output_tensors}"
-        s += f"\n\tInternally initialized tensors: {self.internally_initialized_tensors}"
-        s += f"\n\tInternally terminated tensors: {self.internally_terminated_tensors}"
-        s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_tensors}"
-        s += f"\n\tBuffer tensors: {self.buffer_tensors}"
-        s += f"\n\tRaw layer labels:"
-        for layer in self.raw_tensor_labels_list:
-            s += f"\n\t\t{layer}"
-        return s
-
-    def __str__(self) -> str:
-        if self.pass_finished:
-            return self._str_after_pass()
-        else:
-            return self._str_during_pass()
-
-    def __repr__(self):
-        return self.__str__()
-
-    @staticmethod
-    def _pretty_print_list_w_line_breaks(lst, indent_chars: str, line_break_every=5) -> str:
-        """
-        Utility function to pretty print a list with line breaks, adding indent_chars every line.
-        """
-        pass
-
-    def _get_lookup_help_str(self, layer_label) -> str:
-        """Generates a help string to be used in error messages when indexing fails.
-        """
-        pass
-
-    def _module_hierarchy_str_helper(self, module, level):
-        """
-        Helper function for _module_hierarchy_str.
-        """
-        pass
-
-    def _module_hierarchy_str(self) -> str:
-        """Helper function for printing the nested module hierarchy.
-
-        Returns:
-            String summarizing the model hierarchy.
         """
         pass
 
@@ -534,6 +472,7 @@ class ModelHistory:
         t.tl_module_passes_exited = []
         t.tl_is_submodule_output = False
         t.tl_is_bottom_level_submodule_output = False
+        t.tl_bottom_level_submodule_exited = None
         t.tl_module_entry_exit_thread = []
 
         self.make_tensor_log_entry(t, t_args=[], t_kwargs={})
@@ -834,6 +773,7 @@ class ModelHistory:
         t.tl_module_passes_exited = []
         t.tl_is_submodule_output = False
         t.tl_is_bottom_level_submodule_output = False
+        t.tl_bottom_level_submodule_exited = None
         t.tl_module_entry_exit_thread = []
 
     def _remove_log_entry_references(self, tensor_label: TensorLogEntry):
@@ -1146,7 +1086,7 @@ class ModelHistory:
                 node.layer_label_raw = layer_label
                 node.same_layer_tensors = layer_nodes
                 node.pass_num = n + 1
-                node.layer_num_passes = len(layer_nodes)
+                node.layer_total_passes = len(layer_nodes)
 
     @staticmethod
     def _update_adjacent_subgraphs(node_subgraph_label: str,
@@ -1569,7 +1509,7 @@ class ModelHistory:
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{layer_type_num}_{layer_total_num}"
             tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{layer_type_num}:{pass_num}"
             tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{layer_type_num}"
-            if tensor_log_entry.layer_num_passes == 1:
+            if tensor_log_entry.layer_total_passes == 1:
                 tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
                 tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
             else:
@@ -1579,6 +1519,47 @@ class ModelHistory:
             raw_to_final_tensor_labels[tensor_log_entry.layer_label_raw] = tensor_log_entry.layer_label
         self.raw_to_final_tensor_labels = raw_to_final_tensor_labels
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
+
+    def _add_lookup_keys_for_tensor_entry(self,
+                                          tensor_entry: TensorLogEntry,
+                                          tensor_index: int,
+                                          num_tensors_to_keep: int):
+        """Adds the user-facing lookup keys for a TensorLogEntry, both to itself
+        and to the ModelHistory top-level record.
+
+        Args:
+            tensor_entry: TensorLogEntry to get the lookup keys for.
+        """
+        tensor_entry.index_in_saved_log = tensor_index
+
+        # The "default" keys: including the pass if multiple passes, excluding if one pass.
+        lookup_keys_for_tensor = [tensor_entry.layer_label,
+                                  tensor_entry.layer_label_short,
+                                  tensor_index,
+                                  num_tensors_to_keep - tensor_index]
+
+        # If just one pass, also allow indexing by pass label.
+        if tensor_entry.layer_total_passes == 1:
+            lookup_keys_for_tensor.extend([tensor_entry.layer_label_w_pass,
+                                           tensor_entry.layer_label_w_pass_short])
+
+        # Allow indexing by modules exited as well:
+        for module_name, pass_num in tensor_entry.module_passes_exited:
+            lookup_keys_for_tensor.append(f"{module_name}:{pass_num}")
+            if self.module_num_passes[module_name] == 1:
+                lookup_keys_for_tensor.append(f"{module_name}")
+
+        # If buffer tensor, allow using buffer address as a key.
+        if tensor_entry.is_buffer_tensor:
+            lookup_keys_for_tensor.append(tensor_entry.buffer_address)
+
+        lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
+
+        # Log in both the tensor and in the ModelHistory object.
+        tensor_entry.lookup_keys = lookup_keys_for_tensor
+        for lookup_key in lookup_keys_for_tensor:
+            self.lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.tensor_num
+            self.layer_dict_all_keys[lookup_key] = tensor_entry
 
     def _rename_model_history_layer_names(self):
         """Renames all the metadata fields in ModelHistory with the final layer names, replacing the
@@ -1626,6 +1607,10 @@ class ModelHistory:
             containing_module_pass_label = module_pass_label
             if (module_name not in self.module_num_passes) or (self.module_num_passes[module_name] < module_pass):
                 self.module_num_passes[module_name] = module_pass
+            if module_name not in self.module_addresses:
+                self.module_addresses.append(module_name)
+            if module_pass_label not in self.module_passes:
+                self.module_passes.append(module_pass_label)
 
     def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLogEntry):
         """
@@ -1650,135 +1635,171 @@ class ModelHistory:
             for key, value in tensor_entry.parent_tensor_arg_locs[arg_type].items():
                 tensor_entry.parent_tensor_arg_locs[key] = self.raw_to_final_layer_labels[value]
 
-    def _finalize_tensor_entry_fields(self,
-                                      tensor_entry: TensorLogEntry):
+    def _trim_and_reorder_tensor_entry_fields(self,
+                                              tensor_entry: TensorLogEntry):
         """
         Removes any fields in a TensorLogEntry that were useful in real time, but are not needed by
         the user after the pass is done.
         """
-        fields_to_remove = []
-        for field in fields_to_remove:
-            delattr(tensor_entry, field)
+        new_dir_dict = OrderedDict()
 
-    def _finalize_model_history_fields(self):
+    def _trim_and_reorder_model_history_fields(self):
         """
         Removes any fields in ModelHistory that were useful in real time, but are not needed by
         the user after the pass is done.
         """
-        fields_to_remove = []
-        for field in fields_to_remove:
-            delattr(self, field)
+        new_dir_dict = OrderedDict()
 
-    def _add_lookup_keys_for_tensor_entry(self,
-                                          tensor_entry: TensorLogEntry,
-                                          tensor_index: int,
-                                          num_tensors_to_keep: int):
-        """Adds the user-facing lookup keys for a TensorLogEntry, both to itself
-        and to the ModelHistory top-level record.
-
-        Args:
-            tensor_entry: TensorLogEntry to get the lookup keys for.
+    def _log_final_info_for_all_layers(self, keep_layers_without_saved_activations: bool = True):
         """
-        # The "default" keys: including the pass if multiple passes, excluding if one pass.
-        lookup_keys_for_tensor = [tensor_entry.layer_label,
-                                  tensor_entry.layer_label_short,
-                                  tensor_index,
-                                  num_tensors_to_keep - tensor_index]
-
-        # If just one pass, also allow indexing by pass label.
-        if tensor_entry.layer_num_passes == 1:
-            lookup_keys_for_tensor.extend([tensor_entry.layer_label_w_pass,
-                                           tensor_entry.layer_label_w_pass_short])
-
-        # Allow indexing by modules exited as well:
-        for module_name, pass_num in tensor_entry.module_passes_exited:
-            lookup_keys_for_tensor.append(f"{module_name}:{pass_num}")
-            if self.module_num_passes[module_name] == 1:
-                lookup_keys_for_tensor.append(f"{module_name}")
-
-        # If buffer tensor, allow using buffer address as a key.
-        if tensor_entry.is_buffer_tensor:
-            lookup_keys_for_tensor.append(tensor_entry.buffer_address)
-
-        lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
-
-        # Log in both the tensor and in the ModelHistory object.
-        tensor_entry.lookup_keys = lookup_keys_for_tensor
-        for lookup_key in lookup_keys_for_tensor:
-            self.user_lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.tensor_num
-            self.tensor_mapper_dict[lookup_key] = tensor_entry
-
-    def _final_prettify(self, remove_layers_without_saved_activations: bool = True):
-        """Goes through all tensor log entries for the final stages of pre-processing to make the
-        user-facing version of ModelHistory.
+        Goes through all layers (before discarding unsaved ones), and logs final info about the model
+        and the layers that pertains to all layers (not just saved ones).
         """
-        total_tensor_size = 0
-        total_params = 0
-        total_param_tensors = 0
-        total_param_layers = 0
-        total_param_fsize = 0
-
         unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
-        self.user_lookup_keys_to_tensor_num_dict = {}  # map the user-facing keys to the tensor numbers
-        self.tensor_mapper_dict = {}
-        self.top_level_module_passes = []
-        self.module_pass_children = defaultdict(list)
-        self.module_num_passes = OrderedDict()
+        for t, tensor_entry in enumerate(self):
+            tensor_entry.operation_num = t
 
-        num_tensors_with_activations = 0
-
-        # Go through all tensors in ModelHistory for final round of bookkeeping:
-        for tensor_entry in self:
-            # Replace all raw names with final names:
+            # Replace any layer names with their final names:
             self._replace_layer_names_for_tensor_entry(tensor_entry)
 
             # Log the module hierarchy information:
-
             self._log_module_hierarchy_info_for_layer(tensor_entry)
 
-            # Tally the tensor and parameter size:
+            # Tally the tensor sizes:
+            self.total_tensor_fsize += tensor_entry.tensor_fsize
 
-            total_tensor_size += tensor_entry.tensor_fsize
+            # Tally the parameter sizes:
             if tensor_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
                 if tensor_entry.computed_from_params:
-                    total_param_layers += 1
-                total_params += tensor_entry.num_params_total
-                total_param_tensors += tensor_entry.num_param_tensors
-                total_param_fsize += tensor_entry.param_fsize
+                    self.total_param_layers += 1
+                self.total_params += tensor_entry.num_params_total
+                self.total_param_tensors += tensor_entry.num_param_tensors
+                self.total_param_fsize += tensor_entry.param_fsize
             unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
-            # Replace any stored functions with undecorated versions:
+            # Tally elapsed time:
 
+            self.elapsed_time_function_calls += tensor_entry.func_time_elapsed
+
+            # Replace stored function with original undecorated version:
             tensor_entry.func_applied = self.decorated_to_orig_funcs_dict[tensor_entry.func_applied]
 
-            # Replace field names with the final fields
+            # Update model structural information:
+            if len(tensor_entry.child_tensors) > 1:
+                self.model_is_branching = True
+            if tensor_entry.layer_total_passes > self.model_max_recurrent_loops:
+                self.model_is_recurrent = True
+                self.model_max_recurrent_loops = tensor_entry.layer_total_passes
+            if tensor_entry.in_cond_branch:
+                self.model_has_conditional_branching = True
 
-            # Tally if the tensor has saved activations:
-            num_tensors_with_activations += int(tensor_entry.has_saved_activations)
+        if (self.num_tensors_saved == len(self)) or keep_layers_without_saved_activations:
+            self.all_layers_logged = True
+        else:
+            self.all_layers_logged = False
 
-        # And one more pass to delete unused layers from the record and do final tidying up:
+        # Save the nice versions of the filesize fields:
+        self.total_tensor_fsize_nice = human_readable_size(self.total_tensor_fsize)
+        self.total_param_fsize_nice = human_readable_size(self.total_param_fsize)
+
+        # Log time elapsed:
+        self.pass_end_time = time.time()
+        self.elapsed_time_total = self.pass_end_time - self.pass_start_time
+        self.elapsed_time_torchlens_logging = self.elapsed_time_total - self.elapsed_time_function_calls
+
+    def _remove_unwanted_entries_and_log_remaining(self,
+                                                   keep_layers_without_saved_activations: bool = True):
+        """Removes entries from ModelHistory that we don't want in the final saved output,
+        and logs information about the remaining entries.
+        """
+        tensors_to_remove = []
+        self.unsaved_layers_lookup_keys = set()
         i = 0
         for tensor_entry in self:
             # Determine valid lookup keys and relate them to the tensor's realtime operation number:
-            if tensor_entry.has_saved_activations or remove_layers_without_saved_activations:
-                self._add_lookup_keys_for_tensor_entry(tensor_entry, i, num_tensors_with_activations)
-                self._finalize_tensor_entry_fields(tensor_entry)
+            if tensor_entry.has_saved_activations or keep_layers_without_saved_activations:
+                # Add the lookup keys for the layer, to itself and to ModelHistory:
+                self._add_lookup_keys_for_tensor_entry(tensor_entry, i, self.num_tensors_saved)
+
+                # Log all information:
+                self.layer_list.append(tensor_entry)
+                self.layer_dict_main_keys[tensor_entry.layer_label] = tensor_entry
+                self.layer_labels.append(tensor_entry.layer_label)
+                self.layer_labels_no_pass.append(tensor_entry.layer_label_no_pass)
+                self.layer_labels_w_pass.append(tensor_entry.layer_label_w_pass)
+                self.layer_num_passes[tensor_entry.layer_label] = tensor_entry.layer_total_passes
+                if tensor_entry.has_saved_activations:
+                    self.num_tensors_saved += 1
+                    self.total_tensor_fsize_saved += tensor_entry.tensor_fsize
+                self._trim_and_reorder_tensor_entry_fields(tensor_entry)  # Final reformatting of fields
                 i += 1
             else:
-                self.remove_log_entry(tensor_entry, remove_references=False)
+                tensors_to_remove.append(tensor_entry)
+                self.unsaved_layers_lookup_keys.update(tensor_entry.lookup_keys)
 
-        # Add the fields to ModelHistory:
-        self.total_tensor_fsize = total_tensor_size
-        self.total_tensor_fsize_nice = human_readable_size(total_tensor_size)
-        self.total_param_layers = total_param_layers
-        self.total_param_tensors = total_param_tensors
-        self.total_params = total_params
-        self.total_param_fsize = total_param_fsize
-        self.total_param_fsize_nice = human_readable_size(total_param_fsize)
+        # Remove unused entries.
+        for tensor_entry in tensors_to_remove:
+            self.remove_log_entry(tensor_entry, remove_references=False)
+
+        # Make the saved tensor filesize pretty:
+        self.total_tensor_fsize_saved_nice = human_readable_size(self.total_tensor_fsize_saved)
+
+    def _final_prettify(self, keep_layers_without_saved_activations: bool = True):
+        """
+        Goes through all tensor log entries for the final stages of pre-processing to make the
+        user-facing version of ModelHistory.
+        """
+        # First add additional desired fields to ModelHistory:
+
+        # Keeping track of tensors and lookup keys:
+        self.layer_list = []
+        self.layer_dict_main_keys = OrderedDict()
+        self.layer_dict_all_keys = OrderedDict()
+        self.lookup_keys_to_tensor_num_dict = {}  # map the lookup keys to the tensor numbers
+        self.layer_labels = []
+        self.layer_labels_no_pass = []
+        self.layer_labels_w_pass = []
+        self.layer_num_passes = {}
+
+        # Tallying the elapsed time for just the function calls:
+        self.elapsed_time_function_calls = 0
+
+        # Tensor tallying:
+        self.num_tensors_total = 0
+        self.num_tensors_saved = 0
+        self.total_tensor_fsize = 0
+        self.total_tensor_fsize_saved = 0
+
+        # Param tallying:
+        self.total_params = 0
+        self.total_param_tensors = 0
+        self.total_param_layers = 0
+        self.total_param_fsize = 0
+
+        # Module info:
+        self.module_addresses = []
+        self.module_passes = []
+        self.module_num_passes = OrderedDict()
+        self.top_level_module_passes = []
+        self.module_pass_children = defaultdict(list)
+
+        # Model structure info:
+        self.model_is_recurrent = False
+        self.model_max_recurrent_loops = 1
+        self.model_is_branching = False
+        self.model_has_conditional_branching = False
+
+        # Go through and log information pertaining to all layers:
+        self._log_final_info_for_all_layers(keep_layers_without_saved_activations)
+
+        # And one more pass to delete unused layers from the record and do final tidying up:
+        self._remove_unwanted_entries_and_log_remaining(keep_layers_without_saved_activations)
 
         # Rename the raw tensor entries in the fields of ModelHistory:
         self._rename_model_history_layer_names()
-        self._finalize_model_history_fields()
+        self._trim_and_reorder_model_history_fields()
+
+        # Clear the cache after any tensor deletions for garbage collection purposes:
         torch.cuda.empty_cache()
 
     def _set_pass_finished(self):
@@ -1789,7 +1810,7 @@ class ModelHistory:
             tensor.pass_finished = True
         self.pass_finished = True
 
-    def postprocess(self, only_keep_layers_with_saved_activations: bool = True):
+    def postprocess(self, remove_layers_without_saved_activations: bool = False):
         """
         After the forward pass, cleans up the log into its final form.
         """
@@ -1826,7 +1847,7 @@ class ModelHistory:
         # do any tallying/totals/labeling, log the module hierarchy, rename all tensors,
         # get the operation numbers for all layer labels.
 
-        self._final_prettify(only_keep_layers_with_saved_activations)
+        self._final_prettify(remove_layers_without_saved_activations)
 
         # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
@@ -1845,12 +1866,304 @@ class ModelHistory:
         Returns:
             Ordered, unique list of raw tensor numbers associated with the specified layers.
         """
-        pass
+        raw_tensor_nums_to_save = set()
+        num_layers = len(self.tensor_list)
+        for layer_key in which_layers:
+            if type(layer_key) == int:  # if user specifies ordinal position
+                if not -num_layers <= layer_key < num_layers:
+                    raise ValueError(f"You specified the {layer_key}th layer, but there are only "
+                                     f"{num_layers} layers in the model.")
+                raw_tensor_nums_to_save.add(self[layer_key].layer_raw_tensor_num)
+            elif layer_key in self.layer_labels:  # if it's a primary layer key just grab it
+                raw_tensor_nums_to_save.add(self[layer_key].layer_raw_tensor_num)
+            elif ':' in layer_key:  # if specific pass given, either add or complain if there aren't that many passes
+                label, pass_num = layer_key.split(':')
+                if (layer_key in self.layer_labels_w_pass) or (layer_key in self.module_passes):
+                    raw_tensor_nums_to_save.add(self[layer_key].layer_raw_tensor_num)
+                elif label in self.layer_labels_no_pass:
+                    first_pass_address = f"{label}:1"
+                    raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
+                                     f"{self[first_pass_address].layer_passes_total} passes in {label}; "
+                                     f"please specify a pass in range 1-{self[first_pass_address].layer_passes_total}.")
+                elif label in self.module_addresses:
+                    raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
+                                     f"{self.module_num_passes[label]} passes in {label}; "
+                                     f"please specify a pass in range 1-{self.module_num_passes[label]}.")
+                else:
+                    raise ValueError(self._get_lookup_help_str(label))
+            elif layer_key in self.layer_labels_no_pass:  # if it's a layer address, add all passes of the layer
+                for layer_label_w_pass in self.layer_labels_w_pass:
+                    if layer_label_w_pass.startswith(f"{layer_key}:"):
+                        raw_tensor_nums_to_save.add(self[layer_label_w_pass].layer_raw_tensor_num)
+            elif layer_key in self.module_addresses:  # if it's a module address, add all passes
+                for pass_num in range(1, self.module_num_passes[layer_key] + 1):
+                    raw_tensor_nums_to_save.add(self[f"{layer_key}:{pass_num}"].layer_raw_tensor_num)
+            elif type(layer_key) == str:  # as last resort check if any layer labels begin with the provided substring
+                found_a_match = False
+                for layer in self:
+                    if layer_key in layer.layer_label_w_pass:
+                        raw_tensor_nums_to_save.add(layer.layer_raw_tensor_num)
+                        found_a_match = True
+                if not found_a_match:
+                    raise ValueError(self._get_lookup_help_str(layer_key))
+
+        return raw_tensor_nums_to_save
 
     ########################################
     ########### Visualization ##############
     ########################################
 
+    def render_graph(self):
+        """Produces a visualization of the saved graph
+        """
+        if not self.all_layers_logged:
+            raise ValueError("All layers of the network must be logged in order to render the graph; "
+                             "either use get_model_structure, or use get_model_activations with all layers saved.")
+
     ########################################
     ############# Validation ###############
     ########################################
+
+    def validate_single_layer(self, layer: TensorLogEntry) -> bool:
+        """For a single layer, checks whether computing its value from the saved values of its input
+        tensors yields its actually saved value, and whether computing its value from perturbed values of the input
+        tensors changes it from the saved value. For the perturbation check, also checks whether the other
+        args are all zeros or all ones (e.g., such that changing the input wouldn't matter for addition
+        or multiplication respectively); if so, that step is disregarded.
+
+        Args:
+            layer: TensorLogEntry for the layer to check.
+
+        Returns:
+            True if it passes the tests, False otherwise.
+        """
+        pass
+
+    def validate_all_layers(self) -> bool:
+        """For all layers, checks whether computing its value from the saved values of its input
+        tensors yields its actually saved value, and whether computing its value from perturbed values of the input
+        tensors changes it from the saved value. For the perturbation check, also checks whether the other
+        args are all zeros or all ones (e.g., such that changing the input wouldn't matter for addition
+        or multiplication respectively); if so, that step is disregarded.
+
+        Returns:
+            True if it passes the tests, False otherwise.
+        """
+        for layer in self:
+            if not self.validate_single_layer(layer):
+                return False
+        return True
+
+    ########################################
+    ########### Built-in Methods ###########
+    ########################################
+    def __len__(self):
+        if self.pass_finished:
+            return len(self.layer_list)
+        else:
+            return len(self.raw_tensor_dict)
+
+    def __getitem__(self, ix) -> TensorLogEntry:
+        """Returns an object logging a model layer given an index. If the pass is finished,
+        it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
+
+        Args:
+            ix: desired index
+
+        Returns:
+            Tensor log entry object with info about specified layer.
+        """
+        if self.pass_finished:
+            return self._getitem_after_pass(ix)
+        else:
+            return self._getitem_during_pass(ix)
+
+    def _getitem_during_pass(self, ix) -> TensorLogEntry:
+        """Fetches an item when the pass is unfinished, only based on its raw barcode.
+
+        Args:
+            ix: layer's barcode
+
+        Returns:
+            Tensor log entry object with info about specified layer.
+        """
+        if ix in self.raw_tensor_dict:
+            return self.raw_tensor_dict[ix]
+        else:
+            raise ValueError(f"{ix} not found in the ModelHistory object.")
+
+    def _getitem_after_pass(self, ix):
+        """
+        Overloaded such that entries can be fetched either by their position in the tensor log, their layer label,
+        or their module address.
+        #it should say so and tell them which labels are valid.
+        """
+        if ix in self.tensor_mapper_dict:
+            return self.tensor_mapper_dict[ix]
+        elif (type(ix) == int) and (ix > len(self.tensor_list)):
+            raise ValueError(f"You specified the layer with index {ix}, but there are only {len(self.tensor_list)} "
+                             f"layers; please specify a smaller number.")
+        elif ix in self.module_addresses:
+            module_num_passes = self.module_num_passes[ix]
+            raise ValueError(f"You specified output of module {ix}, but it has {module_num_passes} passes; "
+                             f"please specify e.g. {ix}:2 for the second pass of {ix}.")
+        elif ix.split(':')[0] in self.module_addresses:
+            module, pass_num = ix.split(':')
+            module_num_passes = self.module_num_passes[module]
+            raise ValueError(f"You specified module {module} pass {pass_num}, but {module} only has "
+                             f"{module_num_passes} passes; specify a lower number.")
+        elif ix in self.layer_labels_no_pass:
+            layer_num_passes = self.layer_num_passes[ix]
+            raise ValueError(f"You specified output of layer {ix}, but it has {layer_num_passes} passes; "
+                             f"please specify e.g. {ix}:2 for the second pass of {ix}.")
+        elif ix.split(':')[0] in self.layer_labels_no_pass:
+            layer_label, pass_num = ix.split(':')
+            layer_num_passes = self.layer_num_passes[layer_label]
+            raise ValueError(f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
+                             f"{layer_num_passes} passes. Specify a lower number.")
+        else:
+            raise ValueError(self._get_lookup_help_str(ix))
+
+    def __iter__(self):
+        """Loops through all tensors in the log.
+        """
+        if self.pass_finished:
+            return iter(self.layer_list)
+        else:
+            return iter(list(self.raw_tensor_dict.values()))
+
+    def __str__(self) -> str:
+        if self.pass_finished:
+            return self._str_after_pass()
+        else:
+            return self._str_during_pass()
+
+    def _str_after_pass(self) -> str:
+        """Readable summary of the model history after the pass is finished.
+
+        Returns:
+            String summarizing the model.
+        """
+        s = f"Log of {self.model_name} forward pass:"
+        if self.model_is_branching:
+            branch_str = "with branching"
+        else:
+            branch_str = 'without branching'
+        if self.model_is_recurrent:
+            s += f"\n\tModel structure: recurrent (at most {self.model_max_recurrent_loops} loops), {branch_str}; " \
+                 f"{len(self.module_addresses)} total modules."
+        else:
+            s += f"\n\tModel structure: purely feedforward, {branch_str}; {len(self.module_addresses)} total modules."
+        s += f"\n\t{self.model_num_tensors_total} tensors ({self.model_tensor_fsize_total_nice}) " \
+             f"computed in forward pass; {self.model_num_tensors_saved} tensors " \
+             f"({self.model_tensor_fsize_saved_nice}) saved."
+        s += f"\n\t{self.model_total_param_tensors} parameter operations ({self.model_total_params} params total; " \
+             f"{self.model_total_params_fsize_nice})."
+        s += f"\n\tRandom seed: {self.random_seed_used}"
+        s += f"\n\tTime elapsed: {np.round(self.pass_elapsed_time, 3)}s"
+
+        # Print the module hierarchy.
+        s += f"\n\tModule Hierarchy:"
+        s += self._module_hierarchy_str()
+
+        # Now print all layers.
+        s += f"\n\tLayers:"
+        for layer_ind, layer_barcode in enumerate(self.layer_labels):
+            pass_num = self.tensor_log[layer_barcode].layer_pass_num
+            total_passes = self.tensor_log[layer_barcode].layer_passes_total
+            if total_passes > 1:
+                pass_str = f" ({pass_num}/{total_passes} passes)"
+            else:
+                pass_str = ''
+            s += f"\n\t\t{layer_ind}: {layer_barcode} {pass_str}"
+
+        return s
+
+    def _str_during_pass(self) -> str:
+        """Readable summary of the model history during the pass, as a debugging aid.
+
+        Returns:
+            String summarizing the model.
+        """
+        s = f"Log of {self.model_name} forward pass (pass still ongoing):"
+        s += f"\n\tRandom seed: {self.random_seed_used}"
+        s += f"\n\tInput tensors: {self.input_tensors}"
+        s += f"\n\tOutput tensors: {self.output_tensors}"
+        s += f"\n\tInternally initialized tensors: {self.internally_initialized_tensors}"
+        s += f"\n\tInternally terminated tensors: {self.internally_terminated_tensors}"
+        s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_tensors}"
+        s += f"\n\tBuffer tensors: {self.buffer_tensors}"
+        s += f"\n\tRaw layer labels:"
+        for layer in self.raw_tensor_labels_list:
+            s += f"\n\t\t{layer}"
+        return s
+
+    @staticmethod
+    def pretty_print_list_w_line_breaks(lst, indent_chars: str, line_break_every=5):
+        """
+        Utility function to pretty print a list with line breaks, adding indent_chars every line.
+        """
+        s = f'\n{indent_chars}'
+        for i, item in enumerate(lst):
+            s += f"{item}"
+            if i < len(lst) - 1:
+                s += ', '
+            if ((i + 1) % line_break_every == 0) and (i < len(lst) - 1):
+                s += f'\n{indent_chars}'
+        return s
+
+    def _get_lookup_help_str(self, layer_label):
+        """Generates a help string to be used in error messages when indexing fails.
+        """
+        sample_layer1 = random.choice(self.layer_labels_w_pass)
+        sample_layer2 = random.choice(self.layer_labels_no_pass)
+        if len(self.module_addresses) > 0:
+            sample_module1 = random.choice(self.module_addresses)
+            sample_module2 = random.choice(self.module_passes)
+        else:
+            sample_module1 = 'features.3'
+            sample_module2 = 'features.3:2'
+        module_str = f"(e.g., {sample_module1}, {sample_module2})"
+        help_str = (f"Layer {layer_label} not recognized; please specify either \n\t1) an integer giving "
+                    f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
+                    f"{sample_layer2}), \n\t3) the module address {module_str}"
+                    f"\n\t4) A substring of any desired layer labels (e.g., 'pool' will grab all maxpool2d "
+                    f"or avgpool2d layers, 'maxpool' with grab all 'maxpool2d' layers, etc.)."
+                    f"\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer,"
+                    f"and fourth layer overall in the model.)")
+        return help_str
+
+    def _module_hierarchy_str(self):
+        """
+        Utility function to print the nested module hierarchy.
+        """
+        s = ''
+        for module in self.top_level_modules:
+            s += f"\n\t\t{module[0]}"
+            if len(self.module_children[module]) > 0:
+                s += ':'
+            s += self._module_hierarchy_str_helper(module, 1)
+        return s
+
+    def _module_hierarchy_str_helper(self, module, level):
+        """
+        Helper function for _module_hierarchy_str.
+        """
+        s = ''
+        any_grandchild_modules = any([len(self.module_children[sub_module]) > 0
+                                      for sub_module in self.module_children[module]])
+        if any_grandchild_modules or len(self.module_children[module]) == 0:
+            for sub_module in self.module_children[module]:
+                s += f"\n\t\t{'    ' * level}{sub_module[0]}"
+                if len(self.module_children[sub_module]) == 0:
+                    s += ':'
+                s += self._module_hierarchy_str_helper(sub_module, level + 1)
+        else:
+            s += self.pretty_print_list_w_line_breaks(
+                [module_child[0] for module_child in self.module_children[module]],
+                line_break_every=8,
+                indent_chars=f"\t\t{'    ' * level}")
+        return s
+
+    def __repr__(self):
+        return self.__str__()

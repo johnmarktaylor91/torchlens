@@ -265,6 +265,7 @@ def decorate_pytorch(torch_module: types.ModuleType,
     # Bolt on the identity function
     new_identity = torch_func_decorator(identity, model_history)
     torch.identity = new_identity
+    mutant_to_orig_funcs_dict[new_identity] = identity
     return orig_func_defs, mutant_to_orig_funcs_dict
 
 

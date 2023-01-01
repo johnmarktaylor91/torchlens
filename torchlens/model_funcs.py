@@ -81,6 +81,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     # If it was initialized inside the model and nothing entered the module, it's bottom-level.
     if t.tl_initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
         t.tl_is_bottom_level_submodule_output = True
+        t.tl_bottom_level_submodule_exited = submodule_address
         return True
 
     # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
@@ -93,6 +94,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
 
     # If it survived the above tests, it's a bottom-level submodule.
     t.tl_is_bottom_level_submodule_output = True
+    t.tl_bottom_level_submodule_exited = submodule_address
     return True
 
 
@@ -310,6 +312,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     hook_handles = []
     model_name = str(type(model).__name__)
     model_history = ModelHistory(model_name, random_seed, tensor_nums_to_save)
+    model_history.pass_start_time = time.time()
     orig_func_defs = []
     try:  # TODO: replace with context manager.
         if type(model) == nn.DataParallel:
@@ -333,9 +336,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
             t.requires_grad = True
             t = t.to(model_device)
             model_history.log_source_tensor(t, 'input')
-        start_time = time.time()
         outputs = model(x)
-        model_history.elapsed_time = time.time() - start_time
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
