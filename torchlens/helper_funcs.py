@@ -338,16 +338,10 @@ def nested_getattr(obj: Any, attr: str) -> Any:
         if a in ['volatile', 'T']:  # avoid annoying warning; if there's more, make a list
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                if i == 0:
-                    out = getattr(obj, a)
-                else:
-                    out = getattr(out, a)
+                obj = getattr(obj, a)
         else:
-            if i == 0:
-                out = getattr(obj, a)
-            else:
-                out = getattr(out, a)
-    return out
+            obj = getattr(obj, a)
+    return obj
 
 
 def remove_attributes_starting_with_str(obj: Any,

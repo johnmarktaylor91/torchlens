@@ -122,7 +122,7 @@ def module_post_hook(module: nn.Module,
         t.tl_is_submodule_output = True
 
         if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
-            t = torch.identity(t)
+            t = getattr(torch, 'identity')(t)
 
         t.tl_is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
         t.tl_modules_exited.append(module_address)
@@ -243,7 +243,7 @@ def restore_model_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
                 delattr(module, attribute_name)
 
     for param in model.parameters():
-        param.requires_grad = param.tl_requires_grad
+        param.requires_grad = getattr(param, 'tl_requires_grad')
         for attribute_name in dir(param):
             if attribute_name.startswith(attribute_keyword):
                 delattr(param, attribute_name)

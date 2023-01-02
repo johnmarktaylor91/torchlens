@@ -6,20 +6,6 @@ from IPython.display import display
 
 from torchlens.helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str
 
-INPUT_COLOR = "#98FB98"
-OUTPUT_COLOR = "#ff9999"
-PARAMS_NODE_BG_COLOR = "#E6E6E6"
-BUFFER_NODE_COLOR = "#888888"
-DEFAULT_BG_COLOR = 'white'
-CONNECTING_NODE_LINE_COLOR = 'black'
-NONCONNECTING_NODE_LINE_COLOR = '#A0A0A0'
-BOOL_NODE_COLOR = '#F7D460'
-MAX_MODULE_PENWIDTH = 5
-MIN_MODULE_PENWIDTH = 2
-PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
-
-commute_funcs = ['add', 'mul', 'cat', 'eq', 'ne']
-
 
 def roll_graph(history_dict: Dict) -> Dict:
     """Converts the graph to rolled-up format for plotting purposes. This means that the nodes of the graph
