@@ -133,6 +133,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'func_position_args_non_tensor',
     'func_keyword_args_non_tensor',
     'func_all_args_non_tensor',
+    'function_is_inplace',
     'gradfunc',
     'gradfunc_name',
     'is_part_of_iterable_output',

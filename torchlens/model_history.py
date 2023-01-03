@@ -87,6 +87,7 @@ class TensorLogEntry:
         self.func_position_args_non_tensor = fields_dict['func_position_args_non_tensor']
         self.func_keyword_args_non_tensor = fields_dict['func_keyword_args_non_tensor']
         self.func_all_args_non_tensor = fields_dict['func_all_args_non_tensor']
+        self.function_is_inplace = fields_dict['function_is_inplace']
         self.gradfunc = fields_dict['gradfunc']
         self.gradfunc_name = fields_dict['gradfunc_name']
         self.is_part_of_iterable_output = fields_dict['is_part_of_iterable_output']
@@ -564,6 +565,7 @@ class ModelHistory:
             'func_position_args_non_tensor': [],
             'func_keyword_args_non_tensor': {},
             'func_all_args_non_tensor': [],
+            'function_is_inplace': False,
             'gradfunc': None,
             'gradfunc_name': 'none',
             'is_part_of_iterable_output': False,
@@ -674,7 +676,6 @@ class ModelHistory:
         # Unpacking and reformatting:
         func_name = func.__name__
         layer_type = func_name.lower().replace('_', '')
-        operation_equivalence_type = f"{layer_type}_{self._get_hash_from_untracked_args(args, kwargs)}"
         all_args = list(args) + list(kwargs.values())
 
         fields_dict = {}  # dict storing the arguments for initializing the new log entry
@@ -687,11 +688,6 @@ class ModelHistory:
 
         # General info
         fields_dict['layer_type'] = layer_type
-
-        # Corresponding layer info
-        fields_dict['operation_equivalence_type'] = operation_equivalence_type
-        fields_dict['equivalent_operations'] = set()
-        fields_dict['same_layer_tensors'] = []
 
         # Function call info
         fields_dict['func_applied'] = func
@@ -746,22 +742,8 @@ class ModelHistory:
         arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
         parent_param_passes = self._process_parent_param_passes(arg_parameters)
         indiv_param_barcodes = list(parent_param_passes.keys())
-        if len(parent_param_passes) > 0:
-            computed_from_params = True
-            layer_label = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
-            pass_num = len(self.layers_computed_with_params[layer_label])
-            operation_equivalence_type = layer_label[:]
-        else:
-            computed_from_params = False
-            layer_label = None
-            operation_equivalence_type = fields_dict['operation_equivalence_type']  # keep it the same if no params
-            pass_num = 1
 
-        fields_dict['tl_layer_label_raw'] = layer_label
-        fields_dict['operation_equivalence_type'] = operation_equivalence_type
-        fields_dict['equivalent_operations'] = self.equivalent_operations[operation_equivalence_type]
-        fields_dict['pass_num'] = pass_num
-        fields_dict['computed_from_params'] = computed_from_params
+        fields_dict['computed_from_params'] = (len(parent_param_passes) > 0)
         fields_dict['parent_params'] = arg_parameters
         fields_dict['parent_param_barcodes'] = indiv_param_barcodes
         fields_dict['parent_param_passes'] = parent_param_passes
@@ -799,22 +781,46 @@ class ModelHistory:
         out_iter = make_var_iterable(out_orig)  # so we can iterate through it
 
         for i, out in enumerate(out_iter):
-            if not (type(out) == torch.Tensor and (not hasattr(out, 'tl_tensor_label_raw') or
-                                                   out.grad_fn != out.tl_gradfunc or
-                                                   is_bottom_level_func)):
+            if not self._output_should_be_logged(out, is_bottom_level_func):
                 continue
-            self._log_info_specific_to_single_function_output_tensor(out, i, fields_dict)
+
+            self._log_info_specific_to_single_function_output_tensor(out, i,
+                                                                     parent_param_passes, fields_dict)
             self._make_tensor_log_entry(out, fields_dict=fields_dict,
                                         t_args=args, t_kwargs=kwargs)
-            self._update_tensor_family_links(self[fields_dict['tensor_label_raw']])
+            new_tensor_entry = self[fields_dict['tensor_label_raw']]
+            self._update_tensor_family_links(new_tensor_entry)
 
             # Tag the tensor itself with its label, and with a reference to the model history log.
             out.tl_tensor_label_raw = fields_dict['tensor_label_raw']
             out.tl_source_model_history = self
 
+    def _output_should_be_logged(self,
+                                 out: Any,
+                                 is_bottom_level_func: bool) -> bool:
+        """Function to check whether to log the output of a function.
+
+        Returns:
+            True if the output should be logged, False otherwise.
+        """
+        if type(out) != torch.Tensor:  # only log if it's a tensor
+            return False
+
+        has_same_gradfunc = False
+        if hasattr(out, 'tl_tensor_label_raw'):
+            old_gradfunc = self[getattr(out, 'tl_tensor_label_raw')].gradfunc
+            if out.grad_fn == old_gradfunc:
+                has_same_gradfunc = True
+
+        if (not hasattr(out, 'tl_tensor_label_raw')) or (not has_same_gradfunc) or is_bottom_level_func:
+            return True
+        else:
+            return False
+
     def _log_info_specific_to_single_function_output_tensor(self,
                                                             t: torch.Tensor,
                                                             i: int,
+                                                            parent_param_passes: Dict[str, int],
                                                             fields_dict: Dict[str, Any]):
         """Function to log handle the logging of info that's specific to a single output tensor
         (e.g., the shape), and not common to all output tensors.
@@ -822,21 +828,47 @@ class ModelHistory:
         Args:
             t: tensor to log
             i: index of the tensor in the function output
+            parent_param_passes: Dict mapping barcodes of parent params to how many passes they've seen
             fields_dict: dictionary of fields with which to initialize the new TensorLogEntry
         """
-        # TODO: get clear exactly on what has to wait until here
+        '''
+        TODO: THIS SHIT: let's say layers aren't determined yet, but we need to assign operation equivalence types
+        based on arguments, params, index of the tensor in iterable output
+             if len(parent_param_passes) > 0:
+            pass_num = len(self.layers_computed_with_params[layer_label])
+            operation_equivalence_type = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
+        else:
+            layer_label = None
+            operation_equivalence_type = fields_dict['operation_equivalence_type']  # keep it the same if no params
+            pass_num = 1
+
+
+        operation_equivalence_type = f"{layer_type}_{self._get_hash_from_untracked_args(args, kwargs)}"
+        fields_dict['operation_equivalence_type'] = operation_equivalence_type
+        fields_dict['equivalent_operations'] = self.equivalent_operations[operation_equivalence_type]
+        fields_dict['same_layer_tensors'] = []
+        fields_dict['pass_num'] = pass_num
+        '''
+
         layer_type = fields_dict['layer_type']
         realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
         tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}"
 
+        fields_dict['function_is_inplace'] = hasattr(t, 'tl_tensor_label_raw')
+
         # Increment the counters to be ready for the next tensor
         self.raw_layer_type_counter[layer_type] += 1
         self.tensor_counter += 1
 
-        if hasattr(t, 'tl_gradfunc') and (t.grad_fn == t.tl_gradfunc):
-            fields_dict['gradfunc'] = identity
-            fields_dict['gradfunc_name'] = 'identity'
+        if fields_dict['function_is_inplace']:
+            old_gradfunc = self[getattr(t, 'tl_tensor_label_raw')].gradfunc
+            if t.grad_fn == old_gradfunc:
+                fields_dict['gradfunc'] = identity
+                fields_dict['gradfunc_name'] = 'identity'
+            else:
+                fields_dict['gradfunc'] = t.grad_fn
+                fields_dict['gradfunc_name'] = type(t.grad_fn).__name__
         else:
             fields_dict['gradfunc'] = t.grad_fn
             fields_dict['gradfunc_name'] = type(t.grad_fn).__name__
@@ -1727,7 +1759,7 @@ class ModelHistory:
         """
         candidate_node = self[candidate_node_label]
         candidate_node_operation_equivalence_type = candidate_node.operation_equivalence_type
-        new_equivalent_nodes = [candidate_node_label]
+        new_equivalent_nodes = [(candidate_node_label, candidate_node_subgraph)]
         for subgraph_label in successor_nodes_dict:
             if subgraph_label == candidate_node_subgraph:  # ignore same subgraph
                 continue
@@ -1738,6 +1770,9 @@ class ModelHistory:
                     new_equivalent_nodes.append((other_subgraph_nodes.pop(c), subgraph_label))
                     break  # only add one node per subgraph at most
         new_equivalent_nodes = sorted(new_equivalent_nodes, key=lambda x: x[0])
+        # Remove any collisions to the SAME node:
+        node_labels = [node[0] for node in new_equivalent_nodes]
+        new_equivalent_nodes = [node for node in new_equivalent_nodes if node_labels.count(node[0]) == 1]
         return new_equivalent_nodes
 
     def _log_new_isomorphic_nodes(self,

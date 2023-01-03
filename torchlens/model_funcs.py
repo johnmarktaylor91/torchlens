@@ -205,13 +205,12 @@ def module_post_hook(module: nn.Module,
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
-        model_history = t.tl_source_model_history
-        tensor_entry = model_history[t.tl_tensor_label_raw]
-        tensor_entry.is_submodule_output = True
-
         if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
             t = getattr(torch, 'identity')(t)
 
+        model_history = t.tl_source_model_history
+        tensor_entry = model_history[t.tl_tensor_label_raw]
+        tensor_entry.is_submodule_output = True
         tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
         tensor_entry.modules_exited.append(module_address)
         tensor_entry.module_passes_exited.append((module_address, module_pass_num))
@@ -219,7 +218,7 @@ def module_post_hook(module: nn.Module,
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
         model_history.update_tensor_log_entry(t)  # Update tensor log with this new information.
 
-    for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
+    for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
         model_history = t.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
         input_module_thread = t.tl_module_entry_exit_thread[:]
