@@ -1404,94 +1404,174 @@ class ModelHistory:
 
             nodes_seen.add(node_label)
 
-    @staticmethod
-    def _group_isomorphic_nodes_to_same_layers(iso_node_groups: Dict[str, List],
-                                               subgraphs_dict: Dict,
-                                               node_to_subgraph_dict: Dict,
-                                               adjacent_subgraphs: Dict) -> Dict:
-        same_layer_node_groups = defaultdict(set)  # dict of nodes assigned to the same layer
-        node_to_layer_group_dict = {}  # reverse mapping: each node to its equivalent layer group
+    def _assign_corresponding_tensors_to_same_layer(self):
+        """
+        Post-processing function that yokes together operations corresponding to the same layer, based on
+        the following rule:
+        1) Operations invoking the same parameters are always assigned to the same layer.
+        2) Any contiguous operations surrounding repeated parameters are assigned to the same layer
+            (e.g., if a ReLU always follows every pass of an FC layer, then all instances of that ReLU
+            operation are considered part of the same layer; continue for all such contiguous
+            equivalent operations)
+        3) Any groups of contiguous operations that "loop" back to back, irrespective of whether
+            they include a parameter or not (e.g., in ABCABCABC, then all As count as the same layer, all
+            Bs count as the same layer, and all Cs cound as the same layer, but if a D or an F were inserted
+            between these triplets, they would no longer be grouped together, since the repeats
+            are no longer contiguous)
+        It works by starting from root nodes, and starting from the earliest one, going forward one node at a time,
+        and checking if there are equivalent operations. If so, it builds forward one node at a time, until
+        it no longer finds equivalent operations. If these subgraphs include a parameter node, these nodes
+        are then grouped together no matter what. If they don't, they're only grouped together if contiguous.
+        To allow for the possibility that a node might have more "equivalent" layers as a subset of some bigger
+        subgraph, then while advancing forward, the function checks the number of equivalent layers it has been
+        assigned is equal to the number of operations of that type. If so, it's definitely found everything;
+        if not, it runs the procedure again to check if more equivalent operations can be found.
+        """
+        node_stack = self.input_layers + self.internally_initialized_layers
+        node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
+        operation_equivalence_types_seen = set()
+        while len(node_stack) > 0:
+            # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
+            node_label = node_stack.pop(0)
+            node = self[node_label]
+            node_operation_equivalence_type = node.operation_equivalence_type
+            node_stack.extend(node.child_layers)
+            node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
 
-        for iso_group_label, iso_nodes_orig in iso_node_groups.items():
-            iso_nodes = sorted(iso_nodes_orig)
-            for node1_label, node2_label in it.combinations(iso_nodes, 2):
-                node1_subgraph_label = node_to_subgraph_dict[node1_label]
-                node2_subgraph_label = node_to_subgraph_dict[node2_label]
-                node1_subgraph = subgraphs_dict[node1_subgraph_label]
-                node2_subgraph = subgraphs_dict[node2_subgraph_label]
-                both_subgraphs_have_params = all([node1_subgraph.has_param_node, node2_subgraph.has_param_node])
-                subgraphs_are_adjacent = (node1_subgraph_label in adjacent_subgraphs and
-                                          node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label])
-                if both_subgraphs_have_params or subgraphs_are_adjacent:
-                    earlier_node_label = sorted([node1_label, node2_label])[0]  # layer label always the first node
-                    if earlier_node_label in node_to_layer_group_dict:
-                        layer_group = node_to_layer_group_dict[earlier_node_label]
-                    else:
-                        layer_group = earlier_node_label
-                    same_layer_node_groups[layer_group].update({node1_label, node2_label})
-                    node_to_layer_group_dict[node1_label] = layer_group
-                    node_to_layer_group_dict[node2_label] = layer_group
+            # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
+            if node_operation_equivalence_type in operation_equivalence_types_seen:
+                continue
+            operation_equivalence_types_seen.add(node_operation_equivalence_type)
 
-        return same_layer_node_groups
+            # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
+            if len(node.equivalent_operations) == 1:
+                node.same_layer_tensors = [node_label]
+                continue
 
-    def _assign_and_log_isomorphic_nodes_to_same_layers(self,
-                                                        iso_node_groups: Dict[str, List],
-                                                        subgraphs_dict: Dict,
-                                                        node_to_subgraph_dict: Dict,
-                                                        adjacent_subgraphs: Dict):
-        """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
-        goes through and labels the layers as corresponding to each other. The rule is that nodes will be
-        labeled as corresponding if 1) they are isomorphic with respect to the starting node, and
-        2) the subgraphs either contain a param node, or are adjacent.
+            # If we've already found the same-layer tensors for this node, and it equals the number of
+            # equivalent operations, skip it; the work is already done:
+            if len(node.equivalent_operations) == len(node.same_layer_tensors):
+                continue
+
+            # Else, start from this node and any equivalent operations, and work forward, finding
+            # more equivalent operations:
+            self._find_and_mark_same_layer_operations_starting_from_node(node)
+
+    def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLogEntry):
+        """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
+        and crawls forward, finding and marking corresponding operations until there are none left.
+        At the end of this, nodes that have the same position with respect to the original node
+        are labeled as the same layer either if 1) the subgraph contains a parameter node,
+        or 2) the nodes belong to adjacent subgraphs.
 
         Args:
-            iso_node_groups: Dict specifying list of isomorphic nodes in each group
-            subgraphs_dict: Dict containing entries with information for each subgraph
-            node_to_subgraph_dict: Dict mapping each node to the subgraph its in.
-            adjacent_subgraphs: Dict mapping each subgraph to set of adjacent subgraphs.
+            node: node to start from
         """
-        # Go through each set of isomorphic nodes, and further partition them into nodes assigned to same layer:
-        same_layer_node_groups = self._group_isomorphic_nodes_to_same_layers(iso_node_groups,
-                                                                             subgraphs_dict,
-                                                                             node_to_subgraph_dict,
-                                                                             adjacent_subgraphs)
+        # Bookkeeping regarding nodes, subgraphs, isomorphic nodes, adjacent subgraphs:
+        # Label each subgraph by its starting node label.
+        equivalent_operation_starting_labels = sorted(list(node.equivalent_operations))
 
-        # Finally, label the nodes corresponding to the same layer.
-        for layer_label, layer_nodes in same_layer_node_groups.items():
-            layer_nodes = sorted(list(layer_nodes))  # convert to list and sort
-            for n, node_label in enumerate(layer_nodes):
-                node = self[node_label]
-                node.layer_label_raw = layer_label
-                node.same_layer_tensors = layer_nodes
-                node.pass_num = n + 1
-                node.layer_total_passes = len(layer_nodes)
+        # Dictionary specifying isomorphic nodes: key is earliest such node, value is list of isomorphic nodes
+        iso_node_groups = OrderedDict({equivalent_operation_starting_labels[0]: equivalent_operation_starting_labels})
 
-    @staticmethod
-    def _update_adjacent_subgraphs(node_subgraph_label: str,
-                                   neighbor_subgraph_label: str,
-                                   adjacent_subgraphs: Dict[str, set]):
-        """Helper function that updates the adjacency status of two subgraphs
+        # Reverse dictionary mapping each node to its isomorphism group
+        node_to_iso_group_dict = OrderedDict({label: equivalent_operation_starting_labels[0] for label in
+                                              equivalent_operation_starting_labels})
+
+        # Dictionary of information about each subgraph
+        subgraphs_dict = {}
+        subgraph_info = namedtuple('SubgraphInfo', ['starting_node',
+                                                    'has_param_node',
+                                                    'node_set'])
+        for starting_label in equivalent_operation_starting_labels:
+            subgraphs_dict[starting_label] = subgraph_info(starting_node=starting_label,
+                                                           has_param_node=node.computed_with_params,
+                                                           node_set={starting_label})
+
+        # Dictionary mapping each node to the subgraph it is in
+        node_to_subgraph_dict = OrderedDict({label: subgraphs_dict[label] for label in
+                                             equivalent_operation_starting_labels})
+
+        # Dict mapping each subgraph to the set of subgraphs it's adjacent to; initialize each to be self-adjacent
+        adjacent_subgraphs = {}
+
+        # The stack will be a list of lists, where each latter list is a list of isomorphic nodes.
+        # When adding to the stack, only isomorphic nodes will be added.
+
+        node_stack = [equivalent_operation_starting_labels[:]]
+
+        is_first_node = True  # if the first node, don't look at parents
+        while node_stack:
+            # Pop a set of isomorphic nodes off of the stack, then add and process the next nodes in the stack.
+            isomorphic_nodes = sorted(node_stack.pop(0))
+            self._fetch_and_process_next_isomorphic_nodes(isomorphic_nodes,
+                                                          iso_node_groups,
+                                                          node_to_iso_group_dict,
+                                                          subgraphs_dict,
+                                                          node_to_subgraph_dict,
+                                                          adjacent_subgraphs,
+                                                          is_first_node,
+                                                          node_stack)
+            is_first_node = False
+
+        self._assign_and_log_isomorphic_nodes_to_same_layers(iso_node_groups,
+                                                             subgraphs_dict,
+                                                             node_to_subgraph_dict,
+                                                             adjacent_subgraphs)
+
+    def _fetch_and_process_next_isomorphic_nodes(self,
+                                                 current_iso_nodes: List[str],
+                                                 iso_node_groups: Dict[str, List[str]],
+                                                 node_to_iso_group_dict: Dict[str, str],
+                                                 subgraphs_dict: Dict,
+                                                 node_to_subgraph_dict: Dict,
+                                                 adjacent_subgraphs: Dict[str, set],
+                                                 is_first_node: bool,
+                                                 node_stack: List[List[str]]):
+        """Function that takes a set of isomorphic nodes, finds all sets of isomorphic successor nodes,
+        then processes them and adds them to the stack.
 
         Args:
-            node_subgraph_label: Label of the first subgraph
-            neighbor_subgraph_label: Label of the second subgraph
-            adjacent_subgraphs: Dict mapping each subgraph to set of subgraphs its adjacent to
+            current_iso_nodes: Current set of isomorphic nodes to get the next nodes from.
+            iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
+            node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
+            subgraphs_dict: Dict of information about each subgraph
+            node_to_subgraph_dict: Dict mapping each node to its subgraph
+            adjacent_subgraphs: List of sets of adjacent subgraphs
+            is_first_node: Whether it's the first node in the subgraph; if so, just do children, not parents to start.
+            node_stack: List of lists of isomorphic nodes in the stack.
         """
-        if (node_subgraph_label in adjacent_subgraphs) and (
-                neighbor_subgraph_label in adjacent_subgraphs):
-            return
-        elif (node_subgraph_label in adjacent_subgraphs) and (
-                neighbor_subgraph_label not in adjacent_subgraphs):
-            adjacent_subgraphs[node_subgraph_label].add(neighbor_subgraph_label)
-            adjacent_subgraphs[neighbor_subgraph_label] = adjacent_subgraphs[node_subgraph_label]
-        elif (node_subgraph_label not in adjacent_subgraphs) and (
-                neighbor_subgraph_label in adjacent_subgraphs):
-            adjacent_subgraphs[neighbor_subgraph_label].add(node_subgraph_label)
-            adjacent_subgraphs[node_subgraph_label] = adjacent_subgraphs[neighbor_subgraph_label]
-        else:
-            new_adj_set = {node_subgraph_label, neighbor_subgraph_label}
-            adjacent_subgraphs[neighbor_subgraph_label] = new_adj_set
-            adjacent_subgraphs[node_subgraph_label] = new_adj_set
+        # First, get all children and parents of the current nodes, with constraint of not being added
+        # to their own subgraph yet to avoid backtracking; if run into another subgraph, mark them
+        # adjacent and skip.
+
+        successor_nodes_dict = self._log_collisions_and_get_candidate_next_nodes(current_iso_nodes,
+                                                                                 node_to_subgraph_dict,
+                                                                                 adjacent_subgraphs,
+                                                                                 is_first_node)
+
+        # Find sets of isomorphic nodes, process & add to the stack, discard singular nodes, repeat till none left.
+
+        while True:
+            # Grab a node and pop it:
+            candidate_node_label, candidate_node_neighbor_type, candidate_node_subgraph = \
+                self._get_next_candidate_node(successor_nodes_dict)
+            if candidate_node_label is None:
+                break
+
+            new_equivalent_nodes = self._get_nodes_isomorphic_to_candidate_node(candidate_node_label,
+                                                                                candidate_node_neighbor_type,
+                                                                                candidate_node_subgraph,
+                                                                                successor_nodes_dict)
+
+            # Now log this new set of isomorphic nodes.
+
+            self._log_new_isomorphic_nodes(new_equivalent_nodes,
+                                           iso_node_groups,
+                                           node_to_iso_group_dict,
+                                           subgraphs_dict,
+                                           node_to_subgraph_dict,
+                                           node_stack)
 
     def _log_collisions_and_get_candidate_next_nodes(self,
                                                      current_iso_nodes: List[str],
@@ -1534,6 +1614,33 @@ class ModelHistory:
             successor_nodes_dict[node_subgraph_label] = subgraph_successor_nodes
 
         return successor_nodes_dict
+
+    @staticmethod
+    def _update_adjacent_subgraphs(node_subgraph_label: str,
+                                   neighbor_subgraph_label: str,
+                                   adjacent_subgraphs: Dict[str, set]):
+        """Helper function that updates the adjacency status of two subgraphs
+
+        Args:
+            node_subgraph_label: Label of the first subgraph
+            neighbor_subgraph_label: Label of the second subgraph
+            adjacent_subgraphs: Dict mapping each subgraph to set of subgraphs its adjacent to
+        """
+        if (node_subgraph_label in adjacent_subgraphs) and (
+                neighbor_subgraph_label in adjacent_subgraphs):
+            return
+        elif (node_subgraph_label in adjacent_subgraphs) and (
+                neighbor_subgraph_label not in adjacent_subgraphs):
+            adjacent_subgraphs[node_subgraph_label].add(neighbor_subgraph_label)
+            adjacent_subgraphs[neighbor_subgraph_label] = adjacent_subgraphs[node_subgraph_label]
+        elif (node_subgraph_label not in adjacent_subgraphs) and (
+                neighbor_subgraph_label in adjacent_subgraphs):
+            adjacent_subgraphs[neighbor_subgraph_label].add(node_subgraph_label)
+            adjacent_subgraphs[node_subgraph_label] = adjacent_subgraphs[neighbor_subgraph_label]
+        else:
+            new_adj_set = {node_subgraph_label, neighbor_subgraph_label}
+            adjacent_subgraphs[neighbor_subgraph_label] = new_adj_set
+            adjacent_subgraphs[node_subgraph_label] = new_adj_set
 
     @staticmethod
     def _get_next_candidate_node(successor_nodes_dict: Dict) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -1617,174 +1724,67 @@ class ModelHistory:
                 node_to_subgraph_dict[node_label] = node_subgraph
             node_stack.append(equivalent_node_labels)
 
-    def _fetch_and_process_next_isomorphic_nodes(self,
-                                                 current_iso_nodes: List[str],
-                                                 iso_node_groups: Dict[str, List[str]],
-                                                 node_to_iso_group_dict: Dict[str, str],
-                                                 subgraphs_dict: Dict,
-                                                 node_to_subgraph_dict: Dict,
-                                                 adjacent_subgraphs: Dict[str, set],
-                                                 is_first_node: bool,
-                                                 node_stack: List[List[str]]):
-        """Function that takes a set of isomorphic nodes, finds all sets of isomorphic successor nodes,
-        then processes them and adds them to the stack.
+    def _assign_and_log_isomorphic_nodes_to_same_layers(self,
+                                                        iso_node_groups: Dict[str, List],
+                                                        subgraphs_dict: Dict,
+                                                        node_to_subgraph_dict: Dict,
+                                                        adjacent_subgraphs: Dict):
+        """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
+        goes through and labels the layers as corresponding to each other. The rule is that nodes will be
+        labeled as corresponding if 1) they are isomorphic with respect to the starting node, and
+        2) the subgraphs either contain a param node, or are adjacent.
 
         Args:
-            current_iso_nodes: Current set of isomorphic nodes to get the next nodes from.
-            iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
-            node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
-            subgraphs_dict: Dict of information about each subgraph
-            node_to_subgraph_dict: Dict mapping each node to its subgraph
-            adjacent_subgraphs: List of sets of adjacent subgraphs
-            is_first_node: Whether it's the first node in the subgraph; if so, just do children, not parents to start.
-            node_stack: List of lists of isomorphic nodes in the stack.
+            iso_node_groups: Dict specifying list of isomorphic nodes in each group
+            subgraphs_dict: Dict containing entries with information for each subgraph
+            node_to_subgraph_dict: Dict mapping each node to the subgraph its in.
+            adjacent_subgraphs: Dict mapping each subgraph to set of adjacent subgraphs.
         """
-        # First, get all children and parents of the current nodes, with constraint of not being added
-        # to their own subgraph yet to avoid backtracking; if run into another subgraph, mark them
-        # adjacent and skip.
+        # Go through each set of isomorphic nodes, and further partition them into nodes assigned to same layer:
+        same_layer_node_groups = self._group_isomorphic_nodes_to_same_layers(iso_node_groups,
+                                                                             subgraphs_dict,
+                                                                             node_to_subgraph_dict,
+                                                                             adjacent_subgraphs)
 
-        successor_nodes_dict = self._log_collisions_and_get_candidate_next_nodes(current_iso_nodes,
-                                                                                 node_to_subgraph_dict,
-                                                                                 adjacent_subgraphs,
-                                                                                 is_first_node)
+        # Finally, label the nodes corresponding to the same layer.
+        for layer_label, layer_nodes in same_layer_node_groups.items():
+            layer_nodes = sorted(list(layer_nodes))  # convert to list and sort
+            for n, node_label in enumerate(layer_nodes):
+                node = self[node_label]
+                node.layer_label_raw = layer_label
+                node.same_layer_tensors = layer_nodes
+                node.pass_num = n + 1
+                node.layer_total_passes = len(layer_nodes)
 
-        # Find sets of isomorphic nodes, process & add to the stack, discard singular nodes, repeat till none left.
+    @staticmethod
+    def _group_isomorphic_nodes_to_same_layers(iso_node_groups: Dict[str, List],
+                                               subgraphs_dict: Dict,
+                                               node_to_subgraph_dict: Dict,
+                                               adjacent_subgraphs: Dict) -> Dict:
+        same_layer_node_groups = defaultdict(set)  # dict of nodes assigned to the same layer
+        node_to_layer_group_dict = {}  # reverse mapping: each node to its equivalent layer group
 
-        while True:
-            # Grab a node and pop it:
-            candidate_node_label, candidate_node_neighbor_type, candidate_node_subgraph = \
-                self._get_next_candidate_node(successor_nodes_dict)
-            if candidate_node_label is None:
-                break
+        for iso_group_label, iso_nodes_orig in iso_node_groups.items():
+            iso_nodes = sorted(iso_nodes_orig)
+            for node1_label, node2_label in it.combinations(iso_nodes, 2):
+                node1_subgraph_label = node_to_subgraph_dict[node1_label]
+                node2_subgraph_label = node_to_subgraph_dict[node2_label]
+                node1_subgraph = subgraphs_dict[node1_subgraph_label]
+                node2_subgraph = subgraphs_dict[node2_subgraph_label]
+                both_subgraphs_have_params = all([node1_subgraph.has_param_node, node2_subgraph.has_param_node])
+                subgraphs_are_adjacent = (node1_subgraph_label in adjacent_subgraphs and
+                                          node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label])
+                if both_subgraphs_have_params or subgraphs_are_adjacent:
+                    earlier_node_label = sorted([node1_label, node2_label])[0]  # layer label always the first node
+                    if earlier_node_label in node_to_layer_group_dict:
+                        layer_group = node_to_layer_group_dict[earlier_node_label]
+                    else:
+                        layer_group = earlier_node_label
+                    same_layer_node_groups[layer_group].update({node1_label, node2_label})
+                    node_to_layer_group_dict[node1_label] = layer_group
+                    node_to_layer_group_dict[node2_label] = layer_group
 
-            new_equivalent_nodes = self._get_nodes_isomorphic_to_candidate_node(candidate_node_label,
-                                                                                candidate_node_neighbor_type,
-                                                                                candidate_node_subgraph,
-                                                                                successor_nodes_dict)
-
-            # Now log this new set of isomorphic nodes.
-
-            self._log_new_isomorphic_nodes(new_equivalent_nodes,
-                                           iso_node_groups,
-                                           node_to_iso_group_dict,
-                                           subgraphs_dict,
-                                           node_to_subgraph_dict,
-                                           node_stack)
-
-    def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLogEntry):
-        """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
-        and crawls forward, finding and marking corresponding operations until there are none left.
-        At the end of this, nodes that have the same position with respect to the original node
-        are labeled as the same layer either if 1) the subgraph contains a parameter node,
-        or 2) the nodes belong to adjacent subgraphs.
-
-        Args:
-            node: node to start from
-        """
-        # Bookkeeping regarding nodes, subgraphs, isomorphic nodes, adjacent subgraphs:
-        # Label each subgraph by its starting node label.
-        equivalent_operation_starting_labels = sorted(list(node.equivalent_operations))
-
-        # Dictionary specifying isomorphic nodes: key is earliest such node, value is list of isomorphic nodes
-        iso_node_groups = OrderedDict({equivalent_operation_starting_labels[0]: equivalent_operation_starting_labels})
-
-        # Reverse dictionary mapping each node to its isomorphism group
-        node_to_iso_group_dict = OrderedDict({label: equivalent_operation_starting_labels[0] for label in
-                                              equivalent_operation_starting_labels})
-
-        # Dictionary of information about each subgraph
-        subgraphs_dict = {}
-        subgraph_info = namedtuple('SubgraphInfo', ['starting_node',
-                                                    'has_param_node',
-                                                    'node_set'])
-        for starting_label in equivalent_operation_starting_labels:
-            subgraphs_dict[starting_label] = subgraph_info(starting_node=starting_label,
-                                                           has_param_node=node.computed_with_params,
-                                                           node_set={starting_label})
-
-        # Dictionary mapping each node to the subgraph it is in
-        node_to_subgraph_dict = OrderedDict({label: subgraphs_dict[label] for label in
-                                             equivalent_operation_starting_labels})
-
-        # Dict mapping each subgraph to the set of subgraphs it's adjacent to; initialize each to be self-adjacent
-        adjacent_subgraphs = {}
-
-        # The stack will be a list of lists, where each latter list is a list of isomorphic nodes.
-        # When adding to the stack, only isomorphic nodes will be added.
-
-        node_stack = [equivalent_operation_starting_labels[:]]
-
-        is_first_node = True  # if the first node, don't look at parents
-        while node_stack:
-            # Pop a set of isomorphic nodes off of the stack, then add and process the next nodes in the stack.
-            isomorphic_nodes = sorted(node_stack.pop(0))
-            self._fetch_and_process_next_isomorphic_nodes(isomorphic_nodes,
-                                                          iso_node_groups,
-                                                          node_to_iso_group_dict,
-                                                          subgraphs_dict,
-                                                          node_to_subgraph_dict,
-                                                          adjacent_subgraphs,
-                                                          is_first_node,
-                                                          node_stack)
-            is_first_node = False
-
-        self._assign_and_log_isomorphic_nodes_to_same_layers(iso_node_groups,
-                                                             subgraphs_dict,
-                                                             node_to_subgraph_dict,
-                                                             adjacent_subgraphs)
-
-    def _assign_corresponding_tensors_to_same_layer(self):
-        """
-        Post-processing function that yokes together operations corresponding to the same layer, based on
-        the following rule:
-        1) Operations invoking the same parameters are always assigned to the same layer.
-        2) Any contiguous operations surrounding repeated parameters are assigned to the same layer
-            (e.g., if a ReLU always follows every pass of an FC layer, then all instances of that ReLU
-            operation are considered part of the same layer; continue for all such contiguous
-            equivalent operations)
-        3) Any groups of contiguous operations that "loop" back to back, irrespective of whether
-            they include a parameter or not (e.g., in ABCABCABC, then all As count as the same layer, all
-            Bs count as the same layer, and all Cs cound as the same layer, but if a D or an F were inserted
-            between these triplets, they would no longer be grouped together, since the repeats
-            are no longer contiguous)
-        It works by starting from root nodes, and starting from the earliest one, going forward one node at a time,
-        and checking if there are equivalent operations. If so, it builds forward one node at a time, until
-        it no longer finds equivalent operations. If these subgraphs include a parameter node, these nodes
-        are then grouped together no matter what. If they don't, they're only grouped together if contiguous.
-        To allow for the possibility that a node might have more "equivalent" layers as a subset of some bigger
-        subgraph, then while advancing forward, the function checks the number of equivalent layers it has been
-        assigned is equal to the number of operations of that type. If so, it's definitely found everything;
-        if not, it runs the procedure again to check if more equivalent operations can be found.
-        """
-        node_stack = self.input_layers + self.internally_initialized_layers
-        node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
-        operation_equivalence_types_seen = set()
-        while len(node_stack) > 0:
-            # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
-            node_label = node_stack.pop(0)
-            node = self[node_label]
-            node_operation_equivalence_type = node.operation_equivalence_type
-            node_stack.extend(node.child_layers)
-            node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
-
-            # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
-            if node_operation_equivalence_type in operation_equivalence_types_seen:
-                continue
-            operation_equivalence_types_seen.add(node_operation_equivalence_type)
-
-            # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
-            if len(node.equivalent_operations) == 1:
-                node.same_layer_tensors = [node_label]
-                continue
-
-            # If we've already found the same-layer tensors for this node, and it equals the number of
-            # equivalent operations, skip it; the work is already done:
-            if len(node.equivalent_operations) == len(node.same_layer_tensors):
-                continue
-
-            # Else, start from this node and any equivalent operations, and work forward, finding
-            # more equivalent operations:
-            self._find_and_mark_same_layer_operations_starting_from_node(node)
+        return same_layer_node_groups
 
     def _fix_modules_for_internal_tensors(self):
         """
