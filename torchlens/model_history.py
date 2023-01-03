@@ -15,7 +15,7 @@ import torch
 from torchlens.constants import TENSOR_LOG_ENTRY_FIELD_ORDER, MODEL_HISTORY_FIELD_ORDER
 from torchlens.helper_funcs import log_current_rng_states, get_tensor_memory_amount, human_readable_size, identity, \
     make_random_barcode, make_short_barcode_from_input, make_var_iterable, print_override, safe_copy, \
-    get_vars_of_type_from_obj, get_attr_values_from_tensor_list
+    get_vars_of_type_from_obj, get_attr_values_from_tensor_list, remove_entry_from_list
 
 
 class TensorLogEntry:
@@ -48,7 +48,7 @@ class TensorLogEntry:
         self.tensor_label_raw = fields_dict['tensor_label_raw']
         self.layer_label_raw = fields_dict['layer_label_raw']
         self.operation_num = fields_dict['operation_num']
-        self.tensor_num = fields_dict['tensor_num']
+        self.realtime_tensor_num = fields_dict['realtime_tensor_num']
         self.source_model_history = fields_dict['source_model_history']
         self.pass_finished = fields_dict['pass_finished']
 
@@ -329,6 +329,27 @@ class TensorLogEntry:
         return self.__str__()
 
 
+class RolledTensorLogEntry:
+    def __init__(self, source_entry: TensorLogEntry):
+        """Stripped-down version TensorLogEntry that only encodes the information needed to plot the model
+        in its rolled-up form.
+
+        Args:
+            source_entry: The source TensorLogEntry from which the rolled node is constructed
+        """
+        print(source_entry)
+
+    def __str__(self) -> str:
+        s = ''
+        for field in dir(self):
+            if not field.startswith('_'):
+                s += f"{field}: {getattr(self, field)}"
+        return s
+
+    def __repr__(self):
+        return self.__str__()
+
+
 class ModelHistory:
     # Visualization constants:
     INPUT_COLOR = "#98FB98"
@@ -361,65 +382,79 @@ class ModelHistory:
         self.model_name = model_name
         self.pass_finished = False
         self.track_tensors = False
+        self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
 
         # Model structure info
-        self.model_is_branching = False
         self.model_is_recurrent = False
+        self.model_max_recurrent_loops = 0
+        self.model_has_conditional_branching = False
+        self.model_is_branching = False
 
         # Tensor Tracking:
+        self.layer_list = []
+        self.layer_dict_main_keys = {}
+        self.layer_dict_all_keys = {}
+        self.layer_labels = []
+        self.layer_labels_w_pass = []
+        self.layer_labels_no_pass = []
+        self.layer_num_passes = OrderedDict()
         self.raw_tensor_dict = OrderedDict()
         self.raw_tensor_labels_list = []
         self.tensor_nums_to_save = tensor_nums_to_save
         self.tensor_counter = 1
         self.raw_layer_type_counter = defaultdict(lambda: 1)
-        self.final_layer_type_counter = defaultdict(lambda: 1)
-        self.layer_list = []
-        self.layer_dict_main_keys = {}
-        self.layer_dict_all_keys = {}
+        self.unsaved_layers_lookup_keys = set()
+
+        # Mapping from raw to final layer labels:
+        self.raw_to_final_tensor_labels = {}
+        self.raw_to_final_layer_labels = {}
+        self.lookup_keys_to_tensor_num_dict = {}
 
         # Special Layers:
         self.input_layers = []
         self.output_layers = []
         self.buffer_layers = []
         self.internally_initialized_layers = []
-        self.tensors_where_internal_branches_merge_with_input = []
+        self.layers_where_internal_branches_merge_with_input = []
         self.internally_terminated_layers = []
         self.internally_terminated_bool_layers = []
-        self.tensors_computed_with_params = defaultdict(list)
-        self.equivalent_operations = defaultdict(set)
-        self.same_layer_operations = defaultdict(list)
         self.conditional_branch_edges = []
+        self.layers_computed_with_params = defaultdict(list)
+        self.equivalent_operations = defaultdict(set)
+        self.same_layer_tensors = defaultdict(list)
 
-        # Saved Tensor Info:
-        self.total_tensor_fsize_nice = None
-        self.total_param_fsize_nice = None
+        # Tensor info:
+        self.num_tensors_total = 0
+        self.tensor_fsize_total = 0
+        self.tensor_fsize_total_nice = human_readable_size(0)
+        self.num_tensors_saved = 0
+        self.tensor_fsize_saved = 0
+        self.tensor_fsize_saved_nice = human_readable_size(0)
 
         # Param info:
-        self.model_num_tensors_total = None
-        self.model_tensor_fsize_total_nice = None
-        self.model_num_tensors_saved = None
-        self.model_tensor_fsize_saved_nice = None
-        self.model_total_param_tensors = None
-        self.model_total_params = None
-        self.model_total_params_fsize_nice = None
-
-        # Tracking info
-        self.track_tensors = True
-        self.current_function_call_barcode = None
+        self.total_param_tensors = 0
+        self.total_param_layers = 0
+        self.total_params = 0
+        self.total_params_fsize = 0
+        self.total_params_fsize_nice = human_readable_size(0)
 
         # Info about decorated functions:
         self.decorated_to_orig_funcs_dict = {}
 
         # Module info:
-        self.module_children = OrderedDict()
-        self.top_level_modules = []
+        self.module_addresses = []
+        self.module_passes = []
+        self.module_num_passes = OrderedDict()
+        self.top_level_module_passes = []
+        self.module_pass_children = OrderedDict()
 
         # Time elapsed:
-        self.pass_start_time = None
-        self.pass_end_time = None
-        self.elapsed_time_total = None
-        self.elapsed_time_torchlens_logging = None
+        self.pass_start_time = 0
+        self.pass_end_time = 0
+        self.elapsed_time_total = 0
+        self.elapsed_time_function_calls = 0
+        self.elapsed_time_torchlens_logging = 0
 
     # ********************************************
     # ********** User-Facing Functions ***********
@@ -458,11 +493,11 @@ class ModelHistory:
         layer_type = source
         # Fetch counters and increment to be ready for next tensor to be logged
         layer_type_num = self.raw_layer_type_counter[layer_type]
-        tensor_num = self.tensor_counter
+        realtime_tensor_num = self.tensor_counter
         self.raw_layer_type_counter[layer_type] += 1
         self.tensor_counter += 1
 
-        tensor_label = f"{layer_type}_{layer_type_num}_{tensor_num}_raw"
+        tensor_label = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
 
         if source == 'input':
             is_input_layer = True
@@ -489,7 +524,7 @@ class ModelHistory:
             # General info:
             'tensor_label_raw': tensor_label,
             'layer_label_raw': tensor_label,
-            'tensor_num': tensor_num,
+            'realtime_tensor_num': realtime_tensor_num,
             'operation_num': None,
             'source_model_history': self,
             'pass_finished': False,
@@ -714,8 +749,7 @@ class ModelHistory:
         if len(parent_param_passes) > 0:
             computed_from_params = True
             layer_label = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
-            self.tensors_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
-            pass_num = len(self.tensors_computed_with_params[layer_label])
+            pass_num = len(self.layers_computed_with_params[layer_label])
             operation_equivalence_type = layer_label[:]
         else:
             computed_from_params = False
@@ -760,12 +794,6 @@ class ModelHistory:
         fields_dict['bottom_level_submodule_exited'] = None
         fields_dict['module_entry_exit_thread'] = []
 
-        # TODO: add all the new fields to ModelHistory here.
-        self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
-        self.tensors_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
-        self.tensors_where_internal_branches_merge_with_input.append(t.tl_tensor_label_raw)
-        self.internally_initialized_layers.append(t.tl_tensor_label_raw)
-
         is_part_of_iterable_output = type(out_orig) in [list, tuple, dict, set]
         fields_dict['is_part_of_iterable_output'] = is_part_of_iterable_output
         out_iter = make_var_iterable(out_orig)  # so we can iterate through it
@@ -798,9 +826,9 @@ class ModelHistory:
         """
         # TODO: get clear exactly on what has to wait until here
         layer_type = fields_dict['layer_type']
-        tensor_num = self.tensor_counter
+        realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
-        tensor_label_raw = f"{layer_type}_{layer_type_num}_{tensor_num}"
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}"
 
         # Increment the counters to be ready for the next tensor
         self.raw_layer_type_counter[layer_type] += 1
@@ -828,7 +856,7 @@ class ModelHistory:
         # General info
         fields_dict['tensor_label_raw'] = tensor_label_raw
         fields_dict['layer_label_raw'] = tensor_label_raw
-        fields_dict['tensor_num'] = tensor_num
+        fields_dict['realtime_tensor_num'] = realtime_tensor_num
         fields_dict['operation_num'] = None
         fields_dict['source_model_history'] = self
         fields_dict['pass_finished'] = False
@@ -856,6 +884,11 @@ class ModelHistory:
         fields_dict['tensor_fsize_nice'] = human_readable_size(fields_dict['tensor_fsize'])
 
         # TODO: Add all the new fields to model history here
+        self.layers_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
+        self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
+        self.layers_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
+        self.layers_where_internal_branches_merge_with_input.append(t.tl_tensor_label_raw)
+        self.internally_initialized_layers.append(t.tl_tensor_label_raw)
 
     def _make_tensor_log_entry(self,
                                t: torch.Tensor,
@@ -879,7 +912,7 @@ class ModelHistory:
             t_kwargs = {}
 
         new_entry = TensorLogEntry(fields_dict)
-        if (self.tensor_nums_to_save == 'all') or (new_entry.tensor_num in self.tensor_nums_to_save):
+        if (self.tensor_nums_to_save == 'all') or (new_entry.realtime_tensor_num in self.tensor_nums_to_save):
             new_entry.save_tensor_data(t, t_args, t_kwargs)
         self.raw_tensor_dict[new_entry.tensor_label_raw] = new_entry
         self.raw_tensor_labels_list.append(new_entry.tensor_label_raw)
@@ -1070,19 +1103,19 @@ class ModelHistory:
         return arg_hash
 
     @staticmethod
-    def _update_tensor_containing_modules(t: torch.Tensor) -> List[str]:
+    def _update_tensor_containing_modules(tensor_entry: TensorLogEntry) -> List[str]:
         """Utility function that updates the containing modules of a Tensor by starting from the containing modules
         as of the last function call, then looks at the sequence of module transitions (in or out of a module) as of
         the last module it saw, and updates accordingly.
 
         Args:
-            t: Tensor to check.
+            tensor_entry: Log entry of tensor to check
 
         Returns:
             List of the updated containing modules.
         """
-        containing_modules = t.tl_containing_modules_origin_nested[:]
-        thread_modules = t.tl_module_entry_exit_thread[:]
+        containing_modules = tensor_entry.containing_modules_origin_nested[:]
+        thread_modules = tensor_entry.module_entry_exit_thread[:]
         for thread_module in thread_modules:
             if thread_module[0] == '+':
                 containing_modules.append(thread_module[1:])
@@ -1103,9 +1136,11 @@ class ModelHistory:
         max_input_module_nesting = 0
         most_nested_containing_modules = []
         for t in arg_tensors:
-            if not hasattr(t, 'tl_containing_modules_origin_nested'):
+            tensor_label = getattr(t, 'tl_tensor_label_raw', -1)
+            if tensor_label == -1:
                 continue
-            containing_modules = self._update_tensor_containing_modules(t)
+            tensor_entry = self[tensor_label]
+            containing_modules = self._update_tensor_containing_modules(tensor_entry)
             if len(containing_modules) > max_input_module_nesting:
                 max_input_module_nesting = len(containing_modules)
                 most_nested_containing_modules = containing_modules[:]
@@ -1128,30 +1163,43 @@ class ModelHistory:
         if remove_references:
             self._remove_log_entry_references(tensor_label)
 
-    def _remove_log_entry_references(self, tensor_label: TensorLogEntry):
+    def _remove_log_entry_references(self, layer_to_remove: str):
         """Removes all references to a given TensorLogEntry in the ModelHistory object.
 
         Args:
-            tensor_label: The log entry to remove.
+            layer_to_remove: The log entry to remove.
         """
         # Clear any fields in ModelHistory referring to the entry.
-        fields_to_delete = ['input_tensors', 'output_tensors', 'buffer_tensors', 'internally_initialized_tensors',
-                            'internally_terminated_tensors', 'internally_terminated_bool_tensors',
-                            'tensors_where_internal_branches_merge_with_input']
-        for field in fields_to_delete:
-            field_list = getattr(self, field)
-            if tensor_label in field_list:
-                field_list.remove(tensor_label)
 
-        # Now handle the nested fields:
-        nested_fields_to_delete = ['tensor_computed_with_params', 'equivalent_operations']
+        remove_entry_from_list(self.input_layers, layer_to_remove)
+        remove_entry_from_list(self.output_layers, layer_to_remove)
+        remove_entry_from_list(self.buffer_layers, layer_to_remove)
+        remove_entry_from_list(self.internally_initialized_layers, layer_to_remove)
+        remove_entry_from_list(self.internally_terminated_layers, layer_to_remove)
+        remove_entry_from_list(self.internally_terminated_bool_layers, layer_to_remove)
+        remove_entry_from_list(self.layers_where_internal_branches_merge_with_input, layer_to_remove)
 
-        for nested_field in nested_fields_to_delete:
-            for group_label, group_tensors in getattr(self, nested_field).items():
-                if tensor_label in group_tensors:
-                    group_tensors.remove(tensor_label)
-                if len(group_tensors) == 0:
-                    del getattr(self, nested_field)[group_label]
+        self.conditional_branch_edges = [tup for tup in self.conditional_branch_edges if layer_to_remove not in tup]
+
+        # Now any nested fields.
+
+        for group_label, group_tensors in self.layers_computed_with_params.items():
+            if layer_to_remove in group_tensors:
+                group_tensors.remove(layer_to_remove)
+            if len(group_tensors) == 0:
+                del self.layers_computed_with_params[group_label]
+
+        for group_label, group_tensors in self.equivalent_operations.items():
+            if layer_to_remove in group_tensors:
+                group_tensors.remove(layer_to_remove)
+            if len(group_tensors) == 0:
+                del self.equivalent_operations[group_label]
+
+        for group_label, group_tensors in self.same_layer_tensors.items():
+            if layer_to_remove in group_tensors:
+                group_tensors.remove(layer_to_remove)
+            if len(group_tensors) == 0:
+                del self.same_layer_tensors[group_label]
 
     # ********************************************
     # ************* Post-Processing **************
@@ -1204,13 +1252,13 @@ class ModelHistory:
         """
         Adds dedicated output nodes to the graph.
         """
-        new_output_tensors = []
+        new_output_layers = []
         for i, output_layer_label in enumerate(self.output_layers):
             output_node = self[output_layer_label]
             new_output_node = output_node.copy()
             new_output_node.layer_type = 'output'
             new_output_node.tensor_label_raw = f"output_{i + 1}_{self.tensor_counter}_raw"
-            new_output_node.tensor_num = self.tensor_counter
+            new_output_node.realtime_tensor_num = self.tensor_counter
             self.tensor_counter += 1
 
             # Fix function information:
@@ -1270,9 +1318,9 @@ class ModelHistory:
             self.raw_tensor_dict[new_output_node.tensor_label_raw] = new_output_node
             self.raw_tensor_labels_list.append(new_output_node.tensor_label_raw)
 
-            new_output_tensors.append(new_output_node.tensor_label_raw)
+            new_output_layers.append(new_output_node.tensor_label_raw)
 
-        self.output_tensors = new_output_tensors
+        self.output_layers = new_output_layers
 
     def _remove_orphan_nodes(self):
         """
@@ -1428,7 +1476,7 @@ class ModelHistory:
         if not, it runs the procedure again to check if more equivalent operations can be found.
         """
         node_stack = self.input_layers + self.internally_initialized_layers
-        node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
+        node_stack = sorted(node_stack, key=lambda x: x.realtime_tensor_num)
         operation_equivalence_types_seen = set()
         while len(node_stack) > 0:
             # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
@@ -1436,7 +1484,7 @@ class ModelHistory:
             node = self[node_label]
             node_operation_equivalence_type = node.operation_equivalence_type
             node_stack.extend(node.child_layers)
-            node_stack = sorted(node_stack, key=lambda x: x.tensor_num)
+            node_stack = sorted(node_stack, key=lambda x: x.realtime_tensor_num)
 
             # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
             if node_operation_equivalence_type in operation_equivalence_types_seen:
@@ -1792,7 +1840,7 @@ class ModelHistory:
         this function infers this by tracing back from tensors that came from the input.
         """
         # Fetch nodes where internally initialized branches first meet a tensor computed from the input:
-        node_stack = self.tensors_where_internal_branches_merge_with_input[:]
+        node_stack = self.layers_where_internal_branches_merge_with_input[:]
 
         # Now go through the stack and work backwards up the internally initialized branch, fixing the
         # module containment labels as we go.
@@ -1905,46 +1953,6 @@ class ModelHistory:
         Goes through all tensor log entries for the final stages of pre-processing to make the
         user-facing version of ModelHistory.
         """
-        # First add additional desired fields to ModelHistory:
-
-        # Keeping track of tensors and lookup keys:
-        self.layer_list = []
-        self.layer_dict_main_keys = OrderedDict()
-        self.layer_dict_all_keys = OrderedDict()
-        self.lookup_keys_to_tensor_num_dict = {}  # map the lookup keys to the tensor numbers
-        self.layer_labels = []
-        self.layer_labels_no_pass = []
-        self.layer_labels_w_pass = []
-        self.layer_num_passes = {}
-
-        # Tallying the elapsed time for just the function calls:
-        self.elapsed_time_function_calls = 0
-
-        # Tensor tallying:
-        self.num_tensors_total = 0
-        self.num_tensors_saved = 0
-        self.total_tensor_fsize = 0
-        self.total_tensor_fsize_saved = 0
-
-        # Param tallying:
-        self.total_params = 0
-        self.total_param_tensors = 0
-        self.total_param_layers = 0
-        self.total_param_fsize = 0
-
-        # Module info:
-        self.module_addresses = []
-        self.module_passes = []
-        self.module_num_passes = OrderedDict()
-        self.top_level_module_passes = []
-        self.module_pass_children = defaultdict(list)
-
-        # Model structure info:
-        self.model_is_recurrent = False
-        self.model_max_recurrent_loops = 1
-        self.model_is_branching = False
-        self.model_has_conditional_branching = False
-
         # Go through and log information pertaining to all layers:
         self._log_final_info_for_all_layers(keep_layers_without_saved_activations)
 
@@ -1974,7 +1982,7 @@ class ModelHistory:
             self._log_module_hierarchy_info_for_layer(tensor_entry)
 
             # Tally the tensor sizes:
-            self.total_tensor_fsize += tensor_entry.tensor_fsize
+            self.tensor_fsize_total += tensor_entry.tensor_fsize
 
             # Tally the parameter sizes:
             if tensor_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
@@ -1982,7 +1990,7 @@ class ModelHistory:
                     self.total_param_layers += 1
                 self.total_params += tensor_entry.num_params_total
                 self.total_param_tensors += tensor_entry.num_param_tensors
-                self.total_param_fsize += tensor_entry.param_fsize
+                self.total_params_fsize += tensor_entry.param_fsize
             unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
             # Tally elapsed time:
@@ -2007,8 +2015,8 @@ class ModelHistory:
             self.all_layers_logged = False
 
         # Save the nice versions of the filesize fields:
-        self.total_tensor_fsize_nice = human_readable_size(self.total_tensor_fsize)
-        self.total_param_fsize_nice = human_readable_size(self.total_param_fsize)
+        self.tensor_fsize_total_nice = human_readable_size(self.tensor_fsize_total)
+        self.total_params_fsize_nice = human_readable_size(self.total_params_fsize)
 
         # Log time elapsed:
         self.pass_end_time = time.time()
@@ -2085,7 +2093,7 @@ class ModelHistory:
                 self.layer_num_passes[tensor_entry.layer_label] = tensor_entry.layer_total_passes
                 if tensor_entry.has_saved_activations:
                     self.num_tensors_saved += 1
-                    self.total_tensor_fsize_saved += tensor_entry.tensor_fsize
+                    self.tensor_fsize_saved += tensor_entry.tensor_fsize
                 self._trim_and_reorder_tensor_entry_fields(tensor_entry)  # Final reformatting of fields
                 i += 1
             else:
@@ -2097,7 +2105,7 @@ class ModelHistory:
             self._remove_log_entry(tensor_entry, remove_references=False)
 
         # Make the saved tensor filesize pretty:
-        self.total_tensor_fsize_saved_nice = human_readable_size(self.total_tensor_fsize_saved)
+        self.tensor_fsize_saved_nice = human_readable_size(self.tensor_fsize_saved)
 
     def _add_lookup_keys_for_tensor_entry(self,
                                           tensor_entry: TensorLogEntry,
@@ -2137,7 +2145,7 @@ class ModelHistory:
         # Log in both the tensor and in the ModelHistory object.
         tensor_entry.lookup_keys = lookup_keys_for_tensor
         for lookup_key in lookup_keys_for_tensor:
-            self.lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.tensor_num
+            self.lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.realtime_tensor_num
             self.layer_dict_all_keys[lookup_key] = tensor_entry
 
     @staticmethod
@@ -2166,10 +2174,17 @@ class ModelHistory:
             setattr(self, field, [self.raw_to_final_tensor_labels[tensor_label] for tensor_label in tensor_labels])
 
         new_param_tensors = {}
-        for key, values in self.tensors_computed_with_params:
+        for key, values in self.layers_computed_with_params:
             new_key = self.raw_to_final_layer_labels[key]
             new_param_tensors[new_key] = [self.raw_to_final_tensor_labels[tensor_label] for tensor_label in values]
         self.tensors_computed_with_params = new_param_tensors
+
+        new_equiv_operations_tensors = {}
+        for key, values in self.equivalent_operations:
+            new_key = self.raw_to_final_layer_labels[key]
+            new_equiv_operations_tensors[new_key] = set([self.raw_to_final_tensor_labels[tensor_label]
+                                                         for tensor_label in values])
+        self.equivalent_operations = new_equiv_operations_tensors
 
         new_same_layer_tensors = {}
         for key, values in self.same_layer_tensors:
@@ -2222,13 +2237,13 @@ class ModelHistory:
                 if not -num_layers <= layer_key < num_layers:
                     raise ValueError(f"You specified the {layer_key}th layer, but there are only "
                                      f"{num_layers} layers in the model.")
-                raw_tensor_nums_to_save.add(self[layer_key].tensor_num)
+                raw_tensor_nums_to_save.add(self[layer_key].realtime_tensor_num)
             elif layer_key in self.layer_labels:  # if it's a primary layer key just grab it
-                raw_tensor_nums_to_save.add(self[layer_key].tensor_num)
+                raw_tensor_nums_to_save.add(self[layer_key].realtime_tensor_num)
             elif ':' in layer_key:  # if specific pass given, either add or complain if there aren't that many passes
                 label, pass_num = layer_key.split(':')
                 if (layer_key in self.layer_labels_w_pass) or (layer_key in self.module_passes):
-                    raw_tensor_nums_to_save.add(self[layer_key].tensor_num)
+                    raw_tensor_nums_to_save.add(self[layer_key].realtime_tensor_num)
                 elif label in self.layer_labels_no_pass:
                     first_pass_address = f"{label}:1"
                     raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
@@ -2243,10 +2258,10 @@ class ModelHistory:
             elif layer_key in self.layer_labels_no_pass:  # if it's a layer address, add all passes of the layer
                 for layer_label_w_pass in self.layer_labels_w_pass:
                     if layer_label_w_pass.startswith(f"{layer_key}:"):
-                        raw_tensor_nums_to_save.add(self[layer_label_w_pass].tensor_num)
+                        raw_tensor_nums_to_save.add(self[layer_label_w_pass].realtime_tensor_num)
             elif layer_key in self.module_addresses:  # if it's a module address, add all passes
                 for pass_num in range(1, self.module_num_passes[layer_key] + 1):
-                    raw_tensor_nums_to_save.add(self[f"{layer_key}:{pass_num}"].tensor_num)
+                    raw_tensor_nums_to_save.add(self[f"{layer_key}:{pass_num}"].realtime_tensor_num)
             elif type(layer_key) == str:  # as last resort check if any layer labels begin with the provided substring
                 found_a_match = False
                 for layer in self:
@@ -2405,11 +2420,11 @@ class ModelHistory:
                  f"{len(self.module_addresses)} total modules."
         else:
             s += f"\n\tModel structure: purely feedforward, {branch_str}; {len(self.module_addresses)} total modules."
-        s += f"\n\t{self.model_num_tensors_total} tensors ({self.model_tensor_fsize_total_nice}) " \
-             f"computed in forward pass; {self.model_num_tensors_saved} tensors " \
-             f"({self.model_tensor_fsize_saved_nice}) saved."
-        s += f"\n\t{self.model_total_param_tensors} parameter operations ({self.model_total_params} params total; " \
-             f"{self.model_total_params_fsize_nice})."
+        s += f"\n\t{self.num_tensors_total} tensors ({self.tensor_fsize_total_nice}) " \
+             f"computed in forward pass; {self.num_tensors_saved} tensors " \
+             f"({self.tensor_fsize_saved_nice}) saved."
+        s += f"\n\t{self.total_param_tensors} parameter operations ({self.total_params} params total; " \
+             f"{self.total_params_fsize_nice})."
         s += f"\n\tRandom seed: {self.random_seed_used}"
         s += f"\n\tTime elapsed: {np.round(self.elapsed_time_total, 3)}s"
 
@@ -2420,8 +2435,8 @@ class ModelHistory:
         # Now print all layers.
         s += f"\n\tLayers:"
         for layer_ind, layer_barcode in enumerate(self.layer_labels):
-            pass_num = self.tensor_dict_main_keys[layer_barcode].layer_pass_num
-            total_passes = self.tensor_dict_main_keys[layer_barcode].layer_passes_total
+            pass_num = self.layer_dict_main_keys[layer_barcode].layer_pass_num
+            total_passes = self.layer_dict_main_keys[layer_barcode].layer_passes_total
             if total_passes > 1:
                 pass_str = f" ({pass_num}/{total_passes} passes)"
             else:
@@ -2439,7 +2454,7 @@ class ModelHistory:
         s = f"Log of {self.model_name} forward pass (pass still ongoing):"
         s += f"\n\tRandom seed: {self.random_seed_used}"
         s += f"\n\tInput tensors: {self.input_layers}"
-        s += f"\n\tOutput tensors: {self.output_tensors}"
+        s += f"\n\tOutput tensors: {self.output_layers}"
         s += f"\n\tInternally initialized tensors: {self.internally_initialized_layers}"
         s += f"\n\tInternally terminated tensors: {self.internally_terminated_layers}"
         s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_layers}"
@@ -2489,9 +2504,9 @@ class ModelHistory:
         Utility function to print the nested module hierarchy.
         """
         s = ''
-        for module in self.top_level_modules:
+        for module in self.top_level_module_passes:
             s += f"\n\t\t{module[0]}"
-            if len(self.module_children[module]) > 0:
+            if len(self.module_pass_children[module]) > 0:
                 s += ':'
             s += self._module_hierarchy_str_helper(module, 1)
         return s
@@ -2501,17 +2516,17 @@ class ModelHistory:
         Helper function for _module_hierarchy_str.
         """
         s = ''
-        any_grandchild_modules = any([len(self.module_children[sub_module]) > 0
-                                      for sub_module in self.module_children[module]])
-        if any_grandchild_modules or len(self.module_children[module]) == 0:
-            for sub_module in self.module_children[module]:
+        any_grandchild_modules = any([len(self.module_pass_children[sub_module]) > 0
+                                      for sub_module in self.module_pass_children[module]])
+        if any_grandchild_modules or len(self.module_pass_children[module]) == 0:
+            for sub_module in self.module_pass_children[module]:
                 s += f"\n\t\t{'    ' * level}{sub_module[0]}"
-                if len(self.module_children[sub_module]) == 0:
+                if len(self.module_pass_children[sub_module]) == 0:
                     s += ':'
                 s += self._module_hierarchy_str_helper(sub_module, level + 1)
         else:
             s += self.pretty_print_list_w_line_breaks(
-                [module_child[0] for module_child in self.module_children[module]],
+                [module_child[0] for module_child in self.module_pass_children[module]],
                 line_break_every=8,
                 indent_chars=f"\t\t{'    ' * level}")
         return s

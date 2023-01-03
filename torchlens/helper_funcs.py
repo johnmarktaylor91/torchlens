@@ -133,6 +133,18 @@ def make_var_iterable(x):
         return [x]
 
 
+def remove_entry_from_list(list_: List,
+                           entry: Any):
+    """Removes all instances of an entry from a list if present, in-place.
+
+    Args:
+        list_: the list
+        entry: the entry to remove
+    """
+    while entry in list_:
+        list_.remove(entry)
+
+
 def tuple_assign(tuple_: tuple, ind: int, new_value: any):
     """Utility function to assign an entry of a tuple to a new value.
 

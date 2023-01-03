@@ -17,19 +17,30 @@ MODEL_HISTORY_FIELD_ORDER = [
     'random_seed_used',
 
     # Model structure info
-    'model_is_branching',
     'model_is_recurrent',
+    'model_max_recurrent_loops',
+    'model_is_branching',
+    'model_has_conditional_branching',
 
     # Tensor tracking logs
     'layer_list',
-    'tensor_dict_main_keys',
-    'tensor_dict_all_keys',
+    'layer_dict_main_keys',
+    'layer_dict_all_keys',
+    'layer_labels',
+    'layer_labels_no_pass',
+    'layer_labels_w_pass',
+    'layer_num_passes',
     'raw_tensor_dict',
     'raw_tensor_labels_list',
     'tensor_nums_to_save',
     'tensor_counter',
     'raw_layer_type_counter',
-    'final_layer_type_counter',
+    'unsaved_layers_lookup_keys',
+
+    # Mapping from raw to final layer labels:
+    'raw_to_final_tensor_labels',
+    'raw_to_final_layer_labels',
+    'lookup_keys_to_tensor_num_dict',
 
     # Special layers
     'input_layers',
@@ -39,12 +50,12 @@ MODEL_HISTORY_FIELD_ORDER = [
     'layers_where_internal_branches_merge_with_input',
     'internally_terminated_layers',
     'internally_terminated_bool_layers',
+    'conditional_branch_edges',
     'layers_computed_with_params',
     'equivalent_operations',
     'same_layer_operations',
-    'conditional_branch_edges',
 
-    # Saved tensor info
+    # Tensor info:
     'num_tensors_total',
     'tensor_fsize_total',
     'tensor_fsize_total_nice',
@@ -63,13 +74,17 @@ MODEL_HISTORY_FIELD_ORDER = [
     'decorated_to_orig_funcs_dict',
 
     # Module info
-    'module_children',
+    'module_addresses',
+    'module_passes',
+    'module_num_passes',
+    'module_pass_children',
     'top_level_modules',
 
     # Time elapsed
     'pass_start_time',
     'pass_end_time',
     'elapsed_time_total',
+    'elapsed_time_function_calls',
     'elapsed_time_torchlens_logging'
 ]
 
@@ -80,7 +95,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'tensor_label_raw',
     'layer_label_raw',
     'operation_num',
-    'tensor_num',
+    'realtime_tensor_num',
     'source_model_history',
     'pass_finished',
 
