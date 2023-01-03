@@ -2,20 +2,20 @@
 
 import copy
 import itertools as it
-from collections import OrderedDict, defaultdict, namedtuple
 import random
 import time
-from tqdm import tqdm
+from collections import OrderedDict, defaultdict, namedtuple
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
+from tqdm import tqdm
 
-from torchlens.constants import TENSOR_LOG_ENTRY_FIELD_ORDER, MODEL_HISTORY_FIELD_ORDER
-from torchlens.helper_funcs import log_current_rng_states, get_tensor_memory_amount, human_readable_size, identity, \
-    make_random_barcode, make_short_barcode_from_input, make_var_iterable, print_override, safe_copy, \
-    get_vars_of_type_from_obj, get_attr_values_from_tensor_list, remove_entry_from_list
+from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
+from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
+    get_vars_of_type_from_obj, human_readable_size, identity, log_current_rng_states, make_random_barcode, \
+    make_short_barcode_from_input, make_var_iterable, print_override, remove_entry_from_list, safe_copy
 
 
 class TensorLogEntry:

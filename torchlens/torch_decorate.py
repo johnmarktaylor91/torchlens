@@ -1,15 +1,16 @@
 # This module has all functions relating to decorating PyTorch so tensor operations can be logged.
 
 import time
+import types
 from functools import wraps
 from typing import Callable, List, Tuple
 
 import torch
 
-import helper_funcs as hf
 from constants import ORIG_TORCH_FUNCS
 from helper_funcs import nested_getattr, safe_copy
-from torchlens.helper_funcs import get_vars_of_type_from_obj, identity, log_current_rng_states, make_random_barcode
+from torchlens.helper_funcs import get_vars_of_type_from_obj, identity, log_current_rng_states, make_random_barcode, \
+    print_override
 from torchlens.model_history import ModelHistory
 
 print_funcs = ['__repr__', '__str__', '_str']
@@ -30,7 +31,7 @@ def torch_func_decorator(func: Callable,
         all_args = list(args) + list(kwargs.values())
         arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
-            out = hf.print_override(args[0], func_name)
+            out = print_override(args[0], func_name)
             return out
 
         # Call the function, tracking the timing, rng states, and whether it's a nested function

@@ -66,7 +66,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
-            model_history.output_tensors.append(t.tl_tensor_label_raw)
+            model_history.output_layers.append(t.tl_tensor_label_raw)
             model_history[t.tl_tensor_label_raw].is_output_layer = True
         undecorate_pytorch(torch, orig_func_defs)
         cleanup_model(model, hook_handles)
@@ -177,12 +177,12 @@ def module_pre_hook(module: nn.Module,
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
         model_history = t.tl_source_model_history
+        tensor_entry = model_history[t.tl_tensor_label_raw]
         module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
-        t.tl_modules_entered.append(module_address)
-        t.tl_module_passes_entered.append(module_pass_label)
-        t.tl_is_submodule_input = True
-        t.tl_module_entry_exit_thread.append(('+', module_pass_label[0], module_pass_label[1]))
-        model_history.update_tensor_log_entry(t)  # Update tensor log with this new information.
+        tensor_entry.modules_entered.append(module_address)
+        tensor_entry.module_passes_entered.append(module_pass_label)
+        tensor_entry.is_submodule_input = True
+        tensor_entry.module_entry_exit_thread.append(('+', module_pass_label[0], module_pass_label[1]))
 
 
 def module_post_hook(module: nn.Module,
@@ -206,23 +206,26 @@ def module_post_hook(module: nn.Module,
     output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
     for t in output_tensors:
         model_history = t.tl_source_model_history
-        t.tl_is_submodule_output = True
+        tensor_entry = model_history[t.tl_tensor_label_raw]
+        tensor_entry.is_submodule_output = True
 
         if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
             t = getattr(torch, 'identity')(t)
 
-        t.tl_is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
-        t.tl_modules_exited.append(module_address)
-        t.tl_module_passes_exited.append((module_address, module_pass_num))
-        t.tl_module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
+        tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
+        tensor_entry.modules_exited.append(module_address)
+        tensor_entry.module_passes_exited.append((module_address, module_pass_num))
+        tensor_entry.module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
         model_history.update_tensor_log_entry(t)  # Update tensor log with this new information.
 
     for t in input_tensors:  # Now that module is finished, dial back the threads of all input tensors.
+        model_history = t.tl_source_model_history
+        tensor_entry = model_history[t.tl_tensor_label_raw]
         input_module_thread = t.tl_module_entry_exit_thread[:]
         if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
             module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-            t.tl_module_entry_exit_thread = t.tl_module_entry_exit_thread[:module_entry_ix]
+            tensor_entry.module_entry_exit_thread = tensor_entry.tl_module_entry_exit_thread[:module_entry_ix]
 
     return output_
 
@@ -239,29 +242,30 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     Returns:
         Whether the tensor operation is bottom level.
     """
-    model_history = t.tl_source_model_history
+    model_history = getattr(t, 'tl_source_model_history')
+    tensor_entry = model_history[getattr(t, 'tl_tensor_label_raw')]
     submodule_address = submodule.tl_module_address
 
-    if t.tl_is_bottom_level_submodule_output:
+    if tensor_entry.is_bottom_level_submodule_output:
         return True
 
     # If it was initialized inside the model and nothing entered the module, it's bottom-level.
-    if t.tl_initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
-        t.tl_is_bottom_level_submodule_output = True
-        t.tl_bottom_level_submodule_exited = submodule_address
+    if tensor_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
+        tensor_entry.is_bottom_level_submodule_output = True
+        tensor_entry.bottom_level_submodule_exited = submodule_address
         return True
 
     # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
-    for parent_label in t.tl_parent_tensors:
+    for parent_label in tensor_entry.parent_layers_:
         parent_tensor = model_history[parent_label]
         parent_modules_entered = parent_tensor.modules_entered
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):
-            t.tl_is_bottom_level_submodule_output = False
+            tensor_entry.is_bottom_level_submodule_output = False
             return False
 
     # If it survived the above tests, it's a bottom-level submodule.
-    t.tl_is_bottom_level_submodule_output = True
-    t.tl_bottom_level_submodule_exited = submodule_address
+    tensor_entry.is_bottom_level_submodule_output = True
+    tensor_entry.bottom_level_submodule_exited = submodule_address
     return True
 
 
