@@ -5,7 +5,7 @@ from torch import nn
 
 from torchlens.helper_funcs import warn_parallel
 from torchlens.model_funcs import get_all_submodules, run_model_and_save_specified_activations
-from torchlens.validate import validate_model_history
+from torchlens.validate import validate_saved_activations_for_model_input
 from torchlens.vis import render_graph
 
 
@@ -160,10 +160,10 @@ def validate_saved_activations(model: nn.Module,
 
     history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
     history_pretty = ModelHistory(history_dict, activations_only=True)
-    activations_are_valid = validate_model_history(history_dict,
-                                                   history_pretty,
-                                                   min_proportion_consequential_layers,
-                                                   verbose)
+    activations_are_valid = validate_saved_activations_for_model_input(history_dict,
+                                                                       history_pretty,
+                                                                       min_proportion_consequential_layers,
+                                                                       verbose)
     # Now change back the zero params to what they were:
     for submodule, param_fieldname, orig_param in parameters_to_restore:
         setattr(submodule, param_fieldname, orig_param)

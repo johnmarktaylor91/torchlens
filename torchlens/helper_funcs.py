@@ -13,12 +13,6 @@ import torch
 from IPython import get_ipython
 from torch import nn
 
-clean_from_numpy = copy.deepcopy(torch.from_numpy)
-clean_to_numpy = copy.deepcopy(torch.Tensor.__array__)
-clean_clone = copy.deepcopy(torch.clone)
-clean_new_tensor = copy.deepcopy(torch.tensor)
-clean_new_param = copy.deepcopy(torch.nn.Parameter)
-
 
 def identity(x):
     return x
@@ -39,7 +33,7 @@ def set_random_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
-def get_rng_states() -> Dict:
+def log_current_rng_states() -> Dict:
     """Utility function to fetch sufficient information from all RNG states to recover the same state later.
 
     Returns:
@@ -53,7 +47,7 @@ def get_rng_states() -> Dict:
     return rng_dict
 
 
-def set_saved_rng_states(rng_states: Dict):
+def set_rng_from_saved_states(rng_states: Dict):
     """Utility function to set the state of random seeds to a cached value.
 
     Args:
@@ -191,30 +185,34 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
     return ','.join(ranges)
 
 
-def extend_search_stack_from_item(item: Any,
-                                  next_stack: List):
-    """Utility function to iterate through a single item to populate the next stack to search for.
+def get_vars_of_type_from_obj(obj: Any,
+                              which_type: Type,
+                              subclass_exceptions: Optional[List] = None,
+                              search_depth: int = 5) -> List:
+    """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
+    up to the given search depth.
 
     Args:
-        item: The item
-        next_stack: Stack to add to
+        obj: Object to search.
+        which_type: Type of variable to pull out
+        subclass_exceptions: subclasses that you don't want to pull out.
+        search_depth: How many layers deep to search before giving up.
+
+    Returns:
+        List of objects of desired type found in the input object.
     """
-    if is_iterable(item):
-        for i in item:
-            next_stack.append(i)
-    for attr_name in dir(item):
-        if attr_name.startswith('__'):
-            continue
-        try:
-            attr = getattr(item, attr_name)
-        except AttributeError:
-            continue
-        attr_cls = type(attr)
-        if attr_cls in [str, int, float, bool, np.ndarray]:
-            continue
-        if callable(attr) and not issubclass(attr_cls, nn.Module):
-            continue
-        next_stack.append(attr)
+    if subclass_exceptions is None:
+        subclass_exceptions = []
+    this_stack = [obj]
+    tensors_in_obj = []
+    tensor_ids_in_obj = []
+    for _ in range(search_depth):
+        this_stack = search_stack_for_vars_of_type(this_stack,
+                                                   which_type,
+                                                   tensors_in_obj,
+                                                   tensor_ids_in_obj,
+                                                   subclass_exceptions)
+    return tensors_in_obj
 
 
 def search_stack_for_vars_of_type(current_stack: List,
@@ -252,57 +250,34 @@ def search_stack_for_vars_of_type(current_stack: List,
     return next_stack
 
 
-def get_vars_of_type_from_obj(obj: Any,
-                              which_type: Type,
-                              subclass_exceptions: Optional[List] = None,
-                              search_depth: int = 5) -> List:
-    """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
-    up to the given search depth.
+def extend_search_stack_from_item(item: Any,
+                                  next_stack: List):
+    """Utility function to iterate through a single item to populate the next stack to search for.
 
     Args:
-        obj: Object to search.
-        which_type: Type of variable to pull out
-        subclass_exceptions: subclasses that you don't want to pull out.
-        search_depth: How many layers deep to search before giving up.
-
-    Returns:
-        List of objects of desired type found in the input object.
+        item: The item
+        next_stack: Stack to add to
     """
-    if subclass_exceptions is None:
-        subclass_exceptions = []
-    this_stack = [obj]
-    tensors_in_obj = []
-    tensor_ids_in_obj = []
-    for _ in range(search_depth):
-        this_stack = search_stack_for_vars_of_type(this_stack,
-                                                   which_type,
-                                                   tensors_in_obj,
-                                                   tensor_ids_in_obj,
-                                                   subclass_exceptions)
-    return tensors_in_obj
+    if is_iterable(item):
+        for i in item:
+            next_stack.append(i)
+    for attr_name in dir(item):
+        if attr_name.startswith('__'):
+            continue
+        try:
+            attr = getattr(item, attr_name)
+        except AttributeError:
+            continue
+        attr_cls = type(attr)
+        if attr_cls in [str, int, float, bool, np.ndarray]:
+            continue
+        if callable(attr) and not issubclass(attr_cls, nn.Module):
+            continue
+        next_stack.append(attr)
 
 
-def get_tensors_in_obj_with_mark(x: Any, field_name: str, field_val: Any) -> List[torch.Tensor]:
-    """Get all tensors in an object that have a mark with a given value.
-
-    Args:
-        x: Input object.
-        field_name: Name of the field to check.
-        field_val: Value of the field that the tensor must have.
-
-    Returns:
-        List of tensors with the given mark.
-    """
-    input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
-    tensors_with_mark = []
-    for tensor in input_tensors:
-        if getattr(tensor, field_name, None) == field_val:
-            tensors_with_mark.append(tensor)
-    return tensors_with_mark
-
-
-def get_marks_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
-    """Gets a list of marks from a list of tensors.
+def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
+    """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
 
     Args:
         tensor_list: List of tensors to search.
@@ -389,6 +364,10 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     else:
         size = np.round(size, decimals=decimal_places)
     return f"{size} {unit}"
+
+
+clean_from_numpy = copy.deepcopy(torch.from_numpy)
+clean_new_param = copy.deepcopy(torch.nn.Parameter)
 
 
 def print_override(t: torch.Tensor, func_name: str):

@@ -15,9 +15,71 @@
 from typing import Dict, List
 
 import torch
-from tqdm import tqdm
 
-from torchlens.helper_funcs import get_rng_states, set_saved_rng_states, tuple_assign
+from torchlens.helper_funcs import log_current_rng_states, set_rng_from_saved_states, tuple_assign
+
+
+def validate_batch_of_models_and_inputs():
+    pass
+
+
+def validate_multiple_inputs_for_model():
+    pass
+
+
+def validate_saved_activations_for_model_input(history_dict: Dict,
+                                               pretty_history: ModelHistory,
+                                               min_proportion_consequential_layers: float = 0,
+                                               verbose: bool = False) -> bool:
+    """Given the raw history_dict and saved user-facing pretty_history, confirms 1) that all saved activations
+    in the pretty history match those in the raw history_dict, based on all possible lookup keys, and
+    2) that running a forward pass of the model from any of the saved activations yields the exact same
+    outputs as the original model. Returns True if this succeeds, False if it fails, along with printing
+    where it fails if "verbose" is specified.
+
+    Args:
+        history_dict: The raw history_dict
+        pretty_history: The pretty, user-facing version of the history dict.
+        min_proportion_consequential_layers: Proportion of layers for which changing them affects the output;
+            if zero, it doesn't check them at all.
+        verbose: Whether to print where the validation fails, if indeed it does.
+
+    Returns:
+        True if all activations are validated and yield the same output, False otherwise.
+    """
+
+    # First check that for every saved tensor in the raw history_dict, it matches the one in the final, pretty
+    # history_dict, for all possible lookup keys. This guarantees that the saved tensor being checked is the
+    # one that the user actually sees.
+
+    if not validate_lookup_keys(history_dict, pretty_history, verbose):
+        return False
+
+    # Second, check that the saved activations at each step match the
+    # corresponding input argument of the step afterwards.
+
+    if not saved_activations_match_child_args(history_dict, verbose):
+        return False
+
+    # Third, swap in the saved activations from the final pretty history into each step of the computation graph,
+    # crawling back from the final outputs, re-run the forward pass from those activations, and check that they
+    # in fact yield the exactly correct final output.
+
+    if not validate_all_forward_passes(history_dict, verbose):
+        return False
+
+    # Finally, check that perturbing the saved activations at each step yields a different output, for a minimum
+    # threshold of such perturbations.
+
+    if min_proportion_consequential_layers > 0:
+        proportion_consequential_layers = perturb_all_forward_passes(history_dict, verbose)
+        if proportion_consequential_layers < min_proportion_consequential_layers:
+            if verbose:
+                print(f"Only {proportion_consequential_layers} of saved activations are consequential, "
+                      f"which is less than the minimum {min_proportion_consequential_layers}")
+            return False
+
+    return True
 
 
 def validate_lookup_keys(history_dict: Dict,
@@ -49,55 +111,6 @@ def validate_lookup_keys(history_dict: Dict,
                 lookup_keys_valid = False
 
     return lookup_keys_valid
-
-
-def get_starting_node_sets(history_dict: Dict) -> List[List]:
-    """Helper function to get a list of all the possible sets of starting nodes that are necessary and
-    sufficient to regenerate all outputs if the forward pass starts from those nodes.
-
-    Args:
-        history_dict: The history dict.
-
-    Returns:
-        List of lists of all starting nodes that are sufficient to regenerate all outputs.
-    """
-    tensor_log = history_dict['tensor_log']
-
-    # Get the initial node stack: all immediate predecessors of the output nodes.
-
-    output_tensor_barcodes = history_dict['output_tensors']
-    node_stack = []
-    nodes_seen = set(output_tensor_barcodes)
-    for output_tensor_barcode in output_tensor_barcodes:
-        output_tensor = tensor_log[output_tensor_barcode]
-        for parent_barcode in output_tensor['parent_tensor_barcodes']:
-            node_stack.append(parent_barcode)
-            nodes_seen.add(parent_barcode)
-    starting_node_sets = [node_stack[:]]
-
-    # Now go through and replace each node in the stack with its parents (breadth-first)
-
-    while True:
-        node_stack_is_all_inputs = True  # assume true until we find a node that's not an input node.
-        for n, node_barcode in enumerate(node_stack):
-            node = tensor_log[node_barcode]
-            if len(node['parent_tensor_barcodes']) == 0:  # leave an input node alone.
-                continue
-            else:
-                node_stack_is_all_inputs = False
-                node_to_remove_barcode = node_stack.pop(n)
-                break
-        if node_stack_is_all_inputs:  # we're done; no more parent nodes. Add this last one and quit.
-            break
-        node_to_remove = tensor_log[node_to_remove_barcode]
-        for parent_barcode in node_to_remove['parent_tensor_barcodes']:
-            if parent_barcode not in nodes_seen:  # only add a node if not seen yet.
-                node_stack.append(parent_barcode)
-                nodes_seen.add(parent_barcode)
-        starting_node_sets.append(node_stack[:])
-
-    return starting_node_sets
-
 
 def compute_forward_step(node_barcode: str,
                          new_forward_pass_activations: Dict,
@@ -151,10 +164,10 @@ def compute_forward_step(node_barcode: str,
         else:
             func_kwargs[kwarg_key] = new_forward_pass_activations[kwarg_barcode].clone()
 
-    current_rng_states = get_rng_states()
-    set_saved_rng_states(node_rng_states)
+    current_rng_states = log_current_rng_states()
+    set_rng_from_saved_states(node_rng_states)
     new_tensor_val = node_func(*func_args, **func_kwargs)
-    set_saved_rng_states(current_rng_states)
+    set_rng_from_saved_states(current_rng_states)
 
     if node_func.__name__ == '__setitem__':  # TODO: fix this
         new_tensor_val = func_args[0]
@@ -213,6 +226,7 @@ def update_node_children(node_barcode: str,
         del new_forward_pass_activations[node_barcode]
         new_forward_pass_activations[node_barcode] = None
         torch.cuda.empty_cache()
+
 
 
 def validate_single_forward_pass(history_dict: Dict,
@@ -287,70 +301,6 @@ def validate_single_forward_pass(history_dict: Dict,
     return True
 
 
-def validate_all_forward_passes(history_dict: Dict,
-                                verbose: bool = False) -> bool:
-    """Starting from the output, crawls backward and re-runs the forward pass from the saved activations at
-    each preceding step.
-
-    Args:
-        history_dict: Raw history dict
-        verbose: Whether to print where it fails
-
-    Returns:
-        True if the forward passes from all saved activations match the ground-truth output, False otherwise.
-    """
-    starting_node_sets = get_starting_node_sets(history_dict)
-
-    # Now go through each possible set of starting nodes, and check whether it produces outputs
-    # that match the ground truth outputs.
-
-    if verbose:  # tqdm indicator if verbose indicated.
-        iterator = tqdm(starting_node_sets, desc='Validating forward passes for saved activations')
-    else:
-        iterator = starting_node_sets
-
-    for starting_node_set in iterator:
-        pass_is_valid = validate_single_forward_pass(history_dict, starting_node_set)
-        if not pass_is_valid:
-            if verbose:
-                pretty_starting_nodes = [rough_barcode_to_final_barcode(barcode, history_dict)
-                                         for barcode in starting_node_set]
-                print(f"\nForward pass failed starting from tensors {pretty_starting_nodes}")
-            return False
-
-    return True
-
-
-def perturb_all_forward_passes(history_dict: Dict,
-                               verbose: bool = False):
-    """Runs the forward pass from all saved activations, but changes the saved activations, and ensures that
-    it in fact results in a wrong output.
-
-    Args:
-        history_dict: Raw dict of history.
-        verbose: Whether to print results
-    """
-    starting_node_sets = get_starting_node_sets(history_dict)
-
-    # Now go through each possible set of starting nodes, and check whether it produces outputs
-    # that match the ground truth outputs.
-
-    if verbose:  # tqdm indicator if verbose indicated.
-        iterator = tqdm(starting_node_sets, desc='Perturbing forward passes for saved activations')
-    else:
-        iterator = starting_node_sets
-
-    num_starting_sets = len(starting_node_sets)
-    num_consequential_perturbations = 0
-    for starting_node_set in iterator:
-        pass_matches_output = validate_single_forward_pass(history_dict, starting_node_set, perturb=True)
-        if not pass_matches_output:
-            num_consequential_perturbations += 1
-
-    proportion_consequential_layers = num_consequential_perturbations / num_starting_sets
-    return proportion_consequential_layers
-
-
 def saved_activations_match_child_args(history_dict: Dict,
                                        verbose: bool) -> bool:
     """Checks whether the saved activations at each step match what's fed into the function at the step after.
@@ -397,64 +347,3 @@ def saved_activations_match_child_args(history_dict: Dict,
                 return False
 
     return True
-
-
-def validate_model_history(history_dict: Dict,
-                           pretty_history: ModelHistory,
-                           min_proportion_consequential_layers: float = 0,
-                           verbose: bool = False) -> bool:
-    """Given the raw history_dict and saved user-facing pretty_history, confirms 1) that all saved activations
-    in the pretty history match those in the raw history_dict, based on all possible lookup keys, and
-    2) that running a forward pass of the model from any of the saved activations yields the exact same
-    outputs as the original model. Returns True if this succeeds, False if it fails, along with printing
-    where it fails if "verbose" is specified.
-
-    Args:
-        history_dict: The raw history_dict
-        pretty_history: The pretty, user-facing version of the history dict.
-        min_proportion_consequential_layers: Proportion of layers for which changing them affects the output;
-            if zero, it doesn't check them at all.
-        verbose: Whether to print where the validation fails, if indeed it does.
-
-    Returns:
-        True if all activations are validated and yield the same output, False otherwise.
-    """
-
-    # First check that for every saved tensor in the raw history_dict, it matches the one in the final, pretty
-    # history_dict, for all possible lookup keys. This guarantees that the saved tensor being checked is the
-    # one that the user actually sees.
-
-    if not validate_lookup_keys(history_dict, pretty_history, verbose):
-        return False
-
-    # Second, check that the saved activations at each step match the
-    # corresponding input argument of the step afterwards.
-
-    if not saved_activations_match_child_args(history_dict, verbose):
-        return False
-
-    # Third, swap in the saved activations from the final pretty history into each step of the computation graph,
-    # crawling back from the final outputs, re-run the forward pass from those activations, and check that they
-    # in fact yield the exactly correct final output.
-
-    if not validate_all_forward_passes(history_dict, verbose):
-        return False
-
-    # Finally, check that perturbing the saved activations at each step yields a different output, for a minimum
-    # threshold of such perturbations.
-
-    if min_proportion_consequential_layers > 0:
-        proportion_consequential_layers = perturb_all_forward_passes(history_dict, verbose)
-        if proportion_consequential_layers < min_proportion_consequential_layers:
-            if verbose:
-                print(f"Only {proportion_consequential_layers} of saved activations are consequential, "
-                      f"which is less than the minimum {min_proportion_consequential_layers}")
-            return False
-
-    return True
-
-
-def validate_multiple_images_for_model():
-    pass
-
-def validate_batch_of_models_and_inputs()
