@@ -216,15 +216,14 @@ def module_post_hook(module: nn.Module,
         tensor_entry.module_passes_exited.append((module_address, module_pass_num))
         tensor_entry.module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
-        model_history.update_tensor_log_entry(t)  # Update tensor log with this new information.
 
     for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
         model_history = t.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
-        input_module_thread = t.tl_module_entry_exit_thread[:]
+        input_module_thread = tensor_entry.module_entry_exit_thread[:]
         if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
             module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-            tensor_entry.module_entry_exit_thread = tensor_entry.tl_module_entry_exit_thread[:module_entry_ix]
+            tensor_entry.module_entry_exit_thread = tensor_entry.module_entry_exit_thread[:module_entry_ix]
 
     return output_
 
@@ -255,7 +254,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
         return True
 
     # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
-    for parent_label in tensor_entry.parent_layers_:
+    for parent_label in tensor_entry.parent_layers:
         parent_tensor = model_history[parent_label]
         parent_modules_entered = parent_tensor.modules_entered
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):

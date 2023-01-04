@@ -51,13 +51,13 @@ def torch_func_decorator(func: Callable,
                                                    which_type=torch.Tensor,
                                                    subclass_exceptions=[torch.nn.Parameter])
         if len(output_tensors) > 0:
-            model_history.log_tensors_computed_from_function(func,
-                                                             args,
-                                                             kwargs,
-                                                             out_orig,
-                                                             func_time_elapsed,
-                                                             func_rng_states,
-                                                             is_bottom_level_func)
+            model_history.log_function_output_tensors(func,
+                                                      args,
+                                                      kwargs,
+                                                      out_orig,
+                                                      func_time_elapsed,
+                                                      func_rng_states,
+                                                      is_bottom_level_func)
         return out_orig
 
     return wrapped_func

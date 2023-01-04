@@ -185,8 +185,8 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'terminated_inside_model',
 
     # Conditional info
-    'is_terminal_bool_tensor',
-    'is_atomic_bool_tensor',
+    'is_terminal_bool_layer',
+    'is_atomic_bool_layer',
     'atomic_bool_val',
     'in_cond_branch',
     'cond_branch_start_children',

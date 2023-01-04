@@ -119,7 +119,7 @@ class TensorLogEntry:
         self.sibling_layers = fields_dict['sibling_layers']
         self.has_siblings = fields_dict['has_siblings']
         self.spouse_layers = fields_dict['spouse_layers']
-        self.has_spouses = fields_dict['has_spouse_layers']
+        self.has_spouses = fields_dict['has_spouses']
         self.is_input_layer = fields_dict['is_input_layer']
         self.has_input_ancestor = fields_dict['has_input_ancestor']
         self.input_ancestors = fields_dict['input_ancestors']
@@ -139,8 +139,8 @@ class TensorLogEntry:
         self.terminated_inside_model = fields_dict['terminated_inside_model']
 
         # Conditional info
-        self.is_terminal_bool_tensor = fields_dict['is_terminal_bool_tensor']
-        self.is_atomic_bool_tensor = fields_dict['is_atomic_bool_tensor']
+        self.is_terminal_bool_layer = fields_dict['is_terminal_bool_layer']
+        self.is_atomic_bool_layer = fields_dict['is_atomic_bool_layer']
         self.atomic_bool_val = fields_dict['atomic_bool_val']
         self.in_cond_branch = fields_dict['in_cond_branch']
         self.cond_branch_start_children = fields_dict['cond_branch_start_children']
@@ -160,6 +160,20 @@ class TensorLogEntry:
         self.is_bottom_level_submodule_output = fields_dict['is_bottom_level_submodule_output']
         self.bottom_level_submodule_exited = fields_dict['bottom_level_submodule_exited']
         self.module_entry_exit_thread = fields_dict['module_entry_exit_thread']
+
+    # ********************************************
+    # *********** User-Facing Functions **********
+    # ********************************************
+
+    def print_all_fields(self):
+        """Print all data fields in the layer.
+        """
+        fields_to_exclude = ['source_model_history', 'func_rng_states']
+
+        for field in dir(self):
+            attr = getattr(self, field)
+            if not any([field.startswith('_'), field in fields_to_exclude, callable(attr)]):
+                print(f"{field}: {attr}")
 
     # ********************************************
     # ************* Logging Functions ************
@@ -578,7 +592,7 @@ class ModelHistory:
             'parent_param_passes': {},
             'num_param_tensors': 0,
             'parent_param_shapes': [],
-            'num_params_total': 0,
+            'num_params_total': int(0),
             'parent_params_fsize': 0,
             'parent_params_fsize_nice': human_readable_size(0),
 
@@ -590,14 +604,14 @@ class ModelHistory:
             # Graph info:
             'parent_layers': [],
             'has_parents': False,
-            'parent_tensor_arg_locs': {'args': {}, 'kwargs': {}},
+            'parent_layer_arg_locs': {'args': {}, 'kwargs': {}},
             'orig_ancestors': {tensor_label},
             'child_layers': [],
             'has_children': False,
             'sibling_layers': [],
-            'has_sibling_layers': False,
+            'has_siblings': False,
             'spouse_layers': [],
-            'has_spouse_layers': False,
+            'has_spouses': False,
             'is_input_layer': is_input_layer,
             'has_input_ancestor': has_input_ancestor,
             'input_ancestors': input_ancestors,
@@ -617,8 +631,8 @@ class ModelHistory:
             'terminated_inside_model': False,
 
             # Conditional info:
-            'is_terminal_bool_tensor': False,
-            'is_atomic_bool_tensor': False,
+            'is_terminal_bool_layer': False,
+            'is_atomic_bool_layer': False,
             'atomic_bool_val': None,
             'in_cond_branch': False,
             'cond_branch_start_children': [],
@@ -635,7 +649,7 @@ class ModelHistory:
             'modules_exited': [],
             'module_passes_exited': [],
             'is_submodule_output': False,
-            'is_bottom_level_subodule_output': False,
+            'is_bottom_level_submodule_output': False,
             'bottom_level_submodule_exited': None,
             'module_entry_exit_thread': []
         }
@@ -654,14 +668,14 @@ class ModelHistory:
             self.buffer_layers.append(tensor_label)
             self.internally_initialized_layers.append(tensor_label)
 
-    def log_tensors_computed_from_function(self,
-                                           func: Callable,
-                                           args: Tuple[Any],
-                                           kwargs: Dict[str, Any],
-                                           out_orig: Any,
-                                           func_time_elapsed: float,
-                                           func_rng_states: Dict,
-                                           is_bottom_level_func: bool):
+    def log_function_output_tensors(self,
+                                    func: Callable,
+                                    args: Tuple[Any],
+                                    kwargs: Dict[str, Any],
+                                    out_orig: Any,
+                                    func_time_elapsed: float,
+                                    func_rng_states: Dict,
+                                    is_bottom_level_func: bool):
         """Logs tensor or set of tensors that were computed from a function call.
 
         Args:
@@ -711,30 +725,30 @@ class ModelHistory:
         fields_dict['parent_layer_arg_locs'] = parent_layer_arg_locs
         fields_dict['has_parents'] = (len(fields_dict['parent_layers']) > 0)
         fields_dict['orig_ancestors'] = input_ancestors.union(internally_initialized_ancestors)
-        fields_dict['child_tensors'] = []
+        fields_dict['child_layers'] = []
         fields_dict['has_children'] = False
-        fields_dict['sibling_tensors'] = []
-        fields_dict['has_sibling_tensors'] = False
-        fields_dict['spouse_tensors'] = []
-        fields_dict['has_spouse_tensors'] = False
-        fields_dict['is_input_tensor'] = False
+        fields_dict['sibling_layers'] = []
+        fields_dict['has_siblings'] = False
+        fields_dict['spouse_layers'] = []
+        fields_dict['has_spouses'] = False
+        fields_dict['is_input_layer'] = False
         fields_dict['has_input_ancestor'] = (len(input_ancestors) > 0)
         fields_dict['input_ancestors'] = input_ancestors
         fields_dict['min_distance_from_input'] = None
         fields_dict['max_distance_from_input'] = None
-        fields_dict['is_output_tensor'] = False
+        fields_dict['is_output_layer'] = False
         fields_dict['is_output_ancestor'] = False
         fields_dict['output_descendents'] = set()
         fields_dict['min_distance_from_output'] = None
         fields_dict['max_distance_from_output'] = None
-        fields_dict['is_buffer_tensor'] = False
+        fields_dict['is_buffer_layer'] = False
         fields_dict['buffer_address'] = None
         fields_dict['initialized_inside_model'] = (len(parent_layer_labels) == 0)
         fields_dict['has_internally_initialized_ancestor'] = (len(internally_initialized_ancestors) > 0)
         fields_dict['internally_initialized_parents'] = internal_parent_layer_labels
         fields_dict['internally_initialized_ancestors'] = internally_initialized_ancestors
         fields_dict['terminated_inside_model'] = False
-        fields_dict['is_terminal_bool_tensor'] = False
+        fields_dict['is_terminal_bool_layer'] = False
         fields_dict['in_cond_branch'] = False
         fields_dict['cond_branch_start_children'] = []
 
@@ -743,7 +757,7 @@ class ModelHistory:
         parent_param_passes = self._process_parent_param_passes(arg_parameters)
         indiv_param_barcodes = list(parent_param_passes.keys())
 
-        fields_dict['computed_from_params'] = (len(parent_param_passes) > 0)
+        fields_dict['computed_with_params'] = (len(parent_param_passes) > 0)
         fields_dict['parent_params'] = arg_parameters
         fields_dict['parent_param_barcodes'] = indiv_param_barcodes
         fields_dict['parent_param_passes'] = parent_param_passes
@@ -766,6 +780,8 @@ class ModelHistory:
         fields_dict['is_computed_inside_submodule'] = is_computed_inside_submodule
         fields_dict['containing_module_origin'] = containing_module_origin
         fields_dict['containing_modules_origin_nested'] = containing_modules_origin_nested
+        fields_dict['containing_module_final'] = containing_module_origin
+        fields_dict['containing_modules_final_nested'] = containing_modules_origin_nested
         fields_dict['modules_entered'] = []
         fields_dict['module_passes_entered'] = []
         fields_dict['is_submodule_input'] = False
@@ -849,7 +865,7 @@ class ModelHistory:
         indiv_param_barcodes = list(parent_param_passes.keys())
         realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
-        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}"
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
 
         # Increment the counters to be ready for the next tensor
         self.raw_layer_type_counter[layer_type] += 1
@@ -865,6 +881,7 @@ class ModelHistory:
             operation_equivalence_type = f"{layer_type}_{arg_hash}"
             if fields_dict['is_part_of_iterable_output']:
                 operation_equivalence_type += f'_outindex{i}'
+            fields_dict['operation_equivalence_type'] = operation_equivalence_type
             fields_dict['pass_num'] = 1
 
         self.equivalent_operations[operation_equivalence_type].add(tensor_label_raw)
@@ -889,15 +906,15 @@ class ModelHistory:
             fields_dict['iterable_output_index'] = None
 
         if (t.dtype == torch.bool) and (t.dim()) == 0:
-            fields_dict['is_atomic_bool_tensor'] = True
+            fields_dict['is_atomic_bool_layer'] = True
             fields_dict['atomic_bool_val'] = t.item()
         else:
-            fields_dict['is_atomic_bool_tensor'] = False
+            fields_dict['is_atomic_bool_layer'] = False
             fields_dict['atomic_bool_val'] = None
 
         # General info
         fields_dict['tensor_label_raw'] = tensor_label_raw
-        fields_dict['layer_label_raw'] = tensor_label_raw
+        fields_dict['layer_total_num'] = None
         fields_dict['same_layer_tensors'] = []
         fields_dict['realtime_tensor_num'] = realtime_tensor_num
         fields_dict['operation_num'] = None
@@ -912,6 +929,8 @@ class ModelHistory:
         fields_dict['layer_label_no_pass'] = None
         fields_dict['layer_label_no_pass_short'] = None
         fields_dict['layer_type'] = layer_type
+        fields_dict['layer_label_raw'] = tensor_label_raw
+        fields_dict['layer_type_num'] = layer_type_num
         fields_dict['pass_num'] = 1
         fields_dict['layer_passes_total'] = 1
         fields_dict['lookup_keys'] = []
@@ -1320,7 +1339,7 @@ class ModelHistory:
             new_output_node.parent_param_passes = {}
             new_output_node.num_param_tensors = 0
             new_output_node.parent_param_shapes = []
-            new_output_node.num_params_total = 0
+            new_output_node.num_params_total = int(0)
             new_output_node.parent_params_fsize = 0
             new_output_node.parent_params_fsize_nice = human_readable_size(0)
 
@@ -1456,9 +1475,9 @@ class ModelHistory:
         tensor_entry.terminated_inside_model = True
         if tensor_label not in self.internally_terminated_layers:
             self.internally_terminated_layers.append(tensor_label)
-            if tensor_entry.is_atomic_bool_tensor and (tensor_label not in self.internally_terminated_bool_layers):
+            if tensor_entry.is_atomic_bool_layer and (tensor_label not in self.internally_terminated_bool_layers):
                 self.internally_terminated_bool_layers.append(tensor_label)
-                tensor_entry.is_terminal_bool_tensor = True
+                tensor_entry.is_terminal_bool_layer = True
 
     def _mark_conditional_branches(self):
         """Starting from any terminal boolean nodes, backtracks until it finds the beginning of any
@@ -2207,7 +2226,7 @@ class ModelHistory:
         """
         list_fields_to_rename = ['input_tensors', 'output_tensors', 'buffer_tensors', 'internally_initialized_tensors',
                                  'tensors_where_internal_branches_merge_with_input', 'internally_terminated_tensors',
-                                 'internally_terminated_bool_tensors']
+                                 'internally_terminated_bool_layers']
         for field in list_fields_to_rename:
             tensor_labels = getattr(self, field)
             setattr(self, field, [self.raw_to_final_tensor_labels[tensor_label] for tensor_label in tensor_labels])

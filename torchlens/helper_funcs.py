@@ -345,6 +345,9 @@ def remove_attributes_starting_with_str(obj: Any,
             delattr(obj, field)
 
 
+clean_to_numpy = copy.deepcopy(torch.Tensor.numpy)
+
+
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """Returns the size of a tensor in bytes.
 
@@ -354,7 +357,7 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     Returns:
         Size of tensor in bytes.
     """
-    return getsizeof(t.storage())
+    return getsizeof(np.array(t.data.cpu()))
 
 
 def human_readable_size(size: int, decimal_places: int = 1) -> str:
