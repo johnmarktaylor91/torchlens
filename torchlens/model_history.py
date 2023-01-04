@@ -306,7 +306,7 @@ class TensorLogEntry:
         else:
             child_layers_str = "no child layers"
         s += f"\n\tChild Layers: {child_layers_str}"
-        if self.containing_module_origin == 'none':
+        if self.containing_module_origin is None:
             module_str = "\n\tComputed inside module: not computed inside a module"
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
@@ -784,12 +784,22 @@ class ModelHistory:
             if not self._output_should_be_logged(out, is_bottom_level_func):
                 continue
 
-            self._log_info_specific_to_single_function_output_tensor(out, i,
+            self._log_info_specific_to_single_function_output_tensor(out, i, args, kwargs,
                                                                      parent_param_passes, fields_dict)
             self._make_tensor_log_entry(out, fields_dict=fields_dict,
                                         t_args=args, t_kwargs=kwargs)
             new_tensor_entry = self[fields_dict['tensor_label_raw']]
+            new_tensor_label = new_tensor_entry.tensor_label_raw
             self._update_tensor_family_links(new_tensor_entry)
+
+            # Update relevant fields of ModelHistory
+            # Add layer to relevant fields of ModelHistory:
+            if fields_dict['initialized_inside_model']:
+                self.internally_initialized_layers.append(new_tensor_label)
+            if fields_dict['has_input_ancestor'] and any([(self[parent_layer].has_internally_initialized_ancestor and
+                                                           not self[parent_layer].has_input_ancestor)
+                                                          for parent_layer in fields_dict['parent_layers']]):
+                self.layers_where_internal_branches_merge_with_input.append(new_tensor_label)
 
             # Tag the tensor itself with its label, and with a reference to the model history log.
             out.tl_tensor_label_raw = fields_dict['tensor_label_raw']
@@ -820,6 +830,8 @@ class ModelHistory:
     def _log_info_specific_to_single_function_output_tensor(self,
                                                             t: torch.Tensor,
                                                             i: int,
+                                                            args: Tuple[Any],
+                                                            kwargs: Dict[str, Any],
                                                             parent_param_passes: Dict[str, int],
                                                             fields_dict: Dict[str, Any]):
         """Function to log handle the logging of info that's specific to a single output tensor
@@ -828,39 +840,37 @@ class ModelHistory:
         Args:
             t: tensor to log
             i: index of the tensor in the function output
+            args: positional args to the function that created the tensor
+            kwargs: keyword args to the function that created the tensor
             parent_param_passes: Dict mapping barcodes of parent params to how many passes they've seen
             fields_dict: dictionary of fields with which to initialize the new TensorLogEntry
         """
-        '''
-        TODO: THIS SHIT: let's say layers aren't determined yet, but we need to assign operation equivalence types
-        based on arguments, params, index of the tensor in iterable output
-             if len(parent_param_passes) > 0:
-            pass_num = len(self.layers_computed_with_params[layer_label])
-            operation_equivalence_type = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
-        else:
-            layer_label = None
-            operation_equivalence_type = fields_dict['operation_equivalence_type']  # keep it the same if no params
-            pass_num = 1
-
-
-        operation_equivalence_type = f"{layer_type}_{self._get_hash_from_untracked_args(args, kwargs)}"
-        fields_dict['operation_equivalence_type'] = operation_equivalence_type
-        fields_dict['equivalent_operations'] = self.equivalent_operations[operation_equivalence_type]
-        fields_dict['same_layer_tensors'] = []
-        fields_dict['pass_num'] = pass_num
-        '''
-
         layer_type = fields_dict['layer_type']
+        indiv_param_barcodes = list(parent_param_passes.keys())
         realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
         tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}"
-
-        fields_dict['function_is_inplace'] = hasattr(t, 'tl_tensor_label_raw')
 
         # Increment the counters to be ready for the next tensor
         self.raw_layer_type_counter[layer_type] += 1
         self.tensor_counter += 1
 
+        if len(parent_param_passes) > 0:
+            operation_equivalence_type = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
+            fields_dict['operation_equivalence_type'] = operation_equivalence_type
+            self.layers_computed_with_params[operation_equivalence_type].append(tensor_label_raw)
+            fields_dict['pass_num'] = len(self.layers_computed_with_params[operation_equivalence_type])
+        else:
+            arg_hash = self._get_hash_from_untracked_args(args, kwargs)
+            operation_equivalence_type = f"{layer_type}_{arg_hash}"
+            if fields_dict['is_part_of_iterable_output']:
+                operation_equivalence_type += f'_outindex{i}'
+            fields_dict['pass_num'] = 1
+
+        self.equivalent_operations[operation_equivalence_type].add(tensor_label_raw)
+        fields_dict['equivalent_operations'] = self.equivalent_operations[operation_equivalence_type]
+
+        fields_dict['function_is_inplace'] = hasattr(t, 'tl_tensor_label_raw')
         if fields_dict['function_is_inplace']:
             old_gradfunc = self[getattr(t, 'tl_tensor_label_raw')].gradfunc
             if t.grad_fn == old_gradfunc:
@@ -888,6 +898,7 @@ class ModelHistory:
         # General info
         fields_dict['tensor_label_raw'] = tensor_label_raw
         fields_dict['layer_label_raw'] = tensor_label_raw
+        fields_dict['same_layer_tensors'] = []
         fields_dict['realtime_tensor_num'] = realtime_tensor_num
         fields_dict['operation_num'] = None
         fields_dict['source_model_history'] = self
@@ -914,13 +925,6 @@ class ModelHistory:
         fields_dict['tensor_dtype'] = t.dtype
         fields_dict['tensor_fsize'] = get_tensor_memory_amount(t)
         fields_dict['tensor_fsize_nice'] = human_readable_size(fields_dict['tensor_fsize'])
-
-        # TODO: Add all the new fields to model history here
-        self.layers_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
-        self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
-        self.layers_computed_with_params[layer_label].append(t.tl_tensor_label_raw)
-        self.layers_where_internal_branches_merge_with_input.append(t.tl_tensor_label_raw)
-        self.internally_initialized_layers.append(t.tl_tensor_label_raw)
 
     def _make_tensor_log_entry(self,
                                t: torch.Tensor,
