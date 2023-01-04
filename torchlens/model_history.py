@@ -2355,7 +2355,7 @@ class ModelHistory:
         """
         for layer in tqdm(self, desc="Validating saved layer activations..."):
             if not self.validate_single_layer(layer):
-                print(f"Validation failed for layer {layer.layer_label_w_pass}")
+                print(f"Validation failed for layer {layer.layer_label}")
                 return False
         return True
 
