@@ -86,7 +86,6 @@ def decorate_pytorch(torch_module: types.ModuleType,
     """
 
     # Do a pass to save the original func defs.
-    mutant_to_orig_funcs_dict = {}
     collect_orig_func_defs(torch_module, orig_func_defs)
 
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
@@ -103,7 +102,6 @@ def decorate_pytorch(torch_module: types.ModuleType,
         except (AttributeError, TypeError) as _:
             pass
         new_func.tl_is_decorated_function = True
-        mutant_to_orig_funcs_dict[new_func] = orig_func
         if 'torch.Tensor' in namespace_name:
             decorate_tensors(tensors_to_mutate,
                              namespace_name,
@@ -113,10 +111,6 @@ def decorate_pytorch(torch_module: types.ModuleType,
     # Bolt on the identity function
     new_identity = torch_func_decorator(identity, model_history)
     torch.identity = new_identity
-    mutant_to_orig_funcs_dict[new_identity] = identity
-
-    # Save dict of function definitions to model history
-    model_history.decorated_to_orig_funcs_dict = mutant_to_orig_funcs_dict
 
 
 def decorate_tensors(tensors_to_decorate: List[torch.Tensor],

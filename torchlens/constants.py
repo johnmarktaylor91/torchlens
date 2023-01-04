@@ -13,6 +13,8 @@ MODEL_HISTORY_FIELD_ORDER = [
     'model_name',
     'pass_finished',
     'track_tensors',
+    'all_layers_logged',
+    'keep_layers_without_saved_activations',
     'current_function_call_barcode',
     'random_seed_used',
 
@@ -38,7 +40,6 @@ MODEL_HISTORY_FIELD_ORDER = [
     'unsaved_layers_lookup_keys',
 
     # Mapping from raw to final layer labels:
-    'raw_to_final_tensor_labels',
     'raw_to_final_layer_labels',
     'lookup_keys_to_tensor_num_dict',
 
@@ -70,15 +71,12 @@ MODEL_HISTORY_FIELD_ORDER = [
     'total_params_fsize',
     'total_params_fsize_nice',
 
-    # Info about decorated functions
-    'decorated_to_orig_funcs_dict',
-
     # Module info
     'module_addresses',
     'module_passes',
     'module_num_passes',
     'module_pass_children',
-    'top_level_modules',
+    'top_level_module_passes',
 
     # Time elapsed
     'pass_start_time',
@@ -153,7 +151,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     # Corresponding layer info
     'operation_equivalence_type',
     'equivalent_operations',
-    'same_layer_tensors',
+    'same_layer_operations',
 
     # Graph info
     'parent_layers',
@@ -195,8 +193,6 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'is_computed_inside_submodule',
     'containing_module_origin',
     'containing_modules_origin_nested',
-    'containing_module_final',
-    'containing_modules_final_nested',
     'modules_entered',
     'module_passes_entered',
     'is_submodule_input',

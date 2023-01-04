@@ -63,7 +63,7 @@ def set_rng_from_saved_states(rng_states: Dict):
         torch.cuda.set_rng_state(rng_states['torch_cuda'], 'cuda')
 
 
-def make_random_barcode(barcode_len: int = 16) -> str:
+def make_random_barcode(barcode_len: int = 8) -> str:
     """Generates a random integer hash for a layer to use as internal label (invisible from user side).
 
     Args:

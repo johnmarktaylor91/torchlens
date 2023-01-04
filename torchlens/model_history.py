@@ -4,7 +4,7 @@ import copy
 import itertools as it
 import random
 import time
-from collections import OrderedDict, defaultdict, namedtuple
+from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -107,7 +107,7 @@ class TensorLogEntry:
         # Corresponding layer info:
         self.operation_equivalence_type = fields_dict['operation_equivalence_type']
         self.equivalent_operations = fields_dict['equivalent_operations']
-        self.same_layer_tensors = fields_dict['same_layer_tensors']
+        self.same_layer_operations = fields_dict['same_layer_operations']
 
         # Graph info:
         self.parent_layers = fields_dict['parent_layers']
@@ -149,8 +149,6 @@ class TensorLogEntry:
         self.is_computed_inside_submodule = fields_dict['is_computed_inside_submodule']
         self.containing_module_origin = fields_dict['containing_module_origin']
         self.containing_modules_origin_nested = fields_dict['containing_modules_origin_nested']
-        self.containing_module_final = fields_dict['containing_module_final']
-        self.containing_modules_final_nested = fields_dict['containing_modules_final_nested']
         self.modules_entered = fields_dict['modules_entered']
         self.module_passes_entered = fields_dict['module_passes_entered']
         self.is_submodule_input = fields_dict['is_submodule_input']
@@ -185,11 +183,16 @@ class TensorLogEntry:
         Returns:
             Copy of itself.
         """
-        copied_entry = copy.copy(self)
-        for field in dir(self):
-            if field.startswith('_'):
-                continue
-            setattr(copied_entry, field, getattr(self, field))
+        fields_dict = {}
+        fields_not_to_deepcopy = ['func_applied', 'gradfunc',
+                                  'source_model_history', 'func_rng_states',
+                                  'creation_args', 'creation_kwargs']
+        for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
+            if field not in fields_not_to_deepcopy:
+                fields_dict[field] = copy.deepcopy(getattr(self, field))
+            else:
+                fields_dict[field] = getattr(self, field)
+        copied_entry = TensorLogEntry(fields_dict)
         return copied_entry
 
     def save_tensor_data(self,
@@ -278,54 +281,22 @@ class TensorLogEntry:
             pass_str = ", "
         s = f"Layer {self.layer_label_no_pass}" \
             f"{pass_str}operation {self.operation_num + 1}/" \
-            f"{self.source_model_history.model_num_tensors_total}:"
+            f"{self.source_model_history.num_tensors_total}:"
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
-        if self.tensor_contents != 'none':
-            if len(self.tensor_shape) == 0:
-                tensor_slice = self.tensor_contents
-            elif len(self.tensor_shape) == 1:
-                num_dims = min(5, self.tensor_shape[0])
-                tensor_slice = self.tensor_contents[0:num_dims]
-            elif len(self.tensor_shape) == 2:
-                num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
-                tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
-            else:
-                num_dims = min([5, self.tensor_shape[-2], self.tensor_shape[-1]])
-                tensor_slice = self.tensor_contents.data.clone()
-                for _ in range(len(self.tensor_shape) - 2):
-                    tensor_slice = tensor_slice[0]
-                tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
-            tensor_slice = tensor_slice.detach()
-            tensor_slice.requires_grad = False
-            s += f"\n\t\t{str(tensor_slice)}"
-            if max(self.tensor_shape) > 5:
-                s += '...'
-        if not self.has_input_ancestor:
-            s += f"\n\t(tensor was created de novo inside the model, not computed from input)"
-        if not self.is_output_ancestor:
-            s += f"\n\t(tensor is not an ancestor of the model output; it terminates within the model)"
+        s += self._tensor_contents_str_helper()
+        s += self._tensor_family_str_helper()
         if len(self.parent_param_shapes) > 0:
             params_shapes_str = ', '.join(str(param_shape) for param_shape in self.parent_param_shapes)
             s += f"\n\tParams: Computed from params with shape {params_shapes_str}; " \
                  f"{self.num_params_total} params total ({self.parent_params_fsize_nice})"
         else:
             s += f"\n\tParams: no params used"
-        if len(self.parent_layers) > 0:
-            parent_layers_str = ', '.join(self.parent_layers)
-        else:
-            parent_layers_str = "no parent layers"
-        s += f"\n\tParent Layers: {parent_layers_str}"
-        if len(self.child_layers) > 0:
-            child_layers_str = ', '.join(self.child_layers)
-        else:
-            child_layers_str = "no child layers"
-        s += f"\n\tChild Layers: {child_layers_str}"
         if self.containing_module_origin is None:
             module_str = "\n\tComputed inside module: not computed inside a module"
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
-            s += f"\n\tFunction: {self.func_applied_name} (gradfunc={self.gradfunc_name}) " \
+            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc_name}) " \
                  f"{module_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
@@ -337,6 +308,67 @@ class TensorLogEntry:
             s += f"\n\tOutput of bottom-level module: {self.bottom_level_submodule_exited}"
         lookup_keys_str = ', '.join([str(key) for key in self.lookup_keys])
         s += f"\n\tLookup keys: {lookup_keys_str}"
+
+        return s
+
+    def _tensor_contents_str_helper(self) -> str:
+        """Returns short, readable string for the tensor contents.
+        """
+        s = ''
+        tensor_size_shown = 8
+        if self.tensor_contents != 'none':
+            if len(self.tensor_shape) == 0:
+                tensor_slice = self.tensor_contents
+            elif len(self.tensor_shape) == 1:
+                num_dims = min(tensor_size_shown, self.tensor_shape[0])
+                tensor_slice = self.tensor_contents[0:num_dims]
+            elif len(self.tensor_shape) == 2:
+                num_dims = min([tensor_size_shown, self.tensor_shape[-2], self.tensor_shape[-1]])
+                tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
+            else:
+                num_dims = min([tensor_size_shown, self.tensor_shape[-2], self.tensor_shape[-1]])
+                tensor_slice = self.tensor_contents.data.clone()
+                for _ in range(len(self.tensor_shape) - 2):
+                    tensor_slice = tensor_slice[0]
+                tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
+            tensor_slice = tensor_slice.detach()
+            tensor_slice.requires_grad = False
+            s += f"\n\t\t{str(tensor_slice)}"
+            if max(self.tensor_shape) > tensor_size_shown:
+                s += '...'
+        return s
+
+    def _tensor_family_str_helper(self) -> str:
+        s = '\n\tRelated Tensors:'
+        if len(self.parent_layers) > 0:
+            s += '\n\t\t- parent layers: ' + ', '.join(self.parent_layers)
+        else:
+            s += "\n\t\t- no parent layers"
+
+        if len(self.child_layers) > 0:
+            s += '\n\t\t- child layers: ' + ', '.join(self.child_layers)
+        else:
+            s += "\n\t\t- no child layers"
+
+        if len(self.sibling_layers) > 0:
+            s += '\n\t\t- shares parents with layers: ' + ', '.join(self.sibling_layers)
+        else:
+            s += "\n\t\t- shares parents with no other layers"
+
+        if len(self.spouse_layers) > 0:
+            s += '\n\t\t- shares children with layers: ' + ', '.join(self.spouse_layers)
+        else:
+            s += "\n\t\t- shares children with no other layers"
+
+        if self.has_input_ancestor:  # todo: put the ancestors here
+            s += '\n\t\t- descendent of input layers: ' + ', '.join(self.input_ancestors)
+        else:
+            s += "\n\t\t- tensor was created de novo inside the model (not computed from input)"
+
+        if self.is_output_ancestor:
+            s += '\n\t\t- ancestor of output layers: ' + ', '.join(self.output_descendents)
+        else:
+            s += "\n\t\t- tensor is not an ancestor of the model output; it terminates within the model"
 
         return s
 
@@ -387,22 +419,22 @@ class ModelHistory:
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
         representation of the full history for the user afterward.
-
-        Args:
-            tensor_nums_to_save: the numbers for the tensors to save
-            during the forward pass (e.g., the 2nd tensor generated,
-            the fifth, etc.). If 'all', saves all tensors.
         """
         # General info
         self.model_name = model_name
         self.pass_finished = False
         self.track_tensors = False
+        self.all_layers_logged = False
+        if tensor_nums_to_save is None:
+            self.keep_layers_without_saved_activations = True
+        else:
+            self.keep_layers_without_saved_activations = False
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
 
         # Model structure info
         self.model_is_recurrent = False
-        self.model_max_recurrent_loops = 0
+        self.model_max_recurrent_loops = 1
         self.model_has_conditional_branching = False
         self.model_is_branching = False
 
@@ -417,12 +449,11 @@ class ModelHistory:
         self.raw_tensor_dict = OrderedDict()
         self.raw_tensor_labels_list = []
         self.tensor_nums_to_save = tensor_nums_to_save
-        self.tensor_counter = 1
-        self.raw_layer_type_counter = defaultdict(lambda: 1)
+        self.tensor_counter = 0
+        self.raw_layer_type_counter = defaultdict(lambda: 0)
         self.unsaved_layers_lookup_keys = set()
 
         # Mapping from raw to final layer labels:
-        self.raw_to_final_tensor_labels = {}
         self.raw_to_final_layer_labels = {}
         self.lookup_keys_to_tensor_num_dict = {}
 
@@ -437,7 +468,7 @@ class ModelHistory:
         self.conditional_branch_edges = []
         self.layers_computed_with_params = defaultdict(list)
         self.equivalent_operations = defaultdict(set)
-        self.same_layer_tensors = defaultdict(list)
+        self.same_layer_operations = defaultdict(list)
 
         # Tensor info:
         self.num_tensors_total = 0
@@ -454,15 +485,12 @@ class ModelHistory:
         self.total_params_fsize = 0
         self.total_params_fsize_nice = human_readable_size(0)
 
-        # Info about decorated functions:
-        self.decorated_to_orig_funcs_dict = {}
-
         # Module info:
         self.module_addresses = []
         self.module_passes = []
         self.module_num_passes = OrderedDict()
         self.top_level_module_passes = []
-        self.module_pass_children = OrderedDict()
+        self.module_pass_children = defaultdict(list)
 
         # Time elapsed:
         self.pass_start_time = 0
@@ -474,6 +502,17 @@ class ModelHistory:
     # ********************************************
     # ********** User-Facing Functions ***********
     # ********************************************
+
+    def print_all_fields(self):
+        """Print all data fields for ModelHistory.
+        """
+        fields_to_exclude = ['layer_list', 'layer_dict_main_keys', 'layer_dict_all_keys', 'raw_tensor_dict',
+                             'decorated_to_orig_funcs_dict']
+
+        for field in dir(self):
+            attr = getattr(self, field)
+            if not any([field.startswith('_'), field in fields_to_exclude, callable(attr)]):
+                print(f"{field}: {attr}")
 
     def summarize(self):
         """
@@ -507,10 +546,10 @@ class ModelHistory:
         """
         layer_type = source
         # Fetch counters and increment to be ready for next tensor to be logged
-        layer_type_num = self.raw_layer_type_counter[layer_type]
-        realtime_tensor_num = self.tensor_counter
-        self.raw_layer_type_counter[layer_type] += 1
         self.tensor_counter += 1
+        self.raw_layer_type_counter[layer_type] += 1
+        realtime_tensor_num = self.tensor_counter
+        layer_type_num = self.raw_layer_type_counter[layer_type]
 
         tensor_label = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
 
@@ -599,7 +638,7 @@ class ModelHistory:
             # Corresponding layer info:
             'operation_equivalence_type': operation_equivalence_type,
             'equivalent_operations': self.equivalent_operations[operation_equivalence_type],
-            'same_layer_tensors': [],
+            'same_layer_operations': [],
 
             # Graph info:
             'parent_layers': [],
@@ -641,8 +680,6 @@ class ModelHistory:
             'is_computed_inside_submodule': False,
             'containing_module_origin': None,
             'containing_modules_origin_nested': [],
-            'containing_module_final': None,
-            'containing_modules_final_nested': [],
             'modules_entered': [],
             'module_passes_entered': [],
             'is_submodule_input': False,
@@ -763,7 +800,7 @@ class ModelHistory:
         fields_dict['parent_param_passes'] = parent_param_passes
         fields_dict['num_param_tensors'] = len(arg_parameters)
         fields_dict['parent_param_shapes'] = [tuple(param.shape) for param in arg_parameters]
-        fields_dict['num_params_total'] = np.sum([np.prod(shape) for shape in fields_dict['parent_param_shapes']])
+        fields_dict['num_params_total'] = int(np.sum([np.prod(shape) for shape in fields_dict['parent_param_shapes']]))
         fields_dict['parent_params_fsize'] = int(np.sum([get_tensor_memory_amount(p) for p in arg_parameters]))
         fields_dict['parent_params_fsize_nice'] = human_readable_size(fields_dict['parent_params_fsize'])
 
@@ -780,8 +817,6 @@ class ModelHistory:
         fields_dict['is_computed_inside_submodule'] = is_computed_inside_submodule
         fields_dict['containing_module_origin'] = containing_module_origin
         fields_dict['containing_modules_origin_nested'] = containing_modules_origin_nested
-        fields_dict['containing_module_final'] = containing_module_origin
-        fields_dict['containing_modules_final_nested'] = containing_modules_origin_nested
         fields_dict['modules_entered'] = []
         fields_dict['module_passes_entered'] = []
         fields_dict['is_submodule_input'] = False
@@ -863,13 +898,11 @@ class ModelHistory:
         """
         layer_type = fields_dict['layer_type']
         indiv_param_barcodes = list(parent_param_passes.keys())
+        self.tensor_counter += 1
+        self.raw_layer_type_counter[layer_type] += 1
         realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
         tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
-
-        # Increment the counters to be ready for the next tensor
-        self.raw_layer_type_counter[layer_type] += 1
-        self.tensor_counter += 1
 
         if len(parent_param_passes) > 0:
             operation_equivalence_type = self._make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
@@ -915,7 +948,7 @@ class ModelHistory:
         # General info
         fields_dict['tensor_label_raw'] = tensor_label_raw
         fields_dict['layer_total_num'] = None
-        fields_dict['same_layer_tensors'] = []
+        fields_dict['same_layer_operations'] = []
         fields_dict['realtime_tensor_num'] = realtime_tensor_num
         fields_dict['operation_num'] = None
         fields_dict['source_model_history'] = self
@@ -1250,23 +1283,23 @@ class ModelHistory:
             if len(group_tensors) == 0:
                 del self.equivalent_operations[group_label]
 
-        for group_label, group_tensors in self.same_layer_tensors.items():
+        for group_label, group_tensors in self.same_layer_operations.items():
             if layer_to_remove in group_tensors:
                 group_tensors.remove(layer_to_remove)
             if len(group_tensors) == 0:
-                del self.same_layer_tensors[group_label]
+                del self.same_layer_operations[group_label]
 
     # ********************************************
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, keep_layers_without_saved_activations: bool = False):
+    def postprocess(self):
         """
         After the forward pass, cleans up the log into its final form.
         """
         # Step 1: Add dedicated output nodes
 
-        self._add_output_nodes()
+        self._add_output_layers()
 
         # Step 2: Remove orphan nodes.
 
@@ -1297,13 +1330,13 @@ class ModelHistory:
         # do any tallying/totals/labeling, log the module hierarchy, rename all tensors,
         # get the operation numbers for all layer labels.
 
-        self._final_prettify(keep_layers_without_saved_activations)
+        self._final_prettify()
 
         # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
         self._set_pass_finished()
 
-    def _add_output_nodes(self):
+    def _add_output_layers(self):
         """
         Adds dedicated output nodes to the graph.
         """
@@ -1312,9 +1345,10 @@ class ModelHistory:
             output_node = self[output_layer_label]
             new_output_node = output_node.copy()
             new_output_node.layer_type = 'output'
-            new_output_node.tensor_label_raw = f"output_{i + 1}_{self.tensor_counter}_raw"
-            new_output_node.realtime_tensor_num = self.tensor_counter
             self.tensor_counter += 1
+            new_output_node.tensor_label_raw = f"output_{i + 1}_{self.tensor_counter}_raw"
+            new_output_node.layer_label_raw = new_output_node.tensor_label_raw
+            new_output_node.realtime_tensor_num = self.tensor_counter
 
             # Fix function information:
 
@@ -1330,6 +1364,8 @@ class ModelHistory:
             new_output_node.func_all_args_non_tensor = []
             new_output_node.gradfunc = None
             new_output_node.gradfunc_name = 'none'
+            new_output_node.creation_args = []
+            new_output_node.creation_kwargs = {}
 
             # Strip any params:
 
@@ -1348,8 +1384,6 @@ class ModelHistory:
             new_output_node.is_computed_inside_submodule = False
             new_output_node.containing_module_origin = None
             new_output_node.containing_modules_origin_nested = []
-            new_output_node.containing_module_final = None
-            new_output_node.containing_modules_final_nested = []
             new_output_node.modules_entered = []
             new_output_node.module_passes_entered = []
             new_output_node.is_submodule_input = False
@@ -1364,6 +1398,13 @@ class ModelHistory:
             new_output_node.parent_layers = [output_node.tensor_label_raw]
             new_output_node.sibling_layers = []
             new_output_node.has_sibling_tensors = False
+
+            # Fix layer equivalence information:
+            new_output_node.same_layer_operations = []
+            equiv_type = f"output_{'_'.join(tuple(str(s) for s in new_output_node.tensor_shape))}_" \
+                         f"{str(new_output_node.tensor_dtype)}"
+            new_output_node.operation_equivalence_type = equiv_type
+            self.equivalent_operations[equiv_type].add(new_output_node.tensor_label_raw)
 
             # Change original output node:
 
@@ -1433,23 +1474,26 @@ class ModelHistory:
             max_field = 'max_distance_from_input'
             direction = 'forwards'
             marker_field = 'has_input_ancestor'
-            forward_field = 'child_tensors'
+            layer_logging_field = 'input_ancestors'
+            forward_field = 'child_layers'
         elif mode == 'output':
             starting_nodes = self.output_layers[:]
             min_field = 'min_distance_from_output'
             max_field = 'max_distance_from_output'
             direction = 'backwards'
             marker_field = 'is_output_ancestor'
-            forward_field = 'parent_tensors'
+            layer_logging_field = 'output_descendents'
+            forward_field = 'parent_layers'
         else:
             raise ValueError("Mode but be either 'input' or 'output'")
 
         nodes_seen = set()
 
         # Tuples in format node_label, nodes_since_start, traversal_direction
-        node_stack = [(starting_node_label, 0, direction) for starting_node_label in starting_nodes]
+        node_stack = [(starting_node_label, starting_node_label, 0, direction) for starting_node_label in
+                      starting_nodes]
         while len(node_stack) > 0:
-            current_node_label, nodes_since_start, traversal_direction = node_stack.pop()
+            current_node_label, orig_node, nodes_since_start, traversal_direction = node_stack.pop()
             current_node = self[current_node_label]
             nodes_seen.add(current_node_label)
             if getattr(current_node, min_field) is None:
@@ -1463,12 +1507,13 @@ class ModelHistory:
                 setattr(current_node, max_field, max([nodes_since_start, getattr(current_node, max_field)]))
 
             setattr(current_node, marker_field, True)
+            getattr(current_node, layer_logging_field).add(orig_node)
 
             if (len(current_node.child_layers) == 0) and (not current_node.is_output_layer):
                 self._log_internally_terminated_tensor(current_node_label)
 
             for next_node_label in getattr(current_node, forward_field):
-                node_stack.append((next_node_label, nodes_since_start + 1, traversal_direction))
+                node_stack.append((next_node_label, orig_node, nodes_since_start + 1, traversal_direction))
 
     def _log_internally_terminated_tensor(self, tensor_label: str):
         tensor_entry = self[tensor_label]
@@ -1531,7 +1576,7 @@ class ModelHistory:
         if not, it runs the procedure again to check if more equivalent operations can be found.
         """
         node_stack = self.input_layers + self.internally_initialized_layers
-        node_stack = sorted(node_stack, key=lambda x: x.realtime_tensor_num)
+        node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
         operation_equivalence_types_seen = set()
         while len(node_stack) > 0:
             # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
@@ -1539,7 +1584,7 @@ class ModelHistory:
             node = self[node_label]
             node_operation_equivalence_type = node.operation_equivalence_type
             node_stack.extend(node.child_layers)
-            node_stack = sorted(node_stack, key=lambda x: x.realtime_tensor_num)
+            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
             if node_operation_equivalence_type in operation_equivalence_types_seen:
@@ -1548,12 +1593,12 @@ class ModelHistory:
 
             # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
             if len(node.equivalent_operations) == 1:
-                node.same_layer_tensors = [node_label]
+                node.same_layer_operations = [node_label]
                 continue
 
             # If we've already found the same-layer tensors for this node, and it equals the number of
             # equivalent operations, skip it; the work is already done:
-            if len(node.equivalent_operations) == len(node.same_layer_tensors):
+            if len(node.equivalent_operations) == len(node.same_layer_operations):
                 continue
 
             # Else, start from this node and any equivalent operations, and work forward, finding
@@ -1583,13 +1628,10 @@ class ModelHistory:
 
         # Dictionary of information about each subgraph
         subgraphs_dict = {}
-        subgraph_info = namedtuple('SubgraphInfo', ['starting_node',
-                                                    'has_param_node',
-                                                    'node_set'])
         for starting_label in equivalent_operation_starting_labels:
-            subgraphs_dict[starting_label] = subgraph_info(starting_node=starting_label,
-                                                           has_param_node=node.computed_with_params,
-                                                           node_set={starting_label})
+            subgraphs_dict[starting_label] = {'starting_node': starting_label,
+                                              'has_param_node': node.computed_with_params,
+                                              'node_set': {starting_label}}
 
         # Dictionary mapping each node to the subgraph it is in
         node_to_subgraph_dict = OrderedDict({label: subgraphs_dict[label] for label in
@@ -1617,10 +1659,7 @@ class ModelHistory:
                                                           node_stack)
             is_first_node = False
 
-        self._assign_and_log_isomorphic_nodes_to_same_layers(iso_node_groups,
-                                                             subgraphs_dict,
-                                                             node_to_subgraph_dict,
-                                                             adjacent_subgraphs)
+        self._assign_and_log_isomorphic_nodes_to_same_layers(iso_node_groups, node_to_subgraph_dict, adjacent_subgraphs)
 
     def _fetch_and_process_next_isomorphic_nodes(self,
                                                  current_iso_nodes: List[str],
@@ -1688,8 +1727,8 @@ class ModelHistory:
         Returns:
             Dict with the candidate next nodes for each subgraph.
         """
-        node_type_fields = {'children': 'child_tensors',
-                            'parents': 'parent_tensors'}
+        node_type_fields = {'children': 'child_layers',
+                            'parents': 'parent_layers'}
         if is_first_node:
             node_types_to_use = ['children']
         else:
@@ -1699,16 +1738,15 @@ class ModelHistory:
         for node_label in current_iso_nodes:
             node = self[node_label]
             node_subgraph = node_to_subgraph_dict[node_label]
-            node_subgraph_label = node_subgraph.starting_node
+            node_subgraph_label = node_subgraph['starting_node']
             subgraph_successor_nodes = {'children': [], 'parents': []}
             for node_type in node_types_to_use:
                 node_type_field = node_type_fields[node_type]
                 for neighbor_label in getattr(node, node_type_field):
-                    neighbor_subgraph = node_to_subgraph_dict[neighbor_label]
-                    neighbor_subgraph_label = neighbor_subgraph.starting_node
-                    if neighbor_label in node_subgraph.node_set:  # skip if backtracking own subgraph
+                    if neighbor_label in node_subgraph['node_set']:  # skip if backtracking own subgraph
                         continue
                     elif neighbor_label in node_to_subgraph_dict:  # if hit another subgraph, mark them adjacent & skip
+                        neighbor_subgraph_label = node_to_subgraph_dict[neighbor_label]['starting_node']
                         self._update_adjacent_subgraphs(node_subgraph_label,
                                                         neighbor_subgraph_label,
                                                         adjacent_subgraphs)
@@ -1729,8 +1767,7 @@ class ModelHistory:
             neighbor_subgraph_label: Label of the second subgraph
             adjacent_subgraphs: Dict mapping each subgraph to set of subgraphs its adjacent to
         """
-        if (node_subgraph_label in adjacent_subgraphs) and (
-                neighbor_subgraph_label in adjacent_subgraphs):
+        if (node_subgraph_label in adjacent_subgraphs) and (neighbor_subgraph_label in adjacent_subgraphs):
             return
         elif (node_subgraph_label in adjacent_subgraphs) and (
                 neighbor_subgraph_label not in adjacent_subgraphs):
@@ -1793,6 +1830,7 @@ class ModelHistory:
                     new_equivalent_nodes.append((other_subgraph_nodes.pop(c), subgraph_label))
                     break  # only add one node per subgraph at most
         new_equivalent_nodes = sorted(new_equivalent_nodes, key=lambda x: x[0])
+
         # Remove any collisions to the SAME node:
         node_labels = [node[0] for node in new_equivalent_nodes]
         new_equivalent_nodes = [node for node in new_equivalent_nodes if node_labels.count(node[0]) == 1]
@@ -1824,17 +1862,14 @@ class ModelHistory:
                 node_to_iso_group_dict[node_label] = iso_group_label
             for node_label, node_subgraph in new_isomorphic_nodes:
                 node = self[node_label]
-                subgraphs_dict[node_subgraph].node_set.add(node_label)
-                if not subgraphs_dict[node_subgraph].has_param_node and node.computed_with_params:
-                    subgraphs_dict[node_subgraph].has_param_node = True
-                node_to_subgraph_dict[node_label] = node_subgraph
+                subgraphs_dict[node_subgraph]['node_set'].add(node_label)
+                if not subgraphs_dict[node_subgraph]['has_param_node'] and node.computed_with_params:
+                    subgraphs_dict[node_subgraph]['has_param_node'] = True
+                node_to_subgraph_dict[node_label] = subgraphs_dict[node_subgraph]
             node_stack.append(equivalent_node_labels)
 
-    def _assign_and_log_isomorphic_nodes_to_same_layers(self,
-                                                        iso_node_groups: Dict[str, List],
-                                                        subgraphs_dict: Dict,
-                                                        node_to_subgraph_dict: Dict,
-                                                        adjacent_subgraphs: Dict):
+    def _assign_and_log_isomorphic_nodes_to_same_layers(self, iso_node_groups: Dict[str, List],
+                                                        node_to_subgraph_dict: Dict, adjacent_subgraphs: Dict):
         """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
         goes through and labels the layers as corresponding to each other. The rule is that nodes will be
         labeled as corresponding if 1) they are isomorphic with respect to the starting node, and
@@ -1842,14 +1877,11 @@ class ModelHistory:
 
         Args:
             iso_node_groups: Dict specifying list of isomorphic nodes in each group
-            subgraphs_dict: Dict containing entries with information for each subgraph
             node_to_subgraph_dict: Dict mapping each node to the subgraph its in.
             adjacent_subgraphs: Dict mapping each subgraph to set of adjacent subgraphs.
         """
         # Go through each set of isomorphic nodes, and further partition them into nodes assigned to same layer:
-        same_layer_node_groups = self._group_isomorphic_nodes_to_same_layers(iso_node_groups,
-                                                                             subgraphs_dict,
-                                                                             node_to_subgraph_dict,
+        same_layer_node_groups = self._group_isomorphic_nodes_to_same_layers(iso_node_groups, node_to_subgraph_dict,
                                                                              adjacent_subgraphs)
 
         # Finally, label the nodes corresponding to the same layer.
@@ -1858,13 +1890,12 @@ class ModelHistory:
             for n, node_label in enumerate(layer_nodes):
                 node = self[node_label]
                 node.layer_label_raw = layer_label
-                node.same_layer_tensors = layer_nodes
+                node.same_layer_operations = layer_nodes
                 node.pass_num = n + 1
-                node.layer_total_passes = len(layer_nodes)
+                node.layer_passes_total = len(layer_nodes)
 
     @staticmethod
     def _group_isomorphic_nodes_to_same_layers(iso_node_groups: Dict[str, List],
-                                               subgraphs_dict: Dict,
                                                node_to_subgraph_dict: Dict,
                                                adjacent_subgraphs: Dict) -> Dict:
         same_layer_node_groups = defaultdict(set)  # dict of nodes assigned to the same layer
@@ -1873,11 +1904,11 @@ class ModelHistory:
         for iso_group_label, iso_nodes_orig in iso_node_groups.items():
             iso_nodes = sorted(iso_nodes_orig)
             for node1_label, node2_label in it.combinations(iso_nodes, 2):
-                node1_subgraph_label = node_to_subgraph_dict[node1_label]
-                node2_subgraph_label = node_to_subgraph_dict[node2_label]
-                node1_subgraph = subgraphs_dict[node1_subgraph_label]
-                node2_subgraph = subgraphs_dict[node2_subgraph_label]
-                both_subgraphs_have_params = all([node1_subgraph.has_param_node, node2_subgraph.has_param_node])
+                node1_subgraph = node_to_subgraph_dict[node1_label]
+                node2_subgraph = node_to_subgraph_dict[node2_label]
+                node1_subgraph_label = node1_subgraph['starting_node']
+                node2_subgraph_label = node2_subgraph['starting_node']
+                both_subgraphs_have_params = all([node1_subgraph['has_param_node'], node2_subgraph['has_param_node']])
                 subgraphs_are_adjacent = (node1_subgraph_label in adjacent_subgraphs and
                                           node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label])
                 if both_subgraphs_have_params or subgraphs_are_adjacent:
@@ -1973,7 +2004,6 @@ class ModelHistory:
         Determines the final label for each tensor, and stores this mapping as a dictionary
         in order to then go through and rename everything in the next preprocessing step.
         """
-        raw_to_final_tensor_labels = {}
         raw_to_final_layer_labels = {}
         layer_type_counter = defaultdict(lambda: 1)
         layer_total_counter = 1
@@ -1986,7 +2016,7 @@ class ModelHistory:
                 layer_type_counter[layer_type] += 1
                 layer_total_counter += 1
             else:  # inherit layer numbers from first pass of the layer
-                first_pass_tensor = self[tensor_log_entry.same_layer_tensors[0]]
+                first_pass_tensor = self[tensor_log_entry.same_layer_operations[0]]
                 layer_type_num = first_pass_tensor.layer_type_num
                 layer_total_num = first_pass_tensor.layer_total_num
             tensor_log_entry.layer_type_num = layer_type_num
@@ -1995,27 +2025,26 @@ class ModelHistory:
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{layer_type_num}_{layer_total_num}"
             tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{layer_type_num}:{pass_num}"
             tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{layer_type_num}"
-            if tensor_log_entry.layer_total_passes == 1:
+            if tensor_log_entry.layer_passes_total == 1:
                 tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
                 tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
             else:
                 tensor_log_entry.layer_label = tensor_log_entry.layer_label_w_pass
                 tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_w_pass_short
-            raw_to_final_tensor_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
-            raw_to_final_tensor_labels[tensor_log_entry.layer_label_raw] = tensor_log_entry.layer_label
-        self.raw_to_final_tensor_labels = raw_to_final_tensor_labels
+            raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
+            raw_to_final_layer_labels[tensor_log_entry.layer_label_raw] = tensor_log_entry.layer_label
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
 
-    def _final_prettify(self, keep_layers_without_saved_activations: bool = True):
+    def _final_prettify(self):
         """
         Goes through all tensor log entries for the final stages of pre-processing to make the
         user-facing version of ModelHistory.
         """
         # Go through and log information pertaining to all layers:
-        self._log_final_info_for_all_layers(keep_layers_without_saved_activations)
+        self._log_final_info_for_all_layers()
 
         # And one more pass to delete unused layers from the record and do final tidying up:
-        self._remove_unwanted_entries_and_log_remaining(keep_layers_without_saved_activations)
+        self._remove_unwanted_entries_and_log_remaining()
 
         # Rename the raw tensor entries in the fields of ModelHistory:
         self._rename_model_history_layer_names()
@@ -2024,7 +2053,7 @@ class ModelHistory:
         # Clear the cache after any tensor deletions for garbage collection purposes:
         torch.cuda.empty_cache()
 
-    def _log_final_info_for_all_layers(self, keep_layers_without_saved_activations: bool = True):
+    def _log_final_info_for_all_layers(self):
         """
         Goes through all layers (before discarding unsaved ones), and logs final info about the model
         and the layers that pertains to all layers (not just saved ones).
@@ -2048,29 +2077,23 @@ class ModelHistory:
                     self.total_param_layers += 1
                 self.total_params += tensor_entry.num_params_total
                 self.total_param_tensors += tensor_entry.num_param_tensors
-                self.total_params_fsize += tensor_entry.param_fsize
+                self.total_params_fsize += tensor_entry.parent_params_fsize
             unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
             # Tally elapsed time:
 
             self.elapsed_time_function_calls += tensor_entry.func_time_elapsed
 
-            # Replace stored function with original undecorated version:
-            tensor_entry.func_applied = self.decorated_to_orig_funcs_dict[tensor_entry.func_applied]
-
             # Update model structural information:
             if len(tensor_entry.child_layers) > 1:
                 self.model_is_branching = True
-            if tensor_entry.layer_total_passes > self.model_max_recurrent_loops:
+            if tensor_entry.layer_passes_total > self.model_max_recurrent_loops:
                 self.model_is_recurrent = True
-                self.model_max_recurrent_loops = tensor_entry.layer_total_passes
+                self.model_max_recurrent_loops = tensor_entry.layer_passes_total
             if tensor_entry.in_cond_branch:
                 self.model_has_conditional_branching = True
 
-        if (self.num_tensors_saved == len(self)) or keep_layers_without_saved_activations:
-            self.all_layers_logged = True
-        else:
-            self.all_layers_logged = False
+        self.num_tensors_total = len(self)
 
         # Save the nice versions of the filesize fields:
         self.tensor_fsize_total_nice = human_readable_size(self.tensor_fsize_total)
@@ -2089,13 +2112,14 @@ class ModelHistory:
         Args:
             tensor_entry: TensorLogEntry to replace layer names for.
         """
-        list_fields_to_rename = ['parent_tensors', 'orig_ancestors', 'child_tensors',
-                                 'sibling_tensors', 'spouse_tensors', 'input_ancestors',
-                                 'output_descendants', 'internally_initialized_parents',
-                                 'internally_initialized_ancestors', 'cond_branch_start_children']
+        list_fields_to_rename = ['parent_layers', 'orig_ancestors', 'child_layers',
+                                 'sibling_layers', 'spouse_layers', 'input_ancestors',
+                                 'output_descendents', 'internally_initialized_parents',
+                                 'internally_initialized_ancestors', 'cond_branch_start_children',
+                                 'equivalent_operations', 'same_layer_operations']
         for field in list_fields_to_rename:
             orig_layer_names = getattr(tensor_entry, field)
-            field_type = type(field)
+            field_type = type(orig_layer_names)
             new_layer_names = field_type([self.raw_to_final_layer_labels[raw_name] for raw_name in orig_layer_names])
             setattr(tensor_entry, field, new_layer_names)
 
@@ -2115,30 +2139,35 @@ class ModelHistory:
         containing_module_pass_label = None
         for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
             module_name, module_pass = module_pass_label
+            module_pass_nice_label = f"{module_name}:{module_pass}"
             if (m == 0) and (module_pass_label not in self.top_level_module_passes):
-                self.top_level_module_passes.append(module_pass_label)
+                self.top_level_module_passes.append(module_pass_nice_label)
             else:
-                if module_pass_label not in self.module_pass_children[containing_module_pass_label]:
-                    self.module_pass_children[containing_module_pass_label].append(module_pass_label)
-            containing_module_pass_label = module_pass_label
+                if module_pass_nice_label not in self.module_pass_children[containing_module_pass_label]:
+                    self.module_pass_children[containing_module_pass_label].append(module_pass_nice_label)
+            containing_module_pass_label = module_pass_nice_label
             if (module_name not in self.module_num_passes) or (self.module_num_passes[module_name] < module_pass):
                 self.module_num_passes[module_name] = module_pass
             if module_name not in self.module_addresses:
                 self.module_addresses.append(module_name)
             if module_pass_label not in self.module_passes:
-                self.module_passes.append(module_pass_label)
+                self.module_passes.append(module_pass_nice_label)
 
-    def _remove_unwanted_entries_and_log_remaining(self,
-                                                   keep_layers_without_saved_activations: bool = True):
+    def _remove_unwanted_entries_and_log_remaining(self):
         """Removes entries from ModelHistory that we don't want in the final saved output,
         and logs information about the remaining entries.
         """
         tensors_to_remove = []
         self.unsaved_layers_lookup_keys = set()
+        # Quick loop to count how many tensors are saved:
+        for tensor_entry in self:
+            if tensor_entry.has_saved_activations:
+                self.num_tensors_saved += 1
+
         i = 0
         for tensor_entry in self:
             # Determine valid lookup keys and relate them to the tensor's realtime operation number:
-            if tensor_entry.has_saved_activations or keep_layers_without_saved_activations:
+            if tensor_entry.has_saved_activations or self.keep_layers_without_saved_activations:
                 # Add the lookup keys for the layer, to itself and to ModelHistory:
                 self._add_lookup_keys_for_tensor_entry(tensor_entry, i, self.num_tensors_saved)
 
@@ -2148,15 +2177,19 @@ class ModelHistory:
                 self.layer_labels.append(tensor_entry.layer_label)
                 self.layer_labels_no_pass.append(tensor_entry.layer_label_no_pass)
                 self.layer_labels_w_pass.append(tensor_entry.layer_label_w_pass)
-                self.layer_num_passes[tensor_entry.layer_label] = tensor_entry.layer_total_passes
+                self.layer_num_passes[tensor_entry.layer_label] = tensor_entry.layer_passes_total
                 if tensor_entry.has_saved_activations:
-                    self.num_tensors_saved += 1
                     self.tensor_fsize_saved += tensor_entry.tensor_fsize
                 self._trim_and_reorder_tensor_entry_fields(tensor_entry)  # Final reformatting of fields
                 i += 1
             else:
                 tensors_to_remove.append(tensor_entry)
                 self.unsaved_layers_lookup_keys.update(tensor_entry.lookup_keys)
+
+        if (self.num_tensors_saved == len(self)) or self.keep_layers_without_saved_activations:
+            self.all_layers_logged = True
+        else:
+            self.all_layers_logged = False
 
         # Remove unused entries.
         for tensor_entry in tensors_to_remove:
@@ -2181,7 +2214,7 @@ class ModelHistory:
         lookup_keys_for_tensor = [tensor_entry.layer_label,
                                   tensor_entry.layer_label_short,
                                   tensor_index,
-                                  num_tensors_to_keep - tensor_index]
+                                  tensor_index - num_tensors_to_keep]
 
         # If just one pass, also allow indexing by pass label.
         if tensor_entry.layer_passes_total == 1:
@@ -2193,6 +2226,14 @@ class ModelHistory:
             lookup_keys_for_tensor.append(f"{module_name}:{pass_num}")
             if self.module_num_passes[module_name] == 1:
                 lookup_keys_for_tensor.append(f"{module_name}")
+
+        # Now that we don't need the module pass separately, we can relabel the passes:
+        tensor_entry.module_passes_exited = [f"{module_name}:{module_pass}" for module_name, module_pass
+                                             in tensor_entry.module_passes_exited]
+        tensor_entry.module_passes_entered = [f"{module_name}:{module_pass}" for module_name, module_pass
+                                              in tensor_entry.module_passes_entered]
+        tensor_entry.containing_modules_origin_nested = [f"{module_name}:{module_pass}" for module_name, module_pass
+                                                         in tensor_entry.containing_modules_origin_nested]
 
         # If buffer tensor, allow using buffer address as a key.
         if tensor_entry.is_buffer_layer:
@@ -2224,34 +2265,34 @@ class ModelHistory:
         """Renames all the metadata fields in ModelHistory with the final layer names, replacing the
         realtime debugging names.
         """
-        list_fields_to_rename = ['input_tensors', 'output_tensors', 'buffer_tensors', 'internally_initialized_tensors',
-                                 'tensors_where_internal_branches_merge_with_input', 'internally_terminated_tensors',
+        list_fields_to_rename = ['input_layers', 'output_layers', 'buffer_layers', 'internally_initialized_layers',
+                                 'layers_where_internal_branches_merge_with_input', 'internally_terminated_layers',
                                  'internally_terminated_bool_layers']
         for field in list_fields_to_rename:
             tensor_labels = getattr(self, field)
-            setattr(self, field, [self.raw_to_final_tensor_labels[tensor_label] for tensor_label in tensor_labels])
+            setattr(self, field, [self.raw_to_final_layer_labels[tensor_label] for tensor_label in tensor_labels])
 
         new_param_tensors = {}
-        for key, values in self.layers_computed_with_params:
-            new_key = self.raw_to_final_layer_labels[key]
-            new_param_tensors[new_key] = [self.raw_to_final_tensor_labels[tensor_label] for tensor_label in values]
-        self.tensors_computed_with_params = new_param_tensors
+        for key, values in self.layers_computed_with_params.items():
+            new_key = self[values[0]].layer_label
+            new_param_tensors[new_key] = [self.raw_to_final_layer_labels[tensor_label] for tensor_label in values]
+        self.layers_computed_with_params = new_param_tensors
 
         new_equiv_operations_tensors = {}
-        for key, values in self.equivalent_operations:
-            new_key = self.raw_to_final_layer_labels[key]
-            new_equiv_operations_tensors[new_key] = set([self.raw_to_final_tensor_labels[tensor_label]
-                                                         for tensor_label in values])
+        for key, values in self.equivalent_operations.items():
+            new_equiv_operations_tensors[key] = set([self.raw_to_final_layer_labels[tensor_label]
+                                                     for tensor_label in values])
         self.equivalent_operations = new_equiv_operations_tensors
 
-        new_same_layer_tensors = {}
-        for key, values in self.same_layer_tensors:
+        new_same_layer_operations = {}
+        for key, values in self.same_layer_operations.items():
             new_key = self.raw_to_final_layer_labels[key]
-            new_same_layer_tensors[new_key] = [self.raw_to_final_tensor_labels[tensor_label] for tensor_label in values]
-        self.same_layer_tensors = new_same_layer_tensors
+            new_same_layer_operations[new_key] = [self.raw_to_final_layer_labels[tensor_label] for tensor_label in
+                                                  values]
+        self.same_layer_operations = new_same_layer_operations
 
         for t, (child, parent) in enumerate(self.conditional_branch_edges):
-            new_child, new_parent = self.raw_to_final_tensor_labels[child], self.raw_to_final_tensor_labels[parent]
+            new_child, new_parent = self.raw_to_final_layer_labels[child], self.raw_to_final_layer_labels[parent]
             self.conditional_branch_edges[t] = (new_child, new_parent)
 
     def _trim_and_reorder_model_history_fields(self):
@@ -2381,6 +2422,7 @@ class ModelHistory:
     # ********************************************
     # ************ Built-in Methods **************
     # ********************************************
+
     def __len__(self):
         if self.pass_finished:
             return len(self.layer_list)
@@ -2469,22 +2511,46 @@ class ModelHistory:
             String summarizing the model.
         """
         s = f"Log of {self.model_name} forward pass:"
-        if self.model_is_branching:
-            branch_str = "with branching"
-        else:
-            branch_str = 'without branching'
-        if self.model_is_recurrent:
-            s += f"\n\tModel structure: recurrent (at most {self.model_max_recurrent_loops} loops), {branch_str}; " \
-                 f"{len(self.module_addresses)} total modules."
-        else:
-            s += f"\n\tModel structure: purely feedforward, {branch_str}; {len(self.module_addresses)} total modules."
-        s += f"\n\t{self.num_tensors_total} tensors ({self.tensor_fsize_total_nice}) " \
-             f"computed in forward pass; {self.num_tensors_saved} tensors " \
-             f"({self.tensor_fsize_saved_nice}) saved."
-        s += f"\n\t{self.total_param_tensors} parameter operations ({self.total_params} params total; " \
-             f"{self.total_params_fsize_nice})."
+
+        # General info
+
         s += f"\n\tRandom seed: {self.random_seed_used}"
-        s += f"\n\tTime elapsed: {np.round(self.elapsed_time_total, 3)}s"
+        s += f"\n\tTime elapsed: {np.round(self.elapsed_time_total, 3)}s " \
+             f"({np.round(self.elapsed_time_torchlens_logging, 3)}s spent logging)"
+
+        # Overall model structure
+
+        s += "\n\tStructure:"
+        if self.model_is_recurrent:
+            s += f"\n\t\t- recurrent (at most {self.model_max_recurrent_loops} loops)"
+        else:
+            s += f"\n\t\t- purely feedforward, no recurrence"
+
+        if self.model_is_branching:
+            s += "\n\t\t- with branching"
+        else:
+            s += "\n\t\t- no branching"
+
+        if self.model_has_conditional_branching:
+            s += "\n\t\t- with conditional (if-then) branching"
+        else:
+            s += "\n\t\t- no conditional (if-then) branching"
+
+        if len(self.buffer_layers) > 0:
+            s += f"\n\t\t- contains {len(self.buffer_layers)} buffer layers"
+
+        s += f"\n\t\t- {len(self.module_addresses)} total modules"
+
+        # Model tensors:
+
+        s += "\n\tTensor info:"
+        s += f"\n\t\t- {len(self.layer_list)} total tensors ({self.tensor_fsize_total_nice}) computed in forward pass."
+        s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.tensor_fsize_saved_nice}) saved in log."
+
+        # Model parameters:
+
+        s += f"\n\tParameters: {self.total_param_layers} parameter operations ({self.total_params} params total; " \
+             f"{self.total_params_fsize_nice})"
 
         # Print the module hierarchy.
         s += f"\n\tModule Hierarchy:"
@@ -2493,13 +2559,13 @@ class ModelHistory:
         # Now print all layers.
         s += f"\n\tLayers:"
         for layer_ind, layer_barcode in enumerate(self.layer_labels):
-            pass_num = self.layer_dict_main_keys[layer_barcode].layer_pass_num
+            pass_num = self.layer_dict_main_keys[layer_barcode].pass_num
             total_passes = self.layer_dict_main_keys[layer_barcode].layer_passes_total
             if total_passes > 1:
                 pass_str = f" ({pass_num}/{total_passes} passes)"
             else:
                 pass_str = ''
-            s += f"\n\t\t{layer_ind}: {layer_barcode} {pass_str}"
+            s += f"\n\t\t({layer_ind}) {layer_barcode} {pass_str}"
 
         return s
 
@@ -2563,7 +2629,7 @@ class ModelHistory:
         """
         s = ''
         for module in self.top_level_module_passes:
-            s += f"\n\t\t{module[0]}"
+            s += f"\n\t\t{module}"
             if len(self.module_pass_children[module]) > 0:
                 s += ':'
             s += self._module_hierarchy_str_helper(module, 1)
@@ -2578,9 +2644,7 @@ class ModelHistory:
                                       for sub_module in self.module_pass_children[module]])
         if any_grandchild_modules or len(self.module_pass_children[module]) == 0:
             for sub_module in self.module_pass_children[module]:
-                s += f"\n\t\t{'    ' * level}{sub_module[0]}"
-                if len(self.module_pass_children[sub_module]) == 0:
-                    s += ':'
+                s += f"\n\t\t{'    ' * level}{sub_module}"
                 s += self._module_hierarchy_str_helper(sub_module, level + 1)
         else:
             s += self.pretty_print_list_w_line_breaks(
