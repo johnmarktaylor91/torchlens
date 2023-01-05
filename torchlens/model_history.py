@@ -7,11 +7,14 @@ import time
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
+import graphviz
 import numpy as np
 import pandas as pd
 import torch
+from IPython.core.display import display
 from tqdm import tqdm
 
+from helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str
 from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
     get_vars_of_type_from_obj, human_readable_size, identity, log_current_rng_states, make_random_barcode, \
@@ -339,7 +342,7 @@ class TensorLogEntry:
         return s
 
     def _tensor_family_str_helper(self) -> str:
-        s = '\n\tRelated Tensors:'
+        s = '\n\tRelated Layers:'
         if len(self.parent_layers) > 0:
             s += '\n\t\t- parent layers: ' + ', '.join(self.parent_layers)
         else:
@@ -2330,45 +2333,23 @@ class ModelHistory:
             Ordered, unique list of raw tensor numbers associated with the specified layers.
         """
         raw_tensor_nums_to_save = set()
-        num_layers = len(self.layer_list)
         for layer_key in which_layers:
-            if type(layer_key) == int:  # if user specifies ordinal position
-                if not -num_layers <= layer_key < num_layers:
-                    raise ValueError(f"You specified the {layer_key}th layer, but there are only "
-                                     f"{num_layers} layers in the model.")
-                raw_tensor_nums_to_save.add(self[layer_key].realtime_tensor_num)
-            elif layer_key in self.layer_labels:  # if it's a primary layer key just grab it
-                raw_tensor_nums_to_save.add(self[layer_key].realtime_tensor_num)
-            elif ':' in layer_key:  # if specific pass given, either add or complain if there aren't that many passes
-                label, pass_num = layer_key.split(':')
-                if (layer_key in self.layer_labels_w_pass) or (layer_key in self.module_passes):
-                    raw_tensor_nums_to_save.add(self[layer_key].realtime_tensor_num)
-                elif label in self.layer_labels_no_pass:
-                    first_pass_address = f"{label}:1"
-                    raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
-                                     f"{self[first_pass_address].layer_passes_total} passes in {label}; "
-                                     f"please specify a pass in range 1-{self[first_pass_address].layer_passes_total}.")
-                elif label in self.module_addresses:
-                    raise ValueError(f"You specified {label} pass #{pass_num}, but there are only "
-                                     f"{self.module_num_passes[label]} passes in {label}; "
-                                     f"please specify a pass in range 1-{self.module_num_passes[label]}.")
-                else:
-                    raise ValueError(self._get_lookup_help_str(label))
-            elif layer_key in self.layer_labels_no_pass:  # if it's a layer address, add all passes of the layer
-                for layer_label_w_pass in self.layer_labels_w_pass:
-                    if layer_label_w_pass.startswith(f"{layer_key}:"):
-                        raw_tensor_nums_to_save.add(self[layer_label_w_pass].realtime_tensor_num)
-            elif layer_key in self.module_addresses:  # if it's a module address, add all passes
-                for pass_num in range(1, self.module_num_passes[layer_key] + 1):
-                    raw_tensor_nums_to_save.add(self[f"{layer_key}:{pass_num}"].realtime_tensor_num)
-            elif type(layer_key) == str:  # as last resort check if any layer labels begin with the provided substring
-                found_a_match = False
-                for layer in self:
-                    if layer_key in layer.layer_label_w_pass:
-                        raw_tensor_nums_to_save.add(layer.layer_raw_tensor_num)
-                        found_a_match = True
-                if not found_a_match:
-                    raise ValueError(self._get_lookup_help_str(layer_key))
+            # First check if it matches a lookup key. If so, use that.
+            if layer_key in self.lookup_keys_to_tensor_num_dict:
+                raw_tensor_nums_to_save.add(self.lookup_keys_to_tensor_num_dict[layer_key])
+                continue
+
+            # If not, pull out all layers for which the key is a substring.
+            keys_with_substr = [key for key in self.layer_dict_all_keys if layer_key in str(key)]
+            if len(keys_with_substr) > 0:
+                for key in keys_with_substr:
+                    raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
+                continue
+
+            # If no luck, try to at least point user in right direction:
+
+            self._give_user_feedback_about_lookup_key(layer_key, 'query_multiple')
+
         raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
         return raw_tensor_nums_to_save
 
@@ -2461,34 +2442,54 @@ class ModelHistory:
     def _getitem_after_pass(self, ix):
         """
         Overloaded such that entries can be fetched either by their position in the tensor log, their layer label,
-        or their module address.
-        #it should say so and tell them which labels are valid.
+        or their module address. It should say so and tell them which labels are valid.
         """
         if ix in self.layer_dict_all_keys:
             return self.layer_dict_all_keys[ix]
-        elif (type(ix) == int) and (ix > len(self.layer_list)):
-            raise ValueError(f"You specified the layer with index {ix}, but there are only {len(self.layer_list)} "
-                             f"layers; please specify a smaller number.")
-        elif ix in self.module_addresses:
-            module_num_passes = self.module_num_passes[ix]
-            raise ValueError(f"You specified output of module {ix}, but it has {module_num_passes} passes; "
-                             f"please specify e.g. {ix}:2 for the second pass of {ix}.")
-        elif ix.split(':')[0] in self.module_addresses:
-            module, pass_num = ix.split(':')
+
+        keys_with_substr = [key for key in self.layer_dict_all_keys if ix in str(key)]
+        if len(keys_with_substr) == 1:
+            return self.layer_dict_all_keys[keys_with_substr[0]]
+
+        self._give_user_feedback_about_lookup_key(ix, 'get_one_item')
+
+    def _give_user_feedback_about_lookup_key(self,
+                                             key: Union[int, str],
+                                             mode: str):
+        """For __getitem__ and get_op_nums_from_user_labels, gives the user feedback about the user key
+        they entered if it doesn't yield any matches.
+
+        Args:
+            key: Lookup key used by the user.
+        """
+        if (type(key) == int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
+            raise ValueError(f"You specified the layer with index {key}, but there are only {len(self.layer_list)} "
+                             f"layers; please specify an index in the range "
+                             f"-{len(self.layer_list)} - {len(self.layer_list) - 1}.")
+
+        if key in self.module_addresses:
+            module_num_passes = self.module_num_passes[key]
+            raise ValueError(f"You specified output of module {key}, but it has {module_num_passes} passes; "
+                             f"please specify e.g. {key}:2 for the second pass of {key}.")
+
+        if key.split(':')[0] in self.module_addresses:
+            module, pass_num = key.split(':')
             module_num_passes = self.module_num_passes[module]
             raise ValueError(f"You specified module {module} pass {pass_num}, but {module} only has "
                              f"{module_num_passes} passes; specify a lower number.")
-        elif ix in self.layer_labels_no_pass:
-            layer_num_passes = self.layer_num_passes[ix]
-            raise ValueError(f"You specified output of layer {ix}, but it has {layer_num_passes} passes; "
-                             f"please specify e.g. {ix}:2 for the second pass of {ix}.")
-        elif ix.split(':')[0] in self.layer_labels_no_pass:
-            layer_label, pass_num = ix.split(':')
+
+        if key in self.layer_labels_no_pass:
+            layer_num_passes = self.layer_num_passes[key]
+            raise ValueError(f"You specified output of layer {key}, but it has {layer_num_passes} passes; "
+                             f"please specify e.g. {key}:2 for the second pass of {key}.")
+
+        if key.split(':')[0] in self.layer_labels_no_pass:
+            layer_label, pass_num = key.split(':')
             layer_num_passes = self.layer_num_passes[layer_label]
             raise ValueError(f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
                              f"{layer_num_passes} passes. Specify a lower number.")
-        else:
-            raise ValueError(self._get_lookup_help_str(ix))
+
+        raise ValueError(self._get_lookup_help_str(key, mode))
 
     def __iter__(self):
         """Loops through all tensors in the log.
@@ -2602,7 +2603,9 @@ class ModelHistory:
                 s += f'\n{indent_chars}'
         return s
 
-    def _get_lookup_help_str(self, layer_label):
+    def _get_lookup_help_str(self,
+                             layer_label: Union[int, str],
+                             mode: str) -> str:
         """Generates a help string to be used in error messages when indexing fails.
         """
         sample_layer1 = random.choice(self.layer_labels_w_pass)
@@ -2612,14 +2615,23 @@ class ModelHistory:
             sample_module2 = random.choice(self.module_passes)
         else:
             sample_module1 = 'features.3'
-            sample_module2 = 'features.3:2'
+            sample_module2 = 'features.4:2'
         module_str = f"(e.g., {sample_module1}, {sample_module2})"
-        help_str = (f"Layer {layer_label} not recognized; please specify either \n\t1) an integer giving "
-                    f"the ordinal position of the layer, \n\t2) the layer label (e.g., {sample_layer1}, "
-                    f"{sample_layer2}), \n\t3) the module address {module_str}"
-                    f"\n\t4) A substring of any desired layer labels (e.g., 'pool' will grab all maxpool2d "
-                    f"or avgpool2d layers, 'maxpool' with grab all 'maxpool2d' layers, etc.)."
-                    f"\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer,"
+        if mode == 'get_one_item':
+            msg = "e.g., 'pool' will grab the maxpool2d or avgpool2d layer, 'maxpool' will grab the 'maxpool2d' " \
+                  "layer, etc., but there must be only one such matching layer"
+        elif mode == 'query_multiple':
+            msg = "e.g., 'pool' will grab all maxpool2d or avgpool2d layers, 'maxpool' will grab all 'maxpool2d' " \
+                  "layers, etc."
+        else:
+            raise ValueError("mode must be either get_one_item or query_multiple")
+        help_str = (f"Layer {layer_label} not recognized; please specify either "
+                    f"\n\n\t1) an integer giving the ordinal position of the layer "
+                    f"(e.g. 2 for 3rd layer, -4 for fourth-to-last), "
+                    f"\n\t2) the layer label (e.g., {sample_layer1}, {sample_layer2}), "
+                    f"\n\t3) the module address {module_str}"
+                    f"\n\t4) A substring of any desired layer label ({msg})."
+                    f"\n\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer, "
                     f"and fourth layer overall in the model.)")
         return help_str
 
@@ -2655,3 +2667,540 @@ class ModelHistory:
 
     def __repr__(self):
         return self.__str__()
+
+
+def render_graph(history_dict: Dict,
+                 vis_opt: str = 'unrolled',
+                 vis_outpath: str = 'graph.gv') -> None:
+    """Given the history_dict, renders the computational graph.
+
+    Args:
+        history_dict:
+
+    """
+    if vis_opt not in ['rolled', 'unrolled']:
+        raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
+
+    if vis_opt == 'unrolled':
+        tensor_log = history_dict['tensor_log']
+    elif vis_opt == 'rolled':
+        tensor_log = roll_graph(history_dict)
+    total_tensor_fsize = human_readable_size(history_dict['total_tensor_fsize'])
+    total_params = history_dict['total_params']
+    total_params_fsize = human_readable_size(history_dict['total_params_fsize'])
+    num_tensors = len(history_dict['tensor_log'])
+    graph_caption = (
+        f"<<B>{history_dict['model_name']}</B><br align='left'/>{num_tensors} tensors total ({total_tensor_fsize})"
+        f"<br align='left'/>{total_params} params total ({total_params_fsize})<br align='left'/>>")
+
+    dot = graphviz.Digraph(name='model', comment='Computational graph for the feedforward sweep',
+                           filename=vis_outpath, format='pdf')
+    dot.graph_attr.update({'rankdir': 'BT',
+                           'label': graph_caption,
+                           'labelloc': 't',
+                           'labeljust': 'left',
+                           'ordering': 'out'})
+    dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
+
+    module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.
+
+    for node_barcode, node in tensor_log.items():
+        add_node_to_graphviz(node_barcode,
+                             dot,
+                             vis_opt,
+                             module_cluster_dict,
+                             tensor_log,
+                             history_dict)
+
+    # Finally, set up the subgraphs.
+
+    set_up_subgraphs(dot, module_cluster_dict, history_dict)
+
+    if in_notebook():
+        display(dot)
+        dot.render(vis_outpath, view=False)
+    else:
+        dot.render(vis_outpath, view=True)
+
+
+def add_node_to_graphviz(node_barcode: str,
+                         graphviz_graph,
+                         vis_opt: str,
+                         module_cluster_dict: Dict,
+                         tensor_log: Dict,
+                         history_dict: Dict):
+    """Addes a node and its relevant edges to the graphviz figure.
+
+    Args:
+        node_barcode: Barcode of the node to add.
+        graphviz_graph: The graphviz object to add the node to.
+        vis_opt: Whether to roll the graph or not
+        module_cluster_dict: Dictionary of the module clusters.
+        tensor_log: log of tensors
+        history_dict: The history_dict
+
+        #TODO figure out the subgraph stuff. Either the context method or the new graph method, add labels,
+        #TODO don't override the default node labels.
+
+    Returns:
+        Nothing, but updates the graphviz_graph
+    """
+    node = tensor_log[node_barcode]
+
+    if node['is_bottom_level_module_output']:
+        node_address = '<br/>@' + node['modules_exited'][0]
+        node_address = f"{node_address}"
+        last_module_total_passes = node['module_total_passes']
+        if (last_module_total_passes > 1) and (vis_opt == 'unrolled'):
+            last_module_num_passes = node['module_passes_exited'][0][1]
+            node_address += f":{last_module_num_passes}"
+        node_shape = 'box'
+        node_color = 'black'
+    elif node['is_buffer_tensor']:
+        node_address = '<br/>@' + node['buffer_address']
+        node_shape = 'box'
+        node_color = BUFFER_NODE_COLOR
+    else:
+        node_address = ''
+        node_shape = 'oval'
+        node_color = 'black'
+
+    if node['is_model_input']:
+        bg_color = INPUT_COLOR
+    elif node['is_model_output']:
+        bg_color = OUTPUT_COLOR
+    elif node['output_is_terminal_bool']:
+        bg_color = BOOL_NODE_COLOR
+    elif node['has_params']:
+        bg_color = PARAMS_NODE_BG_COLOR
+    else:
+        bg_color = DEFAULT_BG_COLOR
+
+    tensor_shape = node['tensor_shape']
+    layer_type = node['layer_type']
+    layer_type_str = layer_type.replace('_', '')
+    layer_type_ind = node['layer_type_ind']
+    layer_total_ind = node['layer_total_ind']
+    if node['has_input_ancestor']:
+        line_style = 'solid'
+    else:
+        line_style = 'dashed'
+    if (node['param_total_passes'] > 1) and (vis_opt == 'unrolled'):
+        pass_num = node['pass_num']
+        pass_label = f":{pass_num}"
+    elif (node['param_total_passes'] > 1) and (vis_opt == 'rolled'):
+        pass_label = f' (x{node["param_total_passes"]})'
+    else:
+        pass_label = ''
+
+    if len(tensor_shape) > 1:
+        tensor_shape_str = 'x'.join([str(x) for x in tensor_shape])
+    elif len(tensor_shape) == 1:
+        tensor_shape_str = f'x{tensor_shape[0]}'
+    else:
+        tensor_shape_str = 'x1'
+    tensor_shape_str = f"{tensor_shape_str}"
+
+    if node['has_params']:
+        each_param_shape = []
+        for param_shape in node['parent_params_shape']:
+            if len(param_shape) > 1:
+                each_param_shape.append('x'.join([str(s) for s in param_shape]))
+            else:
+                each_param_shape.append('x1')
+        param_label = "<br/>params: " + ', '.join([param_shape for param_shape in each_param_shape])
+    else:
+        param_label = ''
+
+    tensor_fsize = human_readable_size(node['tensor_fsize'])
+
+    node_title = f"{layer_type_str}_{layer_type_ind}_{layer_total_ind}{pass_label}"
+    node_title = f'<b>{node_title}</b>'
+
+    if node['output_is_terminal_bool']:
+        label_text = str(node['output_bool_val']).upper()
+        bool_label = f"<b><u>{label_text}:</u></b><br/><br/>"
+    else:
+        bool_label = ''
+
+    node_label = (f'<{bool_label}{node_title}<br/>{tensor_shape_str} '
+                  f'({tensor_fsize}){param_label}{node_address}>')
+
+    graphviz_graph.node(name=node_barcode,
+                        label=f"{node_label}",
+                        fontcolor=node_color,
+                        color=node_color,
+                        style=f"filled,{line_style}",
+                        fillcolor=bg_color,
+                        shape=node_shape,
+                        ordering='out')
+
+    if vis_opt == 'rolled':
+        add_rolled_edges_for_node(node, graphviz_graph, module_cluster_dict, tensor_log)
+    else:
+        for child_barcode in node['child_tensor_barcodes']:
+            child_node = tensor_log[child_barcode]
+            if node['has_input_ancestor']:
+                edge_style = 'solid'
+            else:
+                edge_style = 'dashed'
+            edge_dict = {'tail_name': node_barcode,
+                         'head_name': child_barcode,
+                         'color': node_color,
+                         'style': edge_style,
+                         'arrowsize': '.7'}
+
+            if child_barcode in node['cond_branch_start_children']:  # Mark with "if" if the edge starts a cond branch
+                edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+
+            # Label the arguments to the next node if multiple inputs: TODO make this a function and allow same arg to appear multiple times
+            child_node_layer_type = child_node['layer_type'].replace('_', '')
+            if (len(child_node['parent_tensor_barcodes']) > 1) and (child_node_layer_type not in commute_funcs):
+                found_it = False
+                for arg_type in ['args', 'kwargs']:
+                    for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
+                        if arg_barcode == node_barcode:
+                            arg_label = arg_type[:-1] + ' ' + str(arg_loc)
+                            arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_label}</b></FONT>>"
+                            if 'label' not in edge_dict:
+                                edge_dict['label'] = arg_label
+                            else:
+                                edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+                            found_it = True
+                            break
+                        if found_it:
+                            break
+
+            containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
+            if containing_module != -1:
+                module_cluster_dict[containing_module].append(edge_dict)
+            else:
+                graphviz_graph.edge(**edge_dict)
+
+    # Finally, if it's the final output layer, force it to be on top for visual niceness.
+
+    if node['is_last_output_layer'] and vis_opt == 'rolled':
+        with graphviz_graph.subgraph() as s:
+            s.attr(rank='sink')
+            s.node(node_barcode)
+
+
+def roll_graph(history_dict: Dict) -> Dict:
+    """Converts the graph to rolled-up format for plotting purposes. This means that the nodes of the graph
+    are now not tensors, but layers, with the layer children and parents for each pass indicated.
+    The convention is that the pass numbers will be visually indicated for a layer if any one of the children
+    or parent layers vary on different passes; if the same, then they won't be.
+    This is only done for visualization purposes; no tensor data is saved.
+
+    Args:
+        history_dict: The history_dict
+
+    Returns:
+        Rolled-up tensor log.
+    """
+
+    fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
+                      'is_model_input', 'is_model_output', 'is_last_output_layer',
+                      'connects_input_and_output', 'has_input_ancestor', 'parent_tensor_arg_locs',
+                      'cond_branch_start_children', 'output_is_terminal_bool', 'in_cond_branch', 'output_bool_val',
+                      'is_buffer_tensor', 'buffer_address', 'tensor_shape', 'tensor_fsize',
+                      'has_params', 'param_total_passes', 'parent_params_shape',
+                      'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
+                      'module_total_passes', 'module_instance_final_barcodes_list', 'funcs_applied']
+
+    tensor_log = history_dict['tensor_log']
+    rolled_tensor_log = OrderedDict({})
+
+    tensor_to_layer_dict = {}
+
+    for node_barcode, node in tensor_log.items():
+        # Get relevant information from each node.
+
+        layer_barcode = node['layer_barcode']
+        tensor_to_layer_dict[node_barcode] = layer_barcode
+        if layer_barcode in rolled_tensor_log:
+            rolled_node = rolled_tensor_log[layer_barcode]
+        else:
+            rolled_node = OrderedDict({})
+            for field in fields_to_copy:
+                if field in node:
+                    rolled_node[field] = node[field]
+            rolled_node['child_layer_barcodes'] = {}  # each key is pass_num, each value list of children
+            rolled_node['parent_layer_barcodes'] = {}  # each key is pass_num, each value list of parents
+            rolled_node['args_per_layer'] = len(node['parent_tensor_barcodes'])
+            rolled_tensor_log[layer_barcode] = rolled_node
+
+        # Only difference is that now the parents and children are layer barcodes, not tensor barcodes,
+        # and they are linked to each pass of the layer.
+
+        pass_num = node['pass_num']
+        child_layer_barcodes = [tensor_log[child_tensor_barcode]['layer_barcode']
+                                for child_tensor_barcode in node['child_tensor_barcodes']]
+        rolled_node['child_layer_barcodes'][pass_num] = child_layer_barcodes
+
+        parent_layer_barcodes = [tensor_log[parent_tensor_barcode]['layer_barcode']
+                                 for parent_tensor_barcode in node['parent_tensor_barcodes']]
+        rolled_node['parent_layer_barcodes'][pass_num] = parent_layer_barcodes
+
+    # Add an indicator of whether any of the child or parent layers vary based on the pass
+
+    for layer_barcode, rolled_node in rolled_tensor_log.items():
+        edges_vary_across_passes = False
+        for pass_num in rolled_node['child_layer_barcodes']:
+            if pass_num == 1:
+                child_layer_barcodes = rolled_node['child_layer_barcodes'][pass_num]
+                parent_layer_barcodes = rolled_node['parent_layer_barcodes'][pass_num]
+                continue
+            elif any([rolled_node['child_layer_barcodes'][pass_num] != child_layer_barcodes,
+                      rolled_node['parent_layer_barcodes'][pass_num] != parent_layer_barcodes]):
+                edges_vary_across_passes = True
+                break
+            child_layer_barcodes = rolled_node['child_layer_barcodes'][pass_num]
+            parent_layer_barcodes = rolled_node['parent_layer_barcodes'][pass_num]
+        rolled_node['edges_vary_across_passes'] = edges_vary_across_passes
+
+    # Finally add a complementary data structure that for each child or parent edge, indicates the passes for those edges.
+
+    for layer_barcode, rolled_node in rolled_tensor_log.items():
+        child_edge_passes = defaultdict(list)
+        parent_edge_passes = defaultdict(list)
+        for pass_num in rolled_node['child_layer_barcodes']:
+            for child_layer_barcode in rolled_node['child_layer_barcodes'][pass_num]:
+                child_edge_passes[child_layer_barcode].append(pass_num)
+            for parent_layer_barcode in rolled_node['parent_layer_barcodes'][pass_num]:
+                parent_edge_passes[parent_layer_barcode].append(pass_num)
+        rolled_node['child_layer_passes'] = child_edge_passes
+        rolled_node['parent_layer_passes'] = parent_edge_passes
+
+    # And replace the arg locations with the layer, rather than tensor barcodes.
+
+    for layer_barcode, rolled_node in rolled_tensor_log.items():
+        new_parent_arg_locs = {'args': {}, 'kwargs': {}}
+        for arg_type in ['args', 'kwargs']:
+            for arg_loc, arg_barcode in rolled_node['parent_tensor_arg_locs'][arg_type].items():
+                new_parent_arg_locs[arg_type][arg_loc] = tensor_to_layer_dict[arg_barcode]
+        rolled_node['parent_tensor_arg_locs'] = new_parent_arg_locs
+
+    return rolled_tensor_log
+
+
+def add_rolled_edges_for_node(node: Dict,
+                              graphviz_graph,
+                              module_cluster_dict: Dict,
+                              tensor_log: Dict):
+    """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
+
+    Args:
+        node: The node to add edges for.
+        graphviz_graph: The graphviz graph object.
+        module_cluster_dict: Dictionary mapping each cluster to the edges it contains.
+        tensor_log: The tensor log.
+    """
+    parent_node_barcode = node['layer_barcode']
+
+    for child_layer_barcode, parent_pass_nums in node['child_layer_passes'].items():
+        child_node = tensor_log[child_layer_barcode]
+        child_pass_nums = child_node['parent_layer_passes'][parent_node_barcode]
+
+        # Annotate passes for the child and parent nodes for the edge only if they vary across passes.
+
+        if node['edges_vary_across_passes']:
+            tail_label = f'  Out {int_list_to_compact_str(parent_pass_nums)}  '
+        else:
+            tail_label = ''
+
+        # Mark the head label with the argument if need be:
+
+        if child_node['edges_vary_across_passes'] and not child_node['is_model_output']:
+            head_label = f'  In {int_list_to_compact_str(child_pass_nums)}  '
+        else:
+            head_label = ''
+
+        if node['has_input_ancestor']:
+            edge_style = 'solid'
+        else:
+            edge_style = 'dashed'
+
+        if node['is_buffer_tensor']:
+            node_color = BUFFER_NODE_COLOR
+        else:
+            node_color = 'black'
+
+        edge_dict = {'tail_name': node['layer_barcode'],
+                     'head_name': child_layer_barcode,
+                     'color': node_color,
+                     'fontcolor': node_color,
+                     'style': edge_style,
+                     'headlabel': head_label,
+                     'taillabel': tail_label,
+                     'arrowsize': '.7',
+                     'labelfontsize': '8'}
+
+        if child_layer_barcode in node['cond_branch_start_children']:  # Mark with "if" if the edge starts a cond branch
+            edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+
+        # Label the arguments to the next node if multiple inputs: TODO make this a function
+        child_node_layer_type = child_node['layer_type'].replace('_', '')
+        if (child_node['args_per_layer'] > 1) and (child_node_layer_type not in commute_funcs):
+            found_it = False
+            for arg_type in ['args', 'kwargs']:
+                for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
+                    if arg_barcode == parent_node_barcode:
+                        arg_label = arg_type[:-1] + ' ' + str(arg_loc)
+                        arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_label}</b></FONT>>"
+                        if 'label' not in edge_dict:
+                            edge_dict['label'] = arg_label
+                        else:
+                            edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+                        found_it = True
+                        break
+                    if found_it:
+                        break
+
+        containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
+        if containing_module != -1:
+            module_cluster_dict[containing_module].append(edge_dict)
+        else:
+            graphviz_graph.edge(**edge_dict)
+
+
+def set_up_subgraphs(graphviz_graph,
+                     module_cluster_dict: Dict[str, List],
+                     history_dict: Dict):
+    """Given a dictionary specifying the edges in each cluster, the graphviz graph object, and the history_dict,
+    set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
+    recursive logic to set up the nested context managers.
+
+    Args:
+        graphviz_graph: Graphviz graph object.
+        module_cluster_dict: Dictionary mapping each cluster name to the list of edges it contains, with each
+            edge specified as a dict with all necessary arguments for creating that edge.
+        history_dict: History dict.
+    """
+    module_cluster_children_dict = history_dict['module_cluster_children_dict']
+    subgraphs = history_dict['top_level_module_clusters']
+
+    # Get the max nesting depth; it'll be the depth of the deepest module that has no edges.
+
+    max_nesting_depth = get_max_nesting_depth(subgraphs,
+                                              module_cluster_dict,
+                                              module_cluster_children_dict)
+
+    subgraph_stack = [[subgraph_tuple] for subgraph_tuple in subgraphs]
+    nesting_depth = 0
+    while len(subgraph_stack) > 0:
+        parent_graph_list = subgraph_stack.pop(0)
+        setup_subgraphs_recurse(graphviz_graph,
+                                parent_graph_list,
+                                module_cluster_dict,
+                                module_cluster_children_dict,
+                                subgraph_stack,
+                                nesting_depth,
+                                max_nesting_depth,
+                                history_dict)
+
+
+def setup_subgraphs_recurse(starting_subgraph,
+                            parent_graph_list: List,
+                            module_cluster_dict,
+                            module_cluster_children_dict,
+                            subgraph_stack,
+                            nesting_depth,
+                            max_nesting_depth,
+                            history_dict):
+    """Utility function to crawl down several layers deep into nested subgraphs.
+
+    Args:
+        starting_subgraph: The subgraph we're starting from.
+        parent_graph_list: List of parent graphs.
+        module_cluster_dict: Dict mapping each cluster to its edges.
+        module_cluster_children_dict: Dict mapping each cluster to its subclusters.
+        subgraph_stack: Stack of subgraphs to look at.
+        nesting_depth: Nesting depth so far.
+        max_nesting_depth: The total depth of the subgraphs.
+        history_dict: The history dict
+    """
+    subgraph_tuple = parent_graph_list[nesting_depth]
+    subgraph_module, subgraph_barcode = subgraph_tuple
+    subgraph_name = '_'.join(subgraph_tuple)
+    cluster_name = f"cluster_{subgraph_name}"
+    module_type = str(type(history_dict['module_dict'][subgraph_module]).__name__)
+
+    if nesting_depth < len(parent_graph_list) - 1:  # we haven't gotten to the bottom yet, keep going.
+        with starting_subgraph.subgraph(name=cluster_name) as s:
+            setup_subgraphs_recurse(s, parent_graph_list,
+                                    module_cluster_dict, module_cluster_children_dict, subgraph_stack,
+                                    nesting_depth + 1, max_nesting_depth, history_dict)
+
+    else:  # we made it, make the subgraph and add all edges.
+        with starting_subgraph.subgraph(name=cluster_name) as s:
+            pen_width = MIN_MODULE_PENWIDTH + ((max_nesting_depth - nesting_depth) / max_nesting_depth) * PENWIDTH_RANGE
+            s.attr(
+                label=f"<<B>@{subgraph_module}</B><br align='left'/>({module_type})<br align='left'/>>",
+                labelloc='b',
+                penwidth=str(pen_width))
+            subgraph_edges = module_cluster_dict[subgraph_tuple]
+            for edge_dict in subgraph_edges:
+                s.edge(**edge_dict)
+            subgraph_children = module_cluster_children_dict[subgraph_tuple]
+            for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
+                subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
+
+
+def get_lowest_containing_module_for_two_nodes(node1: Dict,
+                                               node2: Dict):
+    """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
+
+    Args:
+        node1: The first node.
+        node2: The second node.
+
+    Returns:
+        Barcode of lowest-level module containing both nodes.
+    """
+    node1_modules = node1['function_call_modules_nested']
+    node2_modules = node2['function_call_modules_nested']
+
+    if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
+        return -1  # no submodule contains them both.
+
+    containing_module = node1_modules[0]
+    for m in range(min([len(node1_modules), len(node2_modules)])):
+        if node1_modules[m] != node2_modules[m]:
+            break
+        containing_module = node1_modules[m]
+    return containing_module
+
+
+def get_max_nesting_depth(top_graphs,
+                          module_cluster_dict,
+                          module_cluster_children_dict):
+    """Utility function to get the max nesting depth of the nested modules in the network; works by
+    recursively crawling down the stack of modules till it hits one with no children and at least one edge.
+
+    Args:
+        top_graphs: Top-level modules
+        module_cluster_dict: Edges in each module.
+        module_cluster_children_dict: Mapping from each module to any children.
+
+    Returns:
+        Max nesting depth.
+    """
+    max_nesting_depth = 1
+    module_stack = [(graph, 1) for graph in top_graphs]
+
+    while len(module_stack) > 0:
+        module, module_depth = module_stack.pop()
+        module_edges = module_cluster_dict[module]
+        module_children = module_cluster_children_dict[module]
+
+        if (len(module_edges) == 0) and (len(module_children) == 0):  # can ignore if no edges and no children.
+            continue
+        elif (len(module_edges) > 0) and (len(module_children) == 0):
+            max_nesting_depth = max([module_depth, max_nesting_depth])
+        elif (len(module_edges) == 0) and (len(module_children) > 0):
+            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
+        else:
+            max_nesting_depth = max([module_depth, max_nesting_depth])
+            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
+    return max_nesting_depth
