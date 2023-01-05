@@ -14,7 +14,7 @@ import torch
 from IPython.core.display import display
 from tqdm import tqdm
 
-from helper_funcs import human_readable_size, in_notebook, int_list_to_compact_str
+from helper_funcs import in_notebook, int_list_to_compact_str
 from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
     get_vars_of_type_from_obj, human_readable_size, identity, log_current_rng_states, make_random_barcode, \
