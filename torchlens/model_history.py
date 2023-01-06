@@ -14,11 +14,11 @@ import torch
 from IPython.core.display import display
 from tqdm import tqdm
 
-from helper_funcs import in_notebook, int_list_to_compact_str
 from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
-    get_vars_of_type_from_obj, human_readable_size, identity, log_current_rng_states, make_random_barcode, \
-    make_short_barcode_from_input, make_var_iterable, print_override, remove_entry_from_list, safe_copy
+    get_vars_of_type_from_obj, human_readable_size, identity, in_notebook, int_list_to_compact_str, \
+    log_current_rng_states, make_random_barcode, make_short_barcode_from_input, make_var_iterable, print_override, \
+    remove_entry_from_list, safe_copy
 
 
 class TensorLogEntry:
@@ -2516,7 +2516,7 @@ class ModelHistory:
         module_cluster_dict = defaultdict(list)
 
         for node_barcode, node in entries_to_plot.items():
-            self._add_node_to_graphviz(node_barcode, dot, module_cluster_dict, vis_opt)
+            self._add_node_to_graphviz(node, dot, module_cluster_dict, vis_opt)
 
         # Finally, set up the subgraphs.
 
@@ -2524,7 +2524,7 @@ class ModelHistory:
 
         if in_notebook():
             display(dot)
-            dot.render(vis_outpath, view=False)
+            # dot.render(vis_outpath, view=False)
         else:
             dot.render(vis_outpath, view=True)
 
@@ -2627,8 +2627,8 @@ class ModelHistory:
             bg_color = self.DEFAULT_BG_COLOR
         return bg_color
 
-    @staticmethod
-    def _make_node_label(node: Union[TensorLogEntry, RolledTensorLogEntry],
+    def _make_node_label(self,
+                         node: Union[TensorLogEntry, RolledTensorLogEntry],
                          node_address: str,
                          vis_opt: str) -> str:
         """Gets the text for the graphviz node.
@@ -2650,17 +2650,10 @@ class ModelHistory:
             tensor_shape_str = f'x{node.tensor_shape[0]}'
         else:
             tensor_shape_str = 'x1'
-        tensor_shape_str = f"{tensor_shape_str}"
 
         # Layer param info:
 
-        each_param_shape = []
-        for param_shape in node.parent_param_shapes:
-            if len(param_shape) > 1:
-                each_param_shape.append('x'.join([str(s) for s in param_shape]))
-            else:
-                each_param_shape.append('x1')
-        param_label = "<br/>params: " + ', '.join([param_shape for param_shape in each_param_shape])
+        param_label = self._make_param_label(node)
 
         tensor_fsize = node.tensor_fsize_nice
         node_title = f"<b>{node.layer_type}_{node.layer_type_num}_{node.layer_total_num}{pass_label}</b>"
@@ -2675,6 +2668,23 @@ class ModelHistory:
                       f'({tensor_fsize}){param_label}{node_address}>')
 
         return node_label
+
+    @staticmethod
+    def _make_param_label(node: Union[TensorLogEntry, RolledTensorLogEntry]) -> str:
+        """Makes the label for parameters of a node.
+        """
+        if node.num_param_tensors == 0:
+            return ''
+
+        each_param_shape = []
+        for param_shape in node.parent_param_shapes:
+            if len(param_shape) > 1:
+                each_param_shape.append('x'.join([str(s) for s in param_shape]))
+            else:
+                each_param_shape.append('x1')
+
+        param_label = "<br/>params: " + ', '.join([param_shape for param_shape in each_param_shape])
+        return param_label
 
     def _add_edges_for_node(self,
                             parent_node: Union[TensorLogEntry, RolledTensorLogEntry],

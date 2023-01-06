@@ -345,9 +345,6 @@ def remove_attributes_starting_with_str(obj: Any,
             delattr(obj, field)
 
 
-clean_to_numpy = copy.deepcopy(torch.Tensor.numpy)
-
-
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """Returns the size of a tensor in bytes.
 
@@ -381,10 +378,6 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     return f"{size} {unit}"
 
 
-clean_from_numpy = copy.deepcopy(torch.from_numpy)
-clean_new_param = copy.deepcopy(torch.nn.Parameter)
-
-
 def print_override(t: torch.Tensor, func_name: str):
     """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
 
@@ -405,6 +398,10 @@ def print_override(t: torch.Tensor, func_name: str):
     elif t.requires_grad:
         np_str = np_str[0:-1] + ", requires_grad=True)"
     return np_str
+
+
+clean_from_numpy = copy.deepcopy(torch.from_numpy)
+clean_new_param = copy.deepcopy(torch.nn.Parameter)
 
 
 def safe_copy(x):

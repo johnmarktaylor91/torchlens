@@ -7,10 +7,9 @@ from typing import Callable, List, Tuple
 
 import torch
 
-from constants import ORIG_TORCH_FUNCS
-from helper_funcs import nested_getattr, safe_copy
+from torchlens.constants import ORIG_TORCH_FUNCS
 from torchlens.helper_funcs import get_vars_of_type_from_obj, identity, log_current_rng_states, make_random_barcode, \
-    print_override
+    nested_getattr, print_override, safe_copy
 from torchlens.model_history import ModelHistory
 
 print_funcs = ['__repr__', '__str__', '_str']

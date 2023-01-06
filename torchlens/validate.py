@@ -17,6 +17,7 @@ from typing import Dict, List
 import torch
 
 from torchlens.helper_funcs import log_current_rng_states, set_rng_from_saved_states, tuple_assign
+from torchlens.model_history import ModelHistory
 
 
 def validate_batch_of_models_and_inputs():
