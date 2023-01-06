@@ -129,6 +129,7 @@ class TensorLogEntry:
         self.min_distance_from_input = fields_dict['min_distance_from_input']
         self.max_distance_from_input = fields_dict['max_distance_from_input']
         self.is_output_layer = fields_dict['is_output_layer']
+        self.is_last_output_layer = fields_dict['is_last_output_layer']
         self.is_output_ancestor = fields_dict['is_output_ancestor']
         self.output_descendents = fields_dict['output_descendents']
         self.min_distance_from_output = fields_dict['min_distance_from_output']
@@ -387,7 +388,86 @@ class RolledTensorLogEntry:
         Args:
             source_entry: The source TensorLogEntry from which the rolled node is constructed
         """
-        print(source_entry)
+        # Label & general info
+        self.layer_label = source_entry.layer_label_no_pass
+        self.layer_type = source_entry.layer_type
+        self.layer_type_num = source_entry.layer_type_num
+        self.layer_total_num = source_entry.layer_total_num
+        self.layer_passes_total = source_entry.layer_passes_total
+        self.source_model_history = source_entry.source_model_history
+
+        # Saved tensor info
+        self.tensor_shape = source_entry.tensor_shape
+        self.tensor_fsize_nice = source_entry.tensor_fsize_nice
+
+        # Param info:
+        self.computed_with_params = source_entry.computed_with_params
+        self.parent_param_shapes = source_entry.parent_param_shapes
+
+        # Graph info
+        self.is_input_layer = source_entry.is_input_layer
+        self.has_input_ancestor = source_entry.has_input_ancestor
+        self.is_output_layer = source_entry.is_output_layer
+        self.is_last_output_layer = source_entry.is_last_output_layer
+        self.is_buffer_layer = source_entry.is_buffer_layer
+        self.buffer_address = source_entry.buffer_address
+        self.cond_branch_start_children = source_entry.cond_branch_start_children
+        self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
+        self.atomic_bool_val = source_entry.atomic_bool_val
+
+        # Module info:
+        self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
+        self.modules_exited = source_entry.modules_exited
+        self.module_passes_exited = source_entry.module_passes_exited
+        self.is_bottom_level_submodule_output = source_entry.is_bottom_level_submodule_output
+        self.bottom_level_submodule_exited = source_entry.bottom_level_submodule_exited
+
+        # Fields specific to rolled node to fill in:
+        self.edges_vary_across_passes = False
+        self.child_layers_per_pass = {}
+        self.child_passes_per_layer = defaultdict(list)
+        self.parent_layers_per_pass = {}
+        self.parent_passes_per_layer = defaultdict(list)
+
+        # Each one will now be a list of layers, since they can vary across passes.
+        self.parent_layer_arg_locs = {'args': defaultdict(set),
+                                      'kwargs': defaultdict(set)}
+
+    def add_pass_info(self,
+                      source_node: TensorLogEntry):
+        """Adds information about another pass of the same layer: namely, mark information about what the
+        child and parent layers are for each pass.
+
+        Args:
+            source_node: Information for the source pass
+        """
+        # Label the layers for each pass
+        child_layer_labels = [self.source_model_history[child].layer_label_no_pass
+                              for child in source_node.child_layers]
+        self.child_layers_per_pass[source_node.pass_num] = child_layer_labels
+        parent_layer_labels = [self.source_model_history[parent].layer_label_no_pass
+                               for parent in source_node.parent_layers]
+        self.parent_layers_per_pass[source_node.pass_num] = parent_layer_labels
+
+        # Label the passes for each layer, and indicate if any layers vary based on the pass.
+        for child_layer in source_node.child_layers:
+            child_layer_label = self.source_model_history[child_layer].layer_label_no_pass
+            self.child_passes_per_layer[child_layer_label].append(source_node.pass_num)
+            if self.child_passes_per_layer[child_layer_label] != list(range(1, source_node.pass_num + 1)):
+                self.edges_vary_across_passes = True
+
+        for parent_layer in source_node.parent_layers:
+            parent_layer_label = self.source_model_history[parent_layer].layer_label_no_pass
+            self.parent_passes_per_layer[parent_layer_label].append(source_node.pass_num)
+            if self.parent_passes_per_layer[parent_layer_label] != list(range(1, source_node.pass_num + 1)):
+                self.edges_vary_across_passes = True
+
+        # For the parent arg locations, have a list of layers rather than single layer, since they can
+        # vary across passes.
+
+        for arg_type in ['args', 'kwargs']:
+            for arg_key, layer_label in source_node.parent_layer_arg_locs[arg_type].items():
+                self.parent_layer_arg_locs[arg_type][arg_key].add(layer_label)
 
     def __str__(self) -> str:
         s = ''
@@ -443,8 +523,10 @@ class ModelHistory:
 
         # Tensor Tracking:
         self.layer_list = []
-        self.layer_dict_main_keys = {}
-        self.layer_dict_all_keys = {}
+        self.layer_list_rolled = []
+        self.layer_dict_main_keys = OrderedDict()
+        self.layer_dict_all_keys = OrderedDict()
+        self.layer_dict_rolled = OrderedDict()
         self.layer_labels = []
         self.layer_labels_w_pass = []
         self.layer_labels_no_pass = []
@@ -490,6 +572,7 @@ class ModelHistory:
 
         # Module info:
         self.module_addresses = []
+        self.module_types = {}
         self.module_passes = []
         self.module_num_passes = OrderedDict()
         self.top_level_module_passes = []
@@ -530,6 +613,40 @@ class ModelHistory:
             Pandas dataframe with info about each layer.
         """
         pass
+
+    def get_op_nums_from_user_labels(self, which_layers: List[Union[str, int]]) -> List[int]:
+        """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
+        the numbers that were generated on the fly during the forward pass, such that they can be
+        saved on a subsequent pass). Raises an error if the user's labels don't correspond to any layers.
+
+        Args:
+            which_layers: List of layers to include, using any indexing desired: either the layer label,
+            the module label, or the ordinal position of the layer. If a layer has multiple passes and
+            none is specified, will return all of them.
+
+        Returns:
+            Ordered, unique list of raw tensor numbers associated with the specified layers.
+        """
+        raw_tensor_nums_to_save = set()
+        for layer_key in which_layers:
+            # First check if it matches a lookup key. If so, use that.
+            if layer_key in self.lookup_keys_to_tensor_num_dict:
+                raw_tensor_nums_to_save.add(self.lookup_keys_to_tensor_num_dict[layer_key])
+                continue
+
+            # If not, pull out all layers for which the key is a substring.
+            keys_with_substr = [key for key in self.layer_dict_all_keys if layer_key in str(key)]
+            if len(keys_with_substr) > 0:
+                for key in keys_with_substr:
+                    raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
+                continue
+
+            # If no luck, try to at least point user in right direction:
+
+            self._give_user_feedback_about_lookup_key(layer_key, 'query_multiple')
+
+        raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
+        return raw_tensor_nums_to_save
 
     # ********************************************
     # ************ Tensor Logging ****************
@@ -660,6 +777,7 @@ class ModelHistory:
             'min_distance_from_input': None,
             'max_distance_from_input': None,
             'is_output_layer': False,
+            'is_last_output_layer': False,
             'is_output_ancestor': False,
             'output_descendents': set(),
             'min_distance_from_output': None,
@@ -777,6 +895,7 @@ class ModelHistory:
         fields_dict['min_distance_from_input'] = None
         fields_dict['max_distance_from_input'] = None
         fields_dict['is_output_layer'] = False
+        fields_dict['is_last_output_layer'] = False
         fields_dict['is_output_ancestor'] = False
         fields_dict['output_descendents'] = set()
         fields_dict['min_distance_from_output'] = None
@@ -1335,7 +1454,11 @@ class ModelHistory:
 
         self._final_prettify()
 
-        # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+        # Step 9: Make the rolled representation of the graph for plotting purposes.
+
+        # self._roll_graph()
+
+        # Step 10: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
         self._set_pass_finished()
 
@@ -1348,6 +1471,8 @@ class ModelHistory:
             output_node = self[output_layer_label]
             new_output_node = output_node.copy()
             new_output_node.layer_type = 'output'
+            if i == len(self.output_layers) - 1:
+                new_output_node.is_last_output_layer = True
             self.tensor_counter += 1
             new_output_node.tensor_label_raw = f"output_{i + 1}_{self.tensor_counter}_raw"
             new_output_node.layer_label_raw = new_output_node.tensor_label_raw
@@ -2235,6 +2360,8 @@ class ModelHistory:
                                              in tensor_entry.module_passes_exited]
         tensor_entry.module_passes_entered = [f"{module_name}:{module_pass}" for module_name, module_pass
                                               in tensor_entry.module_passes_entered]
+        if tensor_entry.containing_module_origin is not None:
+            tensor_entry.containing_module_origin = ':'.join([str(i) for i in tensor_entry.containing_module_origin])
         tensor_entry.containing_modules_origin_nested = [f"{module_name}:{module_pass}" for module_name, module_pass
                                                          in tensor_entry.containing_modules_origin_nested]
 
@@ -2319,50 +2446,475 @@ class ModelHistory:
             tensor.pass_finished = True
         self.pass_finished = True
 
-    def get_op_nums_from_user_labels(self, which_layers: List[Union[str, int]]) -> List[int]:
-        """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
-        the numbers that were generated on the fly during the forward pass, such that they can be
-        saved on a subsequent pass). Raises an error if the user's labels don't correspond to any layers.
-
-        Args:
-            which_layers: List of layers to include, using any indexing desired: either the layer label,
-            the module label, or the ordinal position of the layer. If a layer has multiple passes and
-            none is specified, will return all of them.
-
-        Returns:
-            Ordered, unique list of raw tensor numbers associated with the specified layers.
+    def _roll_graph(self):
         """
-        raw_tensor_nums_to_save = set()
-        for layer_key in which_layers:
-            # First check if it matches a lookup key. If so, use that.
-            if layer_key in self.lookup_keys_to_tensor_num_dict:
-                raw_tensor_nums_to_save.add(self.lookup_keys_to_tensor_num_dict[layer_key])
-                continue
+        Converts the graph to rolled-up format for plotting purposes, such that each node now represents
+        all passes of a given layer instead of having separate nodes for each pass.
+        """
+        for layer_label, node in self.layer_dict_main_keys.items():
+            if layer_label in self.layer_dict_rolled:  # If rolled-up layer has already been added, fetch it:
+                rolled_node = self.layer_dict_rolled[layer_label]
+            else:  # If it hasn't been added, make it:
+                rolled_node = RolledTensorLogEntry(node)
+                self.layer_dict_rolled[layer_label] = rolled_node
+                self.layer_list_rolled.append(rolled_node)
 
-            # If not, pull out all layers for which the key is a substring.
-            keys_with_substr = [key for key in self.layer_dict_all_keys if layer_key in str(key)]
-            if len(keys_with_substr) > 0:
-                for key in keys_with_substr:
-                    raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
-                continue
-
-            # If no luck, try to at least point user in right direction:
-
-            self._give_user_feedback_about_lookup_key(layer_key, 'query_multiple')
-
-        raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
-        return raw_tensor_nums_to_save
+            rolled_node.add_pass_info(node)
 
     # ********************************************
     # *************** Visualization **************
     # ********************************************
 
-    def render_graph(self):
-        """Produces a visualization of the saved graph
+    def render_graph(self,
+                     vis_opt: str = 'unrolled',
+                     vis_outpath: str = 'graph.gv',
+                     vis_fileformat: str = 'pdf',
+                     direction: str = 'vertical') -> None:
+        """Renders the computational graph for the model.
+
+        Args:
+            vis_opt: either 'rolled' or 'unrolled'
+            vis_outpath: where to store the rendered graph
+            vis_fileformat: file format to use for the rendered graph
+            direction: which way the graph should go: either 'vertical' or 'horizontal'
+
         """
         if not self.all_layers_logged:
-            raise ValueError("All layers of the network must be logged in order to render the graph; "
-                             "either use get_model_structure, or use get_model_activations with all layers saved.")
+            raise ValueError("Must have all layers logged in order to render the graph; either save "
+                             "all layers in get_model_activations, or use show_model_graph to "
+                             "render the graph without saving any activations.")
+
+        if vis_opt == 'unrolled':
+            entries_to_plot = self.layer_dict_main_keys
+        elif vis_opt == 'rolled':
+            entries_to_plot = self.layer_dict_rolled
+        else:
+            raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
+
+        if direction == 'vertical':
+            rankdir = 'BT'
+        elif direction == 'horizontal':
+            rankdir = 'LR'
+        else:
+            raise ValueError("direction must be either 'vertical' or 'horizontal'")
+
+        graph_caption = (
+            f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors_total} "
+            f"tensors total ({self.tensor_fsize_total_nice})"
+            f"<br align='left'/>{self.total_params} params total ({self.total_params_fsize_nice})<br align='left'/>>")
+
+        dot = graphviz.Digraph(name=self.model_name, comment='Computational graph for the feedforward sweep',
+                               filename=vis_outpath, format=vis_fileformat)
+        dot.graph_attr.update({'rankdir': rankdir,
+                               'label': graph_caption,
+                               'labelloc': 't',
+                               'labeljust': 'left',
+                               'ordering': 'out'})
+        dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
+
+        # list of edges for each subgraph; subgraphs will be created at the end.
+        module_cluster_dict = defaultdict(list)
+
+        for node_barcode, node in entries_to_plot.items():
+            self._add_node_to_graphviz(node_barcode, dot, module_cluster_dict, vis_opt)
+
+        # Finally, set up the subgraphs.
+
+        self._set_up_subgraphs(dot, module_cluster_dict)
+
+        if in_notebook():
+            display(dot)
+            dot.render(vis_outpath, view=False)
+        else:
+            dot.render(vis_outpath, view=True)
+
+    def _add_node_to_graphviz(self,
+                              node: Union[TensorLogEntry, RolledTensorLogEntry],
+                              graphviz_graph,
+                              module_edge_dict: Dict,
+                              vis_opt: str):
+        """Addes a node and its relevant edges to the graphviz figure.
+
+        Args:
+            node: node to add
+            graphviz_graph: The graphviz object to add the node to.
+            module_edge_dict: Dictionary of the module clusters.
+            vis_opt: Whether to roll the graph or not
+        """
+
+        # Get the address, shape, color, and line style:
+
+        layer_label = node.layer_label
+        node_address, node_shape, node_color = self._get_node_address_shape_color(node)
+        node_bg_color = self._get_node_bg_color(node)
+
+        if node.has_input_ancestor:
+            line_style = 'solid'
+        else:
+            line_style = 'dashed'
+
+        # Get the text for the node label:
+
+        node_label = self._make_node_label(node, node_address, vis_opt)
+        graphviz_graph.node(name=layer_label,
+                            label=node_label,
+                            fontcolor=node_color,
+                            color=node_color,
+                            style=f"filled,{line_style}",
+                            fillcolor=node_bg_color,
+                            shape=node_shape,
+                            ordering='out')
+
+        self._add_edges_for_node(node, node_color, module_edge_dict, graphviz_graph, vis_opt)
+
+        # Finally, if it's the final output layer, force it to be on top for visual niceness.
+
+        if node.is_last_output_layer:
+            with graphviz_graph.subgraph() as s:
+                s.attr(rank='sink')
+                s.node(layer_label)
+
+    def _get_node_address_shape_color(self,
+                                      node: Union[TensorLogEntry, RolledTensorLogEntry]) -> Tuple[str, str, str]:
+        """Gets the node shape, address, and color for the graphviz figure.
+
+        Args:
+            node: node to add
+
+        Returns:
+            node_address: address of the node
+            node_shape: shape of the node
+            node_color: color of the node
+        """
+        if node.is_bottom_level_submodule_output:
+            module_exited = node.bottom_level_submodule_exited
+            if self.module_num_passes[module_exited] == 1:
+                node_address = module_exited
+            else:
+                node_address = node.module_passes_exited[-1]
+            node_address = '<br/>@' + node_address
+            node_shape = 'box'
+            node_color = 'black'
+        elif node.is_buffer_layer:
+            node_address = '<br/>@' + node.buffer_address
+            node_shape = 'box'
+            node_color = self.BUFFER_NODE_COLOR
+        else:
+            node_address = ''
+            node_shape = 'oval'
+            node_color = 'black'
+
+        return node_address, node_shape, node_color
+
+    def _get_node_bg_color(self, node: Union[TensorLogEntry, RolledTensorLogEntry]) -> str:
+        """Gets the node background color for the graphviz figure.
+
+        Args:
+            node: node to add
+
+        Returns:
+            node_bg_color: background color of the node
+        """
+        if node.is_input_layer:
+            bg_color = self.INPUT_COLOR
+        elif node.is_output_layer:
+            bg_color = self.OUTPUT_COLOR
+        elif node.is_terminal_bool_layer:
+            bg_color = self.BOOL_NODE_COLOR
+        elif node.computed_with_params:
+            bg_color = self.PARAMS_NODE_BG_COLOR
+        else:
+            bg_color = self.DEFAULT_BG_COLOR
+        return bg_color
+
+    @staticmethod
+    def _make_node_label(node: Union[TensorLogEntry, RolledTensorLogEntry],
+                         node_address: str,
+                         vis_opt: str) -> str:
+        """Gets the text for the graphviz node.
+        """
+        # Pass info:
+
+        if (node.layer_passes_total > 1) and (vis_opt == 'unrolled'):
+            pass_label = f":{node.pass_num}"
+        elif (node.layer_passes_total > 1) and (vis_opt == 'rolled'):
+            pass_label = f' (x{node.layer_passes_total})'
+        else:
+            pass_label = ''
+
+        # Tensor shape info:
+
+        if len(node.tensor_shape) > 1:
+            tensor_shape_str = 'x'.join([str(x) for x in node.tensor_shape])
+        elif len(node.tensor_shape) == 1:
+            tensor_shape_str = f'x{node.tensor_shape[0]}'
+        else:
+            tensor_shape_str = 'x1'
+        tensor_shape_str = f"{tensor_shape_str}"
+
+        # Layer param info:
+
+        each_param_shape = []
+        for param_shape in node.parent_param_shapes:
+            if len(param_shape) > 1:
+                each_param_shape.append('x'.join([str(s) for s in param_shape]))
+            else:
+                each_param_shape.append('x1')
+        param_label = "<br/>params: " + ', '.join([param_shape for param_shape in each_param_shape])
+
+        tensor_fsize = node.tensor_fsize_nice
+        node_title = f"<b>{node.layer_type}_{node.layer_type_num}_{node.layer_total_num}{pass_label}</b>"
+
+        if node.is_terminal_bool_layer:
+            label_text = str(node.atomic_bool_val).upper()
+            bool_label = f"<b><u>{label_text}:</u></b><br/><br/>"
+        else:
+            bool_label = ''
+
+        node_label = (f'<{bool_label}{node_title}<br/>{tensor_shape_str} '
+                      f'({tensor_fsize}){param_label}{node_address}>')
+
+        return node_label
+
+    def _add_edges_for_node(self,
+                            parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
+                            node_color: str,
+                            module_edge_dict: Dict,
+                            graphviz_graph,
+                            vis_opt: str = 'unrolled'):
+        """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
+
+        Args:
+            parent_node: The node to add edges for.
+            node_color: Color of the node
+            graphviz_graph: The graphviz graph object.
+            module_edge_dict: Dictionary mapping each cluster to the edges it contains.
+            vis_opt: Either 'unrolled' or 'rolled'
+        """
+        for child_layer_label in parent_node.child_layers:
+            if vis_opt == 'unrolled':
+                child_node = self.layer_dict_main_keys[child_layer_label]
+            elif vis_opt == 'rolled':
+                child_node = self.layer_dict_rolled[child_layer_label]
+            else:
+                raise ValueError(f"vis_opt must be 'unrolled' or 'rolled', not {vis_opt}")
+
+            if parent_node.has_input_ancestor:
+                edge_style = 'solid'
+            else:
+                edge_style = 'dashed'
+
+            edge_dict = {'tail_name': parent_node.layer_label,
+                         'head_name': child_layer_label,
+                         'color': node_color,
+                         'fontcolor': node_color,
+                         'style': edge_style,
+                         'arrowsize': '.7',
+                         'labelfontsize': '8'}
+
+            # Mark with "if" in the case edge starts a cond branch
+            if child_layer_label in parent_node.cond_branch_start_children:
+                edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+
+            # Label the arguments to the next node if multiple inputs
+            self._label_node_arguments_if_needed(parent_node, child_node, edge_dict)
+
+            # Annotate passes for rolled node edge if it varies across passes
+            if vis_opt == 'rolled':
+                self._label_rolled_pass_nums(child_node, parent_node, edge_dict)
+
+            # Add it to the appropriate module cluster (most nested one containing both nodes)
+            containing_module = self._get_lowest_containing_module_for_two_nodes(parent_node, child_node)
+            if containing_module != -1:
+                module_edge_dict[containing_module].append(edge_dict)
+            else:
+                graphviz_graph.edge(**edge_dict)
+
+    def _label_node_arguments_if_needed(self,
+                                        parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
+                                        child_node: Union[TensorLogEntry, RolledTensorLogEntry],
+                                        edge_dict: Dict):
+        """Checks if a node has multiple non-commutative arguments, and if so, adds labels in edge_dict
+
+        Args:
+            child_node: child node
+            edge_dict: dict of information about the edge
+        """
+        if (len(child_node.parent_layers) == 1) or (child_node.layer_type in self.COMMUTE_FUNCS):
+            return
+
+        arg_labels = []
+        for arg_type in ['args', 'kwargs']:
+            for arg_loc, arg_label in child_node.parent_layer_arg_locs[arg_type].items():
+                if (parent_node.layer_label == arg_label) or (parent_node.layer_label in arg_label):
+                    arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
+
+        arg_labels = '\n'.join(arg_labels)
+        arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_labels}</b></FONT>>"
+        if 'label' not in edge_dict:
+            edge_dict['label'] = arg_label
+        else:
+            edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+
+    @staticmethod
+    def _label_rolled_pass_nums(child_node: RolledTensorLogEntry,
+                                parent_node: RolledTensorLogEntry,
+                                edge_dict: Dict):
+        """Adds labels for the pass numbers to the edge dict for rolled nodes.
+
+        Args:
+            child_node: child node
+            parent_node: parent node
+            edge_dict: dictionary of edge information
+        """
+        parent_pass_nums = parent_node.child_passes_per_layer[child_node.layer_label]
+        child_pass_nums = child_node.parent_passes_per_layer[parent_node.layer_label]
+        if parent_node.edges_vary_across_passes:
+            edge_dict['taillabel'] = f'  Out {int_list_to_compact_str(parent_pass_nums)}  '
+
+        # Mark the head label with the argument if need be:
+        if child_node.edges_vary_across_passes and not child_node.is_output_layer:
+            edge_dict['headlabel'] = f'  In {int_list_to_compact_str(child_pass_nums)}  '
+
+    @staticmethod
+    def _get_lowest_containing_module_for_two_nodes(node1: Union[TensorLogEntry, RolledTensorLogEntry],
+                                                    node2: Union[TensorLogEntry, RolledTensorLogEntry]):
+        """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
+
+        Args:
+            node1: The first node.
+            node2: The second node.
+
+        Returns:
+            Lowest-level module pass containing two nodes.
+        """
+        node1_modules = node1.containing_modules_origin_nested
+        node2_modules = node2.containing_modules_origin_nested
+
+        if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
+            return -1  # no submodule contains them both.
+
+        containing_module = node1_modules[0]
+        for m in range(min([len(node1_modules), len(node2_modules)])):
+            if node1_modules[m] != node2_modules[m]:
+                break
+            containing_module = node1_modules[m]
+        return containing_module
+
+    def _set_up_subgraphs(self,
+                          graphviz_graph,
+                          module_edge_dict: Dict[str, List]):
+        """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
+        set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
+        recursive logic to set up the nested context managers.
+
+        Args:
+            graphviz_graph: Graphviz graph object.
+            module_edge_dict: Dictionary mapping each cluster to the list of edges it contains, with each
+                edge specified as a dict with all necessary arguments for creating that edge.
+        """
+        module_submodule_dict = self.module_pass_children
+        subgraphs = self.top_level_module_passes
+
+        # Get the max module nesting depth:
+
+        max_nesting_depth = self._get_max_nesting_depth(subgraphs,
+                                                        module_edge_dict,
+                                                        module_submodule_dict)
+
+        subgraph_stack = [[subgraph] for subgraph in subgraphs]
+        nesting_depth = 0
+        while len(subgraph_stack) > 0:
+            parent_graph_list = subgraph_stack.pop(0)
+            self._setup_subgraphs_recurse(graphviz_graph,
+                                          parent_graph_list,
+                                          module_edge_dict,
+                                          module_submodule_dict,
+                                          subgraph_stack,
+                                          nesting_depth,
+                                          max_nesting_depth)
+
+    def _setup_subgraphs_recurse(self,
+                                 starting_subgraph,
+                                 parent_graph_list: List,
+                                 module_edge_dict,
+                                 module_submodule_dict,
+                                 subgraph_stack,
+                                 nesting_depth,
+                                 max_nesting_depth):
+        """Utility function to crawl down several layers deep into nested subgraphs.
+
+        Args:
+            starting_subgraph: The subgraph we're starting from.
+            parent_graph_list: List of parent graphs.
+            module_edge_dict: Dict mapping each cluster to its edges.
+            module_submodule_dict: Dict mapping each cluster to its subclusters.
+            subgraph_stack: Stack of subgraphs to look at.
+            nesting_depth: Nesting depth so far.
+            max_nesting_depth: The total depth of the subgraphs.
+        """
+        subgraph_name_w_pass = parent_graph_list[nesting_depth]
+        subgraph_module = subgraph_name_w_pass.split(':')[0]
+        cluster_name = f"cluster_{subgraph_module}"
+        module_type = self.module_types[subgraph_module]
+        if self.module_num_passes[subgraph_module] > 1:
+            subgraph_title = subgraph_name_w_pass
+        else:
+            subgraph_title = subgraph_module
+
+        if nesting_depth < len(parent_graph_list) - 1:  # we haven't gotten to the bottom yet, keep going.
+            with starting_subgraph.subgraph(name=cluster_name) as s:
+                self._setup_subgraphs_recurse(s, parent_graph_list,
+                                              module_edge_dict, module_submodule_dict, subgraph_stack,
+                                              nesting_depth + 1, max_nesting_depth)
+
+        else:  # we made it, make the subgraph and add all edges.
+            with starting_subgraph.subgraph(name=cluster_name) as s:
+                nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
+                pen_width = self.MIN_MODULE_PENWIDTH + nesting_fraction * self.PENWIDTH_RANGE
+                s.attr(label=f"<<B>@{subgraph_title}</B><br align='left'/>({module_type})<br align='left'/>>",
+                       labelloc='b',
+                       penwidth=str(pen_width))
+                subgraph_edges = module_edge_dict[subgraph_name_w_pass]
+                for edge_dict in subgraph_edges:
+                    s.edge(**edge_dict)
+                subgraph_children = module_submodule_dict[subgraph_name_w_pass]
+                for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
+                    subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
+
+    @staticmethod
+    def _get_max_nesting_depth(top_modules,
+                               module_edge_dict,
+                               module_submodule_dict):
+        """Utility function to get the max nesting depth of the nested modules in the network; works by
+        recursively crawling down the stack of modules till it hits one with no children and at least one edge.
+
+        Args:
+            top_modules: modules at highest level of nesting
+            module_edge_dict: Edges in each module.
+            module_submodule_dict: Mapping from each module to any children.
+
+        Returns:
+            Max nesting depth.
+        """
+        max_nesting_depth = 1
+        module_stack = [(graph, 1) for graph in top_modules]
+
+        while len(module_stack) > 0:
+            module, module_depth = module_stack.pop()
+            module_edges = module_edge_dict[module]
+            module_submodules = module_submodule_dict[module]
+
+            if (len(module_edges) == 0) and (len(module_submodules) == 0):  # can ignore if no edges and no children.
+                continue
+            elif (len(module_edges) > 0) and (len(module_submodules) == 0):
+                max_nesting_depth = max([module_depth, max_nesting_depth])
+            elif (len(module_edges) == 0) and (len(module_submodules) > 0):
+                module_stack.extend([(module_child, module_depth + 1) for module_child in module_submodules])
+            else:
+                max_nesting_depth = max([module_depth, max_nesting_depth])
+                module_stack.extend([(module_child, module_depth + 1) for module_child in module_submodules])
+        return max_nesting_depth
 
     # ********************************************
     # *************** Validation *****************
@@ -2667,540 +3219,3 @@ class ModelHistory:
 
     def __repr__(self):
         return self.__str__()
-
-
-def render_graph(history_dict: Dict,
-                 vis_opt: str = 'unrolled',
-                 vis_outpath: str = 'graph.gv') -> None:
-    """Given the history_dict, renders the computational graph.
-
-    Args:
-        history_dict:
-
-    """
-    if vis_opt not in ['rolled', 'unrolled']:
-        raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
-
-    if vis_opt == 'unrolled':
-        tensor_log = history_dict['tensor_log']
-    elif vis_opt == 'rolled':
-        tensor_log = roll_graph(history_dict)
-    total_tensor_fsize = human_readable_size(history_dict['total_tensor_fsize'])
-    total_params = history_dict['total_params']
-    total_params_fsize = human_readable_size(history_dict['total_params_fsize'])
-    num_tensors = len(history_dict['tensor_log'])
-    graph_caption = (
-        f"<<B>{history_dict['model_name']}</B><br align='left'/>{num_tensors} tensors total ({total_tensor_fsize})"
-        f"<br align='left'/>{total_params} params total ({total_params_fsize})<br align='left'/>>")
-
-    dot = graphviz.Digraph(name='model', comment='Computational graph for the feedforward sweep',
-                           filename=vis_outpath, format='pdf')
-    dot.graph_attr.update({'rankdir': 'BT',
-                           'label': graph_caption,
-                           'labelloc': 't',
-                           'labeljust': 'left',
-                           'ordering': 'out'})
-    dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
-
-    module_cluster_dict = defaultdict(list)  # list of edges for each subgraph; subgraphs will be created at the end.
-
-    for node_barcode, node in tensor_log.items():
-        add_node_to_graphviz(node_barcode,
-                             dot,
-                             vis_opt,
-                             module_cluster_dict,
-                             tensor_log,
-                             history_dict)
-
-    # Finally, set up the subgraphs.
-
-    set_up_subgraphs(dot, module_cluster_dict, history_dict)
-
-    if in_notebook():
-        display(dot)
-        dot.render(vis_outpath, view=False)
-    else:
-        dot.render(vis_outpath, view=True)
-
-
-def add_node_to_graphviz(node_barcode: str,
-                         graphviz_graph,
-                         vis_opt: str,
-                         module_cluster_dict: Dict,
-                         tensor_log: Dict,
-                         history_dict: Dict):
-    """Addes a node and its relevant edges to the graphviz figure.
-
-    Args:
-        node_barcode: Barcode of the node to add.
-        graphviz_graph: The graphviz object to add the node to.
-        vis_opt: Whether to roll the graph or not
-        module_cluster_dict: Dictionary of the module clusters.
-        tensor_log: log of tensors
-        history_dict: The history_dict
-
-        #TODO figure out the subgraph stuff. Either the context method or the new graph method, add labels,
-        #TODO don't override the default node labels.
-
-    Returns:
-        Nothing, but updates the graphviz_graph
-    """
-    node = tensor_log[node_barcode]
-
-    if node['is_bottom_level_module_output']:
-        node_address = '<br/>@' + node['modules_exited'][0]
-        node_address = f"{node_address}"
-        last_module_total_passes = node['module_total_passes']
-        if (last_module_total_passes > 1) and (vis_opt == 'unrolled'):
-            last_module_num_passes = node['module_passes_exited'][0][1]
-            node_address += f":{last_module_num_passes}"
-        node_shape = 'box'
-        node_color = 'black'
-    elif node['is_buffer_tensor']:
-        node_address = '<br/>@' + node['buffer_address']
-        node_shape = 'box'
-        node_color = BUFFER_NODE_COLOR
-    else:
-        node_address = ''
-        node_shape = 'oval'
-        node_color = 'black'
-
-    if node['is_model_input']:
-        bg_color = INPUT_COLOR
-    elif node['is_model_output']:
-        bg_color = OUTPUT_COLOR
-    elif node['output_is_terminal_bool']:
-        bg_color = BOOL_NODE_COLOR
-    elif node['has_params']:
-        bg_color = PARAMS_NODE_BG_COLOR
-    else:
-        bg_color = DEFAULT_BG_COLOR
-
-    tensor_shape = node['tensor_shape']
-    layer_type = node['layer_type']
-    layer_type_str = layer_type.replace('_', '')
-    layer_type_ind = node['layer_type_ind']
-    layer_total_ind = node['layer_total_ind']
-    if node['has_input_ancestor']:
-        line_style = 'solid'
-    else:
-        line_style = 'dashed'
-    if (node['param_total_passes'] > 1) and (vis_opt == 'unrolled'):
-        pass_num = node['pass_num']
-        pass_label = f":{pass_num}"
-    elif (node['param_total_passes'] > 1) and (vis_opt == 'rolled'):
-        pass_label = f' (x{node["param_total_passes"]})'
-    else:
-        pass_label = ''
-
-    if len(tensor_shape) > 1:
-        tensor_shape_str = 'x'.join([str(x) for x in tensor_shape])
-    elif len(tensor_shape) == 1:
-        tensor_shape_str = f'x{tensor_shape[0]}'
-    else:
-        tensor_shape_str = 'x1'
-    tensor_shape_str = f"{tensor_shape_str}"
-
-    if node['has_params']:
-        each_param_shape = []
-        for param_shape in node['parent_params_shape']:
-            if len(param_shape) > 1:
-                each_param_shape.append('x'.join([str(s) for s in param_shape]))
-            else:
-                each_param_shape.append('x1')
-        param_label = "<br/>params: " + ', '.join([param_shape for param_shape in each_param_shape])
-    else:
-        param_label = ''
-
-    tensor_fsize = human_readable_size(node['tensor_fsize'])
-
-    node_title = f"{layer_type_str}_{layer_type_ind}_{layer_total_ind}{pass_label}"
-    node_title = f'<b>{node_title}</b>'
-
-    if node['output_is_terminal_bool']:
-        label_text = str(node['output_bool_val']).upper()
-        bool_label = f"<b><u>{label_text}:</u></b><br/><br/>"
-    else:
-        bool_label = ''
-
-    node_label = (f'<{bool_label}{node_title}<br/>{tensor_shape_str} '
-                  f'({tensor_fsize}){param_label}{node_address}>')
-
-    graphviz_graph.node(name=node_barcode,
-                        label=f"{node_label}",
-                        fontcolor=node_color,
-                        color=node_color,
-                        style=f"filled,{line_style}",
-                        fillcolor=bg_color,
-                        shape=node_shape,
-                        ordering='out')
-
-    if vis_opt == 'rolled':
-        add_rolled_edges_for_node(node, graphviz_graph, module_cluster_dict, tensor_log)
-    else:
-        for child_barcode in node['child_tensor_barcodes']:
-            child_node = tensor_log[child_barcode]
-            if node['has_input_ancestor']:
-                edge_style = 'solid'
-            else:
-                edge_style = 'dashed'
-            edge_dict = {'tail_name': node_barcode,
-                         'head_name': child_barcode,
-                         'color': node_color,
-                         'style': edge_style,
-                         'arrowsize': '.7'}
-
-            if child_barcode in node['cond_branch_start_children']:  # Mark with "if" if the edge starts a cond branch
-                edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
-
-            # Label the arguments to the next node if multiple inputs: TODO make this a function and allow same arg to appear multiple times
-            child_node_layer_type = child_node['layer_type'].replace('_', '')
-            if (len(child_node['parent_tensor_barcodes']) > 1) and (child_node_layer_type not in commute_funcs):
-                found_it = False
-                for arg_type in ['args', 'kwargs']:
-                    for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
-                        if arg_barcode == node_barcode:
-                            arg_label = arg_type[:-1] + ' ' + str(arg_loc)
-                            arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_label}</b></FONT>>"
-                            if 'label' not in edge_dict:
-                                edge_dict['label'] = arg_label
-                            else:
-                                edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
-                            found_it = True
-                            break
-                        if found_it:
-                            break
-
-            containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
-            if containing_module != -1:
-                module_cluster_dict[containing_module].append(edge_dict)
-            else:
-                graphviz_graph.edge(**edge_dict)
-
-    # Finally, if it's the final output layer, force it to be on top for visual niceness.
-
-    if node['is_last_output_layer'] and vis_opt == 'rolled':
-        with graphviz_graph.subgraph() as s:
-            s.attr(rank='sink')
-            s.node(node_barcode)
-
-
-def roll_graph(history_dict: Dict) -> Dict:
-    """Converts the graph to rolled-up format for plotting purposes. This means that the nodes of the graph
-    are now not tensors, but layers, with the layer children and parents for each pass indicated.
-    The convention is that the pass numbers will be visually indicated for a layer if any one of the children
-    or parent layers vary on different passes; if the same, then they won't be.
-    This is only done for visualization purposes; no tensor data is saved.
-
-    Args:
-        history_dict: The history_dict
-
-    Returns:
-        Rolled-up tensor log.
-    """
-
-    fields_to_copy = ['layer_barcode', 'layer_type', 'layer_type_ind', 'layer_total_ind',
-                      'is_model_input', 'is_model_output', 'is_last_output_layer',
-                      'connects_input_and_output', 'has_input_ancestor', 'parent_tensor_arg_locs',
-                      'cond_branch_start_children', 'output_is_terminal_bool', 'in_cond_branch', 'output_bool_val',
-                      'is_buffer_tensor', 'buffer_address', 'tensor_shape', 'tensor_fsize',
-                      'has_params', 'param_total_passes', 'parent_params_shape',
-                      'is_bottom_level_module_output', 'function_call_modules_nested', 'modules_exited',
-                      'module_total_passes', 'module_instance_final_barcodes_list', 'funcs_applied']
-
-    tensor_log = history_dict['tensor_log']
-    rolled_tensor_log = OrderedDict({})
-
-    tensor_to_layer_dict = {}
-
-    for node_barcode, node in tensor_log.items():
-        # Get relevant information from each node.
-
-        layer_barcode = node['layer_barcode']
-        tensor_to_layer_dict[node_barcode] = layer_barcode
-        if layer_barcode in rolled_tensor_log:
-            rolled_node = rolled_tensor_log[layer_barcode]
-        else:
-            rolled_node = OrderedDict({})
-            for field in fields_to_copy:
-                if field in node:
-                    rolled_node[field] = node[field]
-            rolled_node['child_layer_barcodes'] = {}  # each key is pass_num, each value list of children
-            rolled_node['parent_layer_barcodes'] = {}  # each key is pass_num, each value list of parents
-            rolled_node['args_per_layer'] = len(node['parent_tensor_barcodes'])
-            rolled_tensor_log[layer_barcode] = rolled_node
-
-        # Only difference is that now the parents and children are layer barcodes, not tensor barcodes,
-        # and they are linked to each pass of the layer.
-
-        pass_num = node['pass_num']
-        child_layer_barcodes = [tensor_log[child_tensor_barcode]['layer_barcode']
-                                for child_tensor_barcode in node['child_tensor_barcodes']]
-        rolled_node['child_layer_barcodes'][pass_num] = child_layer_barcodes
-
-        parent_layer_barcodes = [tensor_log[parent_tensor_barcode]['layer_barcode']
-                                 for parent_tensor_barcode in node['parent_tensor_barcodes']]
-        rolled_node['parent_layer_barcodes'][pass_num] = parent_layer_barcodes
-
-    # Add an indicator of whether any of the child or parent layers vary based on the pass
-
-    for layer_barcode, rolled_node in rolled_tensor_log.items():
-        edges_vary_across_passes = False
-        for pass_num in rolled_node['child_layer_barcodes']:
-            if pass_num == 1:
-                child_layer_barcodes = rolled_node['child_layer_barcodes'][pass_num]
-                parent_layer_barcodes = rolled_node['parent_layer_barcodes'][pass_num]
-                continue
-            elif any([rolled_node['child_layer_barcodes'][pass_num] != child_layer_barcodes,
-                      rolled_node['parent_layer_barcodes'][pass_num] != parent_layer_barcodes]):
-                edges_vary_across_passes = True
-                break
-            child_layer_barcodes = rolled_node['child_layer_barcodes'][pass_num]
-            parent_layer_barcodes = rolled_node['parent_layer_barcodes'][pass_num]
-        rolled_node['edges_vary_across_passes'] = edges_vary_across_passes
-
-    # Finally add a complementary data structure that for each child or parent edge, indicates the passes for those edges.
-
-    for layer_barcode, rolled_node in rolled_tensor_log.items():
-        child_edge_passes = defaultdict(list)
-        parent_edge_passes = defaultdict(list)
-        for pass_num in rolled_node['child_layer_barcodes']:
-            for child_layer_barcode in rolled_node['child_layer_barcodes'][pass_num]:
-                child_edge_passes[child_layer_barcode].append(pass_num)
-            for parent_layer_barcode in rolled_node['parent_layer_barcodes'][pass_num]:
-                parent_edge_passes[parent_layer_barcode].append(pass_num)
-        rolled_node['child_layer_passes'] = child_edge_passes
-        rolled_node['parent_layer_passes'] = parent_edge_passes
-
-    # And replace the arg locations with the layer, rather than tensor barcodes.
-
-    for layer_barcode, rolled_node in rolled_tensor_log.items():
-        new_parent_arg_locs = {'args': {}, 'kwargs': {}}
-        for arg_type in ['args', 'kwargs']:
-            for arg_loc, arg_barcode in rolled_node['parent_tensor_arg_locs'][arg_type].items():
-                new_parent_arg_locs[arg_type][arg_loc] = tensor_to_layer_dict[arg_barcode]
-        rolled_node['parent_tensor_arg_locs'] = new_parent_arg_locs
-
-    return rolled_tensor_log
-
-
-def add_rolled_edges_for_node(node: Dict,
-                              graphviz_graph,
-                              module_cluster_dict: Dict,
-                              tensor_log: Dict):
-    """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
-
-    Args:
-        node: The node to add edges for.
-        graphviz_graph: The graphviz graph object.
-        module_cluster_dict: Dictionary mapping each cluster to the edges it contains.
-        tensor_log: The tensor log.
-    """
-    parent_node_barcode = node['layer_barcode']
-
-    for child_layer_barcode, parent_pass_nums in node['child_layer_passes'].items():
-        child_node = tensor_log[child_layer_barcode]
-        child_pass_nums = child_node['parent_layer_passes'][parent_node_barcode]
-
-        # Annotate passes for the child and parent nodes for the edge only if they vary across passes.
-
-        if node['edges_vary_across_passes']:
-            tail_label = f'  Out {int_list_to_compact_str(parent_pass_nums)}  '
-        else:
-            tail_label = ''
-
-        # Mark the head label with the argument if need be:
-
-        if child_node['edges_vary_across_passes'] and not child_node['is_model_output']:
-            head_label = f'  In {int_list_to_compact_str(child_pass_nums)}  '
-        else:
-            head_label = ''
-
-        if node['has_input_ancestor']:
-            edge_style = 'solid'
-        else:
-            edge_style = 'dashed'
-
-        if node['is_buffer_tensor']:
-            node_color = BUFFER_NODE_COLOR
-        else:
-            node_color = 'black'
-
-        edge_dict = {'tail_name': node['layer_barcode'],
-                     'head_name': child_layer_barcode,
-                     'color': node_color,
-                     'fontcolor': node_color,
-                     'style': edge_style,
-                     'headlabel': head_label,
-                     'taillabel': tail_label,
-                     'arrowsize': '.7',
-                     'labelfontsize': '8'}
-
-        if child_layer_barcode in node['cond_branch_start_children']:  # Mark with "if" if the edge starts a cond branch
-            edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
-
-        # Label the arguments to the next node if multiple inputs: TODO make this a function
-        child_node_layer_type = child_node['layer_type'].replace('_', '')
-        if (child_node['args_per_layer'] > 1) and (child_node_layer_type not in commute_funcs):
-            found_it = False
-            for arg_type in ['args', 'kwargs']:
-                for arg_loc, arg_barcode in child_node['parent_tensor_arg_locs'][arg_type].items():
-                    if arg_barcode == parent_node_barcode:
-                        arg_label = arg_type[:-1] + ' ' + str(arg_loc)
-                        arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_label}</b></FONT>>"
-                        if 'label' not in edge_dict:
-                            edge_dict['label'] = arg_label
-                        else:
-                            edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
-                        found_it = True
-                        break
-                    if found_it:
-                        break
-
-        containing_module = get_lowest_containing_module_for_two_nodes(node, child_node)
-        if containing_module != -1:
-            module_cluster_dict[containing_module].append(edge_dict)
-        else:
-            graphviz_graph.edge(**edge_dict)
-
-
-def set_up_subgraphs(graphviz_graph,
-                     module_cluster_dict: Dict[str, List],
-                     history_dict: Dict):
-    """Given a dictionary specifying the edges in each cluster, the graphviz graph object, and the history_dict,
-    set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
-    recursive logic to set up the nested context managers.
-
-    Args:
-        graphviz_graph: Graphviz graph object.
-        module_cluster_dict: Dictionary mapping each cluster name to the list of edges it contains, with each
-            edge specified as a dict with all necessary arguments for creating that edge.
-        history_dict: History dict.
-    """
-    module_cluster_children_dict = history_dict['module_cluster_children_dict']
-    subgraphs = history_dict['top_level_module_clusters']
-
-    # Get the max nesting depth; it'll be the depth of the deepest module that has no edges.
-
-    max_nesting_depth = get_max_nesting_depth(subgraphs,
-                                              module_cluster_dict,
-                                              module_cluster_children_dict)
-
-    subgraph_stack = [[subgraph_tuple] for subgraph_tuple in subgraphs]
-    nesting_depth = 0
-    while len(subgraph_stack) > 0:
-        parent_graph_list = subgraph_stack.pop(0)
-        setup_subgraphs_recurse(graphviz_graph,
-                                parent_graph_list,
-                                module_cluster_dict,
-                                module_cluster_children_dict,
-                                subgraph_stack,
-                                nesting_depth,
-                                max_nesting_depth,
-                                history_dict)
-
-
-def setup_subgraphs_recurse(starting_subgraph,
-                            parent_graph_list: List,
-                            module_cluster_dict,
-                            module_cluster_children_dict,
-                            subgraph_stack,
-                            nesting_depth,
-                            max_nesting_depth,
-                            history_dict):
-    """Utility function to crawl down several layers deep into nested subgraphs.
-
-    Args:
-        starting_subgraph: The subgraph we're starting from.
-        parent_graph_list: List of parent graphs.
-        module_cluster_dict: Dict mapping each cluster to its edges.
-        module_cluster_children_dict: Dict mapping each cluster to its subclusters.
-        subgraph_stack: Stack of subgraphs to look at.
-        nesting_depth: Nesting depth so far.
-        max_nesting_depth: The total depth of the subgraphs.
-        history_dict: The history dict
-    """
-    subgraph_tuple = parent_graph_list[nesting_depth]
-    subgraph_module, subgraph_barcode = subgraph_tuple
-    subgraph_name = '_'.join(subgraph_tuple)
-    cluster_name = f"cluster_{subgraph_name}"
-    module_type = str(type(history_dict['module_dict'][subgraph_module]).__name__)
-
-    if nesting_depth < len(parent_graph_list) - 1:  # we haven't gotten to the bottom yet, keep going.
-        with starting_subgraph.subgraph(name=cluster_name) as s:
-            setup_subgraphs_recurse(s, parent_graph_list,
-                                    module_cluster_dict, module_cluster_children_dict, subgraph_stack,
-                                    nesting_depth + 1, max_nesting_depth, history_dict)
-
-    else:  # we made it, make the subgraph and add all edges.
-        with starting_subgraph.subgraph(name=cluster_name) as s:
-            pen_width = MIN_MODULE_PENWIDTH + ((max_nesting_depth - nesting_depth) / max_nesting_depth) * PENWIDTH_RANGE
-            s.attr(
-                label=f"<<B>@{subgraph_module}</B><br align='left'/>({module_type})<br align='left'/>>",
-                labelloc='b',
-                penwidth=str(pen_width))
-            subgraph_edges = module_cluster_dict[subgraph_tuple]
-            for edge_dict in subgraph_edges:
-                s.edge(**edge_dict)
-            subgraph_children = module_cluster_children_dict[subgraph_tuple]
-            for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
-                subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
-
-
-def get_lowest_containing_module_for_two_nodes(node1: Dict,
-                                               node2: Dict):
-    """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
-
-    Args:
-        node1: The first node.
-        node2: The second node.
-
-    Returns:
-        Barcode of lowest-level module containing both nodes.
-    """
-    node1_modules = node1['function_call_modules_nested']
-    node2_modules = node2['function_call_modules_nested']
-
-    if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
-        return -1  # no submodule contains them both.
-
-    containing_module = node1_modules[0]
-    for m in range(min([len(node1_modules), len(node2_modules)])):
-        if node1_modules[m] != node2_modules[m]:
-            break
-        containing_module = node1_modules[m]
-    return containing_module
-
-
-def get_max_nesting_depth(top_graphs,
-                          module_cluster_dict,
-                          module_cluster_children_dict):
-    """Utility function to get the max nesting depth of the nested modules in the network; works by
-    recursively crawling down the stack of modules till it hits one with no children and at least one edge.
-
-    Args:
-        top_graphs: Top-level modules
-        module_cluster_dict: Edges in each module.
-        module_cluster_children_dict: Mapping from each module to any children.
-
-    Returns:
-        Max nesting depth.
-    """
-    max_nesting_depth = 1
-    module_stack = [(graph, 1) for graph in top_graphs]
-
-    while len(module_stack) > 0:
-        module, module_depth = module_stack.pop()
-        module_edges = module_cluster_dict[module]
-        module_children = module_cluster_children_dict[module]
-
-        if (len(module_edges) == 0) and (len(module_children) == 0):  # can ignore if no edges and no children.
-            continue
-        elif (len(module_edges) > 0) and (len(module_children) == 0):
-            max_nesting_depth = max([module_depth, max_nesting_depth])
-        elif (len(module_edges) == 0) and (len(module_children) > 0):
-            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
-        else:
-            max_nesting_depth = max([module_depth, max_nesting_depth])
-            module_stack.extend([(module_child, module_depth + 1) for module_child in module_children])
-    return max_nesting_depth

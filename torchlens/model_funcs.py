@@ -6,11 +6,9 @@ from typing import Any, List, Optional, Union
 import torch
 from torch import nn
 
-from helper_funcs import remove_attributes_starting_with_str
-from torch_decorate import undecorate_tensor
-from torchlens.helper_funcs import get_vars_of_type_from_obj, set_random_seed
+from torchlens.helper_funcs import get_vars_of_type_from_obj, remove_attributes_starting_with_str, set_random_seed
 from torchlens.model_history import ModelHistory
-from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch
+from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, undecorate_tensor
 
 
 def run_model_and_save_specified_activations(model: nn.Module,
@@ -116,6 +114,7 @@ def prepare_model(model: nn.Module, hook_handles: List, model_history: ModelHist
             continue
 
         module.tl_module_type = str(type(module).__name__)
+        model_history.module_types[module.tl_module_address] = module.tl_module_type
         module.tl_module_pass_num = 0
         module.tl_module_pass_labels = []
         module.tl_tensors_entered_labels = []

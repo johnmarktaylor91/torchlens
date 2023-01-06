@@ -26,8 +26,10 @@ MODEL_HISTORY_FIELD_ORDER = [
 
     # Tensor tracking logs
     'layer_list',
+    'layer_list_rolled',
     'layer_dict_main_keys',
     'layer_dict_all_keys',
+    'layer_dict_rolled',
     'layer_labels',
     'layer_labels_no_pass',
     'layer_labels_w_pass',
@@ -73,6 +75,7 @@ MODEL_HISTORY_FIELD_ORDER = [
 
     # Module info
     'module_addresses',
+    'module_types',
     'module_passes',
     'module_num_passes',
     'module_pass_children',
@@ -170,6 +173,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'min_distance_from_input',
     'max_distance_from_input',
     'is_output_layer',
+    'is_last_output_layer',
     'is_output_ancestor',
     'output_descendents',
     'min_distance_from_output',

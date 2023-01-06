@@ -112,6 +112,7 @@ def validate_lookup_keys(history_dict: Dict,
 
     return lookup_keys_valid
 
+
 def compute_forward_step(node_barcode: str,
                          new_forward_pass_activations: Dict,
                          history_dict: Dict) -> torch.Tensor:
@@ -226,7 +227,6 @@ def update_node_children(node_barcode: str,
         del new_forward_pass_activations[node_barcode]
         new_forward_pass_activations[node_barcode] = None
         torch.cuda.empty_cache()
-
 
 
 def validate_single_forward_pass(history_dict: Dict,
