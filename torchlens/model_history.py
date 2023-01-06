@@ -160,7 +160,7 @@ class TensorLogEntry:
         self.module_passes_exited = fields_dict['module_passes_exited']
         self.is_submodule_output = fields_dict['is_submodule_output']
         self.is_bottom_level_submodule_output = fields_dict['is_bottom_level_submodule_output']
-        self.bottom_level_submodule_exited = fields_dict['bottom_level_submodule_exited']
+        self.bottom_level_submodule_pass_exited = fields_dict['bottom_level_submodule_pass_exited']
         self.module_entry_exit_thread = fields_dict['module_entry_exit_thread']
 
     # ********************************************
@@ -220,14 +220,14 @@ class TensorLogEntry:
             if issubclass(type(arg), (torch.Tensor, torch.nn.Parameter)):
                 creation_args.append(safe_copy(arg))
             else:
-                creation_args.append(copy.deepcopy(arg))
+                creation_args.append(copy.copy(arg))
 
         creation_kwargs = {}
         for key, value in t_kwargs.items():
             if issubclass(type(value), (torch.Tensor, torch.nn.Parameter)):
                 creation_kwargs[key] = safe_copy(value)
             else:
-                creation_kwargs[key] = copy.deepcopy(value)
+                creation_kwargs[key] = copy.copy(value)
 
         self.creation_args = creation_args
         self.creation_kwargs = creation_kwargs
@@ -309,7 +309,7 @@ class TensorLogEntry:
         else:
             s += f"\n\tOutput of modules: none"
         if self.is_bottom_level_submodule_output:
-            s += f"\n\tOutput of bottom-level module: {self.bottom_level_submodule_exited}"
+            s += f"\n\tOutput of bottom-level module: {self.bottom_level_submodule_pass_exited}"
         lookup_keys_str = ', '.join([str(key) for key in self.lookup_keys])
         s += f"\n\tLookup keys: {lookup_keys_str}"
 
@@ -403,6 +403,7 @@ class RolledTensorLogEntry:
         # Param info:
         self.computed_with_params = source_entry.computed_with_params
         self.parent_param_shapes = source_entry.parent_param_shapes
+        self.num_param_tensors = source_entry.num_param_tensors
 
         # Graph info
         self.is_input_layer = source_entry.is_input_layer
@@ -414,19 +415,21 @@ class RolledTensorLogEntry:
         self.cond_branch_start_children = source_entry.cond_branch_start_children
         self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
         self.atomic_bool_val = source_entry.atomic_bool_val
+        self.child_layers = set()
+        self.parent_layers = set()
 
         # Module info:
         self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
         self.modules_exited = source_entry.modules_exited
         self.module_passes_exited = source_entry.module_passes_exited
-        self.is_bottom_level_submodule_output = source_entry.is_bottom_level_submodule_output
-        self.bottom_level_submodule_exited = source_entry.bottom_level_submodule_exited
+        self.is_bottom_level_submodule_output = False
+        self.bottom_level_submodule_passes_exited = set()
 
         # Fields specific to rolled node to fill in:
         self.edges_vary_across_passes = False
-        self.child_layers_per_pass = {}
+        self.child_layers_per_pass = defaultdict(set)
         self.child_passes_per_layer = defaultdict(list)
-        self.parent_layers_per_pass = {}
+        self.parent_layers_per_pass = defaultdict(set)
         self.parent_passes_per_layer = defaultdict(list)
 
         # Each one will now be a list of layers, since they can vary across passes.
@@ -444,10 +447,12 @@ class RolledTensorLogEntry:
         # Label the layers for each pass
         child_layer_labels = [self.source_model_history[child].layer_label_no_pass
                               for child in source_node.child_layers]
-        self.child_layers_per_pass[source_node.pass_num] = child_layer_labels
+        self.child_layers.update(child_layer_labels)
+        self.child_layers_per_pass[source_node.pass_num].update(child_layer_labels)
         parent_layer_labels = [self.source_model_history[parent].layer_label_no_pass
                                for parent in source_node.parent_layers]
-        self.parent_layers_per_pass[source_node.pass_num] = parent_layer_labels
+        self.parent_layers.update(parent_layer_labels)
+        self.parent_layers_per_pass[source_node.pass_num].update(parent_layer_labels)
 
         # Label the passes for each layer, and indicate if any layers vary based on the pass.
         for child_layer in source_node.child_layers:
@@ -462,18 +467,26 @@ class RolledTensorLogEntry:
             if self.parent_passes_per_layer[parent_layer_label] != list(range(1, source_node.pass_num + 1)):
                 self.edges_vary_across_passes = True
 
+        # Add submodule info:
+        if source_node.is_bottom_level_submodule_output:
+            self.is_bottom_level_submodule_output = True
+            self.bottom_level_submodule_passes_exited.add(source_node.bottom_level_submodule_pass_exited)
+
         # For the parent arg locations, have a list of layers rather than single layer, since they can
         # vary across passes.
 
         for arg_type in ['args', 'kwargs']:
             for arg_key, layer_label in source_node.parent_layer_arg_locs[arg_type].items():
-                self.parent_layer_arg_locs[arg_type][arg_key].add(layer_label)
+                layer_label_no_pass = self.source_model_history[layer_label].layer_label_no_pass
+                self.parent_layer_arg_locs[arg_type][arg_key].add(layer_label_no_pass)
 
     def __str__(self) -> str:
+        fields_not_to_print = ['source_model_history']
         s = ''
         for field in dir(self):
-            if not field.startswith('_'):
-                s += f"{field}: {getattr(self, field)}"
+            attr = getattr(self, field)
+            if not field.startswith('_') and field not in fields_not_to_print and not (callable(attr)):
+                s += f"{field}: {attr}\n"
         return s
 
     def __repr__(self):
@@ -574,7 +587,7 @@ class ModelHistory:
         self.module_addresses = []
         self.module_types = {}
         self.module_passes = []
-        self.module_num_passes = OrderedDict()
+        self.module_num_passes = defaultdict(lambda: 1)
         self.top_level_module_passes = []
         self.module_pass_children = defaultdict(list)
 
@@ -808,7 +821,7 @@ class ModelHistory:
             'module_passes_exited': [],
             'is_submodule_output': False,
             'is_bottom_level_submodule_output': False,
-            'bottom_level_submodule_exited': None,
+            'bottom_level_submodule_pass_exited': None,
             'module_entry_exit_thread': []
         }
 
@@ -946,7 +959,7 @@ class ModelHistory:
         fields_dict['module_passes_exited'] = []
         fields_dict['is_submodule_output'] = False
         fields_dict['is_bottom_level_submodule_output'] = False
-        fields_dict['bottom_level_submodule_exited'] = None
+        fields_dict['bottom_level_submodule_pass_exited'] = None
         fields_dict['module_entry_exit_thread'] = []
 
         is_part_of_iterable_output = type(out_orig) in [list, tuple, dict, set]
@@ -1032,10 +1045,8 @@ class ModelHistory:
             self.layers_computed_with_params[operation_equivalence_type].append(tensor_label_raw)
             fields_dict['pass_num'] = len(self.layers_computed_with_params[operation_equivalence_type])
         else:
-            arg_hash = self._get_hash_from_untracked_args(args, kwargs)
-            operation_equivalence_type = f"{layer_type}_{arg_hash}"
-            if fields_dict['is_part_of_iterable_output']:
-                operation_equivalence_type += f'_outindex{i}'
+            operation_equivalence_type = self._get_operation_equivalence_type(args, kwargs, i,
+                                                                              layer_type, fields_dict)
             fields_dict['operation_equivalence_type'] = operation_equivalence_type
             fields_dict['pass_num'] = 1
 
@@ -1180,7 +1191,7 @@ class ModelHistory:
         iterfunc = iterfunc_dict[arg_type]
 
         for arg_key, arg in iterfunc(arg_struct):
-            if getattr(arg, 'tensor_label_raw', -1) == parent_entry.tensor_label_raw:
+            if getattr(arg, 'tl_tensor_label_raw', -1) == parent_entry.tensor_label_raw:
                 tensor_all_arg_positions[arg_type][arg_key] = parent_entry.tensor_label_raw
             elif type(arg) in [list, tuple, dict]:
                 iterfunc2 = iterfunc_dict[type(arg)]
@@ -1295,17 +1306,35 @@ class ModelHistory:
         param_group_barcode = f"{layer_type}_{'_'.join(sorted(indiv_param_barcodes))}"
         return param_group_barcode
 
+    def _get_operation_equivalence_type(self,
+                                        args: Tuple,
+                                        kwargs: Dict,
+                                        i: int,
+                                        layer_type: str,
+                                        fields_dict: Dict):
+        arg_hash = self._get_hash_from_args(args, kwargs)
+        operation_equivalence_type = f"{layer_type}_{arg_hash}"
+        if fields_dict['is_part_of_iterable_output']:
+            operation_equivalence_type += f'_outindex{i}'
+        if fields_dict['containing_module_origin'] is not None:
+            module_str = fields_dict['containing_module_origin'][0]
+            operation_equivalence_type += f'_module{module_str}'
+        return operation_equivalence_type
+
     @staticmethod
-    def _get_hash_from_untracked_args(args, kwargs):
+    def _get_hash_from_args(args, kwargs):
         """
         Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
         """
         args_to_hash = []
-        for arg in list(args) + list(kwargs.values()):
-            arg_iter = make_var_iterable(arg)
-            for arg_elem in arg_iter:
-                if not hasattr(arg, 'tl_tensor_label_raw') and not isinstance(arg_elem, torch.nn.Parameter):
-                    args_to_hash.append(arg_elem)
+        for a, arg in enumerate(list(args) + list(kwargs.values())):
+            if hasattr(arg, 'tl_tensor_label_raw'):
+                args_to_hash.append(f"arg{a}{arg.shape}")
+            else:
+                arg_iter = make_var_iterable(arg)
+                for arg_elem in arg_iter:
+                    if not hasattr(arg, 'tl_tensor_label_raw') and not isinstance(arg_elem, torch.nn.Parameter):
+                        args_to_hash.append(arg_elem)
 
         if len(args_to_hash) == 0:
             return 'no_args'
@@ -1396,20 +1425,17 @@ class ModelHistory:
         for group_label, group_tensors in self.layers_computed_with_params.items():
             if layer_to_remove in group_tensors:
                 group_tensors.remove(layer_to_remove)
-            if len(group_tensors) == 0:
-                del self.layers_computed_with_params[group_label]
+        self.layers_computed_with_params = {k: v for k, v in self.layers_computed_with_params.items() if len(v) > 0}
 
         for group_label, group_tensors in self.equivalent_operations.items():
             if layer_to_remove in group_tensors:
                 group_tensors.remove(layer_to_remove)
-            if len(group_tensors) == 0:
-                del self.equivalent_operations[group_label]
+        self.equivalent_operations = {k: v for k, v in self.equivalent_operations.items() if len(v) > 0}
 
         for group_label, group_tensors in self.same_layer_operations.items():
             if layer_to_remove in group_tensors:
                 group_tensors.remove(layer_to_remove)
-            if len(group_tensors) == 0:
-                del self.same_layer_operations[group_label]
+        self.same_layer_operations = {k: v for k, v in self.same_layer_operations.items() if len(v) > 0}
 
     # ********************************************
     # ************* Post-Processing **************
@@ -1454,13 +1480,13 @@ class ModelHistory:
 
         self._final_prettify()
 
-        # Step 9: Make the rolled representation of the graph for plotting purposes.
-
-        # self._roll_graph()
-
-        # Step 10: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+        # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
         self._set_pass_finished()
+
+        # Step 10: Make the rolled representation of the graph for plotting purposes.
+
+        self._roll_graph()
 
     def _add_output_layers(self):
         """
@@ -1622,17 +1648,9 @@ class ModelHistory:
                       starting_nodes]
         while len(node_stack) > 0:
             current_node_label, orig_node, nodes_since_start, traversal_direction = node_stack.pop()
-            current_node = self[current_node_label]
             nodes_seen.add(current_node_label)
-            if getattr(current_node, min_field) is None:
-                setattr(current_node, min_field, nodes_since_start)
-            else:
-                setattr(current_node, min_field, min([nodes_since_start, getattr(current_node, min_field)]))
-
-            if getattr(current_node, max_field) is None:
-                setattr(current_node, max_field, nodes_since_start)
-            else:
-                setattr(current_node, max_field, max([nodes_since_start, getattr(current_node, max_field)]))
+            current_node = self[current_node_label]
+            self._update_node_distance_vals(current_node, min_field, max_field, nodes_since_start)
 
             setattr(current_node, marker_field, True)
             getattr(current_node, layer_logging_field).add(orig_node)
@@ -1641,7 +1659,53 @@ class ModelHistory:
                 self._log_internally_terminated_tensor(current_node_label)
 
             for next_node_label in getattr(current_node, forward_field):
-                node_stack.append((next_node_label, orig_node, nodes_since_start + 1, traversal_direction))
+                if self._check_whether_to_add_node_to_flood_stack(next_node_label, orig_node, nodes_since_start,
+                                                                  min_field, max_field, layer_logging_field,
+                                                                  nodes_seen):
+                    node_stack.append((next_node_label, orig_node, nodes_since_start + 1, traversal_direction))
+
+    @staticmethod
+    def _update_node_distance_vals(current_node: TensorLogEntry,
+                                   min_field: str,
+                                   max_field: str,
+                                   nodes_since_start: int):
+        if getattr(current_node, min_field) is None:
+            setattr(current_node, min_field, nodes_since_start)
+        else:
+            setattr(current_node, min_field, min([nodes_since_start, getattr(current_node, min_field)]))
+
+        if getattr(current_node, max_field) is None:
+            setattr(current_node, max_field, nodes_since_start)
+        else:
+            setattr(current_node, max_field, max([nodes_since_start, getattr(current_node, max_field)]))
+
+    def _check_whether_to_add_node_to_flood_stack(self,
+                                                  candidate_node_label: str,
+                                                  orig_node_label: str,
+                                                  nodes_since_start: int,
+                                                  min_field: str,
+                                                  max_field: str,
+                                                  layer_logging_field: str,
+                                                  nodes_seen: set):
+        """
+        Checker function to trim uninformative nodes when tracing input and output distances:
+        trims nodes if they don't exceed the min or max, or don't add an informative new ancestor or descendent.
+        """
+        candidate_node = self[candidate_node_label]
+
+        if candidate_node_label not in nodes_seen:
+            return True
+
+        if nodes_since_start + 1 < getattr(candidate_node, min_field):
+            return True
+
+        if nodes_since_start + 1 > getattr(candidate_node, max_field):
+            return True
+
+        if orig_node_label not in getattr(candidate_node, layer_logging_field):
+            return True
+
+        return False
 
     def _log_internally_terminated_tensor(self, tensor_label: str):
         tensor_entry = self[tensor_label]
@@ -1711,13 +1775,13 @@ class ModelHistory:
             node_label = node_stack.pop(0)
             node = self[node_label]
             node_operation_equivalence_type = node.operation_equivalence_type
-            node_stack.extend(node.child_layers)
-            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
             if node_operation_equivalence_type in operation_equivalence_types_seen:
                 continue
             operation_equivalence_types_seen.add(node_operation_equivalence_type)
+            node_stack.extend(node.child_layers)
+            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
             if len(node.equivalent_operations) == 1:
@@ -1758,8 +1822,10 @@ class ModelHistory:
         subgraphs_dict = {}
         for starting_label in equivalent_operation_starting_labels:
             subgraphs_dict[starting_label] = {'starting_node': starting_label,
-                                              'has_param_node': node.computed_with_params,
+                                              'param_nodes': set(),
                                               'node_set': {starting_label}}
+            if node.computed_with_params:
+                subgraphs_dict[starting_label]['param_nodes'].add(starting_label)
 
         # Dictionary mapping each node to the subgraph it is in
         node_to_subgraph_dict = OrderedDict({label: subgraphs_dict[label] for label in
@@ -1777,6 +1843,8 @@ class ModelHistory:
         while node_stack:
             # Pop a set of isomorphic nodes off of the stack, then add and process the next nodes in the stack.
             isomorphic_nodes = sorted(node_stack.pop(0))
+            if len(isomorphic_nodes) == 1:
+                continue
             self._fetch_and_process_next_isomorphic_nodes(isomorphic_nodes,
                                                           iso_node_groups,
                                                           node_to_iso_group_dict,
@@ -1816,6 +1884,8 @@ class ModelHistory:
         # adjacent and skip.
 
         successor_nodes_dict = self._log_collisions_and_get_candidate_next_nodes(current_iso_nodes,
+                                                                                 iso_node_groups,
+                                                                                 node_to_iso_group_dict,
                                                                                  node_to_subgraph_dict,
                                                                                  adjacent_subgraphs,
                                                                                  is_first_node)
@@ -1845,6 +1915,8 @@ class ModelHistory:
 
     def _log_collisions_and_get_candidate_next_nodes(self,
                                                      current_iso_nodes: List[str],
+                                                     iso_node_groups: Dict[str, List[str]],
+                                                     node_to_iso_group_dict: Dict[str, str],
                                                      node_to_subgraph_dict: Dict,
                                                      adjacent_subgraphs: Dict[str, set],
                                                      is_first_node: bool) -> Dict:
@@ -1874,10 +1946,12 @@ class ModelHistory:
                     if neighbor_label in node_subgraph['node_set']:  # skip if backtracking own subgraph
                         continue
                     elif neighbor_label in node_to_subgraph_dict:  # if hit another subgraph, mark them adjacent & skip
-                        neighbor_subgraph_label = node_to_subgraph_dict[neighbor_label]['starting_node']
-                        self._update_adjacent_subgraphs(node_subgraph_label,
-                                                        neighbor_subgraph_label,
-                                                        adjacent_subgraphs)
+                        self._check_and_mark_subgraph_adjacency(node_label,
+                                                                neighbor_label,
+                                                                iso_node_groups,
+                                                                node_to_iso_group_dict,
+                                                                node_to_subgraph_dict,
+                                                                adjacent_subgraphs)
                     else:  # we have a new, non-overlapping node as a possible candiate, add it:
                         subgraph_successor_nodes[node_type].append(neighbor_label)
             successor_nodes_dict[node_subgraph_label] = subgraph_successor_nodes
@@ -1885,16 +1959,28 @@ class ModelHistory:
         return successor_nodes_dict
 
     @staticmethod
-    def _update_adjacent_subgraphs(node_subgraph_label: str,
-                                   neighbor_subgraph_label: str,
-                                   adjacent_subgraphs: Dict[str, set]):
+    def _check_and_mark_subgraph_adjacency(node_label: str,
+                                           neighbor_label: str,
+                                           iso_node_groups: Dict[str, List[str]],
+                                           node_to_iso_group_dict: Dict[str, str],
+                                           node_to_subgraph_dict: Dict,
+                                           adjacent_subgraphs: Dict[str, set]):
         """Helper function that updates the adjacency status of two subgraphs
-
-        Args:
-            node_subgraph_label: Label of the first subgraph
-            neighbor_subgraph_label: Label of the second subgraph
-            adjacent_subgraphs: Dict mapping each subgraph to set of subgraphs its adjacent to
         """
+        node_subgraph = node_to_subgraph_dict[node_label]
+        node_subgraph_label = node_subgraph['starting_node']
+        neighbor_subgraph = node_to_subgraph_dict[neighbor_label]
+        neighbor_subgraph_label = neighbor_subgraph['starting_node']
+
+        # Subgraphs are adjacent if the node in the neighboring subgraph has an
+        # isomorphic node in the current subgraph.
+
+        neighbor_iso_group = node_to_iso_group_dict[neighbor_label]
+        nodes_isomorphic_to_neighbor_node = iso_node_groups[neighbor_iso_group]
+        if len(node_subgraph['node_set'].intersection(nodes_isomorphic_to_neighbor_node)) == 0:
+            return
+
+        # Update adjacency
         if (node_subgraph_label in adjacent_subgraphs) and (neighbor_subgraph_label in adjacent_subgraphs):
             return
         elif (node_subgraph_label in adjacent_subgraphs) and (
@@ -1991,8 +2077,8 @@ class ModelHistory:
             for node_label, node_subgraph in new_isomorphic_nodes:
                 node = self[node_label]
                 subgraphs_dict[node_subgraph]['node_set'].add(node_label)
-                if not subgraphs_dict[node_subgraph]['has_param_node'] and node.computed_with_params:
-                    subgraphs_dict[node_subgraph]['has_param_node'] = True
+                if node.computed_with_params:
+                    subgraphs_dict[node_subgraph]['param_nodes'].add(node_label)
                 node_to_subgraph_dict[node_label] = subgraphs_dict[node_subgraph]
             node_stack.append(equivalent_node_labels)
 
@@ -2014,7 +2100,11 @@ class ModelHistory:
 
         # Finally, label the nodes corresponding to the same layer.
         for layer_label, layer_nodes in same_layer_node_groups.items():
-            layer_nodes = sorted(list(layer_nodes))  # convert to list and sort
+            # Skip if the new layer asssignment reduces the number of equivalent layers.
+            if len(layer_nodes) < len(self[layer_label].same_layer_operations):
+                continue
+            # convert to list and sort
+            layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)
             for n, node_label in enumerate(layer_nodes):
                 node = self[node_label]
                 node.layer_label_raw = layer_label
@@ -2022,8 +2112,8 @@ class ModelHistory:
                 node.pass_num = n + 1
                 node.layer_passes_total = len(layer_nodes)
 
-    @staticmethod
-    def _group_isomorphic_nodes_to_same_layers(iso_node_groups: Dict[str, List],
+    def _group_isomorphic_nodes_to_same_layers(self,
+                                               iso_node_groups: Dict[str, List],
                                                node_to_subgraph_dict: Dict,
                                                adjacent_subgraphs: Dict) -> Dict:
         same_layer_node_groups = defaultdict(set)  # dict of nodes assigned to the same layer
@@ -2036,10 +2126,12 @@ class ModelHistory:
                 node2_subgraph = node_to_subgraph_dict[node2_label]
                 node1_subgraph_label = node1_subgraph['starting_node']
                 node2_subgraph_label = node2_subgraph['starting_node']
-                both_subgraphs_have_params = all([node1_subgraph['has_param_node'], node2_subgraph['has_param_node']])
+                node1_param_types = [self[pnode].operation_equivalence_type for pnode in node1_subgraph['param_nodes']]
+                node2_param_types = [self[pnode].operation_equivalence_type for pnode in node2_subgraph['param_nodes']]
+                overlapping_param_types = set(node1_param_types).intersection(set(node2_param_types))
                 subgraphs_are_adjacent = (node1_subgraph_label in adjacent_subgraphs and
                                           node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label])
-                if both_subgraphs_have_params or subgraphs_are_adjacent:
+                if (len(overlapping_param_types) > 0) or subgraphs_are_adjacent:
                     earlier_node_label = sorted([node1_label, node2_label])[0]  # layer label always the first node
                     if earlier_node_label in node_to_layer_group_dict:
                         layer_group = node_to_layer_group_dict[earlier_node_label]
@@ -2160,7 +2252,6 @@ class ModelHistory:
                 tensor_log_entry.layer_label = tensor_log_entry.layer_label_w_pass
                 tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_w_pass_short
             raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
-            raw_to_final_layer_labels[tensor_log_entry.layer_label_raw] = tensor_log_entry.layer_label
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
 
     def _final_prettify(self):
@@ -2195,6 +2286,9 @@ class ModelHistory:
 
             # Log the module hierarchy information:
             self._log_module_hierarchy_info_for_layer(tensor_entry)
+            if tensor_entry.bottom_level_submodule_pass_exited is not None:
+                submodule_pass_nice_name = ':'.join([str(i) for i in tensor_entry.bottom_level_submodule_pass_exited])
+                tensor_entry.bottom_level_submodule_pass_exited = submodule_pass_nice_name
 
             # Tally the tensor sizes:
             self.tensor_fsize_total += tensor_entry.tensor_fsize
@@ -2254,7 +2348,7 @@ class ModelHistory:
         # Fix the arg locations field:
         for arg_type in ['args', 'kwargs']:
             for key, value in tensor_entry.parent_layer_arg_locs[arg_type].items():
-                tensor_entry.parent_layer_arg_locs[key] = self.raw_to_final_layer_labels[value]
+                tensor_entry.parent_layer_arg_locs[arg_type][key] = self.raw_to_final_layer_labels[value]
 
     def _log_module_hierarchy_info_for_layer(self,
                                              tensor_entry: TensorLogEntry):
@@ -2268,13 +2362,14 @@ class ModelHistory:
         for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
             module_name, module_pass = module_pass_label
             module_pass_nice_label = f"{module_name}:{module_pass}"
-            if (m == 0) and (module_pass_label not in self.top_level_module_passes):
+            if (m == 0) and (module_pass_nice_label not in self.top_level_module_passes):
                 self.top_level_module_passes.append(module_pass_nice_label)
             else:
-                if module_pass_nice_label not in self.module_pass_children[containing_module_pass_label]:
+                if ((containing_module_pass_label is not None) and
+                        (module_pass_nice_label not in self.module_pass_children[containing_module_pass_label])):
                     self.module_pass_children[containing_module_pass_label].append(module_pass_nice_label)
             containing_module_pass_label = module_pass_nice_label
-            if (module_name not in self.module_num_passes) or (self.module_num_passes[module_name] < module_pass):
+            if self.module_num_passes[module_name] < module_pass:
                 self.module_num_passes[module_name] = module_pass
             if module_name not in self.module_addresses:
                 self.module_addresses.append(module_name)
@@ -2452,11 +2547,12 @@ class ModelHistory:
         all passes of a given layer instead of having separate nodes for each pass.
         """
         for layer_label, node in self.layer_dict_main_keys.items():
-            if layer_label in self.layer_dict_rolled:  # If rolled-up layer has already been added, fetch it:
-                rolled_node = self.layer_dict_rolled[layer_label]
+            layer_label_no_pass = self[layer_label].layer_label_no_pass
+            if layer_label_no_pass in self.layer_dict_rolled:  # If rolled-up layer has already been added, fetch it:
+                rolled_node = self.layer_dict_rolled[layer_label_no_pass]
             else:  # If it hasn't been added, make it:
                 rolled_node = RolledTensorLogEntry(node)
-                self.layer_dict_rolled[layer_label] = rolled_node
+                self.layer_dict_rolled[node.layer_label_no_pass] = rolled_node
                 self.layer_list_rolled.append(rolled_node)
 
             rolled_node.add_pass_info(node)
@@ -2469,6 +2565,7 @@ class ModelHistory:
                      vis_opt: str = 'unrolled',
                      vis_outpath: str = 'graph.gv',
                      vis_fileformat: str = 'pdf',
+                     show_buffer_layers: bool = False,
                      direction: str = 'vertical') -> None:
         """Renders the computational graph for the model.
 
@@ -2476,6 +2573,7 @@ class ModelHistory:
             vis_opt: either 'rolled' or 'unrolled'
             vis_outpath: where to store the rendered graph
             vis_fileformat: file format to use for the rendered graph
+            show_buffer_layers: whether to show the buffer layers
             direction: which way the graph should go: either 'vertical' or 'horizontal'
 
         """
@@ -2516,15 +2614,15 @@ class ModelHistory:
         module_cluster_dict = defaultdict(list)
 
         for node_barcode, node in entries_to_plot.items():
-            self._add_node_to_graphviz(node, dot, module_cluster_dict, vis_opt)
+            if node.is_buffer_layer and not show_buffer_layers:
+                continue
+            self._add_node_to_graphviz(node, dot, module_cluster_dict, vis_opt, show_buffer_layers)
 
         # Finally, set up the subgraphs.
-
         self._set_up_subgraphs(dot, module_cluster_dict)
 
         if in_notebook():
             display(dot)
-            # dot.render(vis_outpath, view=False)
         else:
             dot.render(vis_outpath, view=True)
 
@@ -2532,7 +2630,8 @@ class ModelHistory:
                               node: Union[TensorLogEntry, RolledTensorLogEntry],
                               graphviz_graph,
                               module_edge_dict: Dict,
-                              vis_opt: str):
+                              vis_opt: str,
+                              show_buffer_layers: bool = False):
         """Addes a node and its relevant edges to the graphviz figure.
 
         Args:
@@ -2540,11 +2639,11 @@ class ModelHistory:
             graphviz_graph: The graphviz object to add the node to.
             module_edge_dict: Dictionary of the module clusters.
             vis_opt: Whether to roll the graph or not
+            show_buffer_layers: Whether to show the buffer layers
         """
 
         # Get the address, shape, color, and line style:
 
-        layer_label = node.layer_label
         node_address, node_shape, node_color = self._get_node_address_shape_color(node)
         node_bg_color = self._get_node_bg_color(node)
 
@@ -2556,7 +2655,7 @@ class ModelHistory:
         # Get the text for the node label:
 
         node_label = self._make_node_label(node, node_address, vis_opt)
-        graphviz_graph.node(name=layer_label,
+        graphviz_graph.node(name=node.layer_label.replace(':', 'pass'),
                             label=node_label,
                             fontcolor=node_color,
                             color=node_color,
@@ -2565,14 +2664,14 @@ class ModelHistory:
                             shape=node_shape,
                             ordering='out')
 
-        self._add_edges_for_node(node, node_color, module_edge_dict, graphviz_graph, vis_opt)
+        self._add_edges_for_node(node, node_color, module_edge_dict, graphviz_graph, vis_opt, show_buffer_layers)
 
         # Finally, if it's the final output layer, force it to be on top for visual niceness.
 
         if node.is_last_output_layer:
             with graphviz_graph.subgraph() as s:
                 s.attr(rank='sink')
-                s.node(layer_label)
+                s.node(node.layer_label)
 
     def _get_node_address_shape_color(self,
                                       node: Union[TensorLogEntry, RolledTensorLogEntry]) -> Tuple[str, str, str]:
@@ -2587,11 +2686,21 @@ class ModelHistory:
             node_color: color of the node
         """
         if node.is_bottom_level_submodule_output:
-            module_exited = node.bottom_level_submodule_exited
-            if self.module_num_passes[module_exited] == 1:
-                node_address = module_exited
+            if type(node) == TensorLogEntry:
+                module_pass_exited = node.bottom_level_submodule_pass_exited
+                module, pass_num = module_pass_exited.split(':')
+                if self.module_num_passes[module] == 1:
+                    node_address = module
+                else:
+                    node_address = module_pass_exited
             else:
-                node_address = node.module_passes_exited[-1]
+                sample_module_pass = list(node.bottom_level_submodule_passes_exited)[0]
+                module = sample_module_pass.split(':')[0]
+                if (len(node.bottom_level_submodule_passes_exited) > 1) or self.module_num_passes[module] == 1:
+                    node_address = module
+                else:
+                    node_address = sample_module_pass
+
             node_address = '<br/>@' + node_address
             node_shape = 'box'
             node_color = 'black'
@@ -2691,7 +2800,8 @@ class ModelHistory:
                             node_color: str,
                             module_edge_dict: Dict,
                             graphviz_graph,
-                            vis_opt: str = 'unrolled'):
+                            vis_opt: str = 'unrolled',
+                            show_buffer_layers: bool = False):
         """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
 
         Args:
@@ -2700,6 +2810,7 @@ class ModelHistory:
             graphviz_graph: The graphviz graph object.
             module_edge_dict: Dictionary mapping each cluster to the edges it contains.
             vis_opt: Either 'unrolled' or 'rolled'
+            show_buffer_layers: whether to show the buffer layers
         """
         for child_layer_label in parent_node.child_layers:
             if vis_opt == 'unrolled':
@@ -2714,8 +2825,8 @@ class ModelHistory:
             else:
                 edge_style = 'dashed'
 
-            edge_dict = {'tail_name': parent_node.layer_label,
-                         'head_name': child_layer_label,
+            edge_dict = {'tail_name': parent_node.layer_label.replace(':', 'pass'),
+                         'head_name': child_layer_label.replace(':', 'pass'),
                          'color': node_color,
                          'fontcolor': node_color,
                          'style': edge_style,
@@ -2727,7 +2838,7 @@ class ModelHistory:
                 edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
 
             # Label the arguments to the next node if multiple inputs
-            self._label_node_arguments_if_needed(parent_node, child_node, edge_dict)
+            self._label_node_arguments_if_needed(parent_node, child_node, edge_dict, show_buffer_layers)
 
             # Annotate passes for rolled node edge if it varies across passes
             if vis_opt == 'rolled':
@@ -2743,14 +2854,17 @@ class ModelHistory:
     def _label_node_arguments_if_needed(self,
                                         parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
                                         child_node: Union[TensorLogEntry, RolledTensorLogEntry],
-                                        edge_dict: Dict):
+                                        edge_dict: Dict,
+                                        show_buffer_layers: bool = False):
         """Checks if a node has multiple non-commutative arguments, and if so, adds labels in edge_dict
 
         Args:
+            parent_node: parent node
             child_node: child node
             edge_dict: dict of information about the edge
+            show_buffer_layers: whether to show the buffer layers
         """
-        if (len(child_node.parent_layers) == 1) or (child_node.layer_type in self.COMMUTE_FUNCS):
+        if not self._check_whether_to_mark_arguments_on_edge(child_node, show_buffer_layers):
             return
 
         arg_labels = []
@@ -2765,6 +2879,43 @@ class ModelHistory:
             edge_dict['label'] = arg_label
         else:
             edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+
+    def _check_whether_to_mark_arguments_on_edge(self,
+                                                 child_node: Union[TensorLogEntry, RolledTensorLogEntry],
+                                                 show_buffer_layers: bool = False):
+        if child_node.layer_type in self.COMMUTE_FUNCS:
+            return False
+
+        if type(child_node) == TensorLogEntry:
+            return self._check_whether_to_mark_arguments_on_unrolled_edge(child_node, show_buffer_layers)
+        elif type(child_node) == RolledTensorLogEntry:
+            return self._check_whether_to_mark_arguments_on_rolled_edge(child_node)
+
+    def _check_whether_to_mark_arguments_on_unrolled_edge(self,
+                                                          child_node: TensorLogEntry,
+                                                          show_buffer_layers: bool = False):
+        num_parents_shown = len(child_node.parent_layers)
+
+        if not show_buffer_layers:
+            num_parents_shown -= sum([int(self[parent].is_buffer_layer) for parent in child_node.parent_layers])
+
+        if num_parents_shown > 1:
+            return True
+        else:
+            return False
+
+    def _check_whether_to_mark_arguments_on_rolled_edge(self,
+                                                        child_node: RolledTensorLogEntry,
+                                                        show_buffer_layers: bool = False):
+        for pass_num, pass_parents in child_node.parent_layers_per_pass.items():
+            num_parents_shown = len(pass_parents)
+            if not show_buffer_layers:
+                num_parents_shown -= sum([int(self.layer_dict_rolled[parent].is_buffer_layer)
+                                          for parent in pass_parents])
+            if num_parents_shown > 1:
+                return True
+
+        return False
 
     @staticmethod
     def _label_rolled_pass_nums(child_node: RolledTensorLogEntry,
@@ -2798,8 +2949,8 @@ class ModelHistory:
         Returns:
             Lowest-level module pass containing two nodes.
         """
-        node1_modules = node1.containing_modules_origin_nested
-        node2_modules = node2.containing_modules_origin_nested
+        node1_modules = node1.containing_modules_origin_nested[:]
+        node2_modules = node2.containing_modules_origin_nested[:]
 
         if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
             return -1  # no submodule contains them both.
@@ -2823,8 +2974,8 @@ class ModelHistory:
             module_edge_dict: Dictionary mapping each cluster to the list of edges it contains, with each
                 edge specified as a dict with all necessary arguments for creating that edge.
         """
-        module_submodule_dict = self.module_pass_children
-        subgraphs = self.top_level_module_passes
+        module_submodule_dict = self.module_pass_children.copy()
+        subgraphs = self.top_level_module_passes[:]
 
         # Get the max module nesting depth:
 
@@ -3202,29 +3353,39 @@ class ModelHistory:
         Utility function to print the nested module hierarchy.
         """
         s = ''
-        for module in self.top_level_module_passes:
+        for module_pass in self.top_level_module_passes:
+            module, pass_num = module_pass.split(':')
             s += f"\n\t\t{module}"
-            if len(self.module_pass_children[module]) > 0:
-                s += ':'
-            s += self._module_hierarchy_str_helper(module, 1)
+            if self.module_num_passes[module] > 1:
+                s += f':{pass_num}'
+            s += self._module_hierarchy_str_helper(module_pass, 1)
         return s
 
-    def _module_hierarchy_str_helper(self, module, level):
+    def _module_hierarchy_str_helper(self, module_pass, level):
         """
         Helper function for _module_hierarchy_str.
         """
         s = ''
-        any_grandchild_modules = any([len(self.module_pass_children[sub_module]) > 0
-                                      for sub_module in self.module_pass_children[module]])
-        if any_grandchild_modules or len(self.module_pass_children[module]) == 0:
-            for sub_module in self.module_pass_children[module]:
-                s += f"\n\t\t{'    ' * level}{sub_module}"
-                s += self._module_hierarchy_str_helper(sub_module, level + 1)
+        any_grandchild_modules = any([len(self.module_pass_children[submodule_pass]) > 0
+                                      for submodule_pass in self.module_pass_children[module_pass]])
+        if any_grandchild_modules or len(self.module_pass_children[module_pass]) == 0:
+            for submodule_pass in self.module_pass_children[module_pass]:
+                submodule, pass_num = submodule_pass.split(':')
+                s += f"\n\t\t{'    ' * level}{submodule}"
+                if self.module_num_passes[submodule] > 1:
+                    s += f":{pass_num}"
+                s += self._module_hierarchy_str_helper(submodule_pass, level + 1)
         else:
-            s += self.pretty_print_list_w_line_breaks(
-                [module_child[0] for module_child in self.module_pass_children[module]],
-                line_break_every=8,
-                indent_chars=f"\t\t{'    ' * level}")
+            submodule_list = []
+            for submodule_pass in self.module_pass_children[module_pass]:
+                submodule, pass_num = submodule_pass.split(':')
+                if self.module_num_passes[submodule] == 1:
+                    submodule_list.append(submodule)
+                else:
+                    submodule_list.append(submodule_pass)
+            s += self.pretty_print_list_w_line_breaks(submodule_list,
+                                                      line_break_every=8,
+                                                      indent_chars=f"\t\t{'    ' * level}")
         return s
 
     def __repr__(self):

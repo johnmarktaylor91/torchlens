@@ -117,8 +117,8 @@ def show_model_graph(model: nn.Module,
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    render_graph(history_dict, vis_opt, vis_outpath)
+    model_history = run_model_and_save_specified_activations(model, x, None, random_seed)
+    model_history.render_graph(vis_opt, vis_outpath)
 
 
 def validate_saved_activations(model: nn.Module,

@@ -49,6 +49,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     orig_func_defs = []
 
     try:
+        x = move_input_tensors_to_device(x, model_device)
         input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
         decorate_pytorch(torch,
                          input_tensors,
@@ -57,7 +58,6 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_history.track_tensors = True
         for t in input_tensors:
             t.requires_grad = True
-            t = t.to(model_device)
             model_history.log_source_tensor(t, 'input')
         prepare_model(model, hook_handles, model_history)
         outputs = model(x)
@@ -82,6 +82,24 @@ def run_model_and_save_specified_activations(model: nn.Module,
         del output_tensors
         del outputs
         torch.cuda.empty_cache()
+
+
+def move_input_tensors_to_device(x: Any,
+                                 device: str):
+    """Moves all tensors in the input to the given device.
+
+    Args:
+        x: Input to the model.
+        device: Device to move the tensors to.
+    """
+    if type(x) == list:
+        x = [t.to(device) for t in x]
+    elif type(x) == dict:
+        for k in x.keys():
+            x[k] = x[k].to(device)
+    elif type(x) == torch.Tensor:
+        x = x.to(device)
+    return x
 
 
 def prepare_model(model: nn.Module, hook_handles: List, model_history: ModelHistory):
@@ -249,7 +267,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     # If it was initialized inside the model and nothing entered the module, it's bottom-level.
     if tensor_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
         tensor_entry.is_bottom_level_submodule_output = True
-        tensor_entry.bottom_level_submodule_exited = submodule_address
+        tensor_entry.bottom_level_submodule_pass_exited = (submodule_address, submodule.tl_module_pass_num)
         return True
 
     # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
@@ -262,7 +280,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
 
     # If it survived the above tests, it's a bottom-level submodule.
     tensor_entry.is_bottom_level_submodule_output = True
-    tensor_entry.bottom_level_submodule_exited = submodule_address
+    tensor_entry.bottom_level_submodule_pass_exited = (submodule_address, submodule.tl_module_pass_num)
     return True
 
 

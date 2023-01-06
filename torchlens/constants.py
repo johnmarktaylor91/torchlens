@@ -204,7 +204,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'module_passes_exited',
     'is_submodule_output',
     'is_bottom_level_submodule_output',
-    'bottom_level_submodule_exited',
+    'bottom_level_submodule_pass_exited',
     'module_entry_exit_thread'
 ]
 
