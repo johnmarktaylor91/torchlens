@@ -360,7 +360,7 @@ def restore_model_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
 def undecorate_model_tensors(model: nn.Module):
     """Goes through a model and all its submodules, and unmutates any tensor attributes. Normally just clearing
     parameters would have done this, but some module types (e.g., batchnorm) contain attributes that are tensors,
-    but not parameteres.
+    but not parameters.
 
     Args:
         model: PyTorch model

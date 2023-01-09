@@ -6,7 +6,6 @@ from typing import List
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
-# TODO: add functions to this too.
 MODEL_HISTORY_FIELD_ORDER = [
 
     # General info
