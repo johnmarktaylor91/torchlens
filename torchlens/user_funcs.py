@@ -3,8 +3,8 @@ from typing import List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.helper_funcs import warn_parallel
-from torchlens.model_funcs import ModelHistory, get_all_submodules, run_model_and_save_specified_activations
+from torchlens.helper_funcs import warn_parallel, get_vars_of_type_from_obj
+from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_activations
 
 
 def get_model_activations(model: nn.Module,
@@ -12,6 +12,9 @@ def get_model_activations(model: nn.Module,
                           which_layers: Union[str, List] = 'all',
                           vis_opt: str = 'none',
                           vis_outpath: str = 'graph.gv',
+                          vis_fileformat: str = 'pdf',
+                          vis_buffer_layers: bool = False,
+                          vis_direction: str = 'vertical',
                           random_seed: Optional[int] = None) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -32,10 +35,13 @@ def get_model_activations(model: nn.Module,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
             in unrolled format (i.e., one node per pass through a layer if a recurrent)
         vis_outpath: file path to save the graph visualization
+        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
+        vis_buffer_layers: whether to visualize the buffer layers
+        vis_direction: either 'vertical' or 'horizontal'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
-        activations: Dict of dicts with the activations from each layer.
+        ModelHistory object with layer activations and metadata
     """
     warn_parallel()
 
@@ -46,32 +52,28 @@ def get_model_activations(model: nn.Module,
 
     if which_layers == 'all':
         tensor_nums_to_save = 'all'
-        tensor_nums_to_save_temporarily = []
-        activations_only = True
     elif which_layers in ['none', None, []]:
         tensor_nums_to_save = None
-        tensor_nums_to_save_temporarily = []
-        activations_only = False
     else:
-        history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-        history_pretty = ModelHistory(history_dict, activations_only=False)
-        tensor_nums_to_save, tensor_nums_to_save_temporarily = history_pretty.get_op_nums_from_user_labels(which_layers)
-        activations_only = True
+        model_history = run_model_and_save_specified_activations(model, x, None, random_seed)
+        tensor_nums_to_save, tensor_nums_to_save_temporarily = model_history.get_op_nums_from_user_labels(which_layers)
 
     # And now save the activations for real.
 
-    history_dict = run_model_and_save_specified_activations(model,
-                                                            x,
-                                                            tensor_nums_to_save,
-                                                            tensor_nums_to_save_temporarily,
-                                                            random_seed)
+    model_history = run_model_and_save_specified_activations(model,
+                                                             x,
+                                                             tensor_nums_to_save,
+                                                             random_seed)
 
     # Visualize if desired.
     if vis_opt != 'none':
-        render_graph(history_dict, vis_opt, vis_outpath)  # change after adding options
+        model_history.render_graph(vis_opt,
+                                   vis_outpath,
+                                   vis_fileformat,
+                                   vis_buffer_layers,
+                                   vis_direction)  # change after adding options
 
-    history_pretty = ModelHistory(history_dict, activations_only=activations_only)
-    return history_pretty
+    return model_history
 
 
 def get_model_structure(model: nn.Module,
@@ -89,25 +91,31 @@ def get_model_structure(model: nn.Module,
         history_dict: Dict of dicts with the activations from each layer.
     """
     warn_parallel()
-    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    history_pretty = ModelHistory(history_dict, activations_only=False)
-    return history_pretty
+    model_history = run_model_and_save_specified_activations(model, x, None, random_seed)
+    return model_history
 
 
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
-                     vis_opt: str = 'rolled',
+                     vis_opt: str = 'none',
                      vis_outpath: str = 'graph.gv',
+                     vis_fileformat: str = 'pdf',
+                     vis_buffer_layers: bool = False,
+                     vis_direction: str = 'vertical',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
     Args:
         model: PyTorch model
         x: model input
-        vis_opt: how to visualize the network; 'none' for no visualization,
-            'rolled' to show the graph in rolled-up format (i.e., one node per layer if a recurrent network),
-            or 'unrolled' to show the graph in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        vis_opt: whether, and how, to visualize the network; 'none' for
+            no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
+            one node per layer if a recurrent network), or 'unrolled' to show the graph
+            in unrolled format (i.e., one node per pass through a layer if a recurrent)
         vis_outpath: file path to save the graph visualization
+        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
+        vis_buffer_layers: whether to visualize the buffer layers
+        vis_direction: either 'vertical' or 'horizontal'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
@@ -117,14 +125,13 @@ def show_model_graph(model: nn.Module,
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     model_history = run_model_and_save_specified_activations(model, x, None, random_seed)
-    model_history.render_graph(vis_opt, vis_outpath)
+    model_history.render_graph(vis_opt, vis_outpath, vis_fileformat,
+                               vis_buffer_layers, vis_direction)
 
 
 def validate_saved_activations(model: nn.Module,
                                x: torch.Tensor,
-                               min_proportion_consequential_layers=.9,
-                               random_seed: Union[int, None] = None,
-                               verbose: bool = False) -> bool:
+                               random_seed: Union[int, None] = None) -> bool:
     """Validate that the saved model activations correctly reproduce the ground truth output. This function works by
     running a forward pass through the model, saving all activations, re-running the forward pass starting from
     the saved activations in each layer, and checking that the resulting output matches the original output.
@@ -136,42 +143,14 @@ def validate_saved_activations(model: nn.Module,
         model: PyTorch model.
         x: Input for which to validate the saved activations.
         random_seed: random seed in case model is stochastic
-        min_proportion_consequential_layers: The percentage of layers for which perturbing them must change the output
-            in order for the model to count as validated.
-        verbose: Whether to have messages during the validation process.
-
     Returns:
         True if the saved activations correctly reproduce the ground truth output, false otherwise.
     """
     warn_parallel()
+    ground_truth_output_tensors = get_vars_of_type_from_obj(model(x), torch.Tensor)
+    model_history = run_model_and_save_specified_activations(model, x, 'all', random_seed)
+    activations_are_valid = model_history.validate_saved_activations(ground_truth_output_tensors)
 
-    submodules = get_all_submodules(model)
-    parameters_to_restore = []
-    for submodule in submodules:
-        for attr in dir(submodule):
-            attr_val = getattr(submodule, attr)
-            if (type(attr_val) == torch.nn.Parameter) and (torch.all(attr_val == 0)):
-                new_vals = torch.nn.Parameter(
-                    torch.randint(0, 2, attr_val.shape, dtype=attr_val.dtype, device=attr_val.device))
-                setattr(submodule, attr, new_vals)
-                parameters_to_restore.append((submodule, attr, attr_val))
-
-    history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
-    history_pretty = ModelHistory(history_dict, activations_only=True)
-    activations_are_valid = validate_saved_activations_for_model_input(history_dict,
-                                                                       history_pretty,
-                                                                       min_proportion_consequential_layers,
-                                                                       verbose)
-    # Now change back the zero params to what they were:
-    for submodule, param_fieldname, orig_param in parameters_to_restore:
-        setattr(submodule, param_fieldname, orig_param)
-
-    for node in history_pretty:
-        del node.tensor_contents
-        del node
-    del history_pretty
-    for node in history_dict['tensor_log'].values():
-        node.clear()
-    history_dict.clear()
-    torch.cuda.empty_cache()
+    model_history.cleanup()
+    del model_history
     return activations_are_valid

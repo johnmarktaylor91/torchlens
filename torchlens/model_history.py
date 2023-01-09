@@ -1384,6 +1384,15 @@ class ModelHistory:
                 most_nested_containing_modules = containing_modules[:]
         return most_nested_containing_modules
 
+    def cleanup(self):
+        """Deletes all log entries in the model.
+        """
+        for tensor_log_entry in self:
+            self._remove_log_entry(tensor_log_entry, remove_references=True)
+        for attr in MODEL_HISTORY_FIELD_ORDER:
+            delattr(self, attr)
+        torch.cuda.empty_cache()
+
     def _remove_log_entry(self,
                           log_entry: TensorLogEntry,
                           remove_references: bool = True):
@@ -1393,7 +1402,10 @@ class ModelHistory:
             log_entry: Tensor log entry to remove.
             remove_references: Whether to also remove references to the log entry
         """
-        tensor_label = log_entry.tensor_label_raw
+        if self.pass_finished:
+            tensor_label = log_entry.layer_label
+        else:
+            tensor_label = log_entry.tensor_label_raw
         for attr in dir(log_entry):
             if not attr.startswith('_') and not callable(getattr(log_entry, attr)):
                 delattr(log_entry, attr)
