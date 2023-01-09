@@ -145,20 +145,24 @@ def remove_entry_from_list(list_: List,
         list_.remove(entry)
 
 
-def tuple_assign(tuple_: tuple, ind: int, new_value: any):
-    """Utility function to assign an entry of a tuple to a new value.
+def tuple_tolerant_assign(obj_: Any, ind: int, new_value: any):
+    """Utility function to assign an entry of a list, tuple, or dict to a new value.
 
     Args:
-        tuple_: Tuple to change.
+        obj_: Tuple to change.
         ind: Index to change.
         new_value: The new value.
 
     Returns:
         Tuple with the new value swapped out.
     """
-    list_ = list(tuple_)
-    list_[ind] = new_value
-    return tuple(list_)
+    if type(obj_) == tuple:
+        list_ = list(obj_)
+        list_[ind] = new_value
+        return tuple(list_)
+
+    obj_[ind] = new_value
+    return obj_
 
 
 def int_list_to_compact_str(int_list: List[int]) -> str:

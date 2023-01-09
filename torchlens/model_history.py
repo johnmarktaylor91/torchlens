@@ -12,13 +12,12 @@ import numpy as np
 import pandas as pd
 import torch
 from IPython.core.display import display
-from tqdm import tqdm
 
 from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
     get_vars_of_type_from_obj, human_readable_size, identity, in_notebook, int_list_to_compact_str, \
-    log_current_rng_states, make_random_barcode, make_short_barcode_from_input, make_var_iterable, print_override, \
-    remove_entry_from_list, safe_copy
+    log_current_rng_states, set_rng_from_saved_states, make_short_barcode_from_input, make_var_iterable, \
+    print_override, remove_entry_from_list, safe_copy, make_random_barcode, tuple_tolerant_assign
 
 
 class TensorLogEntry:
@@ -3081,37 +3080,342 @@ class ModelHistory:
     # *************** Validation *****************
     # ********************************************
 
-    def validate_single_layer(self, layer: TensorLogEntry) -> bool:
-        """For a single layer, checks whether computing its value from the saved values of its input
-        tensors yields its actually saved value, and whether computing its value from perturbed values of the input
-        tensors changes it from the saved value. For the perturbation check, also checks whether the other
-        args are all zeros or all ones (e.g., such that changing the input wouldn't matter for addition
-        or multiplication respectively); if so, that step is disregarded.
+    def validate_saved_activations(self, ground_truth_output_tensors: List[torch.Tensor]) -> bool:
+        """Starting from outputs and internally terminated tensors, checks whether computing their values from the saved
+        values of their input tensors yields their actually saved values, and whether computing their values from
+        their parent tensors yields their saved values.
+
+        Returns:
+            True if it passes the tests, False otherwise.
+        """
+        # First check that the ground truth output tensors are accurate:
+        for i, output_layer_label in enumerate(self.output_layers):
+            output_layer = self[output_layer_label]
+            if not torch.equal(output_layer.tensor_contents, ground_truth_output_tensors[i]):
+                print(f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor.")
+                return False
+
+        # Validate the parents of each validated layer.
+        validated_child_edges_for_each_layer = {}
+        validated_layers = set(self.output_layers + self.internally_terminated_layers)
+        layers_to_validate_parents_for = list(validated_layers)
+
+        while len(layers_to_validate_parents_for) > 0:
+            layer_to_validate_parents_for = layers_to_validate_parents_for.pop(0)
+            parent_layers_valid = self.validate_parents_of_saved_layer(layer_to_validate_parents_for,
+                                                                       validated_layers,
+                                                                       validated_child_edges_for_each_layer,
+                                                                       layers_to_validate_parents_for)
+            if not parent_layers_valid:
+                return False
+
+        if len(validated_layers) < len(self.layer_list):
+            print(f"All saved activations were accurate, but some layers were not reached (check that "
+                  f"child args logged accurately): {set(self.layer_list) - validated_layers}")
+            return False
+
+        return True
+
+    def validate_parents_of_saved_layer(self,
+                                        layer_to_validate_parents_for_label: str,
+                                        validated_layers: Set[str],
+                                        validated_child_edges_for_each_layer: Dict[str, Set[str]],
+                                        layers_to_validate_parents_for: List[str]) -> bool:
+        """Given a layer, checks that 1) all parent tensors appear properly in the saved arguments for that layer,
+        2) that executing the function for that layer with the saved parent layer activations yields the
+        ground truth activation values for that layer, and 3) that plugging in "perturbed" values for each
+        child layer yields values different from the saved activations for that layer.
 
         Args:
-            layer: TensorLogEntry for the layer to check.
-
-        Returns:
-            True if it passes the tests, False otherwise.
+            layer_to_validate_parents_for_label:
+            validated_layers:
+            validated_child_edges_for_each_layer:
+            layers_to_validate_parents_for:
         """
-        pass
+        layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
-    def validate_forward_pass(self) -> bool:
-        """Starting from inputs and internally generated layers, checks whether plugging the
-        saved activations from the input layers into the function for that layer yields the saved
-        activaations for that layer, and whether plugging nonense activations also changes
-        the saved activations for that layer (unless the other args are "special", e.g. all zeros or all ones),
-        and whether following the child operations in this manner eventually yields the output saved activations.
-        Fails if a given layer fails this test, or if there is a layer for which the parent layers are not saved.
+        # Check that the arguments are logged correctly:
+        if not self._check_layer_arguments_logged_correctly(layer_to_validate_parents_for_label):
+            print("Parent arguments for layer {layer_to_validate_parents_for} are not logged properly; "
+                  "either a parent wasn't logged as an argument, or was logged an extra time")
+            return False
 
-        Returns:
-            True if it passes the tests, False otherwise.
-        """
-        for layer in tqdm(self, desc="Validating saved layer activations..."):
-            if not self.validate_single_layer(layer):
-                print(f"Validation failed for layer {layer.layer_label}")
+        # Check that executing the function based on the actual saved values of the parents yields the saved
+        # values of the layer itself:
+
+        if not self._check_whether_func_on_saved_parents_yields_saved_tensor(layer_to_validate_parents_for_label,
+                                                                             perturb=False):
+            return False
+
+        # Check that executing the layer's function on the wrong version of the saved parent tensors
+        # yields the wrong tensors, when each saved tensor is perturbed in turn:
+
+        for perturb_layer in layer_to_validate_parents_for.parent_layers:
+            if not self._check_whether_func_on_saved_parents_yields_saved_tensor(layer_to_validate_parents_for_label,
+                                                                                 perturb=True,
+                                                                                 layers_to_perturb=[perturb_layer]):
                 return False
+
+        # Log that each parent layer has been validated for this source layer.
+
+        for parent_layer_label in layer_to_validate_parents_for.parent_layers:
+            parent_layer = self[parent_layer_label]
+            validated_child_edges_for_each_layer[parent_layer_label].add(layer_to_validate_parents_for_label)
+            if validated_child_edges_for_each_layer[parent_layer_label] == set(parent_layer.child_layers):
+                validated_layers.add(parent_layer_label)
+                layers_to_validate_parents_for.append(parent_layer_label)
+
         return True
+
+    def _check_layer_arguments_logged_correctly(self,
+                                                target_layer_label: str) -> bool:
+        """Check whether the activations of the parent layers match the saved arguments of
+        the target layer, and that the argument locations have been logged correctly.
+
+        Args:
+            target_layer_label: Layer to check
+
+        Returns:
+            True if arguments logged accurately, False otherwise
+        """
+        target_layer = self[target_layer_label]
+
+        # Make sure that all parent layers appear in at least one argument and that no extra layers appear:
+        parent_layers_in_args = set()
+        for arg_type in ['args', 'kwargs']:
+            parent_layers_in_args.update(list(target_layer.parent_layer_arg_locs[arg_type].values()))
+        if parent_layers_in_args != set(target_layer.parent_layers):
+            return False
+
+        argtype_dict = {'args': (enumerate, 'creation_args'),
+                        'kwargs': (lambda x: x.items(), 'creation_kwargs')}
+
+        # Check for each parent layer that it is logged as a saved argument when it matches an argument, and
+        # is not logged when it does not match a saved argument.
+
+        for parent_layer_label in target_layer.parent_layers:
+            parent_layer = self[parent_layer_label]
+            for arg_type in ['args', 'kwargs']:
+                iterfunc, argtype_field = argtype_dict[arg_type]
+                for key, val in iterfunc(getattr(target_layer, argtype_field)):
+                    validation_correct_for_arg_and_layer = self._validate_layer_against_arg(target_layer,
+                                                                                            parent_layer,
+                                                                                            arg_type,
+                                                                                            key,
+                                                                                            val)
+                    if not validation_correct_for_arg_and_layer:
+                        return False
+        return True
+
+    def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key, val):
+        if type(val) in [list, tuple]:
+            for v, subval in enumerate(val):
+                argloc_key = (key, v)
+                validation_correct_for_arg_and_layer = self._check_arglocs_correct_for_arg(target_layer,
+                                                                                           parent_layer,
+                                                                                           arg_type,
+                                                                                           argloc_key,
+                                                                                           subval)
+                if not validation_correct_for_arg_and_layer:
+                    return False
+
+        elif type(val) == dict:
+            for subkey, subval in val.items():
+                argloc_key = (key, subkey)
+                validation_correct_for_arg_and_layer = self._check_arglocs_correct_for_arg(target_layer,
+                                                                                           parent_layer,
+                                                                                           arg_type,
+                                                                                           argloc_key,
+                                                                                           subval)
+                if not validation_correct_for_arg_and_layer:
+                    return False
+        else:
+            argloc_key = key
+            validation_correct_for_arg_and_layer = self._check_arglocs_correct_for_arg(target_layer,
+                                                                                       parent_layer,
+                                                                                       arg_type,
+                                                                                       argloc_key,
+                                                                                       val)
+            if not validation_correct_for_arg_and_layer:
+                return False
+
+        return True
+
+    @staticmethod
+    def _check_arglocs_correct_for_arg(target_layer: TensorLogEntry,
+                                       parent_layer: TensorLogEntry,
+                                       arg_type: str,
+                                       argloc_key: Union[str, tuple],
+                                       saved_arg_val: Any):
+        """For a given layer and an argument to its child layer, checks that it is logged correctly:
+        that is, that it's logged as an argument if it matches, and is not logged as an argument if it doesn't match.
+        """
+        target_layer_label = target_layer.layer_label
+        parent_layer_label = parent_layer.layer_label
+        parent_activations = parent_layer.tensor_contents
+
+        parent_layer_matches_arg = torch.equal(saved_arg_val, parent_activations)
+        parent_layer_logged_as_arg = ((argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and
+                                      (target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label))
+
+        if parent_layer_matches_arg and not parent_layer_logged_as_arg:
+            print(f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
+                  f"{arg_type} {argloc_key} for {target_layer_label}, but is not logged as "
+                  f"such in parent_layer_arg_locs.")
+            return False
+
+        if not parent_layer_matches_arg and parent_layer_logged_as_arg:
+            print(f"Parent {parent_layer_label} of {target_layer_label} is logged as {arg_type} {argloc_key} to "
+                  f"{parent_layer_label}, but its saved activations don't match the saved argument.")
+            return False
+
+        return True
+
+    def _check_whether_func_on_saved_parents_yields_saved_tensor(self,
+                                                                 layer_to_validate_parents_for_label: str,
+                                                                 perturb: bool = False,
+                                                                 layers_to_perturb: List[str] = None) -> bool:
+        """Checks whether executing the saved function for a layer on the saved value of its parent layers
+        in fact yields the saved activations for that layer.
+
+        Args:
+            layer_to_validate_parents_for_label: label of the layer to check the saved activations
+            perturb: whether to perturb the saved activations
+            layers_to_perturb: layers for which to perturb the saved activations
+
+        Returns:
+            True if the activations match, False otherwise
+        """
+        if layers_to_perturb is None:
+            layers_to_perturb = []
+
+        layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
+
+        # Prepare input arguments: keep the ones that should just be kept, perturb those that should be perturbed
+
+        input_args = self._prepare_input_args_for_validating_layer(layer_to_validate_parents_for,
+                                                                   layers_to_perturb)
+
+        # set the saved rng value:
+        layer_func = layer_to_validate_parents_for.func_applied
+        current_rng_states = log_current_rng_states()
+        set_rng_from_saved_states(layer_to_validate_parents_for.func_rng_states)
+        recomputed_output = layer_func(*input_args['args'], **input_args['kwargs'])
+        set_rng_from_saved_states(current_rng_states)
+
+        if layer_func.__name__ in ['__setitem__', 'zero_', '__delitem__']:  # TODO: fix this
+            recomputed_output = input_args['args'][0]
+
+        if type(recomputed_output) in [list, tuple]:
+            recomputed_output = recomputed_output[layer_to_validate_parents_for.iterable_output_index]
+
+        if not (torch.equal(recomputed_output, layer_to_validate_parents_for.tensor_contents)) and not perturb:
+            print(f"Saved activations for layer {layer_to_validate_parents_for_label} do not match the "
+                  f"values computed based on the parent layers {layer_to_validate_parents_for.parent_layers}.")
+            return False
+
+        if torch.equal(recomputed_output, layer_to_validate_parents_for.tensor_contents) and perturb:
+            return self._posthoc_perturb_check(layer_to_validate_parents_for, layers_to_perturb)
+
+        return True
+
+    def _prepare_input_args_for_validating_layer(self,
+                                                 layer_to_validate_parents_for: TensorLogEntry,
+                                                 layers_to_perturb: List[str]) -> Dict:
+        """Prepares the input arguments for validating the saved activations of a layer.
+
+        Args:
+            layer_to_validate_parents_for: Layer being checked.
+            layers_to_perturb: Layers for which to perturb the saved activations.
+
+        Returns:
+            Dict of input arguments.
+        """
+        input_args = {'args': list(layer_to_validate_parents_for.creation_args),
+                      'kwargs': layer_to_validate_parents_for.creation_kwargs.copy()}
+
+        # Swap in saved parent activations:
+
+        for arg_type in ['args', 'kwargs']:
+            for key, parent_layer_arg in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type].items():
+                if parent_layer_arg in layers_to_perturb:
+                    parent_layer_func_values = self._perturb_layer_activations(self[parent_layer_arg].tensor_contents)
+                else:
+                    parent_layer_func_values = self[parent_layer_arg].tensor_contents
+
+                if type(key) != tuple:
+                    input_args[arg_type][key] = parent_layer_func_values
+                else:
+                    input_args[arg_type][key[0]] = tuple_tolerant_assign(input_args[arg_type][key[0]],
+                                                                         key[1],
+                                                                         parent_layer_func_values)
+
+        return input_args
+
+    @staticmethod
+    def _perturb_layer_activations(activations: torch.Tensor) -> torch.Tensor:
+        """
+        Perturbs the values of a saved tensor.
+
+        Args:
+            activations: Tensor of activation values.
+
+        Returns:
+            Perturbed version of saved tensor
+        """
+        device = activations.device
+        if activations.dtype == torch.int:
+            tensor_unique_vals = torch.unique(activations)
+            if len(tensor_unique_vals) > 1:
+                perturbed_activations = torch.randint(activations.min(), activations.max() + 1,
+                                                      size=activations.shape, device=device)
+            else:
+                perturbed_activations = torch.randint(-10, 11, size=activations.shape, device=device)
+        elif activations.dtype == torch.bool:
+            perturbed_activations = torch.randint(0, 2, size=activations.shape, device=device).bool()
+        else:
+            perturbed_activations = torch.randn_like(activations, device=device)
+
+        return perturbed_activations
+
+    @staticmethod
+    def _posthoc_perturb_check(layer_to_validate_parents_for: TensorLogEntry,
+                               layers_to_perturb: List[str]) -> bool:
+        """If a layer fails the "perturbation check"--that is, if perturbing the values of parent
+        layers doesn't change the values relative to the layer's saved values--checks whether one of the
+        remaining arguments is a "special" tensor, such as all-ones or all-zeros, such that perturbing a tensor
+        wouldn't necessarily change the output of the layer.
+
+        Args:
+            layer_to_validate_parents_for: layer being checked.
+            layers_to_perturb: parent layers being perturbed
+
+        Returns:
+            True if there's an "excuse" for the perturbation failing, False otherwise.
+        """
+        arg_type_dict = {'args': (enumerate, 'creation_args'),
+                         'kwargs': (lambda x: x.items, 'creation_kwargs')}
+
+        layer_to_validate_parents_for_label = layer_to_validate_parents_for.layer_label
+        for arg_type in ['args', 'kwargs']:
+            iterfunc, fieldname = arg_type_dict[arg_type]
+            for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):
+                if (key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]) and \
+                        (layer_to_validate_parents_for.creation_args[arg_type][key] in layers_to_perturb):
+                    continue
+                if type(val) == torch.Tensor:
+                    print(f"Activations for layer {layer_to_validate_parents_for_label} do not change when "
+                          f"values for {layers_to_perturb} are changed (out of parent "
+                          f"layers {layer_to_validate_parents_for.parent_layers}), but {arg_type[:-1]} {key} is "
+                          f"all zeros or all-ones, so validation still succeeds...")
+                    if torch.all(val == 0) or torch.all(val == 1):
+                        return True
+
+        print(f"Activations for layer {layer_to_validate_parents_for_label} do not change when "
+              f"values for {layers_to_perturb} are changed (out of parent "
+              f"layers {layer_to_validate_parents_for.parent_layers}), and the other "
+              f"arguments are not \"special\" (all-ones or all-zeros) tensors.")
+        return False
 
     # ********************************************
     # ************ Built-in Methods **************
