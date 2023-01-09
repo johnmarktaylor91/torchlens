@@ -14,8 +14,8 @@
 
 
 def validate_batch_of_models_and_inputs():
-    pass
+    raise NotImplementedError
 
 
 def validate_multiple_inputs_for_model():
-    pass
+    raise NotImplementedError

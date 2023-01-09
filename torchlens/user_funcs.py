@@ -5,7 +5,6 @@ from torch import nn
 
 from torchlens.helper_funcs import warn_parallel
 from torchlens.model_funcs import ModelHistory, get_all_submodules, run_model_and_save_specified_activations
-from torchlens.validate import validate_saved_activations_for_model_input
 
 
 def get_model_activations(model: nn.Module,
