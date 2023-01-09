@@ -1,21 +1,21 @@
-# This module contains functions for validating the rest of the package and ensuring that they return
-# correct outputs. The idea is to exhaustively save everything, and backtracking from the output,
-# repeatedly run my own forward pass and make sure it matches the real output, and do this for
-# multiple inputs per model.
-
-# Validation steps: first, make sure that all possible key entries in the pretty final output
-# corresponding to that tensor are in fact the same tensor data. Then plug that data in, and run
-# the feedforward pass from there, and check that it matches the output.
-
-# As a "debug mode", keep ALL functions applied and their arguments without discarding (this might
-# require tweaking the logic of expand_multiple_functions).
-
 # TODO: this should only have top-level validation functions; the rest should be methods of ModelHistory
+import pandas as pd
 
 
-def validate_batch_of_models_and_inputs():
+def validate_batch_of_models_and_inputs() -> pd.DataFrame:
+    """Given multiple models and several inputs for each, validates the saved activations for all of them
+    and returns a Pandas dataframe summarizing the validation results.
+
+    Returns:
+
+    """
     raise NotImplementedError
 
 
-def validate_multiple_inputs_for_model():
+def validate_multiple_inputs_for_model() -> pd.DataFrame:
+    """Given a model and multiple inputs, validates the saved activations for all of them and returns a Pandas
+    dataframe summarizing the validation results.
+
+    Returns: Pandas dataframe with summary of validation results
+    """
     raise NotImplementedError
