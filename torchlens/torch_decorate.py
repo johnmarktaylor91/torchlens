@@ -33,6 +33,10 @@ def torch_func_decorator(func: Callable,
             out = print_override(args[0], func_name)
             return out
 
+        # Copy the args and kwargs in case they change in-place:
+        arg_copies = tuple([safe_copy(arg) for arg in args])
+        kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
+
         # Call the function, tracking the timing, rng states, and whether it's a nested function
         func_call_barcode = make_random_barcode()
         model_history.current_function_call_barcode = func_call_barcode
@@ -49,10 +53,14 @@ def torch_func_decorator(func: Callable,
         output_tensors = get_vars_of_type_from_obj(out_orig,
                                                    which_type=torch.Tensor,
                                                    subclass_exceptions=[torch.nn.Parameter])
+
+
         if len(output_tensors) > 0:
             model_history.log_function_output_tensors(func,
                                                       args,
                                                       kwargs,
+                                                      arg_copies,
+                                                      kwarg_copies,
                                                       out_orig,
                                                       func_time_elapsed,
                                                       func_rng_states,
@@ -156,11 +164,12 @@ def undecorate_pytorch(torch_module,
     delattr(torch, 'identity')
 
 
-def undecorate_tensor(t):
+def undecorate_tensor(t, device: str = 'cpu'):
     """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
 
     Args:
         t: tensor or parameter object
+        device: device to move the tensor to
 
     Returns:
         Unmutated tensor.
@@ -174,6 +183,7 @@ def undecorate_tensor(t):
     for attr in dir(new_t):
         if attr.startswith('tl_'):
             delattr(new_t, attr)
+    new_t = new_t.to(device)
     return new_t
 
 

@@ -14,6 +14,7 @@ from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, undec
 def run_model_and_save_specified_activations(model: nn.Module,
                                              x: Any,
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
+                                             mark_input_output_distances: bool = False,
                                              random_seed: Optional[int] = None) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
@@ -23,6 +24,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model: PyTorch model.
         x: Input to the model.
         tensor_nums_to_save: List of tensor numbers to save.
+        mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
+            This is computationally expensive for large networks, so it is off by default.
         random_seed: Which random seed to use.
 
     Returns:
@@ -67,8 +70,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_history.output_layers.append(t.tl_tensor_label_raw)
             model_history[t.tl_tensor_label_raw].is_output_layer = True
         undecorate_pytorch(torch, orig_func_defs)
-        cleanup_model(model, hook_handles)
-        model_history.postprocess()
+        cleanup_model(model, hook_handles, model_device)
+        model_history.postprocess(mark_input_output_distances)
         return model_history
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
@@ -305,20 +308,21 @@ def get_all_submodules(model: nn.Module,
     return submodules
 
 
-def cleanup_model(model: nn.Module, hook_handles: List):
+def cleanup_model(model: nn.Module, hook_handles: List, model_device: str):
     """Reverses all temporary changes to the model (namely, the forward hooks and added
     model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
 
     Args:
         model: PyTorch model.
         hook_handles: List of hooks.
+        model_device: Device the model is stored on
 
     Returns:
         Original version of the model.
     """
     clear_hooks(hook_handles)
     restore_model_attributes(model, attribute_keyword='tl')
-    undecorate_model_tensors(model)
+    undecorate_model_tensors(model, model_device)
 
 
 def clear_hooks(hook_handles: List):
@@ -357,13 +361,14 @@ def restore_model_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
                 delattr(param, attribute_name)
 
 
-def undecorate_model_tensors(model: nn.Module):
+def undecorate_model_tensors(model: nn.Module, model_device: str):
     """Goes through a model and all its submodules, and unmutates any tensor attributes. Normally just clearing
     parameters would have done this, but some module types (e.g., batchnorm) contain attributes that are tensors,
     but not parameters.
 
     Args:
         model: PyTorch model
+        model_device: device the model is stored on
 
     Returns:
         PyTorch model with unmutated versions of all tensor attributes.
@@ -374,6 +379,6 @@ def undecorate_model_tensors(model: nn.Module):
             attribute = getattr(submodule, attribute_name)
             if issubclass(type(attribute), torch.Tensor):
                 if not issubclass(type(attribute), torch.nn.Parameter):
-                    setattr(submodule, attribute_name, undecorate_tensor(attribute))
+                    setattr(submodule, attribute_name, undecorate_tensor(attribute, model_device))
                 else:
                     remove_attributes_starting_with_str(attribute, 'tl_')

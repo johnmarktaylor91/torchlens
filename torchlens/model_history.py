@@ -2,6 +2,7 @@
 
 import copy
 import itertools as it
+import os
 import random
 import time
 from collections import OrderedDict, defaultdict
@@ -189,7 +190,7 @@ class TensorLogEntry:
         fields_dict = {}
         fields_not_to_deepcopy = ['func_applied', 'gradfunc',
                                   'source_model_history', 'func_rng_states',
-                                  'creation_args', 'creation_kwargs']
+                                  'creation_args', 'creation_kwargs', 'parent_params', 'tensor_contents']
         for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
                 fields_dict[field] = copy.deepcopy(getattr(self, field))
@@ -317,6 +318,8 @@ class TensorLogEntry:
     def _tensor_contents_str_helper(self) -> str:
         """Returns short, readable string for the tensor contents.
         """
+        if self.tensor_contents is None:
+            return ""
         s = ''
         tensor_size_shown = 8
         if self.tensor_contents != 'none':
@@ -506,6 +509,7 @@ class ModelHistory:
     MIN_MODULE_PENWIDTH = 2
     PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
     COMMUTE_FUNCS = ['add', 'mul', 'cat', 'eq', 'ne']
+    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_']
 
     def __init__(self,
                  model_name: str,
@@ -520,7 +524,8 @@ class ModelHistory:
         self.pass_finished = False
         self.track_tensors = False
         self.all_layers_logged = False
-        if tensor_nums_to_save is None:
+        if tensor_nums_to_save in ['none', None, []]:
+            tensor_nums_to_save = []
             self.keep_layers_without_saved_activations = True
         else:
             self.keep_layers_without_saved_activations = False
@@ -842,6 +847,8 @@ class ModelHistory:
                                     func: Callable,
                                     args: Tuple[Any],
                                     kwargs: Dict[str, Any],
+                                    arg_copies: Tuple[Any],
+                                    kwarg_copies: Dict[str, Any],
                                     out_orig: Any,
                                     func_time_elapsed: float,
                                     func_rng_states: Dict,
@@ -852,6 +859,8 @@ class ModelHistory:
             func: function that was called
             args: positional arguments to function that was called
             kwargs: keyword arguments to function that was called
+            arg_copies: copies of positional arguments to function that was called
+            kwarg_copies: copies of keyword arguments to function that was called
             out_orig: original output from function
             func_time_elapsed: time it took for the function to run
             func_rng_states: states of the random number generator when the function is called
@@ -969,11 +978,15 @@ class ModelHistory:
             if not self._output_should_be_logged(out, is_bottom_level_func):
                 continue
 
+            fields_dict_onetensor = {key: copy.copy(value) for key, value in fields_dict.items()}
+            fields_to_deepcopy = ['parent_layer_arg_locs', 'containing_modules_origin_nested', 'parent_param_passes']
+            for field in fields_to_deepcopy:
+                fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
             self._log_info_specific_to_single_function_output_tensor(out, i, args, kwargs,
-                                                                     parent_param_passes, fields_dict)
-            self._make_tensor_log_entry(out, fields_dict=fields_dict,
-                                        t_args=args, t_kwargs=kwargs)
-            new_tensor_entry = self[fields_dict['tensor_label_raw']]
+                                                                     parent_param_passes, fields_dict_onetensor)
+            self._make_tensor_log_entry(out, fields_dict=fields_dict_onetensor,
+                                        t_args=arg_copies, t_kwargs=kwarg_copies)
+            new_tensor_entry = self[fields_dict_onetensor['tensor_label_raw']]
             new_tensor_label = new_tensor_entry.tensor_label_raw
             self._update_tensor_family_links(new_tensor_entry)
 
@@ -983,11 +996,12 @@ class ModelHistory:
                 self.internally_initialized_layers.append(new_tensor_label)
             if fields_dict['has_input_ancestor'] and any([(self[parent_layer].has_internally_initialized_ancestor and
                                                            not self[parent_layer].has_input_ancestor)
-                                                          for parent_layer in fields_dict['parent_layers']]):
+                                                          for parent_layer in
+                                                          fields_dict_onetensor['parent_layers']]):
                 self.layers_where_internal_branches_merge_with_input.append(new_tensor_label)
 
             # Tag the tensor itself with its label, and with a reference to the model history log.
-            out.tl_tensor_label_raw = fields_dict['tensor_label_raw']
+            out.tl_tensor_label_raw = fields_dict_onetensor['tensor_label_raw']
             out.tl_source_model_history = self
 
     def _output_should_be_logged(self,
@@ -1110,6 +1124,13 @@ class ModelHistory:
         fields_dict['tensor_fsize'] = get_tensor_memory_amount(t)
         fields_dict['tensor_fsize_nice'] = human_readable_size(fields_dict['tensor_fsize'])
 
+        # If internally initialized, fix this information:
+        if len(fields_dict['parent_layers']) == 0:
+            fields_dict['initialized_inside_model'] = True
+            fields_dict['has_internally_initialized_ancestor'] = True
+            fields_dict['internally_initialized_parents'] = []
+            fields_dict['internally_initialized_ancestors'] = {tensor_label_raw}
+
     def _make_tensor_log_entry(self,
                                t: torch.Tensor,
                                fields_dict: Dict,
@@ -1195,7 +1216,7 @@ class ModelHistory:
             elif type(arg) in [list, tuple, dict]:
                 iterfunc2 = iterfunc_dict[type(arg)]
                 for sub_arg_key, sub_arg in iterfunc2(arg):
-                    if getattr(sub_arg, 'tensor_label_raw', -1) == parent_entry.tensor_label_raw:
+                    if getattr(sub_arg, 'tl_tensor_label_raw', -1) == parent_entry.tensor_label_raw:
                         tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = parent_entry.tensor_label_raw
 
     @staticmethod
@@ -1210,6 +1231,7 @@ class ModelHistory:
         """
         input_ancestors = set()
         internally_initialized_ancestors = set()
+
         for parent_entry in parent_entries:
             input_ancestors.update(parent_entry.input_ancestors)
             internally_initialized_ancestors.update(parent_entry.internally_initialized_ancestors)
@@ -1452,7 +1474,7 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self):
+    def postprocess(self, mark_input_output_distances: bool = False):
         """
         After the forward pass, cleans up the log into its final form.
         """
@@ -1460,26 +1482,27 @@ class ModelHistory:
 
         self._add_output_layers()
 
-        # Step 2: Remove orphan nodes.
+        # Step 2: Remove orphan nodes, find nodes that don't terminate in output node
 
         self._remove_orphan_nodes()
 
-        # Step 3: Find mix/max distance from input and output nodes, find nodes that don't terminate in an output node.
+        # Step 3: Find mix/max distance from input and output nodes
 
-        self._mark_input_output_distances()
+        if mark_input_output_distances:
+            self._mark_input_output_distances()
 
         # Step 4: Starting from terminal single boolean tensors, mark the conditional branches.
 
         self._mark_conditional_branches()
 
-        # Step 5: Identify all loops, mark repeated layers.
-
-        self._assign_corresponding_tensors_to_same_layer()
-
-        # Step 6: Annotate the containing modules for all internally-generated tensors (they don't know where
+        # Step 5: Annotate the containing modules for all internally-generated tensors (they don't know where
         # they are when they're made; have to trace breadcrumbs from tensors that came from input).
 
         self._fix_modules_for_internal_tensors()
+
+        # Step 6: Identify all loops, mark repeated layers.
+
+        self._assign_corresponding_tensors_to_same_layer()
 
         # Step 7: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 
@@ -1494,10 +1517,6 @@ class ModelHistory:
         # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
         self._set_pass_finished()
-
-        # Step 10: Make the rolled representation of the graph for plotting purposes.
-
-        self._roll_graph()
 
     def _add_output_layers(self):
         """
@@ -1517,7 +1536,7 @@ class ModelHistory:
 
             # Fix function information:
 
-            new_output_node.func_applied = None
+            new_output_node.func_applied = identity
             new_output_node.func_applied_name = 'none'
             new_output_node.func_time_elapsed = 0
             new_output_node.func_rng_states = log_current_rng_states()
@@ -1529,7 +1548,7 @@ class ModelHistory:
             new_output_node.func_all_args_non_tensor = []
             new_output_node.gradfunc = None
             new_output_node.gradfunc_name = 'none'
-            new_output_node.creation_args = []
+            new_output_node.creation_args = [safe_copy(output_node.tensor_contents)]
             new_output_node.creation_kwargs = {}
 
             # Strip any params:
@@ -1552,7 +1571,7 @@ class ModelHistory:
             new_output_node.modules_entered = []
             new_output_node.module_passes_entered = []
             new_output_node.is_submodule_input = False
-            new_output_node.modules_exited = False
+            new_output_node.modules_exited = []
             new_output_node.module_passes_exited = []
             new_output_node.is_submodule_output = False
             new_output_node.is_bottom_level_submodule_output = False
@@ -1563,6 +1582,8 @@ class ModelHistory:
             new_output_node.parent_layers = [output_node.tensor_label_raw]
             new_output_node.sibling_layers = []
             new_output_node.has_sibling_tensors = False
+            new_output_node.parent_layer_arg_locs = {'args': {0: output_node.tensor_label_raw},
+                                                     'kwargs': {}}
 
             # Fix layer equivalence information:
             new_output_node.same_layer_operations = []
@@ -1595,6 +1616,8 @@ class ModelHistory:
             tensor_label = node_stack.pop()
             nodes_seen.add(tensor_label)
             tensor_entry = self[tensor_label]
+            if (len(tensor_entry.child_layers) == 0) and (not tensor_entry.is_output_layer):
+                self._log_internally_terminated_tensor(tensor_label)
             for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
                 if next_label not in nodes_seen:
                     node_stack.append(next_label)
@@ -1665,9 +1688,6 @@ class ModelHistory:
 
             setattr(current_node, marker_field, True)
             getattr(current_node, layer_logging_field).add(orig_node)
-
-            if (len(current_node.child_layers) == 0) and (not current_node.is_output_layer):
-                self._log_internally_terminated_tensor(current_node_label)
 
             for next_node_label in getattr(current_node, forward_field):
                 if self._check_whether_to_add_node_to_flood_stack(next_node_label, orig_node, nodes_since_start,
@@ -2273,12 +2293,12 @@ class ModelHistory:
         # Go through and log information pertaining to all layers:
         self._log_final_info_for_all_layers()
 
-        # And one more pass to delete unused layers from the record and do final tidying up:
-        self._remove_unwanted_entries_and_log_remaining()
-
         # Rename the raw tensor entries in the fields of ModelHistory:
         self._rename_model_history_layer_names()
         self._trim_and_reorder_model_history_fields()
+
+        # And one more pass to delete unused layers from the record and do final tidying up:
+        self._remove_unwanted_entries_and_log_remaining()
 
         # Clear the cache after any tensor deletions for garbage collection purposes:
         torch.cuda.empty_cache()
@@ -2575,6 +2595,7 @@ class ModelHistory:
     def render_graph(self,
                      vis_opt: str = 'unrolled',
                      vis_outpath: str = 'graph.gv',
+                     save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      show_buffer_layers: bool = False,
                      direction: str = 'vertical') -> None:
@@ -2583,6 +2604,7 @@ class ModelHistory:
         Args:
             vis_opt: either 'rolled' or 'unrolled'
             vis_outpath: where to store the rendered graph
+            save_only: whether to only save the graph without immediately showing it
             vis_fileformat: file format to use for the rendered graph
             show_buffer_layers: whether to show the buffer layers
             direction: which way the graph should go: either 'vertical' or 'horizontal'
@@ -2596,6 +2618,7 @@ class ModelHistory:
         if vis_opt == 'unrolled':
             entries_to_plot = self.layer_dict_main_keys
         elif vis_opt == 'rolled':
+            self._roll_graph()
             entries_to_plot = self.layer_dict_rolled
         else:
             raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
@@ -2613,7 +2636,7 @@ class ModelHistory:
             f"<br align='left'/>{self.total_params} params total ({self.total_params_fsize_nice})<br align='left'/>>")
 
         dot = graphviz.Digraph(name=self.model_name, comment='Computational graph for the feedforward sweep',
-                               filename=vis_outpath, format=vis_fileformat)
+                               format=vis_fileformat)
         dot.graph_attr.update({'rankdir': rankdir,
                                'label': graph_caption,
                                'labelloc': 't',
@@ -2632,10 +2655,11 @@ class ModelHistory:
         # Finally, set up the subgraphs.
         self._set_up_subgraphs(dot, module_cluster_dict)
 
-        if in_notebook():
+        if in_notebook() and not save_only:
             display(dot)
-        else:
-            dot.render(vis_outpath, view=True)
+
+        dot.render(vis_outpath, view=(not save_only))
+        os.remove(vis_outpath)
 
     def _add_node_to_graphviz(self,
                               node: Union[TensorLogEntry, RolledTensorLogEntry],
@@ -3092,7 +3116,8 @@ class ModelHistory:
     # *************** Validation *****************
     # ********************************************
 
-    def validate_saved_activations(self, ground_truth_output_tensors: List[torch.Tensor]) -> bool:
+    def validate_saved_activations(self, ground_truth_output_tensors: List[torch.Tensor],
+                                   verbose: bool = False) -> bool:
         """Starting from outputs and internally terminated tensors, checks whether computing their values from the saved
         values of their input tensors yields their actually saved values, and whether computing their values from
         their parent tensors yields their saved values.
@@ -3108,7 +3133,7 @@ class ModelHistory:
                 return False
 
         # Validate the parents of each validated layer.
-        validated_child_edges_for_each_layer = {}
+        validated_child_edges_for_each_layer = defaultdict(set)
         validated_layers = set(self.output_layers + self.internally_terminated_layers)
         layers_to_validate_parents_for = list(validated_layers)
 
@@ -3117,13 +3142,14 @@ class ModelHistory:
             parent_layers_valid = self.validate_parents_of_saved_layer(layer_to_validate_parents_for,
                                                                        validated_layers,
                                                                        validated_child_edges_for_each_layer,
-                                                                       layers_to_validate_parents_for)
+                                                                       layers_to_validate_parents_for,
+                                                                       verbose)
             if not parent_layers_valid:
                 return False
 
-        if len(validated_layers) < len(self.layer_list):
+        if len(validated_layers) < len(self.layer_labels):
             print(f"All saved activations were accurate, but some layers were not reached (check that "
-                  f"child args logged accurately): {set(self.layer_list) - validated_layers}")
+                  f"child args logged accurately): {set(self.layer_labels) - validated_layers}")
             return False
 
         return True
@@ -3132,7 +3158,8 @@ class ModelHistory:
                                         layer_to_validate_parents_for_label: str,
                                         validated_layers: Set[str],
                                         validated_child_edges_for_each_layer: Dict[str, Set[str]],
-                                        layers_to_validate_parents_for: List[str]) -> bool:
+                                        layers_to_validate_parents_for: List[str],
+                                        verbose: bool = False) -> bool:
         """Given a layer, checks that 1) all parent tensors appear properly in the saved arguments for that layer,
         2) that executing the function for that layer with the saved parent layer activations yields the
         ground truth activation values for that layer, and 3) that plugging in "perturbed" values for each
@@ -3143,13 +3170,14 @@ class ModelHistory:
             validated_layers:
             validated_child_edges_for_each_layer:
             layers_to_validate_parents_for:
+            verbose: whether to print warning messages
         """
         layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
         # Check that the arguments are logged correctly:
         if not self._check_layer_arguments_logged_correctly(layer_to_validate_parents_for_label):
-            print("Parent arguments for layer {layer_to_validate_parents_for} are not logged properly; "
-                  "either a parent wasn't logged as an argument, or was logged an extra time")
+            print(f"Parent arguments for layer {layer_to_validate_parents_for_label} are not logged properly; "
+                  f"either a parent wasn't logged as an argument, or was logged an extra time")
             return False
 
         # Check that executing the function based on the actual saved values of the parents yields the saved
@@ -3163,9 +3191,12 @@ class ModelHistory:
         # yields the wrong tensors, when each saved tensor is perturbed in turn:
 
         for perturb_layer in layer_to_validate_parents_for.parent_layers:
+            if layer_to_validate_parents_for.func_applied_name in self.FUNCS_NOT_TO_PERTURB_IN_VALIDATION:
+                continue
             if not self._check_whether_func_on_saved_parents_yields_saved_tensor(layer_to_validate_parents_for_label,
                                                                                  perturb=True,
-                                                                                 layers_to_perturb=[perturb_layer]):
+                                                                                 layers_to_perturb=[perturb_layer],
+                                                                                 verbose=verbose):
                 return False
 
         # Log that each parent layer has been validated for this source layer.
@@ -3175,7 +3206,8 @@ class ModelHistory:
             validated_child_edges_for_each_layer[parent_layer_label].add(layer_to_validate_parents_for_label)
             if validated_child_edges_for_each_layer[parent_layer_label] == set(parent_layer.child_layers):
                 validated_layers.add(parent_layer_label)
-                layers_to_validate_parents_for.append(parent_layer_label)
+                if not (parent_layer.is_input_layer or parent_layer.is_buffer_layer):
+                    layers_to_validate_parents_for.append(parent_layer_label)
 
         return True
 
@@ -3266,7 +3298,10 @@ class ModelHistory:
         parent_layer_label = parent_layer.layer_label
         parent_activations = parent_layer.tensor_contents
 
-        parent_layer_matches_arg = torch.equal(saved_arg_val, parent_activations)
+        if type(saved_arg_val) == torch.Tensor:
+            parent_layer_matches_arg = torch.equal(saved_arg_val, parent_activations)
+        else:
+            parent_layer_matches_arg = False
         parent_layer_logged_as_arg = ((argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and
                                       (target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label))
 
@@ -3278,7 +3313,7 @@ class ModelHistory:
 
         if not parent_layer_matches_arg and parent_layer_logged_as_arg:
             print(f"Parent {parent_layer_label} of {target_layer_label} is logged as {arg_type} {argloc_key} to "
-                  f"{parent_layer_label}, but its saved activations don't match the saved argument.")
+                  f"{target_layer_label}, but its saved activations don't match the saved argument.")
             return False
 
         return True
@@ -3286,7 +3321,8 @@ class ModelHistory:
     def _check_whether_func_on_saved_parents_yields_saved_tensor(self,
                                                                  layer_to_validate_parents_for_label: str,
                                                                  perturb: bool = False,
-                                                                 layers_to_perturb: List[str] = None) -> bool:
+                                                                 layers_to_perturb: List[str] = None,
+                                                                 verbose: bool = False) -> bool:
         """Checks whether executing the saved function for a layer on the saved value of its parent layers
         in fact yields the saved activations for that layer.
 
@@ -3327,7 +3363,7 @@ class ModelHistory:
             return False
 
         if torch.equal(recomputed_output, layer_to_validate_parents_for.tensor_contents) and perturb:
-            return self._posthoc_perturb_check(layer_to_validate_parents_for, layers_to_perturb)
+            return self._posthoc_perturb_check(layer_to_validate_parents_for, layers_to_perturb, verbose)
 
         return True
 
@@ -3353,7 +3389,7 @@ class ModelHistory:
                 if parent_layer_arg in layers_to_perturb:
                     parent_layer_func_values = self._perturb_layer_activations(self[parent_layer_arg].tensor_contents)
                 else:
-                    parent_layer_func_values = self[parent_layer_arg].tensor_contents
+                    parent_layer_func_values = safe_copy(self[parent_layer_arg].tensor_contents)
 
                 if type(key) != tuple:
                     input_args[arg_type][key] = parent_layer_func_values
@@ -3376,7 +3412,8 @@ class ModelHistory:
             Perturbed version of saved tensor
         """
         device = activations.device
-        if activations.dtype == torch.int:
+        if activations.dtype in [torch.int, torch.long, torch.short, torch.uint8,
+                                 torch.int8, torch.int16, torch.int32, torch.int64]:
             tensor_unique_vals = torch.unique(activations)
             if len(tensor_unique_vals) > 1:
                 perturbed_activations = torch.randint(activations.min(), activations.max() + 1,
@@ -3386,13 +3423,14 @@ class ModelHistory:
         elif activations.dtype == torch.bool:
             perturbed_activations = torch.randint(0, 2, size=activations.shape, device=device).bool()
         else:
-            perturbed_activations = torch.randn_like(activations, device=device)
+            perturbed_activations = torch.randn_like(activations.float(), device=device)
 
         return perturbed_activations
 
-    @staticmethod
-    def _posthoc_perturb_check(layer_to_validate_parents_for: TensorLogEntry,
-                               layers_to_perturb: List[str]) -> bool:
+    def _posthoc_perturb_check(self,
+                               layer_to_validate_parents_for: TensorLogEntry,
+                               layers_to_perturb: List[str],
+                               verbose: bool = False) -> bool:
         """If a layer fails the "perturbation check"--that is, if perturbing the values of parent
         layers doesn't change the values relative to the layer's saved values--checks whether one of the
         remaining arguments is a "special" tensor, such as all-ones or all-zeros, such that perturbing a tensor
@@ -3406,28 +3444,40 @@ class ModelHistory:
             True if there's an "excuse" for the perturbation failing, False otherwise.
         """
         arg_type_dict = {'args': (enumerate, 'creation_args'),
-                         'kwargs': (lambda x: x.items, 'creation_kwargs')}
+                         'kwargs': (lambda x: x.items(), 'creation_kwargs')}
 
         layer_to_validate_parents_for_label = layer_to_validate_parents_for.layer_label
         for arg_type in ['args', 'kwargs']:
             iterfunc, fieldname = arg_type_dict[arg_type]
             for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):
-                if (key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]) and \
-                        (layer_to_validate_parents_for.creation_args[arg_type][key] in layers_to_perturb):
+                # Skip if it's the argument itself:
+                if ((key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]) and
+                        (layer_to_validate_parents_for.parent_layer_arg_locs[arg_type][key]) in layers_to_perturb):
                     continue
-                if type(val) == torch.Tensor:
-                    print(f"Activations for layer {layer_to_validate_parents_for_label} do not change when "
-                          f"values for {layers_to_perturb} are changed (out of parent "
-                          f"layers {layer_to_validate_parents_for.parent_layers}), but {arg_type[:-1]} {key} is "
-                          f"all zeros or all-ones, so validation still succeeds...")
-                    if torch.all(val == 0) or torch.all(val == 1):
-                        return True
+                arg_is_special = self._check_if_arg_is_special_val(val)
+                if arg_is_special:
+                    if verbose:
+                        print(f"Activations for layer {layer_to_validate_parents_for_label} do not change when "
+                              f"values for {layers_to_perturb} are changed (out of parent "
+                              f"layers {layer_to_validate_parents_for.parent_layers}), but {arg_type[:-1]} {key} is "
+                              f"all zeros or all-ones, so validation still succeeds...")
+                    return True
 
         print(f"Activations for layer {layer_to_validate_parents_for_label} do not change when "
               f"values for {layers_to_perturb} are changed (out of parent "
               f"layers {layer_to_validate_parents_for.parent_layers}), and the other "
               f"arguments are not \"special\" (all-ones or all-zeros) tensors.")
         return False
+
+    @staticmethod
+    def _check_if_arg_is_special_val(val):
+        # If it's one of the other arguments, check if it's all zeros or all ones:
+        if type(val) != torch.Tensor:
+            val = torch.Tensor(val)
+        if torch.all(val == 0) or torch.all(val == 1):
+            return True
+        else:
+            return False
 
     # ********************************************
     # ************ Built-in Methods **************

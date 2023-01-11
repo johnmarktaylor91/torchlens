@@ -421,6 +421,9 @@ def safe_copy(x):
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
         vals_np = np.array(x.data.cpu())
         vals_tensor = clean_from_numpy(vals_np)
+        if hasattr(x, 'tl_tensor_label_raw'):
+            vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
+            vals_tensor.tl_source_model_history = x.tl_source_model_history
         if type(x) == torch.Tensor:
             return vals_tensor
         elif type(x) == torch.nn.Parameter:
