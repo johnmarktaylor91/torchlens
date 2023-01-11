@@ -1,20 +1,27 @@
-from typing import List, Optional, Union
+import os
+from typing import Callable, Dict, List, Optional, Union
 
+import pandas as pd
 import torch
 from torch import nn
+import random
 
-from torchlens.graph_handling import ModelHistory
-from torchlens.helper_funcs import warn_parallel
-from torchlens.model_funcs import run_model_and_save_specified_activations, get_all_submodules
-from torchlens.validate import validate_model_history
-from torchlens.vis import render_graph
+from tqdm import tqdm
+
+from torchlens.helper_funcs import warn_parallel, get_vars_of_type_from_obj, set_random_seed
+from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_activations
 
 
 def get_model_activations(model: nn.Module,
                           x: torch.Tensor,
                           which_layers: Union[str, List] = 'all',
+                          mark_input_output_distances: bool = False,
                           vis_opt: str = 'none',
                           vis_outpath: str = 'graph.gv',
+                          vis_save_only: bool = False,
+                          vis_fileformat: str = 'pdf',
+                          vis_buffer_layers: bool = False,
+                          vis_direction: str = 'vertical',
                           random_seed: Optional[int] = None) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -30,15 +37,21 @@ def get_model_activations(model: nn.Module,
         model: PyTorch model
         x: model input
         which_layers: list of layers to include (described above), or 'all' to include all layers.
+        mark_input_output_distances: whether to mark the distance of each layer from the input or output;
+            False by default since this is computationally expensive.
         vis_opt: whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
             in unrolled format (i.e., one node per pass through a layer if a recurrent)
         vis_outpath: file path to save the graph visualization
+        vis_save_only: whether to only save the graph visual without immediately showing it
+        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
+        vis_buffer_layers: whether to visualize the buffer layers
+        vis_direction: either 'vertical' or 'horizontal'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
-        activations: Dict of dicts with the activations from each layer.
+        ModelHistory object with layer activations and metadata
     """
     warn_parallel()
 
@@ -49,68 +62,81 @@ def get_model_activations(model: nn.Module,
 
     if which_layers == 'all':
         tensor_nums_to_save = 'all'
-        tensor_nums_to_save_temporarily = []
-        activations_only = True
     elif which_layers in ['none', None, []]:
         tensor_nums_to_save = None
-        tensor_nums_to_save_temporarily = []
-        activations_only = False
     else:
-        history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-        history_pretty = ModelHistory(history_dict, activations_only=False)
-        tensor_nums_to_save, tensor_nums_to_save_temporarily = history_pretty.get_op_nums_from_user_labels(which_layers)
-        activations_only = True
+        model_history = run_model_and_save_specified_activations(model,
+                                                                 x,
+                                                                 None,
+                                                                 False,
+                                                                 random_seed)
+        tensor_nums_to_save = model_history.get_op_nums_from_user_labels(which_layers)
 
     # And now save the activations for real.
 
-    history_dict = run_model_and_save_specified_activations(model,
-                                                            x,
-                                                            tensor_nums_to_save,
-                                                            tensor_nums_to_save_temporarily,
-                                                            random_seed)
+    model_history = run_model_and_save_specified_activations(model,
+                                                             x,
+                                                             tensor_nums_to_save,
+                                                             mark_input_output_distances,
+                                                             random_seed)
 
     # Visualize if desired.
     if vis_opt != 'none':
-        render_graph(history_dict, vis_opt, vis_outpath)  # change after adding options
+        model_history.render_graph(vis_opt,
+                                   vis_outpath,
+                                   vis_save_only,
+                                   vis_fileformat,
+                                   vis_buffer_layers,
+                                   vis_direction)  # change after adding options
 
-    history_pretty = ModelHistory(history_dict, activations_only=activations_only)
-    return history_pretty
+    return model_history
 
 
 def get_model_structure(model: nn.Module,
                         x: torch.Tensor,
-                        random_seed: Optional[int] = None):
+                        mark_input_output_distances: bool = False,
+                        random_seed: Optional[int] = None) -> ModelHistory:
     """
     Equivalent to get_model_activations, but only fetches layer metadata without saving activations.
 
     Args:
         model: PyTorch model.
         x: model input
+        mark_input_output_distances: whether to mark the distance of each layer from the input or output;
+            False by default since this is computationally expensive.
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
         history_dict: Dict of dicts with the activations from each layer.
     """
     warn_parallel()
-    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    history_pretty = ModelHistory(history_dict, activations_only=False)
-    return history_pretty
+    model_history = run_model_and_save_specified_activations(model, x, None, mark_input_output_distances, random_seed)
+    return model_history
 
 
 def show_model_graph(model: nn.Module,
                      x: torch.Tensor,
-                     vis_opt: str = 'rolled',
+                     vis_opt: str = 'none',
                      vis_outpath: str = 'graph.gv',
+                     save_only: bool = False,
+                     vis_fileformat: str = 'pdf',
+                     vis_buffer_layers: bool = False,
+                     vis_direction: str = 'vertical',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
     Args:
         model: PyTorch model
         x: model input
-        vis_opt: how to visualize the network; 'none' for no visualization,
-            'rolled' to show the graph in rolled-up format (i.e., one node per layer if a recurrent network),
-            or 'unrolled' to show the graph in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        vis_opt: whether, and how, to visualize the network; 'none' for
+            no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
+            one node per layer if a recurrent network), or 'unrolled' to show the graph
+            in unrolled format (i.e., one node per pass through a layer if a recurrent)
         vis_outpath: file path to save the graph visualization
+        save_only: whether to only save the graph visual without immediately showing it
+        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
+        vis_buffer_layers: whether to visualize the buffer layers
+        vis_direction: either 'vertical' or 'horizontal'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
@@ -119,13 +145,17 @@ def show_model_graph(model: nn.Module,
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    history_dict = run_model_and_save_specified_activations(model, x, None, random_seed)
-    render_graph(history_dict, vis_opt, vis_outpath)
+    model_history = run_model_and_save_specified_activations(model, x, None, False, random_seed)
+    model_history.render_graph(vis_opt,
+                               vis_outpath,
+                               save_only,
+                               vis_fileformat,
+                               vis_buffer_layers,
+                               vis_direction)
 
 
 def validate_saved_activations(model: nn.Module,
                                x: torch.Tensor,
-                               min_proportion_consequential_layers=.9,
                                random_seed: Union[int, None] = None,
                                verbose: bool = False) -> bool:
     """Validate that the saved model activations correctly reproduce the ground truth output. This function works by
@@ -139,42 +169,63 @@ def validate_saved_activations(model: nn.Module,
         model: PyTorch model.
         x: Input for which to validate the saved activations.
         random_seed: random seed in case model is stochastic
-        min_proportion_consequential_layers: The percentage of layers for which perturbing them must change the output
-            in order for the model to count as validated.
-        verbose: Whether to have messages during the validation process.
-
+        verbose: whether to show verbose error messages
     Returns:
         True if the saved activations correctly reproduce the ground truth output, false otherwise.
     """
     warn_parallel()
+    if random_seed is None:  # set random seed
+        random_seed = random.randint(1, 4294967294)
+    set_random_seed(random_seed)
+    ground_truth_output_tensors = get_vars_of_type_from_obj(model(x), torch.Tensor)
+    model_history = run_model_and_save_specified_activations(model, x, 'all', False, random_seed)
+    activations_are_valid = model_history.validate_saved_activations(ground_truth_output_tensors, verbose)
 
-    submodules = get_all_submodules(model)
-    parameters_to_restore = []
-    for submodule in submodules:
-        for attr in dir(submodule):
-            attr_val = getattr(submodule, attr)
-            if (type(attr_val) == torch.nn.Parameter) and (torch.all(attr_val == 0)):
-                new_vals = torch.nn.Parameter(
-                    torch.randint(0, 2, attr_val.shape, dtype=attr_val.dtype, device=attr_val.device))
-                setattr(submodule, attr, new_vals)
-                parameters_to_restore.append((submodule, attr, attr_val))
-
-    history_dict = run_model_and_save_specified_activations(model, x, 'all', random_seed)
-    history_pretty = ModelHistory(history_dict, activations_only=True)
-    activations_are_valid = validate_model_history(history_dict,
-                                                   history_pretty,
-                                                   min_proportion_consequential_layers,
-                                                   verbose)
-    # Now change back the zero params to what they were:
-    for submodule, param_fieldname, orig_param in parameters_to_restore:
-        setattr(submodule, param_fieldname, orig_param)
-
-    for node in history_pretty:
-        del node.tensor_contents
-        del node
-    del history_pretty
-    for node in history_dict['tensor_log'].values():
-        node.clear()
-    history_dict.clear()
-    torch.cuda.empty_cache()
+    model_history.cleanup()
+    del model_history
     return activations_are_valid
+
+
+def validate_batch_of_models_and_inputs(models_and_inputs_dict: Dict[str, Dict[str, Union[str, Callable, Dict]]],
+                                        out_path: str,
+                                        redo_model_if_already_run: bool = True) -> pd.DataFrame:
+    """Given multiple models and several inputs for each, validates the saved activations for all of them
+    and returns a Pandas dataframe summarizing the validation results.
+
+    Args:
+        models_and_inputs_dict: Dict mapping each model name to a dict of model info:
+                model_category: category of model (e.g., torchvision; just for directory bookkeeping)
+                model_loading_func: function to load the model
+                model_sample_inputs: dict of example inputs {name: input}
+        out_path: Path to save the validation results to
+        redo_model_if_already_run: If True, will re-run the validation for a model even if already run
+
+    Returns:
+        Pandas dataframe with validation information for each model and input
+    """
+    if os.path.exists(out_path):
+        current_csv = pd.read_csv(out_path)
+    else:
+        current_csv = pd.DataFrame.from_dict({'model_category': [],
+                                              'model_name': [],
+                                              'input_name': [],
+                                              'validation_success': []})
+    models_already_run = current_csv['model_name'].unique()
+    for model_name, model_info in tqdm(models_and_inputs_dict.items(), desc='Validating models'):
+        print(f'Validating model {model_name}')
+        if model_name in models_already_run and not redo_model_if_already_run:
+            continue
+        model_category = model_info['model_category']
+        model_loading_func = model_info['model_loading_func']
+        model = model_loading_func()
+        model_sample_inputs = model_info['model_sample_inputs']
+        for input_name, x in model_sample_inputs.items():
+            validation_success = validate_saved_activations(model, x)
+            current_csv = current_csv.append({'model_category': model_category,
+                                              'model_name': model_name,
+                                              'input_name': input_name,
+                                              'validation_success': validation_success},
+                                             ignore_index=True)
+        current_csv.to_csv(out_path, index=False)
+        del model
+    return current_csv
