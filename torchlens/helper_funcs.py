@@ -274,9 +274,12 @@ def extend_search_stack_from_item(item: Any,
         item: The item
         next_stack: Stack to add to
     """
-    if is_iterable(item):
-        for i in item:
-            next_stack.append(i)
+    if type(item) in [list, tuple, set]:
+        next_stack.extend(list(item))
+
+    if type(item) == dict:
+        next_stack.extend(list(item.values()))
+
     for attr_name in dir(item):
         if attr_name.startswith('__'):
             continue

@@ -1,5 +1,5 @@
 import os
-from typing import Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 import torch
@@ -13,7 +13,8 @@ from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_act
 
 
 def get_model_activations(model: nn.Module,
-                          x: torch.Tensor,
+                          input_args: Union[torch.Tensor, List[Any]],
+                          input_kwargs: Dict[Any, Any] = None,
                           which_layers: Union[str, List] = 'all',
                           mark_input_output_distances: bool = False,
                           vis_opt: str = 'none',
@@ -35,7 +36,8 @@ def get_model_activations(model: nn.Module,
 
     Args:
         model: PyTorch model
-        x: model input
+        input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
+        input_kwargs: keyword arguments for model forward pass
         which_layers: list of layers to include (described above), or 'all' to include all layers.
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
@@ -53,6 +55,9 @@ def get_model_activations(model: nn.Module,
     Returns:
         ModelHistory object with layer activations and metadata
     """
+    if not input_kwargs:
+        input_kwargs = {}
+
     warn_parallel()
 
     if vis_opt not in ['none', 'rolled', 'unrolled']:
@@ -66,7 +71,8 @@ def get_model_activations(model: nn.Module,
         tensor_nums_to_save = None
     else:
         model_history = run_model_and_save_specified_activations(model,
-                                                                 x,
+                                                                 input_args,
+                                                                 input_kwargs,
                                                                  None,
                                                                  False,
                                                                  random_seed)
@@ -75,7 +81,8 @@ def get_model_activations(model: nn.Module,
     # And now save the activations for real.
 
     model_history = run_model_and_save_specified_activations(model,
-                                                             x,
+                                                             input_args,
+                                                             input_kwargs,
                                                              tensor_nums_to_save,
                                                              mark_input_output_distances,
                                                              random_seed)
@@ -93,7 +100,8 @@ def get_model_activations(model: nn.Module,
 
 
 def get_model_structure(model: nn.Module,
-                        x: torch.Tensor,
+                        input_args: torch.Tensor,
+                        input_kwargs: Dict[Any, Any] = None,
                         mark_input_output_distances: bool = False,
                         random_seed: Optional[int] = None) -> ModelHistory:
     """
@@ -101,7 +109,8 @@ def get_model_structure(model: nn.Module,
 
     Args:
         model: PyTorch model.
-        x: model input
+        input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
+        input_kwargs: Keyword arguments for model forward pass, if applicable
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
         random_seed: which random seed to use in case model involves randomness
@@ -109,13 +118,18 @@ def get_model_structure(model: nn.Module,
     Returns:
         history_dict: Dict of dicts with the activations from each layer.
     """
+    if not input_kwargs:
+        input_kwargs = {}
+
     warn_parallel()
-    model_history = run_model_and_save_specified_activations(model, x, None, mark_input_output_distances, random_seed)
+    model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
+                                                             None, mark_input_output_distances, random_seed)
     return model_history
 
 
 def show_model_graph(model: nn.Module,
-                     x: torch.Tensor,
+                     input_args: Union[torch.Tensor, List[Any]],
+                     input_kwargs: Dict[Any, Any] = None,
                      vis_opt: str = 'none',
                      vis_outpath: str = 'graph.gv',
                      save_only: bool = False,
@@ -127,7 +141,8 @@ def show_model_graph(model: nn.Module,
 
     Args:
         model: PyTorch model
-        x: model input
+        input_args: Arguments for model forward pass
+        input_kwargs: Keyword arguments for model forward pass
         vis_opt: whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
@@ -142,10 +157,14 @@ def show_model_graph(model: nn.Module,
     Returns:
         Nothing.
     """
+    if not input_kwargs:
+        input_kwargs = {}
+
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    model_history = run_model_and_save_specified_activations(model, x, None, False, random_seed)
+    model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
+                                                             None, False, random_seed)
     model_history.render_graph(vis_opt,
                                vis_outpath,
                                save_only,
@@ -155,7 +174,8 @@ def show_model_graph(model: nn.Module,
 
 
 def validate_saved_activations(model: nn.Module,
-                               x: torch.Tensor,
+                               input_args: Union[torch.Tensor, List[Any]],
+                               input_kwargs: Dict[Any, Any] = None,
                                random_seed: Union[int, None] = None,
                                verbose: bool = False) -> bool:
     """Validate that the saved model activations correctly reproduce the ground truth output. This function works by
@@ -167,7 +187,8 @@ def validate_saved_activations(model: nn.Module,
 
     Args:
         model: PyTorch model.
-        x: Input for which to validate the saved activations.
+        input_args: Input for which to validate the saved activations.
+        input_kwargs: Keyword arguments for model forward pass
         random_seed: random seed in case model is stochastic
         verbose: whether to show verbose error messages
     Returns:
@@ -177,8 +198,9 @@ def validate_saved_activations(model: nn.Module,
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
-    ground_truth_output_tensors = get_vars_of_type_from_obj(model(x), torch.Tensor)
-    model_history = run_model_and_save_specified_activations(model, x, 'all', False, random_seed)
+    ground_truth_output_tensors = get_vars_of_type_from_obj(model(input_args), torch.Tensor)
+    model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
+                                                             'all', False, random_seed)
     activations_are_valid = model_history.validate_saved_activations(ground_truth_output_tensors, verbose)
 
     model_history.cleanup()

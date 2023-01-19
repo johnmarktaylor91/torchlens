@@ -1,7 +1,7 @@
 import copy
 import random
 import time
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from torch import nn
@@ -12,7 +12,8 @@ from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, undec
 
 
 def run_model_and_save_specified_activations(model: nn.Module,
-                                             x: Any,
+                                             input_args: Union[torch.Tensor, List[Any]],
+                                             input_kwargs: Dict[Any, Any],
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
                                              mark_input_output_distances: bool = False,
                                              random_seed: Optional[int] = None) -> ModelHistory:
@@ -22,7 +23,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
 
     Args:
         model: PyTorch model.
-        x: Input to the model.
+        input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
+        input_kwargs: Keyword arguments to the model's forward pass.
         tensor_nums_to_save: List of tensor numbers to save.
         mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
             This is computationally expensive for large networks, so it is off by default.
@@ -31,6 +33,9 @@ def run_model_and_save_specified_activations(model: nn.Module,
     Returns:
         ModelHistory object with full log of the forward pass
     """
+    if type(input_args) == torch.Tensor:
+        input_args = [input_args]
+
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
@@ -43,7 +48,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     else:
         model_device = 'cpu'
 
-    x = copy.deepcopy(x)
+    input_args = copy.deepcopy(input_args)
     model_name = str(type(model).__name__)
     model_history = ModelHistory(model_name, random_seed, tensor_nums_to_save)
     model_history.pass_start_time = time.time()
@@ -52,18 +57,22 @@ def run_model_and_save_specified_activations(model: nn.Module,
     orig_func_defs = []
 
     try:
-        x = move_input_tensors_to_device(x, model_device)
-        input_tensors = get_vars_of_type_from_obj(x, torch.Tensor)
+        input_args = move_input_tensors_to_device(input_args, model_device)
+        input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
+        input_arg_tensors = get_vars_of_type_from_obj(input_args, torch.Tensor)
+        input_kwarg_tensors = get_vars_of_type_from_obj(input_kwargs, torch.Tensor)
+        input_tensors = input_arg_tensors + input_kwarg_tensors
         decorate_pytorch(torch,
                          input_tensors,
                          orig_func_defs,
                          model_history)
         model_history.track_tensors = True
         for t in input_tensors:
-            t.requires_grad = True
+            if 'int' not in str(t.dtype):
+                t.requires_grad = True
             model_history.log_source_tensor(t, 'input')
         prepare_model(model, hook_handles, model_history)
-        outputs = model(x)
+        outputs = model(*input_args, **input_kwargs)
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
         for t in output_tensors:
@@ -76,12 +85,12 @@ def run_model_and_save_specified_activations(model: nn.Module,
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
         undecorate_pytorch(torch, orig_func_defs)
-        cleanup_model(model, hook_handles)
+        cleanup_model(model, hook_handles, model_device)
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")
         raise e
 
     finally:  # do garbage collection no matter what
-        del x
+        del input_args
         del output_tensors
         del outputs
         torch.cuda.empty_cache()
