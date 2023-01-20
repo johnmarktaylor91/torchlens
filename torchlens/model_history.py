@@ -1579,6 +1579,7 @@ class ModelHistory:
 
             # Fix ancestry information:
 
+            new_output_node.child_layers = []
             new_output_node.parent_layers = [output_node.tensor_label_raw]
             new_output_node.sibling_layers = []
             new_output_node.has_sibling_tensors = False
@@ -1595,7 +1596,7 @@ class ModelHistory:
             # Change original output node:
 
             output_node.is_output_layer = False
-            output_node.child_layers = [new_output_node.tensor_label_raw]
+            output_node.child_layers.append(new_output_node.tensor_label_raw)
 
             self.raw_tensor_dict[new_output_node.tensor_label_raw] = new_output_node
             self.raw_tensor_labels_list.append(new_output_node.tensor_label_raw)
@@ -3470,7 +3471,7 @@ class ModelHistory:
         return False
 
     @staticmethod
-    def _check_if_arg_is_special_val(val):
+    def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]):
         # If it's one of the other arguments, check if it's all zeros or all ones:
         if type(val) != torch.Tensor:
             val = torch.Tensor(val)

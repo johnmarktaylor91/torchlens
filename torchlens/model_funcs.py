@@ -1,7 +1,7 @@
 import copy
 import random
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 from torch import nn
@@ -62,16 +62,16 @@ def run_model_and_save_specified_activations(model: nn.Module,
         input_arg_tensors = get_vars_of_type_from_obj(input_args, torch.Tensor)
         input_kwarg_tensors = get_vars_of_type_from_obj(input_kwargs, torch.Tensor)
         input_tensors = input_arg_tensors + input_kwarg_tensors
-        decorate_pytorch(torch,
-                         input_tensors,
-                         orig_func_defs,
-                         model_history)
+        decorated_func_mapper = decorate_pytorch(torch,
+                                                 input_tensors,
+                                                 orig_func_defs,
+                                                 model_history)
         model_history.track_tensors = True
         for t in input_tensors:
             if 'int' not in str(t.dtype):
                 t.requires_grad = True
             model_history.log_source_tensor(t, 'input')
-        prepare_model(model, hook_handles, model_history)
+        prepare_model(model, hook_handles, model_history, decorated_func_mapper)
         outputs = model(*input_args, **input_kwargs)
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
@@ -79,13 +79,13 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_history.output_layers.append(t.tl_tensor_label_raw)
             model_history[t.tl_tensor_label_raw].is_output_layer = True
         undecorate_pytorch(torch, orig_func_defs)
-        cleanup_model(model, hook_handles, model_device)
+        cleanup_model(model, hook_handles, model_device, decorated_func_mapper)
         model_history.postprocess(mark_input_output_distances)
         return model_history
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
         undecorate_pytorch(torch, orig_func_defs)
-        cleanup_model(model, hook_handles, model_device)
+        cleanup_model(model, hook_handles, model_device, decorated_func_mapper)
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")
         raise e
 
@@ -114,8 +114,11 @@ def move_input_tensors_to_device(x: Any,
     return x
 
 
-def prepare_model(model: nn.Module, hook_handles: List, model_history: ModelHistory):
-    """Adds annotations and hooks to the model.
+def prepare_model(model: nn.Module,
+                  hook_handles: List,
+                  model_history: ModelHistory,
+                  decorated_func_mapper: Dict[Callable, Callable]):
+    """Adds annotations and hooks to the model, and decorates any functions in the model.
 
     Args:
         model: Model to prepare.
@@ -132,6 +135,12 @@ def prepare_model(model: nn.Module, hook_handles: List, model_history: ModelHist
     while len(module_stack) > 0:
         module, parent_address = module_stack.pop()
         module_children = list(module.named_children())
+
+        # Decorate any torch functions in the model:
+        for func_name, func in module.__dict__.items():
+            if (func_name[0:2] == '__') or (not callable(func)) or (func not in decorated_func_mapper):
+                continue
+            module.__dict__[func_name] = decorated_func_mapper[func]
 
         # Annotate the children with the full address.
         for c, (child_name, child_module) in enumerate(module_children):
@@ -317,7 +326,10 @@ def get_all_submodules(model: nn.Module,
     return submodules
 
 
-def cleanup_model(model: nn.Module, hook_handles: List, model_device: str):
+def cleanup_model(model: nn.Module,
+                  hook_handles: List,
+                  model_device: str,
+                  decorated_func_mapper: Dict[Callable, Callable]):
     """Reverses all temporary changes to the model (namely, the forward hooks and added
     model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
 
@@ -325,12 +337,13 @@ def cleanup_model(model: nn.Module, hook_handles: List, model_device: str):
         model: PyTorch model.
         hook_handles: List of hooks.
         model_device: Device the model is stored on
+        decorated_func_mapper: Dict mapping between original and decorated PyTorch funcs
 
     Returns:
         Original version of the model.
     """
     clear_hooks(hook_handles)
-    restore_model_attributes(model, attribute_keyword='tl')
+    restore_model_attributes(model, decorated_func_mapper=decorated_func_mapper, attribute_keyword='tl')
     undecorate_model_tensors(model, model_device)
 
 
@@ -348,20 +361,35 @@ def clear_hooks(hook_handles: List):
         hook_handle.remove()
 
 
-def restore_model_attributes(model: nn.Module, attribute_keyword: str = 'tl'):
+def restore_module_attributes(module: nn.Module,
+                              decorated_func_mapper: Dict[Callable, Callable],
+                              attribute_keyword: str = 'tl'):
+    for attribute_name in dir(module):
+        if attribute_name.startswith(attribute_keyword):
+            delattr(module, attribute_name)
+            continue
+        attr = getattr(module, attribute_name)
+        if isinstance(attr, Callable) and (attr in decorated_func_mapper) and (attribute_name[0:2] != '__'):
+            setattr(module, attribute_name, decorated_func_mapper[attr])
+
+
+def restore_model_attributes(model: nn.Module,
+                             decorated_func_mapper: Dict[Callable, Callable],
+                             attribute_keyword: str = 'tl'):
     """Recursively clears the given attribute from all modules in the model.
 
     Args:
         model: PyTorch model.
+        decorated_func_mapper: Dict mapping between original and decorated PyTorch funcs
         attribute_keyword: Any attribute with this keyword will be cleared.
 
     Returns:
         Nothing.
     """
     for module in get_all_submodules(model):
-        for attribute_name in dir(module):
-            if attribute_name.startswith(attribute_keyword):
-                delattr(module, attribute_name)
+        restore_module_attributes(module,
+                                  decorated_func_mapper=decorated_func_mapper,
+                                  attribute_keyword=attribute_keyword)
 
     for param in model.parameters():
         param.requires_grad = getattr(param, 'tl_requires_grad')

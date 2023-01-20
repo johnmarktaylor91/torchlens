@@ -3,7 +3,7 @@
 import time
 import types
 from functools import wraps
-from typing import Callable, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 import torch
 
@@ -13,7 +13,7 @@ from torchlens.helper_funcs import get_vars_of_type_from_obj, identity, log_curr
 from torchlens.model_history import ModelHistory
 
 print_funcs = ['__repr__', '__str__', '_str']
-funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to', '__array__']
+funcs_not_to_log = ['cpu', 'cuda', 'numpy', '__array__']
 
 
 def torch_func_decorator(func: Callable,
@@ -54,7 +54,6 @@ def torch_func_decorator(func: Callable,
                                                    which_type=torch.Tensor,
                                                    subclass_exceptions=[torch.nn.Parameter])
 
-
         if len(output_tensors) > 0:
             model_history.log_function_output_tensors(func,
                                                       args,
@@ -73,7 +72,7 @@ def torch_func_decorator(func: Callable,
 def decorate_pytorch(torch_module: types.ModuleType,
                      tensors_to_mutate: List[torch.Tensor],
                      orig_func_defs: List[Tuple],
-                     model_history: ModelHistory):
+                     model_history: ModelHistory) -> Dict[Callable, Callable]:
     """Mutates all PyTorch functions (TEMPORARILY!) to save the outputs of any functions
     that return Tensors, along with marking them with metadata. Returns a list of tuples that
     save the current state of the functions, such that they can be restored when done.
@@ -94,6 +93,7 @@ def decorate_pytorch(torch_module: types.ModuleType,
 
     # Do a pass to save the original func defs.
     collect_orig_func_defs(torch_module, orig_func_defs)
+    decorated_func_mapper = {}
 
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
         namespace_name_notorch = namespace_name.replace('torch.', '')
@@ -109,6 +109,8 @@ def decorate_pytorch(torch_module: types.ModuleType,
         except (AttributeError, TypeError) as _:
             pass
         new_func.tl_is_decorated_function = True
+        decorated_func_mapper[new_func] = orig_func
+        decorated_func_mapper[orig_func] = new_func
         if 'torch.Tensor' in namespace_name:
             decorate_tensors(tensors_to_mutate,
                              namespace_name,
@@ -118,6 +120,8 @@ def decorate_pytorch(torch_module: types.ModuleType,
     # Bolt on the identity function
     new_identity = torch_func_decorator(identity, model_history)
     torch.identity = new_identity
+
+    return decorated_func_mapper
 
 
 def decorate_tensors(tensors_to_decorate: List[torch.Tensor],
