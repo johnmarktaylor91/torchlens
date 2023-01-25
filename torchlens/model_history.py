@@ -1474,7 +1474,7 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, mark_input_output_distances: bool = False):
+    def postprocess(self, mark_input_output_distances: bool = True):
         """
         After the forward pass, cleans up the log into its final form.
         """

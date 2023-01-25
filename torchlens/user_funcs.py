@@ -164,7 +164,7 @@ def show_model_graph(model: nn.Module,
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
-                                                             None, False, random_seed)
+                                                             None, True, random_seed)
     model_history.render_graph(vis_opt,
                                vis_outpath,
                                save_only,
