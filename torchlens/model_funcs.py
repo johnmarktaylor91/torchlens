@@ -62,14 +62,14 @@ def run_model_and_save_specified_activations(model: nn.Module,
         input_arg_tensors = get_vars_of_type_from_obj(input_args, torch.Tensor)
         input_kwarg_tensors = get_vars_of_type_from_obj(input_kwargs, torch.Tensor)
         input_tensors = input_arg_tensors + input_kwarg_tensors
+        buffer_tensors = list(model.buffers())
+        tensors_to_decorate = input_tensors + buffer_tensors
         decorated_func_mapper = decorate_pytorch(torch,
-                                                 input_tensors,
+                                                 tensors_to_decorate,
                                                  orig_func_defs,
                                                  model_history)
         model_history.track_tensors = True
         for t in input_tensors:
-            if 'int' not in str(t.dtype):
-                t.requires_grad = True
             model_history.log_source_tensor(t, 'input')
         prepare_model(model, hook_handles, model_history, decorated_func_mapper)
         outputs = model(*input_args, **input_kwargs)
@@ -78,13 +78,15 @@ def run_model_and_save_specified_activations(model: nn.Module,
         for t in output_tensors:
             model_history.output_layers.append(t.tl_tensor_label_raw)
             model_history[t.tl_tensor_label_raw].is_output_layer = True
-        undecorate_pytorch(torch, orig_func_defs)
+        tensors_to_undecorate = tensors_to_decorate + output_tensors
+        undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate, decorated_func_mapper)
         cleanup_model(model, hook_handles, model_device, decorated_func_mapper)
-        model_history.postprocess(mark_input_output_distances)
+        model_history.postprocess(decorated_func_mapper, mark_input_output_distances)
+        decorated_func_mapper.clear()
         return model_history
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
-        undecorate_pytorch(torch, orig_func_defs)
+        undecorate_pytorch(torch, orig_func_defs, input_tensors, decorated_func_mapper)
         cleanup_model(model, hook_handles, model_device, decorated_func_mapper)
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")
         raise e
@@ -124,12 +126,14 @@ def prepare_model(model: nn.Module,
         model: Model to prepare.
         hook_handles: Pre-allocated list to store the hooks, so they can be cleared even if execution fails.
         model_history: ModelHistory object logging the forward pass
+        decorated_func_mapper: Dictionary mapping decorated functions to original functions, so they can be restored
 
     Returns:
         Model with hooks and attributes added.
     """
     model_history.model_name = str(type(model).__name__)
     model.tl_module_address = ''
+    model.tl_source_model_history = model_history
 
     module_stack = [(model, '')]  # list of tuples (name, module)
     while len(module_stack) > 0:
@@ -152,6 +156,7 @@ def prepare_model(model: nn.Module,
         if module == model:  # don't tag the model itself.
             continue
 
+        module.tl_source_model_history = model_history
         module.tl_module_type = str(type(module).__name__)
         model_history.module_types[module.tl_module_address] = module.tl_module_type
         module.tl_module_pass_num = 0
@@ -214,7 +219,7 @@ def module_pre_hook(module: nn.Module,
     module.tl_module_pass_labels.append(module_pass_label)
     input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
     for t in input_tensors:
-        model_history = t.tl_source_model_history
+        model_history = module.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
         module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
         tensor_entry.modules_entered.append(module_address)
@@ -246,7 +251,7 @@ def module_post_hook(module: nn.Module,
         if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
             t = getattr(torch, 'identity')(t)
 
-        model_history = t.tl_source_model_history
+        model_history = module.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
         tensor_entry.is_submodule_output = True
         tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
@@ -256,7 +261,7 @@ def module_post_hook(module: nn.Module,
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
     for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
-        model_history = t.tl_source_model_history
+        model_history = module.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
         input_module_thread = tensor_entry.module_entry_exit_thread[:]
         if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
@@ -278,7 +283,7 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     Returns:
         Whether the tensor operation is bottom level.
     """
-    model_history = getattr(t, 'tl_source_model_history')
+    model_history = getattr(submodule, 'tl_source_model_history')
     tensor_entry = model_history[getattr(t, 'tl_tensor_label_raw')]
     submodule_address = submodule.tl_module_address
 

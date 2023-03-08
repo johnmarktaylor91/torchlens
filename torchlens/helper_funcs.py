@@ -426,7 +426,6 @@ def safe_copy(x):
         vals_tensor = clean_from_numpy(vals_np)
         if hasattr(x, 'tl_tensor_label_raw'):
             vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
-            vals_tensor.tl_source_model_history = x.tl_source_model_history
         if type(x) == torch.Tensor:
             return vals_tensor
         elif type(x) == torch.nn.Parameter:

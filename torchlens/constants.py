@@ -135,7 +135,6 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'func_all_args_non_tensor',
     'function_is_inplace',
     'gradfunc',
-    'gradfunc_name',
     'is_part_of_iterable_output',
     'iterable_output_index',
 

@@ -198,7 +198,11 @@ def validate_saved_activations(model: nn.Module,
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
-    ground_truth_output_tensors = get_vars_of_type_from_obj(model(input_args), torch.Tensor)
+    if type(input_args) == torch.Tensor:
+        input_args = [input_args]
+    if not input_kwargs:
+        input_kwargs = {}
+    ground_truth_output_tensors = get_vars_of_type_from_obj(model(*input_args, **input_kwargs), torch.Tensor)
     model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
                                                              'all', False, random_seed)
     activations_are_valid = model_history.validate_saved_activations(ground_truth_output_tensors, verbose)

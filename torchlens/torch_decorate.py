@@ -115,6 +115,7 @@ def decorate_pytorch(torch_module: types.ModuleType,
             decorate_tensors(tensors_to_mutate,
                              namespace_name,
                              func_name,
+                             decorated_func_mapper,
                              model_history)
 
     # Bolt on the identity function
@@ -127,6 +128,7 @@ def decorate_pytorch(torch_module: types.ModuleType,
 def decorate_tensors(tensors_to_decorate: List[torch.Tensor],
                      namespace_name: str,
                      func_name: str,
+                     decorated_func_mapper: Dict,
                      model_history: ModelHistory):
     """Decorates a list of tensors such that they can be tracked.
 
@@ -134,6 +136,7 @@ def decorate_tensors(tensors_to_decorate: List[torch.Tensor],
         tensors_to_decorate: list of tensors to decorate
         namespace_name: namespace in which the function to decorate is located
         func_name: name of the function to decorate
+        decorated_func_mapper: Maps the decorated function to the original function
         model_history: ModelHistory object tracking the tensor operations
     """
     namespace_name_notensor = namespace_name.replace('torch.Tensor.', '').replace('torch.Tensor', '')
@@ -141,31 +144,58 @@ def decorate_tensors(tensors_to_decorate: List[torch.Tensor],
         try:
             local_tensor_namespace = nested_getattr(t, namespace_name_notensor)
             orig_tensor_func = getattr(local_tensor_namespace, func_name)
+            if hasattr(orig_tensor_func, 'tl_is_decorated_function'):
+                continue
             new_tensor_func = torch_func_decorator(orig_tensor_func, model_history)
             setattr(local_tensor_namespace, func_name, new_tensor_func)
+            decorated_func_mapper[new_tensor_func] = orig_tensor_func
         except (AttributeError, TypeError, RuntimeError) as _:
             pass
 
 
 def undecorate_pytorch(torch_module,
-                       orig_func_defs: List[Tuple]):
+                       orig_func_defs: List[Tuple],
+                       input_tensors: List[torch.Tensor],
+                       decorated_func_mapper: Dict[Callable, Callable]):
     """
     Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
-    This is done for the output tensors and history_dict too to avoid ugliness.
+    This is done for the output tensors and history_dict too to avoid ugliness. Also deletes
+    the mutant versions of the functions to remove any references to old ModelHistory object.
 
     args:
         torch_module: The torch module object.
         orig_func_defs: List of tuples consisting of [namespace_name, func_name, orig_func], sufficient
             to regenerate the original functions.
+        input_tensors: List of input tensors whose fucntions will be undecorated.
+        decorated_func_mapper: Maps the decorated function to the original function
     """
     for namespace_name, func_name, orig_func in orig_func_defs:
         namespace_name_notorch = namespace_name.replace('torch.', '')
         local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
+        decorated_func = getattr(local_func_namespace, func_name)
+        del decorated_func
         try:
             setattr(local_func_namespace, func_name, orig_func)
         except (AttributeError, TypeError) as _:
             continue
     delattr(torch, 'identity')
+    undecorate_tensors(input_tensors, decorated_func_mapper)
+
+
+def undecorate_tensors(tensors_to_undecorate: List[torch.Tensor],
+                       decorated_func_mapper: Dict[Callable, Callable]):
+    for input_tensor in tensors_to_undecorate:
+        delattr(input_tensor, 'tl_tensor_label_raw')
+        for attr_name in dir(input_tensor):
+            if attr_name in ['grad', 'grad_fn', '_grad', '_grad_fn']:
+                continue
+            try:
+                attr = getattr(input_tensor, attr_name)
+            except (AttributeError, TypeError, RuntimeError) as _:
+                continue
+            if callable(attr) and (attr in decorated_func_mapper):
+                setattr(input_tensor, attr_name, decorated_func_mapper[attr])
+                del attr
 
 
 def undecorate_tensor(t, device: str = 'cpu'):
@@ -178,12 +208,11 @@ def undecorate_tensor(t, device: str = 'cpu'):
     Returns:
         Unmutated tensor.
     """
-    if type(t) == torch.Tensor:
+    if type(t) in [torch.Tensor, torch.nn.Parameter]:
         new_t = safe_copy(t)
-    elif type(t) == torch.nn.Parameter:
-        new_t = torch.nn.Parameter(safe_copy(t))
     else:
         new_t = t
+    del t
     for attr in dir(new_t):
         if attr.startswith('tl_'):
             delattr(new_t, attr)

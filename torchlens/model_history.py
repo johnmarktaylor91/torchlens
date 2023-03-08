@@ -92,7 +92,6 @@ class TensorLogEntry:
         self.func_all_args_non_tensor = fields_dict['func_all_args_non_tensor']
         self.function_is_inplace = fields_dict['function_is_inplace']
         self.gradfunc = fields_dict['gradfunc']
-        self.gradfunc_name = fields_dict['gradfunc_name']
         self.is_part_of_iterable_output = fields_dict['is_part_of_iterable_output']
         self.iterable_output_index = fields_dict['iterable_output_index']
 
@@ -217,17 +216,11 @@ class TensorLogEntry:
         # Tensor args and kwargs:
         creation_args = []
         for arg in t_args:
-            if issubclass(type(arg), (torch.Tensor, torch.nn.Parameter)):
-                creation_args.append(safe_copy(arg))
-            else:
-                creation_args.append(copy.copy(arg))
+            creation_args.append(safe_copy(arg))
 
         creation_kwargs = {}
         for key, value in t_kwargs.items():
-            if issubclass(type(value), (torch.Tensor, torch.nn.Parameter)):
-                creation_kwargs[key] = safe_copy(value)
-            else:
-                creation_kwargs[key] = copy.copy(value)
+            creation_kwargs[key] = safe_copy(value)
 
         self.creation_args = creation_args
         self.creation_kwargs = creation_kwargs
@@ -300,7 +293,7 @@ class TensorLogEntry:
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
-            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc_name}) " \
+            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) " \
                  f"{module_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
@@ -756,8 +749,7 @@ class ModelHistory:
             'func_keyword_args_non_tensor': {},
             'func_all_args_non_tensor': [],
             'function_is_inplace': False,
-            'gradfunc': None,
-            'gradfunc_name': 'none',
+            'gradfunc': 'none',
             'is_part_of_iterable_output': False,
             'iterable_output_index': None,
 
@@ -833,7 +825,6 @@ class ModelHistory:
 
         # Tag the tensor itself with its label, and with a reference to the model history log.
         t.tl_tensor_label_raw = tensor_label
-        t.tl_source_model_history = self
 
         # Log info to ModelHistory
         self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
@@ -1002,10 +993,9 @@ class ModelHistory:
 
             # Tag the tensor itself with its label, and with a reference to the model history log.
             out.tl_tensor_label_raw = fields_dict_onetensor['tensor_label_raw']
-            out.tl_source_model_history = self
 
-    def _output_should_be_logged(self,
-                                 out: Any,
+    @staticmethod
+    def _output_should_be_logged(out: Any,
                                  is_bottom_level_func: bool) -> bool:
         """Function to check whether to log the output of a function.
 
@@ -1015,13 +1005,7 @@ class ModelHistory:
         if type(out) != torch.Tensor:  # only log if it's a tensor
             return False
 
-        has_same_gradfunc = False
-        if hasattr(out, 'tl_tensor_label_raw'):
-            old_gradfunc = self[getattr(out, 'tl_tensor_label_raw')].gradfunc
-            if out.grad_fn == old_gradfunc:
-                has_same_gradfunc = True
-
-        if (not hasattr(out, 'tl_tensor_label_raw')) or (not has_same_gradfunc) or is_bottom_level_func:
+        if (not hasattr(out, 'tl_tensor_label_raw')) or is_bottom_level_func:
             return True
         else:
             return False
@@ -1067,17 +1051,7 @@ class ModelHistory:
         fields_dict['equivalent_operations'] = self.equivalent_operations[operation_equivalence_type]
 
         fields_dict['function_is_inplace'] = hasattr(t, 'tl_tensor_label_raw')
-        if fields_dict['function_is_inplace']:
-            old_gradfunc = self[getattr(t, 'tl_tensor_label_raw')].gradfunc
-            if t.grad_fn == old_gradfunc:
-                fields_dict['gradfunc'] = identity
-                fields_dict['gradfunc_name'] = 'identity'
-            else:
-                fields_dict['gradfunc'] = t.grad_fn
-                fields_dict['gradfunc_name'] = type(t.grad_fn).__name__
-        else:
-            fields_dict['gradfunc'] = t.grad_fn
-            fields_dict['gradfunc_name'] = type(t.grad_fn).__name__
+        fields_dict['gradfunc'] = type(t.grad_fn)
 
         if fields_dict['is_part_of_iterable_output']:
             fields_dict['iterable_output_index'] = i
@@ -1474,7 +1448,7 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, mark_input_output_distances: bool = True):
+    def postprocess(self, decorated_func_mapper: Dict, mark_input_output_distances: bool = True):
         """
         After the forward pass, cleans up the log into its final form.
         """
@@ -1512,7 +1486,7 @@ class ModelHistory:
         # do any tallying/totals/labeling, log the module hierarchy, rename all tensors,
         # get the operation numbers for all layer labels.
 
-        self._final_prettify()
+        self._final_prettify(decorated_func_mapper)
 
         # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
@@ -1547,7 +1521,6 @@ class ModelHistory:
             new_output_node.func_keyword_args_non_tensor = {}
             new_output_node.func_all_args_non_tensor = []
             new_output_node.gradfunc = None
-            new_output_node.gradfunc_name = 'none'
             new_output_node.creation_args = [safe_copy(output_node.tensor_contents)]
             new_output_node.creation_kwargs = {}
 
@@ -2286,7 +2259,7 @@ class ModelHistory:
             raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
 
-    def _final_prettify(self):
+    def _final_prettify(self, decorated_func_mapper):
         """
         Goes through all tensor log entries for the final stages of pre-processing to make the
         user-facing version of ModelHistory.
@@ -2300,6 +2273,9 @@ class ModelHistory:
 
         # And one more pass to delete unused layers from the record and do final tidying up:
         self._remove_unwanted_entries_and_log_remaining()
+
+        # Undecorate all saved tensors and remove saved grad_fns.
+        self._undecorate_all_saved_tensors(decorated_func_mapper)
 
         # Clear the cache after any tensor deletions for garbage collection purposes:
         torch.cuda.empty_cache()
@@ -2565,11 +2541,55 @@ class ModelHistory:
                 new_dir_dict[field] = getattr(self, field)
         self.__dict__ = new_dir_dict
 
+    @staticmethod
+    def _undecorate_saved_tensor(t, decorated_func_mapper):
+        if hasattr(t, 'tl_tensor_label_raw'):
+            delattr(t, 'tl_tensor_label_raw')
+        for attr_name in dir(t):
+            if attr_name.startswith('_'):
+                continue
+            try:
+                attr = getattr(t, attr_name)
+            except (AttributeError, TypeError, RuntimeError) as _:
+                continue
+            if attr in decorated_func_mapper:
+                setattr(t, attr_name, decorated_func_mapper[attr])
+
+    def _undecorate_all_saved_tensors(self, decorated_func_mapper: Dict):
+        """Utility function to undecorate all saved tensors.
+
+        Args:
+            decorated_func_mapper: Maps decorated functions to their original versions.
+        """
+        tensors_to_undecorate = []
+        for layer_label in self.layer_labels:
+            tensor_entry = self.layer_dict_main_keys[layer_label]
+            if tensor_entry.tensor_contents is not None:
+                tensors_to_undecorate.append(tensor_entry.tensor_contents)
+
+            tensors_to_undecorate.extend(get_vars_of_type_from_obj(tensor_entry.creation_args,
+                                                                   torch.Tensor,
+                                                                   search_depth=4))
+            tensors_to_undecorate.extend(get_vars_of_type_from_obj(tensor_entry.creation_kwargs,
+                                                                   torch.Tensor,
+                                                                   search_depth=4))
+
+        for t in tensors_to_undecorate:
+            self._undecorate_saved_tensor(t, decorated_func_mapper)
+
+    def _delete_raw_tensor_entries(self):
+        """Deletes the raw tensor entries, leaving only the post-processed entries.
+        """
+        for entry_name, tensor_entry in self.raw_tensor_dict.items():
+            self._remove_log_entry(tensor_entry)
+        self.raw_tensor_dict.clear()
+
     def _set_pass_finished(self):
         """Sets the ModelHistory to "pass finished" status, indicating that the pass is done, so
         the "final" rather than "realtime debugging" mode of certain functions should be used.
         """
-        for tensor in self:
+        for layer_label in self.layer_dict_main_keys:
+            tensor = self.layer_dict_main_keys[layer_label]
             tensor.pass_finished = True
         self.pass_finished = True
 
