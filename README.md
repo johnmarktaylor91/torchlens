@@ -205,15 +205,14 @@ The main function of torchlens is `get_model_activations`; the remaining functio
    problem, and I will update Torchlens to fix the problem.**
 
 And that's it. Torchlens remains in active development, and the goal is for it to work with any PyTorch model
-whatosever without exception. As of the time of this writing, it has been tested with common
-feedforward and recurrent visual networks, as well as transformers.
+whatosever without exception. As of the time of this writing, it has been tested with over 700
+image, video, auditory, and language models. 
 
 ## Planned Features
 
-1) Support for video, audio, and language models
-2) Options for "collapsed" visualization options to show more compact representations of huge
+1) Options for "collapsed" visualization options to show more compact representations of huge
    models (e.g., only showing higher-level modules in the figure, not every single step)
-3) In the further future, I am considering adding functionality to not just save activations,
+2) In the further future, I am considering adding functionality to not just save activations,
    but counterfactually intervene on them (e.g., how would the output have changed if these parameters
    were different or if a different nonlinearity were used). Let me know if you'd find this useful
    and if so, what specific kind of functionality you'd want.

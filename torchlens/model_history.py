@@ -622,7 +622,85 @@ class ModelHistory:
         Returns:
             Pandas dataframe with info about each layer.
         """
-        pass
+        model_df = pd.DataFrame()
+        fields_for_df = ['layer_label',
+                         'layer_label_w_pass',
+                         'layer_label_no_pass',
+                         'layer_label_short',
+                         'layer_label_w_pass_short',
+                         'layer_label_no_pass_short',
+                         'layer_type',
+                         'layer_type_num',
+                         'layer_total_num',
+                         'layer_passes_total',
+                         'pass_num',
+                         'operation_num',
+                         'tensor_shape',
+                         'tensor_dtype',
+                         'tensor_fsize',
+                         'tensor_fsize_nice',
+                         'func_applied_name',
+                         'func_time_elapsed',
+                         'function_is_inplace',
+                         'gradfunc',
+                         'is_input_layer',
+                         'is_output_layer',
+                         'is_buffer_layer',
+                         'is_part_of_iterable_output',
+                         'iterable_output_index',
+                         'parent_layers',
+                         'has_parents',
+                         'orig_ancestors',
+                         'child_layers',
+                         'has_children',
+                         'output_descendents',
+                         'sibling_layers',
+                         'has_siblings',
+                         'spouse_layers',
+                         'has_spouses',
+                         'computed_with_params',
+                         'num_params_total',
+                         'parent_param_shapes',
+                         'parent_params_fsize',
+                         'parent_params_fsize_nice',
+                         'modules_entered',
+                         'modules_exited',
+                         'is_submodule_input',
+                         'is_submodule_output',
+                         'containing_module_origin',
+                         'containing_modules_origin_nested']
+
+        fields_to_change_type = {'layer_type_num': int,
+                                 'layer_total_num': int,
+                                 'layer_passes_total': int,
+                                 'pass_num': int,
+                                 'operation_num': int,
+                                 'function_is_inplace': bool,
+                                 'is_input_layer': bool,
+                                 'is_output_layer': bool,
+                                 'is_buffer_layer': bool,
+                                 'is_part_of_iterable_output': bool,
+                                 'has_parents': bool,
+                                 'has_children': bool,
+                                 'has_siblings': bool,
+                                 'has_spouses': bool,
+                                 'computed_with_params': bool,
+                                 'num_params_total': int,
+                                 'parent_params_fsize': int,
+                                 'tensor_fsize': int,
+                                 'is_submodule_input': bool,
+                                 'is_submodule_output': bool}
+
+        for tensor_entry in self.layer_list:
+            tensor_dict = {}
+            for field_name in fields_for_df:
+                tensor_dict[field_name] = getattr(tensor_entry, field_name)
+            model_df = model_df.append(tensor_dict, ignore_index=True)
+
+        for field in fields_to_change_type:
+            model_df[field] = model_df[field].astype(fields_to_change_type[field])
+
+        return model_df
 
     def get_op_nums_from_user_labels(self, which_layers: List[Union[str, int]]) -> List[int]:
         """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
