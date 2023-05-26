@@ -17,6 +17,8 @@ def get_model_activations(model: nn.Module,
                           input_kwargs: Dict[Any, Any] = None,
                           which_layers: Union[str, List] = 'all',
                           mark_input_output_distances: bool = False,
+                          detach_saved_tensors: bool = False,
+                          save_gradients: bool = False,
                           vis_opt: str = 'none',
                           vis_outpath: str = 'graph.gv',
                           vis_save_only: bool = False,
@@ -41,6 +43,8 @@ def get_model_activations(model: nn.Module,
         which_layers: list of layers to include (described above), or 'all' to include all layers.
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
+        detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
+        save_gradients: whether to save gradients from any subsequent backward pass
         vis_opt: whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
@@ -75,7 +79,7 @@ def get_model_activations(model: nn.Module,
                                                                  input_kwargs,
                                                                  None,
                                                                  False,
-                                                                 random_seed)
+                                                                 random_seed=random_seed)
         tensor_nums_to_save = model_history.get_op_nums_from_user_labels(which_layers)
 
     # And now save the activations for real.
@@ -85,6 +89,8 @@ def get_model_activations(model: nn.Module,
                                                              input_kwargs,
                                                              tensor_nums_to_save,
                                                              mark_input_output_distances,
+                                                             detach_saved_tensors,
+                                                             save_gradients,
                                                              random_seed)
 
     # Visualize if desired.

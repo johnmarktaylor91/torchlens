@@ -79,6 +79,14 @@ class TensorLogEntry:
         self.tensor_fsize = fields_dict['tensor_fsize']
         self.tensor_fsize_nice = fields_dict['tensor_fsize_nice']
 
+        # Saved gradient info
+        self.grad_contents = None
+        self.has_saved_grad = False
+        self.grad_shape = None
+        self.grad_type = None
+        self.grad_fsize = 0
+        self.grad_fsize_nice = human_readable_size(0)
+
         # Function call info:
         self.func_applied = fields_dict['func_applied']
         self.func_applied_name = fields_dict['func_applied_name']
@@ -507,7 +515,9 @@ class ModelHistory:
     def __init__(self,
                  model_name: str,
                  random_seed_used: int,
-                 tensor_nums_to_save: Union[List[int], str] = 'all'):
+                 tensor_nums_to_save: Union[List[int], str] = 'all',
+                 detach_saved_tensors: bool = False,
+                 save_gradients: bool = False):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
         representation of the full history for the user afterward.
@@ -524,6 +534,8 @@ class ModelHistory:
             self.keep_layers_without_saved_activations = False
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
+        self.detach_saved_tensors = detach_saved_tensors
+        self.save_gradients = save_gradients
 
         # Model structure info
         self.model_is_recurrent = False

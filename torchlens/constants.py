@@ -16,6 +16,9 @@ MODEL_HISTORY_FIELD_ORDER = [
     'keep_layers_without_saved_activations',
     'current_function_call_barcode',
     'random_seed_used',
+    'detach_saved_tensors',
+    'save_gradients',
+    'has_saved_gradients',
 
     # Model structure info
     'model_is_recurrent',
@@ -121,6 +124,14 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'tensor_dtype',
     'tensor_fsize',
     'tensor_fsize_nice',
+
+    # Saved gradient info
+    'grad_contents',
+    'has_saved_grad',
+    'grad_shape',
+    'grad_dtype',
+    'grad_fsize',
+    'grad_fsize_nice',
 
     # Function call info
     'func_applied',
