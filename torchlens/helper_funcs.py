@@ -411,17 +411,20 @@ clean_from_numpy = copy.deepcopy(torch.from_numpy)
 clean_new_param = copy.deepcopy(torch.nn.Parameter)
 
 
-def safe_copy(x):
+def safe_copy(x, detach_tensor: bool = False):
     """Utility function to make a copy of a tensor or parameter when torch is in mutated mode, or just copy
     the thing if it's not a tensor.
 
     Args:
         x: Input
+        detach_tensor: Whether to detach the cloned tensor from the computational graph or not.
 
     Returns:
         Safely copied variant of the input with same values and same class, but different memory
     """
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
+        if detach_tensor:
+            return x.clone()
         vals_np = np.array(x.data.cpu())
         vals_tensor = clean_from_numpy(vals_np)
         if hasattr(x, 'tl_tensor_label_raw'):

@@ -72,6 +72,7 @@ class TensorLogEntry:
         # Saved tensor info:
         self.tensor_contents = fields_dict['tensor_contents']
         self.has_saved_activations = fields_dict['has_saved_activations']
+        self.detach_saved_tensor = fields_dict['detach_saved_tensor']
         self.creation_args = fields_dict['creation_args']
         self.creation_kwargs = fields_dict['creation_kwargs']
         self.tensor_shape = fields_dict['tensor_shape']
@@ -80,12 +81,12 @@ class TensorLogEntry:
         self.tensor_fsize_nice = fields_dict['tensor_fsize_nice']
 
         # Saved gradient info
-        self.grad_contents = None
-        self.has_saved_grad = False
-        self.grad_shape = None
-        self.grad_type = None
-        self.grad_fsize = 0
-        self.grad_fsize_nice = human_readable_size(0)
+        self.grad_contents = fields_dict['grad_contents']
+        self.has_saved_grad = fields_dict['has_saved_grad']
+        self.grad_shape = fields_dict['grad_shape']
+        self.grad_dtype = fields_dict['grad_dtype']
+        self.grad_fsize = fields_dict['grad_size']
+        self.grad_fsize_nice = fields_dict['grad_fsize_nice']
 
         # Function call info:
         self.func_applied = fields_dict['func_applied']
@@ -224,11 +225,11 @@ class TensorLogEntry:
         # Tensor args and kwargs:
         creation_args = []
         for arg in t_args:
-            creation_args.append(safe_copy(arg))
+            creation_args.append(safe_copy(arg, self.detach_saved_tensor))
 
         creation_kwargs = {}
         for key, value in t_kwargs.items():
-            creation_kwargs[key] = safe_copy(value)
+            creation_kwargs[key] = safe_copy(value, self.detach_saved_tensor)
 
         self.creation_args = creation_args
         self.creation_kwargs = creation_kwargs
@@ -820,12 +821,22 @@ class ModelHistory:
             # Saved tensor info:
             'tensor_contents': None,
             'has_saved_activations': False,
+            'detach_saved_tensor': self.detach_saved_tensors,
             'creation_args': [],
             'creation_kwargs': {},
             'tensor_shape': tuple(t.shape),
             'tensor_dtype': t.dtype,
             'tensor_fsize': get_tensor_memory_amount(t),
             'tensor_fsize_nice': human_readable_size(get_tensor_memory_amount(t)),
+
+            # Grad info:
+            'grad_contents': None,
+            'save_gradients': self.save_gradients,
+            'has_saved_grad': False,
+            'grad_shape': None,
+            'grad_dtype': None,
+            'grad_fsize': 0,
+            'grad_fsize_nice': human_readable_size(0),
 
             # Function call info:
             'func_applied': None,
@@ -962,6 +973,16 @@ class ModelHistory:
 
         # General info
         fields_dict['layer_type'] = layer_type
+        fields_dict['detach_saved_tensor'] = self.detach_saved_tensors
+
+        # Grad info:
+        fields_dict['grad_contents'] = None
+        fields_dict['save_gradients'] = self.save_gradients
+        fields_dict['has_saved_grad'] = False
+        fields_dict['grad_shape'] = None
+        fields_dict['grad_dtype'] = None
+        fields_dict['grad_fsize'] = 0
+        fields_dict['grad_fsize_nice'] = human_readable_size(0)
 
         # Function call info
         fields_dict['func_applied'] = func

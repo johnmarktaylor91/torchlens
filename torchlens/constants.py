@@ -118,6 +118,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     # Saved tensor info
     'tensor_contents',
     'has_saved_activations',
+    'detach_saved_tensor',
     'creation_args',
     'creation_kwargs',
     'tensor_shape',
@@ -127,6 +128,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
 
     # Saved gradient info
     'grad_contents',
+    'save_gradients',
     'has_saved_grad',
     'grad_shape',
     'grad_dtype',
