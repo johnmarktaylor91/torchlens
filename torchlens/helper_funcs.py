@@ -409,6 +409,7 @@ def print_override(t: torch.Tensor, func_name: str):
 
 clean_from_numpy = copy.deepcopy(torch.from_numpy)
 clean_new_param = copy.deepcopy(torch.nn.Parameter)
+clean_clone = copy.deepcopy(torch.clone)
 
 
 def safe_copy(x, detach_tensor: bool = False):
@@ -424,7 +425,7 @@ def safe_copy(x, detach_tensor: bool = False):
     """
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
         if detach_tensor:
-            return x.clone()
+            return clean_clone(x)
         vals_np = np.array(x.data.cpu())
         vals_tensor = clean_from_numpy(vals_np)
         if hasattr(x, 'tl_tensor_label_raw'):

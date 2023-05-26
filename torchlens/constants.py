@@ -59,6 +59,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'layers_computed_with_params',
     'equivalent_operations',
     'same_layer_operations',
+    'layers_with_saved_gradients',
 
     # Tensor info:
     'num_tensors_total',
@@ -130,10 +131,10 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'grad_contents',
     'save_gradients',
     'has_saved_grad',
-    'grad_shape',
-    'grad_dtype',
-    'grad_fsize',
-    'grad_fsize_nice',
+    'grad_shapes',
+    'grad_dtypes',
+    'grad_fsizes',
+    'grad_fsizes_nice',
 
     # Function call info
     'func_applied',
