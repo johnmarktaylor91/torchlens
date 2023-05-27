@@ -424,7 +424,7 @@ def safe_copy(x, detach_tensor: bool = False):
         Safely copied variant of the input with same values and same class, but different memory
     """
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
-        if detach_tensor:
+        if not detach_tensor:
             return clean_clone(x)
         vals_np = np.array(x.data.cpu())
         vals_tensor = clean_from_numpy(vals_np)
