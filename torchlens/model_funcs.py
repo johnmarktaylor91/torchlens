@@ -16,6 +16,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
                                              input_kwargs: Dict[Any, Any],
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
                                              mark_input_output_distances: bool = False,
+                                             detach_saved_tensors: bool = False,
+                                             save_gradients: bool = False,
                                              random_seed: Optional[int] = None) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
@@ -28,6 +30,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
         tensor_nums_to_save: List of tensor numbers to save.
         mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
             This is computationally expensive for large networks, so it is off by default.
+        detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
+        save_gradients: whether to save gradients from any subsequent backward pass
         random_seed: Which random seed to use.
 
     Returns:
@@ -50,7 +54,11 @@ def run_model_and_save_specified_activations(model: nn.Module,
 
     input_args = copy.deepcopy(input_args)
     model_name = str(type(model).__name__)
-    model_history = ModelHistory(model_name, random_seed, tensor_nums_to_save)
+    model_history = ModelHistory(model_name,
+                                 random_seed,
+                                 tensor_nums_to_save,
+                                 detach_saved_tensors,
+                                 save_gradients)
     model_history.pass_start_time = time.time()
 
     hook_handles = []

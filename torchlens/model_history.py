@@ -72,12 +72,22 @@ class TensorLogEntry:
         # Saved tensor info:
         self.tensor_contents = fields_dict['tensor_contents']
         self.has_saved_activations = fields_dict['has_saved_activations']
+        self.detach_saved_tensor = fields_dict['detach_saved_tensor']
         self.creation_args = fields_dict['creation_args']
         self.creation_kwargs = fields_dict['creation_kwargs']
         self.tensor_shape = fields_dict['tensor_shape']
         self.tensor_dtype = fields_dict['tensor_dtype']
         self.tensor_fsize = fields_dict['tensor_fsize']
         self.tensor_fsize_nice = fields_dict['tensor_fsize_nice']
+
+        # Saved gradient info
+        self.grad_contents = fields_dict['grad_contents']
+        self.save_gradients = fields_dict['save_gradients']
+        self.has_saved_grad = fields_dict['has_saved_grad']
+        self.grad_shapes = fields_dict['grad_shapes']
+        self.grad_dtypes = fields_dict['grad_dtypes']
+        self.grad_fsizes = fields_dict['grad_fsizes']
+        self.grad_fsizes_nice = fields_dict['grad_fsizes_nice']
 
         # Function call info:
         self.func_applied = fields_dict['func_applied']
@@ -210,7 +220,7 @@ class TensorLogEntry:
             t_kwargs: tensor keyword arguments for the operation
         """
         # The tensor itself:
-        self.tensor_contents = safe_copy(t)
+        self.tensor_contents = safe_copy(t, self.detach_saved_tensor)
         self.has_saved_activations = True
 
         # Tensor args and kwargs:
@@ -224,6 +234,19 @@ class TensorLogEntry:
 
         self.creation_args = creation_args
         self.creation_kwargs = creation_kwargs
+
+    def log_tensor_grad(self, grad: torch.Tensor):
+        """Logs the gradient for a tensor to the log entry
+
+        Args:
+            grad: The gradient to save.
+        """
+        self.grad_contents = grad
+        self.has_saved_grad = True
+        self.grad_shapes = [g.shape for g in grad]
+        self.grad_dtypes = [g.dtype for g in grad]
+        self.grad_fsizes = [get_tensor_memory_amount(g) for g in grad]
+        self.grad_fsizes_nice = [human_readable_size(get_tensor_memory_amount(g)) for g in grad]
 
     # ********************************************
     # ************* Fetcher Functions ************
@@ -494,9 +517,8 @@ class ModelHistory:
     OUTPUT_COLOR = "#ff9999"
     PARAMS_NODE_BG_COLOR = "#E6E6E6"
     BUFFER_NODE_COLOR = "#888888"
+    GRADIENT_ARROW_COLOR = "#9197F6"
     DEFAULT_BG_COLOR = 'white'
-    CONNECTING_NODE_LINE_COLOR = 'black'
-    NONCONNECTING_NODE_LINE_COLOR = '#A0A0A0'
     BOOL_NODE_COLOR = '#F7D460'
     MAX_MODULE_PENWIDTH = 5
     MIN_MODULE_PENWIDTH = 2
@@ -507,7 +529,9 @@ class ModelHistory:
     def __init__(self,
                  model_name: str,
                  random_seed_used: int,
-                 tensor_nums_to_save: Union[List[int], str] = 'all'):
+                 tensor_nums_to_save: Union[List[int], str] = 'all',
+                 detach_saved_tensors: bool = False,
+                 save_gradients: bool = False):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
         representation of the full history for the user afterward.
@@ -524,6 +548,9 @@ class ModelHistory:
             self.keep_layers_without_saved_activations = False
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
+        self.detach_saved_tensors = detach_saved_tensors
+        self.save_gradients = save_gradients
+        self.has_saved_gradients = False
 
         # Model structure info
         self.model_is_recurrent = False
@@ -561,6 +588,7 @@ class ModelHistory:
         self.internally_terminated_layers = []
         self.internally_terminated_bool_layers = []
         self.conditional_branch_edges = []
+        self.layers_with_saved_gradients = []
         self.layers_computed_with_params = defaultdict(list)
         self.equivalent_operations = defaultdict(set)
         self.same_layer_operations = defaultdict(list)
@@ -808,12 +836,22 @@ class ModelHistory:
             # Saved tensor info:
             'tensor_contents': None,
             'has_saved_activations': False,
+            'detach_saved_tensor': self.detach_saved_tensors,
             'creation_args': [],
             'creation_kwargs': {},
             'tensor_shape': tuple(t.shape),
             'tensor_dtype': t.dtype,
             'tensor_fsize': get_tensor_memory_amount(t),
             'tensor_fsize_nice': human_readable_size(get_tensor_memory_amount(t)),
+
+            # Grad info:
+            'grad_contents': None,
+            'save_gradients': self.save_gradients,
+            'has_saved_grad': False,
+            'grad_shapes': None,
+            'grad_dtypes': None,
+            'grad_fsizes': 0,
+            'grad_fsizes_nice': human_readable_size(0),
 
             # Function call info:
             'func_applied': None,
@@ -950,6 +988,16 @@ class ModelHistory:
 
         # General info
         fields_dict['layer_type'] = layer_type
+        fields_dict['detach_saved_tensor'] = self.detach_saved_tensors
+
+        # Grad info:
+        fields_dict['grad_contents'] = None
+        fields_dict['save_gradients'] = self.save_gradients
+        fields_dict['has_saved_grad'] = False
+        fields_dict['grad_shapes'] = None
+        fields_dict['grad_dtypes'] = None
+        fields_dict['grad_fsizes'] = 0
+        fields_dict['grad_fsizes_nice'] = human_readable_size(0)
 
         # Function call info
         fields_dict['func_applied'] = func
@@ -1069,8 +1117,10 @@ class ModelHistory:
                                                           fields_dict_onetensor['parent_layers']]):
                 self.layers_where_internal_branches_merge_with_input.append(new_tensor_label)
 
-            # Tag the tensor itself with its label, and with a reference to the model history log.
+            # Tag the tensor itself with its label, and add a backward hook if saving gradients.
             out.tl_tensor_label_raw = fields_dict_onetensor['tensor_label_raw']
+            if self.save_gradients:
+                self._add_backward_hook(out, out.tl_tensor_label_raw)
 
     @staticmethod
     def _output_should_be_logged(out: Any,
@@ -1087,6 +1137,22 @@ class ModelHistory:
             return True
         else:
             return False
+
+    def _add_backward_hook(self, t: torch.Tensor, tensor_label):
+        """Adds a backward hook to the tensor that saves the gradients to ModelHistory if specified.
+
+        Args:
+            t: tensor
+
+        Returns:
+            Nothing; it changes the tensor in place.
+        """
+
+        # Define the decorator
+        def log_grad_to_model_history(g_in, g_out):
+            self._log_tensor_grad(g_out, tensor_label)
+
+        t.grad_fn.register_hook(log_grad_to_model_history)
 
     def _log_info_specific_to_single_function_output_tensor(self,
                                                             t: torch.Tensor,
@@ -1211,6 +1277,28 @@ class ModelHistory:
         self.raw_tensor_labels_list.append(new_entry.tensor_label_raw)
 
         return new_entry
+
+    def _log_tensor_grad(self,
+                         grad: torch.Tensor,
+                         tensor_label_raw: str):
+        """Logs the gradient for a tensor during a backward pass.
+
+        Args:
+            grad: the gradient
+            tensor_label_raw: the raw tensor label
+
+        Returns:
+
+        """
+        self.has_saved_gradients = True
+        tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
+        if tensor_label not in self.layers_with_saved_gradients:
+            self.layers_with_saved_gradients.append(tensor_label)
+            layer_order = {layer: i for i, layer in enumerate(self.layer_labels)}
+            self.layers_with_saved_gradients = sorted(self.layers_with_saved_gradients,
+                                                      key=lambda x: layer_order[x])
+        tensor_log_entry = self[tensor_label]
+        tensor_log_entry.log_tensor_grad(grad)
 
     def _get_parent_tensor_function_call_location(self,
                                                   parent_log_entries: List[TensorLogEntry],
@@ -2624,7 +2712,7 @@ class ModelHistory:
         if hasattr(t, 'tl_tensor_label_raw'):
             delattr(t, 'tl_tensor_label_raw')
         for attr_name in dir(t):
-            if attr_name.startswith('_'):
+            if attr_name.startswith('_') or (attr_name in ['grad']):
                 continue
             try:
                 attr = getattr(t, attr_name)
@@ -2985,6 +3073,11 @@ class ModelHistory:
             else:
                 graphviz_graph.edge(**edge_dict)
 
+            # Finally, add a backwards edge if both tensors have stored gradients.
+            if vis_opt == 'unrolled':
+                self._add_gradient_edge(parent_node, child_node, edge_style, containing_module,
+                                        module_edge_dict, graphviz_graph)
+
     def _label_node_arguments_if_needed(self,
                                         parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
                                         child_node: Union[TensorLogEntry, RolledTensorLogEntry],
@@ -3095,6 +3188,28 @@ class ModelHistory:
                 break
             containing_module = node1_modules[m]
         return containing_module
+
+    def _add_gradient_edge(self,
+                           parent_layer,
+                           child_layer,
+                           edge_style,
+                           containing_module,
+                           module_edge_dict,
+                           graphviz_graph):
+        """Adds a backwards edge if both layers have saved gradients, showing the backward pass.
+        """
+        if parent_layer.has_saved_grad and child_layer.has_saved_grad:
+            edge_dict = {'tail_name': child_layer.layer_label.replace(':', 'pass'),
+                         'head_name': parent_layer.layer_label.replace(':', 'pass'),
+                         'color': self.GRADIENT_ARROW_COLOR,
+                         'fontcolor': self.GRADIENT_ARROW_COLOR,
+                         'style': edge_style,
+                         'arrowsize': '.7',
+                         'labelfontsize': '8'}
+            if containing_module != -1:
+                module_edge_dict[containing_module].append(edge_dict)
+            else:
+                graphviz_graph.edge(**edge_dict)
 
     def _set_up_subgraphs(self,
                           graphviz_graph,
