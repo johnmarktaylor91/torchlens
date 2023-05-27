@@ -206,7 +206,7 @@ The main function of torchlens is `get_model_activations`; the remaining functio
 
 And that's it. Torchlens remains in active development, and the goal is for it to work with any PyTorch model
 whatosever without exception. As of the time of this writing, it has been tested with over 700
-image, video, auditory, and language models. 
+image, video, auditory, and language models.
 
 ## Planned Features
 
@@ -225,8 +225,7 @@ visualizations were created with graphviz; logo created with DALL-E 2.
 
 ## Citing Torchlens
 
-The plan is for Torchlens to be described in a preprint shortly and later as a published journal article; as these
-become available, Torchlens can be cited by citing them.
+To cite TorchLens, you can cite [this preprint](https://www.biorxiv.org/content/10.1101/2023.03.16.532916v1) for now.
 
 ## Contact
 
