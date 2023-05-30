@@ -211,16 +211,20 @@ class TensorLogEntry:
     def save_tensor_data(self,
                          t: torch.Tensor,
                          t_args: List,
-                         t_kwargs: Dict):
+                         t_kwargs: Dict,
+                         activation_postfunc: Optional[Callable] = None):
         """Saves the tensor data for a given tensor operation.
 
         Args:
             t: the tensor.
             t_args: tensor positional arguments for the operation
             t_kwargs: tensor keyword arguments for the operation
+            activation_postfunc: function to apply to activations before saving them
         """
         # The tensor itself:
         self.tensor_contents = safe_copy(t, self.detach_saved_tensor)
+        if activation_postfunc is not None:
+            self.tensor_contents = activation_postfunc(self.tensor_contents)
         self.has_saved_activations = True
 
         # Tensor args and kwargs:
@@ -530,6 +534,7 @@ class ModelHistory:
                  model_name: str,
                  random_seed_used: int,
                  tensor_nums_to_save: Union[List[int], str] = 'all',
+                 activation_postfunc: Optional[Callable] = None,
                  detach_saved_tensors: bool = False,
                  save_gradients: bool = False):
         """Object that stores the history of a model's forward pass.
@@ -546,6 +551,7 @@ class ModelHistory:
             self.keep_layers_without_saved_activations = True
         else:
             self.keep_layers_without_saved_activations = False
+        self.activation_postfunc = activation_postfunc
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
         self.detach_saved_tensors = detach_saved_tensors
@@ -937,7 +943,7 @@ class ModelHistory:
             'module_entry_exit_thread': []
         }
 
-        self._make_tensor_log_entry(t, fields_dict, (), {})
+        self._make_tensor_log_entry(t, fields_dict, (), {}, self.activation_postfunc)
 
         # Tag the tensor itself with its label, and with a reference to the model history log.
         t.tl_tensor_label_raw = tensor_label
@@ -1102,7 +1108,8 @@ class ModelHistory:
             self._log_info_specific_to_single_function_output_tensor(out, i, args, kwargs,
                                                                      parent_param_passes, fields_dict_onetensor)
             self._make_tensor_log_entry(out, fields_dict=fields_dict_onetensor,
-                                        t_args=arg_copies, t_kwargs=kwarg_copies)
+                                        t_args=arg_copies, t_kwargs=kwarg_copies,
+                                        activation_postfunc=self.activation_postfunc)
             new_tensor_entry = self[fields_dict_onetensor['tensor_label_raw']]
             new_tensor_label = new_tensor_entry.tensor_label_raw
             self._update_tensor_family_links(new_tensor_entry)
@@ -1253,7 +1260,8 @@ class ModelHistory:
                                t: torch.Tensor,
                                fields_dict: Dict,
                                t_args: Optional[Tuple] = None,
-                               t_kwargs: Optional[Dict] = None):
+                               t_kwargs: Optional[Dict] = None,
+                               activation_postfunc: Optional[Callable] = None):
         """
         Given a tensor, adds it to the model_history, additionally saving the activations and input
         arguments if specified. Also tags the tensor itself with its raw tensor label
@@ -1264,6 +1272,7 @@ class ModelHistory:
             fields_dict: dictionary of fields to log in TensorLogEntry
             t_args: Positional arguments to the function that created the tensor
             t_kwargs: Keyword arguments to the function that created the tensor
+            activation_postfunc: Function to apply to activations before saving them.
         """
         if t_args is None:
             t_args = []
@@ -1272,7 +1281,7 @@ class ModelHistory:
 
         new_entry = TensorLogEntry(fields_dict)
         if (self.tensor_nums_to_save == 'all') or (new_entry.realtime_tensor_num in self.tensor_nums_to_save):
-            new_entry.save_tensor_data(t, t_args, t_kwargs)
+            new_entry.save_tensor_data(t, t_args, t_kwargs, activation_postfunc)
         self.raw_tensor_dict[new_entry.tensor_label_raw] = new_entry
         self.raw_tensor_labels_list.append(new_entry.tensor_label_raw)
 

@@ -19,6 +19,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'detach_saved_tensors',
     'save_gradients',
     'has_saved_gradients',
+    'activation_postfunc',
 
     # Model structure info
     'model_is_recurrent',
