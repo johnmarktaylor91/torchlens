@@ -1152,7 +1152,8 @@ class ModelHistory:
         def log_grad_to_model_history(g_in, g_out):
             self._log_tensor_grad(g_out, tensor_label)
 
-        t.grad_fn.register_hook(log_grad_to_model_history)
+        if t.grad_fn is not None:
+            t.grad_fn.register_hook(log_grad_to_model_history)
 
     def _log_info_specific_to_single_function_output_tensor(self,
                                                             t: torch.Tensor,
