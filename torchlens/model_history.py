@@ -434,8 +434,8 @@ class RolledTensorLogEntry:
         self.cond_branch_start_children = source_entry.cond_branch_start_children
         self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
         self.atomic_bool_val = source_entry.atomic_bool_val
-        self.child_layers = set()
-        self.parent_layers = set()
+        self.child_layers = list()
+        self.parent_layers = list()
 
         # Module info:
         self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
@@ -446,9 +446,9 @@ class RolledTensorLogEntry:
 
         # Fields specific to rolled node to fill in:
         self.edges_vary_across_passes = False
-        self.child_layers_per_pass = defaultdict(set)
+        self.child_layers_per_pass = defaultdict(list)
         self.child_passes_per_layer = defaultdict(list)
-        self.parent_layers_per_pass = defaultdict(set)
+        self.parent_layers_per_pass = defaultdict(list)
         self.parent_passes_per_layer = defaultdict(list)
 
         # Each one will now be a list of layers, since they can vary across passes.
@@ -475,12 +475,19 @@ class RolledTensorLogEntry:
         # Label the layers for each pass
         child_layer_labels = [self.source_model_history[child].layer_label_no_pass
                               for child in source_node.child_layers]
-        self.child_layers.update(child_layer_labels)
-        self.child_layers_per_pass[source_node.pass_num].update(child_layer_labels)
+        for child_layer in child_layer_labels:
+            if child_layer not in self.child_layers:
+                self.child_layers.append(child_layer)
+            if child_layer not in self.child_layers_per_pass[source_node.pass_num]:
+                self.child_layers_per_pass[source_node.pass_num].append(child_layer)
+
         parent_layer_labels = [self.source_model_history[parent].layer_label_no_pass
                                for parent in source_node.parent_layers]
-        self.parent_layers.update(parent_layer_labels)
-        self.parent_layers_per_pass[source_node.pass_num].update(parent_layer_labels)
+        for parent_layer in parent_layer_labels:
+            if parent_layer not in self.parent_layers:
+                self.parent_layers.append(parent_layer)
+            if parent_layer not in self.parent_layers_per_pass[source_node.pass_num]:
+                self.parent_layers_per_pass[source_node.pass_num].append(parent_layer)
 
         # Label the passes for each layer, and indicate if any layers vary based on the pass.
         for child_layer in source_node.child_layers:
