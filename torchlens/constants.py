@@ -81,7 +81,9 @@ MODEL_HISTORY_FIELD_ORDER = [
     'module_types',
     'module_passes',
     'module_num_passes',
+    'module_children',
     'module_pass_children',
+    'top_level_modules',
     'top_level_module_passes',
 
     # Time elapsed
@@ -217,7 +219,8 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'is_submodule_output',
     'is_bottom_level_submodule_output',
     'bottom_level_submodule_pass_exited',
-    'module_entry_exit_thread'
+    'module_entry_exit_threads_inputs',
+    'module_entry_exit_thread_output'
 ]
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
