@@ -170,7 +170,8 @@ class TensorLogEntry:
         self.is_submodule_output = fields_dict['is_submodule_output']
         self.is_bottom_level_submodule_output = fields_dict['is_bottom_level_submodule_output']
         self.bottom_level_submodule_pass_exited = fields_dict['bottom_level_submodule_pass_exited']
-        self.module_entry_exit_thread = fields_dict['module_entry_exit_thread']
+        self.module_entry_exit_threads_inputs = fields_dict['module_entry_exit_threads_inputs']
+        self.module_entry_exit_thread_output = fields_dict['module_entry_exit_thread_output']
 
     # ********************************************
     # *********** User-Facing Functions **********
@@ -454,6 +455,15 @@ class RolledTensorLogEntry:
         self.parent_layer_arg_locs = {'args': defaultdict(set),
                                       'kwargs': defaultdict(set)}
 
+    def update_data(self,
+                    source_node: TensorLogEntry):
+        """Updates the data as need be.
+        Args:
+            source_node: the source node
+        """
+        if source_node.has_input_ancestor:
+            self.has_input_ancestor = True
+
     def add_pass_info(self,
                       source_node: TensorLogEntry):
         """Adds information about another pass of the same layer: namely, mark information about what the
@@ -475,15 +485,22 @@ class RolledTensorLogEntry:
         # Label the passes for each layer, and indicate if any layers vary based on the pass.
         for child_layer in source_node.child_layers:
             child_layer_label = self.source_model_history[child_layer].layer_label_no_pass
-            self.child_passes_per_layer[child_layer_label].append(source_node.pass_num)
-            if self.child_passes_per_layer[child_layer_label] != list(range(1, source_node.pass_num + 1)):
-                self.edges_vary_across_passes = True
+            if source_node.pass_num not in self.child_passes_per_layer[child_layer_label]:
+                self.child_passes_per_layer[child_layer_label].append(source_node.pass_num)
 
         for parent_layer in source_node.parent_layers:
             parent_layer_label = self.source_model_history[parent_layer].layer_label_no_pass
-            self.parent_passes_per_layer[parent_layer_label].append(source_node.pass_num)
-            if self.parent_passes_per_layer[parent_layer_label] != list(range(1, source_node.pass_num + 1)):
+            if source_node.pass_num not in self.parent_passes_per_layer[parent_layer_label]:
+                self.parent_passes_per_layer[parent_layer_label].append(source_node.pass_num)
+
+        # Check if any edges vary across passes.
+        if source_node.pass_num == source_node.layer_passes_total:
+            pass_lists = list(self.parent_passes_per_layer.values()) + list(self.child_passes_per_layer.values())
+            pass_lens = [len(passes) for passes in pass_lists]
+            if any([pass_len < source_node.layer_passes_total for pass_len in pass_lens]):
                 self.edges_vary_across_passes = True
+            else:
+                self.edges_vary_across_passes = False
 
         # Add submodule info:
         if source_node.is_bottom_level_submodule_output:
@@ -613,7 +630,9 @@ class ModelHistory:
         self.module_types = {}
         self.module_passes = []
         self.module_num_passes = defaultdict(lambda: 1)
+        self.top_level_modules = []
         self.top_level_module_passes = []
+        self.module_children = defaultdict(list)
         self.module_pass_children = defaultdict(list)
 
         # Time elapsed:
@@ -934,7 +953,8 @@ class ModelHistory:
             'is_submodule_output': False,
             'is_bottom_level_submodule_output': False,
             'bottom_level_submodule_pass_exited': None,
-            'module_entry_exit_thread': []
+            'module_entry_exit_threads_inputs': [],
+            'module_entry_exit_thread_output': []
         }
 
         self._make_tensor_log_entry(t, fields_dict, (), {})
@@ -1085,7 +1105,9 @@ class ModelHistory:
         fields_dict['is_submodule_output'] = False
         fields_dict['is_bottom_level_submodule_output'] = False
         fields_dict['bottom_level_submodule_pass_exited'] = None
-        fields_dict['module_entry_exit_thread'] = []
+        fields_dict['module_entry_exit_threads_inputs'] = {p.tensor_label_raw: p.module_entry_exit_thread_output[:]
+                                                           for p in parent_layer_entries}
+        fields_dict['module_entry_exit_thread_output'] = []
 
         is_part_of_iterable_output = type(out_orig) in [list, tuple, dict, set]
         fields_dict['is_part_of_iterable_output'] = is_part_of_iterable_output
@@ -1516,7 +1538,7 @@ class ModelHistory:
             List of the updated containing modules.
         """
         containing_modules = tensor_entry.containing_modules_origin_nested[:]
-        thread_modules = tensor_entry.module_entry_exit_thread[:]
+        thread_modules = tensor_entry.module_entry_exit_thread_output[:]
         for thread_module in thread_modules:
             if thread_module[0] == '+':
                 containing_modules.append(thread_module[1:])
@@ -1715,7 +1737,8 @@ class ModelHistory:
             new_output_node.module_passes_exited = []
             new_output_node.is_submodule_output = False
             new_output_node.is_bottom_level_submodule_output = False
-            new_output_node.module_entry_exit_thread = []
+            new_output_node.module_entry_exit_thread_input = []
+            new_output_node.module_entry_exit_thread_output = []
 
             # Fix ancestry information:
 
@@ -2370,13 +2393,15 @@ class ModelHistory:
         node_to_fix_label = node_to_fix.tensor_label_raw
         node_to_fix.containing_modules_origin_nested = starting_node.containing_modules_origin_nested.copy()
         if node_type_to_fix == 'parent':
-            thread_modules = node_to_fix.module_entry_exit_thread
+            thread_modules = starting_node.module_entry_exit_threads_inputs[node_to_fix.tensor_label_raw]
+            step_val = -1
         elif node_type_to_fix == 'child':
-            thread_modules = starting_node.module_entry_exit_thread
+            thread_modules = node_to_fix.module_entry_exit_threads_inputs[starting_node.tensor_label_raw]
+            step_val = 1
         else:
             raise ValueError("node_type_to_fix must be 'parent' or 'child'")
 
-        for enter_or_exit, module_address, module_pass in thread_modules[::-1]:
+        for enter_or_exit, module_address, module_pass in thread_modules[::step_val]:
             module_pass_label = (module_address, module_pass)
             if node_type_to_fix == 'parent':
                 if enter_or_exit == '+':
@@ -2489,6 +2514,19 @@ class ModelHistory:
                 self.model_max_recurrent_loops = tensor_entry.layer_passes_total
             if tensor_entry.in_cond_branch:
                 self.model_has_conditional_branching = True
+
+        # Extract the module hierarchy information
+        for module in self.top_level_module_passes:
+            module_no_pass = module.split(':')[0]
+            if module_no_pass not in self.top_level_modules:
+                self.top_level_modules.append(module_no_pass)
+
+        for module_parent, module_children in self.module_pass_children.items():
+            module_parent_nopass = module_parent.split(':')[0]
+            for module_child in module_children:
+                module_child_nopass = module_child.split(':')[0]
+                if module_child_nopass not in self.module_children[module_parent_nopass]:
+                    self.module_children[module_parent_nopass].append(module_child_nopass)
 
         self.num_tensors_total = len(self)
 
@@ -2773,7 +2811,7 @@ class ModelHistory:
                 rolled_node = RolledTensorLogEntry(node)
                 self.layer_dict_rolled[node.layer_label_no_pass] = rolled_node
                 self.layer_list_rolled.append(rolled_node)
-
+            rolled_node.update_data(node)
             rolled_node.add_pass_info(node)
 
     # ********************************************
@@ -2841,7 +2879,7 @@ class ModelHistory:
             self._add_node_to_graphviz(node, dot, module_cluster_dict, vis_opt, show_buffer_layers)
 
         # Finally, set up the subgraphs.
-        self._set_up_subgraphs(dot, module_cluster_dict)
+        self._set_up_subgraphs(dot, vis_opt, module_cluster_dict)
 
         if in_notebook() and not save_only:
             display(dot)
@@ -3180,6 +3218,10 @@ class ModelHistory:
         node1_modules = node1.containing_modules_origin_nested[:]
         node2_modules = node2.containing_modules_origin_nested[:]
 
+        if type(node1) == RolledTensorLogEntry:
+            node1_modules = [module.split(':')[0] for module in node1_modules]
+            node2_modules = [module.split(':')[0] for module in node2_modules]
+
         if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
             return -1  # no submodule contains them both.
 
@@ -3214,6 +3256,7 @@ class ModelHistory:
 
     def _set_up_subgraphs(self,
                           graphviz_graph,
+                          vis_opt: str,
                           module_edge_dict: Dict[str, List]):
         """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
         set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
@@ -3221,11 +3264,16 @@ class ModelHistory:
 
         Args:
             graphviz_graph: Graphviz graph object.
+            vis_opt: 'rolled' or 'unrolled'
             module_edge_dict: Dictionary mapping each cluster to the list of edges it contains, with each
                 edge specified as a dict with all necessary arguments for creating that edge.
         """
-        module_submodule_dict = self.module_pass_children.copy()
-        subgraphs = self.top_level_module_passes[:]
+        if vis_opt == 'unrolled':
+            module_submodule_dict = self.module_pass_children.copy()
+            subgraphs = self.top_level_module_passes[:]
+        else:
+            module_submodule_dict = self.module_children.copy()
+            subgraphs = self.top_level_modules[:]
 
         # Get the max module nesting depth:
 
@@ -3243,7 +3291,8 @@ class ModelHistory:
                                           module_submodule_dict,
                                           subgraph_stack,
                                           nesting_depth,
-                                          max_nesting_depth)
+                                          max_nesting_depth,
+                                          vis_opt)
 
     def _setup_subgraphs_recurse(self,
                                  starting_subgraph,
@@ -3252,7 +3301,8 @@ class ModelHistory:
                                  module_submodule_dict,
                                  subgraph_stack,
                                  nesting_depth,
-                                 max_nesting_depth):
+                                 max_nesting_depth,
+                                 vis_opt):
         """Utility function to crawl down several layers deep into nested subgraphs.
 
         Args:
@@ -3263,13 +3313,23 @@ class ModelHistory:
             subgraph_stack: Stack of subgraphs to look at.
             nesting_depth: Nesting depth so far.
             max_nesting_depth: The total depth of the subgraphs.
+            vis_opt: 'rolled' or 'unrolled'
         """
         subgraph_name_w_pass = parent_graph_list[nesting_depth]
         subgraph_module = subgraph_name_w_pass.split(':')[0]
-        cluster_name = f"cluster_{subgraph_module}"
+        if vis_opt == 'unrolled':
+            cluster_name = f"cluster_{subgraph_name_w_pass.replace(':', '_pass')}"
+            subgraph_name = subgraph_name_w_pass
+        elif vis_opt == 'rolled':
+            cluster_name = f"cluster_{subgraph_module}"
+            subgraph_name = subgraph_module
+        else:
+            raise ValueError("vis_opt must be 'rolled' or 'unrolled'")
         module_type = self.module_types[subgraph_module]
-        if self.module_num_passes[subgraph_module] > 1:
+        if (self.module_num_passes[subgraph_module] > 1) and (vis_opt == 'unrolled'):
             subgraph_title = subgraph_name_w_pass
+        elif (self.module_num_passes[subgraph_module] > 1) and (vis_opt == 'rolled'):
+            subgraph_title = f"{subgraph_module} (x{self.module_num_passes[subgraph_module]})"
         else:
             subgraph_title = subgraph_module
 
@@ -3277,7 +3337,7 @@ class ModelHistory:
             with starting_subgraph.subgraph(name=cluster_name) as s:
                 self._setup_subgraphs_recurse(s, parent_graph_list,
                                               module_edge_dict, module_submodule_dict, subgraph_stack,
-                                              nesting_depth + 1, max_nesting_depth)
+                                              nesting_depth + 1, max_nesting_depth, vis_opt)
 
         else:  # we made it, make the subgraph and add all edges.
             with starting_subgraph.subgraph(name=cluster_name) as s:
@@ -3286,7 +3346,7 @@ class ModelHistory:
                 s.attr(label=f"<<B>@{subgraph_title}</B><br align='left'/>({module_type})<br align='left'/>>",
                        labelloc='b',
                        penwidth=str(pen_width))
-                subgraph_edges = module_edge_dict[subgraph_name_w_pass]
+                subgraph_edges = module_edge_dict[subgraph_name]
                 for edge_dict in subgraph_edges:
                     s.edge(**edge_dict)
                 subgraph_children = module_submodule_dict[subgraph_name_w_pass]

@@ -233,7 +233,7 @@ def module_pre_hook(module: nn.Module,
         tensor_entry.modules_entered.append(module_address)
         tensor_entry.module_passes_entered.append(module_pass_label)
         tensor_entry.is_submodule_input = True
-        tensor_entry.module_entry_exit_thread.append(('+', module_pass_label[0], module_pass_label[1]))
+        tensor_entry.module_entry_exit_thread_output.append(('+', module_pass_label[0], module_pass_label[1]))
 
 
 def module_post_hook(module: nn.Module,
@@ -265,16 +265,17 @@ def module_post_hook(module: nn.Module,
         tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
         tensor_entry.modules_exited.append(module_address)
         tensor_entry.module_passes_exited.append((module_address, module_pass_num))
-        tensor_entry.module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
+        tensor_entry.module_entry_exit_thread_output.append(('-', module_entry_label[0], module_entry_label[1]))
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
     for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
         model_history = module.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
-        input_module_thread = tensor_entry.module_entry_exit_thread[:]
+        input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
         if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
             module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-            tensor_entry.module_entry_exit_thread = tensor_entry.module_entry_exit_thread[:module_entry_ix]
+            tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
+                                                           :module_entry_ix]
 
     return output_
 
