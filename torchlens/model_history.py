@@ -2964,10 +2964,7 @@ class ModelHistory:
             else:
                 sample_module_pass = list(node.bottom_level_submodule_passes_exited)[0]
                 module = sample_module_pass.split(':')[0]
-                if (len(node.bottom_level_submodule_passes_exited) > 1) or self.module_num_passes[module] == 1:
-                    node_address = module
-                else:
-                    node_address = sample_module_pass
+                node_address = module
 
             node_address = '<br/>@' + node_address
             node_shape = 'box'
