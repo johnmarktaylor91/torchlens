@@ -641,6 +641,9 @@ class ModelHistory:
         self.top_level_module_passes = []
         self.module_children = defaultdict(list)
         self.module_pass_children = defaultdict(list)
+        self.module_nparams = defaultdict(lambda: 0)
+        self.module_num_tensors = defaultdict(lambda: 0)
+        self.module_pass_num_tensors = defaultdict(lambda: 0)
 
         # Time elapsed:
         self.pass_start_time = 0
@@ -2507,6 +2510,10 @@ class ModelHistory:
                 self.total_params += tensor_entry.num_params_total
                 self.total_param_tensors += tensor_entry.num_param_tensors
                 self.total_params_fsize += tensor_entry.parent_params_fsize
+                # Tally for modules, too.
+                for module_name, _ in tensor_entry.containing_modules_origin_nested:
+                    self.module_nparams[module_name] += tensor_entry.num_params_total
+
             unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
             # Tally elapsed time:
@@ -2582,6 +2589,8 @@ class ModelHistory:
         for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
             module_name, module_pass = module_pass_label
             module_pass_nice_label = f"{module_name}:{module_pass}"
+            self.module_num_tensors[module_name] += 1
+            self.module_pass_num_tensors[module_pass_nice_label] += 1
             if (m == 0) and (module_pass_nice_label not in self.top_level_module_passes):
                 self.top_level_module_passes.append(module_pass_nice_label)
             else:

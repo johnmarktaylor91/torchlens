@@ -85,6 +85,9 @@ MODEL_HISTORY_FIELD_ORDER = [
     'module_pass_children',
     'top_level_modules',
     'top_level_module_passes',
+    'module_nparams',
+    'module_num_tensors',
+    'module_pass_num_tensors',
 
     # Time elapsed
     'pass_start_time',
