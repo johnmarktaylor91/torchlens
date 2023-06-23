@@ -1393,7 +1393,7 @@ class ModelHistory:
                         tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = parent_entry.tensor_label_raw
 
     @staticmethod
-    def _get_ancestors_from_parents(parent_entries: List[TensorLogEntry]) -> Tuple[set[str], set[str]]:
+    def _get_ancestors_from_parents(parent_entries: List[TensorLogEntry]) -> Tuple[Set[str], Set[str]]:
         """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
         Args:
