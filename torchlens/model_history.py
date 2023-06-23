@@ -641,6 +641,9 @@ class ModelHistory:
         self.top_level_module_passes = []
         self.module_children = defaultdict(list)
         self.module_pass_children = defaultdict(list)
+        self.module_nparams = defaultdict(lambda: 0)
+        self.module_num_tensors = defaultdict(lambda: 0)
+        self.module_pass_num_tensors = defaultdict(lambda: 0)
 
         # Time elapsed:
         self.pass_start_time = 0
@@ -2507,6 +2510,10 @@ class ModelHistory:
                 self.total_params += tensor_entry.num_params_total
                 self.total_param_tensors += tensor_entry.num_param_tensors
                 self.total_params_fsize += tensor_entry.parent_params_fsize
+                # Tally for modules, too.
+                for module_name, _ in tensor_entry.containing_modules_origin_nested:
+                    self.module_nparams[module_name] += tensor_entry.num_params_total
+
             unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
             # Tally elapsed time:
@@ -2582,6 +2589,8 @@ class ModelHistory:
         for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
             module_name, module_pass = module_pass_label
             module_pass_nice_label = f"{module_name}:{module_pass}"
+            self.module_num_tensors[module_name] += 1
+            self.module_pass_num_tensors[module_pass_nice_label] += 1
             if (m == 0) and (module_pass_nice_label not in self.top_level_module_passes):
                 self.top_level_module_passes.append(module_pass_nice_label)
             else:
@@ -2827,6 +2836,7 @@ class ModelHistory:
 
     def render_graph(self,
                      vis_opt: str = 'unrolled',
+                     vis_nesting_depth: int = 1000,
                      vis_outpath: str = 'graph.gv',
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
@@ -2836,6 +2846,8 @@ class ModelHistory:
 
         Args:
             vis_opt: either 'rolled' or 'unrolled'
+            vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
+                levels, etc.
             vis_outpath: where to store the rendered graph
             save_only: whether to only save the graph without immediately showing it
             vis_fileformat: file format to use for the rendered graph
@@ -2879,11 +2891,20 @@ class ModelHistory:
 
         # list of edges for each subgraph; subgraphs will be created at the end.
         module_cluster_dict = defaultdict(list)
+        collapsed_modules = set()
+        edges_used = set()
 
         for node_barcode, node in entries_to_plot.items():
             if node.is_buffer_layer and not show_buffer_layers:
                 continue
-            self._add_node_to_graphviz(node, dot, module_cluster_dict, vis_opt, show_buffer_layers)
+            self._add_node_to_graphviz(node,
+                                       dot,
+                                       module_cluster_dict,
+                                       edges_used,
+                                       vis_opt,
+                                       collapsed_modules,
+                                       vis_nesting_depth,
+                                       show_buffer_layers)
 
         # Finally, set up the subgraphs.
         self._set_up_subgraphs(dot, vis_opt, module_cluster_dict)
@@ -2898,7 +2919,10 @@ class ModelHistory:
                               node: Union[TensorLogEntry, RolledTensorLogEntry],
                               graphviz_graph,
                               module_edge_dict: Dict,
+                              edges_used: Set,
                               vis_opt: str,
+                              collapsed_modules: set,
+                              vis_nesting_depth: int = 1000,
                               show_buffer_layers: bool = False):
         """Addes a node and its relevant edges to the graphviz figure.
 
@@ -2907,8 +2931,44 @@ class ModelHistory:
             graphviz_graph: The graphviz object to add the node to.
             module_edge_dict: Dictionary of the module clusters.
             vis_opt: Whether to roll the graph or not
+            vis_nesting_depth: How many levels of nested modules to show
+            collapsed_modules: Labels of collapsed module nodes that have been made so far.
             show_buffer_layers: Whether to show the buffer layers
         """
+        is_collapsed_module = self._check_if_collapsed_module(node, vis_nesting_depth)
+
+        if is_collapsed_module:
+            self._construct_collapsed_module_node(node, graphviz_graph, collapsed_modules,
+                                                  vis_opt, vis_nesting_depth)
+            node_color = 'black'
+        else:
+            node_color = self._construct_layer_node(node, graphviz_graph, vis_opt)
+
+        self._add_edges_for_node(node, is_collapsed_module, vis_nesting_depth, node_color, module_edge_dict,
+                                 edges_used, graphviz_graph, vis_opt, show_buffer_layers)
+
+        # Finally, if it's the final output layer, force it to be on top for visual niceness.
+
+        if node.is_last_output_layer:
+            with graphviz_graph.subgraph() as s:
+                s.attr(rank='sink')
+                s.node(node.layer_label)
+
+    @staticmethod
+    def _check_if_collapsed_module(node, vis_nesting_depth):
+        node_nesting_depth = len(node.containing_modules_origin_nested)
+        if node.is_bottom_level_submodule_output:
+            node_nesting_depth -= 1
+
+        if node_nesting_depth >= vis_nesting_depth:
+            return True
+        else:
+            return False
+
+    def _construct_layer_node(self,
+                              node,
+                              graphviz_graph,
+                              vis_opt):
 
         # Get the address, shape, color, and line style:
 
@@ -2931,15 +2991,67 @@ class ModelHistory:
                             fillcolor=node_bg_color,
                             shape=node_shape,
                             ordering='out')
+        return node_color
 
-        self._add_edges_for_node(node, node_color, module_edge_dict, graphviz_graph, vis_opt, show_buffer_layers)
+    def _construct_collapsed_module_node(self,
+                                         node,
+                                         graphviz_graph,
+                                         collapsed_modules,
+                                         vis_opt,
+                                         vis_nesting_depth):
+        module_address_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
+        module_tuple = module_address_w_pass.split(':')
+        module_output_layer = self[module_address_w_pass]
+        module_output_shape = module_output_layer.tensor_shape
+        module_output_fsize = module_output_layer.tensor_fsize_nice
+        module_address, pass_num = module_tuple
+        module_type = self.module_types[module_address]
+        module_num_passes = self.module_num_passes[module_address]
+        module_nparams = self.module_nparams[module_address]
 
-        # Finally, if it's the final output layer, force it to be on top for visual niceness.
+        if vis_opt == 'unrolled':
+            node_name = 'pass'.join(module_tuple)
+            module_num_tensors = self.module_pass_num_tensors[module_address_w_pass]
+        else:
+            node_name = module_tuple[0]
+            module_num_tensors = self.module_num_tensors[module_address]
 
-        if node.is_last_output_layer:
-            with graphviz_graph.subgraph() as s:
-                s.attr(rank='sink')
-                s.node(node.layer_label)
+        if node_name in collapsed_modules:
+            return  # collapsed node already added
+
+        if module_num_passes == 1:
+            node_title = f"<b>@{module_address}</b>"
+        elif vis_opt == 'unrolled' and (module_num_passes > 1):
+            node_title = f"<b>@{module_address}:{pass_num}</b>"
+        else:
+            node_title = f"<b>@{module_address} (x{module_num_passes})</b>"
+
+        if len(module_output_shape) > 1:
+            tensor_shape_str = 'x'.join([str(x) for x in module_output_shape])
+        elif len(node.tensor_shape) == 1:
+            tensor_shape_str = f'x{module_output_shape[0]}'
+        else:
+            tensor_shape_str = 'x1'
+
+        if module_nparams > 0:
+            bg_color = self.PARAMS_NODE_BG_COLOR
+        else:
+            bg_color = self.DEFAULT_BG_COLOR
+
+        node_label = (f'<{node_title}<br/>'
+                      f'{module_type}<br/>'
+                      f'{tensor_shape_str} ({module_output_fsize})<br/>'
+                      f'{module_num_tensors} layers total<br/>'
+                      f'{module_nparams} parameters>')
+
+        graphviz_graph.node(name=node_name,
+                            label=node_label,
+                            fontcolor='black',
+                            color='black',
+                            style="filled,solid",
+                            fillcolor=bg_color,
+                            shape='box3d',
+                            ordering='out')
 
     def _get_node_address_shape_color(self,
                                       node: Union[TensorLogEntry, RolledTensorLogEntry]) -> Tuple[str, str, str]:
@@ -3062,8 +3174,11 @@ class ModelHistory:
 
     def _add_edges_for_node(self,
                             parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
+                            parent_is_collapsed_module: bool,
+                            vis_nesting_depth: int,
                             node_color: str,
                             module_edge_dict: Dict,
+                            edges_used: Set,
                             graphviz_graph,
                             vis_opt: str = 'unrolled',
                             show_buffer_layers: bool = False):
@@ -3071,9 +3186,12 @@ class ModelHistory:
 
         Args:
             parent_node: The node to add edges for.
+            parent_is_collapsed_module: Whether the node is a collapsed module node.
+            vis_nesting_depth: How many levels of module nesting to show.
             node_color: Color of the node
             graphviz_graph: The graphviz graph object.
             module_edge_dict: Dictionary mapping each cluster to the edges it contains.
+            edges_used: Edges used so far.
             vis_opt: Either 'unrolled' or 'rolled'
             show_buffer_layers: whether to show the buffer layers
         """
@@ -3090,8 +3208,36 @@ class ModelHistory:
             else:
                 edge_style = 'dashed'
 
-            edge_dict = {'tail_name': parent_node.layer_label.replace(':', 'pass'),
-                         'head_name': child_layer_label.replace(':', 'pass'),
+            if parent_is_collapsed_module:
+                edge_style = 'solid'
+                module_name_w_pass = parent_node.containing_modules_origin_nested[vis_nesting_depth - 1]
+                module_tuple = module_name_w_pass.split(':')
+                if vis_opt == 'unrolled':
+                    tail_name = 'pass'.join(module_tuple)
+                else:
+                    tail_name = module_tuple[0]
+            else:
+                tail_name = parent_node.layer_label.replace(':', 'pass')
+
+            child_is_collapsed_module = self._check_if_collapsed_module(child_node, vis_nesting_depth)
+
+            if child_is_collapsed_module:
+                module_name_w_pass = child_node.containing_modules_origin_nested[vis_nesting_depth - 1]
+                module_tuple = module_name_w_pass.split(':')
+                if vis_opt == 'unrolled':
+                    head_name = 'pass'.join(module_tuple)
+                else:
+                    head_name = module_tuple[0]
+            else:
+                head_name = child_node.layer_label.replace(':', 'pass')
+
+            # Skip repeated or self-looping edges.
+            if (head_name == tail_name) or ((tail_name, head_name) in edges_used):
+                continue
+            edges_used.add((tail_name, head_name))
+
+            edge_dict = {'tail_name': tail_name,
+                         'head_name': head_name,
                          'color': node_color,
                          'fontcolor': node_color,
                          'style': edge_style,
@@ -3099,15 +3245,17 @@ class ModelHistory:
                          'labelfontsize': '8'}
 
             # Mark with "if" in the case edge starts a cond branch
-            if child_layer_label in parent_node.cond_branch_start_children:
+            if (child_layer_label in parent_node.cond_branch_start_children) and (not child_is_collapsed_module):
                 edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
 
             # Label the arguments to the next node if multiple inputs
-            self._label_node_arguments_if_needed(parent_node, child_node, edge_dict, show_buffer_layers)
+            if not child_is_collapsed_module:
+                self._label_node_arguments_if_needed(parent_node, child_node, edge_dict, show_buffer_layers)
 
             # Annotate passes for rolled node edge if it varies across passes
             if vis_opt == 'rolled':
-                self._label_rolled_pass_nums(child_node, parent_node, edge_dict)
+                self._label_rolled_pass_nums(child_node, parent_node,
+                                             child_is_collapsed_module, parent_is_collapsed_module, edge_dict)
 
             # Add it to the appropriate module cluster (most nested one containing both nodes)
             containing_module = self._get_lowest_containing_module_for_two_nodes(parent_node, child_node)
@@ -3190,6 +3338,8 @@ class ModelHistory:
     @staticmethod
     def _label_rolled_pass_nums(child_node: RolledTensorLogEntry,
                                 parent_node: RolledTensorLogEntry,
+                                child_is_collapsed_module: bool,
+                                parent_is_collapsed_module: bool,
                                 edge_dict: Dict):
         """Adds labels for the pass numbers to the edge dict for rolled nodes.
 
@@ -3200,11 +3350,11 @@ class ModelHistory:
         """
         parent_pass_nums = parent_node.child_passes_per_layer[child_node.layer_label]
         child_pass_nums = child_node.parent_passes_per_layer[parent_node.layer_label]
-        if parent_node.edges_vary_across_passes:
+        if parent_node.edges_vary_across_passes and (not parent_is_collapsed_module):
             edge_dict['taillabel'] = f'  Out {int_list_to_compact_str(parent_pass_nums)}  '
 
         # Mark the head label with the argument if need be:
-        if child_node.edges_vary_across_passes and not child_node.is_output_layer:
+        if child_node.edges_vary_across_passes and (not child_node.is_output_layer) and (not child_is_collapsed_module):
             edge_dict['headlabel'] = f'  In {int_list_to_compact_str(child_pass_nums)}  '
 
     @staticmethod
