@@ -221,7 +221,7 @@ def undecorate_tensor(t, device: str = 'cpu'):
 
 
 def collect_orig_func_defs(torch_module: types.ModuleType,
-                           orig_func_defs: List[Tuple], ):
+                           orig_func_defs: List[Tuple]):
     """Collects the original torch function definitions, so they can be restored after the logging is done.
 
     Args:
