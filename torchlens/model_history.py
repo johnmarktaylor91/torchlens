@@ -2921,7 +2921,7 @@ class ModelHistory:
                               module_edge_dict: Dict,
                               edges_used: Set,
                               vis_opt: str,
-                              collapsed_modules: set,
+                              collapsed_modules: Set,
                               vis_nesting_depth: int = 1000,
                               show_buffer_layers: bool = False):
         """Addes a node and its relevant edges to the graphviz figure.
