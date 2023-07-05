@@ -17,6 +17,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'current_function_call_barcode',
     'random_seed_used',
     'detach_saved_tensors',
+    'output_device',
     'save_gradients',
     'has_saved_gradients',
 
@@ -124,6 +125,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     # Saved tensor info
     'tensor_contents',
     'has_saved_activations',
+    'output_device',
     'detach_saved_tensor',
     'creation_args',
     'creation_kwargs',

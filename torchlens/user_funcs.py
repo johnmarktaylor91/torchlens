@@ -17,6 +17,7 @@ def get_model_activations(model: nn.Module,
                           input_kwargs: Dict[Any, Any] = None,
                           which_layers: Union[str, List] = 'all',
                           mark_input_output_distances: bool = False,
+                          output_device: str = 'same',
                           detach_saved_tensors: bool = False,
                           save_gradients: bool = False,
                           vis_opt: str = 'none',
@@ -44,6 +45,8 @@ def get_model_activations(model: nn.Module,
         which_layers: list of layers to include (described above), or 'all' to include all layers.
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
+        output_device: device where saved tensors are to be stored. Either 'same' to keep on the same device,
+            or 'cpu' or 'cuda' to move them to cpu or cuda when saved.
         detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
         save_gradients: whether to save gradients from any subsequent backward pass
         vis_opt: whether, and how, to visualize the network; 'none' for
@@ -70,6 +73,9 @@ def get_model_activations(model: nn.Module,
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
+    if output_device not in ['same', 'cpu', 'cuda']:
+        raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
+
     # If not saving all layers, do a probe pass.
 
     if which_layers == 'all':
@@ -81,6 +87,7 @@ def get_model_activations(model: nn.Module,
                                                                  input_args,
                                                                  input_kwargs,
                                                                  None,
+                                                                 output_device,
                                                                  False,
                                                                  random_seed=random_seed)
         tensor_nums_to_save = model_history.get_op_nums_from_user_labels(which_layers)
@@ -91,6 +98,7 @@ def get_model_activations(model: nn.Module,
                                                              input_args,
                                                              input_kwargs,
                                                              tensor_nums_to_save,
+                                                             output_device,
                                                              mark_input_output_distances,
                                                              detach_saved_tensors,
                                                              save_gradients,

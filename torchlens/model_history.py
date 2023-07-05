@@ -72,6 +72,7 @@ class TensorLogEntry:
         # Saved tensor info:
         self.tensor_contents = fields_dict['tensor_contents']
         self.has_saved_activations = fields_dict['has_saved_activations']
+        self.output_device = fields_dict['output_device']
         self.detach_saved_tensor = fields_dict['detach_saved_tensor']
         self.creation_args = fields_dict['creation_args']
         self.creation_kwargs = fields_dict['creation_kwargs']
@@ -222,6 +223,8 @@ class TensorLogEntry:
         """
         # The tensor itself:
         self.tensor_contents = safe_copy(t, self.detach_saved_tensor)
+        if self.output_device not in [str(self.tensor_contents.device), 'same']:
+            self.tensor_contents = self.tensor_contents.to(self.output_device)
         self.has_saved_activations = True
 
         # Tensor args and kwargs:
@@ -554,6 +557,7 @@ class ModelHistory:
                  model_name: str,
                  random_seed_used: int,
                  tensor_nums_to_save: Union[List[int], str] = 'all',
+                 output_device: str = 'same',
                  detach_saved_tensors: bool = False,
                  save_gradients: bool = False):
         """Object that stores the history of a model's forward pass.
@@ -572,6 +576,7 @@ class ModelHistory:
             self.keep_layers_without_saved_activations = False
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
+        self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
         self.save_gradients = save_gradients
         self.has_saved_gradients = False
@@ -679,7 +684,6 @@ class ModelHistory:
         Returns:
             Pandas dataframe with info about each layer.
         """
-        model_df = pd.DataFrame()
         fields_for_df = ['layer_label',
                          'layer_label_w_pass',
                          'layer_label_no_pass',
@@ -748,11 +752,13 @@ class ModelHistory:
                                  'is_submodule_input': bool,
                                  'is_submodule_output': bool}
 
+        model_df_dictlist = []
         for tensor_entry in self.layer_list:
             tensor_dict = {}
             for field_name in fields_for_df:
                 tensor_dict[field_name] = getattr(tensor_entry, field_name)
-            model_df = model_df.append(tensor_dict, ignore_index=True)
+            model_df_dictlist.append(tensor_dict)
+        model_df = pd.DataFrame(model_df_dictlist)
 
         for field in fields_to_change_type:
             model_df[field] = model_df[field].astype(fields_to_change_type[field])
@@ -866,6 +872,7 @@ class ModelHistory:
             'tensor_contents': None,
             'has_saved_activations': False,
             'detach_saved_tensor': self.detach_saved_tensors,
+            'output_device': self.output_device,
             'creation_args': [],
             'creation_kwargs': {},
             'tensor_shape': tuple(t.shape),
@@ -1019,6 +1026,7 @@ class ModelHistory:
         # General info
         fields_dict['layer_type'] = layer_type
         fields_dict['detach_saved_tensor'] = self.detach_saved_tensors
+        fields_dict['output_device'] = self.output_device
 
         # Grad info:
         fields_dict['grad_contents'] = None
