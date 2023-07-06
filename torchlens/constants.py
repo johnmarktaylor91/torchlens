@@ -120,6 +120,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     # Saved tensor info
     'tensor_contents',
     'has_saved_activations',
+    'activation_postfunc',
     'detach_saved_tensor',
     'creation_args',
     'creation_kwargs',

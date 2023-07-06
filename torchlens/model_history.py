@@ -72,6 +72,7 @@ class TensorLogEntry:
         # Saved tensor info:
         self.tensor_contents = fields_dict['tensor_contents']
         self.has_saved_activations = fields_dict['has_saved_activations']
+        self.activation_postfunc = fields_dict['activation_postfunc']
         self.detach_saved_tensor = fields_dict['detach_saved_tensor']
         self.creation_args = fields_dict['creation_args']
         self.creation_kwargs = fields_dict['creation_kwargs']
@@ -343,24 +344,25 @@ class TensorLogEntry:
         s = ''
         tensor_size_shown = 8
         if self.tensor_contents != 'none':
-            if len(self.tensor_shape) == 0:
+            saved_shape = self.tensor_contents.shape
+            if len(saved_shape) == 0:
                 tensor_slice = self.tensor_contents
-            elif len(self.tensor_shape) == 1:
-                num_dims = min(tensor_size_shown, self.tensor_shape[0])
+            elif len(saved_shape) == 1:
+                num_dims = min(tensor_size_shown, saved_shape[0])
                 tensor_slice = self.tensor_contents[0:num_dims]
-            elif len(self.tensor_shape) == 2:
-                num_dims = min([tensor_size_shown, self.tensor_shape[-2], self.tensor_shape[-1]])
+            elif len(saved_shape) == 2:
+                num_dims = min([tensor_size_shown, saved_shape[-2], saved_shape[-1]])
                 tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
             else:
                 num_dims = min([tensor_size_shown, self.tensor_shape[-2], self.tensor_shape[-1]])
                 tensor_slice = self.tensor_contents.data.clone()
-                for _ in range(len(self.tensor_shape) - 2):
+                for _ in range(len(saved_shape) - 2):
                     tensor_slice = tensor_slice[0]
                 tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
             tensor_slice = tensor_slice.detach()
             tensor_slice.requires_grad = False
             s += f"\n\t\t{str(tensor_slice)}"
-            if max(self.tensor_shape) > tensor_size_shown:
+            if (len(saved_shape) > 0) and (max(saved_shape) > tensor_size_shown):
                 s += '...'
         return s
 
@@ -842,6 +844,7 @@ class ModelHistory:
             # Saved tensor info:
             'tensor_contents': None,
             'has_saved_activations': False,
+            'activation_postfunc': self.activation_postfunc,
             'detach_saved_tensor': self.detach_saved_tensors,
             'creation_args': [],
             'creation_kwargs': {},
@@ -1243,6 +1246,7 @@ class ModelHistory:
         # Saved tensor info
         fields_dict['tensor_contents'] = None
         fields_dict['has_saved_activations'] = False
+        fields_dict['activation_postfunc'] = self.activation_postfunc
         fields_dict['creation_args'] = []
         fields_dict['creation_kwargs'] = {}
         fields_dict['tensor_shape'] = tuple(t.shape)

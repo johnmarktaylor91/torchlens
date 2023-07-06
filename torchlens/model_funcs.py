@@ -55,6 +55,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_device = 'cpu'
 
     input_args = copy.deepcopy(input_args)
+    activation_postfunc = copy.deepcopy(activation_postfunc)
     model_name = str(type(model).__name__)
     model_history = ModelHistory(model_name,
                                  random_seed,
