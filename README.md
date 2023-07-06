@@ -210,9 +210,7 @@ image, video, auditory, and language models.
 
 ## Planned Features
 
-1) Options for "collapsed" visualization options to show more compact representations of huge
-   models (e.g., only showing higher-level modules in the figure, not every single step)
-2) In the further future, I am considering adding functionality to not just save activations,
+1) In the further future, I am considering adding functionality to not just save activations,
    but counterfactually intervene on them (e.g., how would the output have changed if these parameters
    were different or if a different nonlinearity were used). Let me know if you'd find this useful
    and if so, what specific kind of functionality you'd want.
