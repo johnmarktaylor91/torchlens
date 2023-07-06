@@ -18,9 +18,11 @@ def get_model_activations(model: nn.Module,
                           which_layers: Union[str, List] = 'all',
                           activation_postfunc: Optional[Callable] = None,
                           mark_input_output_distances: bool = False,
+                          output_device: str = 'same',
                           detach_saved_tensors: bool = False,
                           save_gradients: bool = False,
                           vis_opt: str = 'none',
+                          vis_nesting_depth: int = 1000,
                           vis_outpath: str = 'graph.gv',
                           vis_save_only: bool = False,
                           vis_fileformat: str = 'pdf',
@@ -45,12 +47,16 @@ def get_model_activations(model: nn.Module,
         activation_postfunc: Function to apply to tensors before saving them (e.g., channelwise averaging).
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
+        output_device: device where saved tensors are to be stored. Either 'same' to keep on the same device,
+            or 'cpu' or 'cuda' to move them to cpu or cuda when saved.
         detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
         save_gradients: whether to save gradients from any subsequent backward pass
         vis_opt: whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
             in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
+            levels, etc.
         vis_outpath: file path to save the graph visualization
         vis_save_only: whether to only save the graph visual without immediately showing it
         vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
@@ -69,6 +75,9 @@ def get_model_activations(model: nn.Module,
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
+    if output_device not in ['same', 'cpu', 'cuda']:
+        raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
+
     # If not saving all layers, do a probe pass.
 
     if which_layers == 'all':
@@ -80,6 +89,7 @@ def get_model_activations(model: nn.Module,
                                                                  input_args,
                                                                  input_kwargs,
                                                                  None,
+                                                                 output_device,
                                                                  activation_postfunc,
                                                                  False,
                                                                  random_seed=random_seed)
@@ -91,6 +101,7 @@ def get_model_activations(model: nn.Module,
                                                              input_args,
                                                              input_kwargs,
                                                              tensor_nums_to_save,
+                                                             output_device,
                                                              activation_postfunc,
                                                              mark_input_output_distances,
                                                              detach_saved_tensors,
@@ -100,6 +111,7 @@ def get_model_activations(model: nn.Module,
     # Visualize if desired.
     if vis_opt != 'none':
         model_history.render_graph(vis_opt,
+                                   vis_nesting_depth,
                                    vis_outpath,
                                    vis_save_only,
                                    vis_fileformat,
@@ -148,6 +160,7 @@ def show_model_graph(model: nn.Module,
                      input_args: Union[torch.Tensor, List[Any]],
                      input_kwargs: Dict[Any, Any] = None,
                      vis_opt: str = 'unrolled',
+                     vis_nesting_depth: int = 1000,
                      vis_outpath: str = 'graph.gv',
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
@@ -164,6 +177,8 @@ def show_model_graph(model: nn.Module,
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
             one node per layer if a recurrent network), or 'unrolled' to show the graph
             in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
+            levels, etc.
         vis_outpath: file path to save the graph visualization
         save_only: whether to only save the graph visual without immediately showing it
         vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
@@ -190,6 +205,7 @@ def show_model_graph(model: nn.Module,
                                                              save_gradients=False,
                                                              random_seed=random_seed)
     model_history.render_graph(vis_opt,
+                               vis_nesting_depth,
                                vis_outpath,
                                save_only,
                                vis_fileformat,

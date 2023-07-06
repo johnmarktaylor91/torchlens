@@ -13,7 +13,7 @@ from torchlens.helper_funcs import get_vars_of_type_from_obj, identity, log_curr
 from torchlens.model_history import ModelHistory
 
 print_funcs = ['__repr__', '__str__', '_str']
-funcs_not_to_log = ['cpu', 'cuda', 'numpy', '__array__']
+funcs_not_to_log = ['cpu', 'cuda', 'numpy', 'to', '__array__']
 
 
 def torch_func_decorator(func: Callable,
@@ -221,7 +221,7 @@ def undecorate_tensor(t, device: str = 'cpu'):
 
 
 def collect_orig_func_defs(torch_module: types.ModuleType,
-                           orig_func_defs: List[Tuple], ):
+                           orig_func_defs: List[Tuple]):
     """Collects the original torch function definitions, so they can be restored after the logging is done.
 
     Args:

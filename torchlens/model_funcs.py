@@ -15,6 +15,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
                                              input_args: Union[torch.Tensor, List[Any]],
                                              input_kwargs: Dict[Any, Any],
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
+                                             output_device: str = 'same',
                                              activation_postfunc: Optional[Callable] = None,
                                              mark_input_output_distances: bool = False,
                                              detach_saved_tensors: bool = False,
@@ -29,6 +30,8 @@ def run_model_and_save_specified_activations(model: nn.Module,
         input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
         input_kwargs: Keyword arguments to the model's forward pass.
         tensor_nums_to_save: List of tensor numbers to save.
+        output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
+            'cpu' or 'cuda' to move to cpu or cuda.
         activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
         mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
             This is computationally expensive for large networks, so it is off by default.
@@ -60,6 +63,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
     model_history = ModelHistory(model_name,
                                  random_seed,
                                  tensor_nums_to_save,
+                                 output_device,
                                  activation_postfunc,
                                  detach_saved_tensors,
                                  save_gradients)
@@ -237,7 +241,7 @@ def module_pre_hook(module: nn.Module,
         tensor_entry.modules_entered.append(module_address)
         tensor_entry.module_passes_entered.append(module_pass_label)
         tensor_entry.is_submodule_input = True
-        tensor_entry.module_entry_exit_thread.append(('+', module_pass_label[0], module_pass_label[1]))
+        tensor_entry.module_entry_exit_thread_output.append(('+', module_pass_label[0], module_pass_label[1]))
 
 
 def module_post_hook(module: nn.Module,
@@ -269,16 +273,17 @@ def module_post_hook(module: nn.Module,
         tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
         tensor_entry.modules_exited.append(module_address)
         tensor_entry.module_passes_exited.append((module_address, module_pass_num))
-        tensor_entry.module_entry_exit_thread.append(('-', module_entry_label[0], module_entry_label[1]))
+        tensor_entry.module_entry_exit_thread_output.append(('-', module_entry_label[0], module_entry_label[1]))
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
     for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
         model_history = module.tl_source_model_history
         tensor_entry = model_history[t.tl_tensor_label_raw]
-        input_module_thread = tensor_entry.module_entry_exit_thread[:]
+        input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
         if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
             module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-            tensor_entry.module_entry_exit_thread = tensor_entry.module_entry_exit_thread[:module_entry_ix]
+            tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
+                                                           :module_entry_ix]
 
     return output_
 

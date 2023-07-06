@@ -17,6 +17,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'current_function_call_barcode',
     'random_seed_used',
     'detach_saved_tensors',
+    'output_device',
     'save_gradients',
     'has_saved_gradients',
     'activation_postfunc',
@@ -82,8 +83,13 @@ MODEL_HISTORY_FIELD_ORDER = [
     'module_types',
     'module_passes',
     'module_num_passes',
+    'module_children',
     'module_pass_children',
+    'top_level_modules',
     'top_level_module_passes',
+    'module_nparams',
+    'module_num_tensors',
+    'module_pass_num_tensors',
 
     # Time elapsed
     'pass_start_time',
@@ -120,6 +126,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     # Saved tensor info
     'tensor_contents',
     'has_saved_activations',
+    'output_device',
     'activation_postfunc',
     'detach_saved_tensor',
     'creation_args',
@@ -219,7 +226,8 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'is_submodule_output',
     'is_bottom_level_submodule_output',
     'bottom_level_submodule_pass_exited',
-    'module_entry_exit_thread'
+    'module_entry_exit_threads_inputs',
+    'module_entry_exit_thread_output'
 ]
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
