@@ -16,6 +16,7 @@ def get_model_activations(model: nn.Module,
                           input_args: Union[torch.Tensor, List[Any]],
                           input_kwargs: Dict[Any, Any] = None,
                           which_layers: Union[str, List] = 'all',
+                          activation_postfunc: Optional[Callable] = None,
                           mark_input_output_distances: bool = False,
                           output_device: str = 'same',
                           detach_saved_tensors: bool = False,
@@ -43,6 +44,7 @@ def get_model_activations(model: nn.Module,
         input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
         input_kwargs: keyword arguments for model forward pass
         which_layers: list of layers to include (described above), or 'all' to include all layers.
+        activation_postfunc: Function to apply to tensors before saving them (e.g., channelwise averaging).
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
         output_device: device where saved tensors are to be stored. Either 'same' to keep on the same device,
@@ -88,6 +90,7 @@ def get_model_activations(model: nn.Module,
                                                                  input_kwargs,
                                                                  None,
                                                                  output_device,
+                                                                 activation_postfunc,
                                                                  False,
                                                                  random_seed=random_seed)
         tensor_nums_to_save = model_history.get_op_nums_from_user_labels(which_layers)
@@ -99,6 +102,7 @@ def get_model_activations(model: nn.Module,
                                                              input_kwargs,
                                                              tensor_nums_to_save,
                                                              output_device,
+                                                             activation_postfunc,
                                                              mark_input_output_distances,
                                                              detach_saved_tensors,
                                                              save_gradients,
@@ -140,8 +144,15 @@ def get_model_structure(model: nn.Module,
         input_kwargs = {}
 
     warn_parallel()
-    model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
-                                                             None, mark_input_output_distances, random_seed)
+    model_history = run_model_and_save_specified_activations(model=model,
+                                                             input_args=input_args,
+                                                             input_kwargs=input_kwargs,
+                                                             tensor_nums_to_save=None,
+                                                             activation_postfunc=None,
+                                                             mark_input_output_distances=mark_input_output_distances,
+                                                             detach_saved_tensors=False,
+                                                             save_gradients=False,
+                                                             random_seed=random_seed)
     return model_history
 
 
@@ -184,8 +195,15 @@ def show_model_graph(model: nn.Module,
     if vis_opt not in ['none', 'rolled', 'unrolled']:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
-                                                             None, True, random_seed)
+    model_history = run_model_and_save_specified_activations(model=model,
+                                                             input_args=input_args,
+                                                             input_kwargs=input_kwargs,
+                                                             tensor_nums_to_save=None,
+                                                             activation_postfunc=None,
+                                                             mark_input_output_distances=False,
+                                                             detach_saved_tensors=False,
+                                                             save_gradients=False,
+                                                             random_seed=random_seed)
     model_history.render_graph(vis_opt,
                                vis_nesting_depth,
                                vis_outpath,
@@ -225,8 +243,15 @@ def validate_saved_activations(model: nn.Module,
     if not input_kwargs:
         input_kwargs = {}
     ground_truth_output_tensors = get_vars_of_type_from_obj(model(*input_args, **input_kwargs), torch.Tensor)
-    model_history = run_model_and_save_specified_activations(model, input_args, input_kwargs,
-                                                             'all', False, random_seed)
+    model_history = run_model_and_save_specified_activations(model=model,
+                                                             input_args=input_args,
+                                                             input_kwargs=input_kwargs,
+                                                             tensor_nums_to_save='all',
+                                                             activation_postfunc=None,
+                                                             mark_input_output_distances=False,
+                                                             detach_saved_tensors=False,
+                                                             save_gradients=False,
+                                                             random_seed=random_seed)
     activations_are_valid = model_history.validate_saved_activations(ground_truth_output_tensors, verbose)
 
     model_history.cleanup()

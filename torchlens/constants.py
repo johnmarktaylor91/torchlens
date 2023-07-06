@@ -20,6 +20,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'output_device',
     'save_gradients',
     'has_saved_gradients',
+    'activation_postfunc',
 
     # Model structure info
     'model_is_recurrent',
@@ -126,6 +127,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'tensor_contents',
     'has_saved_activations',
     'output_device',
+    'activation_postfunc',
     'detach_saved_tensor',
     'creation_args',
     'creation_kwargs',

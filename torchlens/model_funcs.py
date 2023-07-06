@@ -16,6 +16,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
                                              input_kwargs: Dict[Any, Any],
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
                                              output_device: str = 'same',
+                                             activation_postfunc: Optional[Callable] = None,
                                              mark_input_output_distances: bool = False,
                                              detach_saved_tensors: bool = False,
                                              save_gradients: bool = False,
@@ -31,6 +32,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         tensor_nums_to_save: List of tensor numbers to save.
         output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
             'cpu' or 'cuda' to move to cpu or cuda.
+        activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
         mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
             This is computationally expensive for large networks, so it is off by default.
         detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
@@ -56,11 +58,13 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_device = 'cpu'
 
     input_args = copy.deepcopy(input_args)
+    activation_postfunc = copy.deepcopy(activation_postfunc)
     model_name = str(type(model).__name__)
     model_history = ModelHistory(model_name,
                                  random_seed,
                                  tensor_nums_to_save,
                                  output_device,
+                                 activation_postfunc,
                                  detach_saved_tensors,
                                  save_gradients)
     model_history.pass_start_time = time.time()
