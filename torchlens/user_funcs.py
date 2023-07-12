@@ -12,23 +12,23 @@ from torchlens.helper_funcs import warn_parallel, get_vars_of_type_from_obj, set
 from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_activations
 
 
-def get_model_activations(model: nn.Module,
-                          input_args: Union[torch.Tensor, List[Any]],
-                          input_kwargs: Dict[Any, Any] = None,
-                          which_layers: Union[str, List] = 'all',
-                          output_device: str = 'same',
-                          activation_postfunc: Optional[Callable] = None,
-                          mark_input_output_distances: bool = False,
-                          detach_saved_tensors: bool = False,
-                          save_gradients: bool = False,
-                          vis_opt: str = 'none',
-                          vis_nesting_depth: int = 1000,
-                          vis_outpath: str = 'graph.gv',
-                          vis_save_only: bool = False,
-                          vis_fileformat: str = 'pdf',
-                          vis_buffer_layers: bool = False,
-                          vis_direction: str = 'vertical',
-                          random_seed: Optional[int] = None) -> ModelHistory:
+def log_forward_pass(model: nn.Module,
+                     input_args: Union[torch.Tensor, List[Any]],
+                     input_kwargs: Dict[Any, Any] = None,
+                     which_layers: Union[str, List] = 'all',
+                     output_device: str = 'same',
+                     activation_postfunc: Optional[Callable] = None,
+                     mark_input_output_distances: bool = False,
+                     detach_saved_tensors: bool = False,
+                     save_gradients: bool = False,
+                     vis_opt: str = 'none',
+                     vis_nesting_depth: int = 1000,
+                     vis_outpath: str = 'graph.gv',
+                     vis_save_only: bool = False,
+                     vis_fileformat: str = 'pdf',
+                     vis_buffer_layers: bool = False,
+                     vis_direction: str = 'vertical',
+                     random_seed: Optional[int] = None) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
     and optionally visualizes the model graph if vis_opt is set to 'rolled' or 'unrolled'.
@@ -121,11 +121,11 @@ def get_model_activations(model: nn.Module,
     return model_history
 
 
-def get_model_structure(model: nn.Module,
-                        input_args: torch.Tensor,
-                        input_kwargs: Dict[Any, Any] = None,
-                        mark_input_output_distances: bool = False,
-                        random_seed: Optional[int] = None) -> ModelHistory:
+def get_model_metadata(model: nn.Module,
+                       input_args: torch.Tensor,
+                       input_kwargs: Dict[Any, Any] = None,
+                       mark_input_output_distances: bool = False,
+                       random_seed: Optional[int] = None) -> ModelHistory:
     """
     Equivalent to get_model_activations, but only fetches layer metadata without saving activations.
 
