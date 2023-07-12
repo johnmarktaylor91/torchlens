@@ -148,6 +148,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     # Function call info
     'func_applied',
     'func_applied_name',
+    'func_call_stack',
     'func_time_elapsed',
     'func_rng_states',
     'num_func_args_total',

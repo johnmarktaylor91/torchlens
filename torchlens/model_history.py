@@ -9,6 +9,7 @@ from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import graphviz
+import inspect
 import numpy as np
 import pandas as pd
 import torch
@@ -94,6 +95,7 @@ class TensorLogEntry:
         # Function call info:
         self.func_applied = fields_dict['func_applied']
         self.func_applied_name = fields_dict['func_applied_name']
+        self.func_call_stack = fields_dict['func_call_stack']
         self.func_time_elapsed = fields_dict['func_time_elapsed']
         self.func_rng_states = fields_dict['func_rng_states']
         self.num_func_args_total = fields_dict['num_func_args_total']
@@ -230,7 +232,7 @@ class TensorLogEntry:
             self.tensor_contents = self.tensor_contents.to(self.output_device)
         if activation_postfunc is not None:
             self.tensor_contents = activation_postfunc(self.tensor_contents)
-        
+
         self.has_saved_activations = True
 
         # Tensor args and kwargs:
@@ -902,6 +904,7 @@ class ModelHistory:
             # Function call info:
             'func_applied': None,
             'func_applied_name': 'none',
+            'func_call_stack': self._get_call_stack_dicts(start_level=4),
             'func_time_elapsed': 0,
             'func_rng_states': log_current_rng_states(),
             'num_func_args_total': 0,
@@ -1050,6 +1053,7 @@ class ModelHistory:
         # Function call info
         fields_dict['func_applied'] = func
         fields_dict['func_applied_name'] = func_name
+        fields_dict['func_call_stack'] = self._get_call_stack_dicts(start_level=3)
         fields_dict['func_time_elapsed'] = func_time_elapsed
         fields_dict['func_rng_states'] = func_rng_states
         fields_dict['num_func_args_total'] = len(args) + len(kwargs)
@@ -1601,6 +1605,13 @@ class ModelHistory:
                 most_nested_containing_modules = containing_modules[:]
         return most_nested_containing_modules
 
+    @staticmethod
+    def _get_call_stack_dicts(start_level: int = 3):
+        call_stack = inspect.stack()
+        call_stack = [inspect.getframeinfo(call_stack[i][0]) for i in range(start_level, len(call_stack))]
+        call_stack_dicts = [{'call_fname': caller.filename, 'call_linenum': caller.lineno} for caller in call_stack]
+        return call_stack_dicts
+
     def cleanup(self):
         """Deletes all log entries in the model.
         """
@@ -1733,6 +1744,7 @@ class ModelHistory:
 
             new_output_node.func_applied = identity
             new_output_node.func_applied_name = 'none'
+            new_output_node.func_call_stack = self._get_call_stack_dicts(5)
             new_output_node.func_time_elapsed = 0
             new_output_node.func_rng_states = log_current_rng_states()
             new_output_node.num_func_args_total = 0
