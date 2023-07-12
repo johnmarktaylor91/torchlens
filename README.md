@@ -66,7 +66,7 @@ Torchlens is compatible with versions 1.8.0+ of PyTorch.
 Below is a quick demo of how to use it; for an interactive demonstration, see
 the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing).
 
-The main function of Torchlens is `get_model_activations`: when called on a model and input, it runs a
+The main function of Torchlens is `log_forward_pass`: when called on a model and input, it runs a
 forward pass on the model and returns a ModelHistory object containing the intermediate layer activations and
 accompanying metadata, along with a visual representation of every operation that occurred during the forward pass:
 
@@ -177,7 +177,7 @@ tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
 
 If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
 with the
-which_layers argument when calling `get_model_activations`; you can either indicate layers in the same way
+which_layers argument when calling `log_forward_pass`; you can either indicate layers in the same way
 as indexing them above, or by passing in a desired substring for filtering the layers (e.g., 'conv'
 will pull out all conv layers):
 
@@ -191,9 +191,9 @@ print(model_history.layer_labels)
 '''
 ```
 
-The main function of torchlens is `get_model_activations`; the remaining functions are:
+The main function of torchlens is `log_forward_pass`; the remaining functions are:
 
-1) `get_model_structure`, to retrieve all model metadata without saving any activations (e.g., to figure out which
+1) `get_model_metadata`, to retrieve all model metadata without saving any activations (e.g., to figure out which
    layers you wish to save)
 2) `show_model_graph`, which visualizes the model graph without saving any activations
 3) `validate_model_activations`, which runs a procedure to check that the activations are correct: specifically,
