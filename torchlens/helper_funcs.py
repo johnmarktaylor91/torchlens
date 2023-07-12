@@ -352,6 +352,21 @@ def remove_attributes_starting_with_str(obj: Any,
             delattr(obj, field)
 
 
+def safe_to(x: Any, device: str):
+    """Moves object to device if it's a tensor, does nothing otherwise.
+
+    Args:
+        x: The object.
+
+    Returns:
+        Object either moved to device if a tensor, same object if otherwise.
+    """
+    if type(x) == torch.Tensor:
+        return x.to(device)
+    else:
+        return x
+
+
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """Returns the size of a tensor in bytes.
 

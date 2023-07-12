@@ -6,7 +6,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.helper_funcs import get_vars_of_type_from_obj, remove_attributes_starting_with_str, set_random_seed
+from torchlens.helper_funcs import get_vars_of_type_from_obj, remove_attributes_starting_with_str, safe_to, \
+    set_random_seed
 from torchlens.model_history import ModelHistory
 from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, undecorate_tensor
 
@@ -123,10 +124,10 @@ def move_input_tensors_to_device(x: Any,
         device: Device to move the tensors to.
     """
     if type(x) == list:
-        x = [t.to(device) for t in x]
+        x = [safe_to(t, device) for t in x]
     elif type(x) == dict:
         for k in x.keys():
-            x[k] = x[k].to(device)
+            x[k] = safe_to(x[k], device)
     elif type(x) == torch.Tensor:
         x = x.to(device)
     return x
