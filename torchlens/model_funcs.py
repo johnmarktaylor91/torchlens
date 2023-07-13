@@ -1,4 +1,5 @@
 import copy
+from functools import wraps
 import random
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -70,7 +71,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
                                  save_gradients)
     model_history.pass_start_time = time.time()
 
-    hook_handles = []
+    module_orig_forward_funcs = {}
     orig_func_defs = []
 
     try:
@@ -88,7 +89,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         model_history.track_tensors = True
         for t in input_tensors:
             model_history.log_source_tensor(t, 'input')
-        prepare_model(model, hook_handles, model_history, decorated_func_mapper)
+        prepare_model(model, module_orig_forward_funcs, model_history, decorated_func_mapper)
         outputs = model(*input_args, **input_kwargs)
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
@@ -97,14 +98,14 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_history[t.tl_tensor_label_raw].is_output_layer = True
         tensors_to_undecorate = tensors_to_decorate + output_tensors
         undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate, decorated_func_mapper)
-        cleanup_model(model, hook_handles, model_device, decorated_func_mapper)
+        cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
         model_history.postprocess(decorated_func_mapper, mark_input_output_distances)
         decorated_func_mapper.clear()
         return model_history
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
         undecorate_pytorch(torch, orig_func_defs, input_tensors, decorated_func_mapper)
-        cleanup_model(model, hook_handles, model_device, decorated_func_mapper)
+        cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
         print("************\nFeature extraction failed; returning model and environment to normal\n*************")
         raise e
 
@@ -134,14 +135,14 @@ def move_input_tensors_to_device(x: Any,
 
 
 def prepare_model(model: nn.Module,
-                  hook_handles: List,
+                  module_orig_forward_funcs: Dict,
                   model_history: ModelHistory,
                   decorated_func_mapper: Dict[Callable, Callable]):
     """Adds annotations and hooks to the model, and decorates any functions in the model.
 
     Args:
         model: Model to prepare.
-        hook_handles: Pre-allocated list to store the hooks, so they can be cleared even if execution fails.
+        module_orig_forward_funcs: Dict with the original forward funcs for each submodule
         model_history: ModelHistory object logging the forward pass
         decorated_func_mapper: Dictionary mapping decorated functions to original functions, so they can be restored
 
@@ -153,6 +154,7 @@ def prepare_model(model: nn.Module,
     model.tl_source_model_history = model_history
 
     module_stack = [(model, '')]  # list of tuples (name, module)
+
     while len(module_stack) > 0:
         module, parent_address = module_stack.pop()
         module_children = list(module.named_children())
@@ -181,10 +183,12 @@ def prepare_model(model: nn.Module,
         module.tl_tensors_entered_labels = []
         module.tl_tensors_exited_labels = []
 
-        # Add hooks.
+        # Add decorators.
 
-        hook_handles.append(module.register_forward_pre_hook(module_pre_hook))
-        hook_handles.append(module.register_forward_hook(module_post_hook))
+        if hasattr(module, 'forward'):
+            module_orig_forward_funcs[module] = module.forward
+            module.forward = module_forward_decorator(module.forward, module, model_history)
+            module.forward.tl_forward_call_is_decorated = True
 
     # Mark all parameters with requires_grad = True, and mark what they were before, so they can be restored on cleanup.
     for param in model.parameters():
@@ -219,74 +223,56 @@ def prepare_buffer_tensors(model: nn.Module,
                 model_history.log_source_tensor(attribute, 'buffer', buffer_address)
 
 
-def module_pre_hook(module: nn.Module,
-                    input_: tuple):
-    """Pre-hook to attach to the modules to log the fact that the tensor entered this module.
+def module_forward_decorator(orig_forward: Callable,
+                             module: nn.Module,
+                             model_history: ModelHistory) -> Callable:
+    @wraps(orig_forward)
+    def decorated_forward(*args, **kwargs):
 
-    Args:
-        module: PyTorch module.
-        input_: The input.
+        # "Pre-hook" operations:
+        module_address = module.tl_module_address
+        module.tl_module_pass_num += 1
+        module_pass_label = (module_address, module.tl_module_pass_num)
+        module.tl_module_pass_labels.append(module_pass_label)
+        input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor)
+        for t in input_tensors:
+            tensor_entry = model_history[t.tl_tensor_label_raw]
+            module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
+            tensor_entry.modules_entered.append(module_address)
+            tensor_entry.module_passes_entered.append(module_pass_label)
+            tensor_entry.is_submodule_input = True
+            tensor_entry.module_entry_exit_thread_output.append(('+', module_pass_label[0], module_pass_label[1]))
 
-    Returns:
-        The input, now marked with information about the module it's entering.
-    """
-    module_address = module.tl_module_address
-    module.tl_module_pass_num += 1
-    module_pass_label = (module_address, module.tl_module_pass_num)
-    module.tl_module_pass_labels.append(module_pass_label)
-    input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
-    for t in input_tensors:
-        model_history = module.tl_source_model_history
-        tensor_entry = model_history[t.tl_tensor_label_raw]
-        module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
-        tensor_entry.modules_entered.append(module_address)
-        tensor_entry.module_passes_entered.append(module_pass_label)
-        tensor_entry.is_submodule_input = True
-        tensor_entry.module_entry_exit_thread_output.append(('+', module_pass_label[0], module_pass_label[1]))
+        # The function call
+        out = orig_forward(*args, **kwargs)
 
+        # "Post-hook" operations:
+        module_address = module.tl_module_address
+        module_pass_num = module.tl_module_pass_num
+        module_entry_label = module.tl_module_pass_labels.pop()
+        output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
+        for t in output_tensors:
+            if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
+                t = getattr(torch, 'identity')(t)
+            tensor_entry = model_history[t.tl_tensor_label_raw]
+            tensor_entry.is_submodule_output = True
+            tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
+            tensor_entry.modules_exited.append(module_address)
+            tensor_entry.module_passes_exited.append((module_address, module_pass_num))
+            tensor_entry.module_entry_exit_thread_output.append(('-', module_entry_label[0], module_entry_label[1]))
+            module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
-def module_post_hook(module: nn.Module,
-                     input_,
-                     output_):
-    """Hook to run after the module is executed: it marks the tensors as no longer being inside a module,
-    indicates which module it is, and add
+        for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
+            tensor_entry = model_history[t.tl_tensor_label_raw]
+            input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
+            if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
+                module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
+                tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
+                                                               :module_entry_ix]
 
-    Args:
-        module: The module.
-        input_: The input.
-        output_: The output.
+        return out
 
-    Returns:
-        Nothing, but records all relevant data.
-    """
-    module_address = module.tl_module_address
-    module_pass_num = module.tl_module_pass_num
-    module_entry_label = module.tl_module_pass_labels.pop()
-    input_tensors = get_vars_of_type_from_obj(input_, torch.Tensor)
-    output_tensors = get_vars_of_type_from_obj(output_, torch.Tensor)
-    for t in output_tensors:
-        if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
-            t = getattr(torch, 'identity')(t)
-
-        model_history = module.tl_source_model_history
-        tensor_entry = model_history[t.tl_tensor_label_raw]
-        tensor_entry.is_submodule_output = True
-        tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
-        tensor_entry.modules_exited.append(module_address)
-        tensor_entry.module_passes_exited.append((module_address, module_pass_num))
-        tensor_entry.module_entry_exit_thread_output.append(('-', module_entry_label[0], module_entry_label[1]))
-        module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
-
-    for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
-        model_history = module.tl_source_model_history
-        tensor_entry = model_history[t.tl_tensor_label_raw]
-        input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
-        if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
-            module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-            tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
-                                                           :module_entry_ix]
-
-    return output_
+    return decorated_forward
 
 
 def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
@@ -350,7 +336,7 @@ def get_all_submodules(model: nn.Module,
 
 
 def cleanup_model(model: nn.Module,
-                  hook_handles: List,
+                  module_orig_forward_funcs: Dict[nn.Module, Callable],
                   model_device: str,
                   decorated_func_mapper: Dict[Callable, Callable]):
     """Reverses all temporary changes to the model (namely, the forward hooks and added
@@ -358,14 +344,18 @@ def cleanup_model(model: nn.Module,
 
     Args:
         model: PyTorch model.
-        hook_handles: List of hooks.
         model_device: Device the model is stored on
+        module_orig_forward_funcs: Dict containing the original, undecorated forward pass functions for each submodule
         decorated_func_mapper: Dict mapping between original and decorated PyTorch funcs
 
     Returns:
         Original version of the model.
     """
-    clear_hooks(hook_handles)
+    submodules = get_all_submodules(model, is_top_level_model=True)
+    for submodule in submodules:
+        if submodule == model:
+            continue
+        submodule.forward = module_orig_forward_funcs[submodule]
     restore_model_attributes(model, decorated_func_mapper=decorated_func_mapper, attribute_keyword='tl')
     undecorate_model_tensors(model, model_device)
 

@@ -328,7 +328,7 @@ class TensorLogEntry:
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
-            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) " \
+            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc.__name__}) " \
                  f"{module_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
@@ -1688,39 +1688,43 @@ class ModelHistory:
 
         self._add_output_layers()
 
-        # Step 2: Remove orphan nodes, find nodes that don't terminate in output node
+        # Step 2: Trace which nodes are ancestors of output nodes
+
+        self._find_output_ancestors()
+
+        # Step 3: Remove orphan nodes, find nodes that don't terminate in output node
 
         self._remove_orphan_nodes()
 
-        # Step 3: Find mix/max distance from input and output nodes
+        # Step 4: Find mix/max distance from input and output nodes
 
         if mark_input_output_distances:
             self._mark_input_output_distances()
 
-        # Step 4: Starting from terminal single boolean tensors, mark the conditional branches.
+        # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
 
         self._mark_conditional_branches()
 
-        # Step 5: Annotate the containing modules for all internally-generated tensors (they don't know where
+        # Step 6: Annotate the containing modules for all internally-generated tensors (they don't know where
         # they are when they're made; have to trace breadcrumbs from tensors that came from input).
 
         self._fix_modules_for_internal_tensors()
 
-        # Step 6: Identify all loops, mark repeated layers.
+        # Step 7: Identify all loops, mark repeated layers.
 
         self._assign_corresponding_tensors_to_same_layer()
 
-        # Step 7: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+        # Step 8: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 
         self._map_raw_tensor_labels_to_final_tensor_labels()
 
-        # Step 8: Process ModelHistory into its final user-facing version: undecorate all tensors,
+        # Step 9: Process ModelHistory into its final user-facing version: undecorate all tensors,
         # do any tallying/totals/labeling, log the module hierarchy, rename all tensors,
         # get the operation numbers for all layer labels.
 
         self._final_prettify(decorated_func_mapper)
 
-        # Step 9: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+        # Step 10: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
         self._set_pass_finished()
 
@@ -1786,6 +1790,8 @@ class ModelHistory:
 
             # Fix ancestry information:
 
+            new_output_node.is_output_ancestor = True
+            new_output_node.output_descendents = {new_output_node.tensor_label_raw}
             new_output_node.child_layers = []
             new_output_node.parent_layers = [output_node.tensor_label_raw]
             new_output_node.sibling_layers = []
@@ -1812,6 +1818,21 @@ class ModelHistory:
 
         self.output_layers = new_output_layers
 
+    def _find_output_ancestors(self):
+        node_stack = self.output_layers[:]
+        nodes_seen = set()
+        while len(node_stack) > 0:
+            node_label = node_stack.pop()
+            nodes_seen.add(node_label)
+            node = self[node_label]
+            for child_node_label in node.child_layers:
+                if self[child_node_label].is_output_ancestor:
+                    node.is_output_ancestor = True
+                    node.output_descendents.update(self[child_node_label].output_descendents)
+            for parent_node_label in node.parent_layers:
+                if parent_node_label not in nodes_seen:
+                    node_stack.append(parent_node_label)
+
     def _remove_orphan_nodes(self):
         """
         Removes nodes that are connected to neither the input nor the output by flooding in both directions
@@ -1829,6 +1850,7 @@ class ModelHistory:
             for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
                 if next_label not in nodes_seen:
                     node_stack.append(next_label)
+
         orphan_nodes = orig_nodes - nodes_seen
 
         # Now remove all orphaned nodes.
