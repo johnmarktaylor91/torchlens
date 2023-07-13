@@ -1744,7 +1744,7 @@ class ModelHistory:
 
             new_output_node.func_applied = identity
             new_output_node.func_applied_name = 'none'
-            new_output_node.func_call_stack = self._get_call_stack_dicts(5)
+            new_output_node.func_call_stack = self._get_call_stack_dicts(start_level=5)
             new_output_node.func_time_elapsed = 0
             new_output_node.func_rng_states = log_current_rng_states()
             new_output_node.num_func_args_total = 0
