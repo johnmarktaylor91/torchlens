@@ -328,7 +328,7 @@ class TensorLogEntry:
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
-            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc.__name__}) " \
+            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) " \
                  f"{module_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
@@ -1251,7 +1251,7 @@ class ModelHistory:
         fields_dict['equivalent_operations'] = self.equivalent_operations[operation_equivalence_type]
 
         fields_dict['function_is_inplace'] = hasattr(t, 'tl_tensor_label_raw')
-        fields_dict['gradfunc'] = type(t.grad_fn)
+        fields_dict['gradfunc'] = type(t.grad_fn).__name__
 
         if fields_dict['is_part_of_iterable_output']:
             fields_dict['iterable_output_index'] = i
