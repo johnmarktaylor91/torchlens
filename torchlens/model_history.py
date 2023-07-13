@@ -328,7 +328,7 @@ class TensorLogEntry:
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
-            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) " \
+            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc.__name__}) " \
                  f"{module_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
