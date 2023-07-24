@@ -1627,7 +1627,7 @@ class ModelHistory:
     @staticmethod
     def _get_call_stack_dicts(start_level: int = 3):
         call_stack = inspect.stack()
-        call_stack = [inspect.getframeinfo(call_stack[i][0]) for i in range(start_level, len(call_stack))]
+        call_stack = [inspect.getframeinfo(call_stack[i][0], context=19) for i in range(start_level, len(call_stack))]
         call_stack_dicts = [{'call_fname': caller.filename, 'call_linenum': caller.lineno,
                              'function': caller.function, 'code_context': caller.code_context} for caller in call_stack]
         return call_stack_dicts
