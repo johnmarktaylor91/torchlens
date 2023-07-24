@@ -1030,8 +1030,8 @@ class ModelHistory:
 
         fields_dict = {}  # dict storing the arguments for initializing the new log entry
 
-        non_tensor_args = [arg for arg in args if not issubclass(type(arg), torch.Tensor)]
-        non_tensor_kwargs = {key: val for key, val in kwargs.items() if not issubclass(type(val), torch.Tensor)}
+        non_tensor_args = [arg for arg in args if not self._check_if_tensor_arg(arg)]
+        non_tensor_kwargs = {key: val for key, val in kwargs.items() if not self._check_if_tensor_arg(val)}
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
         parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
         parent_layer_entries = [self[label] for label in parent_layer_labels]
@@ -1358,6 +1358,25 @@ class ModelHistory:
                                                       key=lambda x: layer_order[x])
         tensor_log_entry = self[tensor_label]
         tensor_log_entry.log_tensor_grad(grad)
+
+    @staticmethod
+    def _check_if_tensor_arg(arg: Any) -> bool:
+        """Helper function to check if an argument either is a tensor or is a list/tuple containing a tensor.
+
+        Args:
+            arg: argument
+
+        Returns:
+            True if arg is or contains a tensor, false otherwise
+        """
+        if issubclass(type(arg), torch.Tensor):
+            return True
+        elif type(arg) in [list, tuple]:
+            for elt in arg:
+                if issubclass(type(elt), torch.Tensor):
+                    return True
+        else:
+            return False
 
     def _get_parent_tensor_function_call_location(self,
                                                   parent_log_entries: List[TensorLogEntry],
