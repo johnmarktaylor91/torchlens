@@ -13,6 +13,7 @@ import inspect
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
 from IPython.core.display import display
 
 from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
@@ -618,6 +619,7 @@ class ModelHistory:
         # Mapping from raw to final layer labels:
         self.raw_to_final_layer_labels = {}
         self.lookup_keys_to_tensor_num_dict = {}
+        self.tensor_num_to_lookup_keys_dict = defaultdict(list)
 
         # Special Layers:
         self.input_layers = []
@@ -2775,6 +2777,7 @@ class ModelHistory:
         tensor_entry.lookup_keys = lookup_keys_for_tensor
         for lookup_key in lookup_keys_for_tensor:
             self.lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.realtime_tensor_num
+            self.tensor_num_to_lookup_keys_dict[tensor_entry.realtime_tensor_num].append(lookup_key)
             self.layer_dict_all_keys[lookup_key] = tensor_entry
 
     @staticmethod
@@ -3582,6 +3585,32 @@ class ModelHistory:
                 subgraph_children = module_submodule_dict[subgraph_name_w_pass]
                 for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
                     subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
+
+    #############################
+    ### Save new activations ####
+    #############################
+
+    def save_new_activations(self,
+                             model: nn.Module,
+                             input_args: Union[torch.Tensor, List[Any]],
+                             input_kwargs: Dict[Any, Any] = None,
+                             which_layers: Union[str, List] = 'all'):
+        #  Fetch the layers to save, check that all layers are actually saved in the model.
+        if which_layers != 'all':
+            tensor_nums_to_save = []
+            bad_layers = []
+            for layer_key in which_layers:
+                if ((layer_key in self.lookup_keys_to_tensor_num_dict) and
+                        (self.lookup_keys_to_tensor_num_dict[layer_key] not in tensor_nums_to_save)):
+                    tensor_nums_to_save.append(self.lookup_keys_to_tensor_num_dict[layer_key])
+                elif layer_key not in self.layer_dict_all_keys:
+                    bad_layers.append(layer_key)
+            if len(bad_layers) > 0:
+                raise ValueError(f"Following desired layers not logged in ModelHistory: \n\t{bad_layers}")
+        else:
+            tensor_nums_to_save = 'all'
+
+        self.tensor_nums_to_save = tensor_nums_to_save
 
     @staticmethod
     def _get_max_nesting_depth(top_modules,
