@@ -228,6 +228,7 @@ class TensorLogEntry:
             t: the tensor.
             t_args: tensor positional arguments for the operation
             t_kwargs: tensor keyword arguments for the operation
+            save_function_args: whether to save the arguments to the function
             activation_postfunc: function to apply to activations before saving them
         """
         # The tensor itself:
@@ -356,9 +357,9 @@ class TensorLogEntry:
         """
         if self.tensor_contents is None:
             return ""
-        s = ''
-        tensor_size_shown = 8
-        if self.tensor_contents != 'none':
+        else:
+            s = ''
+            tensor_size_shown = 8
             saved_shape = self.tensor_contents.shape
             if len(saved_shape) == 0:
                 tensor_slice = self.tensor_contents
@@ -403,7 +404,7 @@ class TensorLogEntry:
         else:
             s += "\n\t\t- shares children with no other layers"
 
-        if self.has_input_ancestor:  # todo: put the ancestors here
+        if self.has_input_ancestor:
             s += '\n\t\t- descendent of input layers: ' + ', '.join(self.input_ancestors)
         else:
             s += "\n\t\t- tensor was created de novo inside the model (not computed from input)"
@@ -609,76 +610,76 @@ class ModelHistory:
         self.model_is_branching = False
 
         # Tensor Tracking:
-        self.layer_list = []
-        self.layer_list_rolled = []
-        self.layer_dict_main_keys = OrderedDict()
-        self.layer_dict_all_keys = OrderedDict()
-        self.layer_dict_rolled = OrderedDict()
-        self.layer_labels = []
-        self.layer_labels_w_pass = []
-        self.layer_labels_no_pass = []
-        self.layer_num_passes = OrderedDict()
-        self.raw_tensor_dict = OrderedDict()
-        self.raw_tensor_labels_list = []
-        self.tensor_nums_to_save = tensor_nums_to_save
-        self.tensor_counter = 0
-        self.raw_layer_type_counter = defaultdict(lambda: 0)
-        self.unsaved_layers_lookup_keys = set()
+        self.layer_list: List[TensorLogEntry] = []
+        self.layer_list_rolled: List[RolledTensorLogEntry] = []
+        self.layer_dict_main_keys: Dict[str, TensorLogEntry] = OrderedDict()
+        self.layer_dict_all_keys: Dict[str, TensorLogEntry] = OrderedDict()
+        self.layer_dict_rolled: Dict[str, RolledTensorLogEntry] = OrderedDict()
+        self.layer_labels: List[str] = []
+        self.layer_labels_w_pass: List[str] = []
+        self.layer_labels_no_pass: List[str] = []
+        self.layer_num_passes: Dict[str, int] = OrderedDict()
+        self.raw_tensor_dict: Dict[str, TensorLogEntry] = OrderedDict()
+        self.raw_tensor_labels_list: List[str] = []
+        self.tensor_nums_to_save: List[int] = tensor_nums_to_save
+        self.tensor_counter: int = 0
+        self.raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
+        self.unsaved_layers_lookup_keys: Set[str] = set()
 
         # Mapping from raw to final layer labels:
-        self.raw_to_final_layer_labels = {}
-        self.lookup_keys_to_tensor_num_dict = {}
-        self.tensor_num_to_lookup_keys_dict = defaultdict(list)
+        self.raw_to_final_layer_labels: Dict[str, str] = {}
+        self.lookup_keys_to_tensor_num_dict: Dict[str, int] = {}
+        self.tensor_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
 
         # Special Layers:
-        self.input_layers = []
-        self.output_layers = []
-        self.buffer_layers = []
-        self.internally_initialized_layers = []
-        self.layers_where_internal_branches_merge_with_input = []
-        self.internally_terminated_layers = []
-        self.internally_terminated_bool_layers = []
-        self.conditional_branch_edges = []
-        self.layers_with_saved_activations = []
-        self.layers_with_saved_gradients = []
-        self.layers_computed_with_params = defaultdict(list)
-        self.equivalent_operations = defaultdict(set)
-        self.same_layer_operations = defaultdict(list)
+        self.input_layers: List[str] = []
+        self.output_layers: List[str] = []
+        self.buffer_layers: List[str] = []
+        self.internally_initialized_layers: List[str] = []
+        self.layers_where_internal_branches_merge_with_input: List[str] = []
+        self.internally_terminated_layers: List[str] = []
+        self.internally_terminated_bool_layers: List[str] = []
+        self.conditional_branch_edges: List[Tuple[str, str]] = []
+        self.layers_with_saved_activations: List[str] = []
+        self.layers_with_saved_gradients: List[str] = []
+        self.layers_computed_with_params: Dict[str, List] = defaultdict(list)
+        self.equivalent_operations: Dict[str, set] = defaultdict(set)
+        self.same_layer_operations: Dict[str, list] = defaultdict(list)
 
         # Tensor info:
-        self.num_tensors_total = 0
-        self.tensor_fsize_total = 0
-        self.tensor_fsize_total_nice = human_readable_size(0)
-        self.num_tensors_saved = 0
-        self.tensor_fsize_saved = 0
-        self.tensor_fsize_saved_nice = human_readable_size(0)
+        self.num_tensors_total: int = 0
+        self.tensor_fsize_total: int = 0
+        self.tensor_fsize_total_nice: str = human_readable_size(0)
+        self.num_tensors_saved: int = 0
+        self.tensor_fsize_saved: int = 0
+        self.tensor_fsize_saved_nice: str = human_readable_size(0)
 
         # Param info:
-        self.total_param_tensors = 0
-        self.total_param_layers = 0
-        self.total_params = 0
-        self.total_params_fsize = 0
-        self.total_params_fsize_nice = human_readable_size(0)
+        self.total_param_tensors: int = 0
+        self.total_param_layers: int = 0
+        self.total_params: int = 0
+        self.total_params_fsize: int = 0
+        self.total_params_fsize_nice: str = human_readable_size(0)
 
         # Module info:
-        self.module_addresses = []
-        self.module_types = {}
-        self.module_passes = []
-        self.module_num_passes = defaultdict(lambda: 1)
-        self.top_level_modules = []
-        self.top_level_module_passes = []
-        self.module_children = defaultdict(list)
-        self.module_pass_children = defaultdict(list)
-        self.module_nparams = defaultdict(lambda: 0)
-        self.module_num_tensors = defaultdict(lambda: 0)
-        self.module_pass_num_tensors = defaultdict(lambda: 0)
+        self.module_addresses: List[str] = []
+        self.module_types: Dict[str, Any] = {}
+        self.module_passes: List = []
+        self.module_num_passes: Dict = defaultdict(lambda: 1)
+        self.top_level_modules: List = []
+        self.top_level_module_passes: List = []
+        self.module_children: Dict = defaultdict(list)
+        self.module_pass_children: Dict = defaultdict(list)
+        self.module_nparams: Dict = defaultdict(lambda: 0)
+        self.module_num_tensors: Dict = defaultdict(lambda: 0)
+        self.module_pass_num_tensors: Dict = defaultdict(lambda: 0)
 
         # Time elapsed:
-        self.pass_start_time = 0
-        self.pass_end_time = 0
-        self.elapsed_time_total = 0
-        self.elapsed_time_function_calls = 0
-        self.elapsed_time_torchlens_logging = 0
+        self.pass_start_time: float = 0
+        self.pass_end_time: float = 0
+        self.elapsed_time_total: float = 0
+        self.elapsed_time_function_calls: float = 0
+        self.elapsed_time_torchlens_logging: float = 0
 
     # ********************************************
     # ********** User-Facing Functions ***********
@@ -3603,12 +3604,33 @@ class ModelHistory:
                              model: nn.Module,
                              input_args: Union[torch.Tensor, List[Any]],
                              input_kwargs: Dict[Any, Any] = None,
-                             which_layers: Union[str, List] = 'all'):
+                             layers_to_save: Union[str, List] = 'all'):
+        """Saves activations to a new input to the model, replacing existing saved activations.
+        This will be much faster than the initial call to log_forward_pass (since all of the metadata has already been
+        saved), so if you wish to save the activations to many different inputs for a given model this is the function
+        you should use. The one caveat is that this function assumes that the computational graph will be the same
+        for the new input; if the model involves a dynamic computational graph that can change across inputs,
+        and this graph changes for the new input, then this function will throw an error. In that case,
+        you'll have to do a new call to log_forward_pass to log the new graph.
+
+        Args:
+            model: Model for which to save activations
+            input_args: Either a single tensor input to the model, or list of input arguments.
+            input_kwargs: Dict of keyword arguments to the model.
+            layers_to_save: List of layers to save, using any valid
+        Returns:
+            Nothing, but now the ModelHistory object will have saved activations for the new input.
+        """
+        if not self.all_layers_logged:
+            raise ValueError("Must have all layers logged in order to save new activations for the model. "
+                             "When calling log_forward_pass, either save all layers, or set "
+                             "keep_unsaved_layers to True.")
+
         #  Fetch the layers to save, check that all layers are actually saved in the model.
-        if which_layers != 'all':
+        if layers_to_save != 'all':
             tensor_nums_to_save = []
             bad_layers = []
-            for layer_key in which_layers:
+            for layer_key in layers_to_save:
                 if ((layer_key in self.lookup_keys_to_tensor_num_dict) and
                         (self.lookup_keys_to_tensor_num_dict[layer_key] not in tensor_nums_to_save)):
                     tensor_nums_to_save.append(self.lookup_keys_to_tensor_num_dict[layer_key])

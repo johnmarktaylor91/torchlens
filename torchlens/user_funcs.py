@@ -46,6 +46,7 @@ def log_forward_pass(model: nn.Module,
         input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
         input_kwargs: keyword arguments for model forward pass
         layers_to_save: list of layers to include (described above), or 'all' to include all layers.
+        keep_unsaved_layers: whether to keep layers without saved activations in the log (i.e., with just metadata)
         activation_postfunc: Function to apply to tensors before saving them (e.g., channelwise averaging).
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
@@ -82,6 +83,8 @@ def log_forward_pass(model: nn.Module,
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
 
     # If not saving all layers, do a probe pass.
+    if type(layers_to_save) == str:
+        layers_to_save = layers_to_save.lower()
 
     if layers_to_save == 'all':
         tensor_nums_to_save = 'all'
