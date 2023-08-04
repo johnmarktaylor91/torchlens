@@ -367,6 +367,24 @@ def safe_to(x: Any, device: str):
         return x
 
 
+def move_input_tensors_to_device(x: Any,
+                                 device: str):
+    """Moves all tensors in the input to the given device.
+
+    Args:
+        x: Input to the model.
+        device: Device to move the tensors to.
+    """
+    if type(x) == list:
+        x = [safe_to(t, device) for t in x]
+    elif type(x) == dict:
+        for k in x.keys():
+            x[k] = safe_to(x[k], device)
+    elif type(x) == torch.Tensor:
+        x = x.to(device)
+    return x
+
+
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """Returns the size of a tensor in bytes.
 

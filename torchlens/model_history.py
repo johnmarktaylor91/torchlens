@@ -1,6 +1,7 @@
 # This file is for defining the ModelHistory class that stores the representation of the forward pass.
 
 import copy
+import inspect
 import itertools as it
 import os
 import random
@@ -9,18 +10,20 @@ from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import graphviz
-import inspect
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn
 from IPython.core.display import display
+from torch import nn
 
 from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
     get_vars_of_type_from_obj, human_readable_size, identity, in_notebook, int_list_to_compact_str, \
-    log_current_rng_states, set_rng_from_saved_states, make_short_barcode_from_input, make_var_iterable, \
-    print_override, remove_entry_from_list, safe_copy, make_random_barcode, tuple_tolerant_assign
+    log_current_rng_states, make_random_barcode, make_short_barcode_from_input, make_var_iterable, \
+    move_input_tensors_to_device, print_override, remove_entry_from_list, safe_copy, set_random_seed, \
+    set_rng_from_saved_states, tuple_tolerant_assign
+from torchlens.model_funcs import cleanup_model, prepare_model
+from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch
 
 
 class TensorLogEntry:
@@ -573,35 +576,36 @@ class ModelHistory:
 
     def __init__(self,
                  model_name: str,
-                 random_seed_used: int,
-                 tensor_nums_to_save: Union[List[int], str] = 'all',
-                 keep_unsaved_layers: bool = True,
                  output_device: str = 'same',
                  activation_postfunc: Optional[Callable] = None,
-                 detach_saved_tensors: bool = False,
+                 keep_unsaved_layers: bool = True,
                  save_function_args: bool = False,
-                 save_gradients: bool = False):
+                 save_gradients: bool = False,
+                 detach_saved_tensors: bool = False,
+                 mark_input_output_distances: bool = True):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
         representation of the full history for the user afterward.
         """
+        # Setup:
+        activation_postfunc = copy.deepcopy(activation_postfunc)
+
         # General info
         self.model_name = model_name
         self.pass_finished = False
         self.track_tensors = False
         self.all_layers_logged = False
         self.all_layers_saved = False
-        if tensor_nums_to_save in ['none', None, []]:
-            tensor_nums_to_save = []
         self.keep_unsaved_layers = keep_unsaved_layers
         self.activation_postfunc = activation_postfunc
         self.current_function_call_barcode = None
-        self.random_seed_used = random_seed_used
+        self.random_seed_used = None
         self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
         self.save_function_args = save_function_args
         self.save_gradients = save_gradients
         self.has_saved_gradients = False
+        self.mark_input_output_distances = mark_input_output_distances
 
         # Model structure info
         self.model_is_recurrent = False
@@ -621,7 +625,7 @@ class ModelHistory:
         self.layer_num_passes: Dict[str, int] = OrderedDict()
         self.raw_tensor_dict: Dict[str, TensorLogEntry] = OrderedDict()
         self.raw_tensor_labels_list: List[str] = []
-        self.tensor_nums_to_save: List[int] = tensor_nums_to_save
+        self.tensor_nums_to_save: List[int] = []
         self.tensor_counter: int = 0
         self.raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
         self.unsaved_layers_lookup_keys: Set[str] = set()
@@ -823,9 +827,133 @@ class ModelHistory:
         raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
         return raw_tensor_nums_to_save
 
-    # ********************************************
-    # ************ Tensor Logging ****************
-    # ********************************************
+    def save_new_activations(self,
+                             model: nn.Module,
+                             input_args: Union[torch.Tensor, List[Any]],
+                             input_kwargs: Dict[Any, Any] = None,
+                             layers_to_save: Union[str, List] = 'all',
+                             random_seed: Optional[int] = None):
+        """Saves activations to a new input to the model, replacing existing saved activations.
+        This will be much faster than the initial call to log_forward_pass (since all of the metadata has already been
+        saved), so if you wish to save the activations to many different inputs for a given model this is the function
+        you should use. The one caveat is that this function assumes that the computational graph will be the same
+        for the new input; if the model involves a dynamic computational graph that can change across inputs,
+        and this graph changes for the new input, then this function will throw an error. In that case,
+        you'll have to do a new call to log_forward_pass to log the new graph.
+
+        Args:
+            model: Model for which to save activations
+            input_args: Either a single tensor input to the model, or list of input arguments.
+            input_kwargs: Dict of keyword arguments to the model.
+            layers_to_save: List of layers to save, using any valid lookup keys
+            random_seed: Which random seed to use
+        Returns:
+            Nothing, but now the ModelHistory object will have saved activations for the new input.
+        """
+        raise NotImplementedError  # todo: implement this
+        '''
+        if layers_to_save != 'all':
+            tensor_nums_to_save = []
+            bad_layers = []
+            for layer_key in layers_to_save:
+                if ((layer_key in self.lookup_keys_to_tensor_num_dict) and
+                        (self.lookup_keys_to_tensor_num_dict[layer_key] not in tensor_nums_to_save)):
+                    tensor_nums_to_save.append(self.lookup_keys_to_tensor_num_dict[layer_key])
+                elif layer_key not in self.layer_dict_all_keys:
+                    bad_layers.append(layer_key)
+            if len(bad_layers) > 0:
+                raise ValueError(f"Following desired layers not logged in ModelHistory: \n\t{bad_layers}")
+        else:
+            tensor_nums_to_save = 'all'
+    
+        self.tensor_nums_to_save = tensor_nums_to_save
+        '''
+
+    ########################################
+    #### Running and logging the model #####
+    ########################################
+
+    def run_and_log_inputs_through_model(self,
+                                         model: nn.Module,
+                                         input_args: Union[torch.Tensor, List[Any]],
+                                         input_kwargs: Dict[Any, Any] = None,
+                                         tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
+                                         random_seed: Optional[int] = None):
+        """Runs input through model and logs it in ModelHistory.
+
+        Args:
+            model: Model for which to save activations
+            input_args: Either a single tensor input to the model, or list of input arguments.
+            input_kwargs: Dict of keyword arguments to the model.
+            tensor_nums_to_save: List of tensor numbers to save
+            random_seed: Which random seed to use
+        Returns:
+            Nothing, but now the ModelHistory object will have saved activations for the new input.
+        """
+        if random_seed is None:  # set random seed
+            random_seed = random.randint(1, 4294967294)
+        self.random_seed_used = random_seed
+        set_random_seed(random_seed)
+
+        self.tensor_nums_to_save = tensor_nums_to_save
+
+        if type(input_args) == torch.Tensor:
+            input_args = [input_args]
+
+        if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
+            model = model.module
+
+        if len(list(model.parameters())) > 0:  # Get the model device by looking at the parameters:
+            model_device = next(iter(model.parameters())).device
+        else:
+            model_device = 'cpu'
+
+        input_args = copy.deepcopy(input_args)
+        input_kwargs = copy.deepcopy(input_kwargs)
+
+        self.pass_start_time = time.time()
+        module_orig_forward_funcs = {}
+        orig_func_defs = []
+
+        try:
+            input_args = move_input_tensors_to_device(input_args, model_device)
+            input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
+            input_arg_tensors = get_vars_of_type_from_obj(input_args, torch.Tensor)
+            input_kwarg_tensors = get_vars_of_type_from_obj(input_kwargs, torch.Tensor)
+            input_tensors = input_arg_tensors + input_kwarg_tensors
+            buffer_tensors = list(model.buffers())
+            tensors_to_decorate = input_tensors + buffer_tensors
+            decorated_func_mapper = decorate_pytorch(torch,
+                                                     tensors_to_decorate,
+                                                     orig_func_defs,
+                                                     self)
+            self.track_tensors = True
+            for t in input_tensors:
+                self.log_source_tensor(t, 'input')
+            prepare_model(model, module_orig_forward_funcs, self, decorated_func_mapper)
+            outputs = model(*input_args, **input_kwargs)
+            self.track_tensors = False
+            output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
+            for t in output_tensors:
+                self.output_layers.append(t.tl_tensor_label_raw)
+                self[t.tl_tensor_label_raw].is_output_layer = True
+            tensors_to_undecorate = tensors_to_decorate + output_tensors
+            undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate, decorated_func_mapper)
+            cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
+            self.postprocess(decorated_func_mapper)
+            decorated_func_mapper.clear()
+
+        except Exception as e:  # if anything fails, make sure everything gets cleaned up
+            undecorate_pytorch(torch, orig_func_defs, input_tensors, decorated_func_mapper)
+            cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
+            print("************\nFeature extraction failed; returning model and environment to normal\n*************")
+            raise e
+
+        finally:  # do garbage collection no matter what
+            del input_args
+            del output_tensors
+            del outputs
+            torch.cuda.empty_cache()
 
     def log_source_tensor(self,
                           t: torch.Tensor,
@@ -1718,7 +1846,7 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, decorated_func_mapper: Dict, mark_input_output_distances: bool = True):
+    def postprocess(self, decorated_func_mapper: Dict):
         """
         After the forward pass, cleans up the log into its final form.
         """
@@ -1736,7 +1864,7 @@ class ModelHistory:
 
         # Step 4: Find mix/max distance from input and output nodes
 
-        if mark_input_output_distances:
+        if self.mark_input_output_distances:
             self._mark_input_output_distances()
 
         # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
@@ -1769,10 +1897,10 @@ class ModelHistory:
         # Step 12: Undecorate all saved tensors and remove saved grad_fns.
         self._undecorate_all_saved_tensors(decorated_func_mapper)
 
-        # Clear the cache after any tensor deletions for garbage collection purposes:
+        # Step 13: Clear the cache after any tensor deletions for garbage collection purposes:
         torch.cuda.empty_cache()
 
-        # Step 10: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+        # Step 14: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
         self._set_pass_finished()
 
@@ -3595,53 +3723,6 @@ class ModelHistory:
                 subgraph_children = module_submodule_dict[subgraph_name_w_pass]
                 for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
                     subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
-
-    #############################
-    ### Save new activations ####
-    #############################
-
-    def save_new_activations(self,
-                             model: nn.Module,
-                             input_args: Union[torch.Tensor, List[Any]],
-                             input_kwargs: Dict[Any, Any] = None,
-                             layers_to_save: Union[str, List] = 'all'):
-        """Saves activations to a new input to the model, replacing existing saved activations.
-        This will be much faster than the initial call to log_forward_pass (since all of the metadata has already been
-        saved), so if you wish to save the activations to many different inputs for a given model this is the function
-        you should use. The one caveat is that this function assumes that the computational graph will be the same
-        for the new input; if the model involves a dynamic computational graph that can change across inputs,
-        and this graph changes for the new input, then this function will throw an error. In that case,
-        you'll have to do a new call to log_forward_pass to log the new graph.
-
-        Args:
-            model: Model for which to save activations
-            input_args: Either a single tensor input to the model, or list of input arguments.
-            input_kwargs: Dict of keyword arguments to the model.
-            layers_to_save: List of layers to save, using any valid
-        Returns:
-            Nothing, but now the ModelHistory object will have saved activations for the new input.
-        """
-        if not self.all_layers_logged:
-            raise ValueError("Must have all layers logged in order to save new activations for the model. "
-                             "When calling log_forward_pass, either save all layers, or set "
-                             "keep_unsaved_layers to True.")
-
-        #  Fetch the layers to save, check that all layers are actually saved in the model.
-        if layers_to_save != 'all':
-            tensor_nums_to_save = []
-            bad_layers = []
-            for layer_key in layers_to_save:
-                if ((layer_key in self.lookup_keys_to_tensor_num_dict) and
-                        (self.lookup_keys_to_tensor_num_dict[layer_key] not in tensor_nums_to_save)):
-                    tensor_nums_to_save.append(self.lookup_keys_to_tensor_num_dict[layer_key])
-                elif layer_key not in self.layer_dict_all_keys:
-                    bad_layers.append(layer_key)
-            if len(bad_layers) > 0:
-                raise ValueError(f"Following desired layers not logged in ModelHistory: \n\t{bad_layers}")
-        else:
-            tensor_nums_to_save = 'all'
-
-        self.tensor_nums_to_save = tensor_nums_to_save
 
     @staticmethod
     def _get_max_nesting_depth(top_modules,

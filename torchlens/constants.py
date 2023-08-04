@@ -23,6 +23,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'save_gradients',
     'has_saved_gradients',
     'activation_postfunc',
+    'mark_input_output_distances',
 
     # Model structure info
     'model_is_recurrent',

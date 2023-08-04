@@ -7,8 +7,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.helper_funcs import get_vars_of_type_from_obj, remove_attributes_starting_with_str, safe_to, \
-    set_random_seed
+from helper_funcs import move_input_tensors_to_device
+from torchlens.helper_funcs import get_vars_of_type_from_obj, remove_attributes_starting_with_str, set_random_seed
 from torchlens.model_history import ModelHistory
 from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, undecorate_tensor
 
@@ -48,96 +48,21 @@ def run_model_and_save_specified_activations(model: nn.Module,
     Returns:
         ModelHistory object with full log of the forward pass
     """
-    if type(input_args) == torch.Tensor:
-        input_args = [input_args]
-
-    if random_seed is None:  # set random seed
-        random_seed = random.randint(1, 4294967294)
-    set_random_seed(random_seed)
-
-    if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
-        model = model.module
-
-    if len(list(model.parameters())) > 0:  # Get the model device by looking at the parameters:
-        model_device = next(iter(model.parameters())).device
-    else:
-        model_device = 'cpu'
-
-    input_args = copy.deepcopy(input_args)
-    activation_postfunc = copy.deepcopy(activation_postfunc)
     model_name = str(type(model).__name__)
     model_history = ModelHistory(model_name,
-                                 random_seed,
-                                 tensor_nums_to_save,
-                                 keep_unsaved_layers,
                                  output_device,
                                  activation_postfunc,
-                                 detach_saved_tensors,
+                                 keep_unsaved_layers,
                                  save_function_args,
-                                 save_gradients)
-    model_history.pass_start_time = time.time()
-
-    module_orig_forward_funcs = {}
-    orig_func_defs = []
-
-    try:
-        input_args = move_input_tensors_to_device(input_args, model_device)
-        input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
-        input_arg_tensors = get_vars_of_type_from_obj(input_args, torch.Tensor)
-        input_kwarg_tensors = get_vars_of_type_from_obj(input_kwargs, torch.Tensor)
-        input_tensors = input_arg_tensors + input_kwarg_tensors
-        buffer_tensors = list(model.buffers())
-        tensors_to_decorate = input_tensors + buffer_tensors
-        decorated_func_mapper = decorate_pytorch(torch,
-                                                 tensors_to_decorate,
-                                                 orig_func_defs,
-                                                 model_history)
-        model_history.track_tensors = True
-        for t in input_tensors:
-            model_history.log_source_tensor(t, 'input')
-        prepare_model(model, module_orig_forward_funcs, model_history, decorated_func_mapper)
-        outputs = model(*input_args, **input_kwargs)
-        model_history.track_tensors = False
-        output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
-        for t in output_tensors:
-            model_history.output_layers.append(t.tl_tensor_label_raw)
-            model_history[t.tl_tensor_label_raw].is_output_layer = True
-        tensors_to_undecorate = tensors_to_decorate + output_tensors
-        undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate, decorated_func_mapper)
-        cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
-        model_history.postprocess(decorated_func_mapper, mark_input_output_distances)
-        decorated_func_mapper.clear()
-        return model_history
-
-    except Exception as e:  # if anything fails, make sure everything gets cleaned up
-        undecorate_pytorch(torch, orig_func_defs, input_tensors, decorated_func_mapper)
-        cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
-        print("************\nFeature extraction failed; returning model and environment to normal\n*************")
-        raise e
-
-    finally:  # do garbage collection no matter what
-        del input_args
-        del output_tensors
-        del outputs
-        torch.cuda.empty_cache()
-
-
-def move_input_tensors_to_device(x: Any,
-                                 device: str):
-    """Moves all tensors in the input to the given device.
-
-    Args:
-        x: Input to the model.
-        device: Device to move the tensors to.
-    """
-    if type(x) == list:
-        x = [safe_to(t, device) for t in x]
-    elif type(x) == dict:
-        for k in x.keys():
-            x[k] = safe_to(x[k], device)
-    elif type(x) == torch.Tensor:
-        x = x.to(device)
-    return x
+                                 save_gradients,
+                                 detach_saved_tensors,
+                                 mark_input_output_distances)
+    model_history.run_and_log_inputs_through_model(model,
+                                                   input_args,
+                                                   input_kwargs,
+                                                   tensor_nums_to_save,
+                                                   random_seed)
+    return model_history
 
 
 def prepare_model(model: nn.Module,
