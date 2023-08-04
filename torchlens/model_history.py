@@ -168,6 +168,7 @@ class TensorLogEntry:
         self.is_computed_inside_submodule = fields_dict['is_computed_inside_submodule']
         self.containing_module_origin = fields_dict['containing_module_origin']
         self.containing_modules_origin_nested = fields_dict['containing_modules_origin_nested']
+        self.module_nesting_depth = fields_dict['module_nesting_depth']
         self.modules_entered = fields_dict['modules_entered']
         self.module_passes_entered = fields_dict['module_passes_entered']
         self.is_submodule_input = fields_dict['is_submodule_input']
@@ -573,7 +574,7 @@ class ModelHistory:
                  model_name: str,
                  random_seed_used: int,
                  tensor_nums_to_save: Union[List[int], str] = 'all',
-                 keep_layers_without_saved_activations: bool = True,
+                 keep_unsaved_layers: bool = True,
                  output_device: str = 'same',
                  activation_postfunc: Optional[Callable] = None,
                  detach_saved_tensors: bool = False,
@@ -588,9 +589,10 @@ class ModelHistory:
         self.pass_finished = False
         self.track_tensors = False
         self.all_layers_logged = False
+        self.all_layers_saved = False
         if tensor_nums_to_save in ['none', None, []]:
             tensor_nums_to_save = []
-        self.keep_layers_without_saved_activations = keep_layers_without_saved_activations
+        self.keep_unsaved_layers = keep_unsaved_layers
         self.activation_postfunc = activation_postfunc
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
@@ -986,6 +988,7 @@ class ModelHistory:
             'is_computed_inside_submodule': False,
             'containing_module_origin': None,
             'containing_modules_origin_nested': [],
+            'module_nesting_depth': 0,
             'modules_entered': [],
             'module_passes_entered': [],
             'is_submodule_input': False,
@@ -1140,6 +1143,7 @@ class ModelHistory:
         fields_dict['is_computed_inside_submodule'] = is_computed_inside_submodule
         fields_dict['containing_module_origin'] = containing_module_origin
         fields_dict['containing_modules_origin_nested'] = containing_modules_origin_nested
+        fields_dict['module_nesting_depth'] = len(containing_modules_origin_nested)
         fields_dict['modules_entered'] = []
         fields_dict['module_passes_entered'] = []
         fields_dict['is_submodule_input'] = False
@@ -2682,13 +2686,13 @@ class ModelHistory:
                 self.module_addresses.append(module_name)
             if module_pass_label not in self.module_passes:
                 self.module_passes.append(module_pass_nice_label)
+        tensor_entry.module_nesting_depth = len(tensor_entry.containing_modules_origin_nested)
 
     def _remove_unwanted_entries_and_log_remaining(self):
         """Removes entries from ModelHistory that we don't want in the final saved output,
         and logs information about the remaining entries.
         """
         tensors_to_remove = []
-        self.unsaved_layers_lookup_keys = set()
         # Quick loop to count how many tensors are saved:
         for tensor_entry in self:
             if tensor_entry.has_saved_activations:
@@ -2697,7 +2701,7 @@ class ModelHistory:
         i = 0
         for tensor_entry in self:
             # Determine valid lookup keys and relate them to the tensor's realtime operation number:
-            if tensor_entry.has_saved_activations or self.keep_layers_without_saved_activations:
+            if tensor_entry.has_saved_activations or self.keep_unsaved_layers:
                 # Add the lookup keys for the layer, to itself and to ModelHistory:
                 self._add_lookup_keys_for_tensor_entry(tensor_entry, i, self.num_tensors_saved)
 
@@ -2716,10 +2720,13 @@ class ModelHistory:
                 tensors_to_remove.append(tensor_entry)
                 self.unsaved_layers_lookup_keys.update(tensor_entry.lookup_keys)
 
-        if (self.num_tensors_saved == len(self)) or self.keep_layers_without_saved_activations:
+        if (self.num_tensors_saved == len(self)) or self.keep_unsaved_layers:
             self.all_layers_logged = True
         else:
             self.all_layers_logged = False
+
+        if self.num_tensors_saved == len(self):
+            self.all_layers_saved = True
 
         # Remove unused entries.
         for tensor_entry in tensors_to_remove:
@@ -2921,7 +2928,7 @@ class ModelHistory:
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      show_buffer_layers: bool = False,
-                     direction: str = 'vertical') -> None:
+                     direction: str = 'bottomup') -> None:
         """Renders the computational graph for the model.
 
         Args:
@@ -2932,13 +2939,12 @@ class ModelHistory:
             save_only: whether to only save the graph without immediately showing it
             vis_fileformat: file format to use for the rendered graph
             show_buffer_layers: whether to show the buffer layers
-            direction: which way the graph should go: either 'vertical' or 'horizontal'
+            direction: which way the graph should go: either 'bottomup', 'topdown', or 'leftright'
 
         """
         if not self.all_layers_logged:
-            raise ValueError("Must have all layers logged in order to render the graph; either save "
-                             "all layers in get_model_activations, or use show_model_graph to "
-                             "render the graph without saving any activations.")
+            raise ValueError("Must have all layers logged in order to render the graph; either save all layers,"
+                             "set keep_unsaved_layers to True, or use show_model_graph.")
 
         if vis_opt == 'unrolled':
             entries_to_plot = self.layer_dict_main_keys
@@ -2948,12 +2954,14 @@ class ModelHistory:
         else:
             raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
 
-        if direction == 'vertical':
+        if direction == 'bottomup':
             rankdir = 'BT'
-        elif direction == 'horizontal':
+        elif direction == 'leftright':
             rankdir = 'LR'
+        elif direction == 'topdown':
+            rankdir = 'TB'
         else:
-            raise ValueError("direction must be either 'vertical' or 'horizontal'")
+            raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
 
         graph_caption = (
             f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors_total} "
@@ -4172,7 +4180,11 @@ class ModelHistory:
         s += self._module_hierarchy_str()
 
         # Now print all layers.
-        s += f"\n\tLayers:"
+        s += f"\n\tLayers"
+        if self.all_layers_saved:
+            s += " (all have saved activations):"
+        else:
+            s += " (* means layer has saved activations):"
         for layer_ind, layer_barcode in enumerate(self.layer_labels):
             pass_num = self.layer_dict_main_keys[layer_barcode].pass_num
             total_passes = self.layer_dict_main_keys[layer_barcode].layer_passes_total
@@ -4180,7 +4192,10 @@ class ModelHistory:
                 pass_str = f" ({pass_num}/{total_passes} passes)"
             else:
                 pass_str = ''
+
             s += f"\n\t\t({layer_ind}) {layer_barcode} {pass_str}"
+            if self.layer_dict_main_keys[layer_barcode].has_saved_activations:
+                s += f" *"
 
         return s
 

@@ -29,7 +29,7 @@ def log_forward_pass(model: nn.Module,
                      vis_save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      vis_buffer_layers: bool = False,
-                     vis_direction: str = 'vertical',
+                     vis_direction: str = 'bottomup',
                      random_seed: Optional[int] = None) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -64,7 +64,7 @@ def log_forward_pass(model: nn.Module,
         vis_save_only: whether to only save the graph visual without immediately showing it
         vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
         vis_buffer_layers: whether to visualize the buffer layers
-        vis_direction: either 'vertical' or 'horizontal'
+        vis_direction: either 'bottomup', 'topdown', or 'leftright'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
@@ -139,7 +139,7 @@ def show_model_graph(model: nn.Module,
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      vis_buffer_layers: bool = False,
-                     vis_direction: str = 'vertical',
+                     vis_direction: str = 'bottomup',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
@@ -157,7 +157,7 @@ def show_model_graph(model: nn.Module,
         save_only: whether to only save the graph visual without immediately showing it
         vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
         vis_buffer_layers: whether to visualize the buffer layers
-        vis_direction: either 'vertical' or 'horizontal'
+        vis_direction: either 'bottomup', 'topdown', or 'leftright'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
