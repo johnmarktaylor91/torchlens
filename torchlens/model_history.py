@@ -77,6 +77,7 @@ class TensorLogEntry:
         self.output_device = fields_dict['output_device']
         self.activation_postfunc = fields_dict['activation_postfunc']
         self.detach_saved_tensor = fields_dict['detach_saved_tensor']
+        self.function_args_saved = fields_dict['function_args_saved']
         self.creation_args = fields_dict['creation_args']
         self.creation_kwargs = fields_dict['creation_kwargs']
         self.tensor_shape = fields_dict['tensor_shape']
@@ -218,6 +219,7 @@ class TensorLogEntry:
                          t: torch.Tensor,
                          t_args: List,
                          t_kwargs: Dict,
+                         save_function_args: bool,
                          activation_postfunc: Optional[Callable] = None):
         """Saves the tensor data for a given tensor operation.
 
@@ -237,16 +239,20 @@ class TensorLogEntry:
         self.has_saved_activations = True
 
         # Tensor args and kwargs:
-        creation_args = []
-        for arg in t_args:
-            creation_args.append(safe_copy(arg))
+        if save_function_args:
+            self.function_args_saved = True
+            creation_args = []
+            for arg in t_args:
+                creation_args.append(safe_copy(arg))
 
-        creation_kwargs = {}
-        for key, value in t_kwargs.items():
-            creation_kwargs[key] = safe_copy(value)
-
-        self.creation_args = creation_args
-        self.creation_kwargs = creation_kwargs
+            creation_kwargs = {}
+            for key, value in t_kwargs.items():
+                creation_kwargs[key] = safe_copy(value)
+            self.creation_args = creation_args
+            self.creation_kwargs = creation_kwargs
+        else:
+            self.creation_args = None
+            self.creation_kwargs = None
 
     def log_tensor_grad(self, grad: torch.Tensor):
         """Logs the gradient for a tensor to the log entry
@@ -570,6 +576,7 @@ class ModelHistory:
                  output_device: str = 'same',
                  activation_postfunc: Optional[Callable] = None,
                  detach_saved_tensors: bool = False,
+                 save_function_args: bool = False,
                  save_gradients: bool = False):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
@@ -590,6 +597,7 @@ class ModelHistory:
         self.random_seed_used = random_seed_used
         self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
+        self.save_function_args = save_function_args
         self.save_gradients = save_gradients
         self.has_saved_gradients = False
 
@@ -630,6 +638,7 @@ class ModelHistory:
         self.internally_terminated_layers = []
         self.internally_terminated_bool_layers = []
         self.conditional_branch_edges = []
+        self.layers_with_saved_activations = []
         self.layers_with_saved_gradients = []
         self.layers_computed_with_params = defaultdict(list)
         self.equivalent_operations = defaultdict(set)
@@ -887,8 +896,9 @@ class ModelHistory:
             'activation_postfunc': self.activation_postfunc,
             'detach_saved_tensor': self.detach_saved_tensors,
             'output_device': self.output_device,
-            'creation_args': [],
-            'creation_kwargs': {},
+            'function_args_saved': False,
+            'creation_args': None,
+            'creation_kwargs': None,
             'tensor_shape': tuple(t.shape),
             'tensor_dtype': t.dtype,
             'tensor_fsize': get_tensor_memory_amount(t),
@@ -1294,8 +1304,9 @@ class ModelHistory:
         fields_dict['tensor_contents'] = None
         fields_dict['has_saved_activations'] = False
         fields_dict['activation_postfunc'] = self.activation_postfunc
-        fields_dict['creation_args'] = []
-        fields_dict['creation_kwargs'] = {}
+        fields_dict['function_args_saved'] = False
+        fields_dict['creation_args'] = None
+        fields_dict['creation_kwargs'] = None
         fields_dict['tensor_shape'] = tuple(t.shape)
         fields_dict['tensor_dtype'] = t.dtype
         fields_dict['tensor_fsize'] = get_tensor_memory_amount(t)
@@ -1334,6 +1345,7 @@ class ModelHistory:
         new_entry = TensorLogEntry(fields_dict)
         if (self.tensor_nums_to_save == 'all') or (new_entry.realtime_tensor_num in self.tensor_nums_to_save):
             new_entry.save_tensor_data(t, t_args, t_kwargs, activation_postfunc)
+            self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
         self.raw_tensor_dict[new_entry.tensor_label_raw] = new_entry
         self.raw_tensor_labels_list.append(new_entry.tensor_label_raw)
 
@@ -1740,11 +1752,21 @@ class ModelHistory:
 
         self._map_raw_tensor_labels_to_final_tensor_labels()
 
-        # Step 9: Process ModelHistory into its final user-facing version: undecorate all tensors,
-        # do any tallying/totals/labeling, log the module hierarchy, rename all tensors,
-        # get the operation numbers for all layer labels.
+        # Step 9: Go through and log information pertaining to all layers:
+        self._log_final_info_for_all_layers()
 
-        self._final_prettify(decorated_func_mapper)
+        # Step 10: Rename the raw tensor entries in the fields of ModelHistory:
+        self._rename_model_history_layer_names()
+        self._trim_and_reorder_model_history_fields()
+
+        # Step 11: And one more pass to delete unused layers from the record and do final tidying up:
+        self._remove_unwanted_entries_and_log_remaining()
+
+        # Step 12: Undecorate all saved tensors and remove saved grad_fns.
+        self._undecorate_all_saved_tensors(decorated_func_mapper)
+
+        # Clear the cache after any tensor deletions for garbage collection purposes:
+        torch.cuda.empty_cache()
 
         # Step 10: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
@@ -2539,27 +2561,6 @@ class ModelHistory:
             raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
 
-    def _final_prettify(self, decorated_func_mapper):
-        """
-        Goes through all tensor log entries for the final stages of pre-processing to make the
-        user-facing version of ModelHistory.
-        """
-        # Go through and log information pertaining to all layers:
-        self._log_final_info_for_all_layers()
-
-        # Rename the raw tensor entries in the fields of ModelHistory:
-        self._rename_model_history_layer_names()
-        self._trim_and_reorder_model_history_fields()
-
-        # And one more pass to delete unused layers from the record and do final tidying up:
-        self._remove_unwanted_entries_and_log_remaining()
-
-        # Undecorate all saved tensors and remove saved grad_fns.
-        self._undecorate_all_saved_tensors(decorated_func_mapper)
-
-        # Clear the cache after any tensor deletions for garbage collection purposes:
-        torch.cuda.empty_cache()
-
     def _log_final_info_for_all_layers(self):
         """
         Goes through all layers (before discarding unsaved ones), and logs final info about the model
@@ -2800,7 +2801,8 @@ class ModelHistory:
         """
         list_fields_to_rename = ['input_layers', 'output_layers', 'buffer_layers', 'internally_initialized_layers',
                                  'layers_where_internal_branches_merge_with_input', 'internally_terminated_layers',
-                                 'internally_terminated_bool_layers']
+                                 'internally_terminated_bool_layers', 'layers_with_saved_gradients',
+                                 'layers_with_saved_activations']
         for field in list_fields_to_rename:
             tensor_labels = getattr(self, field)
             setattr(self, field, [self.raw_to_final_layer_labels[tensor_label] for tensor_label in tensor_labels])

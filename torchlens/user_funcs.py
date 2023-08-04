@@ -121,41 +121,6 @@ def log_forward_pass(model: nn.Module,
     return model_history
 
 
-def get_model_metadata(model: nn.Module,
-                       input_args: torch.Tensor,
-                       input_kwargs: Dict[Any, Any] = None,
-                       mark_input_output_distances: bool = False,
-                       random_seed: Optional[int] = None) -> ModelHistory:
-    """
-    Equivalent to get_model_activations, but only fetches layer metadata without saving activations.
-
-    Args:
-        model: PyTorch model.
-        input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
-        input_kwargs: Keyword arguments for model forward pass, if applicable
-        mark_input_output_distances: whether to mark the distance of each layer from the input or output;
-            False by default since this is computationally expensive.
-        random_seed: which random seed to use in case model involves randomness
-
-    Returns:
-        history_dict: Dict of dicts with the activations from each layer.
-    """
-    if not input_kwargs:
-        input_kwargs = {}
-
-    warn_parallel()
-    model_history = run_model_and_save_specified_activations(model=model,
-                                                             input_args=input_args,
-                                                             input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save=None,
-                                                             activation_postfunc=None,
-                                                             mark_input_output_distances=mark_input_output_distances,
-                                                             detach_saved_tensors=False,
-                                                             save_gradients=False,
-                                                             random_seed=random_seed)
-    return model_history
-
-
 def show_model_graph(model: nn.Module,
                      input_args: Union[torch.Tensor, List[Any]],
                      input_kwargs: Dict[Any, Any] = None,

@@ -18,6 +18,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'random_seed_used',
     'detach_saved_tensors',
     'output_device',
+    'save_function_args',
     'save_gradients',
     'has_saved_gradients',
     'activation_postfunc',
@@ -62,6 +63,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'layers_computed_with_params',
     'equivalent_operations',
     'same_layer_operations',
+    'layers_with_saved_activations',
     'layers_with_saved_gradients',
 
     # Tensor info:
@@ -130,6 +132,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'output_device',
     'activation_postfunc',
     'detach_saved_tensor',
+    'function_args_saved',
     'creation_args',
     'creation_kwargs',
     'tensor_shape',
