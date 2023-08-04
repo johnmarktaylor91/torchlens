@@ -17,10 +17,12 @@ def run_model_and_save_specified_activations(model: nn.Module,
                                              input_args: Union[torch.Tensor, List[Any]],
                                              input_kwargs: Dict[Any, Any],
                                              tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
+                                             keep_unsaved_layers: bool = True,
                                              output_device: str = 'same',
                                              activation_postfunc: Optional[Callable] = None,
                                              mark_input_output_distances: bool = False,
                                              detach_saved_tensors: bool = False,
+                                             save_function_args: bool = False,
                                              save_gradients: bool = False,
                                              random_seed: Optional[int] = None) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
@@ -32,12 +34,14 @@ def run_model_and_save_specified_activations(model: nn.Module,
         input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
         input_kwargs: Keyword arguments to the model's forward pass.
         tensor_nums_to_save: List of tensor numbers to save.
+        keep_unsaved_layers: Whether to keep layers in the ModelHistory log if they don't have saved activations.
         output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
             'cpu' or 'cuda' to move to cpu or cuda.
         activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
         mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
             This is computationally expensive for large networks, so it is off by default.
         detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
+        save_function_args: whether to save the arguments to each function
         save_gradients: whether to save gradients from any subsequent backward pass
         random_seed: Which random seed to use.
 
@@ -65,9 +69,11 @@ def run_model_and_save_specified_activations(model: nn.Module,
     model_history = ModelHistory(model_name,
                                  random_seed,
                                  tensor_nums_to_save,
+                                 keep_unsaved_layers,
                                  output_device,
                                  activation_postfunc,
                                  detach_saved_tensors,
+                                 save_function_args,
                                  save_gradients)
     model_history.pass_start_time = time.time()
 

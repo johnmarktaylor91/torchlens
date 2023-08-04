@@ -573,6 +573,7 @@ class ModelHistory:
                  model_name: str,
                  random_seed_used: int,
                  tensor_nums_to_save: Union[List[int], str] = 'all',
+                 keep_layers_without_saved_activations: bool = True,
                  output_device: str = 'same',
                  activation_postfunc: Optional[Callable] = None,
                  detach_saved_tensors: bool = False,
@@ -589,9 +590,7 @@ class ModelHistory:
         self.all_layers_logged = False
         if tensor_nums_to_save in ['none', None, []]:
             tensor_nums_to_save = []
-            self.keep_layers_without_saved_activations = True
-        else:
-            self.keep_layers_without_saved_activations = False
+        self.keep_layers_without_saved_activations = keep_layers_without_saved_activations
         self.activation_postfunc = activation_postfunc
         self.current_function_call_barcode = None
         self.random_seed_used = random_seed_used
@@ -4161,7 +4160,7 @@ class ModelHistory:
 
         s += "\n\tTensor info:"
         s += f"\n\t\t- {len(self.layer_list)} total tensors ({self.tensor_fsize_total_nice}) computed in forward pass."
-        s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.tensor_fsize_saved_nice}) saved in log."
+        s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.tensor_fsize_saved_nice}) with saved activations."
 
         # Model parameters:
 
