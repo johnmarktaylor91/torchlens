@@ -151,7 +151,7 @@ def prepare_buffer_tensors(model: nn.Module,
                     buffer_address = attribute_name
                 else:
                     buffer_address = submodule.tl_module_address + '.' + attribute_name
-                model_history.log_source_tensor(attribute, 'buffer', buffer_address)
+                model_history.log_source_tensor_exhaustive(attribute, 'buffer', buffer_address)
 
 
 def module_forward_decorator(orig_forward: Callable,

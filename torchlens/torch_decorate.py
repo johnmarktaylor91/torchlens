@@ -34,8 +34,12 @@ def torch_func_decorator(func: Callable,
             return out
 
         # Copy the args and kwargs in case they change in-place:
-        arg_copies = tuple([safe_copy(arg) for arg in args])
-        kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
+        if model_history.save_function_args:
+            arg_copies = tuple([safe_copy(arg) for arg in args])
+            kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
+        else:
+            arg_copies = args
+            kwarg_copies = kwargs
 
         # Call the function, tracking the timing, rng states, and whether it's a nested function
         func_call_barcode = make_random_barcode()
@@ -55,15 +59,15 @@ def torch_func_decorator(func: Callable,
                                                    subclass_exceptions=[torch.nn.Parameter])
 
         if len(output_tensors) > 0:
-            model_history.log_function_output_tensors(func,
-                                                      args,
-                                                      kwargs,
-                                                      arg_copies,
-                                                      kwarg_copies,
-                                                      out_orig,
-                                                      func_time_elapsed,
-                                                      func_rng_states,
-                                                      is_bottom_level_func)
+            model_history.log_function_output_tensors_exhaustive(func,
+                                                                 args,
+                                                                 kwargs,
+                                                                 arg_copies,
+                                                                 kwarg_copies,
+                                                                 out_orig,
+                                                                 func_time_elapsed,
+                                                                 func_rng_states,
+                                                                 is_bottom_level_func)
         return out_orig
 
     return wrapped_func

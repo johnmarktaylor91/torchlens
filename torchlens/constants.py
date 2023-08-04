@@ -12,6 +12,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'model_name',
     'pass_finished',
     'track_tensors',
+    'logging_mode',
     'all_layers_logged',
     'all_layers_saved',
     'keep_unsaved_layers',

@@ -594,6 +594,7 @@ class ModelHistory:
         self.model_name = model_name
         self.pass_finished = False
         self.track_tensors = False
+        self.logging_mode = 'exhaustive'
         self.all_layers_logged = False
         self.all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
@@ -929,7 +930,7 @@ class ModelHistory:
                                                      self)
             self.track_tensors = True
             for t in input_tensors:
-                self.log_source_tensor(t, 'input')
+                self.log_source_tensor_exhaustive(t, 'input')
             prepare_model(model, module_orig_forward_funcs, self, decorated_func_mapper)
             outputs = model(*input_args, **input_kwargs)
             self.track_tensors = False
@@ -959,6 +960,15 @@ class ModelHistory:
                           t: torch.Tensor,
                           source: str,
                           buffer_addr: Optional[str] = None):
+        if self.logging_mode == 'exhaustive':
+            self.log_source_tensor_exhaustive(t, source, buffer_addr)
+        elif self.logging_mode == 'fast':
+            self.log_source_tensor_fast(t, source, buffer_addr)
+
+    def log_source_tensor_exhaustive(self,
+                                     t: torch.Tensor,
+                                     source: str,
+                                     buffer_addr: Optional[str] = None):
         """Takes in an input or buffer tensor, marks it in-place with relevant information, and
         adds it to the log.
 
@@ -1153,6 +1163,37 @@ class ModelHistory:
                                     func_time_elapsed: float,
                                     func_rng_states: Dict,
                                     is_bottom_level_func: bool):
+        if self.logging_mode == 'exhaustive':
+            self.log_function_output_tensors_exhaustive(func,
+                                                        args,
+                                                        kwargs,
+                                                        arg_copies,
+                                                        kwarg_copies,
+                                                        out_orig,
+                                                        func_time_elapsed,
+                                                        func_rng_states,
+                                                        is_bottom_level_func)
+        elif self.logging_mode == 'fast':
+            self.log_function_output_tensors_fast(func,
+                                                  args,
+                                                  kwargs,
+                                                  arg_copies,
+                                                  kwarg_copies,
+                                                  out_orig,
+                                                  func_time_elapsed,
+                                                  func_rng_states,
+                                                  is_bottom_level_func)
+
+    def log_function_output_tensors_exhaustive(self,
+                                               func: Callable,
+                                               args: Tuple[Any],
+                                               kwargs: Dict[str, Any],
+                                               arg_copies: Tuple[Any],
+                                               kwarg_copies: Dict[str, Any],
+                                               out_orig: Any,
+                                               func_time_elapsed: float,
+                                               func_rng_states: Dict,
+                                               is_bottom_level_func: bool):
         """Logs tensor or set of tensors that were computed from a function call.
 
         Args:
