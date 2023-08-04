@@ -853,6 +853,7 @@ class ModelHistory:
         """
         raise NotImplementedError  # todo: implement this
         '''
+        self.logging_mode = 'fast'
         if layers_to_save != 'all':
             tensor_nums_to_save = []
             bad_layers = []
@@ -1153,6 +1154,12 @@ class ModelHistory:
             self.buffer_layers.append(tensor_label)
             self.internally_initialized_layers.append(tensor_label)
 
+    def log_source_tensor_fast(self,
+                               t: torch.Tensor,
+                               source: str,
+                               buffer_addr: Optional[str] = None):
+        raise NotImplementedError
+
     def log_function_output_tensors(self,
                                     func: Callable,
                                     args: Tuple[Any],
@@ -1361,6 +1368,18 @@ class ModelHistory:
             out.tl_tensor_label_raw = fields_dict_onetensor['tensor_label_raw']
             if self.save_gradients:
                 self._add_backward_hook(out, out.tl_tensor_label_raw)
+
+    def log_function_output_tensors_fast(self,
+                                         func: Callable,
+                                         args: Tuple[Any],
+                                         kwargs: Dict[str, Any],
+                                         arg_copies: Tuple[Any],
+                                         kwarg_copies: Dict[str, Any],
+                                         out_orig: Any,
+                                         func_time_elapsed: float,
+                                         func_rng_states: Dict,
+                                         is_bottom_level_func: bool):
+        raise NotImplementedError
 
     @staticmethod
     def _output_should_be_logged(out: Any,
