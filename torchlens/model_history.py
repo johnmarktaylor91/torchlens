@@ -1381,7 +1381,6 @@ class ModelHistory:
         Returns:
             Nothing, but now the ModelHistory object will have saved activations for the new input.
         """
-        print(f"Start: {time.time()}")
         self.logging_mode = 'fast'
         tensor_nums_to_save = self.get_op_nums_from_user_labels(layers_to_save)
 
@@ -1476,9 +1475,7 @@ class ModelHistory:
             for t in input_tensors:
                 self.log_source_tensor(t, 'input')
             self.prepare_model(model, module_orig_forward_funcs, decorated_func_mapper)
-            print(f"Before forward pass: {time.time()}")
             outputs = model(*input_args, **input_kwargs)
-            print(f"After forward pass: {time.time()}")
             self.track_tensors = False
             output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
             for t in output_tensors:
@@ -1489,7 +1486,6 @@ class ModelHistory:
             self.cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
             self.postprocess(decorated_func_mapper)
             decorated_func_mapper.clear()
-            print(f"End: {time.time()}")
 
         except Exception as e:  # if anything fails, make sure everything gets cleaned up
             self.undecorate_pytorch(torch, orig_func_defs, input_tensors, decorated_func_mapper)
