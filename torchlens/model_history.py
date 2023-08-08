@@ -221,7 +221,7 @@ class TensorLogEntry:
 
     def save_tensor_data(self,
                          t: torch.Tensor,
-                         t_args: List,
+                         t_args: Union[List, Tuple],
                          t_kwargs: Dict,
                          save_function_args: bool,
                          activation_postfunc: Optional[Callable] = None):
@@ -300,10 +300,10 @@ class TensorLogEntry:
         s += f"\n\tComputed in modules: {self.containing_modules_origin_nested}"
         s += f"\n\tOutput of modules: {self.module_passes_exited}"
         if self.is_bottom_level_submodule_output:
-            s += f" (bottom-level submodule output)"
+            s += " (bottom-level submodule output)"
         else:
-            s += f" (not bottom-level submodule output)"
-        s += f"\n\tFamily info:"
+            s += " (not bottom-level submodule output)"
+        s += "\n\tFamily info:"
         s += f"\n\t\tParents: {self.parent_layers}"
         s += f"\n\t\tChildren: {self.child_layers}"
         s += f"\n\t\tSpouses: {self.spouse_layers}"
@@ -334,7 +334,7 @@ class TensorLogEntry:
             s += f"\n\tParams: Computed from params with shape {params_shapes_str}; " \
                  f"{self.num_params_total} params total ({self.parent_params_fsize_nice})"
         else:
-            s += f"\n\tParams: no params used"
+            s += "\n\tParams: no params used"
         if self.containing_module_origin is None:
             module_str = "\n\tComputed inside module: not computed inside a module"
         else:
@@ -347,7 +347,7 @@ class TensorLogEntry:
             modules_exited_str = ', '.join(self.modules_exited)
             s += f"\n\tOutput of modules: {modules_exited_str}"
         else:
-            s += f"\n\tOutput of modules: none"
+            s += "\n\tOutput of modules: none"
         if self.is_bottom_level_submodule_output:
             s += f"\n\tOutput of bottom-level module: {self.bottom_level_submodule_pass_exited}"
         lookup_keys_str = ', '.join([str(key) for key in self.lookup_keys])
@@ -964,7 +964,7 @@ class ModelHistory:
         if self.logging_mode == 'exhaustive':
             self.log_source_tensor_exhaustive(t, source, buffer_addr)
         elif self.logging_mode == 'fast':
-            self.log_source_tensor_fast(t, source, buffer_addr)
+            self.log_source_tensor_fast(t, source)
 
     def log_source_tensor_exhaustive(self,
                                      t: torch.Tensor,
@@ -1156,9 +1156,34 @@ class ModelHistory:
 
     def log_source_tensor_fast(self,
                                t: torch.Tensor,
-                               source: str,
-                               buffer_addr: Optional[str] = None):
-        raise NotImplementedError
+                               source: str):
+        """NOTES TO SELF--fields to change are:
+        for ModelHistory: pass timing, num tensors saved, tensor fsize
+        for Tensors: tensor contents, fsize, args, kwargs, make sure to clear gradients.
+        Add a minimal postprocessing thing for tallying stuff pertaining to saved tensors.
+        Have some minimal checker to make sure the graph didn't change.
+        """
+        layer_type = source
+        # Fetch counters and increment to be ready for next tensor to be logged
+        self.tensor_counter += 1
+        self.raw_layer_type_counter[layer_type] += 1
+        realtime_tensor_num = self.tensor_counter
+        layer_type_num = self.raw_layer_type_counter[layer_type]
+
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+        t.tl_tensor_label_raw = tensor_label_raw
+
+        orig_tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
+        orig_tensor_entry = self[orig_tensor_label]
+        if (self.tensor_nums_to_save == 'all') or (orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save):
+            self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
+            orig_tensor_entry.save_tensor_data(t, [], {}, self.save_function_args, self.activation_postfunc)
+
+        orig_tensor_entry
+        orig_tensor_entry.tensor_shape = tuple(t.shape)
+        orig_tensor_entry.tensor_dtype = t.dtype
+        orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(t)
+        orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(t))
 
     def log_function_output_tensors(self,
                                     func: Callable,
@@ -1379,8 +1404,63 @@ class ModelHistory:
                                          func_time_elapsed: float,
                                          func_rng_states: Dict,
                                          is_bottom_level_func: bool):
-        raise NotImplementedError
+        # Collect information.
+        func_name = func.__name__
+        layer_type = func_name.lower().replace('_', '')
+        all_args = list(args) + list(kwargs.values())
+        non_tensor_args = [arg for arg in args if not self._check_if_tensor_arg(arg)]
+        non_tensor_kwargs = {key: val for key, val in kwargs.items() if not self._check_if_tensor_arg(val)}
 
+        arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
+        parent_layer_labels_raw = get_attr_values_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
+        parent_layer_labels_orig = [self.raw_to_final_layer_labels[raw_label] for raw_label in
+                                    parent_layer_labels_raw]
+        out_iter = make_var_iterable(out_orig)
+
+        for i, out in enumerate(out_iter):
+            if not self._output_should_be_logged(out, is_bottom_level_func):
+                continue
+            self.tensor_counter += 1
+            self.raw_layer_type_counter[layer_type] += 1
+            realtime_tensor_num = self.tensor_counter
+            layer_type_num = self.raw_layer_type_counter[layer_type]
+            tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+            out.tl_tensor_label_raw = tensor_label_raw
+            if tensor_label_raw not in self.raw_to_final_layer_labels:
+                raise ValueError("The computational graph changed for this forward pass compared to the original"
+                                 "call to log_forward_pass (either due to different inputs or a different"
+                                 "random seed), so save_new_activations failed. Please re-run"
+                                 "log_forward_pass with the desired inputs.")
+            orig_tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
+            orig_tensor_entry = self[orig_tensor_label]
+
+            # Check to make sure the graph didn't change.
+            if any([orig_tensor_entry.realtime_tensor_num != self.tensor_counter,
+                    orig_tensor_entry.layer_type != layer_type,
+                    orig_tensor_entry.layer_type_num != layer_type_num,
+                    orig_tensor_entry.tensor_label_raw != tensor_label_raw,
+                    set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig)]):
+                raise ValueError("The computational graph changed for this forward pass compared to the original"
+                                 "call to log_forward_pass (either due to different inputs or a different"
+                                 "random seed), so save_new_activations failed. Please re-run"
+                                 "log_forward_pass with the desired inputs.")
+
+            # Update any relevant fields.
+            if (self.tensor_nums_to_save == 'all') or (
+                    orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save):
+                self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
+                orig_tensor_entry.save_tensor_data(out, arg_copies, kwarg_copies,
+                                                   self.save_function_args, self.activation_postfunc)
+
+            orig_tensor_entry.tensor_shape = tuple(out.shape)
+            orig_tensor_entry.tensor_dtype = out.dtype
+            orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(out)
+            orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(out))
+            orig_tensor_entry.func_time_elapsed = func_time_elapsed
+            orig_tensor_entry.func_rng_states = func_rng_states
+            orig_tensor_entry.func_position_args_non_tensor = non_tensor_args
+            orig_tensor_entry.func_keyword_args_non_tensor = non_tensor_kwargs
+        
     @staticmethod
     def _output_should_be_logged(out: Any,
                                  is_bottom_level_func: bool) -> bool:
@@ -1536,7 +1616,7 @@ class ModelHistory:
 
         new_entry = TensorLogEntry(fields_dict)
         if (self.tensor_nums_to_save == 'all') or (new_entry.realtime_tensor_num in self.tensor_nums_to_save):
-            new_entry.save_tensor_data(t, t_args, t_kwargs, activation_postfunc)
+            new_entry.save_tensor_data(t, t_args, t_kwargs, self.save_function_args, activation_postfunc)
             self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
         self.raw_tensor_dict[new_entry.tensor_label_raw] = new_entry
         self.raw_tensor_labels_list.append(new_entry.tensor_label_raw)
@@ -4310,7 +4390,7 @@ class ModelHistory:
         if self.model_is_recurrent:
             s += f"\n\t\t- recurrent (at most {self.model_max_recurrent_loops} loops)"
         else:
-            s += f"\n\t\t- purely feedforward, no recurrence"
+            s += "\n\t\t- purely feedforward, no recurrence"
 
         if self.model_is_branching:
             s += "\n\t\t- with branching"
@@ -4339,11 +4419,11 @@ class ModelHistory:
              f"{self.total_params_fsize_nice})"
 
         # Print the module hierarchy.
-        s += f"\n\tModule Hierarchy:"
+        s += "\n\tModule Hierarchy:"
         s += self._module_hierarchy_str()
 
         # Now print all layers.
-        s += f"\n\tLayers"
+        s += "\n\tLayers"
         if self.all_layers_saved:
             s += " (all have saved activations):"
         else:
@@ -4358,7 +4438,7 @@ class ModelHistory:
 
             s += f"\n\t\t({layer_ind}) {layer_barcode} {pass_str}"
             if self.layer_dict_main_keys[layer_barcode].has_saved_activations:
-                s += f" *"
+                s += " *"
 
         return s
 
@@ -4376,7 +4456,7 @@ class ModelHistory:
         s += f"\n\tInternally terminated tensors: {self.internally_terminated_layers}"
         s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_layers}"
         s += f"\n\tBuffer tensors: {self.buffer_layers}"
-        s += f"\n\tRaw layer labels:"
+        s += "\n\tRaw layer labels:"
         for layer in self.raw_tensor_labels_list:
             s += f"\n\t\t{layer}"
         return s
