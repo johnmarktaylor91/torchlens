@@ -1119,8 +1119,13 @@ class ModelHistory:
                                  module: nn.Module) -> Callable:
         @wraps(orig_forward)
         def decorated_forward(*args, **kwargs):
-            if self.logging_mode == 'fast':
-                return orig_forward(*args, **kwargs)
+            if self.logging_mode == 'fast':  # do bare minimum for logging.
+                out = orig_forward(*args, **kwargs)
+                output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
+                for t in output_tensors:
+                    if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
+                        t = getattr(torch, 'identity')(t)
+                return out
 
             # "Pre-hook" operations:
             module_address = module.tl_module_address
@@ -1973,9 +1978,9 @@ class ModelHistory:
                                         parent_layer_labels_raw]
             out.tl_tensor_label_raw = tensor_label_raw
             if tensor_label_raw not in self.raw_to_final_layer_labels:
-                raise ValueError("The computational graph changed for this forward pass compared to the original"
-                                 "call to log_forward_pass (either due to different inputs or a different"
-                                 "random seed), so save_new_activations failed. Please re-run"
+                raise ValueError("The computational graph changed for this forward pass compared to the original "
+                                 "call to log_forward_pass (either due to different inputs or a different "
+                                 "random seed), so save_new_activations failed. Please re-run "
                                  "log_forward_pass with the desired inputs.")
             orig_tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
             orig_tensor_entry = self[orig_tensor_label]
@@ -1983,12 +1988,11 @@ class ModelHistory:
             # Check to make sure the graph didn't change.
             if any([orig_tensor_entry.realtime_tensor_num != self.tensor_counter,
                     orig_tensor_entry.layer_type != layer_type,
-                    orig_tensor_entry.layer_type_num != layer_type_num,
                     orig_tensor_entry.tensor_label_raw != tensor_label_raw,
                     set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig)]):
-                raise ValueError("The computational graph changed for this forward pass compared to the original"
-                                 "call to log_forward_pass (either due to different inputs or a different"
-                                 "random seed), so save_new_activations failed. Please re-run"
+                raise ValueError("The computational graph changed for this forward pass compared to the original "
+                                 "call to log_forward_pass (either due to different inputs or a different "
+                                 "random seed), so save_new_activations failed. Please re-run "
                                  "log_forward_pass with the desired inputs.")
 
             # Update any relevant fields.
