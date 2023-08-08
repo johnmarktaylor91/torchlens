@@ -71,9 +71,6 @@ def log_forward_pass(model: nn.Module,
     Returns:
         ModelHistory object with layer activations and metadata
     """
-    if not input_kwargs:
-        input_kwargs = {}
-
     warn_parallel()
 
     if vis_opt not in ['none', 'rolled', 'unrolled']:
@@ -82,7 +79,6 @@ def log_forward_pass(model: nn.Module,
     if output_device not in ['same', 'cpu', 'cuda']:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
 
-    # If not saving all layers, do a probe pass.
     if type(layers_to_save) == str:
         layers_to_save = layers_to_save.lower()
 
