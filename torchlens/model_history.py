@@ -4998,6 +4998,8 @@ class ModelHistory:
         s += "\n\tLayers"
         if self.all_layers_saved:
             s += " (all have saved activations):"
+        elif self.num_tensors_saved == 0:
+            s += " (no layer activations are saved):"
         else:
             s += " (* means layer has saved activations):"
         for layer_ind, layer_barcode in enumerate(self.layer_labels):
