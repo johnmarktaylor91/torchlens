@@ -464,8 +464,9 @@ class RolledTensorLogEntry:
         self.cond_branch_start_children = source_entry.cond_branch_start_children
         self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
         self.atomic_bool_val = source_entry.atomic_bool_val
-        self.child_layers = list()
-        self.parent_layers = list()
+        self.child_layers = []
+        self.parent_layers = []
+        self.orphan_layers = []
 
         # Module info:
         self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
@@ -1714,6 +1715,8 @@ class ModelHistory:
 
         tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
         t.tl_tensor_label_raw = tensor_label_raw
+        if tensor_label_raw in self.orphan_layers:
+            return
 
         orig_tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
         orig_tensor_entry = self.layer_dict_all_keys[orig_tensor_label]
@@ -1953,9 +1956,6 @@ class ModelHistory:
         non_tensor_kwargs = {key: val for key, val in kwargs.items() if not self._check_if_tensor_arg(val)}
 
         arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
-        parent_layer_labels_raw = get_attr_values_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
-        parent_layer_labels_orig = [self.raw_to_final_layer_labels[raw_label] for raw_label in
-                                    parent_layer_labels_raw]
         out_iter = make_var_iterable(out_orig)
 
         for i, out in enumerate(out_iter):
@@ -1966,6 +1966,11 @@ class ModelHistory:
             realtime_tensor_num = self.tensor_counter
             layer_type_num = self.raw_layer_type_counter[layer_type]
             tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+            if tensor_label_raw in self.orphan_layers:
+                continue
+            parent_layer_labels_raw = get_attr_values_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
+            parent_layer_labels_orig = [self.raw_to_final_layer_labels[raw_label] for raw_label in
+                                        parent_layer_labels_raw]
             out.tl_tensor_label_raw = tensor_label_raw
             if tensor_label_raw not in self.raw_to_final_layer_labels:
                 raise ValueError("The computational graph changed for this forward pass compared to the original"
@@ -2502,6 +2507,8 @@ class ModelHistory:
         remove_entry_from_list(self.internally_initialized_layers, layer_to_remove)
         remove_entry_from_list(self.internally_terminated_layers, layer_to_remove)
         remove_entry_from_list(self.internally_terminated_bool_layers, layer_to_remove)
+        remove_entry_from_list(self.layers_with_saved_activations, layer_to_remove)
+        remove_entry_from_list(self.layers_with_saved_gradients, layer_to_remove)
         remove_entry_from_list(self.layers_where_internal_branches_merge_with_input, layer_to_remove)
 
         self.conditional_branch_edges = [tup for tup in self.conditional_branch_edges if layer_to_remove not in tup]
@@ -2716,7 +2723,7 @@ class ModelHistory:
         while len(node_stack) > 0:
             tensor_label = node_stack.pop()
             nodes_seen.add(tensor_label)
-            tensor_entry = self[tensor_label]
+            tensor_entry = self.raw_tensor_dict[tensor_label]
             if (len(tensor_entry.child_layers) == 0) and (not tensor_entry.is_output_layer):
                 self._log_internally_terminated_tensor(tensor_label)
             for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
@@ -2724,6 +2731,7 @@ class ModelHistory:
                     node_stack.append(next_label)
 
         orphan_nodes = orig_nodes - nodes_seen
+        self.orphan_layers = list(orphan_nodes)
 
         # Now remove all orphaned nodes.
 

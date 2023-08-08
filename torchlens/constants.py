@@ -68,6 +68,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'same_layer_operations',
     'layers_with_saved_activations',
     'layers_with_saved_gradients',
+    'orphan_layers',
 
     # Tensor info:
     'num_tensors_total',
