@@ -9,7 +9,7 @@ import random
 from tqdm import tqdm
 
 from torchlens.helper_funcs import warn_parallel, get_vars_of_type_from_obj, set_random_seed
-from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_activations
+from torchlens.model_history import ModelHistory, run_model_and_save_specified_activations
 
 
 def log_forward_pass(model: nn.Module,
