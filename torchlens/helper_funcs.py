@@ -204,7 +204,7 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
 def get_vars_of_type_from_obj(obj: Any,
                               which_type: Type,
                               subclass_exceptions: Optional[List] = None,
-                              search_depth: int = 5) -> List:
+                              search_depth: int = 3) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
 

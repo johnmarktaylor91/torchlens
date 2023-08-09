@@ -82,39 +82,38 @@ def log_forward_pass(model: nn.Module,
     if type(layers_to_save) == str:
         layers_to_save = layers_to_save.lower()
 
-    if layers_to_save == 'all':
-        tensor_nums_to_save = 'all'
-    elif layers_to_save in ['none', None, []]:
-        tensor_nums_to_save = None
+    if layers_to_save in ['all', 'none', None, []]:
+        model_history = run_model_and_save_specified_activations(model=model,
+                                                                 input_args=input_args,
+                                                                 input_kwargs=input_kwargs,
+                                                                 layers_to_save=layers_to_save,
+                                                                 keep_unsaved_layers=keep_unsaved_layers,
+                                                                 output_device=output_device,
+                                                                 activation_postfunc=activation_postfunc,
+                                                                 mark_input_output_distances=mark_input_output_distances,
+                                                                 detach_saved_tensors=detach_saved_tensors,
+                                                                 save_function_args=save_function_args,
+                                                                 save_gradients=save_gradients,
+                                                                 random_seed=random_seed)
     else:
         model_history = run_model_and_save_specified_activations(model=model,
                                                                  input_args=input_args,
                                                                  input_kwargs=input_kwargs,
-                                                                 tensor_nums_to_save=None,
+                                                                 layers_to_save=None,
                                                                  keep_unsaved_layers=True,
                                                                  output_device=output_device,
                                                                  activation_postfunc=activation_postfunc,
-                                                                 mark_input_output_distances=False,
-                                                                 detach_saved_tensors=False,
-                                                                 save_function_args=False,
-                                                                 save_gradients=False,
+                                                                 mark_input_output_distances=mark_input_output_distances,
+                                                                 detach_saved_tensors=detach_saved_tensors,
+                                                                 save_function_args=save_function_args,
+                                                                 save_gradients=save_gradients,
                                                                  random_seed=random_seed)
-        tensor_nums_to_save = model_history.get_op_nums_from_user_labels(layers_to_save)
-
-    # And now save the activations for real.
-
-    model_history = run_model_and_save_specified_activations(model=model,
-                                                             input_args=input_args,
-                                                             input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save=tensor_nums_to_save,
-                                                             keep_unsaved_layers=keep_unsaved_layers,
-                                                             output_device=output_device,
-                                                             activation_postfunc=activation_postfunc,
-                                                             mark_input_output_distances=mark_input_output_distances,
-                                                             detach_saved_tensors=detach_saved_tensors,
-                                                             save_function_args=save_function_args,
-                                                             save_gradients=save_gradients,
-                                                             random_seed=random_seed)
+        model_history.keep_unsaved_layers = keep_unsaved_layers
+        model_history.save_new_activations(model=model,
+                                           input_args=input_args,
+                                           input_kwargs=input_kwargs,
+                                           layers_to_save=layers_to_save,
+                                           random_seed=random_seed)
 
     # Visualize if desired.
     if vis_opt != 'none':
@@ -124,7 +123,7 @@ def log_forward_pass(model: nn.Module,
                                    vis_save_only,
                                    vis_fileformat,
                                    vis_buffer_layers,
-                                   vis_direction)  # change after adding options
+                                   vis_direction)
 
     return model_history
 
@@ -171,7 +170,7 @@ def show_model_graph(model: nn.Module,
     model_history = run_model_and_save_specified_activations(model=model,
                                                              input_args=input_args,
                                                              input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save=None,
+                                                             layers_to_save=None,
                                                              activation_postfunc=None,
                                                              mark_input_output_distances=False,
                                                              detach_saved_tensors=False,
@@ -219,7 +218,7 @@ def validate_saved_activations(model: nn.Module,
     model_history = run_model_and_save_specified_activations(model=model,
                                                              input_args=input_args,
                                                              input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save='all',
+                                                             layers_to_save='all',
                                                              keep_unsaved_layers=True,
                                                              activation_postfunc=None,
                                                              mark_input_output_distances=False,

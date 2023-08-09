@@ -67,6 +67,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     'equivalent_operations',
     'same_layer_operations',
     'layers_with_saved_activations',
+    'unlogged_layers',
     'layers_with_saved_gradients',
     'orphan_layers',
 
@@ -101,6 +102,9 @@ MODEL_HISTORY_FIELD_ORDER = [
     # Time elapsed
     'pass_start_time',
     'pass_end_time',
+    'elapsed_time_setup',
+    'elapsed_time_forward_pass',
+    'elapsed_time_cleanup',
     'elapsed_time_total',
     'elapsed_time_function_calls',
     'elapsed_time_torchlens_logging'
