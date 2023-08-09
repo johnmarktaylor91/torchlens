@@ -1,5 +1,4 @@
 # This file is for defining the ModelHistory class that stores the representation of the forward pass.
-# TODO: add more detailed logging of time
 import copy
 from functools import wraps
 import inspect
@@ -760,6 +759,11 @@ class ModelHistory:
                          'has_siblings',
                          'spouse_layers',
                          'has_spouses',
+                         'initialized_inside_model',
+                         'min_distance_from_input',
+                         'max_distance_from_input',
+                         'min_distance_from_output',
+                         'max_distance_from_output',
                          'computed_with_params',
                          'num_params_total',
                          'parent_param_shapes',
@@ -1455,7 +1459,7 @@ class ModelHistory:
             tensors_to_undecorate = tensors_to_decorate + output_tensors
             self.undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
             self.cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
-            self.postprocess(decorated_func_mapper)
+            self.postprocess()
             decorated_func_mapper.clear()
 
         except Exception as e:  # if anything fails, make sure everything gets cleaned up
@@ -2513,12 +2517,12 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, decorated_func_mapper: Dict):
+    def postprocess(self):
         """
         After the forward pass, cleans up the log into its final form.
         """
         if self.logging_mode == 'fast':
-            self.postprocess_fast(decorated_func_mapper)
+            self.postprocess_fast()
             return
 
         # Step 1: Add dedicated output nodes
@@ -2578,7 +2582,7 @@ class ModelHistory:
 
         self._set_pass_finished()
 
-    def postprocess_fast(self, decorated_func_mapper: Dict):
+    def postprocess_fast(self):
         self._trim_and_reorder_model_history_fields()
         self._remove_unwanted_entries_and_log_remaining()
         self._undecorate_all_saved_tensors()
