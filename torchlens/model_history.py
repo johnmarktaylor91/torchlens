@@ -151,6 +151,7 @@ class TensorLogEntry:
         self.min_distance_from_input = fields_dict['min_distance_from_input']
         self.max_distance_from_input = fields_dict['max_distance_from_input']
         self.is_output_layer = fields_dict['is_output_layer']
+        self.is_output_parent = fields_dict['is_output_parent']
         self.is_last_output_layer = fields_dict['is_last_output_layer']
         self.is_output_ancestor = fields_dict['is_output_ancestor']
         self.output_descendents = fields_dict['output_descendents']
@@ -861,8 +862,7 @@ class ModelHistory:
                                                  func_time_elapsed,
                                                  func_rng_states,
                                                  is_bottom_level_func)
-            else:
-                print(func)
+
             return out_orig
 
         return wrapped_func
@@ -1451,7 +1451,7 @@ class ModelHistory:
             output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
             for t in output_tensors:
                 self.output_layers.append(t.tl_tensor_label_raw)
-                self.raw_tensor_dict[t.tl_tensor_label_raw].is_output_layer = True
+                self.raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
             tensors_to_undecorate = tensors_to_decorate + output_tensors
             self.undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
             self.cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
@@ -1617,6 +1617,7 @@ class ModelHistory:
             'min_distance_from_input': None,
             'max_distance_from_input': None,
             'is_output_layer': False,
+            'is_output_parent': False,
             'is_last_output_layer': False,
             'is_output_ancestor': False,
             'output_descendents': set(),
@@ -1816,6 +1817,7 @@ class ModelHistory:
         fields_dict['min_distance_from_input'] = None
         fields_dict['max_distance_from_input'] = None
         fields_dict['is_output_layer'] = False
+        fields_dict['is_output_parent'] = False
         fields_dict['is_last_output_layer'] = False
         fields_dict['is_output_ancestor'] = False
         fields_dict['output_descendents'] = set()
@@ -1969,6 +1971,11 @@ class ModelHistory:
                 self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
                 orig_tensor_entry.save_tensor_data(out, arg_copies, kwarg_copies,
                                                    self.save_function_args, self.activation_postfunc)
+                for child_layer in orig_tensor_entry.child_layers:
+                    if child_layer in self.output_layers:
+                        child_output = self.layer_dict_main_keys[child_layer]
+                        child_output.save_tensor_data(out, [], {},
+                                                      self.save_function_args, self.activation_postfunc)
 
             orig_tensor_entry.tensor_shape = tuple(out.shape)
             orig_tensor_entry.tensor_dtype = out.dtype
@@ -2659,7 +2666,6 @@ class ModelHistory:
 
             # Change original output node:
 
-            output_node.is_output_layer = False
             output_node.child_layers.append(new_output_node.tensor_label_raw)
 
             self.raw_tensor_dict[new_output_node.tensor_label_raw] = new_output_node

@@ -207,6 +207,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'min_distance_from_input',
     'max_distance_from_input',
     'is_output_layer',
+    'is_output_parent',
     'is_last_output_layer',
     'is_output_ancestor',
     'output_descendents',
