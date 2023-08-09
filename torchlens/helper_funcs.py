@@ -253,7 +253,7 @@ def search_stack_for_vars_of_type(current_stack: List,
     if len(current_stack) == 0:
         return current_stack
     while len(current_stack) > 0:
-        item = current_stack.pop()
+        item = current_stack.pop(0)
         item_class = type(item)
         if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
             continue

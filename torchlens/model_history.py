@@ -2599,6 +2599,7 @@ class ModelHistory:
             output_node = self[output_layer_label]
             new_output_node = output_node.copy()
             new_output_node.layer_type = 'output'
+            new_output_node.is_output_layer = True
             if i == len(self.output_layers) - 1:
                 new_output_node.is_last_output_layer = True
             self.tensor_counter += 1
