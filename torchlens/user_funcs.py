@@ -1,17 +1,16 @@
 import os
+import random
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 import torch
 from torch import nn
-import random
-
 from tqdm import tqdm
 
 from torchlens.helper_funcs import (
-    warn_parallel,
     get_vars_of_type_from_obj,
     set_random_seed,
+    warn_parallel,
 )
 from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_activations
 

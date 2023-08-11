@@ -1,6 +1,7 @@
 # This file is for defining the ModelHistory class that stores the representation of the forward pass.
 
 import copy
+import inspect
 import itertools as it
 import os
 import random
@@ -9,7 +10,6 @@ from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import graphviz
-import inspect
 import numpy as np
 import pandas as pd
 import torch
@@ -25,13 +25,13 @@ from torchlens.helper_funcs import (
     in_notebook,
     int_list_to_compact_str,
     log_current_rng_states,
-    set_rng_from_saved_states,
+    make_random_barcode,
     make_short_barcode_from_input,
     make_var_iterable,
     print_override,
     remove_entry_from_list,
     safe_copy,
-    make_random_barcode,
+    set_rng_from_saved_states,
     tuple_tolerant_assign,
 )
 
