@@ -357,6 +357,7 @@ def safe_to(x: Any, device: str):
 
     Args:
         x: The object.
+        device: which device to move to
 
     Returns:
         Object either moved to device if a tensor, same object if otherwise.
