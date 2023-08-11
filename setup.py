@@ -34,5 +34,5 @@ setup(
         "Natural Language :: English",
         "Programming Language :: Python :: 3.9",
     ],
-    extras_require={"dev": ["black[jupyter]", "pytest"]},
+    extras_require={"dev": ["black[jupyter]", "pytest", "pre-commit"]},
 )
