@@ -7,22 +7,32 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import torch
 from torch import nn
 
-from torchlens.helper_funcs import get_vars_of_type_from_obj, remove_attributes_starting_with_str, safe_to, \
-    set_random_seed
+from torchlens.helper_funcs import (
+    get_vars_of_type_from_obj,
+    remove_attributes_starting_with_str,
+    safe_to,
+    set_random_seed,
+)
 from torchlens.model_history import ModelHistory
-from torchlens.torch_decorate import decorate_pytorch, undecorate_pytorch, undecorate_tensor
+from torchlens.torch_decorate import (
+    decorate_pytorch,
+    undecorate_pytorch,
+    undecorate_tensor,
+)
 
 
-def run_model_and_save_specified_activations(model: nn.Module,
-                                             input_args: Union[torch.Tensor, List[Any]],
-                                             input_kwargs: Dict[Any, Any],
-                                             tensor_nums_to_save: Optional[Union[str, List[int]]] = 'all',
-                                             output_device: str = 'same',
-                                             activation_postfunc: Optional[Callable] = None,
-                                             mark_input_output_distances: bool = False,
-                                             detach_saved_tensors: bool = False,
-                                             save_gradients: bool = False,
-                                             random_seed: Optional[int] = None) -> ModelHistory:
+def run_model_and_save_specified_activations(
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any]],
+    input_kwargs: Dict[Any, Any],
+    tensor_nums_to_save: Optional[Union[str, List[int]]] = "all",
+    output_device: str = "same",
+    activation_postfunc: Optional[Callable] = None,
+    mark_input_output_distances: bool = False,
+    detach_saved_tensors: bool = False,
+    save_gradients: bool = False,
+    random_seed: Optional[int] = None,
+) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
     they will be generated from the nicer human-readable names and then fed in).
@@ -54,21 +64,25 @@ def run_model_and_save_specified_activations(model: nn.Module,
     if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
         model = model.module
 
-    if len(list(model.parameters())) > 0:  # Get the model device by looking at the parameters:
+    if (
+        len(list(model.parameters())) > 0
+    ):  # Get the model device by looking at the parameters:
         model_device = next(iter(model.parameters())).device
     else:
-        model_device = 'cpu'
+        model_device = "cpu"
 
     input_args = copy.deepcopy(input_args)
     activation_postfunc = copy.deepcopy(activation_postfunc)
     model_name = str(type(model).__name__)
-    model_history = ModelHistory(model_name,
-                                 random_seed,
-                                 tensor_nums_to_save,
-                                 output_device,
-                                 activation_postfunc,
-                                 detach_saved_tensors,
-                                 save_gradients)
+    model_history = ModelHistory(
+        model_name,
+        random_seed,
+        tensor_nums_to_save,
+        output_device,
+        activation_postfunc,
+        detach_saved_tensors,
+        save_gradients,
+    )
     model_history.pass_start_time = time.time()
 
     module_orig_forward_funcs = {}
@@ -82,14 +96,15 @@ def run_model_and_save_specified_activations(model: nn.Module,
         input_tensors = input_arg_tensors + input_kwarg_tensors
         buffer_tensors = list(model.buffers())
         tensors_to_decorate = input_tensors + buffer_tensors
-        decorated_func_mapper = decorate_pytorch(torch,
-                                                 tensors_to_decorate,
-                                                 orig_func_defs,
-                                                 model_history)
+        decorated_func_mapper = decorate_pytorch(
+            torch, tensors_to_decorate, orig_func_defs, model_history
+        )
         model_history.track_tensors = True
         for t in input_tensors:
-            model_history.log_source_tensor(t, 'input')
-        prepare_model(model, module_orig_forward_funcs, model_history, decorated_func_mapper)
+            model_history.log_source_tensor(t, "input")
+        prepare_model(
+            model, module_orig_forward_funcs, model_history, decorated_func_mapper
+        )
         outputs = model(*input_args, **input_kwargs)
         model_history.track_tensors = False
         output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
@@ -97,16 +112,24 @@ def run_model_and_save_specified_activations(model: nn.Module,
             model_history.output_layers.append(t.tl_tensor_label_raw)
             model_history[t.tl_tensor_label_raw].is_output_layer = True
         tensors_to_undecorate = tensors_to_decorate + output_tensors
-        undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate, decorated_func_mapper)
-        cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
+        undecorate_pytorch(
+            torch, orig_func_defs, tensors_to_undecorate, decorated_func_mapper
+        )
+        cleanup_model(
+            model, module_orig_forward_funcs, model_device, decorated_func_mapper
+        )
         model_history.postprocess(decorated_func_mapper, mark_input_output_distances)
         decorated_func_mapper.clear()
         return model_history
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
         undecorate_pytorch(torch, orig_func_defs, input_tensors, decorated_func_mapper)
-        cleanup_model(model, module_orig_forward_funcs, model_device, decorated_func_mapper)
-        print("************\nFeature extraction failed; returning model and environment to normal\n*************")
+        cleanup_model(
+            model, module_orig_forward_funcs, model_device, decorated_func_mapper
+        )
+        print(
+            "************\nFeature extraction failed; returning model and environment to normal\n*************"
+        )
         raise e
 
     finally:  # do garbage collection no matter what
@@ -116,8 +139,7 @@ def run_model_and_save_specified_activations(model: nn.Module,
         torch.cuda.empty_cache()
 
 
-def move_input_tensors_to_device(x: Any,
-                                 device: str):
+def move_input_tensors_to_device(x: Any, device: str):
     """Moves all tensors in the input to the given device.
 
     Args:
@@ -134,10 +156,12 @@ def move_input_tensors_to_device(x: Any,
     return x
 
 
-def prepare_model(model: nn.Module,
-                  module_orig_forward_funcs: Dict,
-                  model_history: ModelHistory,
-                  decorated_func_mapper: Dict[Callable, Callable]):
+def prepare_model(
+    model: nn.Module,
+    module_orig_forward_funcs: Dict,
+    model_history: ModelHistory,
+    decorated_func_mapper: Dict[Callable, Callable],
+):
     """Adds annotations and hooks to the model, and decorates any functions in the model.
 
     Args:
@@ -150,10 +174,10 @@ def prepare_model(model: nn.Module,
         Model with hooks and attributes added.
     """
     model_history.model_name = str(type(model).__name__)
-    model.tl_module_address = ''
+    model.tl_module_address = ""
     model.tl_source_model_history = model_history
 
-    module_stack = [(model, '')]  # list of tuples (name, module)
+    module_stack = [(model, "")]  # list of tuples (name, module)
 
     while len(module_stack) > 0:
         module, parent_address = module_stack.pop()
@@ -161,13 +185,19 @@ def prepare_model(model: nn.Module,
 
         # Decorate any torch functions in the model:
         for func_name, func in module.__dict__.items():
-            if (func_name[0:2] == '__') or (not callable(func)) or (func not in decorated_func_mapper):
+            if (
+                (func_name[0:2] == "__")
+                or (not callable(func))
+                or (func not in decorated_func_mapper)
+            ):
                 continue
             module.__dict__[func_name] = decorated_func_mapper[func]
 
         # Annotate the children with the full address.
         for c, (child_name, child_module) in enumerate(module_children):
-            child_address = f"{parent_address}.{child_name}" if parent_address != '' else child_name
+            child_address = (
+                f"{parent_address}.{child_name}" if parent_address != "" else child_name
+            )
             child_module.tl_module_address = child_address
             module_children[c] = (child_module, child_address)
         module_stack = module_children + module_stack
@@ -185,9 +215,11 @@ def prepare_model(model: nn.Module,
 
         # Add decorators.
 
-        if hasattr(module, 'forward'):
+        if hasattr(module, "forward"):
             module_orig_forward_funcs[module] = module.forward
-            module.forward = module_forward_decorator(module.forward, module, model_history)
+            module.forward = module_forward_decorator(
+                module.forward, module, model_history
+            )
             module.forward.tl_forward_call_is_decorated = True
 
     # Mark all parameters with requires_grad = True, and mark what they were before, so they can be restored on cleanup.
@@ -199,8 +231,7 @@ def prepare_model(model: nn.Module,
     prepare_buffer_tensors(model, model_history)
 
 
-def prepare_buffer_tensors(model: nn.Module,
-                           model_history: ModelHistory):
+def prepare_buffer_tensors(model: nn.Module, model_history: ModelHistory):
     """Goes through a model and all its submodules, and prepares any "buffer" tensors: tensors
     attached to the module that aren't model parameters.
 
@@ -215,20 +246,21 @@ def prepare_buffer_tensors(model: nn.Module,
     for submodule in submodules:
         for attribute_name in dir(submodule):
             attribute = getattr(submodule, attribute_name)
-            if issubclass(type(attribute), torch.Tensor) and not issubclass(type(attribute), torch.nn.Parameter):
-                if submodule.tl_module_address == '':
+            if issubclass(type(attribute), torch.Tensor) and not issubclass(
+                type(attribute), torch.nn.Parameter
+            ):
+                if submodule.tl_module_address == "":
                     buffer_address = attribute_name
                 else:
-                    buffer_address = submodule.tl_module_address + '.' + attribute_name
-                model_history.log_source_tensor(attribute, 'buffer', buffer_address)
+                    buffer_address = submodule.tl_module_address + "." + attribute_name
+                model_history.log_source_tensor(attribute, "buffer", buffer_address)
 
 
-def module_forward_decorator(orig_forward: Callable,
-                             module: nn.Module,
-                             model_history: ModelHistory) -> Callable:
+def module_forward_decorator(
+    orig_forward: Callable, module: nn.Module, model_history: ModelHistory
+) -> Callable:
     @wraps(orig_forward)
     def decorated_forward(*args, **kwargs):
-
         # "Pre-hook" operations:
         module_address = module.tl_module_address
         module.tl_module_pass_num += 1
@@ -241,7 +273,9 @@ def module_forward_decorator(orig_forward: Callable,
             tensor_entry.modules_entered.append(module_address)
             tensor_entry.module_passes_entered.append(module_pass_label)
             tensor_entry.is_submodule_input = True
-            tensor_entry.module_entry_exit_thread_output.append(('+', module_pass_label[0], module_pass_label[1]))
+            tensor_entry.module_entry_exit_thread_output.append(
+                ("+", module_pass_label[0], module_pass_label[1])
+            )
 
         # The function call
         out = orig_forward(*args, **kwargs)
@@ -252,31 +286,47 @@ def module_forward_decorator(orig_forward: Callable,
         module_entry_label = module.tl_module_pass_labels.pop()
         output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
         for t in output_tensors:
-            if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
-                t = getattr(torch, 'identity')(t)
+            if (
+                module.tl_module_type.lower() == "identity"
+            ):  # if identity module, run the function for bookkeeping
+                t = getattr(torch, "identity")(t)
             tensor_entry = model_history[t.tl_tensor_label_raw]
             tensor_entry.is_submodule_output = True
-            tensor_entry.is_bottom_level_submodule_output = log_whether_exited_submodule_is_bottom_level(t, module)
+            tensor_entry.is_bottom_level_submodule_output = (
+                log_whether_exited_submodule_is_bottom_level(t, module)
+            )
             tensor_entry.modules_exited.append(module_address)
             tensor_entry.module_passes_exited.append((module_address, module_pass_num))
-            tensor_entry.module_entry_exit_thread_output.append(('-', module_entry_label[0], module_entry_label[1]))
+            tensor_entry.module_entry_exit_thread_output.append(
+                ("-", module_entry_label[0], module_entry_label[1])
+            )
             module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
-        for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
+        for (
+            t
+        ) in (
+            input_tensors
+        ):  # Now that module is finished, roll back the threads of all input tensors.
             tensor_entry = model_history[t.tl_tensor_label_raw]
             input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
-            if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
-                module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
-                tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
-                                                               :module_entry_ix]
+            if (
+                "+",
+                module_entry_label[0],
+                module_entry_label[1],
+            ) in input_module_thread:
+                module_entry_ix = input_module_thread.index(
+                    ("+", module_entry_label[0], module_entry_label[1])
+                )
+                tensor_entry.module_entry_exit_thread_output = (
+                    tensor_entry.module_entry_exit_thread_output[:module_entry_ix]
+                )
 
         return out
 
     return decorated_forward
 
 
-def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
-                                                 submodule: nn.Module):
+def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor, submodule: nn.Module):
     """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule;
     that is, that only one tensor operation happened inside the submodule.
 
@@ -287,35 +337,47 @@ def log_whether_exited_submodule_is_bottom_level(t: torch.Tensor,
     Returns:
         Whether the tensor operation is bottom level.
     """
-    model_history = getattr(submodule, 'tl_source_model_history')
-    tensor_entry = model_history[getattr(t, 'tl_tensor_label_raw')]
+    model_history = getattr(submodule, "tl_source_model_history")
+    tensor_entry = model_history[getattr(t, "tl_tensor_label_raw")]
     submodule_address = submodule.tl_module_address
 
     if tensor_entry.is_bottom_level_submodule_output:
         return True
 
     # If it was initialized inside the model and nothing entered the module, it's bottom-level.
-    if tensor_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
+    if (
+        tensor_entry.initialized_inside_model
+        and len(submodule.tl_tensors_entered_labels) == 0
+    ):
         tensor_entry.is_bottom_level_submodule_output = True
-        tensor_entry.bottom_level_submodule_pass_exited = (submodule_address, submodule.tl_module_pass_num)
+        tensor_entry.bottom_level_submodule_pass_exited = (
+            submodule_address,
+            submodule.tl_module_pass_num,
+        )
         return True
 
     # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
     for parent_label in tensor_entry.parent_layers:
         parent_tensor = model_history[parent_label]
         parent_modules_entered = parent_tensor.modules_entered
-        if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):
+        if (len(parent_modules_entered) == 0) or (
+            parent_modules_entered[-1] != submodule_address
+        ):
             tensor_entry.is_bottom_level_submodule_output = False
             return False
 
     # If it survived the above tests, it's a bottom-level submodule.
     tensor_entry.is_bottom_level_submodule_output = True
-    tensor_entry.bottom_level_submodule_pass_exited = (submodule_address, submodule.tl_module_pass_num)
+    tensor_entry.bottom_level_submodule_pass_exited = (
+        submodule_address,
+        submodule.tl_module_pass_num,
+    )
     return True
 
 
-def get_all_submodules(model: nn.Module,
-                       is_top_level_model: bool = True) -> List[nn.Module]:
+def get_all_submodules(
+    model: nn.Module, is_top_level_model: bool = True
+) -> List[nn.Module]:
     """Recursively gets list of all submodules for given module, no matter their level in the
     hierarchy; this includes the model itself.
 
@@ -335,10 +397,12 @@ def get_all_submodules(model: nn.Module,
     return submodules
 
 
-def cleanup_model(model: nn.Module,
-                  module_orig_forward_funcs: Dict[nn.Module, Callable],
-                  model_device: str,
-                  decorated_func_mapper: Dict[Callable, Callable]):
+def cleanup_model(
+    model: nn.Module,
+    module_orig_forward_funcs: Dict[nn.Module, Callable],
+    model_device: str,
+    decorated_func_mapper: Dict[Callable, Callable],
+):
     """Reverses all temporary changes to the model (namely, the forward hooks and added
     model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
 
@@ -356,7 +420,9 @@ def cleanup_model(model: nn.Module,
         if submodule == model:
             continue
         submodule.forward = module_orig_forward_funcs[submodule]
-    restore_model_attributes(model, decorated_func_mapper=decorated_func_mapper, attribute_keyword='tl')
+    restore_model_attributes(
+        model, decorated_func_mapper=decorated_func_mapper, attribute_keyword="tl"
+    )
     undecorate_model_tensors(model, model_device)
 
 
@@ -374,21 +440,29 @@ def clear_hooks(hook_handles: List):
         hook_handle.remove()
 
 
-def restore_module_attributes(module: nn.Module,
-                              decorated_func_mapper: Dict[Callable, Callable],
-                              attribute_keyword: str = 'tl'):
+def restore_module_attributes(
+    module: nn.Module,
+    decorated_func_mapper: Dict[Callable, Callable],
+    attribute_keyword: str = "tl",
+):
     for attribute_name in dir(module):
         if attribute_name.startswith(attribute_keyword):
             delattr(module, attribute_name)
             continue
         attr = getattr(module, attribute_name)
-        if isinstance(attr, Callable) and (attr in decorated_func_mapper) and (attribute_name[0:2] != '__'):
+        if (
+            isinstance(attr, Callable)
+            and (attr in decorated_func_mapper)
+            and (attribute_name[0:2] != "__")
+        ):
             setattr(module, attribute_name, decorated_func_mapper[attr])
 
 
-def restore_model_attributes(model: nn.Module,
-                             decorated_func_mapper: Dict[Callable, Callable],
-                             attribute_keyword: str = 'tl'):
+def restore_model_attributes(
+    model: nn.Module,
+    decorated_func_mapper: Dict[Callable, Callable],
+    attribute_keyword: str = "tl",
+):
     """Recursively clears the given attribute from all modules in the model.
 
     Args:
@@ -400,12 +474,14 @@ def restore_model_attributes(model: nn.Module,
         Nothing.
     """
     for module in get_all_submodules(model):
-        restore_module_attributes(module,
-                                  decorated_func_mapper=decorated_func_mapper,
-                                  attribute_keyword=attribute_keyword)
+        restore_module_attributes(
+            module,
+            decorated_func_mapper=decorated_func_mapper,
+            attribute_keyword=attribute_keyword,
+        )
 
     for param in model.parameters():
-        param.requires_grad = getattr(param, 'tl_requires_grad')
+        param.requires_grad = getattr(param, "tl_requires_grad")
         for attribute_name in dir(param):
             if attribute_name.startswith(attribute_keyword):
                 delattr(param, attribute_name)
@@ -429,6 +505,10 @@ def undecorate_model_tensors(model: nn.Module, model_device: str):
             attribute = getattr(submodule, attribute_name)
             if issubclass(type(attribute), torch.Tensor):
                 if not issubclass(type(attribute), torch.nn.Parameter):
-                    setattr(submodule, attribute_name, undecorate_tensor(attribute, model_device))
+                    setattr(
+                        submodule,
+                        attribute_name,
+                        undecorate_tensor(attribute, model_device),
+                    )
                 else:
-                    remove_attributes_starting_with_str(attribute, 'tl_')
+                    remove_attributes_starting_with_str(attribute, "tl_")
