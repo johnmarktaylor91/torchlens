@@ -3068,7 +3068,7 @@ class ModelHistory:
                 for neighbor_label in getattr(node, node_type_field):
                     if neighbor_label in node_subgraph['node_set']:  # skip if backtracking own subgraph
                         continue
-                    elif neighbor_label in node_to_subgraph_dict:  # if hit another subgraph, mark them adjacent & skip
+                    elif neighbor_label in node_to_subgraph_dict:  # if hit another subgraph, mark them adjacent.
                         self._check_and_mark_subgraph_adjacency(node_label,
                                                                 neighbor_label,
                                                                 iso_node_groups,
