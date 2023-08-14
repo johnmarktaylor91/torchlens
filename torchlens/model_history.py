@@ -24,6 +24,7 @@ from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_
     move_input_tensors_to_device, nested_getattr, print_override, remove_entry_from_list, safe_copy, set_random_seed, \
     set_rng_from_saved_states, tuple_tolerant_assign, remove_attributes_starting_with_str
 
+# todo add saved_layer field, remove the option to only keep saved layers
 # Define some constants.
 print_funcs = ['__repr__', '__str__', '_str']
 funcs_not_to_log = ['cpu', 'cuda', 'numpy', '__array__', 'size', 'dim']
@@ -34,7 +35,6 @@ class TensorLogEntry:
         """Object that stores information about a single tensor operation in the forward pass,
         including metadata and the tensor itself (if specified). Initialized by passing in a dictionary with
         values for all fields.
-
         Args:
             fields_dict: Dict with values for all fields in TensorLogEntry.
         """
@@ -2898,13 +2898,13 @@ class ModelHistory:
             node_label = node_stack.pop(0)
             node = self[node_label]
             node_operation_equivalence_type = node.operation_equivalence_type
+            node_stack.extend(node.child_layers)
+            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
             if node_operation_equivalence_type in operation_equivalence_types_seen:
                 continue
             operation_equivalence_types_seen.add(node_operation_equivalence_type)
-            node_stack.extend(node.child_layers)
-            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
             if len(node.equivalent_operations) == 1:
@@ -3301,6 +3301,11 @@ class ModelHistory:
                                                              'child',
                                                              node_stack,
                                                              nodes_seen)
+
+        # Now that the module containment is fixed, add this to the operation equivalence types.
+        for layer in self:
+            module_str = '_'.join([module_pass[0] for module_pass in layer.containing_modules_origin_nested])
+            layer.operation_equivalence_type += module_str
 
     @staticmethod
     def _fix_modules_for_single_internal_tensor(starting_node: TensorLogEntry,
@@ -4140,7 +4145,7 @@ class ModelHistory:
                 head_name = child_node.layer_label.replace(':', 'pass')
 
             # Skip repeated or self-looping edges.
-            if (head_name == tail_name) or ((tail_name, head_name) in edges_used):
+            if (tail_name, head_name) in edges_used:
                 continue
             edges_used.add((tail_name, head_name))
 
@@ -4286,6 +4291,15 @@ class ModelHistory:
 
         if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
             return -1  # no submodule contains them both.
+
+        if node1 == node2:
+            if node1.is_bottom_level_submodule_output and (len(node1_modules) == 1):
+                return -1
+            elif node1.is_bottom_level_submodule_output and (len(node1_modules) > 1):
+                containing_module = node1_modules[-2]
+            else:
+                containing_module = node1_modules[-1]
+            return containing_module
 
         containing_module = node1_modules[0]
         for m in range(min([len(node1_modules), len(node2_modules)])):
