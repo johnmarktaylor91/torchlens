@@ -2898,13 +2898,14 @@ class ModelHistory:
             node_label = node_stack.pop(0)
             node = self[node_label]
             node_operation_equivalence_type = node.operation_equivalence_type
-            node_stack.extend(node.child_layers)
-            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If we've already checked the nodes of this operation equivalence type as starting nodes, continue:
             if node_operation_equivalence_type in operation_equivalence_types_seen:
                 continue
             operation_equivalence_types_seen.add(node_operation_equivalence_type)
+            for equiv_op in node.equivalent_operations:
+                node_stack.extend(self[equiv_op].child_layers)
+            node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
             if len(node.equivalent_operations) == 1:
@@ -4209,7 +4210,7 @@ class ModelHistory:
         if 'label' not in edge_dict:
             edge_dict['label'] = arg_label
         else:
-            edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+            edge_dict['label'] = edge_dict['label'][:-1] + '<br/>' + arg_label[1:]
 
     def _check_whether_to_mark_arguments_on_edge(self,
                                                  child_node: Union[TensorLogEntry, RolledTensorLogEntry],

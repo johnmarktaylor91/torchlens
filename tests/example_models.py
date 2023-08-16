@@ -192,8 +192,8 @@ class AssignTensor(nn.Module):
     @staticmethod
     def forward(x):
         x = torch.log(x)
-        x[2, 3] = 5
-        x[3, 4] = 1
+        x[2, 2, 0, 1] = 5
+        x[3, 0, 1, 2] = 1
         return x
 
 
@@ -204,7 +204,7 @@ class GetAndSetItem(nn.Module):
     @staticmethod
     def forward(x):
         x = torch.log(x)
-        x[2, 3] = x[5, 2]
+        x[2, 2, 0, 1] = x[3, 2, 1, 0]
         x = x * 2
         return x
 
@@ -236,7 +236,7 @@ class SliceOperations(nn.Module):
         return x
 
 
-class DummyZeroOperation(nn.Module):
+class DummyOperations(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -250,6 +250,17 @@ class DummyZeroOperation(nn.Module):
         x = x + 0
         x = torch.sin(x)
         x = x * 1
+        return x
+
+
+class SameTensorArg(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        x = x * 2
+        x = x + x
+        x = torch.sin(x)
         return x
 
 
@@ -543,7 +554,7 @@ class SimpleLoopNoParam(nn.Module):
 class SameOpRepeat(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(in_features=25, out_features=25)
+        self.fc = nn.Linear(in_features=5, out_features=5)
 
     def forward(self, x):
         for _ in range(8):
@@ -631,8 +642,8 @@ class LoopingInternalFuncs(nn.Module):
         x = x + 3
         for _ in range(3):
             x = x * 2
-            y = torch.rand(3, 3)
-            z = torch.ones(3, 3)
+            y = torch.rand(x.shape)
+            z = torch.ones(x.shape)
             y = y + 1
             y = y + z
             x = x / y
@@ -647,7 +658,7 @@ class LoopingFromInputs1(nn.Module):
 
     @staticmethod
     def forward(x, y, z):
-        start = torch.ones(3, 3)
+        start = torch.ones(x.shape)
         x = torch.sin(start) + x
         x = torch.log(x)
         x = torch.sin(x)
@@ -699,7 +710,7 @@ class StochasticLoop(nn.Module):
     @staticmethod
     def forward(x):
         while True:
-            x = x + torch.rand(x)
+            x = x + torch.rand(x.shape)
             if torch.mean(x) > 0:
                 break
         x = x * 2
@@ -959,8 +970,8 @@ class UberModel3(nn.Module):
 class UberModel4(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(3, 3)
-        self.fc2 = nn.Linear(3, 3)
+        self.fc1 = nn.Linear(5, 5)
+        self.fc2 = nn.Linear(5, 5)
 
     def forward(self, x):
         x = x + 1
@@ -1042,7 +1053,7 @@ class UberModel6(nn.Module):
 class UberModel7(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(3, 3)
+        self.fc = nn.Linear(5, 5)
 
     def forward(self, x):
         x = x + 1
@@ -1114,5 +1125,4 @@ class UberModel9(nn.Module):
         z3 = z2 + a + b
         w1 = x ** 3
         x = torch.sum(torch.stack([y4, z3, w1]))
-
         return x
