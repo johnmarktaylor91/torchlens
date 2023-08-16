@@ -155,7 +155,13 @@ def test_batchnorm_train(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'batchnorm_train'))
+                     vis_buffer_layers=True,
+                     vis_outpath=opj('visualization_outputs', 'batchnorm_train_showbuffer'))
+    show_model_graph(model,
+                     default_input1,
+                     vis_opt='unrolled',
+                     vis_buffer_layers=False,
+                     vis_outpath=opj('visualization_outputs', 'batchnorm_train_invisbuffer'))
 
 
 def test_batchnorm_eval(default_input1):
@@ -363,14 +369,14 @@ def test_simple_branching(default_input1):
 
 def test_conditional_branching(zeros_input, ones_input):
     model = example_models.ConditionalBranching()
-    assert validate_saved_activations(model, zeros_input)
+    assert validate_saved_activations(model, -ones_input)
     assert validate_saved_activations(model, ones_input)
-    show_model_graph(model, zeros_input,
+    show_model_graph(model, -ones_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'conditional_branching_model_zeros'))
-    show_model_graph(model, zeros_input,
+                     vis_outpath=opj('visualization_outputs', 'conditional_branching_model_negative'))
+    show_model_graph(model, ones_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'conditional_branching_model_ones'))
+                     vis_outpath=opj('visualization_outputs', 'conditional_branching_model_positive'))
 
 
 def test_repeated_module(default_input1):
@@ -433,6 +439,17 @@ def test_same_op_repeat(vector_input):
     show_model_graph(model, vector_input,
                      vis_opt='rolled',
                      vis_outpath=opj('visualization_outputs', 'same_op_repeat_rolled'))
+
+
+def test_repeated_op_type_in_loop(default_input1):
+    model = example_models.RepeatedOpTypeInLoop()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'same_op_type_in_loop_unrolled'))
+    show_model_graph(model, default_input1,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'same_op_type_in_loop_rolled'))
 
 
 def test_varying_loop_noparam1(default_input1):
@@ -583,10 +600,10 @@ def test_module_looping_clash3(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash2_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'module_looping_clash3_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash2_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'module_looping_clash3_rolled'))
 
 
 def test_ubermodel1(input_2d):
@@ -675,3 +692,5 @@ def test_ubermodel9():
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'ubermodel9'))
+
+# Built-in Models

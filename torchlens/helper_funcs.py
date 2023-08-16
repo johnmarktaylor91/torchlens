@@ -352,6 +352,33 @@ def remove_attributes_starting_with_str(obj: Any,
             delattr(obj, field)
 
 
+def tensor_all_nan(t: torch.Tensor) -> bool:
+    """Returns True if  tensor is all nans, False otherwise.
+    """
+    if torch.isnan(t).int().sum() == t.numel():
+        return True
+    else:
+        return False
+
+
+def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor) -> bool:
+    """Returns True if the two tensors are equal, allowing for nans.
+    """
+    if t1.shape != t2.shape:
+        return False
+
+    if t1.dtype != t2.dtype:
+        return False
+
+    t1_nonan = torch.nan_to_num(t1, .7234691827346)
+    t2_nonan = torch.nan_to_num(t2, .7234691827346)
+
+    if torch.equal(t1_nonan, t2_nonan):
+        return True
+    else:
+        return False
+
+
 def safe_to(x: Any, device: str):
     """Moves object to device if it's a tensor, does nothing otherwise.
 

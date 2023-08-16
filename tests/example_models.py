@@ -4,12 +4,10 @@ from torch import nn
 
 
 # TODO:
-#  1) organize the inputs for the tests
-#  2) Test for both training and val modes of all models where relevant (batchnorm, dropout)
-#  3) add tests for
+#  1) add tests for
 #       a) different uber models that combines everything (branching, looping, conditional, etc.),
 #       b) model architectures like resnets, googlenet, transformers, GNNs, GANs, etc.
-#  4) Make things nicely organized, ordered, named.
+#  2) Make things nicely organized, ordered, named.
 
 
 #  ***********************
@@ -412,7 +410,6 @@ class ConditionalBranching(nn.Module):
 
     @staticmethod
     def forward(x):
-        x = torch.log(x)
         if torch.mean(x) > 0:
             x = torch.sin(x)
             x = x + 2
@@ -563,6 +560,23 @@ class SameOpRepeat(nn.Module):
         x = torch.flatten(x)
         for _ in range(8):
             x = self.fc(x)
+        return x
+
+
+class RepeatedOpTypeInLoop(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        for _ in range(8):
+            x = x + 1
+            x = torch.sin(x)
+            x = torch.cos(x)
+            x = x * 2
+            x = torch.sin(x)
+            x = torch.exp(x)
+        x = torch.flatten(x)
         return x
 
 
