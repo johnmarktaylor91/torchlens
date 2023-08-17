@@ -7,6 +7,7 @@ import torch
 import torchvision
 import example_models
 
+import cornet
 from torchlens import log_forward_pass, show_model_graph, validate_saved_activations
 
 
@@ -693,4 +694,214 @@ def test_ubermodel9():
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'ubermodel9'))
 
+
 # Built-in Models
+
+def test_alexnet(default_input1):
+    model = torchvision.models.AlexNet()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'alexnet'))
+
+
+def test_googlenet(default_input1):
+    model = torchvision.models.GoogLeNet()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_buffer_layers=True,
+                     vis_outpath=opj('visualization_outputs', 'googlenet_showbuffer'))
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_buffer_layers=False,
+                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer'))
+
+
+def test_vgg16(default_input1):
+    model = torchvision.models.vgg16()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'vgg16'))
+
+
+def test_vgg19(default_input1):
+    model = torchvision.models.vgg19()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'vgg19'))
+
+
+def test_resnet50(default_input1):
+    model = torchvision.models.resnet50()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'resnet50'))
+
+
+def test_resnet101(default_input1):
+    model = torchvision.models.resnet101()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'resnet101'))
+
+
+def test_resnet152(default_input1):
+    model = torchvision.models.resnet152()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'resnet152'))
+
+
+def test_convnext_large(default_input1):
+    model = torchvision.models.convnext_large()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'convnext'))
+
+
+def test_densenet121(default_input1):
+    model = torchvision.models.densenet121()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'densenet121'))
+
+
+def test_efficientnet_b6(default_input1):
+    model = torchvision.models.efficientnet_b6()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'efficientnet_b6'))
+
+
+def test_squeezenet(default_input1):
+    model = torchvision.models.squeezenet1_1()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'squeezenet'))
+
+
+def test_mobilenet(default_input1):
+    model = torchvision.models.mobilenet_v3_large()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'mobilenet'))
+
+
+def test_wide_resnet(default_input1):
+    model = torchvision.models.wide_resnet101_2()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'wide_resnet'))
+
+
+def test_mnasnet(default_input1):
+    model = torchvision.models.mnasnet1_3()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'mnasnet'))
+
+
+def test_shufflenet(default_input1):
+    model = torchvision.models.shufflenet_v2_x1_5()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'shufflenet'))
+
+
+def test_resnext(default_input1):
+    model = torchvision.models.resnext101_64x4d()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'resnext'))
+
+
+def test_regnet(default_input1):
+    model = torchvision.models.regnet_x_32gf()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'regnet'))
+
+
+def test_swin_v2b(default_input1):
+    model = torchvision.models.swin_v2_b()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'swin_v2b'))
+
+
+def test_vit(default_input1):
+    model = torchvision.models.vit_l_16()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'vit_l_16'))
+
+
+def test_maxvit(default_input1):
+    model = torchvision.models.maxvit_t()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'max_vit'))
+
+
+def test_cornet_s(default_input1):
+    model = cornet.cornet_s()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_s_unrolled'))
+    show_model_graph(model, default_input1,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_s_rolled'))
+
+
+def test_cornet_r(default_input1):
+    model = cornet.cornet_r()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_r_unrolled'))
+    show_model_graph(model, default_input1,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_r_rolled'))
+
+
+def test_cornet_rt():
+    model = cornet.cornet_rt()
+    model_input = torch.rand((6, 3, 224, 224))
+    assert validate_saved_activations(model, model_input)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled'))
+    show_model_graph(model, model_input,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled'))
+
+
+def test_cornet_z(default_input1):
+    model = cornet.cornet_z(default_input1)
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_z_unrolled'))
+    show_model_graph(model, default_input1,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'cornet_z_rolled'))
