@@ -204,7 +204,7 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
 def get_vars_of_type_from_obj(obj: Any,
                               which_type: Type,
                               subclass_exceptions: Optional[List] = None,
-                              search_depth: int = 5) -> List:
+                              search_depth: int = 3) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
 
@@ -253,7 +253,7 @@ def search_stack_for_vars_of_type(current_stack: List,
     if len(current_stack) == 0:
         return current_stack
     while len(current_stack) > 0:
-        item = current_stack.pop()
+        item = current_stack.pop(0)
         item_class = type(item)
         if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
             continue
@@ -352,11 +352,39 @@ def remove_attributes_starting_with_str(obj: Any,
             delattr(obj, field)
 
 
+def tensor_all_nan(t: torch.Tensor) -> bool:
+    """Returns True if  tensor is all nans, False otherwise.
+    """
+    if torch.isnan(t).int().sum() == t.numel():
+        return True
+    else:
+        return False
+
+
+def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor) -> bool:
+    """Returns True if the two tensors are equal, allowing for nans.
+    """
+    if t1.shape != t2.shape:
+        return False
+
+    if t1.dtype != t2.dtype:
+        return False
+
+    t1_nonan = torch.nan_to_num(t1, .7234691827346)
+    t2_nonan = torch.nan_to_num(t2, .7234691827346)
+
+    if torch.equal(t1_nonan, t2_nonan):
+        return True
+    else:
+        return False
+
+
 def safe_to(x: Any, device: str):
     """Moves object to device if it's a tensor, does nothing otherwise.
 
     Args:
         x: The object.
+        device: which device to move to
 
     Returns:
         Object either moved to device if a tensor, same object if otherwise.
@@ -365,6 +393,24 @@ def safe_to(x: Any, device: str):
         return x.to(device)
     else:
         return x
+
+
+def move_input_tensors_to_device(x: Any,
+                                 device: str):
+    """Moves all tensors in the input to the given device.
+
+    Args:
+        x: Input to the model.
+        device: Device to move the tensors to.
+    """
+    if type(x) == list:
+        x = [safe_to(t, device) for t in x]
+    elif type(x) == dict:
+        for k in x.keys():
+            x[k] = safe_to(x[k], device)
+    elif type(x) == torch.Tensor:
+        x = x.to(device)
+    return x
 
 
 def get_tensor_memory_amount(t: torch.Tensor) -> int:

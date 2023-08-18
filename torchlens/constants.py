@@ -12,15 +12,19 @@ MODEL_HISTORY_FIELD_ORDER = [
     'model_name',
     'pass_finished',
     'track_tensors',
+    'logging_mode',
     'all_layers_logged',
-    'keep_layers_without_saved_activations',
+    'all_layers_saved',
+    'keep_unsaved_layers',
     'current_function_call_barcode',
     'random_seed_used',
     'detach_saved_tensors',
     'output_device',
+    'save_function_args',
     'save_gradients',
     'has_saved_gradients',
     'activation_postfunc',
+    'mark_input_output_distances',
 
     # Model structure info
     'model_is_recurrent',
@@ -48,6 +52,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     # Mapping from raw to final layer labels:
     'raw_to_final_layer_labels',
     'lookup_keys_to_tensor_num_dict',
+    'tensor_num_to_lookup_keys_dict',
 
     # Special layers
     'input_layers',
@@ -61,7 +66,10 @@ MODEL_HISTORY_FIELD_ORDER = [
     'layers_computed_with_params',
     'equivalent_operations',
     'same_layer_operations',
+    'layers_with_saved_activations',
+    'unlogged_layers',
     'layers_with_saved_gradients',
+    'orphan_layers',
 
     # Tensor info:
     'num_tensors_total',
@@ -94,6 +102,9 @@ MODEL_HISTORY_FIELD_ORDER = [
     # Time elapsed
     'pass_start_time',
     'pass_end_time',
+    'elapsed_time_setup',
+    'elapsed_time_forward_pass',
+    'elapsed_time_cleanup',
     'elapsed_time_total',
     'elapsed_time_function_calls',
     'elapsed_time_torchlens_logging'
@@ -129,6 +140,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'output_device',
     'activation_postfunc',
     'detach_saved_tensor',
+    'function_args_saved',
     'creation_args',
     'creation_kwargs',
     'tensor_shape',
@@ -195,6 +207,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'min_distance_from_input',
     'max_distance_from_input',
     'is_output_layer',
+    'is_output_parent',
     'is_last_output_layer',
     'is_output_ancestor',
     'output_descendents',
@@ -219,6 +232,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'is_computed_inside_submodule',
     'containing_module_origin',
     'containing_modules_origin_nested',
+    'module_nesting_depth',
     'modules_entered',
     'module_passes_entered',
     'is_submodule_input',

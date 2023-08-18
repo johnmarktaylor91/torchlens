@@ -1,5 +1,6 @@
+import copy
 import os
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
@@ -9,17 +10,19 @@ import random
 from tqdm import tqdm
 
 from torchlens.helper_funcs import warn_parallel, get_vars_of_type_from_obj, set_random_seed
-from torchlens.model_funcs import ModelHistory, run_model_and_save_specified_activations
+from torchlens.model_history import ModelHistory, run_model_and_save_specified_activations
 
 
 def log_forward_pass(model: nn.Module,
                      input_args: Union[torch.Tensor, List[Any]],
                      input_kwargs: Dict[Any, Any] = None,
-                     which_layers: Union[str, List] = 'all',
+                     layers_to_save: Union[str, List] = 'all',
+                     keep_unsaved_layers: bool = True,
                      output_device: str = 'same',
                      activation_postfunc: Optional[Callable] = None,
                      mark_input_output_distances: bool = False,
                      detach_saved_tensors: bool = False,
+                     save_function_args: bool = False,
                      save_gradients: bool = False,
                      vis_opt: str = 'none',
                      vis_nesting_depth: int = 1000,
@@ -27,7 +30,7 @@ def log_forward_pass(model: nn.Module,
                      vis_save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      vis_buffer_layers: bool = False,
-                     vis_direction: str = 'vertical',
+                     vis_direction: str = 'bottomup',
                      random_seed: Optional[int] = None) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -43,13 +46,15 @@ def log_forward_pass(model: nn.Module,
         model: PyTorch model
         input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
         input_kwargs: keyword arguments for model forward pass
-        which_layers: list of layers to include (described above), or 'all' to include all layers.
+        layers_to_save: list of layers to include (described above), or 'all' to include all layers.
+        keep_unsaved_layers: whether to keep layers without saved activations in the log (i.e., with just metadata)
         activation_postfunc: Function to apply to tensors before saving them (e.g., channelwise averaging).
         mark_input_output_distances: whether to mark the distance of each layer from the input or output;
             False by default since this is computationally expensive.
         output_device: device where saved tensors are to be stored. Either 'same' to keep on the same device,
             or 'cpu' or 'cuda' to move them to cpu or cuda when saved.
         detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
+        save_function_args: whether to save the arguments to each function involved in computing each tensor
         save_gradients: whether to save gradients from any subsequent backward pass
         vis_opt: whether, and how, to visualize the network; 'none' for
             no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
@@ -61,15 +66,12 @@ def log_forward_pass(model: nn.Module,
         vis_save_only: whether to only save the graph visual without immediately showing it
         vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
         vis_buffer_layers: whether to visualize the buffer layers
-        vis_direction: either 'vertical' or 'horizontal'
+        vis_direction: either 'bottomup', 'topdown', or 'leftright'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
         ModelHistory object with layer activations and metadata
     """
-    if not input_kwargs:
-        input_kwargs = {}
-
     warn_parallel()
 
     if vis_opt not in ['none', 'rolled', 'unrolled']:
@@ -78,35 +80,41 @@ def log_forward_pass(model: nn.Module,
     if output_device not in ['same', 'cpu', 'cuda']:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
 
-    # If not saving all layers, do a probe pass.
+    if type(layers_to_save) == str:
+        layers_to_save = layers_to_save.lower()
 
-    if which_layers == 'all':
-        tensor_nums_to_save = 'all'
-    elif which_layers in ['none', None, []]:
-        tensor_nums_to_save = None
-    else:
-        model_history = run_model_and_save_specified_activations(model,
-                                                                 input_args,
-                                                                 input_kwargs,
-                                                                 None,
-                                                                 output_device,
-                                                                 activation_postfunc,
-                                                                 False,
+    if layers_to_save in ['all', 'none', None, []]:
+        model_history = run_model_and_save_specified_activations(model=model,
+                                                                 input_args=input_args,
+                                                                 input_kwargs=input_kwargs,
+                                                                 layers_to_save=layers_to_save,
+                                                                 keep_unsaved_layers=keep_unsaved_layers,
+                                                                 output_device=output_device,
+                                                                 activation_postfunc=activation_postfunc,
+                                                                 mark_input_output_distances=mark_input_output_distances,
+                                                                 detach_saved_tensors=detach_saved_tensors,
+                                                                 save_function_args=save_function_args,
+                                                                 save_gradients=save_gradients,
                                                                  random_seed=random_seed)
-        tensor_nums_to_save = model_history.get_op_nums_from_user_labels(which_layers)
-
-    # And now save the activations for real.
-
-    model_history = run_model_and_save_specified_activations(model,
-                                                             input_args,
-                                                             input_kwargs,
-                                                             tensor_nums_to_save,
-                                                             output_device,
-                                                             activation_postfunc,
-                                                             mark_input_output_distances,
-                                                             detach_saved_tensors,
-                                                             save_gradients,
-                                                             random_seed)
+    else:
+        model_history = run_model_and_save_specified_activations(model=model,
+                                                                 input_args=input_args,
+                                                                 input_kwargs=input_kwargs,
+                                                                 layers_to_save=None,
+                                                                 keep_unsaved_layers=True,
+                                                                 output_device=output_device,
+                                                                 activation_postfunc=activation_postfunc,
+                                                                 mark_input_output_distances=mark_input_output_distances,
+                                                                 detach_saved_tensors=detach_saved_tensors,
+                                                                 save_function_args=save_function_args,
+                                                                 save_gradients=save_gradients,
+                                                                 random_seed=random_seed)
+        model_history.keep_unsaved_layers = keep_unsaved_layers
+        model_history.save_new_activations(model=model,
+                                           input_args=input_args,
+                                           input_kwargs=input_kwargs,
+                                           layers_to_save=layers_to_save,
+                                           random_seed=random_seed)
 
     # Visualize if desired.
     if vis_opt != 'none':
@@ -116,43 +124,8 @@ def log_forward_pass(model: nn.Module,
                                    vis_save_only,
                                    vis_fileformat,
                                    vis_buffer_layers,
-                                   vis_direction)  # change after adding options
+                                   vis_direction)
 
-    return model_history
-
-
-def get_model_metadata(model: nn.Module,
-                       input_args: torch.Tensor,
-                       input_kwargs: Dict[Any, Any] = None,
-                       mark_input_output_distances: bool = False,
-                       random_seed: Optional[int] = None) -> ModelHistory:
-    """
-    Equivalent to get_model_activations, but only fetches layer metadata without saving activations.
-
-    Args:
-        model: PyTorch model.
-        input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
-        input_kwargs: Keyword arguments for model forward pass, if applicable
-        mark_input_output_distances: whether to mark the distance of each layer from the input or output;
-            False by default since this is computationally expensive.
-        random_seed: which random seed to use in case model involves randomness
-
-    Returns:
-        history_dict: Dict of dicts with the activations from each layer.
-    """
-    if not input_kwargs:
-        input_kwargs = {}
-
-    warn_parallel()
-    model_history = run_model_and_save_specified_activations(model=model,
-                                                             input_args=input_args,
-                                                             input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save=None,
-                                                             activation_postfunc=None,
-                                                             mark_input_output_distances=mark_input_output_distances,
-                                                             detach_saved_tensors=False,
-                                                             save_gradients=False,
-                                                             random_seed=random_seed)
     return model_history
 
 
@@ -165,7 +138,7 @@ def show_model_graph(model: nn.Module,
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      vis_buffer_layers: bool = False,
-                     vis_direction: str = 'vertical',
+                     vis_direction: str = 'bottomup',
                      random_seed: Optional[int] = None) -> None:
     """Visualize the model graph without saving any activations.
 
@@ -183,7 +156,7 @@ def show_model_graph(model: nn.Module,
         save_only: whether to only save the graph visual without immediately showing it
         vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
         vis_buffer_layers: whether to visualize the buffer layers
-        vis_direction: either 'vertical' or 'horizontal'
+        vis_direction: either 'bottomup', 'topdown', or 'leftright'
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
@@ -198,7 +171,7 @@ def show_model_graph(model: nn.Module,
     model_history = run_model_and_save_specified_activations(model=model,
                                                              input_args=input_args,
                                                              input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save=None,
+                                                             layers_to_save=None,
                                                              activation_postfunc=None,
                                                              mark_input_output_distances=False,
                                                              detach_saved_tensors=False,
@@ -214,7 +187,7 @@ def show_model_graph(model: nn.Module,
 
 
 def validate_saved_activations(model: nn.Module,
-                               input_args: Union[torch.Tensor, List[Any]],
+                               input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
                                input_kwargs: Dict[Any, Any] = None,
                                random_seed: Union[int, None] = None,
                                verbose: bool = False) -> bool:
@@ -242,15 +215,19 @@ def validate_saved_activations(model: nn.Module,
         input_args = [input_args]
     if not input_kwargs:
         input_kwargs = {}
-    ground_truth_output_tensors = get_vars_of_type_from_obj(model(*input_args, **input_kwargs), torch.Tensor)
+    input_args_copy = [copy.deepcopy(arg) for arg in input_args]
+    input_kwargs_copy = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
+    ground_truth_output_tensors = get_vars_of_type_from_obj(model(*input_args_copy, **input_kwargs_copy), torch.Tensor)
     model_history = run_model_and_save_specified_activations(model=model,
                                                              input_args=input_args,
                                                              input_kwargs=input_kwargs,
-                                                             tensor_nums_to_save='all',
+                                                             layers_to_save='all',
+                                                             keep_unsaved_layers=True,
                                                              activation_postfunc=None,
                                                              mark_input_output_distances=False,
                                                              detach_saved_tensors=False,
                                                              save_gradients=False,
+                                                             save_function_args=True,
                                                              random_seed=random_seed)
     activations_are_valid = model_history.validate_saved_activations(ground_truth_output_tensors, verbose)
 

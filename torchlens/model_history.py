@@ -1,25 +1,34 @@
 # This file is for defining the ModelHistory class that stores the representation of the forward pass.
-
 import copy
+from functools import wraps
+import inspect
 import itertools as it
 import os
 import random
 import time
+import types
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import graphviz
-import inspect
 import numpy as np
 import pandas as pd
 import torch
 from IPython.core.display import display
+from torch import nn
 
-from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
+from torchlens.constants import MODEL_HISTORY_FIELD_ORDER, ORIG_TORCH_FUNCS, TENSOR_LOG_ENTRY_FIELD_ORDER
 from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_memory_amount, \
     get_vars_of_type_from_obj, human_readable_size, identity, in_notebook, int_list_to_compact_str, \
-    log_current_rng_states, set_rng_from_saved_states, make_short_barcode_from_input, make_var_iterable, \
-    print_override, remove_entry_from_list, safe_copy, make_random_barcode, tuple_tolerant_assign
+    log_current_rng_states, make_random_barcode, make_short_barcode_from_input, make_var_iterable, \
+    move_input_tensors_to_device, nested_getattr, print_override, remove_entry_from_list, safe_copy, set_random_seed, \
+    set_rng_from_saved_states, tuple_tolerant_assign, remove_attributes_starting_with_str, tensor_nanequal, \
+    tensor_all_nan
+
+# todo add saved_layer field, remove the option to only keep saved layers
+# Define some constants.
+print_funcs = ['__repr__', '__str__', '_str']
+funcs_not_to_log = ['cpu', 'cuda', 'numpy', '__array__', 'size', 'dim']
 
 
 class TensorLogEntry:
@@ -27,7 +36,6 @@ class TensorLogEntry:
         """Object that stores information about a single tensor operation in the forward pass,
         including metadata and the tensor itself (if specified). Initialized by passing in a dictionary with
         values for all fields.
-
         Args:
             fields_dict: Dict with values for all fields in TensorLogEntry.
         """
@@ -76,6 +84,7 @@ class TensorLogEntry:
         self.output_device = fields_dict['output_device']
         self.activation_postfunc = fields_dict['activation_postfunc']
         self.detach_saved_tensor = fields_dict['detach_saved_tensor']
+        self.function_args_saved = fields_dict['function_args_saved']
         self.creation_args = fields_dict['creation_args']
         self.creation_kwargs = fields_dict['creation_kwargs']
         self.tensor_shape = fields_dict['tensor_shape']
@@ -142,6 +151,7 @@ class TensorLogEntry:
         self.min_distance_from_input = fields_dict['min_distance_from_input']
         self.max_distance_from_input = fields_dict['max_distance_from_input']
         self.is_output_layer = fields_dict['is_output_layer']
+        self.is_output_parent = fields_dict['is_output_parent']
         self.is_last_output_layer = fields_dict['is_last_output_layer']
         self.is_output_ancestor = fields_dict['is_output_ancestor']
         self.output_descendents = fields_dict['output_descendents']
@@ -166,6 +176,7 @@ class TensorLogEntry:
         self.is_computed_inside_submodule = fields_dict['is_computed_inside_submodule']
         self.containing_module_origin = fields_dict['containing_module_origin']
         self.containing_modules_origin_nested = fields_dict['containing_modules_origin_nested']
+        self.module_nesting_depth = fields_dict['module_nesting_depth']
         self.modules_entered = fields_dict['modules_entered']
         self.module_passes_entered = fields_dict['module_passes_entered']
         self.is_submodule_input = fields_dict['is_submodule_input']
@@ -215,8 +226,9 @@ class TensorLogEntry:
 
     def save_tensor_data(self,
                          t: torch.Tensor,
-                         t_args: List,
+                         t_args: Union[List, Tuple],
                          t_kwargs: Dict,
+                         save_function_args: bool,
                          activation_postfunc: Optional[Callable] = None):
         """Saves the tensor data for a given tensor operation.
 
@@ -224,6 +236,7 @@ class TensorLogEntry:
             t: the tensor.
             t_args: tensor positional arguments for the operation
             t_kwargs: tensor keyword arguments for the operation
+            save_function_args: whether to save the arguments to the function
             activation_postfunc: function to apply to activations before saving them
         """
         # The tensor itself:
@@ -236,16 +249,20 @@ class TensorLogEntry:
         self.has_saved_activations = True
 
         # Tensor args and kwargs:
-        creation_args = []
-        for arg in t_args:
-            creation_args.append(safe_copy(arg))
+        if save_function_args:
+            self.function_args_saved = True
+            creation_args = []
+            for arg in t_args:
+                creation_args.append(safe_copy(arg))
 
-        creation_kwargs = {}
-        for key, value in t_kwargs.items():
-            creation_kwargs[key] = safe_copy(value)
-
-        self.creation_args = creation_args
-        self.creation_kwargs = creation_kwargs
+            creation_kwargs = {}
+            for key, value in t_kwargs.items():
+                creation_kwargs[key] = safe_copy(value)
+            self.creation_args = creation_args
+            self.creation_kwargs = creation_kwargs
+        else:
+            self.creation_args = None
+            self.creation_kwargs = None
 
     def log_tensor_grad(self, grad: torch.Tensor):
         """Logs the gradient for a tensor to the log entry
@@ -288,10 +305,10 @@ class TensorLogEntry:
         s += f"\n\tComputed in modules: {self.containing_modules_origin_nested}"
         s += f"\n\tOutput of modules: {self.module_passes_exited}"
         if self.is_bottom_level_submodule_output:
-            s += f" (bottom-level submodule output)"
+            s += " (bottom-level submodule output)"
         else:
-            s += f" (not bottom-level submodule output)"
-        s += f"\n\tFamily info:"
+            s += " (not bottom-level submodule output)"
+        s += "\n\tFamily info:"
         s += f"\n\t\tParents: {self.parent_layers}"
         s += f"\n\t\tChildren: {self.child_layers}"
         s += f"\n\t\tSpouses: {self.spouse_layers}"
@@ -315,6 +332,8 @@ class TensorLogEntry:
             f"{pass_str}operation {self.operation_num + 1}/" \
             f"{self.source_model_history.num_tensors_total}:"
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
+        if not self.has_saved_activations:
+            s += " (not saved)"
         s += self._tensor_contents_str_helper()
         s += self._tensor_family_str_helper()
         if len(self.parent_param_shapes) > 0:
@@ -322,7 +341,7 @@ class TensorLogEntry:
             s += f"\n\tParams: Computed from params with shape {params_shapes_str}; " \
                  f"{self.num_params_total} params total ({self.parent_params_fsize_nice})"
         else:
-            s += f"\n\tParams: no params used"
+            s += "\n\tParams: no params used"
         if self.containing_module_origin is None:
             module_str = "\n\tComputed inside module: not computed inside a module"
         else:
@@ -335,7 +354,7 @@ class TensorLogEntry:
             modules_exited_str = ', '.join(self.modules_exited)
             s += f"\n\tOutput of modules: {modules_exited_str}"
         else:
-            s += f"\n\tOutput of modules: none"
+            s += "\n\tOutput of modules: none"
         if self.is_bottom_level_submodule_output:
             s += f"\n\tOutput of bottom-level module: {self.bottom_level_submodule_pass_exited}"
         lookup_keys_str = ', '.join([str(key) for key in self.lookup_keys])
@@ -348,9 +367,9 @@ class TensorLogEntry:
         """
         if self.tensor_contents is None:
             return ""
-        s = ''
-        tensor_size_shown = 8
-        if self.tensor_contents != 'none':
+        else:
+            s = ''
+            tensor_size_shown = 8
             saved_shape = self.tensor_contents.shape
             if len(saved_shape) == 0:
                 tensor_slice = self.tensor_contents
@@ -395,7 +414,7 @@ class TensorLogEntry:
         else:
             s += "\n\t\t- shares children with no other layers"
 
-        if self.has_input_ancestor:  # todo: put the ancestors here
+        if self.has_input_ancestor:
             s += '\n\t\t- descendent of input layers: ' + ', '.join(self.input_ancestors)
         else:
             s += "\n\t\t- tensor was created de novo inside the model (not computed from input)"
@@ -446,8 +465,9 @@ class RolledTensorLogEntry:
         self.cond_branch_start_children = source_entry.cond_branch_start_children
         self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
         self.atomic_bool_val = source_entry.atomic_bool_val
-        self.child_layers = list()
-        self.parent_layers = list()
+        self.child_layers = []
+        self.parent_layers = []
+        self.orphan_layers = []
 
         # Module info:
         self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
@@ -560,37 +580,41 @@ class ModelHistory:
     MIN_MODULE_PENWIDTH = 2
     PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
     COMMUTE_FUNCS = ['add', 'mul', 'cat', 'eq', 'ne']
-    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_']
+    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_']
 
     def __init__(self,
                  model_name: str,
-                 random_seed_used: int,
-                 tensor_nums_to_save: Union[List[int], str] = 'all',
                  output_device: str = 'same',
                  activation_postfunc: Optional[Callable] = None,
+                 keep_unsaved_layers: bool = True,
+                 save_function_args: bool = False,
+                 save_gradients: bool = False,
                  detach_saved_tensors: bool = False,
-                 save_gradients: bool = False):
+                 mark_input_output_distances: bool = True):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
         representation of the full history for the user afterward.
         """
+        # Setup:
+        activation_postfunc = copy.deepcopy(activation_postfunc)
+
         # General info
         self.model_name = model_name
         self.pass_finished = False
         self.track_tensors = False
+        self.logging_mode = 'exhaustive'
         self.all_layers_logged = False
-        if tensor_nums_to_save in ['none', None, []]:
-            tensor_nums_to_save = []
-            self.keep_layers_without_saved_activations = True
-        else:
-            self.keep_layers_without_saved_activations = False
+        self.all_layers_saved = False
+        self.keep_unsaved_layers = keep_unsaved_layers
         self.activation_postfunc = activation_postfunc
         self.current_function_call_barcode = None
-        self.random_seed_used = random_seed_used
+        self.random_seed_used = None
         self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
+        self.save_function_args = save_function_args
         self.save_gradients = save_gradients
         self.has_saved_gradients = False
+        self.mark_input_output_distances = mark_input_output_distances
 
         # Model structure info
         self.model_is_recurrent = False
@@ -599,74 +623,80 @@ class ModelHistory:
         self.model_is_branching = False
 
         # Tensor Tracking:
-        self.layer_list = []
-        self.layer_list_rolled = []
-        self.layer_dict_main_keys = OrderedDict()
-        self.layer_dict_all_keys = OrderedDict()
-        self.layer_dict_rolled = OrderedDict()
-        self.layer_labels = []
-        self.layer_labels_w_pass = []
-        self.layer_labels_no_pass = []
-        self.layer_num_passes = OrderedDict()
-        self.raw_tensor_dict = OrderedDict()
-        self.raw_tensor_labels_list = []
-        self.tensor_nums_to_save = tensor_nums_to_save
-        self.tensor_counter = 0
-        self.raw_layer_type_counter = defaultdict(lambda: 0)
-        self.unsaved_layers_lookup_keys = set()
+        self.layer_list: List[TensorLogEntry] = []
+        self.layer_list_rolled: List[RolledTensorLogEntry] = []
+        self.layer_dict_main_keys: Dict[str, TensorLogEntry] = OrderedDict()
+        self.layer_dict_all_keys: Dict[str, TensorLogEntry] = OrderedDict()
+        self.layer_dict_rolled: Dict[str, RolledTensorLogEntry] = OrderedDict()
+        self.layer_labels: List[str] = []
+        self.layer_labels_w_pass: List[str] = []
+        self.layer_labels_no_pass: List[str] = []
+        self.layer_num_passes: Dict[str, int] = OrderedDict()
+        self.raw_tensor_dict: Dict[str, TensorLogEntry] = OrderedDict()
+        self.raw_tensor_labels_list: List[str] = []
+        self.tensor_nums_to_save: List[int] = []
+        self.tensor_counter: int = 0
+        self.raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
+        self.unsaved_layers_lookup_keys: Set[str] = set()
 
         # Mapping from raw to final layer labels:
-        self.raw_to_final_layer_labels = {}
-        self.lookup_keys_to_tensor_num_dict = {}
+        self.raw_to_final_layer_labels: Dict[str, str] = {}
+        self.lookup_keys_to_tensor_num_dict: Dict[str, int] = {}
+        self.tensor_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
 
         # Special Layers:
-        self.input_layers = []
-        self.output_layers = []
-        self.buffer_layers = []
-        self.internally_initialized_layers = []
-        self.layers_where_internal_branches_merge_with_input = []
-        self.internally_terminated_layers = []
-        self.internally_terminated_bool_layers = []
-        self.conditional_branch_edges = []
-        self.layers_with_saved_gradients = []
-        self.layers_computed_with_params = defaultdict(list)
-        self.equivalent_operations = defaultdict(set)
-        self.same_layer_operations = defaultdict(list)
+        self.input_layers: List[str] = []
+        self.output_layers: List[str] = []
+        self.buffer_layers: List[str] = []
+        self.internally_initialized_layers: List[str] = []
+        self.layers_where_internal_branches_merge_with_input: List[str] = []
+        self.internally_terminated_layers: List[str] = []
+        self.internally_terminated_bool_layers: List[str] = []
+        self.conditional_branch_edges: List[Tuple[str, str]] = []
+        self.layers_with_saved_activations: List[str] = []
+        self.unlogged_layers: List[str] = []
+        self.layers_with_saved_gradients: List[str] = []
+        self.layers_computed_with_params: Dict[str, List] = defaultdict(list)
+        self.equivalent_operations: Dict[str, set] = defaultdict(set)
+        self.same_layer_operations: Dict[str, list] = defaultdict(list)
 
         # Tensor info:
-        self.num_tensors_total = 0
-        self.tensor_fsize_total = 0
-        self.tensor_fsize_total_nice = human_readable_size(0)
-        self.num_tensors_saved = 0
-        self.tensor_fsize_saved = 0
-        self.tensor_fsize_saved_nice = human_readable_size(0)
+        self.num_tensors_total: int = 0
+        self.tensor_fsize_total: int = 0
+        self.tensor_fsize_total_nice: str = human_readable_size(0)
+        self.num_tensors_saved: int = 0
+        self.tensor_fsize_saved: int = 0
+        self.tensor_fsize_saved_nice: str = human_readable_size(0)
 
         # Param info:
-        self.total_param_tensors = 0
-        self.total_param_layers = 0
-        self.total_params = 0
-        self.total_params_fsize = 0
-        self.total_params_fsize_nice = human_readable_size(0)
+        self.total_param_tensors: int = 0
+        self.total_param_layers: int = 0
+        self.total_params: int = 0
+        self.total_params_fsize: int = 0
+        self.total_params_fsize_nice: str = human_readable_size(0)
 
         # Module info:
-        self.module_addresses = []
-        self.module_types = {}
-        self.module_passes = []
-        self.module_num_passes = defaultdict(lambda: 1)
-        self.top_level_modules = []
-        self.top_level_module_passes = []
-        self.module_children = defaultdict(list)
-        self.module_pass_children = defaultdict(list)
-        self.module_nparams = defaultdict(lambda: 0)
-        self.module_num_tensors = defaultdict(lambda: 0)
-        self.module_pass_num_tensors = defaultdict(lambda: 0)
+        self.module_addresses: List[str] = []
+        self.module_types: Dict[str, Any] = {}
+        self.module_passes: List = []
+        self.module_num_passes: Dict = defaultdict(lambda: 1)
+        self.top_level_modules: List = []
+        self.top_level_module_passes: List = []
+        self.module_children: Dict = defaultdict(list)
+        self.module_pass_children: Dict = defaultdict(list)
+        self.module_nparams: Dict = defaultdict(lambda: 0)
+        self.module_num_tensors: Dict = defaultdict(lambda: 0)
+        self.module_pass_num_tensors: Dict = defaultdict(lambda: 0)
 
         # Time elapsed:
-        self.pass_start_time = 0
-        self.pass_end_time = 0
-        self.elapsed_time_total = 0
-        self.elapsed_time_function_calls = 0
-        self.elapsed_time_torchlens_logging = 0
+        self.pass_start_time: float = 0
+        self.pass_end_time: float = 0
+        self.elapsed_time_setup: float = 0
+        self.elapsed_time_forward_pass: float = 0
+        self.elapsed_time_cleanup: float = 0
+        self.elapsed_time_total: float = 0
+        self.elapsed_time_function_calls: float = 0
+        self.elapsed_time_torchlens_logging: float = 0
 
     # ********************************************
     # ********** User-Facing Functions ***********
@@ -730,6 +760,11 @@ class ModelHistory:
                          'has_siblings',
                          'spouse_layers',
                          'has_spouses',
+                         'initialized_inside_model',
+                         'min_distance_from_input',
+                         'max_distance_from_input',
+                         'min_distance_from_output',
+                         'max_distance_from_output',
                          'computed_with_params',
                          'num_params_total',
                          'parent_param_shapes',
@@ -776,7 +811,488 @@ class ModelHistory:
 
         return model_df
 
-    def get_op_nums_from_user_labels(self, which_layers: List[Union[str, int]]) -> List[int]:
+    ##########################
+    ## Decoration Functions ##
+    ##########################
+
+    def torch_func_decorator(self,
+                             func: Callable):
+        @wraps(func)
+        def wrapped_func(*args, **kwargs):
+
+            # Initial bookkeeping; check if it's a special function, organize the arguments.
+            self.current_function_call_barcode = 0
+            func_name = func.__name__
+            if (func_name in funcs_not_to_log) or not self.track_tensors:
+                out = func(*args, **kwargs)
+                return out
+            all_args = list(args) + list(kwargs.values())
+            arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
+            if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
+                out = print_override(args[0], func_name)
+                return out
+
+            # Copy the args and kwargs in case they change in-place:
+            if self.save_function_args:
+                arg_copies = tuple([safe_copy(arg) for arg in args])
+                kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
+            else:
+                arg_copies = args
+                kwarg_copies = kwargs
+
+            # Call the function, tracking the timing, rng states, and whether it's a nested function
+            func_call_barcode = make_random_barcode()
+            self.current_function_call_barcode = func_call_barcode
+            start_time = time.time()
+            func_rng_states = log_current_rng_states()
+            out_orig = func(*args, **kwargs)
+            func_time_elapsed = time.time() - start_time
+            is_bottom_level_func = (self.current_function_call_barcode == func_call_barcode)
+
+            if func_name in ['__setitem__', 'zero_', '__delitem__']:
+                out_orig = args[0]
+
+            # Log all output tensors
+            output_tensors = get_vars_of_type_from_obj(out_orig,
+                                                       which_type=torch.Tensor,
+                                                       subclass_exceptions=[torch.nn.Parameter])
+
+            if len(output_tensors) > 0:
+                self.log_function_output_tensors(func,
+                                                 args,
+                                                 kwargs,
+                                                 arg_copies,
+                                                 kwarg_copies,
+                                                 out_orig,
+                                                 func_time_elapsed,
+                                                 func_rng_states,
+                                                 is_bottom_level_func)
+
+            return out_orig
+
+        return wrapped_func
+
+    def decorate_pytorch(self,
+                         torch_module: types.ModuleType,
+                         orig_func_defs: List[Tuple]) -> Dict[Callable, Callable]:
+        """Mutates all PyTorch functions (TEMPORARILY!) to save the outputs of any functions
+        that return Tensors, along with marking them with metadata. Returns a list of tuples that
+        save the current state of the functions, such that they can be restored when done.
+
+        args:
+            torch_module: The top-level torch module (i.e., from "import torch").
+                This is supplied as an argument on the off-chance that the user has imported torch
+                and done their own monkey-patching.
+            tensors_to_mutate: A list of tensors that will be mutated (since any tensors created
+                before calling the torch mutation function will not be mutated).
+            orig_func_defs: Supply a list from outside to guarantee it can be cleaned up properly.
+            tensor_record: A list to which the outputs of the functions will be appended.
+
+        returns:
+            List of tuples consisting of [namespace, func_name, orig_func], sufficient
+            to return torch to normal when finished, and also a dict mapping mutated functions to original functions.
+        """
+
+        # Do a pass to save the original func defs.
+        self.collect_orig_func_defs(torch_module, orig_func_defs)
+        decorated_func_mapper = {}
+
+        for namespace_name, func_name in ORIG_TORCH_FUNCS:
+            namespace_name_notorch = namespace_name.replace('torch.', '')
+            local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
+            if not hasattr(local_func_namespace, func_name):
+                continue
+            orig_func = getattr(local_func_namespace, func_name)
+            if getattr(orig_func, '__name__', False) == 'wrapped_func':
+                continue
+            new_func = self.torch_func_decorator(orig_func)
+            try:
+                setattr(local_func_namespace, func_name, new_func)
+            except (AttributeError, TypeError) as _:
+                pass
+            new_func.tl_is_decorated_function = True
+            decorated_func_mapper[new_func] = orig_func
+            decorated_func_mapper[orig_func] = new_func
+
+        # Bolt on the identity function
+        new_identity = self.torch_func_decorator(identity)
+        torch.identity = new_identity
+
+        return decorated_func_mapper
+
+    @staticmethod
+    def undecorate_pytorch(torch_module,
+                           orig_func_defs: List[Tuple],
+                           input_tensors: List[torch.Tensor]):
+        """
+        Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
+        This is done for the output tensors and history_dict too to avoid ugliness. Also deletes
+        the mutant versions of the functions to remove any references to old ModelHistory object.
+
+        args:
+            torch_module: The torch module object.
+            orig_func_defs: List of tuples consisting of [namespace_name, func_name, orig_func], sufficient
+                to regenerate the original functions.
+            input_tensors: List of input tensors whose fucntions will be undecorated.
+            decorated_func_mapper: Maps the decorated function to the original function
+        """
+        for namespace_name, func_name, orig_func in orig_func_defs:
+            namespace_name_notorch = namespace_name.replace('torch.', '')
+            local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
+            decorated_func = getattr(local_func_namespace, func_name)
+            del decorated_func
+            try:
+                setattr(local_func_namespace, func_name, orig_func)
+            except (AttributeError, TypeError) as _:
+                continue
+        delattr(torch, 'identity')
+        for input_tensor in input_tensors:
+            if hasattr(input_tensor, 'tl_tensor_label_raw'):
+                delattr(input_tensor, 'tl_tensor_label_raw')
+
+    @staticmethod
+    def undecorate_tensor(t, device: str = 'cpu'):
+        """Convenience function to replace the tensor with an unmutated version of itself, keeping the same data.
+
+        Args:
+            t: tensor or parameter object
+            device: device to move the tensor to
+
+        Returns:
+            Unmutated tensor.
+        """
+        if type(t) in [torch.Tensor, torch.nn.Parameter]:
+            new_t = safe_copy(t)
+        else:
+            new_t = t
+        del t
+        for attr in dir(new_t):
+            if attr.startswith('tl_'):
+                delattr(new_t, attr)
+        new_t = new_t.to(device)
+        return new_t
+
+    @staticmethod
+    def collect_orig_func_defs(torch_module: types.ModuleType,
+                               orig_func_defs: List[Tuple]):
+        """Collects the original torch function definitions, so they can be restored after the logging is done.
+
+        Args:
+            torch_module: The top-level torch module
+            orig_func_defs: List of tuples keeping track of the original function definitions
+        """
+        for namespace_name, func_name in ORIG_TORCH_FUNCS:
+            namespace_name_notorch = namespace_name.replace('torch.', '')
+            local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
+            if not hasattr(local_func_namespace, func_name):
+                continue
+            orig_func = getattr(local_func_namespace, func_name)
+            orig_func_defs.append((namespace_name, func_name, orig_func))
+
+    ###########################
+    ##### Model Functions #####
+    ###########################
+
+    def prepare_model(self,
+                      model: nn.Module,
+                      module_orig_forward_funcs: Dict,
+                      decorated_func_mapper: Dict[Callable, Callable]):
+        """Adds annotations and hooks to the model, and decorates any functions in the model.
+
+        Args:
+            model: Model to prepare.
+            module_orig_forward_funcs: Dict with the original forward funcs for each submodule
+            decorated_func_mapper: Dictionary mapping decorated functions to original functions, so they can be restored
+
+        Returns:
+            Model with hooks and attributes added.
+        """
+        self.model_name = str(type(model).__name__)
+        model.tl_module_address = ''
+        model.tl_source_model_history = self
+
+        module_stack = [(model, '')]  # list of tuples (name, module)
+
+        while len(module_stack) > 0:
+            module, parent_address = module_stack.pop()
+            module_children = list(module.named_children())
+
+            # Decorate any torch functions in the model:
+            for func_name, func in module.__dict__.items():
+                if (func_name[0:2] == '__') or (not callable(func)) or (func not in decorated_func_mapper):
+                    continue
+                module.__dict__[func_name] = decorated_func_mapper[func]
+
+            # Annotate the children with the full address.
+            for c, (child_name, child_module) in enumerate(module_children):
+                child_address = f"{parent_address}.{child_name}" if parent_address != '' else child_name
+                child_module.tl_module_address = child_address
+                module_children[c] = (child_module, child_address)
+            module_stack = module_children + module_stack
+
+            if module == model:  # don't tag the model itself.
+                continue
+
+            module.tl_source_model_history = self
+            module.tl_module_type = str(type(module).__name__)
+            self.module_types[module.tl_module_address] = module.tl_module_type
+            module.tl_module_pass_num = 0
+            module.tl_module_pass_labels = []
+            module.tl_tensors_entered_labels = []
+            module.tl_tensors_exited_labels = []
+
+            # Add decorators.
+
+            if hasattr(module, 'forward'):
+                module_orig_forward_funcs[module] = module.forward
+                module.forward = self.module_forward_decorator(module.forward, module)
+                module.forward.tl_forward_call_is_decorated = True
+
+        # Mark all parameters with requires_grad = True, and mark what they were before, so they can be restored on cleanup.
+        for param in model.parameters():
+            param.tl_requires_grad = param.requires_grad
+            param.requires_grad = True
+
+        # And prepare any buffer tensors.
+        self.prepare_buffer_tensors(model)
+
+    def prepare_buffer_tensors(self,
+                               model: nn.Module):
+        """Goes through a model and all its submodules, and prepares any "buffer" tensors: tensors
+        attached to the module that aren't model parameters.
+
+        Args:
+            model: PyTorch model
+
+        Returns:
+            PyTorch model with all buffer tensors prepared and ready to track.
+        """
+        submodules = self.get_all_submodules(model)
+        for submodule in submodules:
+            for attribute_name in dir(submodule):
+                attribute = getattr(submodule, attribute_name)
+                if issubclass(type(attribute), torch.Tensor) and not issubclass(type(attribute), torch.nn.Parameter):
+                    if submodule.tl_module_address == '':
+                        buffer_address = attribute_name
+                    else:
+                        buffer_address = submodule.tl_module_address + '.' + attribute_name
+                    self.log_source_tensor(attribute, 'buffer', buffer_address)
+
+    def module_forward_decorator(self,
+                                 orig_forward: Callable,
+                                 module: nn.Module) -> Callable:
+        @wraps(orig_forward)
+        def decorated_forward(*args, **kwargs):
+            if self.logging_mode == 'fast':  # do bare minimum for logging.
+                out = orig_forward(*args, **kwargs)
+                output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
+                for t in output_tensors:
+                    # if identity module, run the function for bookkeeping
+                    if module.tl_module_type.lower() == 'identity':
+                        t = getattr(torch, 'identity')(t)
+                return out
+
+            # "Pre-hook" operations:
+            module_address = module.tl_module_address
+            module.tl_module_pass_num += 1
+            module_pass_label = (module_address, module.tl_module_pass_num)
+            module.tl_module_pass_labels.append(module_pass_label)
+            input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor)
+            for t in input_tensors:
+                tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
+                module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
+                tensor_entry.modules_entered.append(module_address)
+                tensor_entry.module_passes_entered.append(module_pass_label)
+                tensor_entry.is_submodule_input = True
+                tensor_entry.module_entry_exit_thread_output.append(('+', module_pass_label[0], module_pass_label[1]))
+
+            # The function call
+            out = orig_forward(*args, **kwargs)
+
+            # "Post-hook" operations:
+            module_address = module.tl_module_address
+            module_pass_num = module.tl_module_pass_num
+            module_entry_label = module.tl_module_pass_labels.pop()
+            output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
+            for t in output_tensors:
+                if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
+                    t = getattr(torch, 'identity')(t)
+                tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
+                tensor_entry.is_submodule_output = True
+                tensor_entry.is_bottom_level_submodule_output = self.log_whether_exited_submodule_is_bottom_level(t,
+                                                                                                                  module)
+                tensor_entry.modules_exited.append(module_address)
+                tensor_entry.module_passes_exited.append((module_address, module_pass_num))
+                tensor_entry.module_entry_exit_thread_output.append(('-', module_entry_label[0], module_entry_label[1]))
+                module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
+
+            for t in input_tensors:  # Now that module is finished, roll back the threads of all input tensors.
+                tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
+                input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
+                if ('+', module_entry_label[0], module_entry_label[1]) in input_module_thread:
+                    module_entry_ix = input_module_thread.index(('+', module_entry_label[0], module_entry_label[1]))
+                    tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
+                                                                   :module_entry_ix]
+
+            return out
+
+        return decorated_forward
+
+    def log_whether_exited_submodule_is_bottom_level(self,
+                                                     t: torch.Tensor,
+                                                     submodule: nn.Module):
+        """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule;
+        that is, that only one tensor operation happened inside the submodule.
+
+        Args:
+            t: the tensor leaving the module
+            submodule: the module that the tensor is leaving
+
+        Returns:
+            Whether the tensor operation is bottom level.
+        """
+        tensor_entry = self.raw_tensor_dict[getattr(t, 'tl_tensor_label_raw')]
+        submodule_address = submodule.tl_module_address
+
+        if tensor_entry.is_bottom_level_submodule_output:
+            return True
+
+        # If it was initialized inside the model and nothing entered the module, it's bottom-level.
+        if tensor_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
+            tensor_entry.is_bottom_level_submodule_output = True
+            tensor_entry.bottom_level_submodule_pass_exited = (submodule_address, submodule.tl_module_pass_num)
+            return True
+
+        # Else, all parents must have entered the submodule for it to be a bottom-level submodule.
+        for parent_label in tensor_entry.parent_layers:
+            parent_tensor = self[parent_label]
+            parent_modules_entered = parent_tensor.modules_entered
+            if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):
+                tensor_entry.is_bottom_level_submodule_output = False
+                return False
+
+        # If it survived the above tests, it's a bottom-level submodule.
+        tensor_entry.is_bottom_level_submodule_output = True
+        tensor_entry.bottom_level_submodule_pass_exited = (submodule_address, submodule.tl_module_pass_num)
+        return True
+
+    def get_all_submodules(self,
+                           model: nn.Module,
+                           is_top_level_model: bool = True) -> List[nn.Module]:
+        """Recursively gets list of all submodules for given module, no matter their level in the
+        hierarchy; this includes the model itself.
+
+        Args:
+            model: PyTorch model.
+            is_top_level_model: Whether it's the top-level model; just for the recursive logic of it.
+
+        Returns:
+            List of all submodules.
+        """
+        submodules = []
+        if is_top_level_model:
+            submodules.append(model)
+        for module in model.children():
+            submodules.append(module)
+            submodules += self.get_all_submodules(module, is_top_level_model=False)
+        return submodules
+
+    def cleanup_model(self,
+                      model: nn.Module,
+                      module_orig_forward_funcs: Dict[nn.Module, Callable],
+                      decorated_func_mapper: Dict[Callable, Callable]):
+        """Reverses all temporary changes to the model (namely, the forward hooks and added
+        model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
+
+        Args:
+            model: PyTorch model.
+            module_orig_forward_funcs: Dict containing the original, undecorated forward pass functions for
+                each submodule
+            decorated_func_mapper: Dict mapping between original and decorated PyTorch funcs
+
+        Returns:
+            Original version of the model.
+        """
+        submodules = self.get_all_submodules(model, is_top_level_model=True)
+        for submodule in submodules:
+            if submodule == model:
+                continue
+            submodule.forward = module_orig_forward_funcs[submodule]
+        self.restore_model_attributes(model, decorated_func_mapper=decorated_func_mapper, attribute_keyword='tl')
+        self.undecorate_model_tensors(model)
+
+    @staticmethod
+    def clear_hooks(hook_handles: List):
+        """Takes in a list of tuples (module, hook_handle), and clears the hook at that
+        handle for each module.
+
+        Args:
+            hook_handles: List of tuples (module, hook_handle)
+
+        Returns:
+            Nothing.
+        """
+        for hook_handle in hook_handles:
+            hook_handle.remove()
+
+    @staticmethod
+    def restore_module_attributes(module: nn.Module,
+                                  decorated_func_mapper: Dict[Callable, Callable],
+                                  attribute_keyword: str = 'tl'):
+        for attribute_name in dir(module):
+            if attribute_name.startswith(attribute_keyword):
+                delattr(module, attribute_name)
+                continue
+            attr = getattr(module, attribute_name)
+            if isinstance(attr, Callable) and (attr in decorated_func_mapper) and (attribute_name[0:2] != '__'):
+                setattr(module, attribute_name, decorated_func_mapper[attr])
+
+    def restore_model_attributes(self,
+                                 model: nn.Module,
+                                 decorated_func_mapper: Dict[Callable, Callable],
+                                 attribute_keyword: str = 'tl'):
+        """Recursively clears the given attribute from all modules in the model.
+
+        Args:
+            model: PyTorch model.
+            decorated_func_mapper: Dict mapping between original and decorated PyTorch funcs
+            attribute_keyword: Any attribute with this keyword will be cleared.
+
+        Returns:
+            Nothing.
+        """
+        for module in self.get_all_submodules(model):
+            self.restore_module_attributes(module,
+                                           decorated_func_mapper=decorated_func_mapper,
+                                           attribute_keyword=attribute_keyword)
+
+        for param in model.parameters():
+            param.requires_grad = getattr(param, 'tl_requires_grad')
+            delattr(param, 'tl_requires_grad')
+
+    def undecorate_model_tensors(self, model: nn.Module):
+        """Goes through a model and all its submodules, and unmutates any tensor attributes. Normally just clearing
+        parameters would have done this, but some module types (e.g., batchnorm) contain attributes that are tensors,
+        but not parameters.
+
+        Args:
+            model: PyTorch model
+
+        Returns:
+            PyTorch model with unmutated versions of all tensor attributes.
+        """
+        submodules = self.get_all_submodules(model)
+        for submodule in submodules:
+            for attribute_name in dir(submodule):
+                attribute = getattr(submodule, attribute_name)
+                if issubclass(type(attribute), torch.Tensor):
+                    if not issubclass(type(attribute), torch.nn.Parameter) and \
+                            hasattr(attribute, 'tl_tensor_label_raw'):
+                        delattr(attribute, 'tl_tensor_label_raw')
+                    else:
+                        remove_attributes_starting_with_str(attribute, 'tl_')
+
+    def get_op_nums_from_user_labels(self, which_layers: Union[str, List[Union[str, int]]]) -> List[int]:
         """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
         the numbers that were generated on the fly during the forward pass, such that they can be
         saved on a subsequent pass). Raises an error if the user's labels don't correspond to any layers.
@@ -789,6 +1305,15 @@ class ModelHistory:
         Returns:
             Ordered, unique list of raw tensor numbers associated with the specified layers.
         """
+        if which_layers == 'all':
+            return which_layers
+        elif which_layers in [None, 'none', 'None', 'NONE', []]:
+            return []
+
+        if type(which_layers) != list:
+            which_layers = [which_layers]
+        which_layers = [layer.lower() if (type(layer) == str) else layer for layer in which_layers]
+
         raw_tensor_nums_to_save = set()
         for layer_key in which_layers:
             # First check if it matches a lookup key. If so, use that.
@@ -810,14 +1335,158 @@ class ModelHistory:
         raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
         return raw_tensor_nums_to_save
 
-    # ********************************************
-    # ************ Tensor Logging ****************
-    # ********************************************
+    def save_new_activations(self,
+                             model: nn.Module,
+                             input_args: Union[torch.Tensor, List[Any]],
+                             input_kwargs: Dict[Any, Any] = None,
+                             layers_to_save: Union[str, List] = 'all',
+                             random_seed: Optional[int] = None):
+        """Saves activations to a new input to the model, replacing existing saved activations.
+        This will be much faster than the initial call to log_forward_pass (since all the of the metadata has
+        already been saved), so if you wish to save the activations to many different inputs for a given model
+        this is the function you should use. The one caveat is that this function assumes that the computational
+        graph will be the same for the new input; if the model involves a dynamic computational graph that can change
+        across inputs, and this graph changes for the new input, then this function will throw an error. In that case,
+        you'll have to do a new call to log_forward_pass to log the new graph.
+
+        Args:
+            model: Model for which to save activations
+            input_args: Either a single tensor input to the model, or list of input arguments.
+            input_kwargs: Dict of keyword arguments to the model.
+            layers_to_save: List of layers to save, using any valid lookup keys
+            random_seed: Which random seed to use
+        Returns:
+            Nothing, but now the ModelHistory object will have saved activations for the new input.
+        """
+        self.logging_mode = 'fast'
+
+        # Go through and clear all existing activations.
+        for tensor_log_entry in self:
+            tensor_log_entry.tensor_contents = None
+            tensor_log_entry.has_saved_activations = False
+            tensor_log_entry.has_saved_grad = False
+            tensor_log_entry.grad_contents = None
+
+        # Reset relevant fields.
+        self.layers_with_saved_activations = []
+        self.layers_with_saved_gradients = []
+        self.num_tensors_saved = 0
+        self.tensor_fsize_saved = 0
+        self.tensor_counter = 0
+        self.raw_layer_type_counter = defaultdict(lambda: 0)
+
+        # Now run and log the new inputs.
+        self.run_and_log_inputs_through_model(model,
+                                              input_args,
+                                              input_kwargs,
+                                              layers_to_save,
+                                              random_seed)
+
+    ########################################
+    #### Running and logging the model #####
+    ########################################
+
+    def run_and_log_inputs_through_model(self,
+                                         model: nn.Module,
+                                         input_args: Union[torch.Tensor, List[Any]],
+                                         input_kwargs: Dict[Any, Any] = None,
+                                         layers_to_save: Optional[Union[str, List[Union[str, int]]]] = 'all',
+                                         random_seed: Optional[int] = None):
+        """Runs input through model and logs it in ModelHistory.
+
+        Args:
+            model: Model for which to save activations
+            input_args: Either a single tensor input to the model, or list of input arguments.
+            input_kwargs: Dict of keyword arguments to the model.
+            layers_to_save: List of tensor numbers to save
+            random_seed: Which random seed to use
+        Returns:
+            Nothing, but now the ModelHistory object will have saved activations for the new input.
+        """
+        if random_seed is None:  # set random seed
+            random_seed = random.randint(1, 4294967294)
+        self.random_seed_used = random_seed
+        set_random_seed(random_seed)
+
+        self.tensor_nums_to_save = self.get_op_nums_from_user_labels(layers_to_save)
+
+        if type(input_args) == torch.Tensor:
+            input_args = [input_args]
+
+        if not input_args:
+            input_args = []
+
+        if not input_kwargs:
+            input_kwargs = {}
+
+        if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
+            model = model.module
+
+        if len(list(model.parameters())) > 0:  # Get the model device by looking at the parameters:
+            model_device = next(iter(model.parameters())).device
+        else:
+            model_device = 'cpu'
+
+        input_args = [copy.deepcopy(arg) for arg in input_args]
+        input_kwargs = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
+
+        self.pass_start_time = time.time()
+        module_orig_forward_funcs = {}
+        orig_func_defs = []
+
+        try:
+            input_args = move_input_tensors_to_device(input_args, model_device)
+            input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
+            input_arg_tensors = get_vars_of_type_from_obj(input_args, torch.Tensor, search_depth=5)
+            input_kwarg_tensors = get_vars_of_type_from_obj(input_kwargs, torch.Tensor, search_depth=5)
+            input_tensors = input_arg_tensors + input_kwarg_tensors
+            buffer_tensors = list(model.buffers())
+            tensors_to_decorate = input_tensors + buffer_tensors
+            decorated_func_mapper = self.decorate_pytorch(torch,
+                                                          orig_func_defs)
+            self.track_tensors = True
+            for t in input_tensors:
+                self.log_source_tensor(t, 'input')
+            self.prepare_model(model, module_orig_forward_funcs, decorated_func_mapper)
+            self.elapsed_time_setup = time.time() - self.pass_start_time
+            outputs = model(*input_args, **input_kwargs)
+            self.elapsed_time_forward_pass = time.time() - self.pass_start_time - self.elapsed_time_setup
+            self.track_tensors = False
+            output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
+            for t in output_tensors:
+                self.output_layers.append(t.tl_tensor_label_raw)
+                self.raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
+            tensors_to_undecorate = tensors_to_decorate + output_tensors
+            self.undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
+            self.cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
+            self.postprocess()
+            decorated_func_mapper.clear()
+
+        except Exception as e:  # if anything fails, make sure everything gets cleaned up
+            self.undecorate_pytorch(torch, orig_func_defs, input_tensors)
+            self.cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
+            print("************\nFeature extraction failed; returning model and environment to normal\n*************")
+            raise e
+
+        finally:  # do garbage collection no matter what
+            del input_args
+            del output_tensors
+            del outputs
+            torch.cuda.empty_cache()
 
     def log_source_tensor(self,
                           t: torch.Tensor,
                           source: str,
                           buffer_addr: Optional[str] = None):
+        if self.logging_mode == 'exhaustive':
+            self.log_source_tensor_exhaustive(t, source, buffer_addr)
+        elif self.logging_mode == 'fast':
+            self.log_source_tensor_fast(t, source)
+
+    def log_source_tensor_exhaustive(self,
+                                     t: torch.Tensor,
+                                     source: str,
+                                     buffer_addr: Optional[str] = None):
         """Takes in an input or buffer tensor, marks it in-place with relevant information, and
         adds it to the log.
 
@@ -885,8 +1554,9 @@ class ModelHistory:
             'activation_postfunc': self.activation_postfunc,
             'detach_saved_tensor': self.detach_saved_tensors,
             'output_device': self.output_device,
-            'creation_args': [],
-            'creation_kwargs': {},
+            'function_args_saved': False,
+            'creation_args': None,
+            'creation_kwargs': None,
             'tensor_shape': tuple(t.shape),
             'tensor_dtype': t.dtype,
             'tensor_fsize': get_tensor_memory_amount(t),
@@ -951,6 +1621,7 @@ class ModelHistory:
             'min_distance_from_input': None,
             'max_distance_from_input': None,
             'is_output_layer': False,
+            'is_output_parent': False,
             'is_last_output_layer': False,
             'is_output_ancestor': False,
             'output_descendents': set(),
@@ -975,6 +1646,7 @@ class ModelHistory:
             'is_computed_inside_submodule': False,
             'containing_module_origin': None,
             'containing_modules_origin_nested': [],
+            'module_nesting_depth': 0,
             'modules_entered': [],
             'module_passes_entered': [],
             'is_submodule_input': False,
@@ -1000,6 +1672,39 @@ class ModelHistory:
             self.buffer_layers.append(tensor_label)
             self.internally_initialized_layers.append(tensor_label)
 
+    def log_source_tensor_fast(self,
+                               t: torch.Tensor,
+                               source: str):
+        """NOTES TO SELF--fields to change are:
+        for ModelHistory: pass timing, num tensors saved, tensor fsize
+        for Tensors: tensor contents, fsize, args, kwargs, make sure to clear gradients.
+        Add a minimal postprocessing thing for tallying stuff pertaining to saved tensors.
+        Have some minimal checker to make sure the graph didn't change.
+        """
+        layer_type = source
+        # Fetch counters and increment to be ready for next tensor to be logged
+        self.tensor_counter += 1
+        self.raw_layer_type_counter[layer_type] += 1
+        realtime_tensor_num = self.tensor_counter
+        layer_type_num = self.raw_layer_type_counter[layer_type]
+
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+        t.tl_tensor_label_raw = tensor_label_raw
+        if tensor_label_raw in self.orphan_layers:
+            return
+        orig_tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
+        if orig_tensor_label in self.unlogged_layers:
+            return
+        orig_tensor_entry = self.layer_dict_all_keys[orig_tensor_label]
+        if (self.tensor_nums_to_save == 'all') or (orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save):
+            self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
+            orig_tensor_entry.save_tensor_data(t, [], {}, self.save_function_args, self.activation_postfunc)
+
+        orig_tensor_entry.tensor_shape = tuple(t.shape)
+        orig_tensor_entry.tensor_dtype = t.dtype
+        orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(t)
+        orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(t))
+
     def log_function_output_tensors(self,
                                     func: Callable,
                                     args: Tuple[Any],
@@ -1010,6 +1715,37 @@ class ModelHistory:
                                     func_time_elapsed: float,
                                     func_rng_states: Dict,
                                     is_bottom_level_func: bool):
+        if self.logging_mode == 'exhaustive':
+            self.log_function_output_tensors_exhaustive(func,
+                                                        args,
+                                                        kwargs,
+                                                        arg_copies,
+                                                        kwarg_copies,
+                                                        out_orig,
+                                                        func_time_elapsed,
+                                                        func_rng_states,
+                                                        is_bottom_level_func)
+        elif self.logging_mode == 'fast':
+            self.log_function_output_tensors_fast(func,
+                                                  args,
+                                                  kwargs,
+                                                  arg_copies,
+                                                  kwarg_copies,
+                                                  out_orig,
+                                                  func_time_elapsed,
+                                                  func_rng_states,
+                                                  is_bottom_level_func)
+
+    def log_function_output_tensors_exhaustive(self,
+                                               func: Callable,
+                                               args: Tuple[Any],
+                                               kwargs: Dict[str, Any],
+                                               arg_copies: Tuple[Any],
+                                               kwarg_copies: Dict[str, Any],
+                                               out_orig: Any,
+                                               func_time_elapsed: float,
+                                               func_rng_states: Dict,
+                                               is_bottom_level_func: bool):
         """Logs tensor or set of tensors that were computed from a function call.
 
         Args:
@@ -1085,6 +1821,7 @@ class ModelHistory:
         fields_dict['min_distance_from_input'] = None
         fields_dict['max_distance_from_input'] = None
         fields_dict['is_output_layer'] = False
+        fields_dict['is_output_parent'] = False
         fields_dict['is_last_output_layer'] = False
         fields_dict['is_output_ancestor'] = False
         fields_dict['output_descendents'] = set()
@@ -1129,6 +1866,7 @@ class ModelHistory:
         fields_dict['is_computed_inside_submodule'] = is_computed_inside_submodule
         fields_dict['containing_module_origin'] = containing_module_origin
         fields_dict['containing_modules_origin_nested'] = containing_modules_origin_nested
+        fields_dict['module_nesting_depth'] = len(containing_modules_origin_nested)
         fields_dict['modules_entered'] = []
         fields_dict['module_passes_entered'] = []
         fields_dict['is_submodule_input'] = False
@@ -1177,6 +1915,81 @@ class ModelHistory:
             if self.save_gradients:
                 self._add_backward_hook(out, out.tl_tensor_label_raw)
 
+    def log_function_output_tensors_fast(self,
+                                         func: Callable,
+                                         args: Tuple[Any],
+                                         kwargs: Dict[str, Any],
+                                         arg_copies: Tuple[Any],
+                                         kwarg_copies: Dict[str, Any],
+                                         out_orig: Any,
+                                         func_time_elapsed: float,
+                                         func_rng_states: Dict,
+                                         is_bottom_level_func: bool):
+        # Collect information.
+        func_name = func.__name__
+        layer_type = func_name.lower().replace('_', '')
+        all_args = list(args) + list(kwargs.values())
+        non_tensor_args = [arg for arg in args if not self._check_if_tensor_arg(arg)]
+        non_tensor_kwargs = {key: val for key, val in kwargs.items() if not self._check_if_tensor_arg(val)}
+
+        arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
+        out_iter = make_var_iterable(out_orig)
+
+        for i, out in enumerate(out_iter):
+            if not self._output_should_be_logged(out, is_bottom_level_func):
+                continue
+            self.tensor_counter += 1
+            self.raw_layer_type_counter[layer_type] += 1
+            realtime_tensor_num = self.tensor_counter
+            layer_type_num = self.raw_layer_type_counter[layer_type]
+            tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+            if tensor_label_raw in self.orphan_layers:
+                continue
+            parent_layer_labels_raw = get_attr_values_from_tensor_list(arg_tensors, 'tl_tensor_label_raw')
+            parent_layer_labels_orig = [self.raw_to_final_layer_labels[raw_label] for raw_label in
+                                        parent_layer_labels_raw]
+            out.tl_tensor_label_raw = tensor_label_raw
+            if tensor_label_raw not in self.raw_to_final_layer_labels:
+                raise ValueError("The computational graph changed for this forward pass compared to the original "
+                                 "call to log_forward_pass (either due to different inputs or a different "
+                                 "random seed), so save_new_activations failed. Please re-run "
+                                 "log_forward_pass with the desired inputs.")
+            orig_tensor_label = self.raw_to_final_layer_labels[tensor_label_raw]
+            if orig_tensor_label in self.unlogged_layers:
+                continue
+            orig_tensor_entry = self[orig_tensor_label]
+
+            # Check to make sure the graph didn't change.
+            if any([orig_tensor_entry.realtime_tensor_num != self.tensor_counter,
+                    orig_tensor_entry.layer_type != layer_type,
+                    orig_tensor_entry.tensor_label_raw != tensor_label_raw,
+                    set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig)]):
+                raise ValueError("The computational graph changed for this forward pass compared to the original "
+                                 "call to log_forward_pass (either due to different inputs or a different "
+                                 "random seed), so save_new_activations failed. Please re-run "
+                                 "log_forward_pass with the desired inputs.")
+
+            # Update any relevant fields.
+            if (self.tensor_nums_to_save == 'all') or (
+                    orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save):
+                self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
+                orig_tensor_entry.save_tensor_data(out, arg_copies, kwarg_copies,
+                                                   self.save_function_args, self.activation_postfunc)
+                for child_layer in orig_tensor_entry.child_layers:
+                    if child_layer in self.output_layers:
+                        child_output = self.layer_dict_main_keys[child_layer]
+                        child_output.save_tensor_data(out, [], {},
+                                                      self.save_function_args, self.activation_postfunc)
+
+            orig_tensor_entry.tensor_shape = tuple(out.shape)
+            orig_tensor_entry.tensor_dtype = out.dtype
+            orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(out)
+            orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(out))
+            orig_tensor_entry.func_time_elapsed = func_time_elapsed
+            orig_tensor_entry.func_rng_states = func_rng_states
+            orig_tensor_entry.func_position_args_non_tensor = non_tensor_args
+            orig_tensor_entry.func_keyword_args_non_tensor = non_tensor_kwargs
+
     @staticmethod
     def _output_should_be_logged(out: Any,
                                  is_bottom_level_func: bool) -> bool:
@@ -1204,7 +2017,7 @@ class ModelHistory:
         """
 
         # Define the decorator
-        def log_grad_to_model_history(g_in, g_out):
+        def log_grad_to_model_history(_, g_out):
             self._log_tensor_grad(g_out, tensor_label)
 
         if t.grad_fn is not None:
@@ -1292,8 +2105,9 @@ class ModelHistory:
         fields_dict['tensor_contents'] = None
         fields_dict['has_saved_activations'] = False
         fields_dict['activation_postfunc'] = self.activation_postfunc
-        fields_dict['creation_args'] = []
-        fields_dict['creation_kwargs'] = {}
+        fields_dict['function_args_saved'] = False
+        fields_dict['creation_args'] = None
+        fields_dict['creation_kwargs'] = None
         fields_dict['tensor_shape'] = tuple(t.shape)
         fields_dict['tensor_dtype'] = t.dtype
         fields_dict['tensor_fsize'] = get_tensor_memory_amount(t)
@@ -1331,7 +2145,8 @@ class ModelHistory:
 
         new_entry = TensorLogEntry(fields_dict)
         if (self.tensor_nums_to_save == 'all') or (new_entry.realtime_tensor_num in self.tensor_nums_to_save):
-            new_entry.save_tensor_data(t, t_args, t_kwargs, activation_postfunc)
+            new_entry.save_tensor_data(t, t_args, t_kwargs, self.save_function_args, activation_postfunc)
+            self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
         self.raw_tensor_dict[new_entry.tensor_label_raw] = new_entry
         self.raw_tensor_labels_list.append(new_entry.tensor_label_raw)
 
@@ -1675,6 +2490,8 @@ class ModelHistory:
         remove_entry_from_list(self.internally_initialized_layers, layer_to_remove)
         remove_entry_from_list(self.internally_terminated_layers, layer_to_remove)
         remove_entry_from_list(self.internally_terminated_bool_layers, layer_to_remove)
+        remove_entry_from_list(self.layers_with_saved_activations, layer_to_remove)
+        remove_entry_from_list(self.layers_with_saved_gradients, layer_to_remove)
         remove_entry_from_list(self.layers_where_internal_branches_merge_with_input, layer_to_remove)
 
         self.conditional_branch_edges = [tup for tup in self.conditional_branch_edges if layer_to_remove not in tup]
@@ -1700,10 +2517,14 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, decorated_func_mapper: Dict, mark_input_output_distances: bool = True):
+    def postprocess(self):
         """
         After the forward pass, cleans up the log into its final form.
         """
+        if self.logging_mode == 'fast':
+            self.postprocess_fast()
+            return
+
         # Step 1: Add dedicated output nodes
 
         self._add_output_layers()
@@ -1718,7 +2539,7 @@ class ModelHistory:
 
         # Step 4: Find mix/max distance from input and output nodes
 
-        if mark_input_output_distances:
+        if self.mark_input_output_distances:
             self._mark_input_output_distances()
 
         # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
@@ -1738,14 +2559,35 @@ class ModelHistory:
 
         self._map_raw_tensor_labels_to_final_tensor_labels()
 
-        # Step 9: Process ModelHistory into its final user-facing version: undecorate all tensors,
-        # do any tallying/totals/labeling, log the module hierarchy, rename all tensors,
-        # get the operation numbers for all layer labels.
+        # Step 9: Go through and log information pertaining to all layers:
+        self._log_final_info_for_all_layers()
 
-        self._final_prettify(decorated_func_mapper)
+        # Step 10: Rename the raw tensor entries in the fields of ModelHistory:
+        self._rename_model_history_layer_names()
+        self._trim_and_reorder_model_history_fields()
 
-        # Step 10: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+        # Step 11: And one more pass to delete unused layers from the record and do final tidying up:
+        self._remove_unwanted_entries_and_log_remaining()
 
+        # Step 12: Undecorate all saved tensors and remove saved grad_fns.
+        self._undecorate_all_saved_tensors()
+
+        # Step 13: Clear the cache after any tensor deletions for garbage collection purposes:
+        torch.cuda.empty_cache()
+
+        # Step 14: Log time elapsed.
+        self._log_time_elapsed()
+
+        # Step 15: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+
+        self._set_pass_finished()
+
+    def postprocess_fast(self):
+        self._trim_and_reorder_model_history_fields()
+        self._remove_unwanted_entries_and_log_remaining()
+        self._undecorate_all_saved_tensors()
+        torch.cuda.empty_cache()
+        self._log_time_elapsed()
         self._set_pass_finished()
 
     def _add_output_layers(self):
@@ -1757,6 +2599,7 @@ class ModelHistory:
             output_node = self[output_layer_label]
             new_output_node = output_node.copy()
             new_output_node.layer_type = 'output'
+            new_output_node.is_output_layer = True
             if i == len(self.output_layers) - 1:
                 new_output_node.is_last_output_layer = True
             self.tensor_counter += 1
@@ -1805,7 +2648,7 @@ class ModelHistory:
             new_output_node.module_passes_exited = []
             new_output_node.is_submodule_output = False
             new_output_node.is_bottom_level_submodule_output = False
-            new_output_node.module_entry_exit_thread_input = []
+            new_output_node.module_entry_exit_threads_inputs = {}
             new_output_node.module_entry_exit_thread_output = []
 
             # Fix ancestry information:
@@ -1828,7 +2671,6 @@ class ModelHistory:
 
             # Change original output node:
 
-            output_node.is_output_layer = False
             output_node.child_layers.append(new_output_node.tensor_label_raw)
 
             self.raw_tensor_dict[new_output_node.tensor_label_raw] = new_output_node
@@ -1864,7 +2706,7 @@ class ModelHistory:
         while len(node_stack) > 0:
             tensor_label = node_stack.pop()
             nodes_seen.add(tensor_label)
-            tensor_entry = self[tensor_label]
+            tensor_entry = self.raw_tensor_dict[tensor_label]
             if (len(tensor_entry.child_layers) == 0) and (not tensor_entry.is_output_layer):
                 self._log_internally_terminated_tensor(tensor_label)
             for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
@@ -1872,6 +2714,7 @@ class ModelHistory:
                     node_stack.append(next_label)
 
         orphan_nodes = orig_nodes - nodes_seen
+        self.orphan_layers = list(orphan_nodes)
 
         # Now remove all orphaned nodes.
 
@@ -2061,7 +2904,8 @@ class ModelHistory:
             if node_operation_equivalence_type in operation_equivalence_types_seen:
                 continue
             operation_equivalence_types_seen.add(node_operation_equivalence_type)
-            node_stack.extend(node.child_layers)
+            for equiv_op in node.equivalent_operations:
+                node_stack.extend(self[equiv_op].child_layers)
             node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
 
             # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
@@ -2226,7 +3070,7 @@ class ModelHistory:
                 for neighbor_label in getattr(node, node_type_field):
                     if neighbor_label in node_subgraph['node_set']:  # skip if backtracking own subgraph
                         continue
-                    elif neighbor_label in node_to_subgraph_dict:  # if hit another subgraph, mark them adjacent & skip
+                    elif neighbor_label in node_to_subgraph_dict:  # if hit another subgraph, mark them adjacent.
                         self._check_and_mark_subgraph_adjacency(node_label,
                                                                 neighbor_label,
                                                                 iso_node_groups,
@@ -2382,7 +3226,7 @@ class ModelHistory:
         # Finally, label the nodes corresponding to the same layer.
         for layer_label, layer_nodes in same_layer_node_groups.items():
             # Skip if the new layer asssignment reduces the number of equivalent layers.
-            if len(layer_nodes) < len(self[layer_label].same_layer_operations):
+            if len(layer_nodes) < max([len(self[layer].same_layer_operations) for layer in layer_nodes]):
                 continue
             # convert to list and sort
             layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)
@@ -2452,13 +3296,19 @@ class ModelHistory:
             # And for any internally generated child nodes:
             for child_label in node.child_layers:
                 child_node = self[child_label]
-                if any([node.has_input_ancestor, child_node.has_input_ancestor, child_label in nodes_seen]):
+                if any([node.has_input_ancestor, child_node.has_input_ancestor, child_label in nodes_seen,
+                        child_node.is_output_layer]):
                     continue
                 self._fix_modules_for_single_internal_tensor(node,
                                                              child_node,
                                                              'child',
                                                              node_stack,
                                                              nodes_seen)
+
+        # Now that the module containment is fixed, add this to the operation equivalence types.
+        for layer in self:
+            module_str = '_'.join([module_pass[0] for module_pass in layer.containing_modules_origin_nested])
+            layer.operation_equivalence_type += module_str
 
     @staticmethod
     def _fix_modules_for_single_internal_tensor(starting_node: TensorLogEntry,
@@ -2537,27 +3387,6 @@ class ModelHistory:
             raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
 
-    def _final_prettify(self, decorated_func_mapper):
-        """
-        Goes through all tensor log entries for the final stages of pre-processing to make the
-        user-facing version of ModelHistory.
-        """
-        # Go through and log information pertaining to all layers:
-        self._log_final_info_for_all_layers()
-
-        # Rename the raw tensor entries in the fields of ModelHistory:
-        self._rename_model_history_layer_names()
-        self._trim_and_reorder_model_history_fields()
-
-        # And one more pass to delete unused layers from the record and do final tidying up:
-        self._remove_unwanted_entries_and_log_remaining()
-
-        # Undecorate all saved tensors and remove saved grad_fns.
-        self._undecorate_all_saved_tensors(decorated_func_mapper)
-
-        # Clear the cache after any tensor deletions for garbage collection purposes:
-        torch.cuda.empty_cache()
-
     def _log_final_info_for_all_layers(self):
         """
         Goes through all layers (before discarding unsaved ones), and logs final info about the model
@@ -2624,8 +3453,10 @@ class ModelHistory:
         self.tensor_fsize_total_nice = human_readable_size(self.tensor_fsize_total)
         self.total_params_fsize_nice = human_readable_size(self.total_params_fsize)
 
-        # Log time elapsed:
+    def _log_time_elapsed(self):
         self.pass_end_time = time.time()
+        self.elapsed_time_cleanup = (self.pass_end_time - self.pass_start_time -
+                                     self.elapsed_time_setup - self.elapsed_time_forward_pass)
         self.elapsed_time_total = self.pass_end_time - self.pass_start_time
         self.elapsed_time_torchlens_logging = self.elapsed_time_total - self.elapsed_time_function_calls
 
@@ -2680,24 +3511,37 @@ class ModelHistory:
                 self.module_addresses.append(module_name)
             if module_pass_label not in self.module_passes:
                 self.module_passes.append(module_pass_nice_label)
+        tensor_entry.module_nesting_depth = len(tensor_entry.containing_modules_origin_nested)
 
     def _remove_unwanted_entries_and_log_remaining(self):
         """Removes entries from ModelHistory that we don't want in the final saved output,
         and logs information about the remaining entries.
         """
         tensors_to_remove = []
-        self.unsaved_layers_lookup_keys = set()
         # Quick loop to count how many tensors are saved:
         for tensor_entry in self:
             if tensor_entry.has_saved_activations:
                 self.num_tensors_saved += 1
 
+        if self.keep_unsaved_layers:
+            num_logged_tensors = len(self)
+        else:
+            num_logged_tensors = self.num_tensors_saved
+
+        self.layer_list = []
+        self.layer_dict_main_keys = {}
+        self.layer_labels = []
+        self.layer_labels_no_pass = []
+        self.layer_labels_w_pass = []
+        self.layer_num_passes = {}
+
         i = 0
-        for tensor_entry in self:
+        for raw_tensor_label in self.raw_tensor_labels_list:
+            tensor_entry = self.raw_tensor_dict[raw_tensor_label]
             # Determine valid lookup keys and relate them to the tensor's realtime operation number:
-            if tensor_entry.has_saved_activations or self.keep_layers_without_saved_activations:
+            if tensor_entry.has_saved_activations or self.keep_unsaved_layers:
                 # Add the lookup keys for the layer, to itself and to ModelHistory:
-                self._add_lookup_keys_for_tensor_entry(tensor_entry, i, self.num_tensors_saved)
+                self._add_lookup_keys_for_tensor_entry(tensor_entry, i, num_logged_tensors)
 
                 # Log all information:
                 self.layer_list.append(tensor_entry)
@@ -2712,16 +3556,22 @@ class ModelHistory:
                 i += 1
             else:
                 tensors_to_remove.append(tensor_entry)
+                self.unlogged_layers.append(tensor_entry.layer_label)
                 self.unsaved_layers_lookup_keys.update(tensor_entry.lookup_keys)
-
-        if (self.num_tensors_saved == len(self)) or self.keep_layers_without_saved_activations:
-            self.all_layers_logged = True
-        else:
-            self.all_layers_logged = False
 
         # Remove unused entries.
         for tensor_entry in tensors_to_remove:
             self._remove_log_entry(tensor_entry, remove_references=False)
+
+        if (self.num_tensors_saved == len(self)) or self.keep_unsaved_layers:
+            self.all_layers_logged = True
+        else:
+            self.all_layers_logged = False
+
+        if self.num_tensors_saved == len(self.layer_list):
+            self.all_layers_saved = True
+        else:
+            self.all_layers_saved = False
 
         # Make the saved tensor filesize pretty:
         self.tensor_fsize_saved_nice = human_readable_size(self.tensor_fsize_saved)
@@ -2749,21 +3599,24 @@ class ModelHistory:
             lookup_keys_for_tensor.extend([tensor_entry.layer_label_w_pass,
                                            tensor_entry.layer_label_w_pass_short])
 
+        # Relabel the module passes if the first pass:
+        if self.logging_mode == 'exhaustive':
+            tensor_entry.module_passes_exited = [f"{module_name}:{module_pass}" for module_name, module_pass
+                                                 in tensor_entry.module_passes_exited]
+            tensor_entry.module_passes_entered = [f"{module_name}:{module_pass}" for module_name, module_pass
+                                                  in tensor_entry.module_passes_entered]
+            if tensor_entry.containing_module_origin is not None:
+                tensor_entry.containing_module_origin = ':'.join(
+                    [str(i) for i in tensor_entry.containing_module_origin])
+            tensor_entry.containing_modules_origin_nested = [f"{module_name}:{module_pass}" for module_name, module_pass
+                                                             in tensor_entry.containing_modules_origin_nested]
+
         # Allow indexing by modules exited as well:
-        for module_name, pass_num in tensor_entry.module_passes_exited:
-            lookup_keys_for_tensor.append(f"{module_name}:{pass_num}")
+        for module_pass in tensor_entry.module_passes_exited:
+            module_name, _ = module_pass.split(':')
+            lookup_keys_for_tensor.append(f"{module_pass}")
             if self.module_num_passes[module_name] == 1:
                 lookup_keys_for_tensor.append(f"{module_name}")
-
-        # Now that we don't need the module pass separately, we can relabel the passes:
-        tensor_entry.module_passes_exited = [f"{module_name}:{module_pass}" for module_name, module_pass
-                                             in tensor_entry.module_passes_exited]
-        tensor_entry.module_passes_entered = [f"{module_name}:{module_pass}" for module_name, module_pass
-                                              in tensor_entry.module_passes_entered]
-        if tensor_entry.containing_module_origin is not None:
-            tensor_entry.containing_module_origin = ':'.join([str(i) for i in tensor_entry.containing_module_origin])
-        tensor_entry.containing_modules_origin_nested = [f"{module_name}:{module_pass}" for module_name, module_pass
-                                                         in tensor_entry.containing_modules_origin_nested]
 
         # If buffer tensor, allow using buffer address as a key.
         if tensor_entry.is_buffer_layer:
@@ -2775,6 +3628,7 @@ class ModelHistory:
         tensor_entry.lookup_keys = lookup_keys_for_tensor
         for lookup_key in lookup_keys_for_tensor:
             self.lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.realtime_tensor_num
+            self.tensor_num_to_lookup_keys_dict[tensor_entry.realtime_tensor_num].append(lookup_key)
             self.layer_dict_all_keys[lookup_key] = tensor_entry
 
     @staticmethod
@@ -2797,7 +3651,8 @@ class ModelHistory:
         """
         list_fields_to_rename = ['input_layers', 'output_layers', 'buffer_layers', 'internally_initialized_layers',
                                  'layers_where_internal_branches_merge_with_input', 'internally_terminated_layers',
-                                 'internally_terminated_bool_layers']
+                                 'internally_terminated_bool_layers', 'layers_with_saved_gradients',
+                                 'layers_with_saved_activations']
         for field in list_fields_to_rename:
             tensor_labels = getattr(self, field)
             setattr(self, field, [self.raw_to_final_layer_labels[tensor_label] for tensor_label in tensor_labels])
@@ -2838,25 +3693,8 @@ class ModelHistory:
                 new_dir_dict[field] = getattr(self, field)
         self.__dict__ = new_dir_dict
 
-    @staticmethod
-    def _undecorate_saved_tensor(t, decorated_func_mapper):
-        if hasattr(t, 'tl_tensor_label_raw'):
-            delattr(t, 'tl_tensor_label_raw')
-        for attr_name in dir(t):
-            if attr_name.startswith('_') or (attr_name in ['grad']):
-                continue
-            try:
-                attr = getattr(t, attr_name)
-            except (AttributeError, TypeError, RuntimeError) as _:
-                continue
-            if attr in decorated_func_mapper:
-                setattr(t, attr_name, decorated_func_mapper[attr])
-
-    def _undecorate_all_saved_tensors(self, decorated_func_mapper: Dict):
+    def _undecorate_all_saved_tensors(self):
         """Utility function to undecorate all saved tensors.
-
-        Args:
-            decorated_func_mapper: Maps decorated functions to their original versions.
         """
         tensors_to_undecorate = []
         for layer_label in self.layer_labels:
@@ -2866,13 +3704,14 @@ class ModelHistory:
 
             tensors_to_undecorate.extend(get_vars_of_type_from_obj(tensor_entry.creation_args,
                                                                    torch.Tensor,
-                                                                   search_depth=4))
+                                                                   search_depth=2))
             tensors_to_undecorate.extend(get_vars_of_type_from_obj(tensor_entry.creation_kwargs,
                                                                    torch.Tensor,
-                                                                   search_depth=4))
+                                                                   search_depth=2))
 
         for t in tensors_to_undecorate:
-            self._undecorate_saved_tensor(t, decorated_func_mapper)
+            if hasattr(t, 'tl_tensor_label_raw'):
+                delattr(t, 'tl_tensor_label_raw')
 
     def _delete_raw_tensor_entries(self):
         """Deletes the raw tensor entries, leaving only the post-processed entries.
@@ -2917,7 +3756,7 @@ class ModelHistory:
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      show_buffer_layers: bool = False,
-                     direction: str = 'vertical') -> None:
+                     direction: str = 'bottomup') -> None:
         """Renders the computational graph for the model.
 
         Args:
@@ -2928,13 +3767,12 @@ class ModelHistory:
             save_only: whether to only save the graph without immediately showing it
             vis_fileformat: file format to use for the rendered graph
             show_buffer_layers: whether to show the buffer layers
-            direction: which way the graph should go: either 'vertical' or 'horizontal'
+            direction: which way the graph should go: either 'bottomup', 'topdown', or 'leftright'
 
         """
         if not self.all_layers_logged:
-            raise ValueError("Must have all layers logged in order to render the graph; either save "
-                             "all layers in get_model_activations, or use show_model_graph to "
-                             "render the graph without saving any activations.")
+            raise ValueError("Must have all layers logged in order to render the graph; either save all layers,"
+                             "set keep_unsaved_layers to True, or use show_model_graph.")
 
         if vis_opt == 'unrolled':
             entries_to_plot = self.layer_dict_main_keys
@@ -2944,12 +3782,14 @@ class ModelHistory:
         else:
             raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
 
-        if direction == 'vertical':
+        if direction == 'bottomup':
             rankdir = 'BT'
-        elif direction == 'horizontal':
+        elif direction == 'leftright':
             rankdir = 'LR'
+        elif direction == 'topdown':
+            rankdir = 'TB'
         else:
-            raise ValueError("direction must be either 'vertical' or 'horizontal'")
+            raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
 
         graph_caption = (
             f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors_total} "
@@ -3144,7 +3984,7 @@ class ModelHistory:
         if node.is_bottom_level_submodule_output:
             if type(node) == TensorLogEntry:
                 module_pass_exited = node.bottom_level_submodule_pass_exited
-                module, pass_num = module_pass_exited.split(':')
+                module, _ = module_pass_exited.split(':')
                 if self.module_num_passes[module] == 1:
                     node_address = module
                 else:
@@ -3308,7 +4148,7 @@ class ModelHistory:
                 head_name = child_node.layer_label.replace(':', 'pass')
 
             # Skip repeated or self-looping edges.
-            if (head_name == tail_name) or ((tail_name, head_name) in edges_used):
+            if (tail_name, head_name) in edges_used:
                 continue
             edges_used.add((tail_name, head_name))
 
@@ -3372,7 +4212,7 @@ class ModelHistory:
         if 'label' not in edge_dict:
             edge_dict['label'] = arg_label
         else:
-            edge_dict['label'] = edge_dict['label'] + '\n' + arg_label
+            edge_dict['label'] = edge_dict['label'][:-1] + '<br/>' + arg_label[1:]
 
     def _check_whether_to_mark_arguments_on_edge(self,
                                                  child_node: Union[TensorLogEntry, RolledTensorLogEntry],
@@ -3454,6 +4294,15 @@ class ModelHistory:
 
         if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
             return -1  # no submodule contains them both.
+
+        if node1 == node2:
+            if node1.is_bottom_level_submodule_output and (len(node1_modules) == 1):
+                return -1
+            elif node1.is_bottom_level_submodule_output and (len(node1_modules) > 1):
+                containing_module = node1_modules[-2]
+            else:
+                containing_module = node1_modules[-1]
+            return containing_module
 
         containing_module = node1_modules[0]
         for m in range(min([len(node1_modules), len(node2_modules)])):
@@ -3633,7 +4482,7 @@ class ModelHistory:
         # First check that the ground truth output tensors are accurate:
         for i, output_layer_label in enumerate(self.output_layers):
             output_layer = self[output_layer_label]
-            if not torch.equal(output_layer.tensor_contents, ground_truth_output_tensors[i]):
+            if not tensor_nanequal(output_layer.tensor_contents, ground_truth_output_tensors[i]):
                 print(f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor.")
                 return False
 
@@ -3804,13 +4653,15 @@ class ModelHistory:
         parent_activations = parent_layer.tensor_contents
 
         if type(saved_arg_val) == torch.Tensor:
-            parent_layer_matches_arg = torch.equal(saved_arg_val, parent_activations)
+            parent_layer_matches_arg = tensor_nanequal(saved_arg_val, parent_activations)
         else:
             parent_layer_matches_arg = False
         parent_layer_logged_as_arg = ((argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and
                                       (target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label))
 
-        if parent_layer_matches_arg and not parent_layer_logged_as_arg:
+        if (parent_layer_matches_arg and (not parent_layer_logged_as_arg) and
+                (not tensor_all_nan(parent_activations)) and
+                (parent_activations.abs().mean() != 0) and (parent_activations.abs().mean() != 1)):
             print(f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
                   f"{arg_type} {argloc_key} for {target_layer_label}, but is not logged as "
                   f"such in parent_layer_arg_locs.")
@@ -3862,12 +4713,12 @@ class ModelHistory:
         if type(recomputed_output) in [list, tuple]:
             recomputed_output = recomputed_output[layer_to_validate_parents_for.iterable_output_index]
 
-        if not (torch.equal(recomputed_output, layer_to_validate_parents_for.tensor_contents)) and not perturb:
+        if not (tensor_nanequal(recomputed_output, layer_to_validate_parents_for.tensor_contents)) and not perturb:
             print(f"Saved activations for layer {layer_to_validate_parents_for_label} do not match the "
                   f"values computed based on the parent layers {layer_to_validate_parents_for.parent_layers}.")
             return False
 
-        if torch.equal(recomputed_output, layer_to_validate_parents_for.tensor_contents) and perturb:
+        if tensor_nanequal(recomputed_output, layer_to_validate_parents_for.tensor_contents) and perturb:
             return self._posthoc_perturb_check(layer_to_validate_parents_for, layers_to_perturb, verbose)
 
         return True
@@ -3892,7 +4743,8 @@ class ModelHistory:
         for arg_type in ['args', 'kwargs']:
             for key, parent_layer_arg in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type].items():
                 if parent_layer_arg in layers_to_perturb:
-                    parent_layer_func_values = self._perturb_layer_activations(self[parent_layer_arg].tensor_contents)
+                    parent_layer_func_values = self._perturb_layer_activations(self[parent_layer_arg].tensor_contents,
+                                                                               layer_to_validate_parents_for.tensor_contents)
                 else:
                     parent_layer_func_values = safe_copy(self[parent_layer_arg].tensor_contents)
 
@@ -3906,29 +4758,35 @@ class ModelHistory:
         return input_args
 
     @staticmethod
-    def _perturb_layer_activations(activations: torch.Tensor) -> torch.Tensor:
+    def _perturb_layer_activations(parent_activations: torch.Tensor,
+                                   output_activations: torch.Tensor) -> torch.Tensor:
         """
         Perturbs the values of a saved tensor.
 
         Args:
-            activations: Tensor of activation values.
+            parent_activations: Tensor of activation values for the parent tensor
+            output_activations: Tensor of activation values for the tensor whose parents are being tested (the output)
 
         Returns:
             Perturbed version of saved tensor
         """
-        device = activations.device
-        if activations.dtype in [torch.int, torch.long, torch.short, torch.uint8,
-                                 torch.int8, torch.int16, torch.int32, torch.int64]:
-            tensor_unique_vals = torch.unique(activations)
+        device = parent_activations.device
+        if parent_activations.dtype in [torch.int, torch.long, torch.short, torch.uint8,
+                                        torch.int8, torch.int16, torch.int32, torch.int64]:
+            tensor_unique_vals = torch.unique(parent_activations)
             if len(tensor_unique_vals) > 1:
-                perturbed_activations = torch.randint(activations.min(), activations.max() + 1,
-                                                      size=activations.shape, device=device)
+                perturbed_activations = torch.randint(parent_activations.min(), parent_activations.max() + 1,
+                                                      size=parent_activations.shape, device=device)
             else:
-                perturbed_activations = torch.randint(-10, 11, size=activations.shape, device=device)
-        elif activations.dtype == torch.bool:
-            perturbed_activations = torch.randint(0, 2, size=activations.shape, device=device).bool()
+                perturbed_activations = torch.randint(-10, 11, size=parent_activations.shape, device=device)
+        elif parent_activations.dtype == torch.bool:
+            perturbed_activations = torch.randint(0, 2, size=parent_activations.shape, device=device).bool()
         else:
-            perturbed_activations = torch.randn_like(activations.float(), device=device)
+            mean_output = output_activations.detach().float().abs().mean()
+            mean_output += torch.rand(mean_output.shape) * 100
+            mean_output.requires_grad = False
+            perturbed_activations = torch.randn_like(parent_activations.float(),
+                                                     device=device) * mean_output
 
         return perturbed_activations
 
@@ -3948,6 +4806,16 @@ class ModelHistory:
         Returns:
             True if there's an "excuse" for the perturbation failing, False otherwise.
         """
+        # Check if the tensor is all nans or all infinite:
+        if layer_to_validate_parents_for.tensor_dtype == torch.bool:
+            return True
+        else:
+            num_inf = torch.isinf(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()
+            num_nan = torch.isnan(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()
+            if ((num_inf == layer_to_validate_parents_for.tensor_contents.numel()) or
+                    (num_nan == layer_to_validate_parents_for.tensor_contents.numel())):
+                return True
+
         arg_type_dict = {'args': (enumerate, 'creation_args'),
                          'kwargs': (lambda x: x.items(), 'creation_kwargs')}
 
@@ -4031,7 +4899,7 @@ class ModelHistory:
         if ix in self.layer_dict_all_keys:
             return self.layer_dict_all_keys[ix]
 
-        keys_with_substr = [key for key in self.layer_dict_all_keys if ix in str(key)]
+        keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
         if len(keys_with_substr) == 1:
             return self.layer_dict_all_keys[keys_with_substr[0]]
 
@@ -4109,7 +4977,7 @@ class ModelHistory:
         if self.model_is_recurrent:
             s += f"\n\t\t- recurrent (at most {self.model_max_recurrent_loops} loops)"
         else:
-            s += f"\n\t\t- purely feedforward, no recurrence"
+            s += "\n\t\t- purely feedforward, no recurrence"
 
         if self.model_is_branching:
             s += "\n\t\t- with branching"
@@ -4129,8 +4997,9 @@ class ModelHistory:
         # Model tensors:
 
         s += "\n\tTensor info:"
-        s += f"\n\t\t- {len(self.layer_list)} total tensors ({self.tensor_fsize_total_nice}) computed in forward pass."
-        s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.tensor_fsize_saved_nice}) saved in log."
+        s += f"\n\t\t- {self.num_tensors_total} total tensors ({self.tensor_fsize_total_nice}) " \
+             f"computed in forward pass."
+        s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.tensor_fsize_saved_nice}) with saved activations."
 
         # Model parameters:
 
@@ -4138,11 +5007,17 @@ class ModelHistory:
              f"{self.total_params_fsize_nice})"
 
         # Print the module hierarchy.
-        s += f"\n\tModule Hierarchy:"
+        s += "\n\tModule Hierarchy:"
         s += self._module_hierarchy_str()
 
         # Now print all layers.
-        s += f"\n\tLayers:"
+        s += "\n\tLayers"
+        if self.all_layers_saved:
+            s += " (all have saved activations):"
+        elif self.num_tensors_saved == 0:
+            s += " (no layer activations are saved):"
+        else:
+            s += " (* means layer has saved activations):"
         for layer_ind, layer_barcode in enumerate(self.layer_labels):
             pass_num = self.layer_dict_main_keys[layer_barcode].pass_num
             total_passes = self.layer_dict_main_keys[layer_barcode].layer_passes_total
@@ -4150,7 +5025,12 @@ class ModelHistory:
                 pass_str = f" ({pass_num}/{total_passes} passes)"
             else:
                 pass_str = ''
-            s += f"\n\t\t({layer_ind}) {layer_barcode} {pass_str}"
+
+            if self.layer_dict_main_keys[layer_barcode].has_saved_activations and (not self.all_layers_saved):
+                s += "\n\t\t* "
+            else:
+                s += "\n\t\t  "
+            s += f"({layer_ind}) {layer_barcode} {pass_str}"
 
         return s
 
@@ -4168,7 +5048,7 @@ class ModelHistory:
         s += f"\n\tInternally terminated tensors: {self.internally_terminated_layers}"
         s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_layers}"
         s += f"\n\tBuffer tensors: {self.buffer_layers}"
-        s += f"\n\tRaw layer labels:"
+        s += "\n\tRaw layer labels:"
         for layer in self.raw_tensor_labels_list:
             s += f"\n\t\t{layer}"
         return s
@@ -4261,3 +5141,55 @@ class ModelHistory:
 
     def __repr__(self):
         return self.__str__()
+
+
+def run_model_and_save_specified_activations(model: nn.Module,
+                                             input_args: Union[torch.Tensor, List[Any]],
+                                             input_kwargs: Dict[Any, Any],
+                                             layers_to_save: Optional[Union[str, List[Union[int, str]]]] = 'all',
+                                             keep_unsaved_layers: bool = True,
+                                             output_device: str = 'same',
+                                             activation_postfunc: Optional[Callable] = None,
+                                             mark_input_output_distances: bool = False,
+                                             detach_saved_tensors: bool = False,
+                                             save_function_args: bool = False,
+                                             save_gradients: bool = False,
+                                             random_seed: Optional[int] = None) -> ModelHistory:
+    """Internal function that runs the given input through the given model, and saves the
+    specified activations, as given by the tensor numbers (these will not be visible to the user;
+    they will be generated from the nicer human-readable names and then fed in).
+
+    Args:
+        model: PyTorch model.
+        input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
+        input_kwargs: Keyword arguments to the model's forward pass.
+        layers_to_save: List of layers to save
+        keep_unsaved_layers: Whether to keep layers in the ModelHistory log if they don't have saved activations.
+        output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
+            'cpu' or 'cuda' to move to cpu or cuda.
+        activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
+        mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
+            This is computationally expensive for large networks, so it is off by default.
+        detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
+        save_function_args: whether to save the arguments to each function
+        save_gradients: whether to save gradients from any subsequent backward pass
+        random_seed: Which random seed to use.
+
+    Returns:
+        ModelHistory object with full log of the forward pass
+    """
+    model_name = str(type(model).__name__)
+    model_history = ModelHistory(model_name,
+                                 output_device,
+                                 activation_postfunc,
+                                 keep_unsaved_layers,
+                                 save_function_args,
+                                 save_gradients,
+                                 detach_saved_tensors,
+                                 mark_input_output_distances)
+    model_history.run_and_log_inputs_through_model(model,
+                                                   input_args,
+                                                   input_kwargs,
+                                                   layers_to_save,
+                                                   random_seed)
+    return model_history

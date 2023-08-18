@@ -26,7 +26,7 @@ class SimpleRecurrent(nn.Module):
 
 simple_recurrent = SimpleRecurrent()
 model_history = tl.log_forward_pass(simple_recurrent, x,
-                                    which_layers='all',
+                                    layers_to_save='all',
                                     vis_opt='rolled')
 print(model_history['linear_1_1:2'].tensor_contents)  # second pass of first linear layer
 
@@ -77,7 +77,7 @@ import torchlens as tl
 
 alexnet = torchvision.models.alexnet()
 x = torch.rand(1, 3, 224, 224)
-model_history = tl.log_forward_pass(alexnet, x, which_layers='all', vis_opt='unrolled')
+model_history = tl.log_forward_pass(alexnet, x, layers_to_save='all', vis_opt='unrolled')
 print(model_history)
 
 '''
@@ -184,7 +184,7 @@ will pull out all conv layers):
 ```python
 # Pull out conv2d_3_7, the output of the 'features' module, the fifth-to-last layer, and all linear (i.e., fc) layers:
 model_history = tl.log_forward_pass(alexnet, x, vis_opt='unrolled',
-                                    which_layers=['conv2d_3_7', 'features', -5, 'linear'])
+                                    layers_to_save=['conv2d_3_7', 'features', -5, 'linear'])
 print(model_history.layer_labels)
 '''
 ['conv2d_3_7', 'maxpool2d_3_13', 'linear_1_17', 'dropout_2_19', 'linear_2_20', 'linear_3_22']
