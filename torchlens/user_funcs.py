@@ -16,7 +16,7 @@ from torchlens.model_history import ModelHistory, run_model_and_save_specified_a
 def log_forward_pass(model: nn.Module,
                      input_args: Union[torch.Tensor, List[Any]],
                      input_kwargs: Dict[Any, Any] = None,
-                     layers_to_save: Union[str, List] = 'all',
+                     layers_to_save: Optional[Union[str, List]] = 'all',
                      keep_unsaved_layers: bool = True,
                      output_device: str = 'same',
                      activation_postfunc: Optional[Callable] = None,
@@ -126,6 +126,28 @@ def log_forward_pass(model: nn.Module,
                                    vis_buffer_layers,
                                    vis_direction)
 
+    return model_history
+
+
+def get_model_metadata(model: nn.Module,
+                       input_args: Union[torch.Tensor, List[Any]],
+                       input_kwargs: Dict[Any, Any] = None) -> ModelHistory:
+    """Logs all metadata for a given model and inputs without saving any activations. NOTE: this function
+    will be removed in a future version of TorchLens, since calling it is identical to calling
+    log_forward_pass without saving any layers.
+
+    Args:
+        model: model to inspect
+        input_args: list of input positional arguments, or a single tensor
+        input_kwargs: dict of keyword arguments
+    Returns:
+        ModelHistory object with metadata about the model.
+    """
+    model_history = log_forward_pass(model,
+                                     input_args,
+                                     input_kwargs,
+                                     layers_to_save=None,
+                                     mark_input_output_distances=True)
     return model_history
 
 
