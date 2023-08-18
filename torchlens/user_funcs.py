@@ -1,6 +1,6 @@
 import copy
 import os
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
@@ -187,7 +187,7 @@ def show_model_graph(model: nn.Module,
 
 
 def validate_saved_activations(model: nn.Module,
-                               input_args: Union[torch.Tensor, List[Any]],
+                               input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
                                input_kwargs: Dict[Any, Any] = None,
                                random_seed: Union[int, None] = None,
                                verbose: bool = False) -> bool:

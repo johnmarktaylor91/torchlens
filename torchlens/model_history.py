@@ -580,7 +580,7 @@ class ModelHistory:
     MIN_MODULE_PENWIDTH = 2
     PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
     COMMUTE_FUNCS = ['add', 'mul', 'cat', 'eq', 'ne']
-    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_']
+    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_']
 
     def __init__(self,
                  model_name: str,
@@ -2648,7 +2648,7 @@ class ModelHistory:
             new_output_node.module_passes_exited = []
             new_output_node.is_submodule_output = False
             new_output_node.is_bottom_level_submodule_output = False
-            new_output_node.module_entry_exit_thread_input = []
+            new_output_node.module_entry_exit_threads_inputs = {}
             new_output_node.module_entry_exit_thread_output = []
 
             # Fix ancestry information:
@@ -3296,7 +3296,8 @@ class ModelHistory:
             # And for any internally generated child nodes:
             for child_label in node.child_layers:
                 child_node = self[child_label]
-                if any([node.has_input_ancestor, child_node.has_input_ancestor, child_label in nodes_seen]):
+                if any([node.has_input_ancestor, child_node.has_input_ancestor, child_label in nodes_seen,
+                        child_node.is_output_layer]):
                     continue
                 self._fix_modules_for_single_internal_tensor(node,
                                                              child_node,

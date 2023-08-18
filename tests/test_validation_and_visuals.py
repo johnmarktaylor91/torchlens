@@ -695,7 +695,7 @@ def test_ubermodel9():
                      vis_outpath=opj('visualization_outputs', 'ubermodel9'))
 
 
-# Built-in Models
+# Torchvision Main Models
 
 def test_alexnet(default_input1):
     model = torchvision.models.AlexNet()
@@ -862,6 +862,17 @@ def test_maxvit(default_input1):
                      vis_outpath=opj('visualization_outputs', 'max_vit'))
 
 
+def test_inception_v3():
+    model = torchvision.models.inception_v3()
+    model_input = torch.randn(2, 3, 299, 299)
+    assert validate_saved_activations(model, model_input)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'inception_v3'))
+
+
+# Cornet Models
+
 def test_cornet_s(default_input1):
     model = cornet.cornet_s()
     assert validate_saved_activations(model, default_input1)
@@ -897,7 +908,7 @@ def test_cornet_rt():
 
 
 def test_cornet_z(default_input1):
-    model = cornet.cornet_z(default_input1)
+    model = cornet.cornet_z()
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
@@ -905,3 +916,168 @@ def test_cornet_z(default_input1):
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_outpath=opj('visualization_outputs', 'cornet_z_rolled'))
+
+
+# Torchvision Segmentation Models
+
+def test_deeplabv3_mobilenet(default_input1):
+    model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'deeplabv3_mobilenet'))
+
+
+def test_deeplabv3_resnet50(default_input1):
+    model = torchvision.models.segmentation.deeplabv3_mobilenet_resnet50()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'deeplabv3_resnet50'))
+
+
+def test_fcn_resnet101(default_input1):
+    model = torchvision.models.segmentation.fcn_resnet101()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fcn_resnet101'))
+
+
+def test_fcn_resnet101(default_input1):
+    model = torchvision.models.segmentation.fcn_resnet101()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fcn_resnet101'))
+
+
+def test_lraspp_mobilenet(default_input1):
+    model = torchvision.models.segmentation.lraspp_mobilenet_v3_large()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'lraspp_mobilenet'))
+
+
+# Torchvision Detection Models
+
+def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
+    model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fasterrcnn_mobilenet_v3_large_train'))
+    assert validate_saved_activations(model, model_inputs)
+
+
+def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
+    model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(model, [input_tensors],
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fasterrcnn_mobilenet_v3_large_eval'))
+    assert validate_saved_activations(model, [input_tensors])
+
+
+def test_maskrcnn_resnet50_train(default_input1, default_input2):
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'maskrcnn_resnet50_train'))
+    assert validate_saved_activations(model, model_inputs)
+
+
+def test_maskrcnn_resnet50_eval(default_input1, default_input2):
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(model, [input_tensors],
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fmaskrcnn_resnet50_eval'))
+    assert validate_saved_activations(model, [input_tensors])
+
+
+def test_fcos_resnet50_train(default_input1, default_input2):
+    model = torchvision.models.detection.fcos_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fcos_resnet50_train'))
+    assert validate_saved_activations(model, model_inputs)
+
+
+def test_fcos_resnet50_eval(default_input1, default_input2):
+    model = torchvision.models.detection.fcos_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(model, [input_tensors],
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'fcos_resnet50_eval'))
+    assert validate_saved_activations(model, [input_tensors])
+
+
+def test_retinanet_resnet50_train(default_input1, default_input2):
+    model = torchvision.models.detection.retinanet_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'retinanet_resnet50_train'))
+    assert validate_saved_activations(model, model_inputs)
+
+
+def test_retinanet_resnet50_eval(default_input1, default_input2):
+    model = torchvision.models.detection.retinanet_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(model, [input_tensors],
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'retinanet_resnet50_eval'))
+    assert validate_saved_activations(model, [input_tensors])
+
+
+def test_ssd300_vgg16_train(default_input1, default_input2):
+    model = torchvision.models.detection.ssd300_vgg16()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'ssd300_vgg16_train'))
+    assert validate_saved_activations(model, model_inputs)
+
+
+def test_ssd300_vgg16_eval(default_input1, default_input2):
+    model = torchvision.models.detection.ssd300_vgg16()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(model, [input_tensors],
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'ssd300_vgg16_eval'))
+    assert validate_saved_activations(model, [input_tensors])
+
+
+def test_keypointrcnn_resnet50_eval(default_input1, default_input2):
+    model = torchvision.models.detection.keypointrcnn_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(model, [input_tensors],
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'keypointrcnn_resnet50_eval'),
+                     save_only=True)
+    assert validate_saved_activations(model, [input_tensors])
