@@ -1452,7 +1452,7 @@ class ModelHistory:
             outputs = model(*input_args, **input_kwargs)
             self.elapsed_time_forward_pass = time.time() - self.pass_start_time - self.elapsed_time_setup
             self.track_tensors = False
-            output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor)
+            output_tensors = get_vars_of_type_from_obj(outputs, torch.Tensor, search_depth=5)
             for t in output_tensors:
                 self.output_layers.append(t.tl_tensor_label_raw)
                 self.raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
