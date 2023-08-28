@@ -2386,9 +2386,11 @@ class ModelHistory:
                 args_to_hash.append(f"arg{a}{arg.shape}")
             else:
                 arg_iter = make_var_iterable(arg)
-                for arg_elem in arg_iter:
-                    if not hasattr(arg, 'tl_tensor_label_raw') and not isinstance(arg_elem, torch.nn.Parameter):
+                for i, arg_elem in enumerate(arg_iter):
+                    if not hasattr(arg_elem, 'tl_tensor_label_raw') and not isinstance(arg_elem, torch.nn.Parameter):
                         args_to_hash.append(arg_elem)
+                    elif hasattr(arg_elem, 'tl_tensor_label_raw'):
+                        args_to_hash.append(f"arg{a}_iter{i}_{arg_elem.shape}")
 
         if len(args_to_hash) == 0:
             return 'no_args'
