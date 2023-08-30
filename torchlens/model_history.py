@@ -687,6 +687,8 @@ class ModelHistory:
         self.module_nparams: Dict = defaultdict(lambda: 0)
         self.module_num_tensors: Dict = defaultdict(lambda: 0)
         self.module_pass_num_tensors: Dict = defaultdict(lambda: 0)
+        self.module_layers: Dict = defaultdict(list)
+        self.module_pass_layers: Dict = defaultdict(list)
 
         # Time elapsed:
         self.pass_start_time: float = 0
@@ -3500,6 +3502,10 @@ class ModelHistory:
             module_pass_nice_label = f"{module_name}:{module_pass}"
             self.module_num_tensors[module_name] += 1
             self.module_pass_num_tensors[module_pass_nice_label] += 1
+            if tensor_entry.layer_label not in self.module_layers[module_name]:
+                self.module_layers[module_name].append(tensor_entry.layer_label)
+            if tensor_entry.layer_label not in self.module_pass_layers[module_pass_nice_label]:
+                self.module_pass_layers[module_pass_nice_label].append(tensor_entry.layer_label)
             if (m == 0) and (module_pass_nice_label not in self.top_level_module_passes):
                 self.top_level_module_passes.append(module_pass_nice_label)
             else:
@@ -3930,9 +3936,13 @@ class ModelHistory:
         if vis_opt == 'unrolled':
             node_name = 'pass'.join(module_tuple)
             module_num_tensors = self.module_pass_num_tensors[module_address_w_pass]
+            module_has_input_ancestor = any([self[layer].has_input_ancestor for layer in
+                                             self.module_pass_layers[module_address_w_pass]])
         else:
             node_name = module_tuple[0]
             module_num_tensors = self.module_num_tensors[module_address]
+            module_has_input_ancestor = any([self[layer].has_input_ancestor for layer in
+                                             self.module_layers[module_address]])
 
         if node_name in collapsed_modules:
             return  # collapsed node already added
@@ -3956,6 +3966,11 @@ class ModelHistory:
         else:
             bg_color = self.DEFAULT_BG_COLOR
 
+        if module_has_input_ancestor:
+            line_style = 'solid'
+        else:
+            line_style = 'dashed'
+
         node_label = (f'<{node_title}<br/>'
                       f'{module_type}<br/>'
                       f'{tensor_shape_str} ({module_output_fsize})<br/>'
@@ -3966,7 +3981,7 @@ class ModelHistory:
                             label=node_label,
                             fontcolor='black',
                             color='black',
-                            style="filled,solid",
+                            style=f"filled,{line_style}",
                             fillcolor=bg_color,
                             shape='box3d',
                             ordering='out')
