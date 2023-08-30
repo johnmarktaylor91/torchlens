@@ -390,7 +390,7 @@ def safe_to(x: Any, device: str):
         Object either moved to device if a tensor, same object if otherwise.
     """
     if type(x) == torch.Tensor:
-        return x.to(device)
+        return clean_to(x, device)
     else:
         return x
 
@@ -422,7 +422,7 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     Returns:
         Size of tensor in bytes.
     """
-    return getsizeof(np.array(t.data.cpu()))
+    return getsizeof(np.array(clean_cpu(t.data)))
 
 
 def human_readable_size(size: int, decimal_places: int = 1) -> str:
@@ -446,6 +446,14 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     return f"{size} {unit}"
 
 
+clean_from_numpy = copy.deepcopy(torch.from_numpy)
+clean_new_param = copy.deepcopy(torch.nn.Parameter)
+clean_clone = copy.deepcopy(torch.clone)
+clean_cpu = copy.deepcopy(torch.Tensor.cpu)
+clean_cuda = copy.deepcopy(torch.Tensor.cuda)
+clean_to = copy.deepcopy(torch.Tensor.to)
+
+
 def print_override(t: torch.Tensor, func_name: str):
     """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
 
@@ -456,7 +464,7 @@ def print_override(t: torch.Tensor, func_name: str):
     Returns:
         The string representation of the tensor.
     """
-    n = np.array(t.data.cpu())
+    n = np.array(clean_cpu(t.data))
     np_str = getattr(n, func_name)()
     np_str = np_str.replace('array', 'tensor')
     np_str = np_str.replace('\n', '\n ')
@@ -466,11 +474,6 @@ def print_override(t: torch.Tensor, func_name: str):
     elif t.requires_grad:
         np_str = np_str[0:-1] + ", requires_grad=True)"
     return np_str
-
-
-clean_from_numpy = copy.deepcopy(torch.from_numpy)
-clean_new_param = copy.deepcopy(torch.nn.Parameter)
-clean_clone = copy.deepcopy(torch.clone)
 
 
 def safe_copy(x, detach_tensor: bool = False):
@@ -487,7 +490,7 @@ def safe_copy(x, detach_tensor: bool = False):
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
         if not detach_tensor:
             return clean_clone(x)
-        vals_np = np.array(x.data.cpu())
+        vals_np = np.array(clean_cpu(x.data))
         vals_tensor = clean_from_numpy(vals_np)
         if hasattr(x, 'tl_tensor_label_raw'):
             vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw

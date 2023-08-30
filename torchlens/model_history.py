@@ -23,12 +23,12 @@ from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_
     log_current_rng_states, make_random_barcode, make_short_barcode_from_input, make_var_iterable, \
     move_input_tensors_to_device, nested_getattr, print_override, remove_entry_from_list, safe_copy, set_random_seed, \
     set_rng_from_saved_states, tuple_tolerant_assign, remove_attributes_starting_with_str, tensor_nanequal, \
-    tensor_all_nan
+    tensor_all_nan, clean_to
 
 # todo add saved_layer field, remove the option to only keep saved layers
 # Define some constants.
 print_funcs = ['__repr__', '__str__', '_str']
-funcs_not_to_log = ['cpu', 'cuda', 'numpy', '__array__', 'size', 'dim']
+funcs_not_to_log = ['numpy', '__array__', 'size', 'dim']
 
 
 class TensorLogEntry:
@@ -242,7 +242,7 @@ class TensorLogEntry:
         # The tensor itself:
         self.tensor_contents = safe_copy(t, self.detach_saved_tensor)
         if self.output_device not in [str(self.tensor_contents.device), 'same']:
-            self.tensor_contents = self.tensor_contents.to(self.output_device)
+            self.tensor_contents = clean_to(self.tensor_contents, self.output_device)
         if activation_postfunc is not None:
             self.tensor_contents = activation_postfunc(self.tensor_contents)
 
@@ -971,7 +971,7 @@ class ModelHistory:
         for attr in dir(new_t):
             if attr.startswith('tl_'):
                 delattr(new_t, attr)
-        new_t = new_t.to(device)
+        new_t = clean_to(new_t, device)
         return new_t
 
     @staticmethod
