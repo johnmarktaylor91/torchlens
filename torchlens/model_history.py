@@ -1087,7 +1087,7 @@ class ModelHistory:
         def decorated_forward(*args, **kwargs):
             if self.logging_mode == 'fast':  # do bare minimum for logging.
                 out = orig_forward(*args, **kwargs)
-                output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
+                output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
                 for t in output_tensors:
                     # if identity module, run the function for bookkeeping
                     if module.tl_module_type.lower() == 'identity':
@@ -1099,7 +1099,7 @@ class ModelHistory:
             module.tl_module_pass_num += 1
             module_pass_label = (module_address, module.tl_module_pass_num)
             module.tl_module_pass_labels.append(module_pass_label)
-            input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor)
+            input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor, search_depth=4)
             for t in input_tensors:
                 tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
                 module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
@@ -1115,7 +1115,7 @@ class ModelHistory:
             module_address = module.tl_module_address
             module_pass_num = module.tl_module_pass_num
             module_entry_label = module.tl_module_pass_labels.pop()
-            output_tensors = get_vars_of_type_from_obj(out, torch.Tensor)
+            output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
                 if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
                     t = getattr(torch, 'identity')(t)
@@ -2648,8 +2648,8 @@ class ModelHistory:
             new_output_node.modules_entered = []
             new_output_node.module_passes_entered = []
             new_output_node.is_submodule_input = False
-            new_output_node.modules_exited = []
-            new_output_node.module_passes_exited = []
+            new_output_node.modules_exited = [mod_pass[0] for mod_pass in output_node.containing_modules_origin_nested]
+            new_output_node.module_passes_exited = output_node.containing_modules_origin_nested
             new_output_node.is_submodule_output = False
             new_output_node.is_bottom_level_submodule_output = False
             new_output_node.module_entry_exit_threads_inputs = {}
@@ -4142,7 +4142,6 @@ class ModelHistory:
                 edge_style = 'dashed'
 
             if parent_is_collapsed_module:
-                edge_style = 'solid'
                 module_name_w_pass = parent_node.containing_modules_origin_nested[vis_nesting_depth - 1]
                 module_tuple = module_name_w_pass.split(':')
                 if vis_opt == 'unrolled':
@@ -4164,7 +4163,20 @@ class ModelHistory:
             else:
                 head_name = child_node.layer_label.replace(':', 'pass')
 
-            # Skip repeated or self-looping edges.
+            both_nodes_collapsed_modules = parent_is_collapsed_module and child_is_collapsed_module
+
+            # If both child and parent are in a collapsed module of the same pass, skip the edge:
+            if both_nodes_collapsed_modules:
+                child_containing_modules = child_node.containing_modules_origin_nested[:]
+                parent_containing_modules = parent_node.containing_modules_origin_nested[:]
+                if child_node.is_bottom_level_submodule_output:
+                    child_containing_modules = child_containing_modules[:-1]
+                if parent_node.is_bottom_level_submodule_output:
+                    parent_containing_modules = parent_containing_modules[:-1]
+                if child_containing_modules[:vis_nesting_depth] == parent_containing_modules[:vis_nesting_depth]:
+                    continue
+
+            # Skip repeated edges:
             if (tail_name, head_name) in edges_used:
                 continue
             edges_used.add((tail_name, head_name))
@@ -4178,7 +4190,7 @@ class ModelHistory:
                          'labelfontsize': '8'}
 
             # Mark with "if" in the case edge starts a cond branch
-            if (child_layer_label in parent_node.cond_branch_start_children) and (not child_is_collapsed_module):
+            if child_layer_label in parent_node.cond_branch_start_children:
                 edge_dict['label'] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
 
             # Label the arguments to the next node if multiple inputs
@@ -4187,11 +4199,13 @@ class ModelHistory:
 
             # Annotate passes for rolled node edge if it varies across passes
             if vis_opt == 'rolled':
-                self._label_rolled_pass_nums(child_node, parent_node,
-                                             child_is_collapsed_module, parent_is_collapsed_module, edge_dict)
+                self._label_rolled_pass_nums(child_node, parent_node, edge_dict)
 
             # Add it to the appropriate module cluster (most nested one containing both nodes)
-            containing_module = self._get_lowest_containing_module_for_two_nodes(parent_node, child_node)
+            containing_module = self._get_lowest_containing_module_for_two_nodes(parent_node,
+                                                                                 child_node,
+                                                                                 both_nodes_collapsed_modules,
+                                                                                 vis_nesting_depth)
             if containing_module != -1:
                 module_edge_dict[containing_module].append(edge_dict)
             else:
@@ -4271,8 +4285,6 @@ class ModelHistory:
     @staticmethod
     def _label_rolled_pass_nums(child_node: RolledTensorLogEntry,
                                 parent_node: RolledTensorLogEntry,
-                                child_is_collapsed_module: bool,
-                                parent_is_collapsed_module: bool,
                                 edge_dict: Dict):
         """Adds labels for the pass numbers to the edge dict for rolled nodes.
 
@@ -4283,21 +4295,24 @@ class ModelHistory:
         """
         parent_pass_nums = parent_node.child_passes_per_layer[child_node.layer_label]
         child_pass_nums = child_node.parent_passes_per_layer[parent_node.layer_label]
-        if parent_node.edges_vary_across_passes and (not parent_is_collapsed_module):
+        if parent_node.edges_vary_across_passes:
             edge_dict['taillabel'] = f'  Out {int_list_to_compact_str(parent_pass_nums)}  '
 
         # Mark the head label with the argument if need be:
-        if child_node.edges_vary_across_passes and (not child_node.is_output_layer) and (not child_is_collapsed_module):
+        if child_node.edges_vary_across_passes:
             edge_dict['headlabel'] = f'  In {int_list_to_compact_str(child_pass_nums)}  '
 
     @staticmethod
     def _get_lowest_containing_module_for_two_nodes(node1: Union[TensorLogEntry, RolledTensorLogEntry],
-                                                    node2: Union[TensorLogEntry, RolledTensorLogEntry]):
+                                                    node2: Union[TensorLogEntry, RolledTensorLogEntry],
+                                                    both_nodes_collapsed_modules: bool,
+                                                    vis_nesting_depth: int):
         """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
 
         Args:
             node1: The first node.
             node2: The second node.
+            vis_nesting_depth: How many levels deep to visualize.
 
         Returns:
             Lowest-level module pass containing two nodes.
@@ -4308,6 +4323,16 @@ class ModelHistory:
         if type(node1) == RolledTensorLogEntry:
             node1_modules = [module.split(':')[0] for module in node1_modules]
             node2_modules = [module.split(':')[0] for module in node2_modules]
+
+        if node1.is_bottom_level_submodule_output:
+            node1_nestmodules = node1_modules[:-1]
+        else:
+            node1_nestmodules = node1_modules[:]
+
+        if node2.is_bottom_level_submodule_output:
+            node2_nestmodules = node2_modules[:-1]
+        else:
+            node2_nestmodules = node2_modules[:]
 
         if (len(node1_modules) == 0) or (len(node2_modules) == 0) or (node1_modules[0] != node2_modules[0]):
             return -1  # no submodule contains them both.
@@ -4321,11 +4346,18 @@ class ModelHistory:
                 containing_module = node1_modules[-1]
             return containing_module
 
+        if (node1_nestmodules == node2_nestmodules) and both_nodes_collapsed_modules:
+            if (vis_nesting_depth == 1) or (len(node1_nestmodules) == 1):
+                return -1
+            containing_module = node1_modules[vis_nesting_depth - 2]
+            return containing_module
+
         containing_module = node1_modules[0]
         for m in range(min([len(node1_modules), len(node2_modules)])):
             if node1_modules[m] != node2_modules[m]:
                 break
             containing_module = node1_modules[m]
+
         return containing_module
 
     def _add_gradient_edge(self,
