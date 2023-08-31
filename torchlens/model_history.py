@@ -3814,7 +3814,7 @@ class ModelHistory:
         dot.node_attr.update({'shape': 'box', 'ordering': 'out'})
 
         # list of edges for each subgraph; subgraphs will be created at the end.
-        module_cluster_dict = defaultdict(list)
+        module_cluster_dict = defaultdict(lambda: {'edges': [], 'has_input_ancestor': False})
         collapsed_modules = set()
         edges_used = set()
 
@@ -4207,7 +4207,9 @@ class ModelHistory:
                                                                                  both_nodes_collapsed_modules,
                                                                                  vis_nesting_depth)
             if containing_module != -1:
-                module_edge_dict[containing_module].append(edge_dict)
+                module_edge_dict[containing_module]['edges'].append(edge_dict)
+                if parent_node.has_input_ancestor or child_node.has_input_ancestor:
+                    module_edge_dict[containing_module]['has_input_ancestor'] = True
             else:
                 graphviz_graph.edge(**edge_dict)
 
@@ -4378,7 +4380,7 @@ class ModelHistory:
                          'arrowsize': '.7',
                          'labelfontsize': '8'}
             if containing_module != -1:
-                module_edge_dict[containing_module].append(edge_dict)
+                module_edge_dict[containing_module]['edges'].append(edge_dict)
             else:
                 graphviz_graph.edge(**edge_dict)
 
@@ -4471,10 +4473,16 @@ class ModelHistory:
             with starting_subgraph.subgraph(name=cluster_name) as s:
                 nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
                 pen_width = self.MIN_MODULE_PENWIDTH + nesting_fraction * self.PENWIDTH_RANGE
+                if module_edge_dict[subgraph_name]['has_input_ancestor']:
+                    line_style = 'solid'
+                else:
+                    line_style = 'dashed'
                 s.attr(label=f"<<B>@{subgraph_title}</B><br align='left'/>({module_type})<br align='left'/>>",
                        labelloc='b',
+                       style=f"filled,{line_style}",
+                       fillcolor='white',
                        penwidth=str(pen_width))
-                subgraph_edges = module_edge_dict[subgraph_name]
+                subgraph_edges = module_edge_dict[subgraph_name]['edges']
                 for edge_dict in subgraph_edges:
                     s.edge(**edge_dict)
                 subgraph_children = module_submodule_dict[subgraph_name_w_pass]
@@ -4501,7 +4509,7 @@ class ModelHistory:
 
         while len(module_stack) > 0:
             module, module_depth = module_stack.pop()
-            module_edges = module_edge_dict[module]
+            module_edges = module_edge_dict[module]['edges']
             module_submodules = module_submodule_dict[module]
 
             if (len(module_edges) == 0) and (len(module_submodules) == 0):  # can ignore if no edges and no children.
