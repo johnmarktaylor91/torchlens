@@ -4835,7 +4835,7 @@ class ModelHistory:
             mean_output += torch.rand(mean_output.shape) * 100
             mean_output.requires_grad = False
             perturbed_activations = torch.randn_like(parent_activations.float(),
-                                                     device=device) * mean_output
+                                                     device=device) * mean_output.to(device)
 
         return perturbed_activations
 

@@ -828,6 +828,22 @@ def test_densenet121(default_input1):
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'densenet121'))
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_nesting_depth=1,
+                     vis_outpath=opj('visualization_outputs', 'densenet121_depth1'))
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_nesting_depth=2,
+                     vis_outpath=opj('visualization_outputs', 'densenet121_depth2'))
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_nesting_depth=3,
+                     vis_outpath=opj('visualization_outputs', 'densenet121_depth3'))
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_nesting_depth=4,
+                     vis_outpath=opj('visualization_outputs', 'densenet121_depth4'))
 
 
 def test_efficientnet_b6(default_input1):
@@ -1001,7 +1017,7 @@ def test_cornet_r(default_input1):
 
 def test_cornet_rt():
     model = cornet.cornet_rt()
-    model_input = torch.rand((6, 3, 224, 224))
+    model_input = torch.rand((6, 3, 224, 224)).to('cuda')
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
@@ -1009,27 +1025,27 @@ def test_cornet_rt():
     show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled'))
-    show_model_graph(model, default_input1,
+    show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled_depth1'))
-    show_model_graph(model, default_input1,
+    show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_nesting_depth=1,
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled_depth1'))
-    show_model_graph(model, default_input1,
+    show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled_depth2'))
-    show_model_graph(model, default_input1,
+    show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_nesting_depth=2,
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled_depth2'))
-    show_model_graph(model, default_input1,
+    show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled_depth3'))
-    show_model_graph(model, default_input1,
+    show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_nesting_depth=3,
                      vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled_depth3'))
