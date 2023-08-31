@@ -10,8 +10,10 @@ import example_models
 import cornet
 from torchlens import log_forward_pass, show_model_graph, validate_saved_activations
 
-
 # Define inputs
+torch.manual_seed(0)
+torch.cuda.manual_seed_all(0)
+
 
 @pytest.fixture
 def default_input1():
@@ -1164,13 +1166,17 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
 def test_maskrcnn_resnet50_train(default_input1, default_input2):
     model = torchvision.models.detection.maskrcnn_resnet50_fpn()
     input_tensors = [default_input1[0], default_input2[0]]
-    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
-               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+                'labels': torch.tensor([1, 2]),
+                'masks': torch.rand(2, 224, 224).type(torch.uint8)},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+                'labels': torch.tensor([1, 2]),
+                'masks': torch.rand(2, 224, 224).type(torch.uint8)}]
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'maskrcnn_resnet50_train'))
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_saved_activations(model, model_inputs, random_seed=0)
 
 
 def test_maskrcnn_resnet50_eval(default_input1, default_input2):

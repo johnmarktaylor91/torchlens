@@ -14,7 +14,7 @@ from torchlens.model_history import ModelHistory, run_model_and_save_specified_a
 
 
 def log_forward_pass(model: nn.Module,
-                     input_args: Union[torch.Tensor, List[Any]],
+                     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
                      input_kwargs: Dict[Any, Any] = None,
                      layers_to_save: Optional[Union[str, List]] = 'all',
                      keep_unsaved_layers: bool = True,
@@ -130,7 +130,7 @@ def log_forward_pass(model: nn.Module,
 
 
 def get_model_metadata(model: nn.Module,
-                       input_args: Union[torch.Tensor, List[Any]],
+                       input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
                        input_kwargs: Dict[Any, Any] = None) -> ModelHistory:
     """Logs all metadata for a given model and inputs without saving any activations. NOTE: this function
     will be removed in a future version of TorchLens, since calling it is identical to calling
@@ -152,7 +152,7 @@ def get_model_metadata(model: nn.Module,
 
 
 def show_model_graph(model: nn.Module,
-                     input_args: Union[torch.Tensor, List[Any]],
+                     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
                      input_kwargs: Dict[Any, Any] = None,
                      vis_opt: str = 'unrolled',
                      vis_nesting_depth: int = 1000,

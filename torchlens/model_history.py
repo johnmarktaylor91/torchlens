@@ -258,11 +258,17 @@ class TensorLogEntry:
             self.function_args_saved = True
             creation_args = []
             for arg in t_args:
-                creation_args.append(safe_copy(arg))
+                if type(arg) == list:
+                    creation_args.append([safe_copy(a) for a in arg])
+                else:
+                    creation_args.append(safe_copy(arg))
 
             creation_kwargs = {}
             for key, value in t_kwargs.items():
-                creation_kwargs[key] = safe_copy(value)
+                if type(value) == list:
+                    creation_kwargs[key] = [safe_copy(v) for v in value]
+                else:
+                    creation_kwargs[key] = safe_copy(value)
             self.creation_args = creation_args
             self.creation_kwargs = creation_kwargs
         else:
@@ -585,7 +591,7 @@ class ModelHistory:
     MIN_MODULE_PENWIDTH = 2
     PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
     COMMUTE_FUNCS = ['add', 'mul', 'cat', 'eq', 'ne']
-    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_']
+    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_', 'clamp']
 
     def __init__(self,
                  model_name: str,
@@ -4751,8 +4757,8 @@ class ModelHistory:
 
         return True
 
-    @staticmethod
-    def _check_arglocs_correct_for_arg(target_layer: TensorLogEntry,
+    def _check_arglocs_correct_for_arg(self,
+                                       target_layer: TensorLogEntry,
                                        parent_layer: TensorLogEntry,
                                        arg_type: str,
                                        argloc_key: Union[str, tuple],
@@ -4774,8 +4780,11 @@ class ModelHistory:
         parent_layer_logged_as_arg = ((argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and
                                       (target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label))
 
-        if (parent_layer_matches_arg and (not parent_layer_logged_as_arg) and
-                (parent_activations.abs().mean() != 0) and (parent_activations.abs().mean() != 1)):
+        if (parent_layer_matches_arg and (not parent_layer_logged_as_arg) and (parent_activations.numel() != 0) and
+                (parent_activations.dtype != torch.bool) and
+                (parent_activations.abs().float().mean() != 0) and (parent_activations.abs().float().mean() != 1) and
+                not any([torch.equal(parent_activations, self[other_parent].tensor_contents)
+                         for other_parent in target_layer.parent_layers if other_parent != parent_layer_label])):
             print(f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
                   f"{arg_type} {argloc_key} for {target_layer_label}, but is not logged as "
                   f"such in parent_layer_arg_locs.")
@@ -4849,8 +4858,9 @@ class ModelHistory:
         Returns:
             Dict of input arguments.
         """
-        input_args = {'args': list(layer_to_validate_parents_for.creation_args),
+        input_args = {'args': list(layer_to_validate_parents_for.creation_args[:]),
                       'kwargs': layer_to_validate_parents_for.creation_kwargs.copy()}
+        input_args = self._copy_validation_args(input_args)
 
         # Swap in saved parent activations:
 
@@ -4861,12 +4871,13 @@ class ModelHistory:
                     parent_values = parent_layer.children_tensor_versions[layer_to_validate_parents_for.layer_label]
                 else:
                     parent_values = parent_layer.tensor_contents
+                parent_values = parent_values.detach().clone()
 
                 if parent_layer_arg in layers_to_perturb:
                     parent_layer_func_values = self._perturb_layer_activations(parent_values,
                                                                                layer_to_validate_parents_for.tensor_contents)
                 else:
-                    parent_layer_func_values = safe_copy(parent_values)
+                    parent_layer_func_values = parent_values
 
                 if type(key) != tuple:
                     input_args[arg_type][key] = parent_layer_func_values
@@ -4875,6 +4886,41 @@ class ModelHistory:
                                                                          key[1],
                                                                          parent_layer_func_values)
 
+        return input_args
+
+    @staticmethod
+    def _copy_validation_args(input_args: Dict):
+        new_args = []
+        for i, val in enumerate(input_args['args']):
+            if type(val) == torch.Tensor:
+                new_args.append(val.detach().clone())
+            elif type(val) in [list, tuple, set]:
+                new_iter = []
+                for i2, val2 in enumerate(val):
+                    if type(val2) == torch.Tensor:
+                        new_iter.append(val2.detach().clone())
+                    else:
+                        new_iter.append(val2)
+                new_args.append(new_iter)
+            else:
+                new_args.append(val)
+        input_args['args'] = new_args
+
+        new_kwargs = {}
+        for key, val in input_args['kwargs'].items():
+            if type(val) == torch.Tensor:
+                new_kwargs[key] = val.detach().clone()
+            elif type(val) in [list, tuple, set]:
+                new_iter = []
+                for i2, val2 in enumerate(val):
+                    if type(val2) == torch.Tensor:
+                        new_iter.append(val2.detach().clone())
+                    else:
+                        new_iter.append(val2)
+                new_kwargs[key] = new_iter
+            else:
+                new_kwargs[key] = val
+        input_args['kwargs'] = new_kwargs
         return input_args
 
     @staticmethod
@@ -4895,18 +4941,25 @@ class ModelHistory:
                                         torch.int8, torch.int16, torch.int32, torch.int64]:
             tensor_unique_vals = torch.unique(parent_activations)
             if len(tensor_unique_vals) > 1:
-                perturbed_activations = torch.randint(parent_activations.min(), parent_activations.max() + 1,
-                                                      size=parent_activations.shape, device=device)
+                perturbed_activations = parent_activations.detach().clone()
+                while torch.equal(perturbed_activations, parent_activations):
+                    perturbed_activations = torch.randint(parent_activations.min(), parent_activations.max() + 1,
+                                                          size=parent_activations.shape,
+                                                          device=device).type(parent_activations.dtype)
             else:
-                perturbed_activations = torch.randint(-10, 11, size=parent_activations.shape, device=device)
+                perturbed_activations = torch.randint(-10, 11, size=parent_activations.shape,
+                                                      device=device).type(parent_activations.dtype)
         elif parent_activations.dtype == torch.bool:
-            perturbed_activations = torch.randint(0, 2, size=parent_activations.shape, device=device).bool()
+            perturbed_activations = parent_activations.detach().clone()
+            while torch.equal(perturbed_activations, parent_activations):
+                perturbed_activations = torch.randint(0, 2, size=parent_activations.shape, device=device).bool()
         else:
             mean_output = output_activations.detach().float().abs().mean()
             mean_output += torch.rand(mean_output.shape) * 100
             mean_output.requires_grad = False
-            perturbed_activations = torch.randn_like(parent_activations.float(),
-                                                     device=device) * mean_output.to(device)
+            perturbed_activations = (torch.randn_like(parent_activations.float(),
+                                                      device=device) * mean_output.to(device))
+            perturbed_activations = perturbed_activations.type(parent_activations.dtype)
 
         return perturbed_activations
 
@@ -4928,6 +4981,17 @@ class ModelHistory:
         """
         # Check if the tensor is all nans or all infinite:
         if layer_to_validate_parents_for.tensor_dtype == torch.bool:
+            return True
+        elif ((layer_to_validate_parents_for.func_applied_name == 'to') and
+              (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)):
+            return True
+        elif ((layer_to_validate_parents_for.func_applied_name == '__setitem__') and
+              (type(layer_to_validate_parents_for.creation_args[2]) == torch.Tensor) and
+              (layer_to_validate_parents_for.creation_args[0].shape ==
+               layer_to_validate_parents_for.creation_args[2].shape)):
+            return True
+        elif ((layer_to_validate_parents_for.func_applied_name == '__getitem__') and
+              (layer_to_validate_parents_for.tensor_contents.numel() < 20)):  # some elements can be the same by chance
             return True
         else:
             num_inf = torch.isinf(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()
@@ -4970,7 +5034,7 @@ class ModelHistory:
                 val = torch.Tensor(val)
             except:
                 return True
-        if torch.all(val == 0) or torch.all(val == 1):
+        if torch.all(val == 0) or torch.all(val == 1) or (val.numel() == 0):
             return True
         else:
             return False
