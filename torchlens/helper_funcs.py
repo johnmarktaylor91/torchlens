@@ -133,6 +133,23 @@ def make_var_iterable(x):
         return [x]
 
 
+def index_nested(x: Any,
+                 indices: List[int]) -> Any:
+    """Utility function to index into a nested list or tuple.
+
+    Args:
+        x: Nested list or tuple.
+        indices: List of indices to use.
+
+    Returns:
+        Indexed object.
+    """
+    indices = make_var_iterable(indices)
+    for i in indices:
+        x = x[i]
+    return x
+
+
 def remove_entry_from_list(list_: List,
                            entry: Any):
     """Removes all instances of an entry from a list if present, in-place.

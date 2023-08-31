@@ -23,7 +23,7 @@ from torchlens.helper_funcs import get_attr_values_from_tensor_list, get_tensor_
     log_current_rng_states, make_random_barcode, make_short_barcode_from_input, make_var_iterable, \
     move_input_tensors_to_device, nested_getattr, print_override, remove_entry_from_list, safe_copy, set_random_seed, \
     set_rng_from_saved_states, tuple_tolerant_assign, remove_attributes_starting_with_str, tensor_nanequal, \
-    tensor_all_nan, clean_to
+    tensor_all_nan, clean_to, index_nested
 
 # todo add saved_layer field, remove the option to only keep saved layers
 # Define some constants.
@@ -219,7 +219,8 @@ class TensorLogEntry:
         fields_dict = {}
         fields_not_to_deepcopy = ['func_applied', 'gradfunc',
                                   'source_model_history', 'func_rng_states',
-                                  'creation_args', 'creation_kwargs', 'parent_params', 'tensor_contents']
+                                  'creation_args', 'creation_kwargs', 'parent_params', 'tensor_contents',
+                                  'children_tensor_versions']
         for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
                 fields_dict[field] = copy.deepcopy(getattr(self, field))
@@ -1298,6 +1299,14 @@ class ModelHistory:
                         delattr(attribute, 'tl_tensor_label_raw')
                     else:
                         remove_attributes_starting_with_str(attribute, 'tl_')
+                elif type(attribute) in [list, tuple, set]:
+                    for item in attribute:
+                        if issubclass(type(item), torch.Tensor) and hasattr(item, 'tl_tensor_label_raw'):
+                            delattr(item, 'tl_tensor_label_raw')
+                elif type(attribute) == dict:
+                    for key, val in attribute.items():
+                        if issubclass(type(val), torch.Tensor) and hasattr(val, 'tl_tensor_label_raw'):
+                            delattr(val, 'tl_tensor_label_raw')
 
     def get_op_nums_from_user_labels(self, which_layers: Union[str, List[Union[str, int]]]) -> List[int]:
         """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
@@ -1927,7 +1936,7 @@ class ModelHistory:
                 self._add_backward_hook(out, out.tl_tensor_label_raw)
 
             # Check if parent is parent of a slice function, and deal with any complexities from that.
-            if new_tensor_entry.func_applied_name == '__getitem__':
+            if (new_tensor_entry.func_applied_name == '__getitem__') and (len(new_tensor_entry.parent_layers) > 0):
                 self[new_tensor_entry.parent_layers[0]].was_getitem_applied = True
 
             for parent_label in new_tensor_entry.parent_layers:
@@ -1943,10 +1952,10 @@ class ModelHistory:
         """
         for pos, label in parent_layer_arg_locs['args'].items():
             if label == parent_label:
-                return arg_copies[pos]
+                return index_nested(arg_copies, pos)
         for argname, label in parent_layer_arg_locs['kwargs'].items():
             if label == parent_label:
-                return kwarg_copies[argname]
+                return index_nested(kwarg_copies, argname)
         raise ValueError("Parent layer not found in function arguments.")
 
     def log_function_output_tensors_fast(self,
@@ -2708,6 +2717,11 @@ class ModelHistory:
                          f"{str(new_output_node.tensor_dtype)}"
             new_output_node.operation_equivalence_type = equiv_type
             self.equivalent_operations[equiv_type].add(new_output_node.tensor_label_raw)
+
+            # Fix the getitem stuff:
+
+            new_output_node.was_getitem_applied = False
+            new_output_node.children_tensor_versions = {}
 
             # Change original output node:
 
@@ -3954,7 +3968,7 @@ class ModelHistory:
         if node.is_last_output_layer:
             with graphviz_graph.subgraph() as s:
                 s.attr(rank='sink')
-                s.node(node.nodel_label)
+                s.node(node_label)
 
         return node_color
 
