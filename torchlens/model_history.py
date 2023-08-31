@@ -591,7 +591,7 @@ class ModelHistory:
     MIN_MODULE_PENWIDTH = 2
     PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
     COMMUTE_FUNCS = ['add', 'mul', 'cat', 'eq', 'ne']
-    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_', 'clamp']
+    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_', 'clamp', 'fill_']
 
     def __init__(self,
                  model_name: str,
@@ -1481,7 +1481,7 @@ class ModelHistory:
             tensors_to_undecorate = tensors_to_decorate + output_tensors
             self.undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
             self.cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
-            self.postprocess()
+            self.postprocess(output_tensors)
             decorated_func_mapper.clear()
 
         except Exception as e:  # if anything fails, make sure everything gets cleaned up
@@ -2572,7 +2572,7 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self):
+    def postprocess(self, output_tensors: List[torch.Tensor]):
         """
         After the forward pass, cleans up the log into its final form.
         """
@@ -2582,7 +2582,7 @@ class ModelHistory:
 
         # Step 1: Add dedicated output nodes
 
-        self._add_output_layers()
+        self._add_output_layers(output_tensors)
 
         # Step 2: Trace which nodes are ancestors of output nodes
 
@@ -2645,7 +2645,7 @@ class ModelHistory:
         self._log_time_elapsed()
         self._set_pass_finished()
 
-    def _add_output_layers(self):
+    def _add_output_layers(self, output_tensors: List[torch.Tensor]):
         """
         Adds dedicated output nodes to the graph.
         """
@@ -2676,7 +2676,7 @@ class ModelHistory:
             new_output_node.func_keyword_args_non_tensor = {}
             new_output_node.func_all_args_non_tensor = []
             new_output_node.gradfunc = None
-            new_output_node.creation_args = [safe_copy(output_node.tensor_contents)]
+            new_output_node.creation_args = [output_tensors[i]]
             new_output_node.creation_kwargs = {}
 
             # Strip any params:
@@ -2728,6 +2728,9 @@ class ModelHistory:
 
             new_output_node.was_getitem_applied = False
             new_output_node.children_tensor_versions = {}
+            if output_node.was_getitem_applied:
+                output_node.children_tensor_versions[new_output_node.tensor_label_raw] = safe_copy(output_tensors[i])
+                new_output_node.tensor_contents = safe_copy(output_tensors[i])
 
             # Change original output node:
 
@@ -4781,7 +4784,7 @@ class ModelHistory:
                                       (target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label))
 
         if (parent_layer_matches_arg and (not parent_layer_logged_as_arg) and (parent_activations.numel() != 0) and
-                (parent_activations.dtype != torch.bool) and
+                (parent_activations.dtype != torch.bool) and (not tensor_all_nan(parent_activations)) and
                 (parent_activations.abs().float().mean() != 0) and (parent_activations.abs().float().mean() != 1) and
                 not any([torch.equal(parent_activations, self[other_parent].tensor_contents)
                          for other_parent in target_layer.parent_layers if other_parent != parent_layer_label])):
@@ -4901,7 +4904,7 @@ class ModelHistory:
                         new_iter.append(val2.detach().clone())
                     else:
                         new_iter.append(val2)
-                new_args.append(new_iter)
+                new_args.append(type(val)(new_iter))
             else:
                 new_args.append(val)
         input_args['args'] = new_args
@@ -4917,7 +4920,7 @@ class ModelHistory:
                         new_iter.append(val2.detach().clone())
                     else:
                         new_iter.append(val2)
-                new_kwargs[key] = new_iter
+                new_kwargs[key] = type(val)(new_iter)
             else:
                 new_kwargs[key] = val
         input_args['kwargs'] = new_kwargs
@@ -4937,6 +4940,9 @@ class ModelHistory:
             Perturbed version of saved tensor
         """
         device = parent_activations.device
+        if parent_activations.numel() == 0:
+            return parent_activations.detach().clone()
+
         if parent_activations.dtype in [torch.int, torch.long, torch.short, torch.uint8,
                                         torch.int8, torch.int16, torch.int32, torch.int64]:
             tensor_unique_vals = torch.unique(parent_activations)
@@ -4983,6 +4989,7 @@ class ModelHistory:
         if layer_to_validate_parents_for.tensor_dtype == torch.bool:
             return True
         elif ((layer_to_validate_parents_for.func_applied_name == 'to') and
+              (len(layer_to_validate_parents_for.creation_args) > 1) and
               (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)):
             return True
         elif ((layer_to_validate_parents_for.func_applied_name == '__setitem__') and

@@ -204,11 +204,11 @@ def test_identity_model(default_input1):
                      vis_outpath=opj('visualization_outputs', 'identity_model'))
 
 
-def test_assign_tensor(default_input1):
+def test_assign_tensor(input_2d):
     model = example_models.AssignTensor()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_saved_activations(model, input_2d)
     show_model_graph(model,
-                     default_input1,
+                     input_2d,
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'assigntensor'))
 

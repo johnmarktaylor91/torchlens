@@ -192,8 +192,8 @@ class AssignTensor(nn.Module):
     @staticmethod
     def forward(x):
         x = torch.log(x)
-        x[2, 2, 0, 1] = 5
-        x[3, 0, 1, 2] = 1
+        x[1, 1] = 5
+        x[2] = 1
         return x
 
 
