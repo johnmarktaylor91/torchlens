@@ -220,6 +220,15 @@ def test_get_and_set_item(default_input1):
                      vis_outpath=opj('visualization_outputs', 'get_set_item'))
 
 
+def test_getitem_tracking(input_2d):
+    model = example_models.GetItemTracking()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(model,
+                     input_2d,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'getitem_tracking'))
+
+
 def test_inplace_zero_tensor(default_input1):
     model = example_models.InPlaceZeroTensor()
     assert validate_saved_activations(model, default_input1)

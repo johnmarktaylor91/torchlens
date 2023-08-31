@@ -35,11 +35,13 @@ class InPlaceFuncs(nn.Module):
         self.relu_module_newtensor = nn.ReLU(inplace=False)
 
     def forward(self, x):
-        x = x + 1
-        x = self.relu_module_inplace(x)
-        x = torch.log(x)
-        x = self.relu_module_newtensor(x)
-        x = x * 2
+        x1 = x + 1
+        x2 = self.relu_module_inplace(x1)
+        y1 = x1 * 10
+        y2 = x2 + 3
+        x3 = torch.log(x2)
+        x4 = self.relu_module_newtensor(x3)
+        x5 = x4 * 2 + y1 + y2
         return x
 
 
@@ -205,6 +207,28 @@ class GetAndSetItem(nn.Module):
         x[2, 2, 0, 1] = x[3, 2, 1, 0]
         x = x * 2
         return x
+
+
+class GetItemTracking(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        x = torch.log(x)
+        x = x * 0
+        y1 = x[0]
+        y1[:] = 1
+        y1 = y1.mean()
+        y2 = x[1]
+        y2[:] = 1
+        y2 = y2.mean()
+        y3 = x[3]
+        y3[:] = 1
+        y3 = y3.mean()
+        xmean = x.mean()
+        z = y1 + y2 + y3 + xmean
+        return z
 
 
 class InPlaceZeroTensor(nn.Module):

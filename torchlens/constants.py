@@ -150,6 +150,10 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     'tensor_fsize',
     'tensor_fsize_nice',
 
+    # Tensor slice-changing complications
+    'was_getitem_applied',
+    'children_tensor_versions',
+
     # Saved gradient info
     'grad_contents',
     'save_gradients',

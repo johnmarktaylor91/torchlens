@@ -92,6 +92,10 @@ class TensorLogEntry:
         self.tensor_fsize = fields_dict['tensor_fsize']
         self.tensor_fsize_nice = fields_dict['tensor_fsize_nice']
 
+        # Dealing with getitem complexities
+        self.was_getitem_applied = fields_dict['was_getitem_applied']
+        self.children_tensor_versions = fields_dict['children_tensor_versions']
+
         # Saved gradient info
         self.grad_contents = fields_dict['grad_contents']
         self.save_gradients = fields_dict['save_gradients']
@@ -830,6 +834,7 @@ class ModelHistory:
                 return out
             all_args = list(args) + list(kwargs.values())
             arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
+
             if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
                 out = print_override(args[0], func_name)
                 return out
@@ -1564,6 +1569,10 @@ class ModelHistory:
             'tensor_fsize': get_tensor_memory_amount(t),
             'tensor_fsize_nice': human_readable_size(get_tensor_memory_amount(t)),
 
+            # Get-item complexities
+            'was_getitem_applied': False,
+            'children_tensor_versions': {},
+
             # Grad info:
             'grad_contents': None,
             'save_gradients': self.save_gradients,
@@ -1917,6 +1926,29 @@ class ModelHistory:
             if self.save_gradients:
                 self._add_backward_hook(out, out.tl_tensor_label_raw)
 
+            # Check if parent is parent of a slice function, and deal with any complexities from that.
+            if new_tensor_entry.func_applied_name == '__getitem__':
+                self[new_tensor_entry.parent_layers[0]].was_getitem_applied = True
+
+            for parent_label in new_tensor_entry.parent_layers:
+                parent = self[parent_label]
+                if all([parent.was_getitem_applied, parent.has_saved_activations, self.save_function_args]):
+                    parent_tensor_contents = self._get_parent_contents(parent_label, arg_copies, kwarg_copies,
+                                                                       new_tensor_entry.parent_layer_arg_locs)
+                    parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = parent_tensor_contents
+
+    @staticmethod
+    def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs):
+        """Utility function to get the value of a parent layer from the arguments passed to a function.
+        """
+        for pos, label in parent_layer_arg_locs['args'].items():
+            if label == parent_label:
+                return arg_copies[pos]
+        for argname, label in parent_layer_arg_locs['kwargs'].items():
+            if label == parent_label:
+                return kwarg_copies[argname]
+        raise ValueError("Parent layer not found in function arguments.")
+
     def log_function_output_tensors_fast(self,
                                          func: Callable,
                                          args: Tuple[Any],
@@ -2114,6 +2146,10 @@ class ModelHistory:
         fields_dict['tensor_dtype'] = t.dtype
         fields_dict['tensor_fsize'] = get_tensor_memory_amount(t)
         fields_dict['tensor_fsize_nice'] = human_readable_size(fields_dict['tensor_fsize'])
+
+        # Slice function complexities (i.e., what if a parent tensor is changed in place)
+        fields_dict['was_getitem_applied'] = False
+        fields_dict['children_tensor_versions'] = {}
 
         # If internally initialized, fix this information:
         if len(fields_dict['parent_layers']) == 0:
@@ -3488,6 +3524,12 @@ class ModelHistory:
             for key, value in tensor_entry.parent_layer_arg_locs[arg_type].items():
                 tensor_entry.parent_layer_arg_locs[arg_type][key] = self.raw_to_final_layer_labels[value]
 
+        # Fix the field names for different children tensor versions:
+        new_child_tensor_versions = {}
+        for child_label, tensor_version in tensor_entry.children_tensor_versions.items():
+            new_child_tensor_versions[self.raw_to_final_layer_labels[child_label]] = tensor_version
+        tensor_entry.children_tensor_versions = new_child_tensor_versions
+
     def _log_module_hierarchy_info_for_layer(self,
                                              tensor_entry: TensorLogEntry):
         """
@@ -3871,13 +3913,6 @@ class ModelHistory:
         self._add_edges_for_node(node, is_collapsed_module, vis_nesting_depth, node_color, module_edge_dict,
                                  edges_used, graphviz_graph, vis_opt, show_buffer_layers)
 
-        # Finally, if it's the final output layer, force it to be on top for visual niceness.
-
-        if node.is_last_output_layer:
-            with graphviz_graph.subgraph() as s:
-                s.attr(rank='sink')
-                s.node(node.layer_label)
-
     @staticmethod
     def _check_if_collapsed_module(node, vis_nesting_depth):
         node_nesting_depth = len(node.containing_modules_origin_nested)
@@ -3915,6 +3950,12 @@ class ModelHistory:
                             fillcolor=node_bg_color,
                             shape=node_shape,
                             ordering='out')
+
+        if node.is_last_output_layer:
+            with graphviz_graph.subgraph() as s:
+                s.attr(rank='sink')
+                s.node(node.nodel_label)
+
         return node_color
 
     def _construct_collapsed_module_node(self,
@@ -4707,7 +4748,10 @@ class ModelHistory:
         """
         target_layer_label = target_layer.layer_label
         parent_layer_label = parent_layer.layer_label
-        parent_activations = parent_layer.tensor_contents
+        if target_layer_label in parent_layer.children_tensor_versions:
+            parent_activations = parent_layer.children_tensor_versions[target_layer_label]
+        else:
+            parent_activations = parent_layer.tensor_contents
 
         if type(saved_arg_val) == torch.Tensor:
             parent_layer_matches_arg = tensor_nanequal(saved_arg_val, parent_activations)
@@ -4717,14 +4761,13 @@ class ModelHistory:
                                       (target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label))
 
         if (parent_layer_matches_arg and (not parent_layer_logged_as_arg) and
-                (not tensor_all_nan(parent_activations)) and
                 (parent_activations.abs().mean() != 0) and (parent_activations.abs().mean() != 1)):
             print(f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
                   f"{arg_type} {argloc_key} for {target_layer_label}, but is not logged as "
                   f"such in parent_layer_arg_locs.")
             return False
 
-        if not parent_layer_matches_arg and parent_layer_logged_as_arg:
+        if (not parent_layer_matches_arg) and parent_layer_logged_as_arg:
             print(f"Parent {parent_layer_label} of {target_layer_label} is logged as {arg_type} {argloc_key} to "
                   f"{target_layer_label}, but its saved activations don't match the saved argument.")
             return False
@@ -4799,11 +4842,17 @@ class ModelHistory:
 
         for arg_type in ['args', 'kwargs']:
             for key, parent_layer_arg in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type].items():
+                parent_layer = self[parent_layer_arg]
+                if layer_to_validate_parents_for.layer_label in parent_layer.children_tensor_versions:
+                    parent_values = parent_layer.children_tensor_versions[layer_to_validate_parents_for.layer_label]
+                else:
+                    parent_values = parent_layer.tensor_contents
+
                 if parent_layer_arg in layers_to_perturb:
-                    parent_layer_func_values = self._perturb_layer_activations(self[parent_layer_arg].tensor_contents,
+                    parent_layer_func_values = self._perturb_layer_activations(parent_values,
                                                                                layer_to_validate_parents_for.tensor_contents)
                 else:
-                    parent_layer_func_values = safe_copy(self[parent_layer_arg].tensor_contents)
+                    parent_layer_func_values = safe_copy(parent_values)
 
                 if type(key) != tuple:
                     input_args[arg_type][key] = parent_layer_func_values
@@ -4903,7 +4952,10 @@ class ModelHistory:
     def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]):
         # If it's one of the other arguments, check if it's all zeros or all ones:
         if type(val) != torch.Tensor:
-            val = torch.Tensor(val)
+            try:
+                val = torch.Tensor(val)
+            except:
+                return True
         if torch.all(val == 0) or torch.all(val == 1):
             return True
         else:
