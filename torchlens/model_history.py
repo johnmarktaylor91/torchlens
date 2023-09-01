@@ -1113,8 +1113,10 @@ class ModelHistory:
             module_pass_label = (module_address, module.tl_module_pass_num)
             module.tl_module_pass_labels.append(module_pass_label)
             input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor, search_depth=4)
+            input_tensor_labels = set()
             for t in input_tensors:
                 tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
+                input_tensor_labels.add(t.tl_tensor_label_raw)
                 module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
                 tensor_entry.modules_entered.append(module_address)
                 tensor_entry.module_passes_entered.append(module_pass_label)
@@ -1130,7 +1132,8 @@ class ModelHistory:
             module_entry_label = module.tl_module_pass_labels.pop()
             output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
-                if module.tl_module_type.lower() == 'identity':  # if identity module, run the function for bookkeeping
+                # if identity module or tensor unchanged, run the identity function for bookkeeping
+                if (module.tl_module_type.lower() == 'identity') or (t.tl_tensor_label_raw in input_tensor_labels):
                     t = getattr(torch, 'identity')(t)
                 tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
                 tensor_entry.is_submodule_output = True
@@ -4070,7 +4073,8 @@ class ModelHistory:
         else:
             only_non_buffer_layer = False
 
-        if node.is_bottom_level_submodule_output or only_non_buffer_layer:
+        if ((node.is_bottom_level_submodule_output or only_non_buffer_layer) and
+                (len(node.containing_modules_origin_nested) > 0)):
             if type(node) == TensorLogEntry:
                 module_pass_exited = node.containing_modules_origin_nested[-1]
                 module, _ = module_pass_exited.split(':')

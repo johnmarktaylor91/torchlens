@@ -223,7 +223,11 @@ visualizations were created with graphviz; logo created with DALL-E 2.
 
 ## Citing Torchlens
 
-To cite TorchLens, you can cite [this preprint](https://www.biorxiv.org/content/10.1101/2023.03.16.532916v1) for now.
+To cite TorchLens, you can
+cite [this paper describing the package](https://www.nature.com/articles/s41598-023-40807-0):
+
+Taylor, J., Kriegeskorte, N. Extracting and visualizing hidden activations and computational graphs of PyTorch models
+with TorchLens. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-40807-0
 
 ## Contact
 
