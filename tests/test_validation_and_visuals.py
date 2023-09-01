@@ -744,6 +744,10 @@ def test_googlenet(default_input1):
                      vis_buffer_layers=False,
                      vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer'))
     show_model_graph(model, default_input1,
+                     vis_opt='rolled',
+                     vis_buffer_layers=False,
+                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer_rolled'))
+    show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
                      vis_nesting_depth=1,

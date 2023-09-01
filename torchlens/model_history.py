@@ -3932,7 +3932,7 @@ class ModelHistory:
                                                   vis_opt, vis_nesting_depth)
             node_color = 'black'
         else:
-            node_color = self._construct_layer_node(node, graphviz_graph, vis_opt)
+            node_color = self._construct_layer_node(node, graphviz_graph, show_buffer_layers, vis_opt)
 
         self._add_edges_for_node(node, is_collapsed_module, vis_nesting_depth, node_color, module_edge_dict,
                                  edges_used, graphviz_graph, vis_opt, show_buffer_layers)
@@ -3951,11 +3951,12 @@ class ModelHistory:
     def _construct_layer_node(self,
                               node,
                               graphviz_graph,
+                              show_buffer_layers,
                               vis_opt):
 
         # Get the address, shape, color, and line style:
 
-        node_address, node_shape, node_color = self._get_node_address_shape_color(node)
+        node_address, node_shape, node_color = self._get_node_address_shape_color(node, show_buffer_layers)
         node_bg_color = self._get_node_bg_color(node)
 
         if node.has_input_ancestor:
@@ -4052,7 +4053,8 @@ class ModelHistory:
                             ordering='out')
 
     def _get_node_address_shape_color(self,
-                                      node: Union[TensorLogEntry, RolledTensorLogEntry]) -> Tuple[str, str, str]:
+                                      node: Union[TensorLogEntry, RolledTensorLogEntry],
+                                      show_buffer_layers: bool) -> Tuple[str, str, str]:
         """Gets the node shape, address, and color for the graphviz figure.
 
         Args:
@@ -4063,16 +4065,21 @@ class ModelHistory:
             node_shape: shape of the node
             node_color: color of the node
         """
-        if node.is_bottom_level_submodule_output:
+        if not show_buffer_layers:
+            only_non_buffer_layer = self._check_if_only_non_buffer_in_module(node)
+        else:
+            only_non_buffer_layer = False
+
+        if node.is_bottom_level_submodule_output or only_non_buffer_layer:
             if type(node) == TensorLogEntry:
-                module_pass_exited = node.bottom_level_submodule_pass_exited
+                module_pass_exited = node.containing_modules_origin_nested[-1]
                 module, _ = module_pass_exited.split(':')
                 if self.module_num_passes[module] == 1:
                     node_address = module
                 else:
                     node_address = module_pass_exited
             else:
-                sample_module_pass = list(node.bottom_level_submodule_passes_exited)[0]
+                sample_module_pass = node.containing_modules_origin_nested[-1]
                 module = sample_module_pass.split(':')[0]
                 node_address = module
 
@@ -4089,6 +4096,31 @@ class ModelHistory:
             node_color = 'black'
 
         return node_address, node_shape, node_color
+
+    def _check_if_only_non_buffer_in_module(self,
+                                            node: Union[TensorLogEntry, RolledTensorLogEntry]):
+        """Utility function to check if a layer is the only non-buffer layer in the module
+        """
+        # Check whether it leaves its module:
+        if not ((len(node.modules_exited) > 0) and
+                (len(node.containing_modules_origin_nested) > 0) and
+                (node.containing_modules_origin_nested[-1].split(':')[0] in node.modules_exited)):
+            return False
+
+        # Now check whether all of its parents are either buffers, or are outside the module.
+        # If any aren't, return False.
+
+        for parent_layer_label in node.parent_layers:
+            if type(node) == TensorLogEntry:
+                parent_layer = self[parent_layer_label]
+            else:
+                parent_layer = self.layer_dict_rolled[parent_layer_label]
+            if (not parent_layer.is_buffer_layer) and ((len(parent_layer.containing_modules_origin_nested) > 0) and
+                                                       parent_layer.containing_modules_origin_nested[-1] ==
+                                                       node.containing_modules_origin_nested[-1]):
+                return False
+
+        return True
 
     def _get_node_bg_color(self, node: Union[TensorLogEntry, RolledTensorLogEntry]) -> str:
         """Gets the node background color for the graphviz figure.
