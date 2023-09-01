@@ -1108,7 +1108,7 @@ def test_deeplabv3_mobilenet(default_input1):
 
 
 def test_deeplabv3_resnet50(default_input1):
-    model = torchvision.models.segmentation.deeplabv3_mobilenet_resnet50()
+    model = torchvision.models.segmentation.deeplabv3_resnet50()
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
@@ -1166,6 +1166,8 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
 def test_maskrcnn_resnet50_train(default_input1, default_input2):
     model = torchvision.models.detection.maskrcnn_resnet50_fpn()
     input_tensors = [default_input1[0], default_input2[0]]
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
     targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
                 'labels': torch.tensor([1, 2]),
                 'masks': torch.rand(2, 224, 224).type(torch.uint8)},
@@ -1186,7 +1188,7 @@ def test_maskrcnn_resnet50_eval(default_input1, default_input2):
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'fmaskrcnn_resnet50_eval'))
-    assert validate_saved_activations(model, [input_tensors])
+    assert validate_saved_activations(model, [input_tensors], random_seed=0)
 
 
 def test_fcos_resnet50_train(default_input1, default_input2):

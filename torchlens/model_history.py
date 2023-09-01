@@ -591,7 +591,8 @@ class ModelHistory:
     MIN_MODULE_PENWIDTH = 2
     PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
     COMMUTE_FUNCS = ['add', 'mul', 'cat', 'eq', 'ne']
-    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_', 'clamp', 'fill_']
+    FUNCS_NOT_TO_PERTURB_IN_VALIDATION = ['expand_as', 'new_zeros', 'new_ones', 'zero_', 'copy_', 'clamp', 'fill_',
+                                          'zeros_like', 'ones_like']
 
     def __init__(self,
                  model_name: str,
@@ -3977,7 +3978,7 @@ class ModelHistory:
         if node.is_last_output_layer:
             with graphviz_graph.subgraph() as s:
                 s.attr(rank='sink')
-                s.node(node_label)
+                s.node(node.layer_label.replace(':', 'pass'))
 
         return node_color
 
@@ -4274,6 +4275,14 @@ class ModelHistory:
                 module_edge_dict[containing_module]['edges'].append(edge_dict)
                 if parent_node.has_input_ancestor or child_node.has_input_ancestor:
                     module_edge_dict[containing_module]['has_input_ancestor'] = True
+                    for module in parent_node.containing_modules_origin_nested:
+                        module_edge_dict[module]['has_input_ancestor'] = True
+                        if module == containing_module:
+                            break
+                    for module in child_node.containing_modules_origin_nested:
+                        module_edge_dict[module]['has_input_ancestor'] = True
+                        if module == containing_module:
+                            break
             else:
                 graphviz_graph.edge(**edge_dict)
 
@@ -4821,6 +4830,25 @@ class ModelHistory:
 
         layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
+        if (perturb and (layer_to_validate_parents_for.func_applied_name == '__getitem__') and
+                (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor) and
+                torch.equal(self[layers_to_perturb[0]].tensor_contents,
+                            layer_to_validate_parents_for.creation_args[1])):
+            return True
+        elif (perturb and (layer_to_validate_parents_for.func_applied_name == '__setitem__') and
+              (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor) and
+              (layer_to_validate_parents_for.creation_args[1].dtype == torch.bool) and
+              torch.equal(self[layers_to_perturb[0]].tensor_contents,
+                          layer_to_validate_parents_for.creation_args[1])):
+            return True
+        elif (perturb and (layer_to_validate_parents_for.func_applied_name == '__setitem__') and
+              (type(layer_to_validate_parents_for.creation_args[1]) == tuple) and
+              (type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor) and
+              (layer_to_validate_parents_for.creation_args[1][0].dtype == torch.bool) and
+              torch.equal(self[layers_to_perturb[0]].tensor_contents,
+                          layer_to_validate_parents_for.creation_args[1][0])):
+            return True
+
         # Prepare input arguments: keep the ones that should just be kept, perturb those that should be perturbed
 
         input_args = self._prepare_input_args_for_validating_layer(layer_to_validate_parents_for,
@@ -4997,8 +5025,15 @@ class ModelHistory:
               (layer_to_validate_parents_for.creation_args[0].shape ==
                layer_to_validate_parents_for.creation_args[2].shape)):
             return True
-        elif ((layer_to_validate_parents_for.func_applied_name == '__getitem__') and
+        elif ((layer_to_validate_parents_for.func_applied_name in ['__getitem__', 'unbind']) and
               (layer_to_validate_parents_for.tensor_contents.numel() < 20)):  # some elements can be the same by chance
+            return True
+        elif ((layer_to_validate_parents_for.func_applied_name == '__getitem__') and
+              (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor) and
+              (layer_to_validate_parents_for.creation_args[1].unique() < 20)):
+            return True
+        elif ((layer_to_validate_parents_for.func_applied_name == 'max') and
+              len(layer_to_validate_parents_for.creation_args > 1)):
             return True
         else:
             num_inf = torch.isinf(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()
