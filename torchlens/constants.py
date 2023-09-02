@@ -51,6 +51,7 @@ MODEL_HISTORY_FIELD_ORDER = [
 
     # Mapping from raw to final layer labels:
     'raw_to_final_layer_labels',
+    'final_to_raw_layer_labels',
     'lookup_keys_to_tensor_num_dict',
     'tensor_num_to_lookup_keys_dict',
 

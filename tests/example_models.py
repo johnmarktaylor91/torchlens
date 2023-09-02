@@ -45,6 +45,19 @@ class InPlaceFuncs(nn.Module):
         return x
 
 
+class GeluModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        x = x + 1
+        y = x[0]
+        y = torch.nn.functional.gelu(y)
+        y = y + 2
+        return y
+
+
 class SimpleInternallyGenerated(nn.Module):
     def __init__(self):
         super().__init__()

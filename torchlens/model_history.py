@@ -653,6 +653,7 @@ class ModelHistory:
 
         # Mapping from raw to final layer labels:
         self.raw_to_final_layer_labels: Dict[str, str] = {}
+        self.final_to_raw_layer_labels: Dict[str, str] = {}
         self.lookup_keys_to_tensor_num_dict: Dict[str, int] = {}
         self.tensor_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
 
@@ -3425,6 +3426,7 @@ class ModelHistory:
         in order to then go through and rename everything in the next preprocessing step.
         """
         raw_to_final_layer_labels = {}
+        final_to_raw_layer_labels = {}
         layer_type_counter = defaultdict(lambda: 1)
         layer_total_counter = 1
         for tensor_log_entry in self:
@@ -3452,7 +3454,9 @@ class ModelHistory:
                 tensor_log_entry.layer_label = tensor_log_entry.layer_label_w_pass
                 tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_w_pass_short
             raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
+            final_to_raw_layer_labels[tensor_log_entry.layer_label] = tensor_log_entry.tensor_label_raw
         self.raw_to_final_layer_labels = raw_to_final_layer_labels
+        self.final_to_raw_layer_labels = final_to_raw_layer_labels
 
     def _log_final_info_for_all_layers(self):
         """
@@ -3829,7 +3833,7 @@ class ModelHistory:
     def render_graph(self,
                      vis_opt: str = 'unrolled',
                      vis_nesting_depth: int = 1000,
-                     vis_outpath: str = 'graph.gv',
+                     vis_outpath: str = 'modelgraph',
                      save_only: bool = False,
                      vis_fileformat: str = 'pdf',
                      show_buffer_layers: bool = False,
@@ -3850,6 +3854,11 @@ class ModelHistory:
         if not self.all_layers_logged:
             raise ValueError("Must have all layers logged in order to render the graph; either save all layers,"
                              "set keep_unsaved_layers to True, or use show_model_graph.")
+
+        # Fix the filename if need be, to remove the extension:
+        split_outpath = vis_outpath.split('.')
+        if split_outpath[-1] in ['pdf', 'png', 'jpg', 'svg', 'jpg', 'jpeg', 'bmp', 'pic', 'tif', 'tiff']:
+            vis_outpath = '.'.join(split_outpath[:-1])
 
         if vis_opt == 'unrolled':
             entries_to_plot = self.layer_dict_main_keys
@@ -4648,7 +4657,8 @@ class ModelHistory:
         # First check that the ground truth output tensors are accurate:
         for i, output_layer_label in enumerate(self.output_layers):
             output_layer = self[output_layer_label]
-            if not tensor_nanequal(output_layer.tensor_contents, ground_truth_output_tensors[i]):
+            if not tensor_nanequal(output_layer.tensor_contents, ground_truth_output_tensors[i],
+                                   allow_tolerance=False):
                 print(f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor.")
                 return False
 
@@ -4822,7 +4832,7 @@ class ModelHistory:
             parent_activations = parent_layer.tensor_contents
 
         if type(saved_arg_val) == torch.Tensor:
-            parent_layer_matches_arg = tensor_nanequal(saved_arg_val, parent_activations)
+            parent_layer_matches_arg = tensor_nanequal(saved_arg_val, parent_activations, allow_tolerance=False)
         else:
             parent_layer_matches_arg = False
         parent_layer_logged_as_arg = ((argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and
@@ -4903,12 +4913,14 @@ class ModelHistory:
         if type(recomputed_output) in [list, tuple]:
             recomputed_output = recomputed_output[layer_to_validate_parents_for.iterable_output_index]
 
-        if not (tensor_nanequal(recomputed_output, layer_to_validate_parents_for.tensor_contents)) and not perturb:
+        if not (tensor_nanequal(recomputed_output, layer_to_validate_parents_for.tensor_contents,
+                                allow_tolerance=True)) and not perturb:
             print(f"Saved activations for layer {layer_to_validate_parents_for_label} do not match the "
                   f"values computed based on the parent layers {layer_to_validate_parents_for.parent_layers}.")
             return False
 
-        if tensor_nanequal(recomputed_output, layer_to_validate_parents_for.tensor_contents) and perturb:
+        if tensor_nanequal(recomputed_output, layer_to_validate_parents_for.tensor_contents,
+                           allow_tolerance=True) and perturb:
             return self._posthoc_perturb_check(layer_to_validate_parents_for, layers_to_perturb, verbose)
 
         return True
@@ -5069,7 +5081,7 @@ class ModelHistory:
               (layer_to_validate_parents_for.creation_args[1].unique() < 20)):
             return True
         elif ((layer_to_validate_parents_for.func_applied_name == 'max') and
-              len(layer_to_validate_parents_for.creation_args > 1)):
+              len(layer_to_validate_parents_for.creation_args) > 1):
             return True
         else:
             num_inf = torch.isinf(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()

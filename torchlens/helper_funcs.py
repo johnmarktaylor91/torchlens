@@ -13,6 +13,8 @@ import torch
 from IPython import get_ipython
 from torch import nn
 
+MAX_FLOATING_POINT_TOLERANCE = 5.5879e-09 + .0000001
+
 
 def identity(x):
     return x
@@ -378,7 +380,7 @@ def tensor_all_nan(t: torch.Tensor) -> bool:
         return False
 
 
-def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor) -> bool:
+def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -> bool:
     """Returns True if the two tensors are equal, allowing for nans.
     """
     if t1.shape != t2.shape:
@@ -392,8 +394,12 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor) -> bool:
 
     if torch.equal(t1_nonan, t2_nonan):
         return True
-    else:
-        return False
+
+    if (allow_tolerance and (t1_nonan.dtype != torch.bool) and (t2_nonan.dtype != torch.bool) and
+            ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)):
+        return True
+
+    return False
 
 
 def safe_to(x: Any, device: str):
@@ -507,7 +513,7 @@ def safe_copy(x, detach_tensor: bool = False):
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
         if not detach_tensor:
             return clean_clone(x)
-        vals_np = np.array(clean_cpu(x.data))
+        vals_np = clean_cpu(x.data).numpy()
         vals_tensor = clean_from_numpy(vals_np)
         if hasattr(x, 'tl_tensor_label_raw'):
             vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw

@@ -1,11 +1,14 @@
 # This is for validating all the different model types. Have it both validate and spit out the visual for checking.
 # Let the default input size be 3x3x224x224.
 
+import os
 from os.path import join as opj
 import pytest
 import torch
+import torchaudio.models
 import torchvision
 import example_models
+import visualpriors
 
 import cornet
 from torchlens import log_forward_pass, show_model_graph, validate_saved_activations
@@ -13,6 +16,13 @@ from torchlens import log_forward_pass, show_model_graph, validate_saved_activat
 # Define inputs
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
+
+sub_dirs = ['toy-networks', 'torchvision-main', 'torchvision-detection',
+            'torchvision-opticflow', 'torchvision-segmentation', 'torchvision-video', 'torchaudio',
+            'torchvision-quantize', 'cornet', 'taskonomy']
+
+for sub_dir in sub_dirs:
+    os.makedirs(opj('visualization_outputs', sub_dir), exist_ok=True)
 
 
 @pytest.fixture
@@ -63,7 +73,7 @@ def test_model_simple_ff(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'simple_ff'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'simple_ff'))
 
 
 def test_model_inplace_funcs(default_input1):
@@ -72,7 +82,7 @@ def test_model_inplace_funcs(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'inplace_funcs'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'inplace_funcs'))
 
 
 def test_model_simple_internally_generated(default_input1):
@@ -81,7 +91,7 @@ def test_model_simple_internally_generated(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'simple_internally_generated'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'simple_internally_generated'))
 
 
 def test_model_new_tensor_inside(default_input1):
@@ -90,7 +100,7 @@ def test_model_new_tensor_inside(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'new_tensor_inside'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'new_tensor_inside'))
 
 
 def test_model_new_tensor_from_numpy(default_input1):
@@ -99,7 +109,7 @@ def test_model_new_tensor_from_numpy(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'new_tensor_from_numpy'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'new_tensor_from_numpy'))
 
 
 def test_model_simple_random(default_input1):
@@ -108,7 +118,7 @@ def test_model_simple_random(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'simple_random'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'simple_random'))
 
 
 def test_dropout_model_real_train(default_input1):
@@ -118,7 +128,7 @@ def test_dropout_model_real_train(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dropout_real_train'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dropout_real_train'))
 
 
 def test_dropout_model_real_eval(default_input1):
@@ -128,7 +138,7 @@ def test_dropout_model_real_eval(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dropout_real_eval'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dropout_real_eval'))
 
 
 def test_dropout_model_dummy_zero_train(default_input1):
@@ -138,7 +148,7 @@ def test_dropout_model_dummy_zero_train(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dropout_dummyzero_train'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dropout_dummyzero_train'))
 
 
 def test_dropout_model_dummy_zero_eval(default_input1):
@@ -148,7 +158,7 @@ def test_dropout_model_dummy_zero_eval(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dropout_dummyzero_eval'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dropout_dummyzero_eval'))
 
 
 def test_batchnorm_train(default_input1):
@@ -159,12 +169,12 @@ def test_batchnorm_train(default_input1):
                      default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
-                     vis_outpath=opj('visualization_outputs', 'batchnorm_train_showbuffer'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'batchnorm_train_showbuffer'))
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=False,
-                     vis_outpath=opj('visualization_outputs', 'batchnorm_train_invisbuffer'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'batchnorm_train_invisbuffer'))
 
 
 def test_batchnorm_eval(default_input1):
@@ -174,7 +184,7 @@ def test_batchnorm_eval(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'batchnorm_eval'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'batchnorm_eval'))
 
 
 def test_concat_tensors(default_input1):
@@ -183,7 +193,7 @@ def test_concat_tensors(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'concat_tensors'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'concat_tensors'))
 
 
 def test_split_tensor(default_input1):
@@ -192,7 +202,7 @@ def test_split_tensor(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'split_tensors'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'split_tensors'))
 
 
 def test_identity_model(default_input1):
@@ -201,7 +211,7 @@ def test_identity_model(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'identity_model'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'identity_model'))
 
 
 def test_assign_tensor(input_2d):
@@ -210,7 +220,7 @@ def test_assign_tensor(input_2d):
     show_model_graph(model,
                      input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'assigntensor'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'assigntensor'))
 
 
 def test_get_and_set_item(default_input1):
@@ -219,7 +229,7 @@ def test_get_and_set_item(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'get_set_item'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'get_set_item'))
 
 
 def test_getitem_tracking(input_2d):
@@ -228,7 +238,7 @@ def test_getitem_tracking(input_2d):
     show_model_graph(model,
                      input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'getitem_tracking'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'getitem_tracking'))
 
 
 def test_inplace_zero_tensor(default_input1):
@@ -237,7 +247,7 @@ def test_inplace_zero_tensor(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'inplace_zerotensor'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'inplace_zerotensor'))
 
 
 def test_slice_operations(default_input1):
@@ -246,7 +256,7 @@ def test_slice_operations(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'slice_operations'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'slice_operations'))
 
 
 def test_dummy_operations(default_input1):
@@ -255,7 +265,7 @@ def test_dummy_operations(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dummy_operations'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dummy_operations'))
 
 
 def test_sametensor_arg(default_input1):
@@ -264,7 +274,7 @@ def test_sametensor_arg(default_input1):
     show_model_graph(model,
                      default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'same_tensor_arg'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'same_tensor_arg'))
 
 
 def test_multiple_inputs_arg(default_input1, default_input2, default_input3):
@@ -273,7 +283,7 @@ def test_multiple_inputs_arg(default_input1, default_input2, default_input3):
     show_model_graph(model,
                      [default_input1, default_input2, default_input3],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'multiple_inputs_arg'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'multiple_inputs_arg'))
 
 
 def test_multiple_inputs_kwarg(default_input1, default_input2, default_input3):
@@ -283,7 +293,7 @@ def test_multiple_inputs_kwarg(default_input1, default_input2, default_input3):
                      [],
                      {'x': default_input1, 'y': default_input2, 'z': default_input3},
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'multiple_inputs_kwarg'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'multiple_inputs_kwarg'))
 
 
 def test_multiple_inputs_arg_kwarg_mix(default_input1, default_input2, default_input3):
@@ -293,7 +303,7 @@ def test_multiple_inputs_arg_kwarg_mix(default_input1, default_input2, default_i
                      [],
                      {'x': default_input1, 'y': default_input2, 'z': default_input3},
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'multiple_inputs_arg_kwarg_mix'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'multiple_inputs_arg_kwarg_mix'))
 
 
 def test_list_input(default_input1, default_input2, default_input3):
@@ -302,7 +312,7 @@ def test_list_input(default_input1, default_input2, default_input3):
     show_model_graph(model,
                      [[default_input1, default_input2, default_input3]],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'list_inputs'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'list_inputs'))
 
 
 def test_dict_input(default_input1, default_input2, default_input3):
@@ -311,7 +321,7 @@ def test_dict_input(default_input1, default_input2, default_input3):
     show_model_graph(model,
                      [{'x': default_input1, 'y': default_input2, 'z': default_input3}],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dict_inputs'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dict_inputs'))
 
 
 def test_nested_input(default_input1, default_input2, default_input3, default_input4):
@@ -322,7 +332,7 @@ def test_nested_input(default_input1, default_input2, default_input3, default_in
                      [{'list1': [default_input1, default_input2],
                        'list2': [default_input3, default_input4]}],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_inputs'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_inputs'))
 
 
 def test_multi_outputs(default_input1):
@@ -330,7 +340,7 @@ def test_multi_outputs(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'multi_outputs'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'multi_outputs'))
 
 
 def test_list_output(default_input1):
@@ -338,7 +348,7 @@ def test_list_output(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'list_output'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'list_output'))
 
 
 def test_dict_output(default_input1):
@@ -346,7 +356,7 @@ def test_dict_output(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'dict_output'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'dict_output'))
 
 
 def test_nested_output(default_input1):
@@ -354,7 +364,7 @@ def test_nested_output(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_output'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_output'))
 
 
 def test_buffer_model():
@@ -363,11 +373,11 @@ def test_buffer_model():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'buffer_model_visible'),
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'buffer_visible'),
                      vis_buffer_layers=True)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'buffer_model_invisible'),
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'buffer_invisible'),
                      vis_buffer_layers=False)
 
 
@@ -376,7 +386,7 @@ def test_simple_branching(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'simple_branching_model'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'simple_branching'))
 
 
 def test_conditional_branching(zeros_input, ones_input):
@@ -385,10 +395,10 @@ def test_conditional_branching(zeros_input, ones_input):
     assert validate_saved_activations(model, ones_input)
     show_model_graph(model, -ones_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'conditional_branching_model_negative'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'conditional_branching_negative'))
     show_model_graph(model, ones_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'conditional_branching_model_positive'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'conditional_branching_positive'))
 
 
 def test_repeated_module(default_input1):
@@ -396,7 +406,7 @@ def test_repeated_module(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'repeated_module_model'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'repeated_module'))
 
 
 def test_nested_modules(default_input1):
@@ -404,23 +414,23 @@ def test_nested_modules(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_modules_model_fulldepth'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_modules_fulldepth'))
     show_model_graph(model, default_input1,
                      vis_nesting_depth=1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_modules_model_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_modules_depth1'))
     show_model_graph(model, default_input1,
                      vis_nesting_depth=2,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_modules_model_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_modules_depth2'))
     show_model_graph(model, default_input1,
                      vis_nesting_depth=3,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_modules_model_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_modules_depth3'))
     show_model_graph(model, default_input1,
                      vis_nesting_depth=4,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'nested_modules_model_depth4'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'nested_modules_depth4'))
 
 
 def test_orphan_tensors(default_input1):
@@ -428,7 +438,7 @@ def test_orphan_tensors(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'orphan_tensors_model'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'orphan_tensors'))
 
 
 def test_simple_loop_no_param(default_input1):
@@ -436,10 +446,10 @@ def test_simple_loop_no_param(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'simple_loop_no_param_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'simple_loop_no_param_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'simple_loop_no_param_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'simple_loop_no_param_rolled'))
 
 
 def test_same_op_repeat(vector_input):
@@ -447,10 +457,10 @@ def test_same_op_repeat(vector_input):
     assert validate_saved_activations(model, vector_input)
     show_model_graph(model, vector_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'same_op_repeat_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'same_op_repeat_unrolled'))
     show_model_graph(model, vector_input,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'same_op_repeat_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'same_op_repeat_rolled'))
 
 
 def test_repeated_op_type_in_loop(default_input1):
@@ -458,10 +468,10 @@ def test_repeated_op_type_in_loop(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'same_op_type_in_loop_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'same_op_type_in_loop_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'same_op_type_in_loop_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'same_op_type_in_loop_rolled'))
 
 
 def test_varying_loop_noparam1(default_input1):
@@ -469,10 +479,10 @@ def test_varying_loop_noparam1(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'varying_loop_noparam1_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'varying_loop_noparam1_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'varying_loop_noparam1_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'varying_loop_noparam1_rolled'))
 
 
 def test_varying_loop_noparam2(default_input1):
@@ -480,10 +490,10 @@ def test_varying_loop_noparam2(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'varying_loop_noparam2_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'varying_loop_noparam2_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'varying_loop_noparam2_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'varying_loop_noparam2_rolled'))
 
 
 def test_varying_loop_withparam(vector_input):
@@ -491,10 +501,10 @@ def test_varying_loop_withparam(vector_input):
     assert validate_saved_activations(model, vector_input)
     show_model_graph(model, vector_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'varying_loop_withparam_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'varying_loop_withparam_unrolled'))
     show_model_graph(model, vector_input,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'varying_loop_withparam_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'varying_loop_withparam_rolled'))
 
 
 def test_looping_internal_funcs(default_input1):
@@ -502,10 +512,10 @@ def test_looping_internal_funcs(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_internal_funcs_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_internal_funcs_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_internal_funcs_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_internal_funcs_rolled'))
 
 
 def test_looping_from_inputs1(default_input1, default_input2, default_input3):
@@ -513,10 +523,10 @@ def test_looping_from_inputs1(default_input1, default_input2, default_input3):
     assert validate_saved_activations(model, [default_input1, default_input2, default_input3])
     show_model_graph(model, [default_input1, default_input2, default_input3],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_from_inputs1_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_from_inputs1_unrolled'))
     show_model_graph(model, [default_input1, default_input2, default_input3],
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_from_inputs1_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_from_inputs1_rolled'))
 
 
 def test_looping_from_inputs2(default_input1, default_input2, default_input3):
@@ -524,10 +534,10 @@ def test_looping_from_inputs2(default_input1, default_input2, default_input3):
     assert validate_saved_activations(model, [[default_input1, default_input2, default_input3]])
     show_model_graph(model, [[default_input1, default_input2, default_input3]],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_from_inputs2_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_from_inputs2_unrolled'))
     show_model_graph(model, [[default_input1, default_input2, default_input3]],
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_from_inputs2_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_from_inputs2_rolled'))
 
 
 def test_looping_inputs_and_outputs(default_input1, default_input2, default_input3):
@@ -535,10 +545,10 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
     assert validate_saved_activations(model, [[default_input1, default_input2, default_input3]])
     show_model_graph(model, [[default_input1, default_input2, default_input3]],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_inputs_and_outputs_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_inputs_and_outputs_unrolled'))
     show_model_graph(model, [[default_input1, default_input2, default_input3]],
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_inputs_and_outputs_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_inputs_and_outputs_rolled'))
 
 
 def test_stochastic_loop(default_input1):
@@ -546,10 +556,10 @@ def test_stochastic_loop(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'stochastic_loop_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'stochastic_loop_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_rolled'))
 
 
 def test_recurrent_params_simple(input_2d):
@@ -557,10 +567,10 @@ def test_recurrent_params_simple(input_2d):
     assert validate_saved_activations(model, input_2d)
     show_model_graph(model, input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'recurrent_params_simple_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'recurrent_params_simple_unrolled'))
     show_model_graph(model, input_2d,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'recurrent_params_simple_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'recurrent_params_simple_rolled'))
 
 
 def test_recurrent_params_complex(input_2d):
@@ -568,10 +578,10 @@ def test_recurrent_params_complex(input_2d):
     assert validate_saved_activations(model, input_2d)
     show_model_graph(model, input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'recurrent_params_complex_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'recurrent_params_complex_unrolled'))
     show_model_graph(model, input_2d,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'recurrent_params_complex_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'recurrent_params_complex_rolled'))
 
 
 def test_looping_params_doublenested(input_2d):
@@ -579,10 +589,10 @@ def test_looping_params_doublenested(input_2d):
     assert validate_saved_activations(model, input_2d)
     show_model_graph(model, input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_params_doublenested_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_params_doublenested_unrolled'))
     show_model_graph(model, input_2d,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'looping_params_doublenested_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_params_doublenested_rolled'))
 
 
 def test_module_looping_clash1(default_input1):
@@ -590,10 +600,10 @@ def test_module_looping_clash1(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash1_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'module_looping_clash1_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash1_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'module_looping_clash1_rolled'))
 
 
 def test_module_looping_clash2(default_input1):
@@ -601,10 +611,10 @@ def test_module_looping_clash2(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash2_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'module_looping_clash2_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash2_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'module_looping_clash2_rolled'))
 
 
 def test_module_looping_clash3(default_input1):
@@ -612,10 +622,10 @@ def test_module_looping_clash3(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash3_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'module_looping_clash3_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'module_looping_clash3_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'module_looping_clash3_rolled'))
 
 
 def test_ubermodel1(input_2d):
@@ -623,7 +633,7 @@ def test_ubermodel1(input_2d):
     assert validate_saved_activations(model, [[input_2d, input_2d * 2, input_2d * 3]])
     show_model_graph(model, [[input_2d, input_2d * 2, input_2d * 3]],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel1'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel1'))
 
 
 def test_ubermodel2():
@@ -632,7 +642,7 @@ def test_ubermodel2():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel2'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel2'))
 
 
 def test_ubermodel3(input_2d):
@@ -640,10 +650,10 @@ def test_ubermodel3(input_2d):
     assert validate_saved_activations(model, input_2d)
     show_model_graph(model, input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel3_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel3_unrolled'))
     show_model_graph(model, input_2d,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel3_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel3_rolled'))
 
 
 def test_ubermodel4(input_2d):
@@ -651,10 +661,10 @@ def test_ubermodel4(input_2d):
     assert validate_saved_activations(model, input_2d)
     show_model_graph(model, input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel4_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel4_unrolled'))
     show_model_graph(model, input_2d,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel4_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel4_rolled'))
 
 
 def test_ubermodel5():
@@ -663,7 +673,7 @@ def test_ubermodel5():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel5'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel5'))
 
 
 def test_ubermodel6(default_input1):
@@ -671,10 +681,10 @@ def test_ubermodel6(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel6_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel6_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel6_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel6_rolled'))
 
 
 def test_ubermodel7(input_2d):
@@ -682,10 +692,10 @@ def test_ubermodel7(input_2d):
     assert validate_saved_activations(model, input_2d)
     show_model_graph(model, input_2d,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel7_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel7_unrolled'))
     show_model_graph(model, input_2d,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel7_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel7_rolled'))
 
 
 def test_ubermodel8():
@@ -694,7 +704,7 @@ def test_ubermodel8():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel8'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel8'))
 
 
 def test_ubermodel9():
@@ -703,7 +713,7 @@ def test_ubermodel9():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ubermodel9'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'ubermodel9'))
 
 
 # Torchvision Main Models
@@ -713,23 +723,23 @@ def test_alexnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'alexnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'alexnet'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'alexnet_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'alexnet_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'alexnet_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'alexnet_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'alexnet_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'alexnet_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=4,
-                     vis_outpath=opj('visualization_outputs', 'alexnet_depth4'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'alexnet_depth4'))
 
 
 def test_googlenet(default_input1):
@@ -738,55 +748,55 @@ def test_googlenet(default_input1):
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_showbuffer'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_showbuffer'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=False,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_nobuffer'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_buffer_layers=False,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_nobuffer_rolled'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_showbuffer_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_showbuffer_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=False,
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_nobuffer_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_showbuffer_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_showbuffer_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=False,
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_nobuffer_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_showbuffer_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_showbuffer_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=False,
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_nobuffer_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=True,
                      vis_nesting_depth=4,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_showbuffer_depth4'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_showbuffer_depth4'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_buffer_layers=False,
                      vis_nesting_depth=4,
-                     vis_outpath=opj('visualization_outputs', 'googlenet_nobuffer_depth4'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'googlenet_nobuffer_depth4'))
 
 
 def test_vgg16(default_input1):
@@ -794,7 +804,7 @@ def test_vgg16(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'vgg16'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'vgg16'))
 
 
 def test_vgg19(default_input1):
@@ -802,7 +812,7 @@ def test_vgg19(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'vgg19'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'vgg19'))
 
 
 def test_resnet50(default_input1):
@@ -810,7 +820,7 @@ def test_resnet50(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'resnet50'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'resnet50'))
 
 
 def test_resnet101(default_input1):
@@ -818,7 +828,7 @@ def test_resnet101(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'resnet101'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'resnet101'))
 
 
 def test_resnet152(default_input1):
@@ -826,7 +836,7 @@ def test_resnet152(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'resnet152'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'resnet152'))
 
 
 def test_convnext_large(default_input1):
@@ -834,7 +844,7 @@ def test_convnext_large(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'convnext'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'convnext'))
 
 
 def test_densenet121(default_input1):
@@ -842,23 +852,23 @@ def test_densenet121(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'densenet121'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'densenet121'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'densenet121_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'densenet121_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'densenet121_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'densenet121_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'densenet121_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'densenet121_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=4,
-                     vis_outpath=opj('visualization_outputs', 'densenet121_depth4'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'densenet121_depth4'))
 
 
 def test_efficientnet_b6(default_input1):
@@ -866,7 +876,7 @@ def test_efficientnet_b6(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'efficientnet_b6'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'efficientnet_b6'))
 
 
 def test_squeezenet(default_input1):
@@ -874,7 +884,7 @@ def test_squeezenet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'squeezenet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'squeezenet'))
 
 
 def test_mobilenet(default_input1):
@@ -882,7 +892,7 @@ def test_mobilenet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'mobilenet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'mobilenet'))
 
 
 def test_wide_resnet(default_input1):
@@ -890,7 +900,7 @@ def test_wide_resnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'wide_resnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'wide_resnet'))
 
 
 def test_mnasnet(default_input1):
@@ -898,7 +908,7 @@ def test_mnasnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'mnasnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'mnasnet'))
 
 
 def test_shufflenet(default_input1):
@@ -906,7 +916,7 @@ def test_shufflenet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'shufflenet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'shufflenet'))
 
 
 def test_resnext(default_input1):
@@ -914,7 +924,7 @@ def test_resnext(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'resnext'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'resnext'))
 
 
 def test_regnet(default_input1):
@@ -922,7 +932,7 @@ def test_regnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'regnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'regnet'))
 
 
 def test_swin_v2b(default_input1):
@@ -930,7 +940,7 @@ def test_swin_v2b(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'swin_v2b'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'swin_v2b'))
 
 
 def test_vit(default_input1):
@@ -938,7 +948,7 @@ def test_vit(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'vit_l_16'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'vit_l_16'))
 
 
 def test_maxvit(default_input1):
@@ -946,7 +956,7 @@ def test_maxvit(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'max_vit'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'max_vit'))
 
 
 def test_inception_v3():
@@ -955,7 +965,7 @@ def test_inception_v3():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'inception_v3'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'inception_v3'))
 
 
 # Cornet Models
@@ -965,34 +975,34 @@ def test_cornet_s(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_rolled'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_unrolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_unrolled_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_rolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_rolled_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_unrolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_unrolled_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_rolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_rolled_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_unrolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_unrolled_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_s_rolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_s_rolled_depth3'))
 
 
 def test_cornet_r(default_input1):
@@ -1000,34 +1010,34 @@ def test_cornet_r(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_rolled'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_unrolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_unrolled_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_rolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_rolled_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_unrolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_unrolled_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_rolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_rolled_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_unrolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_unrolled_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_r_rolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_r_rolled_depth3'))
 
 
 def test_cornet_rt():
@@ -1036,34 +1046,34 @@ def test_cornet_rt():
     assert validate_saved_activations(model, model_input)
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_unrolled'))
     show_model_graph(model, model_input,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_rolled'))
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_unrolled_depth1'))
     show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_rolled_depth1'))
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_unrolled_depth2'))
     show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_rolled_depth2'))
     show_model_graph(model, model_input,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_unrolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_unrolled_depth3'))
     show_model_graph(model, model_input,
                      vis_opt='rolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_rt_rolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_rt_rolled_depth3'))
 
 
 def test_cornet_z(default_input1):
@@ -1071,76 +1081,87 @@ def test_cornet_z(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_unrolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_unrolled'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_rolled'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_unrolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_unrolled_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=1,
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_rolled_depth1'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_rolled_depth1'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_unrolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_unrolled_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=2,
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_rolled_depth2'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_rolled_depth2'))
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_unrolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_unrolled_depth3'))
     show_model_graph(model, default_input1,
                      vis_opt='rolled',
                      vis_nesting_depth=3,
-                     vis_outpath=opj('visualization_outputs', 'cornet_z_rolled_depth3'))
+                     vis_outpath=opj('visualization_outputs', 'cornet', 'cornet_z_rolled_depth3'))
 
 
 # Torchvision Segmentation Models
-
-def test_deeplabv3_mobilenet(default_input1):
-    model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large()
-    assert validate_saved_activations(model, default_input1)
-    show_model_graph(model, default_input1,
-                     vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'deeplabv3_mobilenet'))
-
-
-def test_deeplabv3_resnet50(default_input1):
+def test_segment_deeplab_v3_resnet50(default_input1):
     model = torchvision.models.segmentation.deeplabv3_resnet50()
-    assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'deeplabv3_resnet50'))
-
-
-def test_fcn_resnet101(default_input1):
-    model = torchvision.models.segmentation.fcn_resnet101()
+                     vis_outpath=opj('visualization_outputs', 'torchvision-segmentation',
+                                     'segment_deeplab_v3_resnet50'))
     assert validate_saved_activations(model, default_input1)
+
+
+def test_segment_deeplabv3_resnet101(default_input1):
+    model = torchvision.models.segmentation.deeplabv3_resnet101()
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fcn_resnet101'))
-
-
-def test_fcn_resnet101(default_input1):
-    model = torchvision.models.segmentation.fcn_resnet101()
+                     vis_outpath=opj('visualization_outputs', 'torchvision-segmentation',
+                                     'segment_deeplabv3_resnet101'))
     assert validate_saved_activations(model, default_input1)
+
+
+def test_segment_deeplabv3_mobilenet(default_input1):
+    model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large()
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fcn_resnet101'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-segmentation',
+                                     'segment_deeplabv3_mobilenet_v3_large'))
+    assert validate_saved_activations(model, default_input1)
 
 
-def test_lraspp_mobilenet(default_input1):
+def test_segment_lraspp_mobilenet(default_input1):
     model = torchvision.models.segmentation.lraspp_mobilenet_v3_large()
-    assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'lraspp_mobilenet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-segmentation',
+                                     'segment_lraspp_mobilenet_v3_large'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_segment_fcn_resnet50(default_input1):
+    model = torchvision.models.segmentation.fcn_resnet50()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-segmentation', 'segment_fcn_resnet50'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_segment_fcn_resnet101(default_input1):
+    model = torchvision.models.segmentation.fcn_resnet101()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-segmentation', 'segment_fcn_resnet101'))
+    assert validate_saved_activations(model, default_input1)
 
 
 # Torchvision Detection Models
@@ -1153,7 +1174,8 @@ def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fasterrcnn_mobilenet_v3_large_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'fasterrcnn_mobilenet_v3_large_train'))
     assert validate_saved_activations(model, model_inputs)
 
 
@@ -1163,7 +1185,8 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fasterrcnn_mobilenet_v3_large_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'fasterrcnn_mobilenet_v3_large_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1181,7 +1204,7 @@ def test_maskrcnn_resnet50_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'maskrcnn_resnet50_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'maskrcnn_resnet50_train'))
     assert validate_saved_activations(model, model_inputs, random_seed=0)
 
 
@@ -1191,7 +1214,7 @@ def test_maskrcnn_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fmaskrcnn_resnet50_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'fmaskrcnn_resnet50_eval'))
     assert validate_saved_activations(model, [input_tensors], random_seed=0)
 
 
@@ -1203,8 +1226,9 @@ def test_fcos_resnet50_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fcos_resnet50_train'))
-    assert validate_saved_activations(model, model_inputs)
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'fcos_resnet50_train'),
+                     random_seed=1)
+    assert validate_saved_activations(model, model_inputs, random_seed=1)
 
 
 def test_fcos_resnet50_eval(default_input1, default_input2):
@@ -1213,7 +1237,7 @@ def test_fcos_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'fcos_resnet50_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'fcos_resnet50_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1225,7 +1249,7 @@ def test_retinanet_resnet50_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'retinanet_resnet50_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'retinanet_resnet50_train'))
     assert validate_saved_activations(model, model_inputs)
 
 
@@ -1235,7 +1259,7 @@ def test_retinanet_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'retinanet_resnet50_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'retinanet_resnet50_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1247,7 +1271,7 @@ def test_ssd300_vgg16_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ssd300_vgg16_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'ssd300_vgg16_train'))
     assert validate_saved_activations(model, model_inputs)
 
 
@@ -1257,7 +1281,7 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'ssd300_vgg16_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'ssd300_vgg16_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1267,6 +1291,231 @@ def test_keypointrcnn_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'keypointrcnn_resnet50_eval'),
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'keypointrcnn_resnet50_eval'),
                      save_only=True)
-    assert validate_saved_activations(model, [input_tensors])
+
+
+def test_keypointrcnn_resnet50_train(default_input1, default_input2):
+    model = torchvision.models.detection.keypointrcnn_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'keypointrcnn_resnet50_train'),
+                     save_only=True)
+
+
+def test_quantize_resnet50(default_input1):
+    model = torchvision.models.quantization.resnet50()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-quantize', 'quantize_resnet50'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_quantize_resnext101_64x4d(default_input1):
+    model = torchvision.models.quantization.resnext101_64x4d()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-quantize', 'quantize_resnetx101_64x4d'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_quantize_shufflenet_v2_1x(default_input1):
+    model = torchvision.models.quantization.shufflenet_v2_x1_5()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-quantize', 'quantize_shufflenet_v2_x1_5'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_quantize_mobilenet_v3_large(default_input1):
+    model = torchvision.models.quantization.mobilenet_v3_large()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-quantize', 'quantize_mobilenet_v3_large'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_quantize_googlenet(default_input1):
+    model = torchvision.models.quantization.googlenet()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-quantize', 'quantize_googlenet'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_quantize_inception_v3():
+    model = torchvision.models.quantization.inception_v3()
+    model_input = torch.randn(2, 3, 299, 299)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-quantize', 'quantize_inception_v3'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_taskonomy(default_input1):
+    model = visualpriors.taskonomy_network.TaskonomyNetwork()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'taskonomy', 'taskonomy'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_video_mc3_18():
+    model = torchvision.models.video.mc3_18()
+    model_input = torch.randn(6, 3, 16, 112, 112)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_mc3_18'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_video_mvit_v1_b():
+    model = torchvision.models.video.mvit_v1_b()
+    model_input = torch.randn(4, 3, 448, 896)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_mvit_v1_b'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_video_mvit_v2_s():
+    model = torchvision.models.video.mvit_v2_s()
+    model_input = torch.randn(16, 3, 448, 896)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_mvit_v2_s'))
+
+
+def test_video_r2plus1_18():
+    model = torchvision.models.video.r2plus1d_18()
+    model_input = torch.randn(16, 3, 16, 112, 112)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_r2plus1d_18'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_video_r3d_18():
+    model = torchvision.models.video.r3d_18()
+    model_input = torch.randn(16, 3, 16, 112, 112)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_r3d_18'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_video_s3d():
+    model = torchvision.models.video.s3d()
+    model_input = torch.randn(16, 3, 16, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_s3d'))
+    assert validate_saved_activations(model, model_input)
+
+
+# Optic flow models
+
+def test_opticflow_raftsmall():
+    model = torchvision.models.optical_flow.raft_small()
+    model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-opticflow', 'opticflow_raftsmall'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_opticflow_raftlarge():
+    model = torchvision.models.optical_flow.raft_large()
+    model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]
+    show_model_graph(model, model_input,
+                     random_seed=1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchvision-opticflow', 'opticflow_raftlarge'))
+    assert validate_saved_activations(model, model_input, random_seed=1)
+
+
+# Torchaudio next
+
+def test_audio_conv_tasnet_base():
+    model = torchaudio.models.conv_tasnet_base()
+    model_input = torch.randn(6, 1, 3)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_conv_tasnet_base'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_audio_hubert_base():
+    model = torchaudio.models.hubert_base()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_hubert_base'), random_seed=1)
+    assert validate_saved_activations(model, model_input, random_seed=1)
+
+
+def test_audio_hubert_large():
+    model = torchaudio.models.hubert_large()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_hubert_large'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_audio_hubert_xlarge():
+    model = torchaudio.models.hubert_xlarge()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_hubert_xlarge'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_audio_wav2vec2_base():
+    model = torchaudio.models.wav2vec2_base()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_wave2vec2_base'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_audio_wav2vec2_large():
+    model = torchaudio.models.wav2vec2_large()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_wave2vec2_large'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_audio_wav2vec2_large_lv60k():
+    model = torchaudio.models.wav2vec2_large_lv60k()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_wave2vec2_large_lv60k'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_audio_wav2letter():
+    model = torchaudio.models.Wav2Letter()
+    model_input = torch.randn(1, 1, 2000)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_wav2letter'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_deepspeech():
+    model = torchaudio.models.DeepSpeech(3)
+    model_input = torch.randn(12, 2000, 3)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_deepspeech'))
+    assert validate_saved_activations(model, model_input)
