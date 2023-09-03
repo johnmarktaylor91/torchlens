@@ -761,8 +761,8 @@ class StochasticLoop(nn.Module):
     @staticmethod
     def forward(x):
         while True:
-            x = x + torch.rand(x.shape)
-            if torch.mean(x) > 0:
+            x = x + torch.rand(x.shape).abs()
+            if torch.mean(x) > 100:
                 break
         x = x * 2
         return x

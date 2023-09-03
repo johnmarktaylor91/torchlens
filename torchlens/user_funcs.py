@@ -239,7 +239,8 @@ def validate_saved_activations(model: nn.Module,
         input_kwargs = {}
     input_args_copy = [copy.deepcopy(arg) for arg in input_args]
     input_kwargs_copy = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
-    ground_truth_output_tensors = get_vars_of_type_from_obj(model(*input_args_copy, **input_kwargs_copy), torch.Tensor)
+    ground_truth_output_tensors = get_vars_of_type_from_obj(model(*input_args_copy, **input_kwargs_copy), torch.Tensor,
+                                                            search_depth=5)
     model_history = run_model_and_save_specified_activations(model=model,
                                                              input_args=input_args,
                                                              input_kwargs=input_kwargs,

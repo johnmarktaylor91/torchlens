@@ -4887,6 +4887,10 @@ class ModelHistory:
               torch.equal(self[layers_to_perturb[0]].tensor_contents,
                           layer_to_validate_parents_for.creation_args[1])):
             return True
+        elif (perturb and (layer_to_validate_parents_for.func_applied_name == 'cross_entropy') and
+              torch.equal(self[layers_to_perturb[0]].tensor_contents,
+                          layer_to_validate_parents_for.creation_args[1])):
+            return True
         elif (perturb and (layer_to_validate_parents_for.func_applied_name == '__setitem__') and
               (type(layer_to_validate_parents_for.creation_args[1]) == tuple) and
               (type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor) and
@@ -5029,18 +5033,24 @@ class ModelHistory:
                                                           size=parent_activations.shape,
                                                           device=device).type(parent_activations.dtype)
             else:
-                perturbed_activations = torch.randint(-10, 11, size=parent_activations.shape,
-                                                      device=device).type(parent_activations.dtype)
+                if torch.min(parent_activations) < 0:
+                    perturbed_activations = torch.randint(-10, 11, size=parent_activations.shape,
+                                                          device=device).type(parent_activations.dtype)
+                else:
+                    perturbed_activations = torch.randint(0, 11, size=parent_activations.shape,
+                                                          device=device).type(parent_activations.dtype)
+
         elif parent_activations.dtype == torch.bool:
             perturbed_activations = parent_activations.detach().clone()
             while torch.equal(perturbed_activations, parent_activations):
                 perturbed_activations = torch.randint(0, 2, size=parent_activations.shape, device=device).bool()
         else:
-            mean_output = output_activations.detach().float().abs().mean()
-            mean_output += torch.rand(mean_output.shape) * 100
-            mean_output.requires_grad = False
+            mean_output_sqrt = output_activations.detach().float().abs().mean()
+            mean_output_sqrt += torch.rand(mean_output_sqrt.shape) * 100
+            mean_output_sqrt *= torch.rand(mean_output_sqrt.shape)
+            mean_output_sqrt.requires_grad = False
             perturbed_activations = (torch.randn_like(parent_activations.float(),
-                                                      device=device) * mean_output.to(device))
+                                                      device=device) * mean_output_sqrt.to(device))
             perturbed_activations = perturbed_activations.type(parent_activations.dtype)
 
         return perturbed_activations
@@ -5082,6 +5092,9 @@ class ModelHistory:
             return True
         elif ((layer_to_validate_parents_for.func_applied_name == 'max') and
               len(layer_to_validate_parents_for.creation_args) > 1):
+            return True
+        elif ((layer_to_validate_parents_for.func_applied_name == 'max') and
+              not torch.is_floating_point(layer_to_validate_parents_for.creation_args[0])):
             return True
         else:
             num_inf = torch.isinf(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()

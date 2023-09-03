@@ -3,23 +3,42 @@
 
 import os
 from os.path import join as opj
+
+import cornet
 import pytest
+import requests
+import timm.models
 import torch
 import torchaudio.models
 import torchvision
-import example_models
 import visualpriors
+from PIL import Image
+from transformers import BertForNextSentencePrediction, BertTokenizer, GPT2Model, \
+    GPT2Tokenizer
+from torch_geometric.datasets import QM9
+from torch_geometric.nn import DimeNet
 
-import cornet
-from torchlens import log_forward_pass, show_model_graph, validate_saved_activations
+import example_models
+from torchlens import show_model_graph, validate_saved_activations
 
 # Define inputs
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 
-sub_dirs = ['toy-networks', 'torchvision-main', 'torchvision-detection',
-            'torchvision-opticflow', 'torchvision-segmentation', 'torchvision-video', 'torchaudio',
-            'torchvision-quantize', 'cornet', 'taskonomy']
+sub_dirs = ['cornet',
+            'graph-neural-networks',
+            'language-models',
+            'multimodal-models',
+            'taskonomy',
+            'timm',
+            'torchaudio',
+            'torchvision-main',
+            'torchvision-detection',
+            'torchvision-opticflow',
+            'torchvision-segmentation',
+            'torchvision-video',
+            'torchvision-quantize',
+            'taskonomy']
 
 for sub_dir in sub_dirs:
     os.makedirs(opj('visualization_outputs', sub_dir), exist_ok=True)
@@ -551,15 +570,28 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
                      vis_outpath=opj('visualization_outputs', 'toy-networks', 'looping_inputs_and_outputs_rolled'))
 
 
-def test_stochastic_loop(default_input1):
+def test_stochastic_loop():
     model = example_models.StochasticLoop()
-    assert validate_saved_activations(model, default_input1)
-    show_model_graph(model, default_input1,
+    model_input = torch.zeros(2, 2)
+    assert validate_saved_activations(model, model_input)
+    show_model_graph(model, model_input,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_unrolled'))
-    show_model_graph(model, default_input1,
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_unrolled1'))
+    show_model_graph(model, model_input,
                      vis_opt='rolled',
-                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_rolled'))
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_rolled1'))
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_unrolled2'))
+    show_model_graph(model, model_input,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_rolled2'))
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_unrolled3'))
+    show_model_graph(model, model_input,
+                     vis_opt='rolled',
+                     vis_outpath=opj('visualization_outputs', 'toy-networks', 'stochastic_loop_rolled3'))
 
 
 def test_recurrent_params_simple(input_2d):
@@ -844,7 +876,7 @@ def test_convnext_large(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'convnext'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'convnext_large'))
 
 
 def test_densenet121(default_input1):
@@ -892,7 +924,7 @@ def test_mobilenet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'mobilenet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'mobilenet_vg_large'))
 
 
 def test_wide_resnet(default_input1):
@@ -900,7 +932,7 @@ def test_wide_resnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'wide_resnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'wide_resnet101_2'))
 
 
 def test_mnasnet(default_input1):
@@ -908,7 +940,7 @@ def test_mnasnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'mnasnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'mnasnet1_3'))
 
 
 def test_shufflenet(default_input1):
@@ -916,7 +948,7 @@ def test_shufflenet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'shufflenet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'shufflenet_v2_x1_5'))
 
 
 def test_resnext(default_input1):
@@ -924,7 +956,7 @@ def test_resnext(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'resnext'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'resnext101_64x4d'))
 
 
 def test_regnet(default_input1):
@@ -932,7 +964,7 @@ def test_regnet(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'regnet'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'regnet_x_32gf'))
 
 
 def test_swin_v2b(default_input1):
@@ -956,7 +988,7 @@ def test_maxvit(default_input1):
     assert validate_saved_activations(model, default_input1)
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'max_vit'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-main', 'max_vit_t'))
 
 
 def test_inception_v3():
@@ -1117,7 +1149,7 @@ def test_segment_deeplab_v3_resnet50(default_input1):
     show_model_graph(model, default_input1,
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'torchvision-segmentation',
-                                     'segment_deeplab_v3_resnet50'))
+                                     'segment_deeplabv3_resnet50'))
     assert validate_saved_activations(model, default_input1)
 
 
@@ -1175,7 +1207,7 @@ def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'torchvision-detection',
-                                     'fasterrcnn_mobilenet_v3_large_train'))
+                                     'detect_fasterrcnn_mobilenet_v3_large_320_fpn_train'))
     assert validate_saved_activations(model, model_inputs)
 
 
@@ -1186,7 +1218,7 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'torchvision-detection',
-                                     'fasterrcnn_mobilenet_v3_large_eval'))
+                                     'detect_fasterrcnn_mobilenet_v3_large_320_fpn_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1204,7 +1236,8 @@ def test_maskrcnn_resnet50_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'maskrcnn_resnet50_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_maskrcnn_resnet50_fpn_train'))
     assert validate_saved_activations(model, model_inputs, random_seed=0)
 
 
@@ -1213,8 +1246,10 @@ def test_maskrcnn_resnet50_eval(default_input1, default_input2):
     input_tensors = [default_input1[0], default_input2[0]]
     model = model.eval()
     show_model_graph(model, [input_tensors],
+                     random_seed=1,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'fmaskrcnn_resnet50_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_maskrcnn_resnet50_fpn_eval'))
     assert validate_saved_activations(model, [input_tensors], random_seed=0)
 
 
@@ -1226,7 +1261,8 @@ def test_fcos_resnet50_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'fcos_resnet50_train'),
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_fcos_resnet50_fpn_train'),
                      random_seed=1)
     assert validate_saved_activations(model, model_inputs, random_seed=1)
 
@@ -1237,7 +1273,7 @@ def test_fcos_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'fcos_resnet50_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'detect_fcos_resnet50_fpn_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1249,7 +1285,8 @@ def test_retinanet_resnet50_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'retinanet_resnet50_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_retinanet_resnet50_fpn_train'))
     assert validate_saved_activations(model, model_inputs)
 
 
@@ -1259,7 +1296,8 @@ def test_retinanet_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'retinanet_resnet50_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_retinanet_resnet50_fpn_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1271,7 +1309,7 @@ def test_ssd300_vgg16_train(default_input1, default_input2):
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'ssd300_vgg16_train'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'detect_ssd300_vgg16_train'))
     assert validate_saved_activations(model, model_inputs)
 
 
@@ -1281,7 +1319,7 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'ssd300_vgg16_eval'))
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'detect_ssd300_vgg16_eval'))
     assert validate_saved_activations(model, [input_tensors])
 
 
@@ -1291,19 +1329,23 @@ def test_keypointrcnn_resnet50_eval(default_input1, default_input2):
     model = model.eval()
     show_model_graph(model, [input_tensors],
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'keypointrcnn_resnet50_eval'),
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_keypointrcnn_resnet50_fpn_eval'),
                      save_only=True)
 
 
 def test_keypointrcnn_resnet50_train(default_input1, default_input2):
     model = torchvision.models.detection.keypointrcnn_resnet50_fpn()
     input_tensors = [default_input1[0], default_input2[0]]
-    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])},
-               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([1, 2])}]
+    targets = [{'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([0, 1]),
+                'scores': torch.tensor([0.9, 0.8]), 'keypoints': torch.rand(2, 17, 3)},
+               {'boxes': torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]), 'labels': torch.tensor([0, 1]),
+                'scores': torch.tensor([0.9, 0.8]), 'keypoints': torch.rand(2, 17, 3)}]
     model_inputs = (input_tensors, targets)
     show_model_graph(model, model_inputs,
                      vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-detection', 'keypointrcnn_resnet50_train'),
+                     vis_outpath=opj('visualization_outputs', 'torchvision-detection',
+                                     'detect_keypointrcnn_resnet50_fpn_train'),
                      save_only=True)
 
 
@@ -1373,15 +1415,6 @@ def test_video_mc3_18():
     assert validate_saved_activations(model, model_input)
 
 
-def test_video_mvit_v1_b():
-    model = torchvision.models.video.mvit_v1_b()
-    model_input = torch.randn(4, 3, 448, 896)
-    show_model_graph(model, model_input,
-                     vis_opt='unrolled',
-                     vis_outpath=opj('visualization_outputs', 'torchvision-video', 'video_mvit_v1_b'))
-    assert validate_saved_activations(model, model_input)
-
-
 def test_video_mvit_v2_s():
     model = torchvision.models.video.mvit_v2_s()
     model_input = torch.randn(16, 3, 448, 896)
@@ -1438,7 +1471,165 @@ def test_opticflow_raftlarge():
     assert validate_saved_activations(model, model_input, random_seed=1)
 
 
-# Torchaudio next
+# TIMM models
+
+def test_timm_adv_inception_v3(default_input1):
+    model = timm.models.adv_inception_v3(pretrained=True)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_adv_inception_v3'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_timm_beit_base_patch16_224(default_input1):
+    model = timm.models.beit_base_patch16_224()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_beit_base_patch16_224'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_timm_beit_base_patch16_224_in22k(default_input1):
+    model = timm.models.beit_base_patch16_224_in22k()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_beit_base_patch16_224_in22k'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_timm_cait_s24_224(default_input1):
+    model = timm.models.cait_s24_224()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_cait_s24_224'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_timm_coat_mini(default_input1):
+    model = timm.models.coat_mini()
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_coat_mini'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_timm_convit_base(default_input1):
+    model = timm.create_model('convit_base', pretrained=True)
+    show_model_graph(model, default_input1,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_convit_base'))
+    assert validate_saved_activations(model, default_input1)
+
+
+def test_timm_darknet21():
+    model = timm.create_model('darknet21', pretrained=True)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_darknet21'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_ghostnet_100():
+    model = timm.create_model('ghostnet_100', pretrained=True)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_ghostnet_100'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_mixnet_m():
+    model = timm.create_model('mixnet_m', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_mixnet_m'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_poolformer_s24():
+    model = timm.create_model('poolformer_s24', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_poolformer_s24'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_resnest14d():
+    model = timm.create_model('resnest14d', pretrained=False)
+    model_input = torch.randn(6, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_resnest14d'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_edgenext_small():
+    model = timm.create_model('edgenext_small', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'timm_edgenext_small'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_gluon_resnext101_32x4d():
+    model = timm.create_model('gluon_resnext101_32x4d', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'gluon_resnext101_32x4d'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_hardcorenas_f():
+    model = timm.create_model('hardcorenas_f', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'hardcorenas_f'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_semnasnet_100():
+    model = timm.create_model('semnasnet_100', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'semnasnet_100'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_xcit_tiny_24_p8_224():
+    model = timm.create_model('xcit_tiny_24_p8_224', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'xcit_tiny_24_p8_224'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_seresnet152():
+    model = timm.create_model('seresnet152', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'seresnet152'))
+    assert validate_saved_activations(model, model_input)
+
+
+def test_timm_ecaresnet101d():
+    model = timm.create_model('ecaresnet101d', pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(model, model_input,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'timm', 'ecaresnet101d'))
+    assert validate_saved_activations(model, model_input)
+
+
+# Torchaudio
 
 def test_audio_conv_tasnet_base():
     model = torchaudio.models.conv_tasnet_base()
@@ -1519,3 +1710,62 @@ def test_deepspeech():
                      vis_opt='unrolled',
                      vis_outpath=opj('visualization_outputs', 'torchaudio', 'audio_deepspeech'))
     assert validate_saved_activations(model, model_input)
+
+
+# Language models
+
+def test_gpt2():
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    model = GPT2Model.from_pretrained("gpt2")
+    model_inputs = ['to be or not to be', 'that is the question']
+    model_inputs = tokenizer(*model_inputs, return_tensors='pt')
+    show_model_graph(model, [], model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'language-models', 'gpt2'))
+    assert validate_saved_activations(model, [], model_inputs)
+
+
+def test_bert():
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    model = BertForNextSentencePrediction.from_pretrained("bert-base-uncased")
+    model_inputs = ('to be or not to be', 'that is the question')
+    model_inputs = tokenizer(*model_inputs, return_tensors='pt')
+    model_inputs['labels'] = torch.LongTensor([1])
+    show_model_graph(model, [], model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'language-models', 'bert'))
+    assert validate_saved_activations(model, [], model_inputs)
+
+
+# Multimodal
+
+def test_clip():
+    from transformers import CLIPModel, CLIPProcessor
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    url = "http://images.cocodataset.org/val2017/000000039769.jpg"
+    image = Image.open(requests.get(url, stream=True).raw)
+    model_inputs = processor(text=["a photo of a cat", "a photo of a dog"], images=image, return_tensors="pt",
+                             padding=True)
+    show_model_graph(model, [], model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'multimodal-models', 'clip'))
+    assert validate_saved_activations(model, [], model_inputs)
+
+
+# Graph neural networks
+
+def test_dimenet():
+    model = DimeNet(6, 3, 4, 2, 6, 3)
+    z = torch.tensor([6, 1, 1, 1, 1])
+    pose = torch.tensor([[-1.2700e-02, 1.0858e+00, 8.0000e-03],
+                         [2.2000e-03, -6.0000e-03, 2.0000e-03],
+                         [1.0117e+00, 1.4638e+00, 3.0000e-04],
+                         [-5.4080e-01, 1.4475e+00, -8.7660e-01],
+                         [-5.2380e-01, 1.4379e+00, 9.0640e-01]])
+    batch = None
+    model_inputs = (z, pose, batch)
+    show_model_graph(model, model_inputs,
+                     vis_opt='unrolled',
+                     vis_outpath=opj('visualization_outputs', 'graph-neural-networks', 'dimenet'))
+    assert validate_saved_activations(model, model_inputs)

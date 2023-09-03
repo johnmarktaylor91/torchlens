@@ -389,6 +389,9 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -
     if t1.dtype != t2.dtype:
         return False
 
+    if not torch.equal(t1.isinf(), t2.isinf()):
+        return False
+
     t1_nonan = torch.nan_to_num(t1, .7234691827346)
     t2_nonan = torch.nan_to_num(t2, .7234691827346)
 
