@@ -1,6 +1,5 @@
 numpy
 pandas
-pytest
 torch
 torchvision
 tqdm
