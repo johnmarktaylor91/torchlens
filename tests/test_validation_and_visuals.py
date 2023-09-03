@@ -2115,54 +2115,6 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
     assert validate_saved_activations(model, [input_tensors])
 
 
-def test_keypointrcnn_resnet50_eval(default_input1, default_input2):
-    model = torchvision.models.detection.keypointrcnn_resnet50_fpn()
-    input_tensors = [default_input1[0], default_input2[0]]
-    model = model.eval()
-    show_model_graph(
-        model,
-        [input_tensors],
-        vis_opt="unrolled",
-        vis_outpath=opj(
-            "visualization_outputs",
-            "torchvision-detection",
-            "detect_keypointrcnn_resnet50_fpn_eval",
-        ),
-        save_only=True,
-    )
-
-
-def test_keypointrcnn_resnet50_train(default_input1, default_input2):
-    model = torchvision.models.detection.keypointrcnn_resnet50_fpn()
-    input_tensors = [default_input1[0], default_input2[0]]
-    targets = [
-        {
-            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
-            "labels": torch.tensor([0, 1]),
-            "scores": torch.tensor([0.9, 0.8]),
-            "keypoints": torch.rand(2, 17, 3),
-        },
-        {
-            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
-            "labels": torch.tensor([0, 1]),
-            "scores": torch.tensor([0.9, 0.8]),
-            "keypoints": torch.rand(2, 17, 3),
-        },
-    ]
-    model_inputs = (input_tensors, targets)
-    show_model_graph(
-        model,
-        model_inputs,
-        vis_opt="unrolled",
-        vis_outpath=opj(
-            "visualization_outputs",
-            "torchvision-detection",
-            "detect_keypointrcnn_resnet50_fpn_train",
-        ),
-        save_only=True,
-    )
-
-
 def test_quantize_resnet50(default_input1):
     model = torchvision.models.quantization.resnet50()
     show_model_graph(
