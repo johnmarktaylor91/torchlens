@@ -1,0 +1,24 @@
+name: Lint
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: "${{ github.head_ref || github.ref }}-lint-and-test"
+  cancel-in-progress: true
+
+jobs:
+  #   flake8:
+  #     runs-on: ubuntu-latest
+  #     container: python:3.8.5-slim-buster
+  #     steps:
+  #       - uses: actions/checkout@v2
+  #       - run: pip install flake8
+  #       - run: flake8 . --show-source
+  black:
+    runs-on: ubuntu-latest
+    container: python:3.9-slim
+    steps:
+      - uses: actions/checkout@v2
+      - run: pip install black
+      - run: black --check .
