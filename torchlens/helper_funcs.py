@@ -13,7 +13,7 @@ import torch
 from IPython import get_ipython
 from torch import nn
 
-MAX_FLOATING_POINT_TOLERANCE = 5.5879e-09 + .0000001
+MAX_FLOATING_POINT_TOLERANCE = 5.5879e-09 + 0.0000001
 
 
 def identity(x):
@@ -41,11 +41,13 @@ def log_current_rng_states() -> Dict:
     Returns:
         Dict with sufficient information to recover all RNG states.
     """
-    rng_dict = {'random': random.getstate(),
-                'np': np.random.get_state(),
-                'torch': torch.random.get_rng_state()}
+    rng_dict = {
+        "random": random.getstate(),
+        "np": np.random.get_state(),
+        "torch": torch.random.get_rng_state(),
+    }
     if torch.cuda.is_available():
-        rng_dict['torch_cuda'] = torch.cuda.get_rng_state('cuda')
+        rng_dict["torch_cuda"] = torch.cuda.get_rng_state("cuda")
     return rng_dict
 
 
@@ -58,11 +60,11 @@ def set_rng_from_saved_states(rng_states: Dict):
     Returns:
         Nothing, but correctly sets all random seed states.
     """
-    random.setstate(rng_states['random'])
-    np.random.set_state(rng_states['np'])
-    torch.random.set_rng_state(rng_states['torch'])
+    random.setstate(rng_states["random"])
+    np.random.set_state(rng_states["np"])
+    torch.random.set_rng_state(rng_states["torch"])
     if torch.cuda.is_available():
-        torch.cuda.set_rng_state(rng_states['torch_cuda'], 'cuda')
+        torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 
 def make_random_barcode(barcode_len: int = 8) -> str:
@@ -75,12 +77,13 @@ def make_random_barcode(barcode_len: int = 8) -> str:
         Random hash.
     """
     alphabet = string.ascii_letters + string.digits
-    barcode = ''.join(secrets.choice(alphabet) for _ in range(barcode_len))
+    barcode = "".join(secrets.choice(alphabet) for _ in range(barcode_len))
     return barcode
 
 
-def make_short_barcode_from_input(things_to_hash: List[Any],
-                                  barcode_len: int = 16) -> str:
+def make_short_barcode_from_input(
+    things_to_hash: List[Any], barcode_len: int = 16
+) -> str:
     """Utility function that takes a list of anything and returns a short hash of it.
 
     Args:
@@ -90,11 +93,11 @@ def make_short_barcode_from_input(things_to_hash: List[Any],
     Returns:
         Short hash of the input.
     """
-    barcode = ''.join([str(x) for x in things_to_hash])
+    barcode = "".join([str(x) for x in things_to_hash])
     barcode = str(hash(barcode))
-    barcode = barcode.encode('utf-8')
+    barcode = barcode.encode("utf-8")
     barcode = base64.urlsafe_b64encode(barcode)
-    barcode = barcode.decode('utf-8')
+    barcode = barcode.decode("utf-8")
     barcode = barcode[0:barcode_len]
     return barcode
 
@@ -135,8 +138,7 @@ def make_var_iterable(x):
         return [x]
 
 
-def index_nested(x: Any,
-                 indices: List[int]) -> Any:
+def index_nested(x: Any, indices: List[int]) -> Any:
     """Utility function to index into a nested list or tuple.
 
     Args:
@@ -152,8 +154,7 @@ def index_nested(x: Any,
     return x
 
 
-def remove_entry_from_list(list_: List,
-                           entry: Any):
+def remove_entry_from_list(list_: List, entry: Any):
     """Removes all instances of an entry from a list if present, in-place.
 
     Args:
@@ -197,7 +198,7 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
     """
     int_list = sorted(int_list)
     if len(int_list) == 0:
-        return ''
+        return ""
     if len(int_list) == 1:
         return str(int_list[0])
     ranges = []
@@ -210,20 +211,22 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
             if start == end:
                 ranges.append(str(start))
             else:
-                ranges.append(f'{start}-{end}')
+                ranges.append(f"{start}-{end}")
             start = int_list[i]
             end = int_list[i]
     if start == end:
         ranges.append(str(start))
     else:
-        ranges.append(f'{start}-{end}')
-    return ','.join(ranges)
+        ranges.append(f"{start}-{end}")
+    return ",".join(ranges)
 
 
-def get_vars_of_type_from_obj(obj: Any,
-                              which_type: Type,
-                              subclass_exceptions: Optional[List] = None,
-                              search_depth: int = 3) -> List:
+def get_vars_of_type_from_obj(
+    obj: Any,
+    which_type: Type,
+    subclass_exceptions: Optional[List] = None,
+    search_depth: int = 3,
+) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
 
@@ -242,19 +245,23 @@ def get_vars_of_type_from_obj(obj: Any,
     tensors_in_obj = []
     tensor_ids_in_obj = []
     for _ in range(search_depth):
-        this_stack = search_stack_for_vars_of_type(this_stack,
-                                                   which_type,
-                                                   tensors_in_obj,
-                                                   tensor_ids_in_obj,
-                                                   subclass_exceptions)
+        this_stack = search_stack_for_vars_of_type(
+            this_stack,
+            which_type,
+            tensors_in_obj,
+            tensor_ids_in_obj,
+            subclass_exceptions,
+        )
     return tensors_in_obj
 
 
-def search_stack_for_vars_of_type(current_stack: List,
-                                  which_type: Type,
-                                  tensors_in_obj: List,
-                                  tensor_ids_in_obj: List,
-                                  subclass_exceptions: List):
+def search_stack_for_vars_of_type(
+    current_stack: List,
+    which_type: Type,
+    tensors_in_obj: List,
+    tensor_ids_in_obj: List,
+    subclass_exceptions: List,
+):
     """Helper function that searches current stack for vars of a given type, and
     returns the next stack to search.
 
@@ -279,14 +286,13 @@ def search_stack_for_vars_of_type(current_stack: List,
         if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
             tensors_in_obj.append(item)
             tensor_ids_in_obj.append(id(item))
-        if hasattr(item, 'shape'):
+        if hasattr(item, "shape"):
             continue
         extend_search_stack_from_item(item, next_stack)
     return next_stack
 
 
-def extend_search_stack_from_item(item: Any,
-                                  next_stack: List):
+def extend_search_stack_from_item(item: Any, next_stack: List):
     """Utility function to iterate through a single item to populate the next stack to search for.
 
     Args:
@@ -300,7 +306,7 @@ def extend_search_stack_from_item(item: Any,
         next_stack.extend(list(item.values()))
 
     for attr_name in dir(item):
-        if attr_name.startswith('__'):
+        if attr_name.startswith("__"):
             continue
         try:
             attr = getattr(item, attr_name)
@@ -314,7 +320,9 @@ def extend_search_stack_from_item(item: Any,
         next_stack.append(attr)
 
 
-def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
+def get_attr_values_from_tensor_list(
+    tensor_list: List[torch.Tensor], field_name: str
+) -> List[Any]:
     """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
 
     Args:
@@ -343,22 +351,24 @@ def nested_getattr(obj: Any, attr: str) -> Any:
     Returns:
         The attribute specified by the string.
     """
-    if attr == '':
+    if attr == "":
         return obj
 
     attributes = attr.split(".")
     for i, a in enumerate(attributes):
-        if a in ['volatile', 'T']:  # avoid annoying warning; if there's more, make a list
+        if a in [
+            "volatile",
+            "T",
+        ]:  # avoid annoying warning; if there's more, make a list
             with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
+                warnings.simplefilter("ignore")
                 obj = getattr(obj, a)
         else:
             obj = getattr(obj, a)
     return obj
 
 
-def remove_attributes_starting_with_str(obj: Any,
-                                        s: str):
+def remove_attributes_starting_with_str(obj: Any, s: str):
     """Given an object removes, any attributes for that object beginning with a given
     substring.
 
@@ -392,14 +402,18 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -
     if not torch.equal(t1.isinf(), t2.isinf()):
         return False
 
-    t1_nonan = torch.nan_to_num(t1, .7234691827346)
-    t2_nonan = torch.nan_to_num(t2, .7234691827346)
+    t1_nonan = torch.nan_to_num(t1, 0.7234691827346)
+    t2_nonan = torch.nan_to_num(t2, 0.7234691827346)
 
     if torch.equal(t1_nonan, t2_nonan):
         return True
 
-    if (allow_tolerance and (t1_nonan.dtype != torch.bool) and (t2_nonan.dtype != torch.bool) and
-            ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)):
+    if (
+        allow_tolerance
+        and (t1_nonan.dtype != torch.bool)
+        and (t2_nonan.dtype != torch.bool)
+        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+    ):
         return True
 
     return False
@@ -421,8 +435,7 @@ def safe_to(x: Any, device: str):
         return x
 
 
-def move_input_tensors_to_device(x: Any,
-                                 device: str):
+def move_input_tensors_to_device(x: Any, device: str):
     """Moves all tensors in the input to the given device.
 
     Args:
@@ -461,11 +474,11 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     Returns:
         String with human-readable size.
     """
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
-        if size < 1024.0 or unit == 'PB':
+    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
+        if size < 1024.0 or unit == "PB":
             break
         size /= 1024.0
-    if unit == 'B':
+    if unit == "B":
         size = int(size)
     else:
         size = np.round(size, decimals=decimal_places)
@@ -492,8 +505,8 @@ def print_override(t: torch.Tensor, func_name: str):
     """
     n = np.array(clean_cpu(t.data))
     np_str = getattr(n, func_name)()
-    np_str = np_str.replace('array', 'tensor')
-    np_str = np_str.replace('\n', '\n ')
+    np_str = np_str.replace("array", "tensor")
+    np_str = np_str.replace("\n", "\n ")
     if t.grad_fn is not None:
         grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
         np_str = np_str[0:-1] + grad_fn_str
@@ -518,7 +531,7 @@ def safe_copy(x, detach_tensor: bool = False):
             return clean_clone(x)
         vals_np = clean_cpu(x.data).numpy()
         vals_tensor = clean_from_numpy(vals_np)
-        if hasattr(x, 'tl_tensor_label_raw'):
+        if hasattr(x, "tl_tensor_label_raw"):
             vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
         if type(x) == torch.Tensor:
             return vals_tensor
@@ -530,7 +543,7 @@ def safe_copy(x, detach_tensor: bool = False):
 
 def in_notebook():
     try:
-        if 'IPKernelApp' not in get_ipython().config:
+        if "IPKernelApp" not in get_ipython().config:
             return False
     except ImportError:
         return False
@@ -543,7 +556,9 @@ def warn_parallel():
     """
     Utility function to give raise error if it's being run in parallel processing.
     """
-    if mp.current_process().name != 'MainProcess':
-        raise RuntimeError("WARNING: It looks like you are using parallel execution; only run "
-                           "pytorch-xray in the main process, since certain operations "
-                           "depend on execution order.")
+    if mp.current_process().name != "MainProcess":
+        raise RuntimeError(
+            "WARNING: It looks like you are using parallel execution; only run "
+            "pytorch-xray in the main process, since certain operations "
+            "depend on execution order."
+        )

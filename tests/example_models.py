@@ -28,6 +28,7 @@ class SimpleFF(nn.Module):
 #  **** Special Case Functions ****
 #  ********************************
 
+
 class InPlaceFuncs(nn.Module):
     def __init__(self):
         super().__init__()
@@ -112,7 +113,7 @@ class SimpleRandom(nn.Module):
 class DropoutModelReal(nn.Module):
     def __init__(self):
         super().__init__()
-        self.dropout = nn.Dropout(p=.5)
+        self.dropout = nn.Dropout(p=0.5)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
@@ -303,6 +304,7 @@ class SameTensorArg(nn.Module):
 #  **** Special Case Architectures ****
 #  ************************************
 
+
 class MultiInputs(nn.Module):
     def __init__(self):
         super().__init__()
@@ -334,7 +336,7 @@ class DictInput(nn.Module):
 
     @staticmethod
     def forward(input_dict):
-        x, y, z = input_dict['x'], input_dict['y'], input_dict['z']
+        x, y, z = input_dict["x"], input_dict["y"], input_dict["z"]
         a = x + y
         b = torch.log(z)
         x = a ** b
@@ -347,7 +349,7 @@ class NestedInput(nn.Module):
 
     @staticmethod
     def forward(input_dict):
-        list1, list2 = input_dict['list1'], input_dict['list2']
+        list1, list2 = input_dict["list1"], input_dict["list2"]
         a, b = list1
         c, d = list2
         t1 = a * d
@@ -395,7 +397,7 @@ class DictOutput(nn.Module):
         b = torch.sin(x)
         c = torch.tan(x)
         b = b * 3
-        return {'a': a, 'b': b, 'c': c}
+        return {"a": a, "b": b, "c": c}
 
 
 class NestedOutput(nn.Module):
@@ -409,14 +411,14 @@ class NestedOutput(nn.Module):
         b = torch.sin(x)
         c = torch.tan(x)
         b = b * 3
-        return {'a': [a, b], 'b': c, 'c': [a, b, c], 'd': [[a, b]]}
+        return {"a": [a, b], "b": c, "c": [a, b, c], "d": [[a, b]]}
 
 
 class BufferModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.register_buffer('buffer1', torch.ones(12, 12))
-        self.register_buffer('buffer2', torch.rand(12, 12))
+        self.register_buffer("buffer1", torch.ones(12, 12))
+        self.register_buffer("buffer2", torch.rand(12, 12))
 
     def forward(self, x):
         x = x + self.buffer1
@@ -869,7 +871,9 @@ class ModuleLoopingClash1(nn.Module):
         x = torch.sin(x)
         x = self.relu(x)
         x = torch.log(x)
-        for _ in range(4):  # this tests clashes between what counts as "same"--module-based or looping-based
+        for _ in range(
+            4
+        ):  # this tests clashes between what counts as "same"--module-based or looping-based
             x = self.relu(x)
             x = x + 1
         x = torch.cos(x)
@@ -920,6 +924,7 @@ class ModuleLoopingClash3(nn.Module):
 #  ****************************
 #  **** Uber Architectures ****
 #  ****************************
+
 
 class UberModel1(nn.Module):
     def __init__(self):
