@@ -263,6 +263,30 @@ print(model_history['conv2d_3'].func_call_stack[8])
    and if so, what specific kind of functionality you'd want.
 2) I am planning to add an option to only visualize a single submodule of a model rather than the full graph at once.
 
+## Other Packages You Should Check Out
+
+The goal is for *TorchLens* to completely solve the problem of extracting activations and metadata
+from deep neural networks and visualizing their structure so that nobody has to think about this stuff ever again, but
+it intentionally leaves out certain functionality: for example, it has no functions for loading models or stimuli, or
+for analyzing the extracted activations. This is in part because it's impossible to predict all the things you might
+want to do with the activations, or all the possible models you might want to look at, but also because there are
+already
+excellent packages for doing these things. Here are a few--let me know if I've missed any!
+
+- [ThingsVision](https://github.com/ViCCo-Group/thingsvision): has excellent functionality for loading vision models,
+  loading stimuli, and analyzing the extracted activations.
+- [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): similar end-to-end functionality to ThingsVision; the
+  interface
+  for loading models from different libraries is particularly powerful.
+- [surgeon-pytorch](https://github.com/archinetai/surgeon-pytorch): easy-to-use functionality for extracting activations
+  from models
+- [deepdive](https://github.com/ColinConwell/DeepDive): has outstanding functionality for loading and benchmarking
+  models
+- [torchvision feature_extraction module](https://pytorch.org/vision/stable/feature_extraction.html): can extract
+  activations from models with static computational graphs
+- [rsatoolbox3](https://github.com/rsagroup/rsatoolbox): total solution for performing representational similarity
+  analysis on DNN activations and brain data
+
 ## Acknowledgments
 
 The development of *TorchLens* benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
@@ -285,4 +309,4 @@ johnmarkedwardtaylor@gmail.com,
 contact me via [twitter](https://twitter.com/johnmark_taylor), or post on
 the [issues](https://github.com/johnmarktaylor91/torchlens/issues)
 or [discussion](https://github.com/johnmarktaylor91/torchlens/discussions) page for this GitHub
-repository, if you have any questions, comments, or suggestions.
+repository, if you have any questions, comments, or suggestions (or if you'd be interested in collaborating!).
