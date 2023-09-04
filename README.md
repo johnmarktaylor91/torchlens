@@ -203,7 +203,7 @@ The main function of *TorchLens* is `log_forward_pass`; the remaining functions 
    layer, and checks that the resulting output matches the ground-truth output. It also checks that swapping in
    random nonsense activations instead of the saved activations generates the wrong output. **If this function ever
    returns False (i.e., the saved activations are wrong), please contact me via email (johnmarkedwardtaylor@gmail.com)
-   or on this GitHub page with a description of the problem, and I will update Torchlens to fix the problem.**
+   or on this GitHub page with a description of the problem, and I will update TorchLens to fix the problem.**
 
 And that's it. *TorchLens* remains in active development, and the goal is for it to work with any PyTorch model
 whatosever without exception. As of the time of this writing, it has been tested with over 700
