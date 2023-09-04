@@ -2909,6 +2909,7 @@ class ModelHistory:
                 "call_linenum": caller.lineno,
                 "function": caller.function,
                 "code_context": caller.code_context,
+                "code_context_str": "".join(caller.code_context),
             }
             for caller in call_stack
         ]
