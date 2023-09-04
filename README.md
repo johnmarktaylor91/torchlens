@@ -215,7 +215,8 @@ and graph neural networks.
 You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument
 to `log_forward_pass`; for example, here you can see one of GoogLeNet's "inception" modules at different levels of
 nesting depth:
-<img src="images/nested_modules_example.png" width=30% height=30%>
+
+<img src="images/nested_modules_example.png" width=50% height=50%>
 
 An experimental feature is to extract not just the activations from all of a model's operations,
 but also the gradients from a backward pass (which you can compute based on any intermediate layer, not just the model's
@@ -273,12 +274,13 @@ want to do with the activations, or all the possible models you might want to lo
 already outstanding packages for doing these things. Here are a few-let me know if I've missed any!
 
 - [ThingsVision](https://github.com/ViCCo-Group/thingsvision): has excellent functionality for loading vision models,
-  loading stimuli, and analyzing the extracted activations.
+  loading stimuli, and analyzing the extracted activations
 - [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): similar end-to-end functionality to ThingsVision; the
   interface
-  for loading models from different libraries is particularly powerful.
+  for loading models from different libraries is particularly powerful
 - [surgeon-pytorch](https://github.com/archinetai/surgeon-pytorch): easy-to-use functionality for extracting activations
-  from models
+  from models, along with functionality for training a model using loss functions based on intermediate layer
+  activations
 - [deepdive](https://github.com/ColinConwell/DeepDive): has outstanding functionality for loading and benchmarking
   models
 - [torchvision feature_extraction module](https://pytorch.org/vision/stable/feature_extraction.html): can extract
