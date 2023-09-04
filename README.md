@@ -212,21 +212,22 @@ and graph neural networks.
 
 ## Miscellaneous Features
 
-You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument
-to `log_forward_pass`; for example, here you can see one of GoogLeNet's "inception" modules at different levels of
-nesting depth:
+- You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument
+  to `log_forward_pass`; for example, here you can see one of GoogLeNet's "inception" modules at different levels of
+  nesting depth:
 
 <img src="images/nested_modules_example.png" width=80% height=80%>
 
-An experimental feature is to extract not just the activations from all of a model's operations,
-but also the gradients from a backward pass (which you can compute based on any intermediate layer, not just the model's
-output),
-and also visualize the path taken by the backward pass (shown with blue arrows below). See the CoLab tutorial for
-instructions on how to do this.
+- An experimental feature is to extract not just the activations from all of a model's operations,
+  but also the gradients from a backward pass (which you can compute based on any intermediate layer, not just the
+  model's
+  output),
+  and also visualize the path taken by the backward pass (shown with blue arrows below). See the CoLab tutorial for
+  instructions on how to do this.
 
 <img src="images/gradients.png" width=30% height=30%>
 
-You can see the literal code that was used to run the model with the func_call_stack field:
+- You can see the literal code that was used to run the model with the func_call_stack field:
 
 ```python
 print(model_history['conv2d_3'].func_call_stack[8])
