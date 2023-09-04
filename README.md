@@ -1,6 +1,6 @@
 # <img src="images/logo.png" width=8% height=8%> TorchLens
 
-*Quick Links*
+**Quick Links**
 
 - [Paper describing TorchLens](https://www.nature.com/articles/s41598-023-40807-0)
 - [CoLab tutorial](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing)
