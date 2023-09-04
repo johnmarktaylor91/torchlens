@@ -1,14 +1,15 @@
 # <img src="images/logo.png" width=8% height=8%> Torchlens
 
-Torchlens is a package for doing exactly two things:
+TorchLens is a package for doing exactly two things:
 
 1) Easily extracting the activations from every single intermediate operation in a PyTorch model—no
    modifications needed—in one line of code. "Every operation" means every operation; "one line" means one line.
-2) Understanding the model's computational structure via an intuitive automatic visualization and extensive metadata
+2) Understanding the model's computational structure via an intuitive automatic visualization and extensive
+   metadata ([partial list here](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf))
    about the network's computational graph.
 
 Here it is in action for a very simple recurrent model; as you can see, you just define the model like normal and pass
-it in, and Torchlens returns a full log of the forward pass along with a visualization:
+it in, and TorchLens returns a full log of the forward pass along with a visualization:
 
 ```python
 class SimpleRecurrent(nn.Module):
@@ -47,26 +48,27 @@ in its forward pass; you can grab the saved outputs of every last one:
 
 <img src="images/swin_v2_b_demo.jpg" width="70%" height="70%">
 
-The goal of Torchlens is to do this for any PyTorch model whatsoever.
+The goal of TorchLens is to do this for any PyTorch model whatsoever. You can see a bunch of example model
+visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
 
 ## Installation
 
-To install Torchlens, first install graphviz if you haven't already (required to generate the network visualizations),
-and then install Torchlens from GitHub using pip:
+To install TorchLens, first install graphviz if you haven't already (required to generate the network visualizations),
+and then install TorchLens using pip:
 
 ```bash
 sudo apt install graphviz
 pip install torchlens
 ```
 
-Torchlens is compatible with versions 1.8.0+ of PyTorch.
+TorchLens is compatible with versions 1.8.0+ of PyTorch.
 
 ## How-To Guide
 
 Below is a quick demo of how to use it; for an interactive demonstration, see
 the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing).
 
-The main function of Torchlens is `log_forward_pass`: when called on a model and input, it runs a
+The main function of TorchLens is `log_forward_pass`: when called on a model and input, it runs a
 forward pass on the model and returns a ModelHistory object containing the intermediate layer activations and
 accompanying metadata, along with a visual representation of every operation that occurred during the forward pass:
 
@@ -176,8 +178,7 @@ tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
 ```
 
 If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
-with the
-which_layers argument when calling `log_forward_pass`; you can either indicate layers in the same way
+with the layers_to_save argument when calling `log_forward_pass`; you can either indicate layers in the same way
 as indexing them above, or by passing in a desired substring for filtering the layers (e.g., 'conv'
 will pull out all conv layers):
 
@@ -194,19 +195,61 @@ print(model_history.layer_labels)
 The main function of torchlens is `log_forward_pass`; the remaining functions are:
 
 1) `get_model_metadata`, to retrieve all model metadata without saving any activations (e.g., to figure out which
-   layers you wish to save)
+   layers you wish to save; note that this is the same as calling `log_forward_pass` with `layers_to_save=None`)
 2) `show_model_graph`, which visualizes the model graph without saving any activations
 3) `validate_model_activations`, which runs a procedure to check that the activations are correct: specifically,
    it runs a forward pass and saves all intermediate activations, re-runs the forward pass from each intermediate
    layer, and checks that the resulting output matches the ground-truth output. It also checks that swapping in
    random nonsense activations instead of the saved activations generates the wrong output. **If this function ever
    returns False (i.e., the saved activations are wrong), please contact me via email (johnmarkedwardtaylor@gmail.com)
-   or on this GitHub page with a description of the
-   problem, and I will update Torchlens to fix the problem.**
+   or on this GitHub page with a description of the problem, and I will update Torchlens to fix the problem.**
 
-And that's it. Torchlens remains in active development, and the goal is for it to work with any PyTorch model
+And that's it. TorchLens remains in active development, and the goal is for it to work with any PyTorch model
 whatosever without exception. As of the time of this writing, it has been tested with over 700
-image, video, auditory, and language models.
+image, video, auditory, multimodal, and language models, including feedforward, recurrent, transformer,
+and graph neural networks.
+
+## Miscellaneous Features
+
+You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument:
+<img src="images/nested_modules_example.png" width=30% height=30%>
+
+An experimental feature is to extract not just the activations from all of a model's operations,
+but also the gradients from a backward pass (which you can compute based on any intermediate layer, not just the model's
+output),
+and also visualize the path taken by the backward pass (shown with blue arrows below). See the CoLab tutorial for
+instructions on how to do this.
+<img src="images/gradients.png" width=30% height=30%>
+
+You can see the literal code that was used to run the model with the func_call_stack field:
+
+```python
+print(model_history['conv2d_3'].func_call_stack[8])
+'''
+{'call_fname': '/usr/local/lib/python3.10/dist-packages/torchvision/models/alexnet.py',
+ 'call_linenum': 48,
+ 'function': 'forward',
+ 'code_context': ['            nn.Linear(256 * 6 * 6, 4096),\n',
+  '            nn.ReLU(inplace=True),\n',
+  '            nn.Dropout(p=dropout),\n',
+  '            nn.Linear(4096, 4096),\n',
+  '            nn.ReLU(inplace=True),\n',
+  '            nn.Linear(4096, num_classes),\n',
+  '        )\n',
+  '\n',
+  '    def forward(self, x: torch.Tensor) -> torch.Tensor:\n',
+  '        x = self.features(x)\n',
+  '        x = self.avgpool(x)\n',
+  '        x = torch.flatten(x, 1)\n',
+  '        x = self.classifier(x)\n',
+  '        return x\n',
+  '\n',
+  '\n',
+  'class AlexNet_Weights(WeightsEnum):\n',
+  '    IMAGENET1K_V1 = Weights(\n',
+  '        url="https://download.pytorch.org/models/alexnet-owt-7be5be79.pth",\n']}
+'''
+```
 
 ## Planned Features
 
@@ -214,23 +257,25 @@ image, video, auditory, and language models.
    but counterfactually intervene on them (e.g., how would the output have changed if these parameters
    were different or if a different nonlinearity were used). Let me know if you'd find this useful
    and if so, what specific kind of functionality you'd want.
+2) I am planning to add an option to only visualize a single submodule of a model rather than the full graph at once.
 
 ## Acknowledgments
 
-The development of Torchlens benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
+The development of TorchLens benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
 Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. All network
 visualizations were created with graphviz. Logo created by Nikolaus Kriegeskorte.
 
 ## Citing Torchlens
 
 To cite TorchLens, you can
-cite [this paper describing the package](https://www.nature.com/articles/s41598-023-40807-0):
+cite [this paper describing the package](https://www.nature.com/articles/s41598-023-40807-0) (and consider adding a star
+to this repo if you find TorchLens useful):
 
 Taylor, J., Kriegeskorte, N. Extracting and visualizing hidden activations and computational graphs of PyTorch models
 with TorchLens. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-40807-0
 
 ## Contact
 
-As Torchlens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
+As TorchLens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
 contant me via [twitter](https://twitter.com/johnmark_taylor), or post on the issues or discussion page for this GitHub
 repository, if you have any questions, comments, or suggestions.
