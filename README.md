@@ -211,7 +211,9 @@ and graph neural networks.
 
 ## Miscellaneous Features
 
-You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument:
+You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument
+to `log_forward_pass`; for example, here you can see one of GoogLeNet's "inception" modules at different levels of
+nesting depth:
 <img src="images/nested_modules_example.png" width=30% height=30%>
 
 An experimental feature is to extract not just the activations from all of a model's operations,
