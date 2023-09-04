@@ -141,6 +141,7 @@ particular layer, and also how to pull out the actual activations from that laye
 ```python
 print(model_history['conv2d_3_7'])  # pulling out layer by its name 
 # The following commented lines pull out the same layer:
+# model_history['conv2d_3'] you can omit the second number (since strictly speaking it's redundant)
 # model_history['conv2d_3_7:1'] colon indicates the pass of a layer (here just one)
 # model_history['features.6'] can grab a layer by the module for which it is an output
 # model_history[7] the 7th layer overall
