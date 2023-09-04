@@ -281,5 +281,5 @@ with TorchLens. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-408
 ## Contact
 
 As TorchLens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
-contant me via [twitter](https://twitter.com/johnmark_taylor), or post on the issues or discussion page for this GitHub
+contact me via [twitter](https://twitter.com/johnmark_taylor), or post on the issues or discussion page for this GitHub
 repository, if you have any questions, comments, or suggestions.
