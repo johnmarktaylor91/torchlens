@@ -219,6 +219,7 @@ but also the gradients from a backward pass (which you can compute based on any 
 output),
 and also visualize the path taken by the backward pass (shown with blue arrows below). See the CoLab tutorial for
 instructions on how to do this.
+
 <img src="images/gradients.png" width=30% height=30%>
 
 You can see the literal code that was used to run the model with the func_call_stack field:
