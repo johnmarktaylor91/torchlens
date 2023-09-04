@@ -1,6 +1,6 @@
 # <img src="images/logo.png" width=8% height=8%> Torchlens
 
-TorchLens is a package for doing exactly two things:
+*TorchLens* is a package for doing exactly two things:
 
 1) Easily extracting the activations from every single intermediate operation in a PyTorch model—no
    modifications needed—in one line of code. "Every operation" means every operation; "one line" means one line.
@@ -9,7 +9,7 @@ TorchLens is a package for doing exactly two things:
    about the network's computational graph.
 
 Here it is in action for a very simple recurrent model; as you can see, you just define the model like normal and pass
-it in, and TorchLens returns a full log of the forward pass along with a visualization:
+it in, and *TorchLens* returns a full log of the forward pass along with a visualization:
 
 ```python
 class SimpleRecurrent(nn.Module):
@@ -48,27 +48,27 @@ in its forward pass; you can grab the saved outputs of every last one:
 
 <img src="images/swin_v2_b_demo.jpg" width="70%" height="70%">
 
-The goal of TorchLens is to do this for any PyTorch model whatsoever. You can see a bunch of example model
+The goal of *TorchLens* is to do this for any PyTorch model whatsoever. You can see a bunch of example model
 visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
 
 ## Installation
 
-To install TorchLens, first install graphviz if you haven't already (required to generate the network visualizations),
-and then install TorchLens using pip:
+To install *TorchLens*, first install graphviz if you haven't already (required to generate the network visualizations),
+and then install *TorchLens* using pip:
 
 ```bash
 sudo apt install graphviz
 pip install torchlens
 ```
 
-TorchLens is compatible with versions 1.8.0+ of PyTorch.
+*TorchLens* is compatible with versions 1.8.0+ of PyTorch.
 
 ## How-To Guide
 
 Below is a quick demo of how to use it; for an interactive demonstration, see
 the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing).
 
-The main function of TorchLens is `log_forward_pass`: when called on a model and input, it runs a
+The main function of *TorchLens* is `log_forward_pass`: when called on a model and input, it runs a
 forward pass on the model and returns a ModelHistory object containing the intermediate layer activations and
 accompanying metadata, along with a visual representation of every operation that occurred during the forward pass:
 
@@ -193,7 +193,7 @@ print(model_history.layer_labels)
 '''
 ```
 
-The main function of torchlens is `log_forward_pass`; the remaining functions are:
+The main function of *TorchLens* is `log_forward_pass`; the remaining functions are:
 
 1) `get_model_metadata`, to retrieve all model metadata without saving any activations (e.g., to figure out which
    layers you wish to save; note that this is the same as calling `log_forward_pass` with `layers_to_save=None`)
@@ -205,7 +205,7 @@ The main function of torchlens is `log_forward_pass`; the remaining functions ar
    returns False (i.e., the saved activations are wrong), please contact me via email (johnmarkedwardtaylor@gmail.com)
    or on this GitHub page with a description of the problem, and I will update Torchlens to fix the problem.**
 
-And that's it. TorchLens remains in active development, and the goal is for it to work with any PyTorch model
+And that's it. *TorchLens* remains in active development, and the goal is for it to work with any PyTorch model
 whatosever without exception. As of the time of this writing, it has been tested with over 700
 image, video, auditory, multimodal, and language models, including feedforward, recurrent, transformer,
 and graph neural networks.
@@ -265,22 +265,23 @@ print(model_history['conv2d_3'].func_call_stack[8])
 
 ## Acknowledgments
 
-The development of TorchLens benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
+The development of *TorchLens* benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
 Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. All network
 visualizations were created with graphviz. Logo created by Nikolaus Kriegeskorte.
 
 ## Citing Torchlens
 
-To cite TorchLens, you can
+To cite *TorchLens*, you can
 cite [this paper describing the package](https://www.nature.com/articles/s41598-023-40807-0) (and consider adding a star
-to this repo if you find TorchLens useful):
+to this repo if you find *TorchLens* useful):
 
 Taylor, J., Kriegeskorte, N. Extracting and visualizing hidden activations and computational graphs of PyTorch models
-with TorchLens. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-40807-0
+with *TorchLens*. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-40807-0
 
 ## Contact
 
-As TorchLens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
+As *TorchLens* is still in active development, I would love your feedback. Please contact
+johnmarkedwardtaylor@gmail.com,
 contact me via [twitter](https://twitter.com/johnmark_taylor), or post on
 the [issues](https://github.com/johnmarktaylor91/torchlens/issues)
 or [discussion](https://github.com/johnmarktaylor91/torchlens/discussions) page for this GitHub
