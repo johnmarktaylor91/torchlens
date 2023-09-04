@@ -179,7 +179,7 @@ tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
 ```
 
 If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
-with the layers_to_save argument when calling `log_forward_pass`; you can either indicate layers in the same way
+with the `layers_to_save` argument when calling `log_forward_pass`; you can either indicate layers in the same way
 as indexing them above, or by passing in a desired substring for filtering the layers (e.g., 'conv'
 will pull out all conv layers):
 
@@ -281,5 +281,7 @@ with TorchLens. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-408
 ## Contact
 
 As TorchLens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
-contact me via [twitter](https://twitter.com/johnmark_taylor), or post on the issues or discussion page for this GitHub
+contact me via [twitter](https://twitter.com/johnmark_taylor), or post on
+the [issues](https://github.com/johnmarktaylor91/torchlens/issues)
+or [discussion](https://github.com/johnmarktaylor91/torchlens/discussions) page for this GitHub
 repository, if you have any questions, comments, or suggestions.
