@@ -216,7 +216,7 @@ You can visualize models at different levels of nesting depth using the `vis_nes
 to `log_forward_pass`; for example, here you can see one of GoogLeNet's "inception" modules at different levels of
 nesting depth:
 
-<img src="images/nested_modules_example.png" width=50% height=50%>
+<img src="images/nested_modules_example.png" width=80% height=80%>
 
 An experimental feature is to extract not just the activations from all of a model's operations,
 but also the gradients from a backward pass (which you can compute based on any intermediate layer, not just the model's
