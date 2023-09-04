@@ -302,7 +302,9 @@ class TensorLogEntry:
         if self.output_device not in [str(self.tensor_contents.device), "same"]:
             self.tensor_contents = clean_to(self.tensor_contents, self.output_device)
         if activation_postfunc is not None:
+            self.source_model_history.pause_logging = True
             self.tensor_contents = activation_postfunc(self.tensor_contents)
+            self.source_model_history.pause_logging = False
 
         self.has_saved_activations = True
 
@@ -738,6 +740,7 @@ class ModelHistory:
         self.pass_finished = False
         self.track_tensors = False
         self.logging_mode = "exhaustive"
+        self.pause_logging = False
         self.all_layers_logged = False
         self.all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
@@ -971,7 +974,11 @@ class ModelHistory:
             # Initial bookkeeping; check if it's a special function, organize the arguments.
             self.current_function_call_barcode = 0
             func_name = func.__name__
-            if (func_name in funcs_not_to_log) or not self.track_tensors:
+            if (
+                (func_name in funcs_not_to_log)
+                or (not self.track_tensors)
+                or self.pause_logging
+            ):
                 out = func(*args, **kwargs)
                 return out
             all_args = list(args) + list(kwargs.values())
@@ -1209,7 +1216,9 @@ class ModelHistory:
 
             # Add decorators.
 
-            if hasattr(module, "forward"):
+            if hasattr(module, "forward") and not hasattr(
+                module.forward, "tl_forward_call_is_decorated"
+            ):
                 module_orig_forward_funcs[module] = module.forward
                 module.forward = self.module_forward_decorator(module.forward, module)
                 module.forward.tl_forward_call_is_decorated = True
@@ -1402,7 +1411,8 @@ class ModelHistory:
         if is_top_level_model:
             submodules.append(model)
         for module in model.children():
-            submodules.append(module)
+            if module not in submodules:
+                submodules.append(module)
             submodules += self.get_all_submodules(module, is_top_level_model=False)
         return submodules
 

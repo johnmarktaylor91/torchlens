@@ -56,7 +56,7 @@ and then install Torchlens from GitHub using pip:
 
 ```bash
 sudo apt install graphviz
-pip install git+https://github.com/johnmarktaylor91/torchlens
+pip install torchlens
 ```
 
 Torchlens is compatible with versions 1.8.0+ of PyTorch.
@@ -219,7 +219,7 @@ image, video, auditory, and language models.
 
 The development of Torchlens benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
 Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. All network
-visualizations were created with graphviz; logo created with DALL-E 2.
+visualizations were created with graphviz. Logo created by Nikolaus Kriegeskorte.
 
 ## Citing Torchlens
 
@@ -232,5 +232,5 @@ with TorchLens. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-408
 ## Contact
 
 As Torchlens is still in active development, I would love your feedback. Please contact johnmarkedwardtaylor@gmail.com,
-or post on the issues or discussion page for this GitHub repository, if you have any questions, comments, or
-suggestions.
+contant me via [twitter](https://twitter.com/johnmark_taylor), or post on the issues or discussion page for this GitHub
+repository, if you have any questions, comments, or suggestions.

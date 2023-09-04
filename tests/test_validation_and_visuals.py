@@ -2672,7 +2672,7 @@ def test_bert():
 # Multimodal
 
 
-def test_clip():
+def test_clip():  # for some reason CLIP breaks the PyCharm debugger
     from transformers import CLIPModel, CLIPProcessor
 
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -2689,10 +2689,11 @@ def test_clip():
         model,
         [],
         model_inputs,
+        random_seed=1,
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "multimodal-models", "clip"),
     )
-    assert validate_saved_activations(model, [], model_inputs)
+    assert validate_saved_activations(model, [], model_inputs, random_seed=1)
 
 
 # Graph neural networks
