@@ -276,14 +276,13 @@ already outstanding packages for doing these things. Here are a few-let me know 
 
 - [ThingsVision](https://github.com/ViCCo-Group/thingsvision): has excellent functionality for loading vision models,
   loading stimuli, and analyzing the extracted activations
-- [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): similar end-to-end functionality to ThingsVision; the
-  interface
-  for loading models from different libraries is particularly powerful
+- [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): similar end-to-end functionality to ThingsVision, along with
+  functionality for comparing extracted activations to neural data.
 - [surgeon-pytorch](https://github.com/archinetai/surgeon-pytorch): easy-to-use functionality for extracting activations
   from models, along with functionality for training a model using loss functions based on intermediate layer
   activations
 - [deepdive](https://github.com/ColinConwell/DeepDive): has outstanding functionality for loading and benchmarking
-  models
+  many different models
 - [torchvision feature_extraction module](https://pytorch.org/vision/stable/feature_extraction.html): can extract
   activations from models with static computational graphs
 - [rsatoolbox3](https://github.com/rsagroup/rsatoolbox): total solution for performing representational similarity
