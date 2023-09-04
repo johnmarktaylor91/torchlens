@@ -270,8 +270,7 @@ from deep neural networks and visualizing their structure so that nobody has to 
 it intentionally leaves out certain functionality: for example, it has no functions for loading models or stimuli, or
 for analyzing the extracted activations. This is in part because it's impossible to predict all the things you might
 want to do with the activations, or all the possible models you might want to look at, but also because there are
-already
-excellent packages for doing these things. Here are a few--let me know if I've missed any!
+already outstanding packages for doing these things. Here are a few-let me know if I've missed any!
 
 - [ThingsVision](https://github.com/ViCCo-Group/thingsvision): has excellent functionality for loading vision models,
   loading stimuli, and analyzing the extracted activations.
