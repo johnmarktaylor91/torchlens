@@ -298,7 +298,8 @@ def search_stack_for_vars_of_type(
             tensors_in_obj.append(item)
             tensor_addresses.append(address)
             tensor_ids_in_obj.append(id(item))
-        if hasattr(item, "shape"):
+            continue
+        if item_class in [str, int, float, bool, np.ndarray, torch.tensor]:
             continue
         extend_search_stack_from_item(item, address, next_stack)
     return next_stack
@@ -328,7 +329,7 @@ def extend_search_stack_from_item(item: Any, address: str, next_stack: List):
             continue
         try:
             attr = getattr(item, attr_name)
-        except AttributeError:
+        except:
             continue
         attr_cls = type(attr)
         if attr_cls in [str, int, float, bool, np.ndarray]:
