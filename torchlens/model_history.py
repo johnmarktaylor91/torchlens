@@ -187,6 +187,7 @@ class TensorLogEntry:
         self.output_descendents = fields_dict["output_descendents"]
         self.min_distance_from_output = fields_dict["min_distance_from_output"]
         self.max_distance_from_output = fields_dict["max_distance_from_output"]
+        self.input_output_address = fields_dict["input_output_address"]
         self.is_buffer_layer = fields_dict["is_buffer_layer"]
         self.buffer_address = fields_dict["buffer_address"]
         self.initialized_inside_model = fields_dict["initialized_inside_model"]
@@ -246,7 +247,7 @@ class TensorLogEntry:
         for field in dir(self):
             attr = getattr(self, field)
             if not any(
-                [field.startswith("_"), field in fields_to_exclude, callable(attr)]
+                    [field.startswith("_"), field in fields_to_exclude, callable(attr)]
             ):
                 print(f"{field}: {attr}")
 
@@ -281,12 +282,12 @@ class TensorLogEntry:
         return copied_entry
 
     def save_tensor_data(
-        self,
-        t: torch.Tensor,
-        t_args: Union[List, Tuple],
-        t_kwargs: Dict,
-        save_function_args: bool,
-        activation_postfunc: Optional[Callable] = None,
+            self,
+            t: torch.Tensor,
+            t_args: Union[List, Tuple],
+            t_kwargs: Dict,
+            save_function_args: bool,
+            activation_postfunc: Optional[Callable] = None,
     ):
         """Saves the tensor data for a given tensor operation.
 
@@ -407,8 +408,8 @@ class TensorLogEntry:
             pass_str = ", "
         s = (
             f"Layer {self.layer_label_no_pass}"
-            f"{pass_str}operation {self.operation_num + 1}/"
-            f"{self.source_model_history.num_tensors_total}:"
+            f"{pass_str}operation {self.operation_num}/"
+            f"{self.source_model_history.num_operations}:"
         )
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
         if not self.has_saved_activations:
@@ -624,8 +625,8 @@ class RolledTensorLogEntry:
                 child_layer
             ].layer_label_no_pass
             if (
-                source_node.pass_num
-                not in self.child_passes_per_layer[child_layer_label]
+                    source_node.pass_num
+                    not in self.child_passes_per_layer[child_layer_label]
             ):
                 self.child_passes_per_layer[child_layer_label].append(
                     source_node.pass_num
@@ -636,8 +637,8 @@ class RolledTensorLogEntry:
                 parent_layer
             ].layer_label_no_pass
             if (
-                source_node.pass_num
-                not in self.parent_passes_per_layer[parent_layer_label]
+                    source_node.pass_num
+                    not in self.parent_passes_per_layer[parent_layer_label]
             ):
                 self.parent_passes_per_layer[parent_layer_label].append(
                     source_node.pass_num
@@ -650,7 +651,7 @@ class RolledTensorLogEntry:
             )
             pass_lens = [len(passes) for passes in pass_lists]
             if any(
-                [pass_len < source_node.layer_passes_total for pass_len in pass_lens]
+                    [pass_len < source_node.layer_passes_total for pass_len in pass_lens]
             ):
                 self.edges_vary_across_passes = True
             else:
@@ -681,9 +682,9 @@ class RolledTensorLogEntry:
         for field in dir(self):
             attr = getattr(self, field)
             if (
-                not field.startswith("_")
-                and field not in fields_not_to_print
-                and not (callable(attr))
+                    not field.startswith("_")
+                    and field not in fields_not_to_print
+                    and not (callable(attr))
             ):
                 s += f"{field}: {attr}\n"
         return s
@@ -718,15 +719,15 @@ class ModelHistory:
     ]
 
     def __init__(
-        self,
-        model_name: str,
-        output_device: str = "same",
-        activation_postfunc: Optional[Callable] = None,
-        keep_unsaved_layers: bool = True,
-        save_function_args: bool = False,
-        save_gradients: bool = False,
-        detach_saved_tensors: bool = False,
-        mark_input_output_distances: bool = True,
+            self,
+            model_name: str,
+            output_device: str = "same",
+            activation_postfunc: Optional[Callable] = None,
+            keep_unsaved_layers: bool = True,
+            save_function_args: bool = False,
+            save_gradients: bool = False,
+            detach_saved_tensors: bool = False,
+            mark_input_output_distances: bool = True,
     ):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
@@ -774,6 +775,7 @@ class ModelHistory:
         self.raw_tensor_labels_list: List[str] = []
         self.tensor_nums_to_save: List[int] = []
         self.tensor_counter: int = 0
+        self.num_operations: int = 0
         self.raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
         self.unsaved_layers_lookup_keys: Set[str] = set()
 
@@ -857,7 +859,7 @@ class ModelHistory:
         for field in dir(self):
             attr = getattr(self, field)
             if not any(
-                [field.startswith("_"), field in fields_to_exclude, callable(attr)]
+                    [field.startswith("_"), field in fields_to_exclude, callable(attr)]
             ):
                 print(f"{field}: {attr}")
 
@@ -975,9 +977,9 @@ class ModelHistory:
             self.current_function_call_barcode = 0
             func_name = func.__name__
             if (
-                (func_name in funcs_not_to_log)
-                or (not self.track_tensors)
-                or self.pause_logging
+                    (func_name in funcs_not_to_log)
+                    or (not self.track_tensors)
+                    or self.pause_logging
             ):
                 out = func(*args, **kwargs)
                 return out
@@ -1004,7 +1006,7 @@ class ModelHistory:
             out_orig = func(*args, **kwargs)
             func_time_elapsed = time.time() - start_time
             is_bottom_level_func = (
-                self.current_function_call_barcode == func_call_barcode
+                    self.current_function_call_barcode == func_call_barcode
             )
 
             if func_name in ["__setitem__", "zero_", "__delitem__"]:
@@ -1035,7 +1037,7 @@ class ModelHistory:
         return wrapped_func
 
     def decorate_pytorch(
-        self, torch_module: types.ModuleType, orig_func_defs: List[Tuple]
+            self, torch_module: types.ModuleType, orig_func_defs: List[Tuple]
     ) -> Dict[Callable, Callable]:
         """Mutates all PyTorch functions (TEMPORARILY!) to save the outputs of any functions
         that return Tensors, along with marking them with metadata. Returns a list of tuples that
@@ -1084,7 +1086,7 @@ class ModelHistory:
 
     @staticmethod
     def undecorate_pytorch(
-        torch_module, orig_func_defs: List[Tuple], input_tensors: List[torch.Tensor]
+            torch_module, orig_func_defs: List[Tuple], input_tensors: List[torch.Tensor]
     ):
         """
         Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
@@ -1136,7 +1138,7 @@ class ModelHistory:
 
     @staticmethod
     def collect_orig_func_defs(
-        torch_module: types.ModuleType, orig_func_defs: List[Tuple]
+            torch_module: types.ModuleType, orig_func_defs: List[Tuple]
     ):
         """Collects the original torch function definitions, so they can be restored after the logging is done.
 
@@ -1157,10 +1159,10 @@ class ModelHistory:
     ###########################
 
     def prepare_model(
-        self,
-        model: nn.Module,
-        module_orig_forward_funcs: Dict,
-        decorated_func_mapper: Dict[Callable, Callable],
+            self,
+            model: nn.Module,
+            module_orig_forward_funcs: Dict,
+            decorated_func_mapper: Dict[Callable, Callable],
     ):
         """Adds annotations and hooks to the model, and decorates any functions in the model.
 
@@ -1185,9 +1187,9 @@ class ModelHistory:
             # Decorate any torch functions in the model:
             for func_name, func in module.__dict__.items():
                 if (
-                    (func_name[0:2] == "__")
-                    or (not callable(func))
-                    or (func not in decorated_func_mapper)
+                        (func_name[0:2] == "__")
+                        or (not callable(func))
+                        or (func not in decorated_func_mapper)
                 ):
                     continue
                 module.__dict__[func_name] = decorated_func_mapper[func]
@@ -1217,7 +1219,7 @@ class ModelHistory:
             # Add decorators.
 
             if hasattr(module, "forward") and not hasattr(
-                module.forward, "tl_forward_call_is_decorated"
+                    module.forward, "tl_forward_call_is_decorated"
             ):
                 module_orig_forward_funcs[module] = module.forward
                 module.forward = self.module_forward_decorator(module.forward, module)
@@ -1246,18 +1248,18 @@ class ModelHistory:
             for attribute_name in dir(submodule):
                 attribute = getattr(submodule, attribute_name)
                 if issubclass(type(attribute), torch.Tensor) and not issubclass(
-                    type(attribute), torch.nn.Parameter
+                        type(attribute), torch.nn.Parameter
                 ):
                     if submodule.tl_module_address == "":
                         buffer_address = attribute_name
                     else:
                         buffer_address = (
-                            submodule.tl_module_address + "." + attribute_name
+                                submodule.tl_module_address + "." + attribute_name
                         )
                     self.log_source_tensor(attribute, "buffer", buffer_address)
 
     def module_forward_decorator(
-        self, orig_forward: Callable, module: nn.Module
+            self, orig_forward: Callable, module: nn.Module
     ) -> Callable:
         @wraps(orig_forward)
         def decorated_forward(*args, **kwargs):
@@ -1305,7 +1307,7 @@ class ModelHistory:
             for t in output_tensors:
                 # if identity module or tensor unchanged, run the identity function for bookkeeping
                 if (module.tl_module_type.lower() == "identity") or (
-                    t.tl_tensor_label_raw in input_tensor_labels
+                        t.tl_tensor_label_raw in input_tensor_labels
                 ):
                     t = getattr(torch, "identity")(t)
                 tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
@@ -1323,30 +1325,30 @@ class ModelHistory:
                 module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
             for (
-                t
+                    t
             ) in (
-                input_tensors
+                    input_tensors
             ):  # Now that module is finished, roll back the threads of all input tensors.
                 tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
                 input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
                 if (
-                    "+",
-                    module_entry_label[0],
-                    module_entry_label[1],
+                        "+",
+                        module_entry_label[0],
+                        module_entry_label[1],
                 ) in input_module_thread:
                     module_entry_ix = input_module_thread.index(
                         ("+", module_entry_label[0], module_entry_label[1])
                     )
                     tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
-                        :module_entry_ix
-                    ]
+                                                                   :module_entry_ix
+                                                                   ]
 
             return out
 
         return decorated_forward
 
     def log_whether_exited_submodule_is_bottom_level(
-        self, t: torch.Tensor, submodule: nn.Module
+            self, t: torch.Tensor, submodule: nn.Module
     ):
         """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule;
         that is, that only one tensor operation happened inside the submodule.
@@ -1366,8 +1368,8 @@ class ModelHistory:
 
         # If it was initialized inside the model and nothing entered the module, it's bottom-level.
         if (
-            tensor_entry.initialized_inside_model
-            and len(submodule.tl_tensors_entered_labels) == 0
+                tensor_entry.initialized_inside_model
+                and len(submodule.tl_tensors_entered_labels) == 0
         ):
             tensor_entry.is_bottom_level_submodule_output = True
             tensor_entry.bottom_level_submodule_pass_exited = (
@@ -1381,7 +1383,7 @@ class ModelHistory:
             parent_tensor = self[parent_label]
             parent_modules_entered = parent_tensor.modules_entered
             if (len(parent_modules_entered) == 0) or (
-                parent_modules_entered[-1] != submodule_address
+                    parent_modules_entered[-1] != submodule_address
             ):
                 tensor_entry.is_bottom_level_submodule_output = False
                 return False
@@ -1395,7 +1397,7 @@ class ModelHistory:
         return True
 
     def get_all_submodules(
-        self, model: nn.Module, is_top_level_model: bool = True
+            self, model: nn.Module, is_top_level_model: bool = True
     ) -> List[nn.Module]:
         """Recursively gets list of all submodules for given module, no matter their level in the
         hierarchy; this includes the model itself.
@@ -1417,10 +1419,10 @@ class ModelHistory:
         return submodules
 
     def cleanup_model(
-        self,
-        model: nn.Module,
-        module_orig_forward_funcs: Dict[nn.Module, Callable],
-        decorated_func_mapper: Dict[Callable, Callable],
+            self,
+            model: nn.Module,
+            module_orig_forward_funcs: Dict[nn.Module, Callable],
+            decorated_func_mapper: Dict[Callable, Callable],
     ):
         """Reverses all temporary changes to the model (namely, the forward hooks and added
         model attributes) that were added for PyTorch x-ray (scout's honor; leave no trace).
@@ -1460,9 +1462,9 @@ class ModelHistory:
 
     @staticmethod
     def restore_module_attributes(
-        module: nn.Module,
-        decorated_func_mapper: Dict[Callable, Callable],
-        attribute_keyword: str = "tl",
+            module: nn.Module,
+            decorated_func_mapper: Dict[Callable, Callable],
+            attribute_keyword: str = "tl",
     ):
         for attribute_name in dir(module):
             if attribute_name.startswith(attribute_keyword):
@@ -1470,17 +1472,17 @@ class ModelHistory:
                 continue
             attr = getattr(module, attribute_name)
             if (
-                isinstance(attr, Callable)
-                and (attr in decorated_func_mapper)
-                and (attribute_name[0:2] != "__")
+                    isinstance(attr, Callable)
+                    and (attr in decorated_func_mapper)
+                    and (attribute_name[0:2] != "__")
             ):
                 setattr(module, attribute_name, decorated_func_mapper[attr])
 
     def restore_model_attributes(
-        self,
-        model: nn.Module,
-        decorated_func_mapper: Dict[Callable, Callable],
-        attribute_keyword: str = "tl",
+            self,
+            model: nn.Module,
+            decorated_func_mapper: Dict[Callable, Callable],
+            attribute_keyword: str = "tl",
     ):
         """Recursively clears the given attribute from all modules in the model.
 
@@ -1520,7 +1522,7 @@ class ModelHistory:
                 attribute = getattr(submodule, attribute_name)
                 if issubclass(type(attribute), torch.Tensor):
                     if not issubclass(type(attribute), torch.nn.Parameter) and hasattr(
-                        attribute, "tl_tensor_label_raw"
+                            attribute, "tl_tensor_label_raw"
                     ):
                         delattr(attribute, "tl_tensor_label_raw")
                     else:
@@ -1528,18 +1530,18 @@ class ModelHistory:
                 elif type(attribute) in [list, tuple, set]:
                     for item in attribute:
                         if issubclass(type(item), torch.Tensor) and hasattr(
-                            item, "tl_tensor_label_raw"
+                                item, "tl_tensor_label_raw"
                         ):
                             delattr(item, "tl_tensor_label_raw")
                 elif type(attribute) == dict:
                     for key, val in attribute.items():
                         if issubclass(type(val), torch.Tensor) and hasattr(
-                            val, "tl_tensor_label_raw"
+                                val, "tl_tensor_label_raw"
                         ):
                             delattr(val, "tl_tensor_label_raw")
 
     def get_op_nums_from_user_labels(
-        self, which_layers: Union[str, List[Union[str, int]]]
+            self, which_layers: Union[str, List[Union[str, int]]]
     ) -> List[int]:
         """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
         the numbers that were generated on the fly during the forward pass, such that they can be
@@ -1592,12 +1594,12 @@ class ModelHistory:
         return raw_tensor_nums_to_save
 
     def save_new_activations(
-        self,
-        model: nn.Module,
-        input_args: Union[torch.Tensor, List[Any]],
-        input_kwargs: Dict[Any, Any] = None,
-        layers_to_save: Union[str, List] = "all",
-        random_seed: Optional[int] = None,
+            self,
+            model: nn.Module,
+            input_args: Union[torch.Tensor, List[Any]],
+            input_kwargs: Dict[Any, Any] = None,
+            layers_to_save: Union[str, List] = "all",
+            random_seed: Optional[int] = None,
     ):
         """Saves activations to a new input to the model, replacing existing saved activations.
         This will be much faster than the initial call to log_forward_pass (since all the of the metadata has
@@ -1643,12 +1645,12 @@ class ModelHistory:
     ########################################
 
     def run_and_log_inputs_through_model(
-        self,
-        model: nn.Module,
-        input_args: Union[torch.Tensor, List[Any]],
-        input_kwargs: Dict[Any, Any] = None,
-        layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
-        random_seed: Optional[int] = None,
+            self,
+            model: nn.Module,
+            input_args: Union[torch.Tensor, List[Any]],
+            input_kwargs: Dict[Any, Any] = None,
+            layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
+            random_seed: Optional[int] = None,
     ):
         """Runs input through model and logs it in ModelHistory.
 
@@ -1673,17 +1675,18 @@ class ModelHistory:
 
         if not input_args:
             input_args = []
+        input_arg_names = inspect.getfullargspec(model.forward).args.remove('self')[0: len(input_args)]
 
         if not input_kwargs:
             input_kwargs = {}
 
         if (
-            type(model) == nn.DataParallel
+                type(model) == nn.DataParallel
         ):  # Unwrap model from DataParallel if relevant:
             model = model.module
 
         if (
-            len(list(model.parameters())) > 0
+                len(list(model.parameters())) > 0
         ):  # Get the model device by looking at the parameters:
             model_device = next(iter(model.parameters())).device
         else:
@@ -1697,26 +1700,21 @@ class ModelHistory:
         orig_func_defs = []
 
         try:
-            input_args = move_input_tensors_to_device(input_args, model_device)
-            input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
-            input_arg_tensors = get_vars_of_type_from_obj(
-                input_args, torch.Tensor, search_depth=5
-            )
-            input_kwarg_tensors = get_vars_of_type_from_obj(
-                input_kwargs, torch.Tensor, search_depth=5
-            )
-            input_tensors = input_arg_tensors + input_kwarg_tensors
+            input_tensors, input_tensor_addresses = self._fetch_label_move_input_tensors(input_args,
+                                                                                         input_arg_names,
+                                                                                         input_kwargs,
+                                                                                         model_device)
             buffer_tensors = list(model.buffers())
             tensors_to_decorate = input_tensors + buffer_tensors
             decorated_func_mapper = self.decorate_pytorch(torch, orig_func_defs)
             self.track_tensors = True
-            for t in input_tensors:
-                self.log_source_tensor(t, "input")
+            for i, t in enumerate(input_tensors):
+                self.log_source_tensor(t, "input", input_tensor_addresses[i])
             self.prepare_model(model, module_orig_forward_funcs, decorated_func_mapper)
             self.elapsed_time_setup = time.time() - self.pass_start_time
             outputs = model(*input_args, **input_kwargs)
             self.elapsed_time_forward_pass = (
-                time.time() - self.pass_start_time - self.elapsed_time_setup
+                    time.time() - self.pass_start_time - self.elapsed_time_setup
             )
             self.track_tensors = False
             output_tensors = get_vars_of_type_from_obj(
@@ -1745,16 +1743,60 @@ class ModelHistory:
             del outputs
             torch.cuda.empty_cache()
 
+    @staticmethod
+    def _fetch_label_move_input_tensors(input_args: List[Any],
+                                        input_arg_names: List[str],
+                                        input_kwargs: Dict,
+                                        model_device: str) -> Tuple[List[torch.Tensor], List[str]]:
+        """Fetches input tensors, gets their addresses, and moves them to the model device.
+
+        Args:
+            input_args: input arguments
+            input_arg_names: name of input arguments
+            input_kwargs: input keyword arguments
+            model_device: model device
+
+        Returns:
+            input tensors and their addresses
+        """
+        input_args = move_input_tensors_to_device(input_args, model_device)
+        input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
+        input_arg_tensors = [
+            get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5) for arg in input_args
+        ]
+        input_kwarg_tensors = [
+            get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5) for kwarg in input_kwargs.values()
+        ]
+        input_tensors = []
+        input_tensor_addresses = []
+        for a, arg_tensors in enumerate(input_arg_tensors):
+            for t, addr in arg_tensors:
+                input_tensors.append(t)
+                tensor_addr = f"input.{input_arg_names[a]}"
+                if addr != "":
+                    tensor_addr += f".{addr}"
+                input_tensor_addresses.append(tensor_addr)
+
+        for a, kwarg_tensors in enumerate(input_kwarg_tensors):
+            for t, addr in kwarg_tensors:
+                input_tensors.append(t)
+                tensor_addr = f"input.{list(input_kwargs.keys())[a]}"
+                if addr != "":
+                    tensor_addr += f".{addr}"
+                input_tensor_addresses.append(tensor_addr)
+
+        return input_tensors, input_tensor_addresses
+
     def log_source_tensor(
-        self, t: torch.Tensor, source: str, buffer_addr: Optional[str] = None
+            self, t: torch.Tensor, source: str, extra_address: Optional[str] = None
     ):
         if self.logging_mode == "exhaustive":
-            self.log_source_tensor_exhaustive(t, source, buffer_addr)
+            self.log_source_tensor_exhaustive(t, source, extra_address)
         elif self.logging_mode == "fast":
             self.log_source_tensor_fast(t, source)
 
     def log_source_tensor_exhaustive(
-        self, t: torch.Tensor, source: str, buffer_addr: Optional[str] = None
+            self, t: torch.Tensor, source: str, extra_addr: Optional[str] = None
     ):
         """Takes in an input or buffer tensor, marks it in-place with relevant information, and
         adds it to the log.
@@ -1762,7 +1804,7 @@ class ModelHistory:
         Args:
             t: the tensor
             source: either 'input' or 'buffer'
-            buffer_addr: Address of the buffer tensor if it's a buffer tensor
+            extra_addr: either the buffer address or the input address
         """
         layer_type = source
         # Fetch counters and increment to be ready for next tensor to be logged
@@ -1771,12 +1813,14 @@ class ModelHistory:
         realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
 
-        tensor_label = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+        tensor_label = f"{layer_type}_{layer_type_num}_raw"
 
         if source == "input":
             is_input_layer = True
             has_input_ancestor = True
+            input_output_address = extra_addr
             is_buffer_layer = False
+            buffer_address = None
             initialized_inside_model = False
             has_internally_initialized_ancestor = False
             input_ancestors = {tensor_label}
@@ -1787,12 +1831,14 @@ class ModelHistory:
         elif source == "buffer":
             is_input_layer = False
             has_input_ancestor = False
+            input_output_address = None
             is_buffer_layer = True
+            buffer_address = extra_addr
             initialized_inside_model = True
             has_internally_initialized_ancestor = True
             internally_initialized_ancestors = {tensor_label}
             input_ancestors = set()
-            operation_equivalence_type = f"buffer_{buffer_addr}"
+            operation_equivalence_type = f"buffer_{extra_addr}"
         else:
             raise ValueError("source must be either 'input' or 'buffer'")
 
@@ -1896,8 +1942,9 @@ class ModelHistory:
             "output_descendents": set(),
             "min_distance_from_output": None,
             "max_distance_from_output": None,
+            "input_output_address": input_output_address,
             "is_buffer_layer": is_buffer_layer,
-            "buffer_address": buffer_addr,
+            "buffer_address": buffer_address,
             "initialized_inside_model": initialized_inside_model,
             "has_internally_initialized_ancestor": has_internally_initialized_ancestor,
             "internally_initialized_parents": [],
@@ -1952,10 +1999,9 @@ class ModelHistory:
         # Fetch counters and increment to be ready for next tensor to be logged
         self.tensor_counter += 1
         self.raw_layer_type_counter[layer_type] += 1
-        realtime_tensor_num = self.tensor_counter
         layer_type_num = self.raw_layer_type_counter[layer_type]
 
-        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_raw"
         t.tl_tensor_label_raw = tensor_label_raw
         if tensor_label_raw in self.orphan_layers:
             return
@@ -1964,7 +2010,7 @@ class ModelHistory:
             return
         orig_tensor_entry = self.layer_dict_all_keys[orig_tensor_label]
         if (self.tensor_nums_to_save == "all") or (
-            orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save
+                orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save
         ):
             self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
             orig_tensor_entry.save_tensor_data(
@@ -1979,16 +2025,16 @@ class ModelHistory:
         )
 
     def log_function_output_tensors(
-        self,
-        func: Callable,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        arg_copies: Tuple[Any],
-        kwarg_copies: Dict[str, Any],
-        out_orig: Any,
-        func_time_elapsed: float,
-        func_rng_states: Dict,
-        is_bottom_level_func: bool,
+            self,
+            func: Callable,
+            args: Tuple[Any],
+            kwargs: Dict[str, Any],
+            arg_copies: Tuple[Any],
+            kwarg_copies: Dict[str, Any],
+            out_orig: Any,
+            func_time_elapsed: float,
+            func_rng_states: Dict,
+            is_bottom_level_func: bool,
     ):
         if self.logging_mode == "exhaustive":
             self.log_function_output_tensors_exhaustive(
@@ -2016,16 +2062,16 @@ class ModelHistory:
             )
 
     def log_function_output_tensors_exhaustive(
-        self,
-        func: Callable,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        arg_copies: Tuple[Any],
-        kwarg_copies: Dict[str, Any],
-        out_orig: Any,
-        func_time_elapsed: float,
-        func_rng_states: Dict,
-        is_bottom_level_func: bool,
+            self,
+            func: Callable,
+            args: Tuple[Any],
+            kwargs: Dict[str, Any],
+            arg_copies: Tuple[Any],
+            kwarg_copies: Dict[str, Any],
+            out_orig: Any,
+            func_time_elapsed: float,
+            func_rng_states: Dict,
+            is_bottom_level_func: bool,
     ):
         """Logs tensor or set of tensors that were computed from a function call.
 
@@ -2130,11 +2176,12 @@ class ModelHistory:
         fields_dict["output_descendents"] = set()
         fields_dict["min_distance_from_output"] = None
         fields_dict["max_distance_from_output"] = None
+        fields_dict["input_output_addr"] = None
         fields_dict["is_buffer_layer"] = False
         fields_dict["buffer_address"] = None
         fields_dict["initialized_inside_model"] = len(parent_layer_labels) == 0
         fields_dict["has_internally_initialized_ancestor"] = (
-            len(internally_initialized_ancestors) > 0
+                len(internally_initialized_ancestors) > 0
         )
         fields_dict["internally_initialized_parents"] = internal_parent_layer_labels
         fields_dict[
@@ -2237,13 +2284,13 @@ class ModelHistory:
             if fields_dict["initialized_inside_model"]:
                 self.internally_initialized_layers.append(new_tensor_label)
             if fields_dict["has_input_ancestor"] and any(
-                [
-                    (
-                        self[parent_layer].has_internally_initialized_ancestor
-                        and not self[parent_layer].has_input_ancestor
-                    )
-                    for parent_layer in fields_dict_onetensor["parent_layers"]
-                ]
+                    [
+                        (
+                                self[parent_layer].has_internally_initialized_ancestor
+                                and not self[parent_layer].has_input_ancestor
+                        )
+                        for parent_layer in fields_dict_onetensor["parent_layers"]
+                    ]
             ):
                 self.layers_where_internal_branches_merge_with_input.append(
                     new_tensor_label
@@ -2256,18 +2303,18 @@ class ModelHistory:
 
             # Check if parent is parent of a slice function, and deal with any complexities from that.
             if (new_tensor_entry.func_applied_name == "__getitem__") and (
-                len(new_tensor_entry.parent_layers) > 0
+                    len(new_tensor_entry.parent_layers) > 0
             ):
                 self[new_tensor_entry.parent_layers[0]].was_getitem_applied = True
 
             for parent_label in new_tensor_entry.parent_layers:
                 parent = self[parent_label]
                 if all(
-                    [
-                        parent.was_getitem_applied,
-                        parent.has_saved_activations,
-                        self.save_function_args,
-                    ]
+                        [
+                            parent.was_getitem_applied,
+                            parent.has_saved_activations,
+                            self.save_function_args,
+                        ]
                 ):
                     parent_tensor_contents = self._get_parent_contents(
                         parent_label,
@@ -2281,7 +2328,7 @@ class ModelHistory:
 
     @staticmethod
     def _get_parent_contents(
-        parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs
+            parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs
     ):
         """Utility function to get the value of a parent layer from the arguments passed to a function.
         """
@@ -2294,16 +2341,16 @@ class ModelHistory:
         raise ValueError("Parent layer not found in function arguments.")
 
     def log_function_output_tensors_fast(
-        self,
-        func: Callable,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        arg_copies: Tuple[Any],
-        kwarg_copies: Dict[str, Any],
-        out_orig: Any,
-        func_time_elapsed: float,
-        func_rng_states: Dict,
-        is_bottom_level_func: bool,
+            self,
+            func: Callable,
+            args: Tuple[Any],
+            kwargs: Dict[str, Any],
+            arg_copies: Tuple[Any],
+            kwarg_copies: Dict[str, Any],
+            out_orig: Any,
+            func_time_elapsed: float,
+            func_rng_states: Dict,
+            is_bottom_level_func: bool,
     ):
         # Collect information.
         func_name = func.__name__
@@ -2355,13 +2402,13 @@ class ModelHistory:
 
             # Check to make sure the graph didn't change.
             if any(
-                [
-                    orig_tensor_entry.realtime_tensor_num != self.tensor_counter,
-                    orig_tensor_entry.layer_type != layer_type,
-                    orig_tensor_entry.tensor_label_raw != tensor_label_raw,
-                    set(orig_tensor_entry.parent_layers)
-                    != set(parent_layer_labels_orig),
-                ]
+                    [
+                        orig_tensor_entry.realtime_tensor_num != self.tensor_counter,
+                        orig_tensor_entry.layer_type != layer_type,
+                        orig_tensor_entry.tensor_label_raw != tensor_label_raw,
+                        set(orig_tensor_entry.parent_layers)
+                        != set(parent_layer_labels_orig),
+                    ]
             ):
                 raise ValueError(
                     "The computational graph changed for this forward pass compared to the original "
@@ -2372,7 +2419,7 @@ class ModelHistory:
 
             # Update any relevant fields.
             if (self.tensor_nums_to_save == "all") or (
-                orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save
+                    orig_tensor_entry.realtime_tensor_num in self.tensor_nums_to_save
             ):
                 self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
                 orig_tensor_entry.save_tensor_data(
@@ -2437,13 +2484,13 @@ class ModelHistory:
             t.grad_fn.register_hook(log_grad_to_model_history)
 
     def _log_info_specific_to_single_function_output_tensor(
-        self,
-        t: torch.Tensor,
-        i: int,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        parent_param_passes: Dict[str, int],
-        fields_dict: Dict[str, Any],
+            self,
+            t: torch.Tensor,
+            i: int,
+            args: Tuple[Any],
+            kwargs: Dict[str, Any],
+            parent_param_passes: Dict[str, int],
+            fields_dict: Dict[str, Any],
     ):
         """Function to log handle the logging of info that's specific to a single output tensor
         (e.g., the shape), and not common to all output tensors.
@@ -2551,12 +2598,12 @@ class ModelHistory:
             fields_dict["internally_initialized_ancestors"] = {tensor_label_raw}
 
     def _make_tensor_log_entry(
-        self,
-        t: torch.Tensor,
-        fields_dict: Dict,
-        t_args: Optional[Tuple] = None,
-        t_kwargs: Optional[Dict] = None,
-        activation_postfunc: Optional[Callable] = None,
+            self,
+            t: torch.Tensor,
+            fields_dict: Dict,
+            t_args: Optional[Tuple] = None,
+            t_kwargs: Optional[Dict] = None,
+            activation_postfunc: Optional[Callable] = None,
     ):
         """
         Given a tensor, adds it to the model_history, additionally saving the activations and input
@@ -2577,7 +2624,7 @@ class ModelHistory:
 
         new_entry = TensorLogEntry(fields_dict)
         if (self.tensor_nums_to_save == "all") or (
-            new_entry.realtime_tensor_num in self.tensor_nums_to_save
+                new_entry.realtime_tensor_num in self.tensor_nums_to_save
         ):
             new_entry.save_tensor_data(
                 t, t_args, t_kwargs, self.save_function_args, activation_postfunc
@@ -2629,10 +2676,10 @@ class ModelHistory:
             return False
 
     def _get_parent_tensor_function_call_location(
-        self,
-        parent_log_entries: List[TensorLogEntry],
-        args: Tuple[Any],
-        kwargs: Dict[Any, Any],
+            self,
+            parent_log_entries: List[TensorLogEntry],
+            args: Tuple[Any],
+            kwargs: Dict[Any, Any],
     ) -> Dict:
         """Utility function that takes in the parent tensors, the args, and kwargs, and returns a dict specifying
         where in the function call the parent tensors were used.
@@ -2660,10 +2707,10 @@ class ModelHistory:
 
     @staticmethod
     def _find_arg_positions_for_single_parent(
-        parent_entry: TensorLogEntry,
-        arg_type: str,
-        arg_struct: Union[List, Tuple, Dict],
-        tensor_all_arg_positions: Dict,
+            parent_entry: TensorLogEntry,
+            arg_type: str,
+            arg_struct: Union[List, Tuple, Dict],
+            tensor_all_arg_positions: Dict,
     ):
         """Helper function that finds where a single parent tensor is used in either the args or kwargs of a function,
         and updates a dict that tracks this information.
@@ -2692,8 +2739,8 @@ class ModelHistory:
                 iterfunc2 = iterfunc_dict[type(arg)]
                 for sub_arg_key, sub_arg in iterfunc2(arg):
                     if (
-                        getattr(sub_arg, "tl_tensor_label_raw", -1)
-                        == parent_entry.tensor_label_raw
+                            getattr(sub_arg, "tl_tensor_label_raw", -1)
+                            == parent_entry.tensor_label_raw
                     ):
                         tensor_all_arg_positions[arg_type][
                             (arg_key, sub_arg_key)
@@ -2701,7 +2748,7 @@ class ModelHistory:
 
     @staticmethod
     def _get_ancestors_from_parents(
-        parent_entries: List[TensorLogEntry],
+            parent_entries: List[TensorLogEntry],
     ) -> Tuple[Set[str], Set[str]]:
         """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
@@ -2757,7 +2804,7 @@ class ModelHistory:
             )
 
     def _add_sibling_labels_for_new_tensor(
-        self, entry_to_update: TensorLogEntry, parent_tensor: TensorLogEntry
+            self, entry_to_update: TensorLogEntry, parent_tensor: TensorLogEntry
     ):
         """Given a tensor and specified parent tensor, adds sibling labels to that tensor, and
         adds itself as a sibling to all existing children.
@@ -2778,7 +2825,7 @@ class ModelHistory:
 
     @staticmethod
     def _process_parent_param_passes(
-        arg_parameters: List[torch.nn.Parameter],
+            arg_parameters: List[torch.nn.Parameter],
     ) -> Dict[str, int]:
         """Utility function to mark the parameters with barcodes, and log which pass they're on.
 
@@ -2816,7 +2863,7 @@ class ModelHistory:
         return param_group_barcode
 
     def _get_operation_equivalence_type(
-        self, args: Tuple, kwargs: Dict, i: int, layer_type: str, fields_dict: Dict
+            self, args: Tuple, kwargs: Dict, i: int, layer_type: str, fields_dict: Dict
     ):
         arg_hash = self._get_hash_from_args(args, kwargs)
         operation_equivalence_type = f"{layer_type}_{arg_hash}"
@@ -2840,7 +2887,7 @@ class ModelHistory:
                 arg_iter = make_var_iterable(arg)
                 for i, arg_elem in enumerate(arg_iter):
                     if not hasattr(arg_elem, "tl_tensor_label_raw") and not isinstance(
-                        arg_elem, torch.nn.Parameter
+                            arg_elem, torch.nn.Parameter
                     ):
                         args_to_hash.append(arg_elem)
                     elif hasattr(arg_elem, "tl_tensor_label_raw"):
@@ -2869,7 +2916,7 @@ class ModelHistory:
             if thread_module[0] == "+":
                 containing_modules.append(thread_module[1:])
             elif (thread_module[0] == "-") and (
-                thread_module[1:] in containing_modules
+                    thread_module[1:] in containing_modules
             ):
                 containing_modules.remove(thread_module[1:])
         return containing_modules
@@ -2925,7 +2972,7 @@ class ModelHistory:
         torch.cuda.empty_cache()
 
     def _remove_log_entry(
-        self, log_entry: TensorLogEntry, remove_references: bool = True
+            self, log_entry: TensorLogEntry, remove_references: bool = True
     ):
         """Given a TensorLogEntry, destroys it and all references to it.
 
@@ -3068,7 +3115,9 @@ class ModelHistory:
         self._log_time_elapsed()
         self._set_pass_finished()
 
-    def _add_output_layers(self, output_tensors: List[torch.Tensor]):
+    def _add_output_layers(
+            self, output_tensors: List[torch.Tensor], output_addresses: List[str]
+    ):
         """
         Adds dedicated output nodes to the graph.
         """
@@ -3081,11 +3130,10 @@ class ModelHistory:
             if i == len(self.output_layers) - 1:
                 new_output_node.is_last_output_layer = True
             self.tensor_counter += 1
-            new_output_node.tensor_label_raw = (
-                f"output_{i + 1}_{self.tensor_counter}_raw"
-            )
+            new_output_node.tensor_label_raw = f"output_{i + 1}_raw"
             new_output_node.layer_label_raw = new_output_node.tensor_label_raw
             new_output_node.realtime_tensor_num = self.tensor_counter
+            new_output_node.input_output_address = output_addresses[i]
 
             # Fix function information:
 
@@ -3208,7 +3256,7 @@ class ModelHistory:
             nodes_seen.add(tensor_label)
             tensor_entry = self.raw_tensor_dict[tensor_label]
             if (len(tensor_entry.child_layers) == 0) and (
-                not tensor_entry.is_output_layer
+                    not tensor_entry.is_output_layer
             ):
                 self._log_internally_terminated_tensor(tensor_label)
             for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
@@ -3295,13 +3343,13 @@ class ModelHistory:
 
             for next_node_label in getattr(current_node, forward_field):
                 if self._check_whether_to_add_node_to_flood_stack(
-                    next_node_label,
-                    orig_node,
-                    nodes_since_start,
-                    min_field,
-                    max_field,
-                    layer_logging_field,
-                    nodes_seen,
+                        next_node_label,
+                        orig_node,
+                        nodes_since_start,
+                        min_field,
+                        max_field,
+                        layer_logging_field,
+                        nodes_seen,
                 ):
                     node_stack.append(
                         (
@@ -3314,10 +3362,10 @@ class ModelHistory:
 
     @staticmethod
     def _update_node_distance_vals(
-        current_node: TensorLogEntry,
-        min_field: str,
-        max_field: str,
-        nodes_since_start: int,
+            current_node: TensorLogEntry,
+            min_field: str,
+            max_field: str,
+            nodes_since_start: int,
     ):
         if getattr(current_node, min_field) is None:
             setattr(current_node, min_field, nodes_since_start)
@@ -3338,14 +3386,14 @@ class ModelHistory:
             )
 
     def _check_whether_to_add_node_to_flood_stack(
-        self,
-        candidate_node_label: str,
-        orig_node_label: str,
-        nodes_since_start: int,
-        min_field: str,
-        max_field: str,
-        layer_logging_field: str,
-        nodes_seen: set,
+            self,
+            candidate_node_label: str,
+            orig_node_label: str,
+            nodes_since_start: int,
+            min_field: str,
+            max_field: str,
+            layer_logging_field: str,
+            nodes_seen: set,
     ):
         """
         Checker function to trim uninformative nodes when tracing input and output distances:
@@ -3373,7 +3421,7 @@ class ModelHistory:
         if tensor_label not in self.internally_terminated_layers:
             self.internally_terminated_layers.append(tensor_label)
             if tensor_entry.is_atomic_bool_layer and (
-                tensor_label not in self.internally_terminated_bool_layers
+                    tensor_label not in self.internally_terminated_bool_layers
             ):
                 self.internally_terminated_bool_layers.append(tensor_label)
                 tensor_entry.is_terminal_bool_layer = True
@@ -3394,7 +3442,7 @@ class ModelHistory:
             for next_tensor_label in node.parent_layers + node.child_layers:
                 next_node = self[next_tensor_label]
                 if (
-                    next_node.is_output_ancestor
+                        next_node.is_output_ancestor
                 ):  # we found the beginning of a conditional branch
                     next_node.cond_branch_start_children.append(node_label)
                     next_node.in_cond_branch = False
@@ -3465,7 +3513,7 @@ class ModelHistory:
             self._find_and_mark_same_layer_operations_starting_from_node(node)
 
     def _find_and_mark_same_layer_operations_starting_from_node(
-        self, node: TensorLogEntry
+            self, node: TensorLogEntry
     ):
         """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
         and crawls forward, finding and marking corresponding operations until there are none left.
@@ -3547,15 +3595,15 @@ class ModelHistory:
         )
 
     def _fetch_and_process_next_isomorphic_nodes(
-        self,
-        current_iso_nodes: List[str],
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        subgraphs_dict: Dict,
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict[str, set],
-        is_first_node: bool,
-        node_stack: List[List[str]],
+            self,
+            current_iso_nodes: List[str],
+            iso_node_groups: Dict[str, List[str]],
+            node_to_iso_group_dict: Dict[str, str],
+            subgraphs_dict: Dict,
+            node_to_subgraph_dict: Dict,
+            adjacent_subgraphs: Dict[str, set],
+            is_first_node: bool,
+            node_stack: List[List[str]],
     ):
         """Function that takes a set of isomorphic nodes, finds all sets of isomorphic successor nodes,
         then processes them and adds them to the stack.
@@ -3614,13 +3662,13 @@ class ModelHistory:
             )
 
     def _log_collisions_and_get_candidate_next_nodes(
-        self,
-        current_iso_nodes: List[str],
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict[str, set],
-        is_first_node: bool,
+            self,
+            current_iso_nodes: List[str],
+            iso_node_groups: Dict[str, List[str]],
+            node_to_iso_group_dict: Dict[str, str],
+            node_to_subgraph_dict: Dict,
+            adjacent_subgraphs: Dict[str, set],
+            is_first_node: bool,
     ) -> Dict:
         """Helper function that checks all parent and children nodes for overlap with nodes already added
         to subgraphs (either the same subgraph or another one), logs any adjacency among subgraphs,
@@ -3645,11 +3693,11 @@ class ModelHistory:
                 node_type_field = node_type_fields[node_type]
                 for neighbor_label in getattr(node, node_type_field):
                     if (
-                        neighbor_label in node_subgraph["node_set"]
+                            neighbor_label in node_subgraph["node_set"]
                     ):  # skip if backtracking own subgraph
                         continue
                     elif (
-                        neighbor_label in node_to_subgraph_dict
+                            neighbor_label in node_to_subgraph_dict
                     ):  # if hit another subgraph, mark them adjacent.
                         self._check_and_mark_subgraph_adjacency(
                             node_label,
@@ -3667,12 +3715,12 @@ class ModelHistory:
 
     @staticmethod
     def _check_and_mark_subgraph_adjacency(
-        node_label: str,
-        neighbor_label: str,
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict[str, set],
+            node_label: str,
+            neighbor_label: str,
+            iso_node_groups: Dict[str, List[str]],
+            node_to_iso_group_dict: Dict[str, str],
+            node_to_subgraph_dict: Dict,
+            adjacent_subgraphs: Dict[str, set],
     ):
         """Helper function that updates the adjacency status of two subgraphs
         """
@@ -3687,29 +3735,29 @@ class ModelHistory:
         neighbor_iso_group = node_to_iso_group_dict[neighbor_label]
         nodes_isomorphic_to_neighbor_node = iso_node_groups[neighbor_iso_group]
         if (
-            len(
-                node_subgraph["node_set"].intersection(
-                    nodes_isomorphic_to_neighbor_node
+                len(
+                    node_subgraph["node_set"].intersection(
+                        nodes_isomorphic_to_neighbor_node
+                    )
                 )
-            )
-            == 0
+                == 0
         ):
             return
 
         # Update adjacency
         if (node_subgraph_label in adjacent_subgraphs) and (
-            neighbor_subgraph_label in adjacent_subgraphs
+                neighbor_subgraph_label in adjacent_subgraphs
         ):
             return
         elif (node_subgraph_label in adjacent_subgraphs) and (
-            neighbor_subgraph_label not in adjacent_subgraphs
+                neighbor_subgraph_label not in adjacent_subgraphs
         ):
             adjacent_subgraphs[node_subgraph_label].add(neighbor_subgraph_label)
             adjacent_subgraphs[neighbor_subgraph_label] = adjacent_subgraphs[
                 node_subgraph_label
             ]
         elif (node_subgraph_label not in adjacent_subgraphs) and (
-            neighbor_subgraph_label in adjacent_subgraphs
+                neighbor_subgraph_label in adjacent_subgraphs
         ):
             adjacent_subgraphs[neighbor_subgraph_label].add(node_subgraph_label)
             adjacent_subgraphs[node_subgraph_label] = adjacent_subgraphs[
@@ -3722,7 +3770,7 @@ class ModelHistory:
 
     @staticmethod
     def _get_next_candidate_node(
-        successor_nodes_dict: Dict,
+            successor_nodes_dict: Dict,
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """Helper function to grab the next candidate node to consider out of the possible successor nodes.
 
@@ -3733,7 +3781,7 @@ class ModelHistory:
 
         """
         for subgraph_label, neighbor_type in it.product(
-            successor_nodes_dict, ["children", "parents"]
+                successor_nodes_dict, ["children", "parents"]
         ):
             subgraph_neighbors = successor_nodes_dict[subgraph_label][neighbor_type]
             if len(subgraph_neighbors) > 0:
@@ -3748,11 +3796,11 @@ class ModelHistory:
         return None, None, None
 
     def _get_nodes_isomorphic_to_candidate_node(
-        self,
-        candidate_node_label: str,
-        candidate_node_neighbor_type: str,
-        candidate_node_subgraph: str,
-        successor_nodes_dict: Dict,
+            self,
+            candidate_node_label: str,
+            candidate_node_neighbor_type: str,
+            candidate_node_subgraph: str,
+            successor_nodes_dict: Dict,
     ) -> List[Tuple[str, str]]:
         """Finds nodes that are isomorphic with a candidate node.
 
@@ -3779,8 +3827,8 @@ class ModelHistory:
             for c, comparison_node_label in enumerate(other_subgraph_nodes):
                 comparison_node = self[comparison_node_label]
                 if (
-                    comparison_node.operation_equivalence_type
-                    == candidate_node_operation_equivalence_type
+                        comparison_node.operation_equivalence_type
+                        == candidate_node_operation_equivalence_type
                 ):
                     new_equivalent_nodes.append(
                         (other_subgraph_nodes.pop(c), subgraph_label)
@@ -3796,13 +3844,13 @@ class ModelHistory:
         return new_equivalent_nodes
 
     def _log_new_isomorphic_nodes(
-        self,
-        new_isomorphic_nodes: List[Tuple[str, str]],
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        subgraphs_dict: Dict,
-        node_to_subgraph_dict: Dict,
-        node_stack: List[List[str]],
+            self,
+            new_isomorphic_nodes: List[Tuple[str, str]],
+            iso_node_groups: Dict[str, List[str]],
+            node_to_iso_group_dict: Dict[str, str],
+            subgraphs_dict: Dict,
+            node_to_subgraph_dict: Dict,
+            node_stack: List[List[str]],
     ):
         """Takes a new set of equivalent nodes, and logs them as equivalent, adds them to their subgraphs,
         and adds them to the stack.
@@ -3830,10 +3878,10 @@ class ModelHistory:
             node_stack.append(equivalent_node_labels)
 
     def _assign_and_log_isomorphic_nodes_to_same_layers(
-        self,
-        iso_node_groups: Dict[str, List],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict,
+            self,
+            iso_node_groups: Dict[str, List],
+            node_to_subgraph_dict: Dict,
+            adjacent_subgraphs: Dict,
     ):
         """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
         goes through and labels the layers as corresponding to each other. The rule is that nodes will be
@@ -3854,7 +3902,7 @@ class ModelHistory:
         for layer_label, layer_nodes in same_layer_node_groups.items():
             # Skip if the new layer asssignment reduces the number of equivalent layers.
             if len(layer_nodes) < max(
-                [len(self[layer].same_layer_operations) for layer in layer_nodes]
+                    [len(self[layer].same_layer_operations) for layer in layer_nodes]
             ):
                 continue
             # convert to list and sort
@@ -3869,10 +3917,10 @@ class ModelHistory:
                 node.layer_passes_total = len(layer_nodes)
 
     def _group_isomorphic_nodes_to_same_layers(
-        self,
-        iso_node_groups: Dict[str, List],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict,
+            self,
+            iso_node_groups: Dict[str, List],
+            node_to_subgraph_dict: Dict,
+            adjacent_subgraphs: Dict,
     ) -> Dict:
         same_layer_node_groups = defaultdict(
             set
@@ -3900,8 +3948,8 @@ class ModelHistory:
                     set(node2_param_types)
                 )
                 subgraphs_are_adjacent = (
-                    node1_subgraph_label in adjacent_subgraphs
-                    and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
+                        node1_subgraph_label in adjacent_subgraphs
+                        and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
                 )
                 if (len(overlapping_param_types) > 0) or subgraphs_are_adjacent:
                     earlier_node_label = sorted([node1_label, node2_label])[
@@ -3938,7 +3986,7 @@ class ModelHistory:
             for parent_label in node.parent_layers:
                 parent_node = self[parent_label]
                 if (not parent_node.has_input_ancestor) and (
-                    parent_label not in nodes_seen
+                        parent_label not in nodes_seen
                 ):
                     self._fix_modules_for_single_internal_tensor(
                         node, parent_node, "parent", node_stack, nodes_seen
@@ -3948,12 +3996,12 @@ class ModelHistory:
             for child_label in node.child_layers:
                 child_node = self[child_label]
                 if any(
-                    [
-                        node.has_input_ancestor,
-                        child_node.has_input_ancestor,
-                        child_label in nodes_seen,
-                        child_node.is_output_layer,
-                    ]
+                        [
+                            node.has_input_ancestor,
+                            child_node.has_input_ancestor,
+                            child_label in nodes_seen,
+                            child_node.is_output_layer,
+                        ]
                 ):
                     continue
                 self._fix_modules_for_single_internal_tensor(
@@ -3972,11 +4020,11 @@ class ModelHistory:
 
     @staticmethod
     def _fix_modules_for_single_internal_tensor(
-        starting_node: TensorLogEntry,
-        node_to_fix: TensorLogEntry,
-        node_type_to_fix: str,
-        node_stack: List[str],
-        nodes_seen: Set[str],
+            starting_node: TensorLogEntry,
+            node_to_fix: TensorLogEntry,
+            node_type_to_fix: str,
+            node_stack: List[str],
+            nodes_seen: Set[str],
     ):
         """Helper function to fix the containing modules for a single internally generated tensor.
         The rule is, start from the child node, and apply in reverse any modules that were entered or exited.
@@ -4042,21 +4090,36 @@ class ModelHistory:
             pass_num = tensor_log_entry.pass_num
             if pass_num == 1:
                 layer_type_num = layer_type_counter[layer_type]
-                layer_total_num = layer_total_counter
                 layer_type_counter[layer_type] += 1
-                layer_total_counter += 1
+                if layer_type in ["input", "buffer"]:
+                    layer_total_num = 0
+                else:
+                    layer_total_num = layer_total_counter
+                    layer_total_counter += 1
+
             else:  # inherit layer numbers from first pass of the layer
                 first_pass_tensor = self[tensor_log_entry.same_layer_operations[0]]
                 layer_type_num = first_pass_tensor.layer_type_num
-                layer_total_num = first_pass_tensor.layer_total_num
+                if layer_type in ["input", "buffer"]:
+                    layer_total_num = 0
+                else:
+                    layer_total_num = first_pass_tensor.layer_total_num
             tensor_log_entry.layer_type_num = layer_type_num
             tensor_log_entry.layer_total_num = layer_total_num
-            tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{layer_type_num}_{layer_total_num}:{pass_num}"
-            )
-            tensor_log_entry.layer_label_no_pass = (
-                f"{layer_type}_{layer_type_num}_{layer_total_num}"
-            )
+
+            if layer_type not in ["input", "output", "buffer"]:
+                tensor_log_entry.layer_label_w_pass = (
+                    f"{layer_type}_{layer_type_num}_{layer_total_num}:{pass_num}"
+                )
+                tensor_log_entry.layer_label_no_pass = (
+                    f"{layer_type}_{layer_type_num}_{layer_total_num}"
+                )
+            else:
+                tensor_log_entry.layer_label_w_pass = (
+                    f"{layer_type}_{layer_type_num}:{pass_num}"
+                )
+                tensor_log_entry.layer_label_no_pass = f"{layer_type}_{layer_type_num}"
+
             tensor_log_entry.layer_label_w_pass_short = (
                 f"{layer_type}_{layer_type_num}:{pass_num}"
             )
@@ -4090,8 +4153,16 @@ class ModelHistory:
         unique_layers_seen = (
             set()
         )  # to avoid double-counting params of recurrent layers
+        operation_num = 1
         for t, tensor_entry in enumerate(self):
-            tensor_entry.operation_num = t
+            if tensor_entry.layer_type in ["input", "buffer"]:
+                tensor_entry.operation_num = 0
+            elif tensor_entry.layer_type == "output":
+                tensor_entry.operation_num = None  # fix later
+            else:
+                tensor_entry.operation_num = operation_num
+                self.num_operations += 1
+                operation_num += 1
 
             # Replace any layer names with their final names:
             self._replace_layer_names_for_tensor_entry(tensor_entry)
@@ -4111,7 +4182,7 @@ class ModelHistory:
 
             # Tally the parameter sizes:
             if (
-                tensor_entry.layer_label_no_pass not in unique_layers_seen
+                    tensor_entry.layer_label_no_pass not in unique_layers_seen
             ):  # only count params once
                 if tensor_entry.computed_with_params:
                     self.total_param_layers += 1
@@ -4137,6 +4208,9 @@ class ModelHistory:
             if tensor_entry.in_cond_branch:
                 self.model_has_conditional_branching = True
 
+        for layer in self.output_layers:
+            self[layer].operation_num = self.num_operations
+
         # Extract the module hierarchy information
         for module in self.top_level_module_passes:
             module_no_pass = module.split(":")[0]
@@ -4148,8 +4222,8 @@ class ModelHistory:
             for module_child in module_children:
                 module_child_nopass = module_child.split(":")[0]
                 if (
-                    module_child_nopass
-                    not in self.module_children[module_parent_nopass]
+                        module_child_nopass
+                        not in self.module_children[module_parent_nopass]
                 ):
                     self.module_children[module_parent_nopass].append(
                         module_child_nopass
@@ -4164,14 +4238,14 @@ class ModelHistory:
     def _log_time_elapsed(self):
         self.pass_end_time = time.time()
         self.elapsed_time_cleanup = (
-            self.pass_end_time
-            - self.pass_start_time
-            - self.elapsed_time_setup
-            - self.elapsed_time_forward_pass
+                self.pass_end_time
+                - self.pass_start_time
+                - self.elapsed_time_setup
+                - self.elapsed_time_forward_pass
         )
         self.elapsed_time_total = self.pass_end_time - self.pass_start_time
         self.elapsed_time_torchlens_logging = (
-            self.elapsed_time_total - self.elapsed_time_function_calls
+                self.elapsed_time_total - self.elapsed_time_function_calls
         )
 
     def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLogEntry):
@@ -4217,8 +4291,8 @@ class ModelHistory:
         # Fix the field names for different children tensor versions:
         new_child_tensor_versions = {}
         for (
-            child_label,
-            tensor_version,
+                child_label,
+                tensor_version,
         ) in tensor_entry.children_tensor_versions.items():
             new_child_tensor_versions[
                 self.raw_to_final_layer_labels[child_label]
@@ -4234,7 +4308,7 @@ class ModelHistory:
         """
         containing_module_pass_label = None
         for m, module_pass_label in enumerate(
-            tensor_entry.containing_modules_origin_nested
+                tensor_entry.containing_modules_origin_nested
         ):
             module_name, module_pass = module_pass_label
             module_pass_nice_label = f"{module_name}:{module_pass}"
@@ -4243,20 +4317,20 @@ class ModelHistory:
             if tensor_entry.layer_label not in self.module_layers[module_name]:
                 self.module_layers[module_name].append(tensor_entry.layer_label)
             if (
-                tensor_entry.layer_label
-                not in self.module_pass_layers[module_pass_nice_label]
+                    tensor_entry.layer_label
+                    not in self.module_pass_layers[module_pass_nice_label]
             ):
                 self.module_pass_layers[module_pass_nice_label].append(
                     tensor_entry.layer_label
                 )
             if (m == 0) and (
-                module_pass_nice_label not in self.top_level_module_passes
+                    module_pass_nice_label not in self.top_level_module_passes
             ):
                 self.top_level_module_passes.append(module_pass_nice_label)
             else:
                 if (containing_module_pass_label is not None) and (
-                    module_pass_nice_label
-                    not in self.module_pass_children[containing_module_pass_label]
+                        module_pass_nice_label
+                        not in self.module_pass_children[containing_module_pass_label]
                 ):
                     self.module_pass_children[containing_module_pass_label].append(
                         module_pass_nice_label
@@ -4342,7 +4416,7 @@ class ModelHistory:
         self.tensor_fsize_saved_nice = human_readable_size(self.tensor_fsize_saved)
 
     def _add_lookup_keys_for_tensor_entry(
-        self, tensor_entry: TensorLogEntry, tensor_index: int, num_tensors_to_keep: int
+            self, tensor_entry: TensorLogEntry, tensor_index: int, num_tensors_to_keep: int
     ):
         """Adds the user-facing lookup keys for a TensorLogEntry, both to itself
         and to the ModelHistory top-level record.
@@ -4392,9 +4466,11 @@ class ModelHistory:
             if self.module_num_passes[module_name] == 1:
                 lookup_keys_for_tensor.append(f"{module_name}")
 
-        # If buffer tensor, allow using buffer address as a key.
+        # Allow using buffer/input/output address as key, too:
         if tensor_entry.is_buffer_layer:
             lookup_keys_for_tensor.append(tensor_entry.buffer_address)
+        elif tensor_entry.is_input_layer or tensor_entry.is_output_layer:
+            lookup_keys_for_tensor.append(tensor_entry.input_output_address)
 
         lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
 
@@ -4543,7 +4619,7 @@ class ModelHistory:
         for layer_label, node in self.layer_dict_main_keys.items():
             layer_label_no_pass = self[layer_label].layer_label_no_pass
             if (
-                layer_label_no_pass in self.layer_dict_rolled
+                    layer_label_no_pass in self.layer_dict_rolled
             ):  # If rolled-up layer has already been added, fetch it:
                 rolled_node = self.layer_dict_rolled[layer_label_no_pass]
             else:  # If it hasn't been added, make it:
@@ -4558,14 +4634,14 @@ class ModelHistory:
     # ********************************************
 
     def render_graph(
-        self,
-        vis_opt: str = "unrolled",
-        vis_nesting_depth: int = 1000,
-        vis_outpath: str = "modelgraph",
-        save_only: bool = False,
-        vis_fileformat: str = "pdf",
-        show_buffer_layers: bool = False,
-        direction: str = "bottomup",
+            self,
+            vis_opt: str = "unrolled",
+            vis_nesting_depth: int = 1000,
+            vis_outpath: str = "modelgraph",
+            save_only: bool = False,
+            vis_fileformat: str = "pdf",
+            show_buffer_layers: bool = False,
+            direction: str = "bottomup",
     ) -> None:
         """Renders the computational graph for the model.
 
@@ -4674,15 +4750,15 @@ class ModelHistory:
         os.remove(vis_outpath)
 
     def _add_node_to_graphviz(
-        self,
-        node: Union[TensorLogEntry, RolledTensorLogEntry],
-        graphviz_graph,
-        module_edge_dict: Dict,
-        edges_used: Set,
-        vis_opt: str,
-        collapsed_modules: Set,
-        vis_nesting_depth: int = 1000,
-        show_buffer_layers: bool = False,
+            self,
+            node: Union[TensorLogEntry, RolledTensorLogEntry],
+            graphviz_graph,
+            module_edge_dict: Dict,
+            edges_used: Set,
+            vis_opt: str,
+            collapsed_modules: Set,
+            vis_nesting_depth: int = 1000,
+            show_buffer_layers: bool = False,
     ):
         """Addes a node and its relevant edges to the graphviz figure.
 
@@ -4766,11 +4842,11 @@ class ModelHistory:
         return node_color
 
     def _construct_collapsed_module_node(
-        self, node, graphviz_graph, collapsed_modules, vis_opt, vis_nesting_depth
+            self, node, graphviz_graph, collapsed_modules, vis_opt, vis_nesting_depth
     ):
         module_address_w_pass = node.containing_modules_origin_nested[
             vis_nesting_depth - 1
-        ]
+            ]
         module_tuple = module_address_w_pass.split(":")
         module_output_layer = self[module_address_w_pass]
         module_output_shape = module_output_layer.tensor_shape
@@ -4846,9 +4922,9 @@ class ModelHistory:
         )
 
     def _get_node_address_shape_color(
-        self,
-        node: Union[TensorLogEntry, RolledTensorLogEntry],
-        show_buffer_layers: bool,
+            self,
+            node: Union[TensorLogEntry, RolledTensorLogEntry],
+            show_buffer_layers: bool,
     ) -> Tuple[str, str, str]:
         """Gets the node shape, address, and color for the graphviz figure.
 
@@ -4866,7 +4942,7 @@ class ModelHistory:
             only_non_buffer_layer = False
 
         if (node.is_bottom_level_submodule_output or only_non_buffer_layer) and (
-            len(node.containing_modules_origin_nested) > 0
+                len(node.containing_modules_origin_nested) > 0
         ):
             if type(node) == TensorLogEntry:
                 module_pass_exited = node.containing_modules_origin_nested[-1]
@@ -4887,6 +4963,10 @@ class ModelHistory:
             node_address = "<br/>@" + node.buffer_address
             node_shape = "box"
             node_color = self.BUFFER_NODE_COLOR
+        elif node.is_output_layer or node.is_input_layer:
+            node_address = "<br/>@" + node.input_output_address
+            node_shape = "oval"
+            node_color = "black"
         else:
             node_address = ""
             node_shape = "oval"
@@ -4895,18 +4975,18 @@ class ModelHistory:
         return node_address, node_shape, node_color
 
     def _check_if_only_non_buffer_in_module(
-        self, node: Union[TensorLogEntry, RolledTensorLogEntry]
+            self, node: Union[TensorLogEntry, RolledTensorLogEntry]
     ):
         """Utility function to check if a layer is the only non-buffer layer in the module
         """
         # Check whether it leaves its module:
         if not (
-            (len(node.modules_exited) > 0)
-            and (len(node.containing_modules_origin_nested) > 0)
-            and (
-                node.containing_modules_origin_nested[-1].split(":")[0]
-                in node.modules_exited
-            )
+                (len(node.modules_exited) > 0)
+                and (len(node.containing_modules_origin_nested) > 0)
+                and (
+                        node.containing_modules_origin_nested[-1].split(":")[0]
+                        in node.modules_exited
+                )
         ):
             return False
 
@@ -4919,16 +4999,16 @@ class ModelHistory:
             else:
                 parent_layer = self.layer_dict_rolled[parent_layer_label]
             if (not parent_layer.is_buffer_layer) and (
-                (len(parent_layer.containing_modules_origin_nested) > 0)
-                and parent_layer.containing_modules_origin_nested[-1]
-                == node.containing_modules_origin_nested[-1]
+                    (len(parent_layer.containing_modules_origin_nested) > 0)
+                    and parent_layer.containing_modules_origin_nested[-1]
+                    == node.containing_modules_origin_nested[-1]
             ):
                 return False
 
         return True
 
     def _get_node_bg_color(
-        self, node: Union[TensorLogEntry, RolledTensorLogEntry]
+            self, node: Union[TensorLogEntry, RolledTensorLogEntry]
     ) -> str:
         """Gets the node background color for the graphviz figure.
 
@@ -4951,10 +5031,10 @@ class ModelHistory:
         return bg_color
 
     def _make_node_label(
-        self,
-        node: Union[TensorLogEntry, RolledTensorLogEntry],
-        node_address: str,
-        vis_opt: str,
+            self,
+            node: Union[TensorLogEntry, RolledTensorLogEntry],
+            node_address: str,
+            vis_opt: str,
     ) -> str:
         """Gets the text for the graphviz node.
         """
@@ -5016,16 +5096,16 @@ class ModelHistory:
         return param_label
 
     def _add_edges_for_node(
-        self,
-        parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
-        parent_is_collapsed_module: bool,
-        vis_nesting_depth: int,
-        node_color: str,
-        module_edge_dict: Dict,
-        edges_used: Set,
-        graphviz_graph,
-        vis_opt: str = "unrolled",
-        show_buffer_layers: bool = False,
+            self,
+            parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
+            parent_is_collapsed_module: bool,
+            vis_nesting_depth: int,
+            node_color: str,
+            module_edge_dict: Dict,
+            edges_used: Set,
+            graphviz_graph,
+            vis_opt: str = "unrolled",
+            show_buffer_layers: bool = False,
     ):
         """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
 
@@ -5058,7 +5138,7 @@ class ModelHistory:
             if parent_is_collapsed_module:
                 module_name_w_pass = parent_node.containing_modules_origin_nested[
                     vis_nesting_depth - 1
-                ]
+                    ]
                 module_tuple = module_name_w_pass.split(":")
                 if vis_opt == "unrolled":
                     tail_name = "pass".join(module_tuple)
@@ -5074,7 +5154,7 @@ class ModelHistory:
             if child_is_collapsed_module:
                 module_name_w_pass = child_node.containing_modules_origin_nested[
                     vis_nesting_depth - 1
-                ]
+                    ]
                 module_tuple = module_name_w_pass.split(":")
                 if vis_opt == "unrolled":
                     head_name = "pass".join(module_tuple)
@@ -5084,24 +5164,24 @@ class ModelHistory:
                 head_name = child_node.layer_label.replace(":", "pass")
 
             both_nodes_collapsed_modules = (
-                parent_is_collapsed_module and child_is_collapsed_module
+                    parent_is_collapsed_module and child_is_collapsed_module
             )
 
             # If both child and parent are in a collapsed module of the same pass, skip the edge:
             if both_nodes_collapsed_modules:
                 child_containing_modules = child_node.containing_modules_origin_nested[
-                    :
-                ]
+                                           :
+                                           ]
                 parent_containing_modules = parent_node.containing_modules_origin_nested[
-                    :
-                ]
+                                            :
+                                            ]
                 if child_node.is_bottom_level_submodule_output:
                     child_containing_modules = child_containing_modules[:-1]
                 if parent_node.is_bottom_level_submodule_output:
                     parent_containing_modules = parent_containing_modules[:-1]
                 if (
-                    child_containing_modules[:vis_nesting_depth]
-                    == parent_containing_modules[:vis_nesting_depth]
+                        child_containing_modules[:vis_nesting_depth]
+                        == parent_containing_modules[:vis_nesting_depth]
                 ):
                     continue
 
@@ -5165,11 +5245,11 @@ class ModelHistory:
                 )
 
     def _label_node_arguments_if_needed(
-        self,
-        parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
-        child_node: Union[TensorLogEntry, RolledTensorLogEntry],
-        edge_dict: Dict,
-        show_buffer_layers: bool = False,
+            self,
+            parent_node: Union[TensorLogEntry, RolledTensorLogEntry],
+            child_node: Union[TensorLogEntry, RolledTensorLogEntry],
+            edge_dict: Dict,
+            show_buffer_layers: bool = False,
     ):
         """Checks if a node has multiple non-commutative arguments, and if so, adds labels in edge_dict
 
@@ -5180,7 +5260,7 @@ class ModelHistory:
             show_buffer_layers: whether to show the buffer layers
         """
         if not self._check_whether_to_mark_arguments_on_edge(
-            child_node, show_buffer_layers
+                child_node, show_buffer_layers
         ):
             return
 
@@ -5190,7 +5270,7 @@ class ModelHistory:
                 arg_type
             ].items():
                 if (parent_node.layer_label == arg_label) or (
-                    parent_node.layer_label in arg_label
+                        parent_node.layer_label in arg_label
                 ):
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
@@ -5202,9 +5282,9 @@ class ModelHistory:
             edge_dict["label"] = edge_dict["label"][:-1] + "<br/>" + arg_label[1:]
 
     def _check_whether_to_mark_arguments_on_edge(
-        self,
-        child_node: Union[TensorLogEntry, RolledTensorLogEntry],
-        show_buffer_layers: bool = False,
+            self,
+            child_node: Union[TensorLogEntry, RolledTensorLogEntry],
+            show_buffer_layers: bool = False,
     ):
         if child_node.layer_type in self.COMMUTE_FUNCS:
             return False
@@ -5217,7 +5297,7 @@ class ModelHistory:
             return self._check_whether_to_mark_arguments_on_rolled_edge(child_node)
 
     def _check_whether_to_mark_arguments_on_unrolled_edge(
-        self, child_node: TensorLogEntry, show_buffer_layers: bool = False
+            self, child_node: TensorLogEntry, show_buffer_layers: bool = False
     ):
         num_parents_shown = len(child_node.parent_layers)
 
@@ -5235,7 +5315,7 @@ class ModelHistory:
             return False
 
     def _check_whether_to_mark_arguments_on_rolled_edge(
-        self, child_node: RolledTensorLogEntry, show_buffer_layers: bool = False
+            self, child_node: RolledTensorLogEntry, show_buffer_layers: bool = False
     ):
         for pass_num, pass_parents in child_node.parent_layers_per_pass.items():
             num_parents_shown = len(pass_parents)
@@ -5253,9 +5333,9 @@ class ModelHistory:
 
     @staticmethod
     def _label_rolled_pass_nums(
-        child_node: RolledTensorLogEntry,
-        parent_node: RolledTensorLogEntry,
-        edge_dict: Dict,
+            child_node: RolledTensorLogEntry,
+            parent_node: RolledTensorLogEntry,
+            edge_dict: Dict,
     ):
         """Adds labels for the pass numbers to the edge dict for rolled nodes.
 
@@ -5279,10 +5359,10 @@ class ModelHistory:
 
     @staticmethod
     def _get_lowest_containing_module_for_two_nodes(
-        node1: Union[TensorLogEntry, RolledTensorLogEntry],
-        node2: Union[TensorLogEntry, RolledTensorLogEntry],
-        both_nodes_collapsed_modules: bool,
-        vis_nesting_depth: int,
+            node1: Union[TensorLogEntry, RolledTensorLogEntry],
+            node2: Union[TensorLogEntry, RolledTensorLogEntry],
+            both_nodes_collapsed_modules: bool,
+            vis_nesting_depth: int,
     ):
         """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
 
@@ -5312,9 +5392,9 @@ class ModelHistory:
             node2_nestmodules = node2_modules[:]
 
         if (
-            (len(node1_modules) == 0)
-            or (len(node2_modules) == 0)
-            or (node1_modules[0] != node2_modules[0])
+                (len(node1_modules) == 0)
+                or (len(node2_modules) == 0)
+                or (node1_modules[0] != node2_modules[0])
         ):
             return -1  # no submodule contains them both.
 
@@ -5342,13 +5422,13 @@ class ModelHistory:
         return containing_module
 
     def _add_gradient_edge(
-        self,
-        parent_layer,
-        child_layer,
-        edge_style,
-        containing_module,
-        module_edge_dict,
-        graphviz_graph,
+            self,
+            parent_layer,
+            child_layer,
+            edge_style,
+            containing_module,
+            module_edge_dict,
+            graphviz_graph,
     ):
         """Adds a backwards edge if both layers have saved gradients, showing the backward pass.
         """
@@ -5368,7 +5448,7 @@ class ModelHistory:
                 graphviz_graph.edge(**edge_dict)
 
     def _set_up_subgraphs(
-        self, graphviz_graph, vis_opt: str, module_edge_dict: Dict[str, List]
+            self, graphviz_graph, vis_opt: str, module_edge_dict: Dict[str, List]
     ):
         """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
         set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
@@ -5409,15 +5489,15 @@ class ModelHistory:
             )
 
     def _setup_subgraphs_recurse(
-        self,
-        starting_subgraph,
-        parent_graph_list: List,
-        module_edge_dict,
-        module_submodule_dict,
-        subgraph_stack,
-        nesting_depth,
-        max_nesting_depth,
-        vis_opt,
+            self,
+            starting_subgraph,
+            parent_graph_list: List,
+            module_edge_dict,
+            module_submodule_dict,
+            subgraph_stack,
+            nesting_depth,
+            max_nesting_depth,
+            vis_opt,
     ):
         """Utility function to crawl down several layers deep into nested subgraphs.
 
@@ -5452,7 +5532,7 @@ class ModelHistory:
             subgraph_title = subgraph_module
 
         if (
-            nesting_depth < len(parent_graph_list) - 1
+                nesting_depth < len(parent_graph_list) - 1
         ):  # we haven't gotten to the bottom yet, keep going.
             with starting_subgraph.subgraph(name=cluster_name) as s:
                 self._setup_subgraphs_recurse(
@@ -5469,10 +5549,10 @@ class ModelHistory:
         else:  # we made it, make the subgraph and add all edges.
             with starting_subgraph.subgraph(name=cluster_name) as s:
                 nesting_fraction = (
-                    max_nesting_depth - nesting_depth
-                ) / max_nesting_depth
+                                           max_nesting_depth - nesting_depth
+                                   ) / max_nesting_depth
                 pen_width = (
-                    self.MIN_MODULE_PENWIDTH + nesting_fraction * self.PENWIDTH_RANGE
+                        self.MIN_MODULE_PENWIDTH + nesting_fraction * self.PENWIDTH_RANGE
                 )
                 if module_edge_dict[subgraph_name]["has_input_ancestor"]:
                     line_style = "solid"
@@ -5490,7 +5570,7 @@ class ModelHistory:
                     s.edge(**edge_dict)
                 subgraph_children = module_submodule_dict[subgraph_name_w_pass]
                 for (
-                    subgraph_child
+                        subgraph_child
                 ) in subgraph_children:  # it's weird but have to go in reverse order.
                     subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
 
@@ -5516,7 +5596,7 @@ class ModelHistory:
             module_submodules = module_submodule_dict[module]
 
             if (len(module_edges) == 0) and (
-                len(module_submodules) == 0
+                    len(module_submodules) == 0
             ):  # can ignore if no edges and no children.
                 continue
             elif (len(module_edges) > 0) and (len(module_submodules) == 0):
@@ -5543,7 +5623,7 @@ class ModelHistory:
     # ********************************************
 
     def validate_saved_activations(
-        self, ground_truth_output_tensors: List[torch.Tensor], verbose: bool = False
+            self, ground_truth_output_tensors: List[torch.Tensor], verbose: bool = False
     ) -> bool:
         """Starting from outputs and internally terminated tensors, checks whether computing their values from the saved
         values of their input tensors yields their actually saved values, and whether computing their values from
@@ -5556,9 +5636,9 @@ class ModelHistory:
         for i, output_layer_label in enumerate(self.output_layers):
             output_layer = self[output_layer_label]
             if not tensor_nanequal(
-                output_layer.tensor_contents,
-                ground_truth_output_tensors[i],
-                allow_tolerance=False,
+                    output_layer.tensor_contents,
+                    ground_truth_output_tensors[i],
+                    allow_tolerance=False,
             ):
                 print(
                     f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
@@ -5592,12 +5672,12 @@ class ModelHistory:
         return True
 
     def validate_parents_of_saved_layer(
-        self,
-        layer_to_validate_parents_for_label: str,
-        validated_layers: Set[str],
-        validated_child_edges_for_each_layer: Dict[str, Set[str]],
-        layers_to_validate_parents_for: List[str],
-        verbose: bool = False,
+            self,
+            layer_to_validate_parents_for_label: str,
+            validated_layers: Set[str],
+            validated_child_edges_for_each_layer: Dict[str, Set[str]],
+            layers_to_validate_parents_for: List[str],
+            verbose: bool = False,
     ) -> bool:
         """Given a layer, checks that 1) all parent tensors appear properly in the saved arguments for that layer,
         2) that executing the function for that layer with the saved parent layer activations yields the
@@ -5615,7 +5695,7 @@ class ModelHistory:
 
         # Check that the arguments are logged correctly:
         if not self._check_layer_arguments_logged_correctly(
-            layer_to_validate_parents_for_label
+                layer_to_validate_parents_for_label
         ):
             print(
                 f"Parent arguments for layer {layer_to_validate_parents_for_label} are not logged properly; "
@@ -5627,7 +5707,7 @@ class ModelHistory:
         # values of the layer itself:
 
         if not self._check_whether_func_on_saved_parents_yields_saved_tensor(
-            layer_to_validate_parents_for_label, perturb=False
+                layer_to_validate_parents_for_label, perturb=False
         ):
             return False
 
@@ -5636,15 +5716,15 @@ class ModelHistory:
 
         for perturb_layer in layer_to_validate_parents_for.parent_layers:
             if (
-                layer_to_validate_parents_for.func_applied_name
-                in self.FUNCS_NOT_TO_PERTURB_IN_VALIDATION
+                    layer_to_validate_parents_for.func_applied_name
+                    in self.FUNCS_NOT_TO_PERTURB_IN_VALIDATION
             ):
                 continue
             if not self._check_whether_func_on_saved_parents_yields_saved_tensor(
-                layer_to_validate_parents_for_label,
-                perturb=True,
-                layers_to_perturb=[perturb_layer],
-                verbose=verbose,
+                    layer_to_validate_parents_for_label,
+                    perturb=True,
+                    layers_to_perturb=[perturb_layer],
+                    verbose=verbose,
             ):
                 return False
 
@@ -5656,7 +5736,7 @@ class ModelHistory:
                 layer_to_validate_parents_for_label
             )
             if validated_child_edges_for_each_layer[parent_layer_label] == set(
-                parent_layer.child_layers
+                    parent_layer.child_layers
             ):
                 validated_layers.add(parent_layer_label)
                 if not (parent_layer.is_input_layer or parent_layer.is_buffer_layer):
@@ -5706,7 +5786,7 @@ class ModelHistory:
         return True
 
     def _validate_layer_against_arg(
-        self, target_layer, parent_layer, arg_type, key, val
+            self, target_layer, parent_layer, arg_type, key, val
     ):
         if type(val) in [list, tuple]:
             for v, subval in enumerate(val):
@@ -5736,12 +5816,12 @@ class ModelHistory:
         return True
 
     def _check_arglocs_correct_for_arg(
-        self,
-        target_layer: TensorLogEntry,
-        parent_layer: TensorLogEntry,
-        arg_type: str,
-        argloc_key: Union[str, tuple],
-        saved_arg_val: Any,
+            self,
+            target_layer: TensorLogEntry,
+            parent_layer: TensorLogEntry,
+            arg_type: str,
+            argloc_key: Union[str, tuple],
+            saved_arg_val: Any,
     ):
         """For a given layer and an argument to its child layer, checks that it is logged correctly:
         that is, that it's logged as an argument if it matches, and is not logged as an argument if it doesn't match.
@@ -5762,27 +5842,27 @@ class ModelHistory:
         else:
             parent_layer_matches_arg = False
         parent_layer_logged_as_arg = (
-            argloc_key in target_layer.parent_layer_arg_locs[arg_type]
-        ) and (
-            target_layer.parent_layer_arg_locs[arg_type][argloc_key]
-            == parent_layer_label
-        )
+                                             argloc_key in target_layer.parent_layer_arg_locs[arg_type]
+                                     ) and (
+                                             target_layer.parent_layer_arg_locs[arg_type][argloc_key]
+                                             == parent_layer_label
+                                     )
 
         if (
-            parent_layer_matches_arg
-            and (not parent_layer_logged_as_arg)
-            and (parent_activations.numel() != 0)
-            and (parent_activations.dtype != torch.bool)
-            and (not tensor_all_nan(parent_activations))
-            and (parent_activations.abs().float().mean() != 0)
-            and (parent_activations.abs().float().mean() != 1)
-            and not any(
-                [
-                    torch.equal(parent_activations, self[other_parent].tensor_contents)
-                    for other_parent in target_layer.parent_layers
-                    if other_parent != parent_layer_label
-                ]
-            )
+                parent_layer_matches_arg
+                and (not parent_layer_logged_as_arg)
+                and (parent_activations.numel() != 0)
+                and (parent_activations.dtype != torch.bool)
+                and (not tensor_all_nan(parent_activations))
+                and (parent_activations.abs().float().mean() != 0)
+                and (parent_activations.abs().float().mean() != 1)
+                and not any(
+            [
+                torch.equal(parent_activations, self[other_parent].tensor_contents)
+                for other_parent in target_layer.parent_layers
+                if other_parent != parent_layer_label
+            ]
+        )
         ):
             print(
                 f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
@@ -5801,11 +5881,11 @@ class ModelHistory:
         return True
 
     def _check_whether_func_on_saved_parents_yields_saved_tensor(
-        self,
-        layer_to_validate_parents_for_label: str,
-        perturb: bool = False,
-        layers_to_perturb: List[str] = None,
-        verbose: bool = False,
+            self,
+            layer_to_validate_parents_for_label: str,
+            perturb: bool = False,
+            layers_to_perturb: List[str] = None,
+            verbose: bool = False,
     ) -> bool:
         """Checks whether executing the saved function for a layer on the saved value of its parent layers
         in fact yields the saved activations for that layer.
@@ -5824,47 +5904,47 @@ class ModelHistory:
         layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
         if (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
-            and torch.equal(
-                self[layers_to_perturb[0]].tensor_contents,
-                layer_to_validate_parents_for.creation_args[1],
-            )
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
+                and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
         ):
             return True
         elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
-            and (layer_to_validate_parents_for.creation_args[1].dtype == torch.bool)
-            and torch.equal(
-                self[layers_to_perturb[0]].tensor_contents,
-                layer_to_validate_parents_for.creation_args[1],
-            )
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
+                and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+                and (layer_to_validate_parents_for.creation_args[1].dtype == torch.bool)
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
         ):
             return True
         elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "cross_entropy")
-            and torch.equal(
-                self[layers_to_perturb[0]].tensor_contents,
-                layer_to_validate_parents_for.creation_args[1],
-            )
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "cross_entropy")
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
         ):
             return True
         elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == tuple)
-            and (
-                type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor
-            )
-            and (layer_to_validate_parents_for.creation_args[1][0].dtype == torch.bool)
-            and torch.equal(
-                self[layers_to_perturb[0]].tensor_contents,
-                layer_to_validate_parents_for.creation_args[1][0],
-            )
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
+                and (type(layer_to_validate_parents_for.creation_args[1]) == tuple)
+                and (
+                        type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor
+                )
+                and (layer_to_validate_parents_for.creation_args[1][0].dtype == torch.bool)
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1][0],
+        )
         ):
             return True
 
@@ -5894,14 +5974,14 @@ class ModelHistory:
             ]
 
         if (
-            not (
-                tensor_nanequal(
-                    recomputed_output,
-                    layer_to_validate_parents_for.tensor_contents,
-                    allow_tolerance=True,
+                not (
+                        tensor_nanequal(
+                            recomputed_output,
+                            layer_to_validate_parents_for.tensor_contents,
+                            allow_tolerance=True,
+                        )
                 )
-            )
-            and not perturb
+                and not perturb
         ):
             print(
                 f"Saved activations for layer {layer_to_validate_parents_for_label} do not match the "
@@ -5910,12 +5990,12 @@ class ModelHistory:
             return False
 
         if (
-            tensor_nanequal(
-                recomputed_output,
-                layer_to_validate_parents_for.tensor_contents,
-                allow_tolerance=True,
-            )
-            and perturb
+                tensor_nanequal(
+                    recomputed_output,
+                    layer_to_validate_parents_for.tensor_contents,
+                    allow_tolerance=True,
+                )
+                and perturb
         ):
             return self._posthoc_perturb_check(
                 layer_to_validate_parents_for, layers_to_perturb, verbose
@@ -5924,9 +6004,9 @@ class ModelHistory:
         return True
 
     def _prepare_input_args_for_validating_layer(
-        self,
-        layer_to_validate_parents_for: TensorLogEntry,
-        layers_to_perturb: List[str],
+            self,
+            layer_to_validate_parents_for: TensorLogEntry,
+            layers_to_perturb: List[str],
     ) -> Dict:
         """Prepares the input arguments for validating the saved activations of a layer.
 
@@ -5947,13 +6027,13 @@ class ModelHistory:
 
         for arg_type in ["args", "kwargs"]:
             for (
-                key,
-                parent_layer_arg,
+                    key,
+                    parent_layer_arg,
             ) in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type].items():
                 parent_layer = self[parent_layer_arg]
                 if (
-                    layer_to_validate_parents_for.layer_label
-                    in parent_layer.children_tensor_versions
+                        layer_to_validate_parents_for.layer_label
+                        in parent_layer.children_tensor_versions
                 ):
                     parent_values = parent_layer.children_tensor_versions[
                         layer_to_validate_parents_for.layer_label
@@ -6015,7 +6095,7 @@ class ModelHistory:
 
     @staticmethod
     def _perturb_layer_activations(
-        parent_activations: torch.Tensor, output_activations: torch.Tensor
+            parent_activations: torch.Tensor, output_activations: torch.Tensor
     ) -> torch.Tensor:
         """
         Perturbs the values of a saved tensor.
@@ -6080,10 +6160,10 @@ class ModelHistory:
         return perturbed_activations
 
     def _posthoc_perturb_check(
-        self,
-        layer_to_validate_parents_for: TensorLogEntry,
-        layers_to_perturb: List[str],
-        verbose: bool = False,
+            self,
+            layer_to_validate_parents_for: TensorLogEntry,
+            layers_to_perturb: List[str],
+            verbose: bool = False,
     ) -> bool:
         """If a layer fails the "perturbation check"--that is, if perturbing the values of parent
         layers doesn't change the values relative to the layer's saved values--checks whether one of the
@@ -6101,38 +6181,38 @@ class ModelHistory:
         if layer_to_validate_parents_for.tensor_dtype == torch.bool:
             return True
         elif (
-            (layer_to_validate_parents_for.func_applied_name == "to")
-            and (len(layer_to_validate_parents_for.creation_args) > 1)
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+                (layer_to_validate_parents_for.func_applied_name == "to")
+                and (len(layer_to_validate_parents_for.creation_args) > 1)
+                and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
         ):
             return True
         elif (
-            (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-            and (type(layer_to_validate_parents_for.creation_args[2]) == torch.Tensor)
-            and (
-                layer_to_validate_parents_for.creation_args[0].shape
-                == layer_to_validate_parents_for.creation_args[2].shape
-            )
+                (layer_to_validate_parents_for.func_applied_name == "__setitem__")
+                and (type(layer_to_validate_parents_for.creation_args[2]) == torch.Tensor)
+                and (
+                        layer_to_validate_parents_for.creation_args[0].shape
+                        == layer_to_validate_parents_for.creation_args[2].shape
+                )
         ):
             return True
         elif (
-            layer_to_validate_parents_for.func_applied_name in ["__getitem__", "unbind"]
+                layer_to_validate_parents_for.func_applied_name in ["__getitem__", "unbind"]
         ) and (
-            layer_to_validate_parents_for.tensor_contents.numel() < 20
+                layer_to_validate_parents_for.tensor_contents.numel() < 20
         ):  # some elements can be the same by chance
             return True
         elif (
-            (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
-            and (layer_to_validate_parents_for.creation_args[1].unique() < 20)
+                (layer_to_validate_parents_for.func_applied_name == "__getitem__")
+                and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+                and (layer_to_validate_parents_for.creation_args[1].unique() < 20)
         ):
             return True
         elif (layer_to_validate_parents_for.func_applied_name == "max") and len(
-            layer_to_validate_parents_for.creation_args
+                layer_to_validate_parents_for.creation_args
         ) > 1:
             return True
         elif (
-            layer_to_validate_parents_for.func_applied_name == "max"
+                layer_to_validate_parents_for.func_applied_name == "max"
         ) and not torch.is_floating_point(
             layer_to_validate_parents_for.creation_args[0]
         ):
@@ -6149,7 +6229,7 @@ class ModelHistory:
                 .sum()
             )
             if (num_inf == layer_to_validate_parents_for.tensor_contents.numel()) or (
-                num_nan == layer_to_validate_parents_for.tensor_contents.numel()
+                    num_nan == layer_to_validate_parents_for.tensor_contents.numel()
             ):
                 return True
 
@@ -6164,16 +6244,16 @@ class ModelHistory:
             for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):
                 # Skip if it's the argument itself:
                 if (
-                    (
-                        key
-                        in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]
-                    )
-                    and (
+                        (
+                                key
+                                in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]
+                        )
+                        and (
                         layer_to_validate_parents_for.parent_layer_arg_locs[arg_type][
                             key
                         ]
-                    )
-                    in layers_to_perturb
+                )
+                        in layers_to_perturb
                 ):
                     continue
                 arg_is_special = self._check_if_arg_is_special_val(val)
@@ -6271,7 +6351,7 @@ class ModelHistory:
             key: Lookup key used by the user.
         """
         if (type(key) == int) and (
-            key >= len(self.layer_list) or key < -len(self.layer_list)
+                key >= len(self.layer_list) or key < -len(self.layer_list)
         ):
             raise ValueError(
                 f"You specified the layer with index {key}, but there are only {len(self.layer_list)} "
@@ -6401,7 +6481,7 @@ class ModelHistory:
                 pass_str = ""
 
             if self.layer_dict_main_keys[layer_barcode].has_saved_activations and (
-                not self.all_layers_saved
+                    not self.all_layers_saved
             ):
                 s += "\n\t\t* "
             else:
@@ -6528,18 +6608,18 @@ class ModelHistory:
 
 
 def run_model_and_save_specified_activations(
-    model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Dict[Any, Any],
-    layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
-    keep_unsaved_layers: bool = True,
-    output_device: str = "same",
-    activation_postfunc: Optional[Callable] = None,
-    mark_input_output_distances: bool = False,
-    detach_saved_tensors: bool = False,
-    save_function_args: bool = False,
-    save_gradients: bool = False,
-    random_seed: Optional[int] = None,
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List[Any]],
+        input_kwargs: Dict[Any, Any],
+        layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
+        keep_unsaved_layers: bool = True,
+        output_device: str = "same",
+        activation_postfunc: Optional[Callable] = None,
+        mark_input_output_distances: bool = False,
+        detach_saved_tensors: bool = False,
+        save_function_args: bool = False,
+        save_gradients: bool = False,
+        random_seed: Optional[int] = None,
 ) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;

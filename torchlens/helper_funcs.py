@@ -82,7 +82,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
 
 
 def make_short_barcode_from_input(
-    things_to_hash: List[Any], barcode_len: int = 16
+        things_to_hash: List[Any], barcode_len: int = 16
 ) -> str:
     """Utility function that takes a list of anything and returns a short hash of it.
 
@@ -222,10 +222,11 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
 
 
 def get_vars_of_type_from_obj(
-    obj: Any,
-    which_type: Type,
-    subclass_exceptions: Optional[List] = None,
-    search_depth: int = 3,
+        obj: Any,
+        which_type: Type,
+        subclass_exceptions: Optional[List] = None,
+        search_depth: int = 3,
+        get_addresses=False
 ) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
@@ -235,10 +236,13 @@ def get_vars_of_type_from_obj(
         which_type: Type of variable to pull out
         subclass_exceptions: subclasses that you don't want to pull out.
         search_depth: How many layers deep to search before giving up.
+        get_addresses: if True, then returns list of tuples (object, address), where the
+            address is how you'd index to get the object
 
     Returns:
         List of objects of desired type found in the input object.
     """
+    # TODO: implement functionality for fetching the address
     if subclass_exceptions is None:
         subclass_exceptions = []
     this_stack = [obj]
@@ -256,11 +260,11 @@ def get_vars_of_type_from_obj(
 
 
 def search_stack_for_vars_of_type(
-    current_stack: List,
-    which_type: Type,
-    tensors_in_obj: List,
-    tensor_ids_in_obj: List,
-    subclass_exceptions: List,
+        current_stack: List,
+        which_type: Type,
+        tensors_in_obj: List,
+        tensor_ids_in_obj: List,
+        subclass_exceptions: List,
 ):
     """Helper function that searches current stack for vars of a given type, and
     returns the next stack to search.
@@ -321,7 +325,7 @@ def extend_search_stack_from_item(item: Any, next_stack: List):
 
 
 def get_attr_values_from_tensor_list(
-    tensor_list: List[torch.Tensor], field_name: str
+        tensor_list: List[torch.Tensor], field_name: str
 ) -> List[Any]:
     """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
 
@@ -409,10 +413,10 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -
         return True
 
     if (
-        allow_tolerance
-        and (t1_nonan.dtype != torch.bool)
-        and (t2_nonan.dtype != torch.bool)
-        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+            allow_tolerance
+            and (t1_nonan.dtype != torch.bool)
+            and (t2_nonan.dtype != torch.bool)
+            and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
     ):
         return True
 
