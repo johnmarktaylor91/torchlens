@@ -590,12 +590,13 @@ class RolledTensorLogEntry:
         """
         if source_node.has_input_ancestor:
             self.has_input_ancestor = True
-        self.input_output_address = ''.join([char if (source_node.input_output_address[c] == char) else '*'
-                                             for c, char in enumerate(self.input_output_address)])
-        if self.input_output_address[-1] == '.':
-            self.input_output_address = self.input_output_address[:-1]
-        if self.input_output_address[-1] == '*':
-            self.input_output_address = self.input_output_address.strip('*') + '*'
+        if not any([self.input_output_address is None, source_node.input_output_address is None]):
+            self.input_output_address = ''.join([char if (source_node.input_output_address[c] == char) else '*'
+                                                 for c, char in enumerate(self.input_output_address)])
+            if self.input_output_address[-1] == '.':
+                self.input_output_address = self.input_output_address[:-1]
+            if self.input_output_address[-1] == '*':
+                self.input_output_address = self.input_output_address.strip('*') + '*'
 
     def add_pass_info(self, source_node: TensorLogEntry):
         """Adds information about another pass of the same layer: namely, mark information about what the
@@ -1681,7 +1682,7 @@ class ModelHistory:
 
         if not input_args:
             input_args = []
-        input_arg_names = inspect.getfullargspec(model.forward).args.remove('self')[0: len(input_args)]
+        input_arg_names = self._get_input_arg_names(model, input_args)
 
         if not input_kwargs:
             input_kwargs = {}
@@ -1723,9 +1724,11 @@ class ModelHistory:
                     time.time() - self.pass_start_time - self.elapsed_time_setup
             )
             self.track_tensors = False
-            output_tensors, output_tensor_addresses = get_vars_of_type_from_obj(
-                outputs, torch.Tensor, search_depth=5, return_addresses=True
+            output_tensors_w_addresses = get_vars_of_type_from_obj(
+                outputs, torch.Tensor, search_depth=5, return_addresses=True, allow_repeats=True
             )
+            output_tensors = [t for t, _ in output_tensors_w_addresses]
+            output_tensor_addresses = [addr for _, addr in output_tensors_w_addresses]
             for t in output_tensors:
                 self.output_layers.append(t.tl_tensor_label_raw)
                 self.raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
@@ -1748,6 +1751,14 @@ class ModelHistory:
             del output_tensors
             del outputs
             torch.cuda.empty_cache()
+
+    @staticmethod
+    def _get_input_arg_names(model, input_args):
+        input_arg_names = inspect.getfullargspec(model.forward).args
+        if 'self' in input_arg_names:
+            input_arg_names.remove('self')
+        input_arg_names = input_arg_names[0: len(input_args)]
+        return input_arg_names
 
     @staticmethod
     def _fetch_label_move_input_tensors(input_args: List[Any],
@@ -2182,7 +2193,7 @@ class ModelHistory:
         fields_dict["output_descendents"] = set()
         fields_dict["min_distance_from_output"] = None
         fields_dict["max_distance_from_output"] = None
-        fields_dict["input_output_addr"] = None
+        fields_dict["input_output_address"] = None
         fields_dict["is_buffer_layer"] = False
         fields_dict["buffer_address"] = None
         fields_dict["initialized_inside_model"] = len(parent_layer_labels) == 0
@@ -2950,7 +2961,7 @@ class ModelHistory:
         return most_nested_containing_modules
 
     @staticmethod
-    def _get_call_stack_dicts(start_level: int = 3):
+    def _get_call_stack_dicts():
         call_stack = inspect.stack()
         call_stack = [
             inspect.getframeinfo(call_stack[i][0], context=19)
@@ -2966,6 +2977,11 @@ class ModelHistory:
             }
             for caller in call_stack
         ]
+        call_stack_dicts = [d for d in call_stack_dicts if not any([d['call_fname'].endswith('model_history.py'),
+                                                                    d['call_fname'].endswith(
+                                                                        'torchlens/helper_funcs.py'),
+                                                                    d['call_fname'].endswith(
+                                                                        'torchlens/user_funcs.py')])]
         return call_stack_dicts
 
     def cleanup(self):
@@ -5070,7 +5086,10 @@ class ModelHistory:
         param_label = self._make_param_label(node)
 
         tensor_fsize = node.tensor_fsize_nice
-        node_title = f"<b>{node.layer_type}_{node.layer_type_num}_{node.layer_total_num}{pass_label}</b>"
+        if node.layer_type in ['input', 'output', 'buffer']:
+            node_title = f"<b>{node.layer_type}_{node.layer_type_num}{pass_label}</b>"
+        else:
+            node_title = f"<b>{node.layer_type}_{node.layer_type_num}_{node.layer_total_num}{pass_label}</b>"
 
         if node.is_terminal_bool_layer:
             label_text = str(node.atomic_bool_val).upper()

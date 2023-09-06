@@ -226,7 +226,8 @@ def get_vars_of_type_from_obj(
         which_type: Type,
         subclass_exceptions: Optional[List] = None,
         search_depth: int = 3,
-        return_addresses=False
+        return_addresses=False,
+        allow_repeats=False
 ) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
@@ -238,6 +239,7 @@ def get_vars_of_type_from_obj(
         search_depth: How many layers deep to search before giving up.
         return_addresses: if True, then returns list of tuples (object, address), where the
             address is how you'd index to get the object
+        allow_repeats: whether to allow repeats of the same tensor
 
     Returns:
         List of objects of desired type found in the input object.
@@ -256,6 +258,7 @@ def get_vars_of_type_from_obj(
             tensor_addresses,
             tensor_ids_in_obj,
             subclass_exceptions,
+            allow_repeats
         )
 
     if return_addresses:
@@ -271,6 +274,7 @@ def search_stack_for_vars_of_type(
         tensor_addresses: List,
         tensor_ids_in_obj: List,
         subclass_exceptions: List,
+        allow_repeats: bool
 ):
     """Helper function that searches current stack for vars of a given type, and
     returns the next stack to search.
@@ -282,6 +286,7 @@ def search_stack_for_vars_of_type(
         tensor_addresses: Addresses of the tensors found so far
         tensor_ids_in_obj: List of tensor ids found in the object so far
         subclass_exceptions: Subclasses of tensors not to use.
+        allow_repeats: whether to allow repeat tensors
 
     Returns:
         The next stack.
@@ -292,9 +297,10 @@ def search_stack_for_vars_of_type(
     while len(current_stack) > 0:
         (item, address) = current_stack.pop(0)
         item_class = type(item)
-        if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
+        if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or \
+                ((id(item) in tensor_ids_in_obj) and not allow_repeats):
             continue
-        if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
+        if issubclass(item_class, which_type):
             tensors_in_obj.append(item)
             tensor_addresses.append(address)
             tensor_ids_in_obj.append(id(item))
