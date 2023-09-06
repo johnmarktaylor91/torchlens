@@ -226,7 +226,7 @@ def get_vars_of_type_from_obj(
         which_type: Type,
         subclass_exceptions: Optional[List] = None,
         search_depth: int = 3,
-        get_addresses=False
+        return_addresses=False
 ) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
@@ -236,33 +236,39 @@ def get_vars_of_type_from_obj(
         which_type: Type of variable to pull out
         subclass_exceptions: subclasses that you don't want to pull out.
         search_depth: How many layers deep to search before giving up.
-        get_addresses: if True, then returns list of tuples (object, address), where the
+        return_addresses: if True, then returns list of tuples (object, address), where the
             address is how you'd index to get the object
 
     Returns:
         List of objects of desired type found in the input object.
     """
-    # TODO: implement functionality for fetching the address
     if subclass_exceptions is None:
         subclass_exceptions = []
-    this_stack = [obj]
+    this_stack = [(obj, '')]
     tensors_in_obj = []
+    tensor_addresses = []
     tensor_ids_in_obj = []
     for _ in range(search_depth):
         this_stack = search_stack_for_vars_of_type(
             this_stack,
             which_type,
             tensors_in_obj,
+            tensor_addresses,
             tensor_ids_in_obj,
             subclass_exceptions,
         )
-    return tensors_in_obj
+
+    if return_addresses:
+        return list(zip(tensors_in_obj, tensor_addresses))
+    else:
+        return tensors_in_obj
 
 
 def search_stack_for_vars_of_type(
         current_stack: List,
         which_type: Type,
         tensors_in_obj: List,
+        tensor_addresses: List,
         tensor_ids_in_obj: List,
         subclass_exceptions: List,
 ):
@@ -273,6 +279,7 @@ def search_stack_for_vars_of_type(
         current_stack: The current stack.
         which_type: Type of variable to pull out
         tensors_in_obj: List of tensors found in the object so far
+        tensor_addresses: Addresses of the tensors found so far
         tensor_ids_in_obj: List of tensor ids found in the object so far
         subclass_exceptions: Subclasses of tensors not to use.
 
@@ -283,20 +290,21 @@ def search_stack_for_vars_of_type(
     if len(current_stack) == 0:
         return current_stack
     while len(current_stack) > 0:
-        item = current_stack.pop(0)
+        (item, address) = current_stack.pop(0)
         item_class = type(item)
         if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]):
             continue
         if all([issubclass(item_class, which_type), id(item) not in tensor_ids_in_obj]):
             tensors_in_obj.append(item)
+            tensor_addresses.append(address)
             tensor_ids_in_obj.append(id(item))
         if hasattr(item, "shape"):
             continue
-        extend_search_stack_from_item(item, next_stack)
+        extend_search_stack_from_item(item, address, next_stack)
     return next_stack
 
 
-def extend_search_stack_from_item(item: Any, next_stack: List):
+def extend_search_stack_from_item(item: Any, address: str, next_stack: List):
     """Utility function to iterate through a single item to populate the next stack to search for.
 
     Args:
@@ -304,10 +312,16 @@ def extend_search_stack_from_item(item: Any, next_stack: List):
         next_stack: Stack to add to
     """
     if type(item) in [list, tuple, set]:
-        next_stack.extend(list(item))
+        if address == '':
+            next_stack.extend([(x, f'{i}') for i, x in enumerate(item)])
+        else:
+            next_stack.extend([(x, f'{address}.{i}') for i, x in enumerate(item)])
 
     if type(item) == dict:
-        next_stack.extend(list(item.values()))
+        if address == '':
+            next_stack.extend([(val, key) for key, val in item.items()])
+        else:
+            next_stack.extend([(val, f'{address}.{key}') for key, val in item.items()])
 
     for attr_name in dir(item):
         if attr_name.startswith("__"):
@@ -321,7 +335,10 @@ def extend_search_stack_from_item(item: Any, next_stack: List):
             continue
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
-        next_stack.append(attr)
+        if address == '':
+            next_stack.append((attr, attr_name.strip('_')))
+        else:
+            next_stack.append((attr, f'{address}.{attr_name.strip("_")}'))
 
 
 def get_attr_values_from_tensor_list(
@@ -437,23 +454,6 @@ def safe_to(x: Any, device: str):
         return clean_to(x, device)
     else:
         return x
-
-
-def move_input_tensors_to_device(x: Any, device: str):
-    """Moves all tensors in the input to the given device.
-
-    Args:
-        x: Input to the model.
-        device: Device to move the tensors to.
-    """
-    if type(x) == list:
-        x = [safe_to(t, device) for t in x]
-    elif type(x) == dict:
-        for k in x.keys():
-            x[k] = safe_to(x[k], device)
-    elif type(x) == torch.Tensor:
-        x = x.to(device)
-    return x
 
 
 def get_tensor_memory_amount(t: torch.Tensor) -> int:

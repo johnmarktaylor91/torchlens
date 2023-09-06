@@ -34,7 +34,6 @@ from torchlens.helper_funcs import (
     make_random_barcode,
     make_short_barcode_from_input,
     make_var_iterable,
-    move_input_tensors_to_device,
     nested_getattr,
     print_override,
     remove_entry_from_list,
@@ -554,6 +553,7 @@ class RolledTensorLogEntry:
         self.is_last_output_layer = source_entry.is_last_output_layer
         self.is_buffer_layer = source_entry.is_buffer_layer
         self.buffer_address = source_entry.buffer_address
+        self.input_output_address = source_entry.input_output_address
         self.cond_branch_start_children = source_entry.cond_branch_start_children
         self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
         self.atomic_bool_val = source_entry.atomic_bool_val
@@ -590,6 +590,12 @@ class RolledTensorLogEntry:
         """
         if source_node.has_input_ancestor:
             self.has_input_ancestor = True
+        self.input_output_address = ''.join([char if (source_node.input_output_address[c] == char) else '*'
+                                             for c, char in enumerate(self.input_output_address)])
+        if self.input_output_address[-1] == '.':
+            self.input_output_address = self.input_output_address[:-1]
+        if self.input_output_address[-1] == '*':
+            self.input_output_address = self.input_output_address.strip('*') + '*'
 
     def add_pass_info(self, source_node: TensorLogEntry):
         """Adds information about another pass of the same layer: namely, mark information about what the
@@ -1717,8 +1723,8 @@ class ModelHistory:
                     time.time() - self.pass_start_time - self.elapsed_time_setup
             )
             self.track_tensors = False
-            output_tensors = get_vars_of_type_from_obj(
-                outputs, torch.Tensor, search_depth=5
+            output_tensors, output_tensor_addresses = get_vars_of_type_from_obj(
+                outputs, torch.Tensor, search_depth=5, return_addresses=True
             )
             for t in output_tensors:
                 self.output_layers.append(t.tl_tensor_label_raw)
@@ -1726,7 +1732,7 @@ class ModelHistory:
             tensors_to_undecorate = tensors_to_decorate + output_tensors
             self.undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
             self.cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
-            self.postprocess(output_tensors)
+            self.postprocess(output_tensors, output_tensor_addresses)
             decorated_func_mapper.clear()
 
         except Exception as e:  # if anything fails, make sure everything gets cleaned up
@@ -1759,13 +1765,12 @@ class ModelHistory:
         Returns:
             input tensors and their addresses
         """
-        input_args = move_input_tensors_to_device(input_args, model_device)
-        input_kwargs = move_input_tensors_to_device(input_kwargs, model_device)
         input_arg_tensors = [
-            get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5) for arg in input_args
+            get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5, return_addresses=True) for arg in input_args
         ]
         input_kwarg_tensors = [
-            get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5) for kwarg in input_kwargs.values()
+            get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
+            for kwarg in input_kwargs.values()
         ]
         input_tensors = []
         input_tensor_addresses = []
@@ -1785,6 +1790,7 @@ class ModelHistory:
                     tensor_addr += f".{addr}"
                 input_tensor_addresses.append(tensor_addr)
 
+        input_tensors = [t.to(model_device) for t in input_tensors]
         return input_tensors, input_tensor_addresses
 
     def log_source_tensor(
@@ -3042,7 +3048,7 @@ class ModelHistory:
     # ************* Post-Processing **************
     # ********************************************
 
-    def postprocess(self, output_tensors: List[torch.Tensor]):
+    def postprocess(self, output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]):
         """
         After the forward pass, cleans up the log into its final form.
         """
@@ -3052,7 +3058,7 @@ class ModelHistory:
 
         # Step 1: Add dedicated output nodes
 
-        self._add_output_layers(output_tensors)
+        self._add_output_layers(output_tensors, output_tensor_addresses)
 
         # Step 2: Trace which nodes are ancestors of output nodes
 
@@ -3133,7 +3139,10 @@ class ModelHistory:
             new_output_node.tensor_label_raw = f"output_{i + 1}_raw"
             new_output_node.layer_label_raw = new_output_node.tensor_label_raw
             new_output_node.realtime_tensor_num = self.tensor_counter
-            new_output_node.input_output_address = output_addresses[i]
+            output_address = 'output'
+            if output_addresses[i] != '':
+                output_address += f'.{output_addresses[i]}'
+            new_output_node.input_output_address = output_address
 
             # Fix function information:
 
