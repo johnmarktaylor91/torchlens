@@ -82,7 +82,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
 
 
 def make_short_barcode_from_input(
-    things_to_hash: List[Any], barcode_len: int = 16
+        things_to_hash: List[Any], barcode_len: int = 16
 ) -> str:
     """Utility function that takes a list of anything and returns a short hash of it.
 
@@ -222,12 +222,12 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
 
 
 def get_vars_of_type_from_obj(
-    obj: Any,
-    which_type: Type,
-    subclass_exceptions: Optional[List] = None,
-    search_depth: int = 3,
-    return_addresses=False,
-    allow_repeats=False,
+        obj: Any,
+        which_type: Type,
+        subclass_exceptions: Optional[List] = None,
+        search_depth: int = 3,
+        return_addresses=False,
+        allow_repeats=False,
 ) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
@@ -270,14 +270,14 @@ def get_vars_of_type_from_obj(
 
 
 def search_stack_for_vars_of_type(
-    current_stack: List,
-    which_type: Type,
-    tensors_in_obj: List,
-    tensor_addresses: List,
-    tensor_addresses_full: List,
-    tensor_ids_in_obj: List,
-    subclass_exceptions: List,
-    allow_repeats: bool,
+        current_stack: List,
+        which_type: Type,
+        tensors_in_obj: List,
+        tensor_addresses: List,
+        tensor_addresses_full: List,
+        tensor_ids_in_obj: List,
+        subclass_exceptions: List,
+        allow_repeats: bool,
 ):
     """Helper function that searches current stack for vars of a given type, and
     returns the next stack to search.
@@ -302,7 +302,7 @@ def search_stack_for_vars_of_type(
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
         if any(
-            [issubclass(item_class, subclass) for subclass in subclass_exceptions]
+                [issubclass(item_class, subclass) for subclass in subclass_exceptions]
         ) or ((id(item) in tensor_ids_in_obj) and not allow_repeats):
             continue
         if issubclass(item_class, which_type):
@@ -318,7 +318,7 @@ def search_stack_for_vars_of_type(
 
 
 def extend_search_stack_from_item(
-    item: Any, address: str, address_full, next_stack: List
+        item: Any, address: str, address_full, next_stack: List
 ):
     """Utility function to iterate through a single item to populate the next stack to search for.
 
@@ -326,7 +326,7 @@ def extend_search_stack_from_item(
         item: The item
         next_stack: Stack to add to
     """
-    if type(item) in [list, tuple, set]:
+    if issubclass(type(item), (list, tuple, set)):
         if address == "":
             next_stack.extend(
                 [(x, f"{i}", address_full + [("ind", i)]) for i, x in enumerate(item)]
@@ -339,7 +339,7 @@ def extend_search_stack_from_item(
                 ]
             )
 
-    if type(item) == dict:
+    if issubclass(type(item), dict):
         if address == "":
             next_stack.extend(
                 [(val, key, address_full + [("ind", key)]) for key, val in item.items()]
@@ -379,7 +379,7 @@ def extend_search_stack_from_item(
 
 
 def get_attr_values_from_tensor_list(
-    tensor_list: List[torch.Tensor], field_name: str
+        tensor_list: List[torch.Tensor], field_name: str
 ) -> List[Any]:
     """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
 
@@ -480,10 +480,10 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -
         return True
 
     if (
-        allow_tolerance
-        and (t1_nonan.dtype != torch.bool)
-        and (t2_nonan.dtype != torch.bool)
-        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+            allow_tolerance
+            and (t1_nonan.dtype != torch.bool)
+            and (t2_nonan.dtype != torch.bool)
+            and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
     ):
         return True
 
