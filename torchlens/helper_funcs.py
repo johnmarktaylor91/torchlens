@@ -246,9 +246,10 @@ def get_vars_of_type_from_obj(
     """
     if subclass_exceptions is None:
         subclass_exceptions = []
-    this_stack = [(obj, '')]
+    this_stack = [(obj, '', [])]
     tensors_in_obj = []
     tensor_addresses = []
+    tensor_addresses_full = []
     tensor_ids_in_obj = []
     for _ in range(search_depth):
         this_stack = search_stack_for_vars_of_type(
@@ -256,13 +257,14 @@ def get_vars_of_type_from_obj(
             which_type,
             tensors_in_obj,
             tensor_addresses,
+            tensor_addresses_full,
             tensor_ids_in_obj,
             subclass_exceptions,
             allow_repeats
         )
 
     if return_addresses:
-        return list(zip(tensors_in_obj, tensor_addresses))
+        return list(zip(tensors_in_obj, tensor_addresses, tensor_addresses_full))
     else:
         return tensors_in_obj
 
@@ -272,6 +274,7 @@ def search_stack_for_vars_of_type(
         which_type: Type,
         tensors_in_obj: List,
         tensor_addresses: List,
+        tensor_addresses_full: List,
         tensor_ids_in_obj: List,
         subclass_exceptions: List,
         allow_repeats: bool
@@ -284,6 +287,7 @@ def search_stack_for_vars_of_type(
         which_type: Type of variable to pull out
         tensors_in_obj: List of tensors found in the object so far
         tensor_addresses: Addresses of the tensors found so far
+        tensor_addresses_full: explicit instructions for indexing the obj
         tensor_ids_in_obj: List of tensor ids found in the object so far
         subclass_exceptions: Subclasses of tensors not to use.
         allow_repeats: whether to allow repeat tensors
@@ -295,7 +299,7 @@ def search_stack_for_vars_of_type(
     if len(current_stack) == 0:
         return current_stack
     while len(current_stack) > 0:
-        (item, address) = current_stack.pop(0)
+        item, address, address_full = current_stack.pop(0)
         item_class = type(item)
         if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or \
                 ((id(item) in tensor_ids_in_obj) and not allow_repeats):
@@ -303,15 +307,16 @@ def search_stack_for_vars_of_type(
         if issubclass(item_class, which_type):
             tensors_in_obj.append(item)
             tensor_addresses.append(address)
+            tensor_addresses_full.append(address_full)
             tensor_ids_in_obj.append(id(item))
             continue
         if item_class in [str, int, float, bool, np.ndarray, torch.tensor]:
             continue
-        extend_search_stack_from_item(item, address, next_stack)
+        extend_search_stack_from_item(item, address, address_full, next_stack)
     return next_stack
 
 
-def extend_search_stack_from_item(item: Any, address: str, next_stack: List):
+def extend_search_stack_from_item(item: Any, address: str, address_full, next_stack: List):
     """Utility function to iterate through a single item to populate the next stack to search for.
 
     Args:
@@ -320,15 +325,15 @@ def extend_search_stack_from_item(item: Any, address: str, next_stack: List):
     """
     if type(item) in [list, tuple, set]:
         if address == '':
-            next_stack.extend([(x, f'{i}') for i, x in enumerate(item)])
+            next_stack.extend([(x, f'{i}', address_full + [('ind', i)]) for i, x in enumerate(item)])
         else:
-            next_stack.extend([(x, f'{address}.{i}') for i, x in enumerate(item)])
+            next_stack.extend([(x, f'{address}.{i}', address_full + [('ind', i)]) for i, x in enumerate(item)])
 
     if type(item) == dict:
         if address == '':
-            next_stack.extend([(val, key) for key, val in item.items()])
+            next_stack.extend([(val, key, address_full + [('ind', key)]) for key, val in item.items()])
         else:
-            next_stack.extend([(val, f'{address}.{key}') for key, val in item.items()])
+            next_stack.extend([(val, f'{address}.{key}', address_full + [('ind', key)]) for key, val in item.items()])
 
     for attr_name in dir(item):
         if attr_name.startswith("__"):
@@ -343,9 +348,9 @@ def extend_search_stack_from_item(item: Any, address: str, next_stack: List):
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
         if address == '':
-            next_stack.append((attr, attr_name.strip('_')))
+            next_stack.append((attr, attr_name.strip('_'), address_full + [('attr', attr_name)]))
         else:
-            next_stack.append((attr, f'{address}.{attr_name.strip("_")}'))
+            next_stack.append((attr, f'{address}.{attr_name.strip("_")}', address_full + [('attr', attr_name)]))
 
 
 def get_attr_values_from_tensor_list(
@@ -394,6 +399,22 @@ def nested_getattr(obj: Any, attr: str) -> Any:
         else:
             obj = getattr(obj, a)
     return obj
+
+
+def nested_assign(obj, addr, val):
+    """Given object and an address in that object, assign value to that address.
+    """
+    for i, (entry_type, entry_val) in enumerate(addr):
+        if i == len(addr) - 1:
+            if entry_type == 'ind':
+                obj[entry_val] = val
+            elif entry_type == 'attr':
+                setattr(obj, entry_val, val)
+        else:
+            if entry_type == 'ind':
+                obj = obj[entry_val]
+            elif entry_type == 'attr':
+                obj = getattr(obj, entry_val)
 
 
 def remove_attributes_starting_with_str(obj: Any, s: str):

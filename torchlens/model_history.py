@@ -35,6 +35,7 @@ from torchlens.helper_funcs import (
     make_short_barcode_from_input,
     make_var_iterable,
     nested_getattr,
+    nested_assign,
     print_override,
     remove_entry_from_list,
     safe_copy,
@@ -1682,7 +1683,6 @@ class ModelHistory:
 
         if not input_args:
             input_args = []
-        input_arg_names = self._get_input_arg_names(model, input_args)
 
         if not input_kwargs:
             input_kwargs = {}
@@ -1700,6 +1700,7 @@ class ModelHistory:
             model_device = "cpu"
 
         input_args = [copy.deepcopy(arg) for arg in input_args]
+        input_arg_names = self._get_input_arg_names(model, input_args)
         input_kwargs = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
 
         self.pass_start_time = time.time()
@@ -1727,8 +1728,8 @@ class ModelHistory:
             output_tensors_w_addresses = get_vars_of_type_from_obj(
                 outputs, torch.Tensor, search_depth=5, return_addresses=True, allow_repeats=True
             )
-            output_tensors = [t for t, _ in output_tensors_w_addresses]
-            output_tensor_addresses = [addr for _, addr in output_tensors_w_addresses]
+            output_tensors = [t for t, _, _ in output_tensors_w_addresses]
+            output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
             for t in output_tensors:
                 self.output_layers.append(t.tl_tensor_label_raw)
                 self.raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
@@ -1783,10 +1784,28 @@ class ModelHistory:
             get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
             for kwarg in input_kwargs.values()
         ]
+        for a, arg in enumerate(input_args):
+            for i, (t, addr, addr_full) in enumerate(input_arg_tensors[a]):
+                t_moved = t.to(model_device)
+                input_arg_tensors[a][i] = (t_moved, addr, addr_full)
+                if not addr_full:
+                    input_args[a] = t_moved
+                else:
+                    nested_assign(input_args[a], addr_full, t_moved)
+
+        for k, (key, val) in enumerate(input_kwargs.items()):
+            for i, (t, addr, addr_full) in enumerate(input_kwarg_tensors[k]):
+                t_moved = t.to(model_device)
+                input_kwarg_tensors[k][i] = (t_moved, addr, addr_full)
+                if not addr_full:
+                    input_kwargs[key] = t_moved
+                else:
+                    nested_assign(input_kwargs[key], addr_full, t_moved)
+
         input_tensors = []
         input_tensor_addresses = []
         for a, arg_tensors in enumerate(input_arg_tensors):
-            for t, addr in arg_tensors:
+            for t, addr, addr_full in arg_tensors:
                 input_tensors.append(t)
                 tensor_addr = f"input.{input_arg_names[a]}"
                 if addr != "":
@@ -1794,14 +1813,13 @@ class ModelHistory:
                 input_tensor_addresses.append(tensor_addr)
 
         for a, kwarg_tensors in enumerate(input_kwarg_tensors):
-            for t, addr in kwarg_tensors:
+            for t, addr, addr_full in kwarg_tensors:
                 input_tensors.append(t)
                 tensor_addr = f"input.{list(input_kwargs.keys())[a]}"
                 if addr != "":
                     tensor_addr += f".{addr}"
                 input_tensor_addresses.append(tensor_addr)
 
-        input_tensors = [t.to(model_device) for t in input_tensors]
         return input_tensors, input_tensor_addresses
 
     def log_source_tensor(
@@ -1907,7 +1925,7 @@ class ModelHistory:
             # Function call info:
             "func_applied": None,
             "func_applied_name": "none",
-            "func_call_stack": self._get_call_stack_dicts(start_level=4),
+            "func_call_stack": self._get_call_stack_dicts(),
             "func_time_elapsed": 0,
             "func_rng_states": log_current_rng_states(),
             "num_func_args_total": 0,
@@ -2143,7 +2161,7 @@ class ModelHistory:
         # Function call info
         fields_dict["func_applied"] = func
         fields_dict["func_applied_name"] = func_name
-        fields_dict["func_call_stack"] = self._get_call_stack_dicts(start_level=3)
+        fields_dict["func_call_stack"] = self._get_call_stack_dicts()
         fields_dict["func_time_elapsed"] = func_time_elapsed
         fields_dict["func_rng_states"] = func_rng_states
         fields_dict["num_func_args_total"] = len(args) + len(kwargs)
@@ -2965,7 +2983,7 @@ class ModelHistory:
         call_stack = inspect.stack()
         call_stack = [
             inspect.getframeinfo(call_stack[i][0], context=19)
-            for i in range(start_level, len(call_stack))
+            for i in range(len(call_stack))
         ]
         call_stack_dicts = [
             {
@@ -2977,12 +2995,25 @@ class ModelHistory:
             }
             for caller in call_stack
         ]
-        call_stack_dicts = [d for d in call_stack_dicts if not any([d['call_fname'].endswith('model_history.py'),
-                                                                    d['call_fname'].endswith(
-                                                                        'torchlens/helper_funcs.py'),
-                                                                    d['call_fname'].endswith(
-                                                                        'torchlens/user_funcs.py')])]
-        return call_stack_dicts
+        # Only start at the level of that first forward pass, going from shallow to deep.
+        tracking = False
+        filtered_dicts = []
+        for d in range(len(call_stack_dicts) - 1, -1, -1):
+            call_stack_dict = call_stack_dicts[d]
+            if any([call_stack_dict['call_fname'].endswith('model_history.py'),
+                    call_stack_dict['call_fname'].endswith(
+                        'torchlens/helper_funcs.py'),
+                    call_stack_dict['call_fname'].endswith(
+                        'torchlens/user_funcs.py'),
+                    call_stack_dict['function'] == '_call_impl']):
+                continue
+            if call_stack_dict['function'] == 'forward':
+                tracking = True
+
+            if tracking:
+                filtered_dicts.append(call_stack_dict)
+
+        return filtered_dicts
 
     def cleanup(self):
         """Deletes all log entries in the model.
@@ -3164,7 +3195,7 @@ class ModelHistory:
 
             new_output_node.func_applied = identity
             new_output_node.func_applied_name = "none"
-            new_output_node.func_call_stack = self._get_call_stack_dicts(start_level=5)
+            new_output_node.func_call_stack = self._get_call_stack_dicts()
             new_output_node.func_time_elapsed = 0
             new_output_node.func_rng_states = log_current_rng_states()
             new_output_node.num_func_args_total = 0
