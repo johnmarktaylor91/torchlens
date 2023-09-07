@@ -82,7 +82,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
 
 
 def make_short_barcode_from_input(
-        things_to_hash: List[Any], barcode_len: int = 16
+    things_to_hash: List[Any], barcode_len: int = 16
 ) -> str:
     """Utility function that takes a list of anything and returns a short hash of it.
 
@@ -222,12 +222,12 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
 
 
 def get_vars_of_type_from_obj(
-        obj: Any,
-        which_type: Type,
-        subclass_exceptions: Optional[List] = None,
-        search_depth: int = 3,
-        return_addresses=False,
-        allow_repeats=False
+    obj: Any,
+    which_type: Type,
+    subclass_exceptions: Optional[List] = None,
+    search_depth: int = 3,
+    return_addresses=False,
+    allow_repeats=False,
 ) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
@@ -246,7 +246,7 @@ def get_vars_of_type_from_obj(
     """
     if subclass_exceptions is None:
         subclass_exceptions = []
-    this_stack = [(obj, '', [])]
+    this_stack = [(obj, "", [])]
     tensors_in_obj = []
     tensor_addresses = []
     tensor_addresses_full = []
@@ -260,7 +260,7 @@ def get_vars_of_type_from_obj(
             tensor_addresses_full,
             tensor_ids_in_obj,
             subclass_exceptions,
-            allow_repeats
+            allow_repeats,
         )
 
     if return_addresses:
@@ -270,14 +270,14 @@ def get_vars_of_type_from_obj(
 
 
 def search_stack_for_vars_of_type(
-        current_stack: List,
-        which_type: Type,
-        tensors_in_obj: List,
-        tensor_addresses: List,
-        tensor_addresses_full: List,
-        tensor_ids_in_obj: List,
-        subclass_exceptions: List,
-        allow_repeats: bool
+    current_stack: List,
+    which_type: Type,
+    tensors_in_obj: List,
+    tensor_addresses: List,
+    tensor_addresses_full: List,
+    tensor_ids_in_obj: List,
+    subclass_exceptions: List,
+    allow_repeats: bool,
 ):
     """Helper function that searches current stack for vars of a given type, and
     returns the next stack to search.
@@ -301,8 +301,9 @@ def search_stack_for_vars_of_type(
     while len(current_stack) > 0:
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
-        if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or \
-                ((id(item) in tensor_ids_in_obj) and not allow_repeats):
+        if any(
+            [issubclass(item_class, subclass) for subclass in subclass_exceptions]
+        ) or ((id(item) in tensor_ids_in_obj) and not allow_repeats):
             continue
         if issubclass(item_class, which_type):
             tensors_in_obj.append(item)
@@ -316,7 +317,9 @@ def search_stack_for_vars_of_type(
     return next_stack
 
 
-def extend_search_stack_from_item(item: Any, address: str, address_full, next_stack: List):
+def extend_search_stack_from_item(
+    item: Any, address: str, address_full, next_stack: List
+):
     """Utility function to iterate through a single item to populate the next stack to search for.
 
     Args:
@@ -324,16 +327,30 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
         next_stack: Stack to add to
     """
     if type(item) in [list, tuple, set]:
-        if address == '':
-            next_stack.extend([(x, f'{i}', address_full + [('ind', i)]) for i, x in enumerate(item)])
+        if address == "":
+            next_stack.extend(
+                [(x, f"{i}", address_full + [("ind", i)]) for i, x in enumerate(item)]
+            )
         else:
-            next_stack.extend([(x, f'{address}.{i}', address_full + [('ind', i)]) for i, x in enumerate(item)])
+            next_stack.extend(
+                [
+                    (x, f"{address}.{i}", address_full + [("ind", i)])
+                    for i, x in enumerate(item)
+                ]
+            )
 
     if type(item) == dict:
-        if address == '':
-            next_stack.extend([(val, key, address_full + [('ind', key)]) for key, val in item.items()])
+        if address == "":
+            next_stack.extend(
+                [(val, key, address_full + [("ind", key)]) for key, val in item.items()]
+            )
         else:
-            next_stack.extend([(val, f'{address}.{key}', address_full + [('ind', key)]) for key, val in item.items()])
+            next_stack.extend(
+                [
+                    (val, f"{address}.{key}", address_full + [("ind", key)])
+                    for key, val in item.items()
+                ]
+            )
 
     for attr_name in dir(item):
         if attr_name.startswith("__"):
@@ -347,14 +364,22 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
             continue
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
-        if address == '':
-            next_stack.append((attr, attr_name.strip('_'), address_full + [('attr', attr_name)]))
+        if address == "":
+            next_stack.append(
+                (attr, attr_name.strip("_"), address_full + [("attr", attr_name)])
+            )
         else:
-            next_stack.append((attr, f'{address}.{attr_name.strip("_")}', address_full + [('attr', attr_name)]))
+            next_stack.append(
+                (
+                    attr,
+                    f'{address}.{attr_name.strip("_")}',
+                    address_full + [("attr", attr_name)],
+                )
+            )
 
 
 def get_attr_values_from_tensor_list(
-        tensor_list: List[torch.Tensor], field_name: str
+    tensor_list: List[torch.Tensor], field_name: str
 ) -> List[Any]:
     """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
 
@@ -402,18 +427,17 @@ def nested_getattr(obj: Any, attr: str) -> Any:
 
 
 def nested_assign(obj, addr, val):
-    """Given object and an address in that object, assign value to that address.
-    """
+    """Given object and an address in that object, assign value to that address."""
     for i, (entry_type, entry_val) in enumerate(addr):
         if i == len(addr) - 1:
-            if entry_type == 'ind':
+            if entry_type == "ind":
                 obj[entry_val] = val
-            elif entry_type == 'attr':
+            elif entry_type == "attr":
                 setattr(obj, entry_val, val)
         else:
-            if entry_type == 'ind':
+            if entry_type == "ind":
                 obj = obj[entry_val]
-            elif entry_type == 'attr':
+            elif entry_type == "attr":
                 obj = getattr(obj, entry_val)
 
 
@@ -456,10 +480,10 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -
         return True
 
     if (
-            allow_tolerance
-            and (t1_nonan.dtype != torch.bool)
-            and (t2_nonan.dtype != torch.bool)
-            and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+        allow_tolerance
+        and (t1_nonan.dtype != torch.bool)
+        and (t2_nonan.dtype != torch.bool)
+        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
     ):
         return True
 
