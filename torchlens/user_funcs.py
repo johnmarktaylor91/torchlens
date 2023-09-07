@@ -21,25 +21,25 @@ from torchlens.model_history import (
 
 
 def log_forward_pass(
-    model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
-    layers_to_save: Optional[Union[str, List]] = "all",
-    keep_unsaved_layers: bool = True,
-    output_device: str = "same",
-    activation_postfunc: Optional[Callable] = None,
-    mark_input_output_distances: bool = False,
-    detach_saved_tensors: bool = False,
-    save_function_args: bool = False,
-    save_gradients: bool = False,
-    vis_opt: str = "none",
-    vis_nesting_depth: int = 1000,
-    vis_outpath: str = "graph.gv",
-    vis_save_only: bool = False,
-    vis_fileformat: str = "pdf",
-    vis_buffer_layers: bool = False,
-    vis_direction: str = "bottomup",
-    random_seed: Optional[int] = None,
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+        input_kwargs: Dict[Any, Any] = None,
+        layers_to_save: Optional[Union[str, List]] = "all",
+        keep_unsaved_layers: bool = True,
+        output_device: str = "same",
+        activation_postfunc: Optional[Callable] = None,
+        mark_input_output_distances: bool = False,
+        detach_saved_tensors: bool = False,
+        save_function_args: bool = False,
+        save_gradients: bool = False,
+        vis_opt: str = "none",
+        vis_nesting_depth: int = 1000,
+        vis_outpath: str = "graph.gv",
+        vis_save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        vis_buffer_layers: bool = False,
+        vis_direction: str = "bottomup",
+        random_seed: Optional[int] = None,
 ) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -149,9 +149,9 @@ def log_forward_pass(
 
 
 def get_model_metadata(
-    model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+        input_kwargs: Dict[Any, Any] = None,
 ) -> ModelHistory:
     """Logs all metadata for a given model and inputs without saving any activations. NOTE: this function
     will be removed in a future version of TorchLens, since calling it is identical to calling
@@ -175,17 +175,17 @@ def get_model_metadata(
 
 
 def show_model_graph(
-    model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
-    vis_opt: str = "unrolled",
-    vis_nesting_depth: int = 1000,
-    vis_outpath: str = "graph.gv",
-    save_only: bool = False,
-    vis_fileformat: str = "pdf",
-    vis_buffer_layers: bool = False,
-    vis_direction: str = "bottomup",
-    random_seed: Optional[int] = None,
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+        input_kwargs: Dict[Any, Any] = None,
+        vis_opt: str = "unrolled",
+        vis_nesting_depth: int = 1000,
+        vis_outpath: str = "graph.gv",
+        save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        vis_buffer_layers: bool = False,
+        vis_direction: str = "bottomup",
+        random_seed: Optional[int] = None,
 ) -> None:
     """Visualize the model graph without saving any activations.
 
@@ -240,11 +240,11 @@ def show_model_graph(
 
 
 def validate_saved_activations(
-    model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
-    random_seed: Union[int, None] = None,
-    verbose: bool = False,
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+        input_kwargs: Dict[Any, Any] = None,
+        random_seed: Union[int, None] = None,
+        verbose: bool = False,
 ) -> bool:
     """Validate that the saved model activations correctly reproduce the ground truth output. This function works by
     running a forward pass through the model, saving all activations, re-running the forward pass starting from
@@ -273,7 +273,7 @@ def validate_saved_activations(
     input_args_copy = [copy.deepcopy(arg) for arg in input_args]
     input_kwargs_copy = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
     ground_truth_output_tensors = get_vars_of_type_from_obj(
-        model(*input_args_copy, **input_kwargs_copy), torch.Tensor, search_depth=5
+        model(*input_args_copy, **input_kwargs_copy), torch.Tensor, search_depth=5, allow_repeats=True
     )
     model_history = run_model_and_save_specified_activations(
         model=model,
@@ -298,9 +298,9 @@ def validate_saved_activations(
 
 
 def validate_batch_of_models_and_inputs(
-    models_and_inputs_dict: Dict[str, Dict[str, Union[str, Callable, Dict]]],
-    out_path: str,
-    redo_model_if_already_run: bool = True,
+        models_and_inputs_dict: Dict[str, Dict[str, Union[str, Callable, Dict]]],
+        out_path: str,
+        redo_model_if_already_run: bool = True,
 ) -> pd.DataFrame:
     """Given multiple models and several inputs for each, validates the saved activations for all of them
     and returns a Pandas dataframe summarizing the validation results.
@@ -329,7 +329,7 @@ def validate_batch_of_models_and_inputs(
         )
     models_already_run = current_csv["model_name"].unique()
     for model_name, model_info in tqdm(
-        models_and_inputs_dict.items(), desc="Validating models"
+            models_and_inputs_dict.items(), desc="Validating models"
     ):
         print(f"Validating model {model_name}")
         if model_name in models_already_run and not redo_model_if_already_run:
