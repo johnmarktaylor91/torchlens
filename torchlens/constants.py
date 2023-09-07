@@ -44,6 +44,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     "raw_tensor_labels_list",
     "tensor_nums_to_save",
     "tensor_counter",
+    "num_operations",
     "raw_layer_type_counter",
     "unsaved_layers_lookup_keys",
     # Mapping from raw to final layer labels:
@@ -201,6 +202,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "is_last_output_layer",
     "is_output_ancestor",
     "output_descendents",
+    "input_output_address",
     "min_distance_from_output",
     "max_distance_from_output",
     "is_buffer_layer",
