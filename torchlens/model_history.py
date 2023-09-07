@@ -239,8 +239,7 @@ class TensorLogEntry:
     # ********************************************
 
     def print_all_fields(self):
-        """Print all data fields in the layer.
-        """
+        """Print all data fields in the layer."""
         fields_to_exclude = ["source_model_history", "func_rng_states"]
 
         for field in dir(self):
@@ -448,8 +447,7 @@ class TensorLogEntry:
         return s
 
     def _tensor_contents_str_helper(self) -> str:
-        """Returns short, readable string for the tensor contents.
-        """
+        """Returns short, readable string for the tensor contents."""
         if self.tensor_contents is None:
             return ""
         else:
@@ -844,8 +842,7 @@ class ModelHistory:
     # ********************************************
 
     def print_all_fields(self):
-        """Print all data fields for ModelHistory.
-        """
+        """Print all data fields for ModelHistory."""
         fields_to_exclude = [
             "layer_list",
             "layer_dict_main_keys",
@@ -970,7 +967,6 @@ class ModelHistory:
     def torch_func_decorator(self, func: Callable):
         @wraps(func)
         def wrapped_func(*args, **kwargs):
-
             # Initial bookkeeping; check if it's a special function, organize the arguments.
             self.current_function_call_barcode = 0
             func_name = func.__name__
@@ -1310,8 +1306,8 @@ class ModelHistory:
                     t = getattr(torch, "identity")(t)
                 tensor_entry = self.raw_tensor_dict[t.tl_tensor_label_raw]
                 tensor_entry.is_submodule_output = True
-                tensor_entry.is_bottom_level_submodule_output = self.log_whether_exited_submodule_is_bottom_level(
-                    t, module
+                tensor_entry.is_bottom_level_submodule_output = (
+                    self.log_whether_exited_submodule_is_bottom_level(t, module)
                 )
                 tensor_entry.modules_exited.append(module_address)
                 tensor_entry.module_passes_exited.append(
@@ -1337,9 +1333,9 @@ class ModelHistory:
                     module_entry_ix = input_module_thread.index(
                         ("+", module_entry_label[0], module_entry_label[1])
                     )
-                    tensor_entry.module_entry_exit_thread_output = tensor_entry.module_entry_exit_thread_output[
-                        :module_entry_ix
-                    ]
+                    tensor_entry.module_entry_exit_thread_output = (
+                        tensor_entry.module_entry_exit_thread_output[:module_entry_ix]
+                    )
 
             return out
 
@@ -1731,7 +1727,9 @@ class ModelHistory:
             self.postprocess(output_tensors)
             decorated_func_mapper.clear()
 
-        except Exception as e:  # if anything fails, make sure everything gets cleaned up
+        except (
+            Exception
+        ) as e:  # if anything fails, make sure everything gets cleaned up
             self.undecorate_pytorch(torch, orig_func_defs, input_tensors)
             self.cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
             print(
@@ -2283,8 +2281,7 @@ class ModelHistory:
     def _get_parent_contents(
         parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs
     ):
-        """Utility function to get the value of a parent layer from the arguments passed to a function.
-        """
+        """Utility function to get the value of a parent layer from the arguments passed to a function."""
         for pos, label in parent_layer_arg_locs["args"].items():
             if label == parent_label:
                 return index_nested(arg_copies, pos)
@@ -2916,8 +2913,7 @@ class ModelHistory:
         return call_stack_dicts
 
     def cleanup(self):
-        """Deletes all log entries in the model.
-        """
+        """Deletes all log entries in the model."""
         for tensor_log_entry in self:
             self._remove_log_entry(tensor_log_entry, remove_references=True)
         for attr in MODEL_HISTORY_FIELD_ORDER:
@@ -3674,8 +3670,7 @@ class ModelHistory:
         node_to_subgraph_dict: Dict,
         adjacent_subgraphs: Dict[str, set],
     ):
-        """Helper function that updates the adjacency status of two subgraphs
-        """
+        """Helper function that updates the adjacency status of two subgraphs"""
         node_subgraph = node_to_subgraph_dict[node_label]
         node_subgraph_label = node_subgraph["starting_node"]
         neighbor_subgraph = node_to_subgraph_dict[neighbor_label]
@@ -4496,8 +4491,7 @@ class ModelHistory:
         self.__dict__ = new_dir_dict
 
     def _undecorate_all_saved_tensors(self):
-        """Utility function to undecorate all saved tensors.
-        """
+        """Utility function to undecorate all saved tensors."""
         tensors_to_undecorate = []
         for layer_label in self.layer_labels:
             tensor_entry = self.layer_dict_main_keys[layer_label]
@@ -4520,8 +4514,7 @@ class ModelHistory:
                 delattr(t, "tl_tensor_label_raw")
 
     def _delete_raw_tensor_entries(self):
-        """Deletes the raw tensor entries, leaving only the post-processed entries.
-        """
+        """Deletes the raw tensor entries, leaving only the post-processed entries."""
         for entry_name, tensor_entry in self.raw_tensor_dict.items():
             self._remove_log_entry(tensor_entry)
         self.raw_tensor_dict.clear()
@@ -4731,7 +4724,6 @@ class ModelHistory:
             return False
 
     def _construct_layer_node(self, node, graphviz_graph, show_buffer_layers, vis_opt):
-
         # Get the address, shape, color, and line style:
 
         node_address, node_shape, node_color = self._get_node_address_shape_color(
@@ -4897,8 +4889,7 @@ class ModelHistory:
     def _check_if_only_non_buffer_in_module(
         self, node: Union[TensorLogEntry, RolledTensorLogEntry]
     ):
-        """Utility function to check if a layer is the only non-buffer layer in the module
-        """
+        """Utility function to check if a layer is the only non-buffer layer in the module"""
         # Check whether it leaves its module:
         if not (
             (len(node.modules_exited) > 0)
@@ -4956,8 +4947,7 @@ class ModelHistory:
         node_address: str,
         vis_opt: str,
     ) -> str:
-        """Gets the text for the graphviz node.
-        """
+        """Gets the text for the graphviz node."""
         # Pass info:
 
         if (node.layer_passes_total > 1) and (vis_opt == "unrolled"):
@@ -4998,8 +4988,7 @@ class ModelHistory:
 
     @staticmethod
     def _make_param_label(node: Union[TensorLogEntry, RolledTensorLogEntry]) -> str:
-        """Makes the label for parameters of a node.
-        """
+        """Makes the label for parameters of a node."""
         if node.num_param_tensors == 0:
             return ""
 
@@ -5092,9 +5081,9 @@ class ModelHistory:
                 child_containing_modules = child_node.containing_modules_origin_nested[
                     :
                 ]
-                parent_containing_modules = parent_node.containing_modules_origin_nested[
-                    :
-                ]
+                parent_containing_modules = (
+                    parent_node.containing_modules_origin_nested[:]
+                )
                 if child_node.is_bottom_level_submodule_output:
                     child_containing_modules = child_containing_modules[:-1]
                 if parent_node.is_bottom_level_submodule_output:
@@ -5350,8 +5339,7 @@ class ModelHistory:
         module_edge_dict,
         graphviz_graph,
     ):
-        """Adds a backwards edge if both layers have saved gradients, showing the backward pass.
-        """
+        """Adds a backwards edge if both layers have saved gradients, showing the backward pass."""
         if parent_layer.has_saved_grad and child_layer.has_saved_grad:
             edge_dict = {
                 "tail_name": child_layer.layer_label.replace(":", "pass"),
@@ -5698,8 +5686,10 @@ class ModelHistory:
             for arg_type in ["args", "kwargs"]:
                 iterfunc, argtype_field = argtype_dict[arg_type]
                 for key, val in iterfunc(getattr(target_layer, argtype_field)):
-                    validation_correct_for_arg_and_layer = self._validate_layer_against_arg(
-                        target_layer, parent_layer, arg_type, key, val
+                    validation_correct_for_arg_and_layer = (
+                        self._validate_layer_against_arg(
+                            target_layer, parent_layer, arg_type, key, val
+                        )
                     )
                     if not validation_correct_for_arg_and_layer:
                         return False
@@ -5711,8 +5701,10 @@ class ModelHistory:
         if type(val) in [list, tuple]:
             for v, subval in enumerate(val):
                 argloc_key = (key, v)
-                validation_correct_for_arg_and_layer = self._check_arglocs_correct_for_arg(
-                    target_layer, parent_layer, arg_type, argloc_key, subval
+                validation_correct_for_arg_and_layer = (
+                    self._check_arglocs_correct_for_arg(
+                        target_layer, parent_layer, arg_type, argloc_key, subval
+                    )
                 )
                 if not validation_correct_for_arg_and_layer:
                     return False
@@ -5720,8 +5712,10 @@ class ModelHistory:
         elif type(val) == dict:
             for subkey, subval in val.items():
                 argloc_key = (key, subkey)
-                validation_correct_for_arg_and_layer = self._check_arglocs_correct_for_arg(
-                    target_layer, parent_layer, arg_type, argloc_key, subval
+                validation_correct_for_arg_and_layer = (
+                    self._check_arglocs_correct_for_arg(
+                        target_layer, parent_layer, arg_type, argloc_key, subval
+                    )
                 )
                 if not validation_correct_for_arg_and_layer:
                     return False
@@ -6164,17 +6158,10 @@ class ModelHistory:
             for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):
                 # Skip if it's the argument itself:
                 if (
-                    (
-                        key
-                        in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]
-                    )
-                    and (
-                        layer_to_validate_parents_for.parent_layer_arg_locs[arg_type][
-                            key
-                        ]
-                    )
-                    in layers_to_perturb
-                ):
+                    key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]
+                ) and (
+                    layer_to_validate_parents_for.parent_layer_arg_locs[arg_type][key]
+                ) in layers_to_perturb:
                     continue
                 arg_is_special = self._check_if_arg_is_special_val(val)
                 if arg_is_special:
@@ -6312,8 +6299,7 @@ class ModelHistory:
         raise ValueError(self._get_lookup_help_str(key, mode))
 
     def __iter__(self):
-        """Loops through all tensors in the log.
-        """
+        """Loops through all tensors in the log."""
         if self.pass_finished:
             return iter(self.layer_list)
         else:
@@ -6444,8 +6430,7 @@ class ModelHistory:
         return s
 
     def _get_lookup_help_str(self, layer_label: Union[int, str], mode: str) -> str:
-        """Generates a help string to be used in error messages when indexing fails.
-        """
+        """Generates a help string to be used in error messages when indexing fails."""
         sample_layer1 = random.choice(self.layer_labels_w_pass)
         sample_layer2 = random.choice(self.layer_labels_no_pass)
         if len(self.module_addresses) > 0:

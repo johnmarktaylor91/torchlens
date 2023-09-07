@@ -103,7 +103,7 @@ def make_short_barcode_from_input(
 
 
 def is_iterable(obj: Any) -> bool:
-    """ Checks if an object is iterable.
+    """Checks if an object is iterable.
 
     Args:
         obj: Object to check.
@@ -382,8 +382,7 @@ def remove_attributes_starting_with_str(obj: Any, s: str):
 
 
 def tensor_all_nan(t: torch.Tensor) -> bool:
-    """Returns True if  tensor is all nans, False otherwise.
-    """
+    """Returns True if  tensor is all nans, False otherwise."""
     if torch.isnan(t).int().sum() == t.numel():
         return True
     else:
@@ -391,8 +390,7 @@ def tensor_all_nan(t: torch.Tensor) -> bool:
 
 
 def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -> bool:
-    """Returns True if the two tensors are equal, allowing for nans.
-    """
+    """Returns True if the two tensors are equal, allowing for nans."""
     if t1.shape != t2.shape:
         return False
 
