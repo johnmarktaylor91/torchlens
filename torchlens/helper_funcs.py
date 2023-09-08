@@ -326,7 +326,7 @@ def extend_search_stack_from_item(
         item: The item
         next_stack: Stack to add to
     """
-    if issubclass(type(item), (list, tuple, set)):
+    if type(item) in [list, tuple, set]:
         if address == "":
             next_stack.extend(
                 [(x, f"{i}", address_full + [("ind", i)]) for i, x in enumerate(item)]
