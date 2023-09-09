@@ -1686,6 +1686,9 @@ class ModelHistory:
         if type(input_args) == torch.Tensor:
             input_args = [input_args]
 
+        if type(input_args) == tuple:
+            input_args = list(input_args)
+
         if not input_args:
             input_args = []
 
@@ -5171,7 +5174,7 @@ class ModelHistory:
             if len(param_shape) > 1:
                 each_param_shape.append("x".join([str(s) for s in param_shape]))
             else:
-                each_param_shape.append("x1")
+                each_param_shape.append(f"x{param_shape[0]}")
 
         param_label = "<br/>params: " + ", ".join(
             [param_shape for param_shape in each_param_shape]
@@ -6001,6 +6004,8 @@ class ModelHistory:
         )
         ):
             return True
+        elif layer_to_validate_parents_for.func_applied_name == 'empty_like':
+            return True
         elif (
                 perturb
                 and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
@@ -6034,6 +6039,59 @@ class ModelHistory:
             layer_to_validate_parents_for.creation_args[1][0],
         )
         ):
+            return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "index_select")
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[2],
+        )
+        ):
+            return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "lstm")
+                and (torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1][0]) or
+                     torch.equal(
+                         self[layers_to_perturb[0]].tensor_contents,
+                         layer_to_validate_parents_for.creation_args[1][1]) or
+                     torch.equal(
+                         self[layers_to_perturb[0]].tensor_contents,
+                         layer_to_validate_parents_for.creation_args[1]) or
+                     torch.equal(
+                         self[layers_to_perturb[0]].tensor_contents,
+                         layer_to_validate_parents_for.creation_args[2][0]) or
+                     torch.equal(
+                         self[layers_to_perturb[0]].tensor_contents,
+                         layer_to_validate_parents_for.creation_args[2][1])
+                )):
+            return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "_pad_packed_sequence")
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1]
+        )):
+            return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "masked_fill_")
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1]
+        )):
+            return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "scatter_")
+                and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[2]
+        )):
             return True
 
         # Prepare input arguments: keep the ones that should just be kept, perturb those that should be perturbed
@@ -6220,14 +6278,16 @@ class ModelHistory:
                         device=device,
                     ).type(parent_activations.dtype)
             else:
-                if torch.min(parent_activations) < 0:
-                    perturbed_activations = torch.randint(
-                        -10, 11, size=parent_activations.shape, device=device
-                    ).type(parent_activations.dtype)
-                else:
-                    perturbed_activations = torch.randint(
-                        0, 11, size=parent_activations.shape, device=device
-                    ).type(parent_activations.dtype)
+                perturbed_activations = parent_activations.detach().clone()
+                while torch.equal(perturbed_activations, parent_activations):
+                    if torch.min(parent_activations) < 0:
+                        perturbed_activations = torch.randint(
+                            -10, 11, size=parent_activations.shape, device=device
+                        ).type(parent_activations.dtype)
+                    else:
+                        perturbed_activations = torch.randint(
+                            0, 11, size=parent_activations.shape, device=device
+                        ).type(parent_activations.dtype)
 
         elif parent_activations.dtype == torch.bool:
             perturbed_activations = parent_activations.detach().clone()

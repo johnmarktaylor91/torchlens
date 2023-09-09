@@ -347,11 +347,7 @@ def my_get_overridable_functions() -> List:
             if namespace is not torch.Tensor:
                 if func_name.startswith("__"):
                     continue
-                elif func_name.startswith("_"):
-                    ignore = True
-                elif func_name.endswith("_"):
-                    ignore = True
-                elif not func_name[0].islower():
+                elif func_name[0].isupper():
                     ignore = True
                 elif func_name == "unique_dim":
                     continue

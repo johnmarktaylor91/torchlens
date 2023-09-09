@@ -13,6 +13,7 @@ import torchaudio.models
 import torchvision
 import visualpriors
 from PIL import Image
+from StyleTTS.models import TextEncoder
 from transformers import (
     BertForNextSentencePrediction,
     BertTokenizer,
@@ -2694,6 +2695,23 @@ def test_clip():  # for some reason CLIP breaks the PyCharm debugger
         vis_outpath=opj("visualization_outputs", "multimodal-models", "clip"),
     )
     assert validate_saved_activations(model, [], model_inputs, random_seed=1)
+
+
+# Text to speech
+def test_styletts():
+    model = TextEncoder(3, 3, 3, 100)
+    tokens = torch.tensor([[3, 0, 1, 2, 0, 2, 2, 3, 1, 4]])
+    input_lengths = torch.ones(1, dtype=torch.long) * 10
+    m = torch.ones(1, 10)
+    model_inputs = (tokens, input_lengths, m)
+    show_model_graph(
+        model,
+        model_inputs,
+        random_seed=1,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "text-to-speech", "styletts_text_encoder"),
+    )
+    assert validate_saved_activations(model, model_inputs, random_seed=1)
 
 
 # Graph neural networks
