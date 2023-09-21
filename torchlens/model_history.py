@@ -30,6 +30,7 @@ from torchlens.helper_funcs import (
     identity,
     in_notebook,
     int_list_to_compact_str,
+    is_iterable,
     log_current_rng_states,
     make_random_barcode,
     make_short_barcode_from_input,
@@ -3022,10 +3023,16 @@ class ModelHistory:
                 "call_linenum": caller.lineno,
                 "function": caller.function,
                 "code_context": caller.code_context,
-                "code_context_str": "".join(caller.code_context),
             }
             for caller in call_stack
         ]
+
+        for call_stack_dict in call_stack_dicts:
+            if is_iterable(call_stack_dict['code_context']):
+                call_stack_dict['code_context_str'] = ''.join(call_stack_dict['code_context'])
+            else:
+                call_stack_dict['code_context_str'] = str(call_stack_dict['code_context'])
+
         # Only start at the level of that first forward pass, going from shallow to deep.
         tracking = False
         filtered_dicts = []

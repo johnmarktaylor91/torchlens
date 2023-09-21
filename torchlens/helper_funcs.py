@@ -353,7 +353,7 @@ def extend_search_stack_from_item(
             )
 
     for attr_name in dir(item):
-        if attr_name.startswith("__"):
+        if (attr_name.startswith("__")) or (attr_name == 'T') or ('grad' in attr_name):
             continue
         try:
             attr = getattr(item, attr_name)
