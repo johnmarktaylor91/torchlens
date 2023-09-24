@@ -1294,7 +1294,7 @@ class ModelHistory:
             module_pass_label = (module_address, module.tl_module_pass_num)
             module.tl_module_pass_labels.append(module_pass_label)
             input_tensors = get_vars_of_type_from_obj(
-                [args, kwargs], torch.Tensor, search_depth=4
+                [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=4
             )
             input_tensor_labels = set()
             for t in input_tensors:
