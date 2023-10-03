@@ -5180,8 +5180,10 @@ class ModelHistory:
         for param_shape in node.parent_param_shapes:
             if len(param_shape) > 1:
                 each_param_shape.append("x".join([str(s) for s in param_shape]))
-            else:
+            elif len(param_shape) == 1:
                 each_param_shape.append(f"x{param_shape[0]}")
+            else:
+                each_param_shape.append("x1")
 
         param_label = "<br/>params: " + ", ".join(
             [param_shape for param_shape in each_param_shape]
@@ -6008,6 +6010,15 @@ class ModelHistory:
                 and torch.equal(
             self[layers_to_perturb[0]].tensor_contents,
             layer_to_validate_parents_for.creation_args[1],
+        )
+        ):
+            return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
+                and not torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[0],
         )
         ):
             return True

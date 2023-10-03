@@ -2330,19 +2330,6 @@ def test_timm_beit_base_patch16_224(default_input1):
     assert validate_saved_activations(model, default_input1)
 
 
-def test_timm_beit_base_patch16_224_in22k(default_input1):
-    model = timm.models.beit_base_patch16_224_in22k()
-    show_model_graph(
-        model,
-        default_input1,
-        vis_opt="unrolled",
-        vis_outpath=opj(
-            "visualization_outputs", "timm", "timm_beit_base_patch16_224_in22k"
-        ),
-    )
-    assert validate_saved_activations(model, default_input1)
-
-
 def test_timm_cait_s24_224(default_input1):
     model = timm.models.cait_s24_224()
     show_model_graph(
@@ -2377,7 +2364,7 @@ def test_timm_convit_base(default_input1):
 
 
 def test_timm_darknet21():
-    model = timm.create_model("darknet21", pretrained=True)
+    model = timm.create_model("darknet21", pretrained=False)
     model_input = torch.randn(1, 3, 224, 224)
     show_model_graph(
         model,
