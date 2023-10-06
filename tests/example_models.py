@@ -268,7 +268,7 @@ class SliceOperations(nn.Module):
         y.zero_()
         y = y + 1
         y = torch.log(y)
-        x = x**2
+        x = x ** 2
         return x
 
 
@@ -313,7 +313,7 @@ class MultiInputs(nn.Module):
     def forward(x, y, z):
         a = x + y
         b = torch.log(z)
-        x = a**b
+        x = a ** b
         return x
 
 
@@ -326,7 +326,7 @@ class ListInput(nn.Module):
         x, y, z = input_list
         a = x + y
         b = torch.log(z)
-        x = a**b
+        x = a ** b
         return x
 
 
@@ -339,7 +339,7 @@ class DictInput(nn.Module):
         x, y, z = input_dict["x"], input_dict["y"], input_dict["z"]
         a = x + y
         b = torch.log(z)
-        x = a**b
+        x = a ** b
         return x
 
 
@@ -437,7 +437,7 @@ class SimpleBranching(nn.Module):
         y = x * 2
         y = y + 3
         y = torch.log(y)
-        z = x**2
+        z = x ** 2
         z = torch.sin(z)
         x = x + y + z
         return x
@@ -457,7 +457,7 @@ class ConditionalBranching(nn.Module):
             x = torch.cos(x)
             x = x + 1
             x = x * 4
-            x = x**2
+            x = x ** 2
         return x
 
 
@@ -505,7 +505,7 @@ class Level12(nn.Module):
 
     @staticmethod
     def forward(x):
-        x = x**3 + torch.ones(x.shape)
+        x = x ** 3 + torch.ones(x.shape)
         x = x / 5
         return x
 
@@ -567,9 +567,9 @@ class OrphanTensors(nn.Module):
         z = torch.ones(5, 5)
         z = z + 1
         a = z * 2
-        b = z**2
+        b = z ** 2
         c = a + b
-        x = x**2
+        x = x ** 2
         return x
 
 
@@ -633,7 +633,7 @@ class VaryingLoopNoParam1(nn.Module):
             if i % 2 == 0:
                 y = x + 3
                 y = torch.sin(y)
-                y = y**2
+                y = y ** 2
             x = torch.sin(x)
             if i % 2 == 1:
                 z = x + 3
@@ -656,7 +656,7 @@ class VaryingLoopNoParam2(nn.Module):
             if i in [0, 3, 4]:
                 y = x + 3
                 y = torch.sin(y)
-                y = y**2
+                y = y ** 2
             else:
                 y = x * torch.rand(x.shape)
                 y = torch.cos(y)
@@ -681,7 +681,7 @@ class VaryingLoopWithParam(nn.Module):
         x = self.fc(x)
         x = x + 1
         x = x * 2
-        x = x**3
+        x = x ** 3
         x = self.fc(x)
         return x
 
@@ -872,7 +872,7 @@ class ModuleLoopingClash1(nn.Module):
         x = self.relu(x)
         x = torch.log(x)
         for _ in range(
-            4
+                4
         ):  # this tests clashes between what counts as "same"--module-based or looping-based
             x = self.relu(x)
             x = x + 1
@@ -922,8 +922,39 @@ class ModuleLoopingClash3(nn.Module):
 
 
 #  ****************************
-#  **** Uber Architectures ****
+#  **** RNN/LSTM Architectures ****
 #  ****************************
+class LSTMModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lstm = nn.LSTM(5, 10)
+        self.label = nn.Linear(10, 5)
+        self.hidden_size = 10
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        h_0 = torch.zeros(1, batch_size, self.hidden_size)
+        c_0 = torch.zeros(1, batch_size, self.hidden_size)
+
+        output, (final_hidden_state, final_cell_state) = self.lstm(x, (h_0, c_0))
+
+        return self.label(final_hidden_state[-1])
+
+
+class RNNModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.rnn = nn.RNN(5, 10)
+        self.label = nn.Linear(10, 5)
+        self.hidden_size = 10
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        h_0 = torch.zeros(1, batch_size, self.hidden_size)
+
+        output, final_hidden_state = self.rnn(x, h_0)
+
+        return self.label(final_hidden_state[-1])
 
 
 class UberModel1(nn.Module):
@@ -939,7 +970,7 @@ class UberModel1(nn.Module):
         x, y, z = x
         x = x + 1
         y = y * 2
-        y = y**3
+        y = y ** 3
         w = torch.rand(5, 5)
         w = w * 2
         w = w + 4
@@ -1007,7 +1038,7 @@ class UberModel3(nn.Module):
         x = self.fc(x)
         x = x + 1
         x = x * 2
-        x = x**3
+        x = x ** 3
         x = self.fc(x)
         x = x + 2
         x = x * 3
@@ -1171,6 +1202,6 @@ class UberModel9(nn.Module):
         a = torch.ones(3, 3)
         b = torch.zeros(3, 3)
         z3 = z2 + a + b
-        w1 = x**3
+        w1 = x ** 3
         x = torch.sum(torch.stack([y4, z3, w1]))
         return x

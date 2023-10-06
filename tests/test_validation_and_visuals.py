@@ -14,13 +14,14 @@ import torchvision
 import visualpriors
 from PIL import Image
 from StyleTTS.models import TextEncoder
+from model.Unet import UNet
+
 from transformers import (
     BertForNextSentencePrediction,
     BertTokenizer,
     GPT2Model,
     GPT2Tokenizer,
 )
-from torch_geometric.datasets import QM9
 from torch_geometric.nn import DimeNet
 
 import example_models
@@ -2625,6 +2626,41 @@ def test_deepspeech():
 
 # Language models
 
+def test_lstm():
+    model = example_models.LSTMModel()
+    model_input = torch.rand(5, 5, 5)
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "language-models", "language_lstm_unrolled"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "language-models", "language_lstm_rolled"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+def test_rnn():
+    model = example_models.RNNModel()
+    model_input = torch.rand(5, 5, 5)
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "language-models", "language_rnn_unrolled"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "language-models", "language_rnn_rolled"),
+    )
+    assert validate_saved_activations(model, model_input)
+
 
 def test_gpt2():
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -2682,6 +2718,19 @@ def test_clip():  # for some reason CLIP breaks the PyCharm debugger
         vis_outpath=opj("visualization_outputs", "multimodal-models", "clip"),
     )
     assert validate_saved_activations(model, [], model_inputs, random_seed=1)
+
+
+def test_stable_diffusion():
+    model = UNet(3, 16, 10)
+    model_inputs = (torch.rand(6, 3, 224, 224), torch.tensor([1]), torch.tensor([1.]), torch.tensor([3.]))
+    show_model_graph(
+        model,
+        model_inputs,
+        random_seed=1,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "multimodal-models", "stable_diffusion"),
+    )
+    assert validate_saved_activations(model, model_inputs, random_seed=1)
 
 
 # Text to speech

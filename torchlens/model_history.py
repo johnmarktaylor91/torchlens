@@ -6078,14 +6078,15 @@ class ModelHistory:
                          layer_to_validate_parents_for.creation_args[1][1]) or
                      torch.equal(
                          self[layers_to_perturb[0]].tensor_contents,
-                         layer_to_validate_parents_for.creation_args[1]) or
-                     torch.equal(
-                         self[layers_to_perturb[0]].tensor_contents,
                          layer_to_validate_parents_for.creation_args[2][0]) or
                      torch.equal(
                          self[layers_to_perturb[0]].tensor_contents,
-                         layer_to_validate_parents_for.creation_args[2][1])
-                )):
+                         layer_to_validate_parents_for.creation_args[2][1]) or
+                     ((type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor) and
+                      torch.equal(
+                          self[layers_to_perturb[0]].tensor_contents,
+                          layer_to_validate_parents_for.creation_args[1])
+                     ))):
             return True
         elif (
                 perturb
