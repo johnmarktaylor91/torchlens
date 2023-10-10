@@ -9,6 +9,7 @@ import time
 import types
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+import warnings
 
 import graphviz
 import numpy as np
@@ -1085,7 +1086,9 @@ class ModelHistory:
                 continue
             new_func = self.torch_func_decorator(orig_func)
             try:
-                setattr(local_func_namespace, func_name, new_func)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(local_func_namespace, func_name, new_func)
             except (AttributeError, TypeError) as _:
                 pass
             new_func.tl_is_decorated_function = True
@@ -1117,10 +1120,14 @@ class ModelHistory:
         for namespace_name, func_name, orig_func in orig_func_defs:
             namespace_name_notorch = namespace_name.replace("torch.", "")
             local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
-            decorated_func = getattr(local_func_namespace, func_name)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                decorated_func = getattr(local_func_namespace, func_name)
             del decorated_func
             try:
-                setattr(local_func_namespace, func_name, orig_func)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(local_func_namespace, func_name, orig_func)
             except (AttributeError, TypeError) as _:
                 continue
         delattr(torch, "identity")
@@ -1260,7 +1267,9 @@ class ModelHistory:
         submodules = self.get_all_submodules(model)
         for submodule in submodules:
             for attribute_name in dir(submodule):
-                attribute = getattr(submodule, attribute_name)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    attribute = getattr(submodule, attribute_name)
                 if issubclass(type(attribute), torch.Tensor) and not issubclass(
                         type(attribute), torch.nn.Parameter
                 ):
@@ -1484,13 +1493,17 @@ class ModelHistory:
             if attribute_name.startswith(attribute_keyword):
                 delattr(module, attribute_name)
                 continue
-            attr = getattr(module, attribute_name)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                attr = getattr(module, attribute_name)
             if (
                     isinstance(attr, Callable)
                     and (attr in decorated_func_mapper)
                     and (attribute_name[0:2] != "__")
             ):
-                setattr(module, attribute_name, decorated_func_mapper[attr])
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(module, attribute_name, decorated_func_mapper[attr])
 
     def restore_model_attributes(
             self,
@@ -1533,7 +1546,9 @@ class ModelHistory:
         submodules = self.get_all_submodules(model)
         for submodule in submodules:
             for attribute_name in dir(submodule):
-                attribute = getattr(submodule, attribute_name)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    attribute = getattr(submodule, attribute_name)
                 if issubclass(type(attribute), torch.Tensor):
                     if not issubclass(type(attribute), torch.nn.Parameter) and hasattr(
                             attribute, "tl_tensor_label_raw"
@@ -3077,8 +3092,10 @@ class ModelHistory:
         else:
             tensor_label = log_entry.tensor_label_raw
         for attr in dir(log_entry):
-            if not attr.startswith("_") and not callable(getattr(log_entry, attr)):
-                delattr(log_entry, attr)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                if not attr.startswith("_") and not callable(getattr(log_entry, attr)):
+                    delattr(log_entry, attr)
         del log_entry
         if remove_references:
             self._remove_log_entry_references(tensor_label)
@@ -4152,7 +4169,7 @@ class ModelHistory:
         for enter_or_exit, module_address, module_pass in thread_modules[::step_val]:
             module_pass_label = (module_address, module_pass)
             if node_type_to_fix == "parent":
-                if enter_or_exit == "+":
+                if (enter_or_exit == "+") and (module_pass_label in node_to_fix.containing_modules_origin_nested):
                     node_to_fix.containing_modules_origin_nested.remove(
                         module_pass_label
                     )
@@ -4664,7 +4681,9 @@ class ModelHistory:
             new_dir_dict[field] = getattr(self, field)
         for field in dir(self):
             if field.startswith("_"):
-                new_dir_dict[field] = getattr(self, field)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    new_dir_dict[field] = getattr(self, field)
         self.__dict__ = new_dir_dict
 
     def _undecorate_all_saved_tensors(self):

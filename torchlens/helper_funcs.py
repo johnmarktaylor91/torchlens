@@ -356,7 +356,9 @@ def extend_search_stack_from_item(
         if (attr_name.startswith("__")) or (attr_name == 'T') or ('grad' in attr_name):
             continue
         try:
-            attr = getattr(item, attr_name)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                attr = getattr(item, attr_name)
         except:
             continue
         attr_cls = type(attr)
@@ -417,6 +419,9 @@ def nested_getattr(obj: Any, attr: str) -> Any:
         if a in [
             "volatile",
             "T",
+            'H',
+            'mH',
+            'mT'
         ]:  # avoid annoying warning; if there's more, make a list
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -438,7 +443,9 @@ def nested_assign(obj, addr, val):
             if entry_type == "ind":
                 obj = obj[entry_val]
             elif entry_type == "attr":
-                obj = getattr(obj, entry_val)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    obj = getattr(obj, entry_val)
 
 
 def remove_attributes_starting_with_str(obj: Any, s: str):
