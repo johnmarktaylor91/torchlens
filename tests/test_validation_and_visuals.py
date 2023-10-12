@@ -522,6 +522,72 @@ def test_buffer_model():
     )
 
 
+def test_buffer_rewrite_model():
+    model = example_models.BufferRewriteModel()
+    model_input = torch.rand(12, 12)
+    assert validate_saved_activations(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="unrolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_visible_unnested_unrolled"),
+        vis_buffer_layers=True,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="unrolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_invisible_unnested_unrolled"),
+        vis_buffer_layers=False,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_visible_nested_unrolled"),
+        vis_buffer_layers=True,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_invisible_nested_unrolled"),
+        vis_buffer_layers=False,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="rolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_visible_unnested_rolled"),
+        vis_buffer_layers=True,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="rolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_invisible_unnested_rolled"),
+        vis_buffer_layers=False,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_visible_nested_rolled"),
+        vis_buffer_layers=True,
+    )
+    show_model_graph(
+        model,
+        model_input,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_invisible_nested_rolled"),
+        vis_buffer_layers=False,
+    )
+
+
 def test_simple_branching(default_input1):
     model = example_models.SimpleBranching()
     assert validate_saved_activations(model, default_input1)

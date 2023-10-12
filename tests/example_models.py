@@ -427,6 +427,41 @@ class BufferModel(nn.Module):
         return x
 
 
+class BufferRewriteModule(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("buffer1", torch.rand(12, 12))
+        self.register_buffer("buffer2", torch.rand(12, 12))
+
+    def forward(self, x):
+        x = torch.sin(x)
+        x = x + self.buffer1
+        x = x * self.buffer2
+        self.buffer1 = torch.rand(12, 12)
+        self.buffer2 = x ** 2
+        x = self.buffer1 + self.buffer2
+        return x
+
+
+class BufferRewriteModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.buffer_mod = BufferRewriteModule()
+
+    def forward(self, x):
+        x = torch.cos(x)
+        x = self.buffer_mod(x)
+        x = x * 4
+        x = self.buffer_mod(x)
+        x = self.buffer_mod(x)
+        x = x + 1
+        x = self.buffer_mod(x)
+        x = self.buffer_mod(x)
+        x = self.buffer_mod(x)
+        x = x * 2
+        return x
+
+
 class SimpleBranching(nn.Module):
     def __init__(self):
         super().__init__()
