@@ -91,7 +91,7 @@ def log_forward_pass(
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
 
-    if type(layers_to_save) == str:
+    if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
 
     if layers_to_save in ["all", "none", None, []]:
@@ -266,8 +266,12 @@ def validate_saved_activations(
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
-    if type(input_args) == torch.Tensor:
+    if type(input_args) is tuple:
+        input_args = list(input_args)
+    elif (type(input_args) not in [list, tuple]) and (input_args is not None):
         input_args = [input_args]
+    if not input_args:
+        input_args = []
     if not input_kwargs:
         input_kwargs = {}
     input_args_copy = [copy.deepcopy(arg) for arg in input_args]

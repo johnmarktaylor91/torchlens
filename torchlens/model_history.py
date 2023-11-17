@@ -1735,11 +1735,10 @@ class ModelHistory:
 
         self.tensor_nums_to_save = self.get_op_nums_from_user_labels(layers_to_save)
 
-        if type(input_args) == torch.Tensor:
-            input_args = [input_args]
-
-        if type(input_args) == tuple:
+        if type(input_args) is tuple:
             input_args = list(input_args)
+        elif (type(input_args) not in [list, tuple]) and (input_args is not None):
+            input_args = [input_args]
 
         if not input_args:
             input_args = []
