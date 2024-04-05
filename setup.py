@@ -7,7 +7,6 @@ requirements = [
     "numpy",
     "pandas",
     "pytest",
-    "torch",
     "torchvision",
     "tqdm",
     "ipython",
