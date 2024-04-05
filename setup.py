@@ -7,7 +7,6 @@ requirements = [
     "numpy",
     "pandas",
     "pytest",
-    "torchvision",
     "tqdm",
     "ipython",
     "graphviz",
@@ -15,7 +14,7 @@ requirements = [
 
 setup(
     name="torchlens",
-    version="0.1.14",
+    version="0.1.15",
     description="A package for extracting activations from PyTorch models",
     long_description="A package for extracting activations from PyTorch models. Contains functionality for "
                      "extracting model activations, visualizing a model's computational graph, and "
