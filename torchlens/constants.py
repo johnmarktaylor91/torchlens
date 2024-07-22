@@ -105,6 +105,8 @@ MODEL_HISTORY_FIELD_ORDER = [
     "elapsed_time_total",
     "elapsed_time_function_calls",
     "elapsed_time_torchlens_logging",
+    # Lookup info
+    "func_argnames"
 ]
 
 TENSOR_LOG_ENTRY_FIELD_ORDER = [
@@ -158,6 +160,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "func_call_stack",
     "func_time_elapsed",
     "func_rng_states",
+    "func_argnames",
     "num_func_args_total",
     "num_position_args",
     "num_keyword_args",
