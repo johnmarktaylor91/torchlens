@@ -6353,6 +6353,19 @@ class ModelHistory:
             layer_to_validate_parents_for.creation_args[2]
         )):
             return True
+        elif (
+                perturb
+                and (layer_to_validate_parents_for.func_applied_name == "interpolate")
+                and ((('scale_factor' in layer_to_validate_parents_for.creation_kwargs)
+                      and torch.equal(
+                    self[layers_to_perturb[0]].tensor_contents,
+                    layer_to_validate_parents_for.creation_kwargs['scale_factor']))
+                     or ((len(layer_to_validate_parents_for.creation_args) >= 3)
+                         and torch.equal(
+                            self[layers_to_perturb[0]].tensor_contents,
+                            layer_to_validate_parents_for.creation_args[2])))
+        ):
+            return True
 
         # Prepare input arguments: keep the ones that should just be kept, perturb those that should be perturbed
 
@@ -6364,7 +6377,10 @@ class ModelHistory:
         layer_func = layer_to_validate_parents_for.func_applied
         current_rng_states = log_current_rng_states()
         set_rng_from_saved_states(layer_to_validate_parents_for.func_rng_states)
-        recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
+        try:
+            recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
+        except:
+            raise Exception(f"Invalid perturbed arguments for layer {layer_to_validate_parents_for_label}")
         set_rng_from_saved_states(current_rng_states)
 
         if layer_func.__name__ in [
@@ -6399,7 +6415,7 @@ class ModelHistory:
                 tensor_nanequal(
                     recomputed_output,
                     layer_to_validate_parents_for.tensor_contents,
-                    allow_tolerance=True,
+                    allow_tolerance=False,
                 )
                 and perturb
         ):
