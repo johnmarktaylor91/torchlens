@@ -30,6 +30,7 @@ from torchlens import show_model_graph, validate_saved_activations
 # Define inputs
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
+torch.use_deterministic_algorithms()
 
 sub_dirs = [
     "cornet",
