@@ -283,6 +283,8 @@ for analyzing the extracted activations. This is in part because it's impossible
 want to do with the activations, or all the possible models you might want to look at, but also because there are
 already outstanding packages for doing these things. Here are a few-let me know if I've missed any!
 
+- [Cerbrec](cerbrec.com): Program for interactively visualizing and debugging deep neural networks (uses TorchLens under
+  the hood for extracting the graphs of PyTorch models!)
 - [ThingsVision](https://github.com/ViCCo-Group/thingsvision): has excellent functionality for loading vision models,
   loading stimuli, and analyzing the extracted activations
 - [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): similar excellent end-to-end functionality to ThingsVision,
