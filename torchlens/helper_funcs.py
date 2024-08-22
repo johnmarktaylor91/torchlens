@@ -130,9 +130,9 @@ def make_var_iterable(x):
     Returns:
         Iterable output
     """
-    if type(x) in [tuple, list, set]:
+    if any([issubclass(type(x), cls) for cls in [list, tuple, set]]):
         return x
-    if issubclass(type(x), dict):
+    elif issubclass(type(x), dict):
         return list(x.values())
     else:
         return [x]

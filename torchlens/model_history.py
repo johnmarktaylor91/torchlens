@@ -2424,7 +2424,7 @@ class ModelHistory:
         }
         fields_dict["module_entry_exit_thread_output"] = []
 
-        is_part_of_iterable_output = type(out_orig) in [list, tuple, dict, set]
+        is_part_of_iterable_output = any([issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]])
         fields_dict["is_part_of_iterable_output"] = is_part_of_iterable_output
         out_iter = make_var_iterable(out_orig)  # so we can iterate through it
 
