@@ -14,7 +14,7 @@ requirements = [
 
 setup(
     name="torchlens",
-    version="0.1.17",
+    version="0.1.18",
     description="A package for extracting activations from PyTorch models",
     long_description="A package for extracting activations from PyTorch models. Contains functionality for "
                      "extracting model activations, visualizing a model's computational graph, and "
