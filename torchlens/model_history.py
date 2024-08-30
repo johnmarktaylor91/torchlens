@@ -1591,8 +1591,9 @@ class ModelHistory:
             )
 
         for param in model.parameters():
-            param.requires_grad = getattr(param, "tl_requires_grad")
-            delattr(param, "tl_requires_grad")
+            if hasattr(param, "tl_requires_grad"):
+                param.requires_grad = getattr(param, "tl_requires_grad")
+                delattr(param, "tl_requires_grad")
 
     def undecorate_model_tensors(self, model: nn.Module):
         """Goes through a model and all its submodules, and unmutates any tensor attributes. Normally just clearing
