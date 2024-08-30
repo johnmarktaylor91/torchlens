@@ -524,7 +524,7 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     """
     cpu_data = clean_cpu(t.data)
     if cpu_data.dtype == torch.bfloat16:
-        cpu_data = cpu_data.to(torch.float16)
+        cpu_data = clean_to(cpu_data, torch.float16)
     return getsizeof(np.array(cpu_data))
 
 
@@ -569,7 +569,7 @@ def print_override(t: torch.Tensor, func_name: str):
     """
     cpu_data = clean_cpu(t.data)
     if cpu_data.dtype == torch.bfloat16:
-        cpu_data = cpu_data.to(torch.float16)
+        cpu_data = clean_to(cpu_data, torch.float16)
     n = np.array(cpu_data)
     np_str = getattr(n, func_name)()
     np_str = np_str.replace("array", "tensor")
@@ -598,7 +598,7 @@ def safe_copy(x, detach_tensor: bool = False):
             return clean_clone(x)
         vals_cpu = clean_cpu(x.data)
         if vals_cpu.dtype == torch.bfloat16:
-            vals_cpu = vals_cpu.to(torch.float16)
+            vals_cpu = clean_to(vals_cpu, torch.float16)
         vals_np = vals_cpu.numpy()
         vals_tensor = clean_from_numpy(vals_np)
         if hasattr(x, "tl_tensor_label_raw"):
