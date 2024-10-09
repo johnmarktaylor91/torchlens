@@ -9,12 +9,11 @@ import pytest
 import requests
 import timm.models
 import torch
+import torch.nn as nn
 import torchaudio.models
 import torchvision
 import visualpriors
 from PIL import Image
-from StyleTTS.models import TextEncoder
-from model.Unet import UNet
 
 from transformers import (
     BertForNextSentencePrediction,
@@ -3025,6 +3024,11 @@ def test_clip():  # for some reason CLIP breaks the PyCharm debugger
 
 
 def test_stable_diffusion():
+    try:
+        from model.Unet import UNet
+    except ModuleNotFoundError:
+        pytest.xfail()
+
     model = UNet(3, 16, 10)
     model_inputs = (torch.rand(6, 3, 224, 224), torch.tensor([1]), torch.tensor([1.]), torch.tensor([3.]))
     show_model_graph(
@@ -3039,7 +3043,13 @@ def test_stable_diffusion():
 
 
 # Text to speech
+
 def test_styletts():
+    try:
+        from StyleTTS.models import TextEncoder
+    except ModuleNotFoundError:
+        pytest.xfail()
+
     model = TextEncoder(3, 3, 3, 100)
     tokens = torch.tensor([[3, 0, 1, 2, 0, 2, 2, 3, 1, 4]])
     input_lengths = torch.ones(1, dtype=torch.long) * 10
@@ -3081,3 +3091,39 @@ def test_dimenet():
         vis_outpath=opj("visualization_outputs", "graph-neural-networks", "dimenet"),
     )
     assert validate_saved_activations(model, model_inputs)
+
+
+# Lightning modules
+
+def test_lightning():
+    try:
+        import lightning as L
+    except ModuleNotFoundError:
+        pytest.xfail()
+
+    class OneHotAutoEncoder(L.LightningModule):
+
+        def __init__(self):
+            super().__init__()
+            self.model = nn.Sequential(
+                    nn.Linear(16, 4),
+                    nn.ReLU(),
+                    nn.Linear(4, 16),
+            )
+
+        def forward(self, x):
+            x_hat = self.model(x)
+            return nn.functional.mse_loss(x_hat, x)
+
+    model = OneHotAutoEncoder()
+    model_inputs = [torch.randn(2, 16)]
+
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "lightning", "one-hot-autoencoder"),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
