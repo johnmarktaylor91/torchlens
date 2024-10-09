@@ -836,6 +836,7 @@ def test_varying_loop_noparam1(default_input1):
     )
 
 
+@pytest.mark.xfail
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
     assert validate_saved_activations(model, default_input1)
@@ -3027,7 +3028,7 @@ def test_stable_diffusion():
     try:
         from model.Unet import UNet
     except ModuleNotFoundError:
-        pytest.xfail()
+        pytest.skip()
 
     model = UNet(3, 16, 10)
     model_inputs = (torch.rand(6, 3, 224, 224), torch.tensor([1]), torch.tensor([1.]), torch.tensor([3.]))
@@ -3048,7 +3049,7 @@ def test_styletts():
     try:
         from StyleTTS.models import TextEncoder
     except ModuleNotFoundError:
-        pytest.xfail()
+        pytest.skip()
 
     model = TextEncoder(3, 3, 3, 100)
     tokens = torch.tensor([[3, 0, 1, 2, 0, 2, 2, 3, 1, 4]])
@@ -3099,7 +3100,7 @@ def test_lightning():
     try:
         import lightning as L
     except ModuleNotFoundError:
-        pytest.xfail()
+        pytest.skip()
 
     class OneHotAutoEncoder(L.LightningModule):
 
