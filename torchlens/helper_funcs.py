@@ -6,7 +6,7 @@ import secrets
 import string
 import warnings
 from sys import getsizeof
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Callable
 
 import numpy as np
 import torch
@@ -446,6 +446,26 @@ def nested_assign(obj, addr, val):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     obj = getattr(obj, entry_val)
+
+
+def iter_accessible_attributes(obj: Any, *, short_circuit: Optional[Callable[[Any, str], bool]] = None):
+    for attr_name in dir(obj):
+        if short_circuit and short_circuit(obj, attr_name):
+            continue
+
+        # Attribute access can fail for any number of reasons, especially when 
+        # working with objects that we don't know anything about.  This 
+        # function makes a best-effort attempt to access every attribute, but 
+        # gracefully skips any that cause problems.
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                attr = getattr(obj, attr_name)
+            except Exception:
+                continue
+
+        yield attr_name, attr
 
 
 def remove_attributes_starting_with_str(obj: Any, s: str):

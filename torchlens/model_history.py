@@ -44,6 +44,7 @@ from torchlens.helper_funcs import (
     set_random_seed,
     set_rng_from_saved_states,
     tuple_tolerant_assign,
+    iter_accessible_attributes,
     remove_attributes_starting_with_str,
     tensor_nanequal,
     tensor_all_nan,
@@ -1314,10 +1315,7 @@ class ModelHistory:
         """
         submodules = self.get_all_submodules(model)
         for submodule in submodules:
-            for attribute_name in dir(submodule):
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    attribute = getattr(submodule, attribute_name)
+            for attribute_name, attribute in iter_accessible_attributes(submodule):
                 if issubclass(type(attribute), torch.Tensor) and not issubclass(
                         type(attribute), torch.nn.Parameter
                 ):
@@ -1551,13 +1549,12 @@ class ModelHistory:
             decorated_func_mapper: Dict[Callable, Callable],
             attribute_keyword: str = "tl",
     ):
-        for attribute_name in dir(module):
+        def del_attrs_with_prefix(module, attribute_name):
             if attribute_name.startswith(attribute_keyword):
                 delattr(module, attribute_name)
-                continue
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                attr = getattr(module, attribute_name)
+                return True
+
+        for attribute_name, attr in iter_accessible_attributes(module, short_circuit=del_attrs_with_prefix):
             if (
                     isinstance(attr, Callable)
                     and (attr in decorated_func_mapper)
@@ -1608,10 +1605,7 @@ class ModelHistory:
         """
         submodules = self.get_all_submodules(model)
         for submodule in submodules:
-            for attribute_name in dir(submodule):
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    attribute = getattr(submodule, attribute_name)
+            for attribute_name, attribute in iter_accessible_attributes(submodule):
                 if issubclass(type(attribute), torch.Tensor):
                     if not issubclass(type(attribute), torch.nn.Parameter) and hasattr(
                             attribute, "tl_tensor_label_raw"

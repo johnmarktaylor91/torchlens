@@ -1,2 +1,15 @@
 black
+cornet @ git+https://github.com/dicarlolab/CORnet
+lightning
+numpy
+pillow
 pytest
+requests
+timm
+torch
+torchaudio
+torch_geometric
+torchlens
+torchvision
+transformers
+visualpriors
