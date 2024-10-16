@@ -302,8 +302,9 @@ already outstanding packages for doing these things. Here are a few-let me know 
 ## Acknowledgments
 
 The development of *TorchLens* benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
-Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. All network
-visualizations were created with graphviz. Logo created by Nikolaus Kriegeskorte.
+Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. Thank you to Kale Kundert
+for helpful discussion and for his code contributions enabling PyTorch Lightning compatibility.
+All network visualizations were created with graphviz. Logo created by Nikolaus Kriegeskorte.
 
 ## Citing Torchlens
 
