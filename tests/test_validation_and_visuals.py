@@ -582,6 +582,7 @@ def test_buffer_rewrite_model():
     show_model_graph(
         model,
         model_input,
+        save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "toy-networks", "buffer_rewrite_model_visible_nested_unrolled"),
         vis_buffer_layers=True,
@@ -3107,9 +3108,9 @@ def test_lightning():
         def __init__(self):
             super().__init__()
             self.model = nn.Sequential(
-                    nn.Linear(16, 4),
-                    nn.ReLU(),
-                    nn.Linear(4, 16),
+                nn.Linear(16, 4),
+                nn.ReLU(),
+                nn.Linear(4, 16),
             )
 
         def forward(self, x):
@@ -3127,4 +3128,3 @@ def test_lightning():
         vis_outpath=opj("visualization_outputs", "lightning", "one-hot-autoencoder"),
     )
     assert validate_saved_activations(model, model_inputs)
-
