@@ -95,6 +95,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     "module_num_tensors",
     "module_pass_num_tensors",
     "module_layers",
+    "module_layer_argnames",
     "module_pass_layers",
     # Time elapsed
     "pass_start_time",
@@ -231,6 +232,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "module_nesting_depth",
     "modules_entered",
     "module_passes_entered",
+    "modules_entered_argnames",
     "is_submodule_input",
     "modules_exited",
     "module_passes_exited",

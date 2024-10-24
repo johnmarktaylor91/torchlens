@@ -223,6 +223,7 @@ class TensorLogEntry:
         ]
         self.module_nesting_depth = fields_dict["module_nesting_depth"]
         self.modules_entered = fields_dict["modules_entered"]
+        self.modules_entered_argnames = fields_dict["modules_entered_argnames"]
         self.module_passes_entered = fields_dict["module_passes_entered"]
         self.is_submodule_input = fields_dict["is_submodule_input"]
         self.modules_exited = fields_dict["modules_exited"]
@@ -853,6 +854,7 @@ class ModelHistory:
         self.module_pass_num_tensors: Dict = defaultdict(lambda: 0)
         self.module_layers: Dict = defaultdict(list)
         self.module_pass_layers: Dict = defaultdict(list)
+        self.module_layer_argnames = defaultdict(list)
 
         # Time elapsed:
         self.pass_start_time: float = 0
@@ -1361,6 +1363,12 @@ class ModelHistory:
                 tensor_entry.modules_entered.append(module_address)
                 tensor_entry.module_passes_entered.append(module_pass_label)
                 tensor_entry.is_submodule_input = True
+                for arg_key, arg_val in list(enumerate(args)) + list(kwargs.items()):
+                    if arg_val is t:
+                        tensor_entry.modules_entered_argnames[
+                            f"{module_pass_label[0]}:{module_pass_label[1]}"].append(arg_key)
+                        self.module_layer_argnames[(f"{module_pass_label[0]}:"
+                                                    f"{module_pass_label[1]}")].append((t.tl_tensor_label_raw, arg_key))
                 tensor_entry.module_entry_exit_thread_output.append(
                     ("+", module_pass_label[0], module_pass_label[1])
                 )
@@ -2131,6 +2139,7 @@ class ModelHistory:
             "containing_modules_origin_nested": [],
             "module_nesting_depth": 0,
             "modules_entered": [],
+            "modules_entered_argnames": defaultdict(list),
             "module_passes_entered": [],
             "is_submodule_input": False,
             "modules_exited": [],
@@ -2406,6 +2415,7 @@ class ModelHistory:
         ] = containing_modules_origin_nested
         fields_dict["module_nesting_depth"] = len(containing_modules_origin_nested)
         fields_dict["modules_entered"] = []
+        fields_dict["modules_entered_argnames"] = defaultdict(list)
         fields_dict["module_passes_entered"] = []
         fields_dict["is_submodule_input"] = False
         fields_dict["modules_exited"] = []
@@ -4874,6 +4884,13 @@ class ModelHistory:
                 self.raw_to_final_layer_labels[parent],
             )
             self.conditional_branch_edges[t] = (new_child, new_parent)
+
+        for module_pass, arglist in self.module_layer_argnames.items():
+            for a, arg in enumerate(arglist):
+                raw_name = self.module_layer_argnames[module_pass][a][0]
+                new_name = self.raw_to_final_layer_labels[raw_name]
+                argname = self.module_layer_argnames[module_pass][a][1]
+                self.module_layer_argnames[module_pass][a] = (new_name, argname)
 
     def _trim_and_reorder_model_history_fields(self):
         """
