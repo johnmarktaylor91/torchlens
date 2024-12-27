@@ -1317,10 +1317,11 @@ class ModelHistory:
         """
         submodules = self.get_all_submodules(model)
         for submodule in submodules:
-            for attribute_name, attribute in iter_accessible_attributes(submodule):
+            attr_list = list(submodule.named_buffers()) + list(iter_accessible_attributes(submodule))
+            for attribute_name, attribute in attr_list:
                 if issubclass(type(attribute), torch.Tensor) and not issubclass(
                         type(attribute), torch.nn.Parameter
-                ):
+                ) and not hasattr(attribute, 'tl_buffer_address'):
                     if submodule.tl_module_address == "":
                         buffer_address = attribute_name
                     else:
