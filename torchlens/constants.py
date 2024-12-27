@@ -415,5 +415,20 @@ def my_get_overridable_functions() -> List:
     return func_names
 
 
+TORCHVISION_FUNCS = [
+    ("torch.ops.torchvision.nms", "_op"),
+    ("torch.ops.torchvision.deform_conv2d", "_op"),
+    ("torch.ops.torchvision.ps_roi_align", "_op"),
+    ("torch.ops.torchvision.ps_roi_pool", "_op"),
+    ("torch.ops.torchvision.roi_align", "_op"),
+    ("torch.ops.torchvision.roi_pool", "_op")]
+
 OVERRIDABLE_FUNCS = my_get_overridable_functions()
 ORIG_TORCH_FUNCS = OVERRIDABLE_FUNCS + IGNORED_FUNCS
+
+try:
+    import torchvision
+
+    ORIG_TORCH_FUNCS += TORCHVISION_FUNCS
+except ModuleNotFoundError:
+    pass
