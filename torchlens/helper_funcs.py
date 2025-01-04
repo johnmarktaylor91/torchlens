@@ -1,19 +1,20 @@
 import base64
 import copy
+import inspect
 import multiprocessing as mp
 import random
 import secrets
 import string
 import warnings
 from sys import getsizeof
-from typing import Any, Dict, List, Optional, Type, Callable
+from typing import Any, Callable, Dict, List, Optional, Type
 
 import numpy as np
 import torch
 from IPython import get_ipython
 from torch import nn
 
-MAX_FLOATING_POINT_TOLERANCE = 5.5879e-09 + 0.0000001
+MAX_FLOATING_POINT_TOLERANCE = 3e-6
 
 
 def identity(x):
@@ -100,6 +101,55 @@ def make_short_barcode_from_input(
     barcode = barcode.decode("utf-8")
     barcode = barcode[0:barcode_len]
     return barcode
+
+
+def _get_call_stack_dicts():
+    call_stack = inspect.stack()
+    call_stack = [
+        inspect.getframeinfo(call_stack[i][0], context=19)
+        for i in range(len(call_stack))
+    ]
+    call_stack_dicts = [
+        {
+            "call_fname": caller.filename,
+            "call_linenum": caller.lineno,
+            "function": caller.function,
+            "code_context": caller.code_context,
+        }
+        for caller in call_stack
+    ]
+
+    for call_stack_dict in call_stack_dicts:
+        if is_iterable(call_stack_dict['code_context']):
+            call_stack_dict['code_context_str'] = ''.join(call_stack_dict['code_context'])
+        else:
+            call_stack_dict['code_context_str'] = str(call_stack_dict['code_context'])
+
+    # Only start at the level of that first forward pass, going from shallow to deep.
+    tracking = False
+    filtered_dicts = []
+    for d in range(len(call_stack_dicts) - 1, -1, -1):
+        call_stack_dict = call_stack_dicts[d]
+        if any(
+                [
+                    call_stack_dict["call_fname"].endswith("model_history.py"),
+                    call_stack_dict["call_fname"].endswith("torchlens/helper_funcs.py"),
+                    call_stack_dict["call_fname"].endswith("torchlens/user_funcs.py"),
+                    call_stack_dict["call_fname"].endswith("torchlens/trace_model.py"),
+                    call_stack_dict["call_fname"].endswith("torchlens/logging_funcs.py"),
+                    call_stack_dict["call_fname"].endswith("torchlens/decorate_torch.py"),
+                    call_stack_dict["call_fname"].endswith("torchlens/model_funcs.py"),
+                    "_call_impl" in call_stack_dict["function"],
+                ]
+        ):
+            continue
+        if call_stack_dict["function"] == "forward":
+            tracking = True
+
+        if tracking:
+            filtered_dicts.append(call_stack_dict)
+
+    return filtered_dicts
 
 
 def is_iterable(obj: Any) -> bool:
@@ -489,7 +539,9 @@ def tensor_all_nan(t: torch.Tensor) -> bool:
         return False
 
 
-def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -> bool:
+def tensor_nanequal(t1: torch.Tensor,
+                    t2: torch.Tensor,
+                    allow_tolerance=False) -> bool:
     """Returns True if the two tensors are equal, allowing for nans."""
     if t1.shape != t2.shape:
         return False

@@ -1,23 +1,71 @@
 import copy
 import os
+import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
 from torch import nn
-import random
-
 from tqdm import tqdm
 
-from torchlens.helper_funcs import (
-    warn_parallel,
-    get_vars_of_type_from_obj,
-    set_random_seed,
-)
-from torchlens.model_history import (
+from .helper_funcs import (get_vars_of_type_from_obj, set_random_seed, warn_parallel)
+from .model_history import (
     ModelHistory,
-    run_model_and_save_specified_activations,
 )
+
+
+def run_model_and_save_specified_activations(
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List[Any]],
+        input_kwargs: Dict[Any, Any],
+        layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
+        keep_unsaved_layers: bool = True,
+        output_device: str = "same",
+        activation_postfunc: Optional[Callable] = None,
+        mark_input_output_distances: bool = False,
+        detach_saved_tensors: bool = False,
+        save_function_args: bool = False,
+        save_gradients: bool = False,
+        random_seed: Optional[int] = None,
+) -> ModelHistory:
+    """Internal function that runs the given input through the given model, and saves the
+    specified activations, as given by the tensor numbers (these will not be visible to the user;
+    they will be generated from the nicer human-readable names and then fed in).
+
+    Args:
+        model: PyTorch model.
+        input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
+        input_kwargs: Keyword arguments to the model's forward pass.
+        layers_to_save: List of layers to save
+        keep_unsaved_layers: Whether to keep layers in the ModelHistory log if they don't have saved activations.
+        output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
+            'cpu' or 'cuda' to move to cpu or cuda.
+        activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
+        mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
+            This is computationally expensive for large networks, so it is off by default.
+        detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
+        save_function_args: whether to save the arguments to each function
+        save_gradients: whether to save gradients from any subsequent backward pass
+        random_seed: Which random seed to use.
+
+    Returns:
+        ModelHistory object with full log of the forward pass
+    """
+    model_name = str(type(model).__name__)
+    model_history = ModelHistory(
+        model_name,
+        output_device,
+        activation_postfunc,
+        keep_unsaved_layers,
+        save_function_args,
+        save_gradients,
+        detach_saved_tensors,
+        mark_input_output_distances,
+    )
+    model_history._run_and_log_inputs_through_model(
+        model, input_args, input_kwargs, layers_to_save, random_seed
+    )
+    return model_history
 
 
 def log_forward_pass(

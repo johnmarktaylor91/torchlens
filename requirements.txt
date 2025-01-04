@@ -3,3 +3,4 @@ pandas
 tqdm
 ipython
 graphviz
+torch

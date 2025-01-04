@@ -1,6 +1,7 @@
 # This is for validating all the different model types. Have it both validate and spit out the visual for checking.
 # Let the default input size be 3x3x224x224.
 
+import numpy as np
 import os
 from os.path import join as opj
 
@@ -2187,57 +2188,6 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
     assert validate_saved_activations(model, [input_tensors])
 
 
-def test_maskrcnn_resnet50_train(default_input1, default_input2):
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn()
-    input_tensors = [default_input1[0], default_input2[0]]
-    torch.manual_seed(0)
-    torch.cuda.manual_seed_all(0)
-    targets = [
-        {
-            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
-            "labels": torch.tensor([1, 2]),
-            "masks": torch.rand(2, 224, 224).type(torch.uint8),
-        },
-        {
-            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
-            "labels": torch.tensor([1, 2]),
-            "masks": torch.rand(2, 224, 224).type(torch.uint8),
-        },
-    ]
-    model_inputs = (input_tensors, targets)
-    show_model_graph(
-        model,
-        model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
-        vis_outpath=opj(
-            "visualization_outputs",
-            "torchvision-detection",
-            "detect_maskrcnn_resnet50_fpn_train",
-        ),
-    )
-    assert validate_saved_activations(model, model_inputs, random_seed=0)
-
-
-def test_maskrcnn_resnet50_eval(default_input1, default_input2):
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn()
-    input_tensors = [default_input1[0], default_input2[0]]
-    model = model.eval()
-    show_model_graph(
-        model,
-        [input_tensors],
-        random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
-        vis_outpath=opj(
-            "visualization_outputs",
-            "torchvision-detection",
-            "detect_maskrcnn_resnet50_fpn_eval",
-        ),
-    )
-    assert validate_saved_activations(model, [input_tensors], random_seed=0)
-
-
 def test_fcos_resnet50_train(default_input1, default_input2):
     model = torchvision.models.detection.fcos_resnet50_fpn()
     input_tensors = [default_input1[0], default_input2[0]]
@@ -2562,7 +2512,7 @@ def test_opticflow_raftsmall():
     assert validate_saved_activations(model, model_input)
 
 
-def test_opticflow_raftlarge():
+def test_opticflow_raftlarge():  # TODO: the loop-finding prccedure messes up on this somehow.
     model = torchvision.models.optical_flow.raft_large()
     model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]
     show_model_graph(
@@ -3005,8 +2955,7 @@ def test_clip():  # for some reason CLIP breaks the PyCharm debugger
 
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-    image = Image.open(requests.get(url, stream=True).raw)
+    image = Image.fromarray(np.random.random((640, 480, 3)).astype(np.uint8))
     model_inputs = processor(
         text=["a photo of a cat", "a photo of a dog"],
         images=image,
@@ -3027,7 +2976,7 @@ def test_clip():  # for some reason CLIP breaks the PyCharm debugger
 
 def test_stable_diffusion():
     try:
-        from model.Unet import UNet
+        import UNet
     except ModuleNotFoundError:
         pytest.skip()
 

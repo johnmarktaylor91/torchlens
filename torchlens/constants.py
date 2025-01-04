@@ -2,6 +2,7 @@ import __future__
 import functools
 import types
 from typing import List
+import warnings
 
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
@@ -9,12 +10,12 @@ from torch.overrides import get_ignored_functions, get_testing_overrides
 MODEL_HISTORY_FIELD_ORDER = [
     # General info
     "model_name",
-    "pass_finished",
-    "track_tensors",
+    "_pass_finished",
+    "_track_tensors",
     "logging_mode",
-    "pause_logging",
-    "all_layers_logged",
-    "all_layers_saved",
+    "_pause_logging",
+    "_all_layers_logged",
+    "_all_layers_saved",
     "keep_unsaved_layers",
     "current_function_call_barcode",
     "random_seed_used",
@@ -40,25 +41,25 @@ MODEL_HISTORY_FIELD_ORDER = [
     "layer_labels_no_pass",
     "layer_labels_w_pass",
     "layer_num_passes",
-    "raw_tensor_dict",
-    "raw_tensor_labels_list",
-    "tensor_nums_to_save",
-    "tensor_counter",
+    "_raw_tensor_dict",
+    "_raw_tensor_labels_list",
+    "_tensor_nums_to_save",
+    "_tensor_counter",
     "num_operations",
-    "raw_layer_type_counter",
-    "unsaved_layers_lookup_keys",
+    "_raw_layer_type_counter",
+    "_unsaved_layers_lookup_keys",
     # Mapping from raw to final layer labels:
-    "raw_to_final_layer_labels",
-    "final_to_raw_layer_labels",
-    "lookup_keys_to_tensor_num_dict",
-    "tensor_num_to_lookup_keys_dict",
+    "_raw_to_final_layer_labels",
+    "_final_to_raw_layer_labels",
+    "_lookup_keys_to_tensor_num_dict",
+    "_tensor_num_to_lookup_keys_dict",
     # Special layers
     "input_layers",
     "output_layers",
     "buffer_layers",
     "buffer_num_passes",
     "internally_initialized_layers",
-    "layers_where_internal_branches_merge_with_input",
+    "_layers_where_internal_branches_merge_with_input",
     "internally_terminated_layers",
     "internally_terminated_bool_layers",
     "conditional_branch_edges",
@@ -118,7 +119,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "operation_num",
     "realtime_tensor_num",
     "source_model_history",
-    "pass_finished",
+    "_pass_finished",
     # Other labeling info
     "layer_label_short",
     "layer_label_w_pass",
@@ -423,7 +424,9 @@ TORCHVISION_FUNCS = [
     ("torch.ops.torchvision.roi_align", "_op"),
     ("torch.ops.torchvision.roi_pool", "_op")]
 
-OVERRIDABLE_FUNCS = my_get_overridable_functions()
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    OVERRIDABLE_FUNCS = my_get_overridable_functions()
 ORIG_TORCH_FUNCS = OVERRIDABLE_FUNCS + IGNORED_FUNCS
 
 try:
