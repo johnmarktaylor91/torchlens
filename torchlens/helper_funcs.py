@@ -597,7 +597,7 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     cpu_data = clean_cpu(t.data)
     if cpu_data.dtype == torch.bfloat16:
         cpu_data = clean_to(cpu_data, torch.float16)
-    return getsizeof(np.array(cpu_data))
+    return getsizeof(np.array(clean_dense(cpu_data)))
 
 
 def human_readable_size(size: int, decimal_places: int = 1) -> str:
@@ -627,6 +627,7 @@ clean_clone = copy.deepcopy(torch.clone)
 clean_cpu = copy.deepcopy(torch.Tensor.cpu)
 clean_cuda = copy.deepcopy(torch.Tensor.cuda)
 clean_to = copy.deepcopy(torch.Tensor.to)
+clean_dense = copy.deepcopy(torch.Tensor.to_dense)
 
 
 def print_override(t: torch.Tensor, func_name: str):
