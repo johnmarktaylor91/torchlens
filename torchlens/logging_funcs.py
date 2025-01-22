@@ -14,6 +14,7 @@ from .tensor_log import TensorLogEntry
 
 if TYPE_CHECKING:
     from .model_history import ModelHistory
+    from .tensor_log import TensorLogEntry
 
 
 def save_new_activations(
@@ -274,6 +275,11 @@ def log_source_tensor_exhaustive(
     if source == "buffer":
         self.buffer_layers.append(tensor_label)
         self.internally_initialized_layers.append(tensor_label)
+
+    # Make it track gradients if relevant
+
+    if self.save_gradients:
+        _add_backward_hook(self, t, t.tl_tensor_label_raw)
 
 
 def log_source_tensor_fast(self, t: torch.Tensor, source: str):
@@ -774,12 +780,11 @@ def _add_backward_hook(self, t: torch.Tensor, tensor_label):
         Nothing; it changes the tensor in place.
     """
 
-    # Define the decorator
-    def log_grad_to_model_history(_, g_out):
-        self._log_tensor_grad(g_out, tensor_label)
+    def log_grad_to_model_history(grad):
+        _log_tensor_grad(self, grad, tensor_label)
 
-    if t.grad_fn is not None:
-        t.grad_fn.register_hook(log_grad_to_model_history)
+    if (t.grad_fn is not None) or t.requires_grad:
+        t.register_hook(log_grad_to_model_history)
 
 
 def _log_info_specific_to_single_function_output_tensor(
@@ -948,14 +953,24 @@ def _log_tensor_grad(self, grad: torch.Tensor, tensor_label_raw: str):
     """
     self.has_saved_gradients = True
     tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
-    if tensor_label not in self.layers_with_saved_gradients:
-        self.layers_with_saved_gradients.append(tensor_label)
-        layer_order = {layer: i for i, layer in enumerate(self.layer_labels)}
-        self.layers_with_saved_gradients = sorted(
-            self.layers_with_saved_gradients, key=lambda x: layer_order[x]
-        )
     tensor_log_entry = self[tensor_label]
-    tensor_log_entry.log_tensor_grad(grad)
+    layers_to_update = [tensor_label]
+    if tensor_log_entry.is_output_parent:  # also update any linked outputs
+        for child_layer in tensor_log_entry.child_layers:
+            if self[child_layer].is_output_layer:
+                layers_to_update.append(child_layer)
+
+    for layer_label in layers_to_update:
+        layer = self[layer_label]
+        if layer_label not in self.layers_with_saved_gradients:
+            self.layers_with_saved_gradients.append(layer_label)
+
+        layer.log_tensor_grad(grad)
+
+    layer_order = {layer: i for i, layer in enumerate(self.layer_labels)}
+    self.layers_with_saved_gradients = sorted(
+        self.layers_with_saved_gradients, key=lambda x: layer_order[x]
+    )
 
 
 def _check_if_tensor_arg(arg: Any) -> bool:

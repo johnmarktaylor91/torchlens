@@ -918,8 +918,8 @@ def _add_gradient_edge(
         edge_dict = {
             "tail_name": child_layer.layer_label.replace(":", "pass"),
             "head_name": parent_layer.layer_label.replace(":", "pass"),
-            "color": self.GRADIENT_ARROW_COLOR,
-            "fontcolor": self.GRADIENT_ARROW_COLOR,
+            "color": GRADIENT_ARROW_COLOR,
+            "fontcolor": GRADIENT_ARROW_COLOR,
             "style": edge_style,
             "arrowsize": ".7",
             "labelfontsize": "8",
