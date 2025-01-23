@@ -80,10 +80,10 @@ class TensorLogEntry:
         self.grad_contents = fields_dict["grad_contents"]
         self.save_gradients = fields_dict["save_gradients"]
         self.has_saved_grad = fields_dict["has_saved_grad"]
-        self.grad_shapes = fields_dict["grad_shapes"]
-        self.grad_dtypes = fields_dict["grad_dtypes"]
-        self.grad_fsizes = fields_dict["grad_fsizes"]
-        self.grad_fsizes_nice = fields_dict["grad_fsizes_nice"]
+        self.grad_shape = fields_dict["grad_shape"]
+        self.grad_dtype = fields_dict["grad_dtype"]
+        self.grad_fsize = fields_dict["grad_fsize"]
+        self.grad_fsize_nice = fields_dict["grad_fsize_nice"]
 
         # Function call info:
         self.func_applied = fields_dict["func_applied"]
@@ -298,12 +298,10 @@ class TensorLogEntry:
         """
         self.grad_contents = grad
         self.has_saved_grad = True
-        self.grad_shapes = [g.shape for g in grad]
-        self.grad_dtypes = [g.dtype for g in grad]
-        self.grad_fsizes = [get_tensor_memory_amount(g) for g in grad]
-        self.grad_fsizes_nice = [
-            human_readable_size(get_tensor_memory_amount(g)) for g in grad
-        ]
+        self.grad_shape = grad.shape
+        self.grad_dtype = grad.dtype
+        self.grad_fsize = get_tensor_memory_amount(grad)
+        self.grad_fsize_nice = human_readable_size(get_tensor_memory_amount(grad))
 
     # ********************************************
     # ************* Fetcher Functions ************

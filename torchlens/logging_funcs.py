@@ -167,10 +167,10 @@ def log_source_tensor_exhaustive(
         "grad_contents": None,
         "save_gradients": self.save_gradients,
         "has_saved_grad": False,
-        "grad_shapes": None,
-        "grad_dtypes": None,
-        "grad_fsizes": 0,
-        "grad_fsizes_nice": human_readable_size(0),
+        "grad_shape": None,
+        "grad_dtype": None,
+        "grad_fsize": 0,
+        "grad_fsize_nice": human_readable_size(0),
         # Function call info:
         "func_applied": None,
         "func_applied_name": "none",
@@ -416,10 +416,10 @@ def log_function_output_tensors_exhaustive(
     fields_dict["grad_contents"] = None
     fields_dict["save_gradients"] = self.save_gradients
     fields_dict["has_saved_grad"] = False
-    fields_dict["grad_shapes"] = None
-    fields_dict["grad_dtypes"] = None
-    fields_dict["grad_fsizes"] = 0
-    fields_dict["grad_fsizes_nice"] = human_readable_size(0)
+    fields_dict["grad_shape"] = None
+    fields_dict["grad_dtype"] = None
+    fields_dict["grad_fsize"] = 0
+    fields_dict["grad_fsize_nice"] = human_readable_size(0)
 
     # Function call info
     fields_dict["func_applied"] = func
