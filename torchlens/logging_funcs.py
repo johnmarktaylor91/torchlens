@@ -322,6 +322,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
 def log_function_output_tensors(
         self,
         func: Callable,
+        func_name: str,
         args: Tuple[Any],
         kwargs: Dict[str, Any],
         arg_copies: Tuple[Any],
@@ -335,6 +336,7 @@ def log_function_output_tensors(
         log_function_output_tensors_exhaustive(
             self,
             func,
+            func_name,
             args,
             kwargs,
             arg_copies,
@@ -347,7 +349,7 @@ def log_function_output_tensors(
     elif self.logging_mode == "fast":
         log_function_output_tensors_fast(
             self,
-            func,
+            func_name,
             args,
             kwargs,
             arg_copies,
@@ -362,6 +364,7 @@ def log_function_output_tensors(
 def log_function_output_tensors_exhaustive(
         self,
         func: Callable,
+        func_name: str,
         args: Tuple[Any],
         kwargs: Dict[str, Any],
         arg_copies: Tuple[Any],
@@ -385,7 +388,6 @@ def log_function_output_tensors_exhaustive(
         is_bottom_level_func: whether the function is at the bottom-level of function nesting
     """
     # Unpacking and reformatting:
-    func_name = func.__name__
     layer_type = func_name.lower().replace("_", "")
     all_args = list(args) + list(kwargs.values())
 
@@ -645,7 +647,7 @@ def _get_parent_contents(
 
 def log_function_output_tensors_fast(
         self,
-        func: Callable,
+        func_name: str,
         args: Tuple[Any],
         kwargs: Dict[str, Any],
         arg_copies: Tuple[Any],
@@ -656,7 +658,6 @@ def log_function_output_tensors_fast(
         is_bottom_level_func: bool,
 ):
     # Collect information.
-    func_name = func.__name__
     layer_type = func_name.lower().replace("_", "")
     all_args = list(args) + list(kwargs.values())
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
@@ -768,6 +769,13 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
         return True
     else:
         return False
+
+
+def _get_funcname(self, f):
+    if f in self._funcname_overrides:
+        return self._funcname_overrides[f]
+    else:
+        return f.__name__
 
 
 def _add_backward_hook(self, t: torch.Tensor, tensor_label):

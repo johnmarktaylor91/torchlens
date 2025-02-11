@@ -19,12 +19,11 @@ funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 print_funcs = ["__repr__", "__str__", "_str"]
 
 
-def torch_func_decorator(self, func: Callable):
+def torch_func_decorator(self, func: Callable, func_name: str):
     @wraps(func)
     def wrapped_func(*args, **kwargs):
         # Initial bookkeeping; check if it's a special function, organize the arguments.
         self.current_function_call_barcode = 0
-        func_name = func.__name__
         if (
                 (func_name in funcs_not_to_log)
                 or (not self._track_tensors)
@@ -78,6 +77,7 @@ def torch_func_decorator(self, func: Callable):
             log_function_output_tensors(
                 self,
                 func,
+                func_name,
                 args,
                 kwargs,
                 arg_copies,
@@ -118,6 +118,13 @@ def decorate_pytorch(
     collect_orig_func_defs(torch_module, orig_func_defs)
     decorated_func_mapper = {}
 
+    # Get references to the function classes.
+    function_class = type(lambda: 0)
+    builtin_class = type(torch.mean)
+    method_class = type(torch.Tensor.__add__)
+    wrapper_class = type(torch.Tensor.__getitem__)
+    getset_class = type(torch.Tensor.real)
+
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
         namespace_name_notorch = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
@@ -128,19 +135,39 @@ def decorate_pytorch(
             get_func_argnames(self, orig_func, func_name)
         if getattr(orig_func, "__name__", False) == "wrapped_func":
             continue
-        new_func = torch_func_decorator(self, orig_func)
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                setattr(local_func_namespace, func_name, new_func)
-        except (AttributeError, TypeError) as _:
-            pass
-        new_func.tl_is_decorated_function = True
-        decorated_func_mapper[new_func] = orig_func
-        decorated_func_mapper[orig_func] = new_func
+
+        if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
+            new_func = torch_func_decorator(self, orig_func, func_name)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(local_func_namespace, func_name, new_func)
+            except (AttributeError, TypeError) as _:
+                pass
+            new_func.tl_is_decorated_function = True
+            decorated_func_mapper[new_func] = orig_func
+            decorated_func_mapper[orig_func] = new_func
+
+        elif type(orig_func) == getset_class:
+            getter_orig, setter_orig, deleter_orig = orig_func.__get__, orig_func.__set__, orig_func.__delete__
+            getter_dec, setter_dec, deleter_dec = (torch_func_decorator(self, getter_orig, func_name),
+                                                   torch_func_decorator(self, setter_orig, func_name),
+                                                   torch_func_decorator(self, deleter_orig, func_name))
+            getter_dec.tl_is_decorated_function = True
+            setter_dec.tl_is_decorated_function = True
+            deleter_dec.tl_is_decorated_function = True
+            new_property = property(getter_dec, setter_dec, deleter_dec, doc=func_name)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(local_func_namespace, func_name, new_property)
+            except (AttributeError, TypeError) as _:
+                pass
+            decorated_func_mapper[new_property] = orig_func
+            decorated_func_mapper[orig_func] = new_property
 
     # Bolt on the identity function
-    new_identity = torch_func_decorator(self, identity)
+    new_identity = torch_func_decorator(self, identity, 'identity')
     torch.identity = new_identity
 
     return decorated_func_mapper
@@ -225,6 +252,9 @@ def get_func_argnames(self, orig_func: Callable, func_name: str):
     """Attempts to get the argument names for a function, first by checking the signature, then
     by checking the documentation. Adds these names to func_argnames if it can find them,
     doesn't do anything if it can't."""
+    if func_name in ['real', 'imag', 'T', 'mT', 'data', 'H']:
+        return
+
     try:
         argnames = list(inspect.signature(orig_func).parameters.keys())
         argnames = tuple([arg.replace('*', '') for arg in argnames if arg not in ['cls', 'self']])

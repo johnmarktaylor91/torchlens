@@ -93,6 +93,11 @@ def input_2d():
     return torch.rand(5, 5)
 
 
+@pytest.fixture
+def input_complex():
+    return torch.complex(torch.rand(3, 3), torch.rand(3, 3)),
+
+
 # Test different operations
 
 
@@ -1184,6 +1189,18 @@ def test_module_looping_clash3(default_input1):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "module_looping_clash3_rolled"
         ),
+    )
+
+
+def test_propertymodel(input_complex):
+    model = example_models.PropertyModel()
+    assert validate_saved_activations(model, input_complex)
+    show_model_graph(
+        model,
+        input_complex,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "propertymodel"),
     )
 
 
@@ -3040,6 +3057,40 @@ def test_dimenet():
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "graph-neural-networks", "dimenet"),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
+
+# Quantum machine-learning model
+
+def test_qml():
+    import pennylane as qml
+    n_qubits = 2
+    dev = qml.device("default.qubit", wires=n_qubits)
+
+    @qml.qnode(dev, diff_method="backprop")
+    def qnode(inputs, weights):
+        # print(inputs)
+        qml.RX(inputs[0][0], wires=0)
+        qml.RY(weights, wires=0)
+        return [qml.expval(qml.PauliZ(0)), qml.expval(qml.PauliZ(1))]
+
+    weight_shapes = {"weights": 1}
+    qlayer = qml.qnn.TorchLayer(qnode, weight_shapes)
+
+    clayer_1 = torch.nn.Linear(2, 2)
+    clayer_2 = torch.nn.Linear(2, 2)
+    softmax = torch.nn.Softmax(dim=1)
+    layers = [clayer_1, qlayer, clayer_2, softmax]
+    model = torch.nn.Sequential(*layers)
+    model_inputs = torch.rand(1, 2, requires_grad=False)
+
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "quantum", "qml"),
     )
     assert validate_saved_activations(model, model_inputs)
 

@@ -1240,3 +1240,22 @@ class UberModel9(nn.Module):
         w1 = x ** 3
         x = torch.sum(torch.stack([y4, z3, w1]))
         return x
+
+
+class PropertyModel(nn.Module):
+    def __init__(self):
+        """Conv, relu, pool, fc, output."""
+        super().__init__()
+
+    def forward(self, x):
+        r = x.real
+        i = x.imag
+        t = torch.rand(4, 4)
+        t = t * 3
+        t = t.data
+        t2 = t.T
+        m = torch.rand(4, 4, 4)
+        m = m ** 2
+        m2 = m.mT.mean()
+        out = r * i / m2 + t2.mean()
+        return out

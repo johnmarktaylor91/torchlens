@@ -330,6 +330,11 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "_make_subclass"),
     ("torch.Tensor", "solve"),
     ("torch.Tensor", "unflatten"),
+    ("torch.Tensor", "real"),
+    ("torch.Tensor", "imag"),
+    ("torch.Tensor", "T"),
+    ("torch.Tensor", "mT"),
+    ("torch.Tensor", "H")
 ]
 
 
