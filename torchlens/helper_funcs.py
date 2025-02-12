@@ -404,7 +404,7 @@ def extend_search_stack_from_item(
 
     for attr_name in dir(item):
         if ((attr_name.startswith("__")) or
-                (attr_name in ['T', 'mT', 'real', 'imag']) or
+                (attr_name in ['T', 'mT', 'real', 'imag', 'H']) or
                 ('grad' in attr_name)):
             continue
         try:
