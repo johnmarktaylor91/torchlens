@@ -244,7 +244,8 @@ def run_and_log_inputs_through_model(
         ]
 
         for t in output_tensors:
-            self.output_layers.append(t.tl_tensor_label_raw)
+            if self.logging_mode == 'exhaustive':
+                self.output_layers.append(t.tl_tensor_label_raw)
             self._raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
         tensors_to_undecorate = tensors_to_decorate + output_tensors
         undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
