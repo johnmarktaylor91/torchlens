@@ -94,16 +94,19 @@ def postprocess(
 
 
 def postprocess_fast(self: "ModelHistory"):
-    _trim_and_reorder_model_history_fields(self)
-    _remove_unwanted_entries_and_log_remaining(self)
-    _undecorate_all_saved_tensors(self)
-
     for output_layer_label in self.output_layers:
         output_layer = self[output_layer_label]
         output_layer.tensor_contents = self[output_layer.parent_layers[0]].tensor_contents
+        output_layer.tensor_fsize = self[output_layer.parent_layers[0]].tensor_fsize
+        output_layer.tensor_fsize_nice = self[output_layer.parent_layers[0]].tensor_fsize_nice
         output_layer.has_saved_activations = self[output_layer.parent_layers[0]].has_saved_activations
         output_layer.has_saved_grad = self[output_layer.parent_layers[0]].has_saved_grad
         output_layer.grad_contents = self[output_layer.parent_layers[0]].grad_contents
+        if output_layer.has_saved_activations:
+            self.layers_with_saved_activations.append(output_layer_label)
+    _trim_and_reorder_model_history_fields(self)
+    _remove_unwanted_entries_and_log_remaining(self)
+    _undecorate_all_saved_tensors(self)
 
     torch.cuda.empty_cache()
     _log_time_elapsed(self)
