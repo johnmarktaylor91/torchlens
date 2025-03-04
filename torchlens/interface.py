@@ -39,7 +39,7 @@ def _getitem_after_pass(self, ix):
     if len(keys_with_substr) == 1:
         return self.layer_dict_all_keys[keys_with_substr[0]]
 
-    self._give_user_feedback_about_lookup_key(ix, "get_one_item")
+    _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
 
 
 def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
@@ -88,7 +88,7 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
             f"{layer_num_passes} passes. Specify a lower number."
         )
 
-    raise ValueError(self._get_lookup_help_str(key, mode))
+    raise ValueError(_get_lookup_help_str(self, key, mode))
 
 
 def _str_after_pass(self) -> str:
