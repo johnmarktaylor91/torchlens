@@ -9,7 +9,7 @@ from .helper_funcs import (
     human_readable_size,
 )
 from .interface import (_getitem_after_pass, _getitem_during_pass, _str_after_pass,
-                        _str_during_pass, to_pandas, print_all_fields)
+                        _str_during_pass, to_pandas, print_all_fields, _give_user_feedback_about_lookup_key, _get_lookup_help_str)
 from .logging_funcs import save_new_activations
 from .model_funcs import cleanup_model, prepare_model
 from .postprocess import postprocess
@@ -209,3 +209,5 @@ class ModelHistory:
     _cleanup_model = cleanup_model
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
     _remove_log_entry = _remove_log_entry
+    _give_user_feedback_about_lookup_key = _give_user_feedback_about_lookup_key
+    _get_lookup_help_str = _get_lookup_help_str
