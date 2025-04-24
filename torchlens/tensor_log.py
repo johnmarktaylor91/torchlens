@@ -36,6 +36,8 @@ class TensorLogEntry:
                 error_str += f"\n\t- Extra fields {', '.join(extra_fields)}"
             raise ValueError(error_str)
 
+        self.stack_trace = fields_dict["stack_trace"]
+        self.is_graph_break_node = fields_dict["is_graph_break_node"]
         # General info:
         self.tensor_label_raw = fields_dict["tensor_label_raw"]
         self.layer_label_raw = fields_dict["layer_label_raw"]
@@ -486,6 +488,8 @@ class RolledTensorLogEntry:
         Args:
             source_entry: The source TensorLogEntry from which the rolled node is constructed
         """
+        self.stack_trace = source_entry.stack_trace
+        self.is_graph_break_node = source_entry.is_graph_break_node
         # Label & general info
         self.layer_label = source_entry.layer_label_no_pass
         self.layer_type = source_entry.layer_type

@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
+import torch._dynamo as dynamo
 from torch import nn
 from tqdm import tqdm
 
@@ -94,6 +95,7 @@ def log_forward_pass(
         vis_gradient_edge_overrides: Dict = None,
         vis_module_overrides: Dict = None,
         random_seed: Optional[int] = None,
+        vis_graph_with_dynamo_explain: bool = False
 ) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -188,7 +190,7 @@ def log_forward_pass(
         )
 
     # Visualize if desired.
-    if vis_opt != "none":
+    if vis_opt != "none" and vis_graph_with_dynamo_explain == False:
         model_history.render_graph(
             vis_opt,
             vis_nesting_depth,
@@ -203,6 +205,25 @@ def log_forward_pass(
             vis_fileformat,
             vis_buffer_layers,
             vis_direction,
+        )
+
+    if vis_graph_with_dynamo_explain:
+        dynamo_results = dynamo.explain(model.forward)(input_args, **(input_kwargs or {}))
+        model_history.render_graph(
+            vis_opt,
+            vis_nesting_depth,
+            vis_outpath,
+            vis_graph_overrides,
+            vis_node_overrides,
+            vis_nested_node_overrides,
+            vis_edge_overrides,
+            vis_gradient_edge_overrides,
+            vis_module_overrides,
+            vis_save_only,
+            vis_fileformat,
+            vis_buffer_layers,
+            vis_direction,
+            dynamo_results
         )
 
     return model_history
@@ -252,6 +273,7 @@ def show_model_graph(
         vis_buffer_layers: bool = False,
         vis_direction: str = "bottomup",
         random_seed: Optional[int] = None,
+        vis_graph_with_dynamo_explain: bool = False
 ) -> None:
     """Visualize the model graph without saving any activations.
 
@@ -294,21 +316,41 @@ def show_model_graph(
         save_gradients=False,
         random_seed=random_seed,
     )
-    model_history.render_graph(
-        vis_opt,
-        vis_nesting_depth,
-        vis_outpath,
-        vis_graph_overrides,
-        vis_node_overrides,
-        vis_nested_node_overrides,
-        vis_edge_overrides,
-        vis_gradient_edge_overrides,
-        vis_module_overrides,
-        save_only,
-        vis_fileformat,
-        vis_buffer_layers,
-        vis_direction,
-    )
+
+    if vis_graph_with_dynamo_explain:
+        dynamo_results = dynamo.explain(model.forward)(input_args, **(input_kwargs or {}))
+        model_history.render_graph(
+            vis_opt,
+            vis_nesting_depth,
+            vis_outpath,
+            vis_graph_overrides,
+            vis_node_overrides,
+            vis_nested_node_overrides,
+            vis_edge_overrides,
+            vis_gradient_edge_overrides,
+            vis_module_overrides,
+            save_only,
+            vis_fileformat,
+            vis_buffer_layers,
+            vis_direction,
+            dynamo_results
+        )
+    else:
+        model_history.render_graph(
+            vis_opt,
+            vis_nesting_depth,
+            vis_outpath,
+            vis_graph_overrides,
+            vis_node_overrides,
+            vis_nested_node_overrides,
+            vis_edge_overrides,
+            vis_gradient_edge_overrides,
+            vis_module_overrides,
+            save_only,
+            vis_fileformat,
+            vis_buffer_layers,
+            vis_direction,
+        )
 
 
 def validate_saved_activations(

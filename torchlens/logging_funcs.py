@@ -2,6 +2,7 @@ import copy
 import itertools as it
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Tuple, Union
+import inspect
 
 import numpy as np
 import torch
@@ -16,6 +17,13 @@ if TYPE_CHECKING:
     from .model_history import ModelHistory
     from .tensor_log import TensorLogEntry
 
+
+class PickleFrame:
+    filename: str
+    lineno: int
+    def __init__(self, filename: str, lineno: int):
+        self.filename = filename
+        self.lineno = lineno
 
 def save_new_activations(
         self: "ModelHistory",
@@ -126,7 +134,13 @@ def log_source_tensor_exhaustive(
     else:
         raise ValueError("source must be either 'input' or 'buffer'")
 
+    stacks = inspect.stack()
+    pickle_stack: List[PickleFrame] = []
+    for stack in stacks:
+        pickle_stack.append(PickleFrame(stack.filename, stack.lineno))
     fields_dict = {
+        "stack_trace": pickle_stack,
+        "is_graph_break_node": False,
         # General info:
         "tensor_label_raw": tensor_label,
         "layer_label_raw": tensor_label,
@@ -409,6 +423,12 @@ def log_function_output_tensors_exhaustive(
     )
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
+    stacks = inspect.stack()
+    pickle_stack: List[PickleFrame] = []
+    for stack in stacks:
+        pickle_stack.append(PickleFrame(stack.filename, stack.lineno))
+    fields_dict["stack_trace"] = pickle_stack
+    fields_dict["is_graph_break_node"] = False
     # General info
     fields_dict["layer_type"] = layer_type
     fields_dict["detach_saved_tensor"] = self.detach_saved_tensors

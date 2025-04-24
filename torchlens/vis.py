@@ -1,8 +1,11 @@
 from collections import defaultdict
+from inspect import FrameInfo
+from traceback import FrameSummary
 from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
 import graphviz
 from IPython.display import display
+from torch._dynamo.backends.debugging import ExplainOutput
 
 from .helper_funcs import in_notebook, int_list_to_compact_str
 from .postprocess import _roll_graph
@@ -39,6 +42,7 @@ def render_graph(
         vis_fileformat: str = "pdf",
         show_buffer_layers: bool = False,
         direction: str = "bottomup",
+        dynamo_explain_outputs: ExplainOutput = []
 ) -> None:
     """Renders the computational graph for the model.
 
@@ -141,6 +145,12 @@ def render_graph(
     collapsed_modules = set()
     edges_used = set()
 
+    print("Number of breaks: " + str(len(dynamo_explain_outputs.break_reasons)))
+    for dynamo_explain_output in dynamo_explain_outputs.break_reasons:
+        best_node_name, best_node = __align_graph_break_to_node(dynamo_explain_output.user_stack, entries_to_plot.items())
+        best_node.is_graph_break_node = True
+        entries_to_plot[best_node_name] = best_node
+
     for node_barcode, node in entries_to_plot.items():
         if node.is_buffer_layer and not show_buffer_layers:
             continue
@@ -167,6 +177,31 @@ def render_graph(
         display(dot)
 
     dot.render(vis_outpath, view=(not save_only))
+
+
+def __align_graph_break_to_node(break_frame: list[FrameSummary], nodes: dict[str, TensorLogEntry] ) -> Tuple[str, TensorLogEntry]:
+    target_file = break_frame[0].filename
+    target_line = break_frame[0].lineno
+
+    best_node_name = None
+    best_dist = float('inf')
+    best_node = None
+
+    for node_name, node in nodes.items():
+        if node.stack_trace is None:
+            continue
+
+        stack_frames: list[FrameInfo] = node.stack_trace
+
+        for stack_frame in stack_frames:
+            if stack_frame.filename == target_file:
+                dist = abs(stack_frame.lineno - target_line)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_node_name = node_name
+                    best_node = node
+
+    return best_node_name, best_node
 
 
 def _add_node_to_graphviz(
@@ -430,6 +465,9 @@ def _get_node_address_shape_color(
         node_address = ""
         node_shape = "oval"
         node_color = "black"
+
+    if node.is_graph_break_node:
+        node_color = "red"
 
     return node_address, node_shape, node_color
 
