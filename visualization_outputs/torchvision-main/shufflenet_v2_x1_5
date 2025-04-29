@@ -1,0 +1,2095 @@
+// Computational graph for the feedforward sweep
+digraph ShuffleNetV2 {
+	graph [label=<<B>ShuffleNetV2</B><br align='left'/>372 tensors total (344.6 MB)<br align='left'/>3503624 params total (13.4 MB)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>6x3x224x224 (3.4 MB)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_1_1 [label=<<b>conv2d_1_1</b><br/>6x24x112x112 (6.9 MB)<br/>params: 24x3x3x3<br/>@conv1.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_1_2 [label=<<b>batchnorm_1_2</b><br/>6x24x112x112 (6.9 MB)<br/>params: x24, x24<br/>@conv1.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_3 [label=<<b>relu_1_3</b><br/>6x24x112x112 (6.9 MB)<br/>@conv1.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_3 -> maxpool2d_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_1_4 [label=<<b>maxpool2d_1_4</b><br/>6x24x56x56 (1.7 MB)<br/>@maxpool> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_1_4 -> conv2d_2_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_1_4 -> conv2d_4_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_2_5 [label=<<b>conv2d_2_5</b><br/>6x24x28x28 (441.2 KB)<br/>params: 24x1x3x3<br/>@stage2.0.branch1.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_2_6 [label=<<b>batchnorm_2_6</b><br/>6x24x28x28 (441.2 KB)<br/>params: x24, x24<br/>@stage2.0.branch1.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_3_7 [label=<<b>conv2d_3_7</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x24x1x1<br/>@stage2.0.branch1.2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_3_8 [label=<<b>batchnorm_3_8</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.0.branch1.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_9 [label=<<b>relu_2_9</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.0.branch1.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_4_10 [label=<<b>conv2d_4_10</b><br/>6x88x56x56 (6.3 MB)<br/>params: 88x24x1x1<br/>@stage2.0.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_4_11 [label=<<b>batchnorm_4_11</b><br/>6x88x56x56 (6.3 MB)<br/>params: x88, x88<br/>@stage2.0.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_3_12 [label=<<b>relu_3_12</b><br/>6x88x56x56 (6.3 MB)<br/>@stage2.0.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_5_13 [label=<<b>conv2d_5_13</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x1x3x3<br/>@stage2.0.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_5_14 [label=<<b>batchnorm_5_14</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.0.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_6_15 [label=<<b>conv2d_6_15</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.0.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_6_16 [label=<<b>batchnorm_6_16</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.0.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_4_17 [label=<<b>relu_4_17</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.0.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_1_18 [label=<<b>cat_1_18</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_1_19 [label=<<b>view_1_19</b><br/>6x2x88x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_1_20 [label=<<b>transpose_1_20</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_1_21 [label=<<b>contiguous_1_21</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_2_22 [label=<<b>view_2_22</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_1_23 [label=<<b>chunk_1_23</b><br/>6x88x28x28 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_2_24 [label=<<b>chunk_2_24</b><br/>6x88x28x28 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_7_25 [label=<<b>conv2d_7_25</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.1.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_7_26 [label=<<b>batchnorm_7_26</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.1.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_5_27 [label=<<b>relu_5_27</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.1.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_8_28 [label=<<b>conv2d_8_28</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x1x3x3<br/>@stage2.1.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_8_29 [label=<<b>batchnorm_8_29</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.1.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_9_30 [label=<<b>conv2d_9_30</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.1.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_9_31 [label=<<b>batchnorm_9_31</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.1.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_6_32 [label=<<b>relu_6_32</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.1.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_2_33 [label=<<b>cat_2_33</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_3_34 [label=<<b>view_3_34</b><br/>6x2x88x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_2_35 [label=<<b>transpose_2_35</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_2_36 [label=<<b>contiguous_2_36</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_4_37 [label=<<b>view_4_37</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_3_38 [label=<<b>chunk_3_38</b><br/>6x88x28x28 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_4_39 [label=<<b>chunk_4_39</b><br/>6x88x28x28 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_10_40 [label=<<b>conv2d_10_40</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.2.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_10_41 [label=<<b>batchnorm_10_41</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.2.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_7_42 [label=<<b>relu_7_42</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.2.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_11_43 [label=<<b>conv2d_11_43</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x1x3x3<br/>@stage2.2.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_11_44 [label=<<b>batchnorm_11_44</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.2.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_12_45 [label=<<b>conv2d_12_45</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.2.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_12_46 [label=<<b>batchnorm_12_46</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.2.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_8_47 [label=<<b>relu_8_47</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.2.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_3_48 [label=<<b>cat_3_48</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_5_49 [label=<<b>view_5_49</b><br/>6x2x88x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_3_50 [label=<<b>transpose_3_50</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_3_51 [label=<<b>contiguous_3_51</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_6_52 [label=<<b>view_6_52</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_5_53 [label=<<b>chunk_5_53</b><br/>6x88x28x28 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_6_54 [label=<<b>chunk_6_54</b><br/>6x88x28x28 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_13_55 [label=<<b>conv2d_13_55</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.3.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_13_56 [label=<<b>batchnorm_13_56</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.3.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_9_57 [label=<<b>relu_9_57</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.3.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_14_58 [label=<<b>conv2d_14_58</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x1x3x3<br/>@stage2.3.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_14_59 [label=<<b>batchnorm_14_59</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.3.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_15_60 [label=<<b>conv2d_15_60</b><br/>6x88x28x28 (1.6 MB)<br/>params: 88x88x1x1<br/>@stage2.3.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_15_61 [label=<<b>batchnorm_15_61</b><br/>6x88x28x28 (1.6 MB)<br/>params: x88, x88<br/>@stage2.3.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_10_62 [label=<<b>relu_10_62</b><br/>6x88x28x28 (1.6 MB)<br/>@stage2.3.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_4_63 [label=<<b>cat_4_63</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_7_64 [label=<<b>view_7_64</b><br/>6x2x88x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_4_65 [label=<<b>transpose_4_65</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_4_66 [label=<<b>contiguous_4_66</b><br/>6x88x2x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_8_67 [label=<<b>view_8_67</b><br/>6x176x28x28 (3.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_8_67 -> conv2d_16_68 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	view_8_67 -> conv2d_18_73 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_16_68 [label=<<b>conv2d_16_68</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.0.branch1.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_16_69 [label=<<b>batchnorm_16_69</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.0.branch1.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_17_70 [label=<<b>conv2d_17_70</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.0.branch1.2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_17_71 [label=<<b>batchnorm_17_71</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.0.branch1.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_11_72 [label=<<b>relu_11_72</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.0.branch1.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_18_73 [label=<<b>conv2d_18_73</b><br/>6x176x28x28 (3.2 MB)<br/>params: 176x176x1x1<br/>@stage3.0.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_18_74 [label=<<b>batchnorm_18_74</b><br/>6x176x28x28 (3.2 MB)<br/>params: x176, x176<br/>@stage3.0.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_12_75 [label=<<b>relu_12_75</b><br/>6x176x28x28 (3.2 MB)<br/>@stage3.0.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_19_76 [label=<<b>conv2d_19_76</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.0.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_19_77 [label=<<b>batchnorm_19_77</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.0.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_20_78 [label=<<b>conv2d_20_78</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.0.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_20_79 [label=<<b>batchnorm_20_79</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.0.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_13_80 [label=<<b>relu_13_80</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.0.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_5_81 [label=<<b>cat_5_81</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_9_82 [label=<<b>view_9_82</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_5_83 [label=<<b>transpose_5_83</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_5_84 [label=<<b>contiguous_5_84</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_10_85 [label=<<b>view_10_85</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_7_86 [label=<<b>chunk_7_86</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_8_87 [label=<<b>chunk_8_87</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_21_88 [label=<<b>conv2d_21_88</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.1.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_21_89 [label=<<b>batchnorm_21_89</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.1.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_14_90 [label=<<b>relu_14_90</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.1.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_22_91 [label=<<b>conv2d_22_91</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.1.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_22_92 [label=<<b>batchnorm_22_92</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.1.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_23_93 [label=<<b>conv2d_23_93</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.1.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_23_94 [label=<<b>batchnorm_23_94</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.1.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_15_95 [label=<<b>relu_15_95</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.1.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_6_96 [label=<<b>cat_6_96</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_11_97 [label=<<b>view_11_97</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_6_98 [label=<<b>transpose_6_98</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_6_99 [label=<<b>contiguous_6_99</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_12_100 [label=<<b>view_12_100</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_9_101 [label=<<b>chunk_9_101</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_10_102 [label=<<b>chunk_10_102</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_24_103 [label=<<b>conv2d_24_103</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.2.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_24_104 [label=<<b>batchnorm_24_104</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.2.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_16_105 [label=<<b>relu_16_105</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.2.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_25_106 [label=<<b>conv2d_25_106</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.2.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_25_107 [label=<<b>batchnorm_25_107</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.2.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_26_108 [label=<<b>conv2d_26_108</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.2.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_26_109 [label=<<b>batchnorm_26_109</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.2.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_17_110 [label=<<b>relu_17_110</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.2.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_7_111 [label=<<b>cat_7_111</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_13_112 [label=<<b>view_13_112</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_7_113 [label=<<b>transpose_7_113</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_7_114 [label=<<b>contiguous_7_114</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_14_115 [label=<<b>view_14_115</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_11_116 [label=<<b>chunk_11_116</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_12_117 [label=<<b>chunk_12_117</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_27_118 [label=<<b>conv2d_27_118</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.3.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_27_119 [label=<<b>batchnorm_27_119</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.3.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_18_120 [label=<<b>relu_18_120</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.3.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_28_121 [label=<<b>conv2d_28_121</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.3.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_28_122 [label=<<b>batchnorm_28_122</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.3.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_29_123 [label=<<b>conv2d_29_123</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.3.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_29_124 [label=<<b>batchnorm_29_124</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.3.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_19_125 [label=<<b>relu_19_125</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.3.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_8_126 [label=<<b>cat_8_126</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_15_127 [label=<<b>view_15_127</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_8_128 [label=<<b>transpose_8_128</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_8_129 [label=<<b>contiguous_8_129</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_16_130 [label=<<b>view_16_130</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_13_131 [label=<<b>chunk_13_131</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_14_132 [label=<<b>chunk_14_132</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_30_133 [label=<<b>conv2d_30_133</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.4.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_30_134 [label=<<b>batchnorm_30_134</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.4.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_20_135 [label=<<b>relu_20_135</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.4.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_31_136 [label=<<b>conv2d_31_136</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.4.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_31_137 [label=<<b>batchnorm_31_137</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.4.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_32_138 [label=<<b>conv2d_32_138</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.4.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_32_139 [label=<<b>batchnorm_32_139</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.4.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_21_140 [label=<<b>relu_21_140</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.4.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_9_141 [label=<<b>cat_9_141</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_17_142 [label=<<b>view_17_142</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_9_143 [label=<<b>transpose_9_143</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_9_144 [label=<<b>contiguous_9_144</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_18_145 [label=<<b>view_18_145</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_15_146 [label=<<b>chunk_15_146</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_16_147 [label=<<b>chunk_16_147</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_33_148 [label=<<b>conv2d_33_148</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.5.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_33_149 [label=<<b>batchnorm_33_149</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.5.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_22_150 [label=<<b>relu_22_150</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.5.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_34_151 [label=<<b>conv2d_34_151</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.5.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_34_152 [label=<<b>batchnorm_34_152</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.5.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_35_153 [label=<<b>conv2d_35_153</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.5.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_35_154 [label=<<b>batchnorm_35_154</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.5.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_23_155 [label=<<b>relu_23_155</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.5.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_10_156 [label=<<b>cat_10_156</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_19_157 [label=<<b>view_19_157</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_10_158 [label=<<b>transpose_10_158</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_10_159 [label=<<b>contiguous_10_159</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_20_160 [label=<<b>view_20_160</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_17_161 [label=<<b>chunk_17_161</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_18_162 [label=<<b>chunk_18_162</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_36_163 [label=<<b>conv2d_36_163</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.6.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_36_164 [label=<<b>batchnorm_36_164</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.6.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_24_165 [label=<<b>relu_24_165</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.6.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_37_166 [label=<<b>conv2d_37_166</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.6.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_37_167 [label=<<b>batchnorm_37_167</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.6.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_38_168 [label=<<b>conv2d_38_168</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.6.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_38_169 [label=<<b>batchnorm_38_169</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.6.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_25_170 [label=<<b>relu_25_170</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.6.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_11_171 [label=<<b>cat_11_171</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_21_172 [label=<<b>view_21_172</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_11_173 [label=<<b>transpose_11_173</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_11_174 [label=<<b>contiguous_11_174</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_22_175 [label=<<b>view_22_175</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_19_176 [label=<<b>chunk_19_176</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_20_177 [label=<<b>chunk_20_177</b><br/>6x176x14x14 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_39_178 [label=<<b>conv2d_39_178</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.7.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_39_179 [label=<<b>batchnorm_39_179</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.7.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_26_180 [label=<<b>relu_26_180</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.7.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_40_181 [label=<<b>conv2d_40_181</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x1x3x3<br/>@stage3.7.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_40_182 [label=<<b>batchnorm_40_182</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.7.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_41_183 [label=<<b>conv2d_41_183</b><br/>6x176x14x14 (808.7 KB)<br/>params: 176x176x1x1<br/>@stage3.7.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_41_184 [label=<<b>batchnorm_41_184</b><br/>6x176x14x14 (808.7 KB)<br/>params: x176, x176<br/>@stage3.7.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_27_185 [label=<<b>relu_27_185</b><br/>6x176x14x14 (808.7 KB)<br/>@stage3.7.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_12_186 [label=<<b>cat_12_186</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_23_187 [label=<<b>view_23_187</b><br/>6x2x176x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_12_188 [label=<<b>transpose_12_188</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_12_189 [label=<<b>contiguous_12_189</b><br/>6x176x2x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_24_190 [label=<<b>view_24_190</b><br/>6x352x14x14 (1.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_24_190 -> conv2d_42_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	view_24_190 -> conv2d_44_196 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_42_191 [label=<<b>conv2d_42_191</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x1x3x3<br/>@stage4.0.branch1.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_42_192 [label=<<b>batchnorm_42_192</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.0.branch1.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_43_193 [label=<<b>conv2d_43_193</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.0.branch1.2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_43_194 [label=<<b>batchnorm_43_194</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.0.branch1.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_28_195 [label=<<b>relu_28_195</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.0.branch1.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_44_196 [label=<<b>conv2d_44_196</b><br/>6x352x14x14 (1.6 MB)<br/>params: 352x352x1x1<br/>@stage4.0.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_44_197 [label=<<b>batchnorm_44_197</b><br/>6x352x14x14 (1.6 MB)<br/>params: x352, x352<br/>@stage4.0.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_29_198 [label=<<b>relu_29_198</b><br/>6x352x14x14 (1.6 MB)<br/>@stage4.0.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_45_199 [label=<<b>conv2d_45_199</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x1x3x3<br/>@stage4.0.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_45_200 [label=<<b>batchnorm_45_200</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.0.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_46_201 [label=<<b>conv2d_46_201</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.0.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_46_202 [label=<<b>batchnorm_46_202</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.0.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_30_203 [label=<<b>relu_30_203</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.0.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_13_204 [label=<<b>cat_13_204</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_25_205 [label=<<b>view_25_205</b><br/>6x2x352x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_13_206 [label=<<b>transpose_13_206</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_13_207 [label=<<b>contiguous_13_207</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_26_208 [label=<<b>view_26_208</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_21_209 [label=<<b>chunk_21_209</b><br/>6x352x7x7 (404.4 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_22_210 [label=<<b>chunk_22_210</b><br/>6x352x7x7 (404.4 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_47_211 [label=<<b>conv2d_47_211</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.1.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_47_212 [label=<<b>batchnorm_47_212</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.1.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_31_213 [label=<<b>relu_31_213</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.1.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_48_214 [label=<<b>conv2d_48_214</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x1x3x3<br/>@stage4.1.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_48_215 [label=<<b>batchnorm_48_215</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.1.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_49_216 [label=<<b>conv2d_49_216</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.1.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_49_217 [label=<<b>batchnorm_49_217</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.1.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_32_218 [label=<<b>relu_32_218</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.1.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_14_219 [label=<<b>cat_14_219</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_27_220 [label=<<b>view_27_220</b><br/>6x2x352x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_14_221 [label=<<b>transpose_14_221</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_14_222 [label=<<b>contiguous_14_222</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_28_223 [label=<<b>view_28_223</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_23_224 [label=<<b>chunk_23_224</b><br/>6x352x7x7 (404.4 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_24_225 [label=<<b>chunk_24_225</b><br/>6x352x7x7 (404.4 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_50_226 [label=<<b>conv2d_50_226</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.2.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_50_227 [label=<<b>batchnorm_50_227</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.2.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_33_228 [label=<<b>relu_33_228</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.2.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_51_229 [label=<<b>conv2d_51_229</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x1x3x3<br/>@stage4.2.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_51_230 [label=<<b>batchnorm_51_230</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.2.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_52_231 [label=<<b>conv2d_52_231</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.2.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_52_232 [label=<<b>batchnorm_52_232</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.2.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_34_233 [label=<<b>relu_34_233</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.2.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_15_234 [label=<<b>cat_15_234</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_29_235 [label=<<b>view_29_235</b><br/>6x2x352x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_15_236 [label=<<b>transpose_15_236</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_15_237 [label=<<b>contiguous_15_237</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_30_238 [label=<<b>view_30_238</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_25_239 [label=<<b>chunk_25_239</b><br/>6x352x7x7 (404.4 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	chunk_26_240 [label=<<b>chunk_26_240</b><br/>6x352x7x7 (404.4 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_53_241 [label=<<b>conv2d_53_241</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.3.branch2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_53_242 [label=<<b>batchnorm_53_242</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.3.branch2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_35_243 [label=<<b>relu_35_243</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.3.branch2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_54_244 [label=<<b>conv2d_54_244</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x1x3x3<br/>@stage4.3.branch2.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_54_245 [label=<<b>batchnorm_54_245</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.3.branch2.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_55_246 [label=<<b>conv2d_55_246</b><br/>6x352x7x7 (404.4 KB)<br/>params: 352x352x1x1<br/>@stage4.3.branch2.5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_55_247 [label=<<b>batchnorm_55_247</b><br/>6x352x7x7 (404.4 KB)<br/>params: x352, x352<br/>@stage4.3.branch2.6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_36_248 [label=<<b>relu_36_248</b><br/>6x352x7x7 (404.4 KB)<br/>@stage4.3.branch2.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_16_249 [label=<<b>cat_16_249</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_31_250 [label=<<b>view_31_250</b><br/>6x2x352x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	transpose_16_251 [label=<<b>transpose_16_251</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	contiguous_16_252 [label=<<b>contiguous_16_252</b><br/>6x352x2x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_32_253 [label=<<b>view_32_253</b><br/>6x704x7x7 (808.7 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	view_32_253 -> conv2d_56_254 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_56_254 [label=<<b>conv2d_56_254</b><br/>6x1024x7x7 (1.1 MB)<br/>params: 1024x704x1x1<br/>@conv5.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_56_255 [label=<<b>batchnorm_56_255</b><br/>6x1024x7x7 (1.1 MB)<br/>params: x1024, x1024<br/>@conv5.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_37_256 [label=<<b>relu_37_256</b><br/>6x1024x7x7 (1.1 MB)<br/>@conv5.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_37_256 -> mean_1_257 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mean_1_257 [label=<<b>mean_1_257</b><br/>6x1024 (24.1 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mean_1_257 -> linear_1_258 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_258 [label=<<b>linear_1_258</b><br/>6x1000 (23.6 KB)<br/>params: 1000x1024, x1000<br/>@fc> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_258 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>6x1000 (23.6 KB)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_conv1_pass1 {
+		fillcolor=white label=<<B>@conv1</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_1_1 -> batchnorm_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_1_2 -> relu_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_maxpool_pass1 {
+		fillcolor=white label=<<B>@maxpool</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_stage2_pass1 {
+		fillcolor=white label=<<B>@stage2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		view_2_22 -> chunk_1_23 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_2_22 -> chunk_2_24 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_4_37 -> chunk_3_38 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_4_37 -> chunk_4_39 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_6_52 -> chunk_5_53 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_6_52 -> chunk_6_54 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_stage3_pass1 {
+		fillcolor=white label=<<B>@stage3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		view_10_85 -> chunk_7_86 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_10_85 -> chunk_8_87 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_12_100 -> chunk_9_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_12_100 -> chunk_10_102 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_14_115 -> chunk_11_116 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_14_115 -> chunk_12_117 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_16_130 -> chunk_13_131 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_16_130 -> chunk_14_132 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_18_145 -> chunk_15_146 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_18_145 -> chunk_16_147 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_20_160 -> chunk_17_161 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_20_160 -> chunk_18_162 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_22_175 -> chunk_19_176 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_22_175 -> chunk_20_177 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_stage4_pass1 {
+		fillcolor=white label=<<B>@stage4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		view_26_208 -> chunk_21_209 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_26_208 -> chunk_22_210 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_28_223 -> chunk_23_224 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_28_223 -> chunk_24_225 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_30_238 -> chunk_25_239 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		view_30_238 -> chunk_26_240 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_conv5_pass1 {
+		fillcolor=white label=<<B>@conv5</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_56_254 -> batchnorm_56_255 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_56_255 -> relu_37_256 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_fc_pass1 {
+		fillcolor=white label=<<B>@fc</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_conv1_pass1 {
+		subgraph "cluster_conv1.0_pass1" {
+			fillcolor=white label=<<B>@conv1.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv1_pass1 {
+		subgraph "cluster_conv1.1_pass1" {
+			fillcolor=white label=<<B>@conv1.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv1_pass1 {
+		subgraph "cluster_conv1.2_pass1" {
+			fillcolor=white label=<<B>@conv1.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			fillcolor=white label=<<B>@stage2.0</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_2_9 -> cat_1_18 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_4_17 -> cat_1_18 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_1_18 -> view_1_19 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_1_19 -> transpose_1_20 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_1_20 -> contiguous_1_21 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_1_21 -> view_2_22 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			fillcolor=white label=<<B>@stage2.1</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_1_23 -> cat_2_33 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_2_24 -> conv2d_7_25 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_6_32 -> cat_2_33 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_2_33 -> view_3_34 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_3_34 -> transpose_2_35 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_2_35 -> contiguous_2_36 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_2_36 -> view_4_37 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			fillcolor=white label=<<B>@stage2.2</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_3_38 -> cat_3_48 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_4_39 -> conv2d_10_40 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_8_47 -> cat_3_48 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_3_48 -> view_5_49 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_5_49 -> transpose_3_50 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_3_50 -> contiguous_3_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_3_51 -> view_6_52 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			fillcolor=white label=<<B>@stage2.3</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_5_53 -> cat_4_63 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_6_54 -> conv2d_13_55 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_10_62 -> cat_4_63 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_4_63 -> view_7_64 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_7_64 -> transpose_4_65 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_4_65 -> contiguous_4_66 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_4_66 -> view_8_67 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			fillcolor=white label=<<B>@stage3.0</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_11_72 -> cat_5_81 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_13_80 -> cat_5_81 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_5_81 -> view_9_82 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_9_82 -> transpose_5_83 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_5_83 -> contiguous_5_84 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_5_84 -> view_10_85 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			fillcolor=white label=<<B>@stage3.1</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_7_86 -> cat_6_96 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_8_87 -> conv2d_21_88 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_15_95 -> cat_6_96 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_6_96 -> view_11_97 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_11_97 -> transpose_6_98 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_6_98 -> contiguous_6_99 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_6_99 -> view_12_100 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			fillcolor=white label=<<B>@stage3.2</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_9_101 -> cat_7_111 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_10_102 -> conv2d_24_103 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_17_110 -> cat_7_111 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_7_111 -> view_13_112 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_13_112 -> transpose_7_113 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_7_113 -> contiguous_7_114 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_7_114 -> view_14_115 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			fillcolor=white label=<<B>@stage3.3</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_11_116 -> cat_8_126 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_12_117 -> conv2d_27_118 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_19_125 -> cat_8_126 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_8_126 -> view_15_127 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_15_127 -> transpose_8_128 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_8_128 -> contiguous_8_129 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_8_129 -> view_16_130 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			fillcolor=white label=<<B>@stage3.4</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_13_131 -> cat_9_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_14_132 -> conv2d_30_133 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_21_140 -> cat_9_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_9_141 -> view_17_142 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_17_142 -> transpose_9_143 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_9_143 -> contiguous_9_144 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_9_144 -> view_18_145 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			fillcolor=white label=<<B>@stage3.5</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_15_146 -> cat_10_156 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_16_147 -> conv2d_33_148 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_23_155 -> cat_10_156 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_10_156 -> view_19_157 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_19_157 -> transpose_10_158 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_10_158 -> contiguous_10_159 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_10_159 -> view_20_160 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			fillcolor=white label=<<B>@stage3.6</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_17_161 -> cat_11_171 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_18_162 -> conv2d_36_163 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_25_170 -> cat_11_171 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_11_171 -> view_21_172 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_21_172 -> transpose_11_173 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_11_173 -> contiguous_11_174 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_11_174 -> view_22_175 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			fillcolor=white label=<<B>@stage3.7</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_19_176 -> cat_12_186 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_20_177 -> conv2d_39_178 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_27_185 -> cat_12_186 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_12_186 -> view_23_187 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_23_187 -> transpose_12_188 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_12_188 -> contiguous_12_189 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_12_189 -> view_24_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			fillcolor=white label=<<B>@stage4.0</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_28_195 -> cat_13_204 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_30_203 -> cat_13_204 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_13_204 -> view_25_205 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_25_205 -> transpose_13_206 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_13_206 -> contiguous_13_207 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_13_207 -> view_26_208 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			fillcolor=white label=<<B>@stage4.1</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_21_209 -> cat_14_219 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_22_210 -> conv2d_47_211 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_32_218 -> cat_14_219 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_14_219 -> view_27_220 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_27_220 -> transpose_14_221 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_14_221 -> contiguous_14_222 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_14_222 -> view_28_223 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			fillcolor=white label=<<B>@stage4.2</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_23_224 -> cat_15_234 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_24_225 -> conv2d_50_226 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_34_233 -> cat_15_234 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_15_234 -> view_29_235 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_29_235 -> transpose_15_236 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_15_236 -> contiguous_15_237 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_15_237 -> view_30_238 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			fillcolor=white label=<<B>@stage4.3</B><br align='left'/>(InvertedResidual)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			chunk_25_239 -> cat_16_249 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			chunk_26_240 -> conv2d_53_241 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_36_248 -> cat_16_249 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_16_249 -> view_31_250 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			view_31_250 -> transpose_16_251 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			transpose_16_251 -> contiguous_16_252 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			contiguous_16_252 -> view_32_253 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_conv5_pass1 {
+		subgraph "cluster_conv5.0_pass1" {
+			fillcolor=white label=<<B>@conv5.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv5_pass1 {
+		subgraph "cluster_conv5.1_pass1" {
+			fillcolor=white label=<<B>@conv5.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv5_pass1 {
+		subgraph "cluster_conv5.2_pass1" {
+			fillcolor=white label=<<B>@conv5.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch1_pass1" {
+				fillcolor=white label=<<B>@stage2.0.branch1</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_2_5 -> batchnorm_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_2_6 -> conv2d_3_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_3_7 -> batchnorm_3_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_3_8 -> relu_2_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				fillcolor=white label=<<B>@stage2.0.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_4_10 -> batchnorm_4_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_4_11 -> relu_3_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_3_12 -> conv2d_5_13 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_5_13 -> batchnorm_5_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_5_14 -> conv2d_6_15 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_6_15 -> batchnorm_6_16 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_6_16 -> relu_4_17 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				fillcolor=white label=<<B>@stage2.1.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_7_25 -> batchnorm_7_26 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_7_26 -> relu_5_27 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_5_27 -> conv2d_8_28 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_8_28 -> batchnorm_8_29 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_8_29 -> conv2d_9_30 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_9_30 -> batchnorm_9_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_9_31 -> relu_6_32 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				fillcolor=white label=<<B>@stage2.2.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_10_40 -> batchnorm_10_41 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_10_41 -> relu_7_42 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_7_42 -> conv2d_11_43 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_11_43 -> batchnorm_11_44 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_11_44 -> conv2d_12_45 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_12_45 -> batchnorm_12_46 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_12_46 -> relu_8_47 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				fillcolor=white label=<<B>@stage2.3.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_13_55 -> batchnorm_13_56 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_13_56 -> relu_9_57 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_9_57 -> conv2d_14_58 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_14_58 -> batchnorm_14_59 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_14_59 -> conv2d_15_60 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_15_60 -> batchnorm_15_61 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_15_61 -> relu_10_62 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch1_pass1" {
+				fillcolor=white label=<<B>@stage3.0.branch1</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_16_68 -> batchnorm_16_69 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_16_69 -> conv2d_17_70 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_17_70 -> batchnorm_17_71 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_17_71 -> relu_11_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.0.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_18_73 -> batchnorm_18_74 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_18_74 -> relu_12_75 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_12_75 -> conv2d_19_76 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_19_76 -> batchnorm_19_77 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_19_77 -> conv2d_20_78 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_20_78 -> batchnorm_20_79 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_20_79 -> relu_13_80 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.1.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_21_88 -> batchnorm_21_89 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_21_89 -> relu_14_90 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_14_90 -> conv2d_22_91 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_22_91 -> batchnorm_22_92 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_22_92 -> conv2d_23_93 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_23_93 -> batchnorm_23_94 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_23_94 -> relu_15_95 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.2.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_24_103 -> batchnorm_24_104 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_24_104 -> relu_16_105 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_16_105 -> conv2d_25_106 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_25_106 -> batchnorm_25_107 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_25_107 -> conv2d_26_108 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_26_108 -> batchnorm_26_109 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_26_109 -> relu_17_110 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.3.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_27_118 -> batchnorm_27_119 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_27_119 -> relu_18_120 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_18_120 -> conv2d_28_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_28_121 -> batchnorm_28_122 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_28_122 -> conv2d_29_123 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_29_123 -> batchnorm_29_124 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_29_124 -> relu_19_125 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.4.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_30_133 -> batchnorm_30_134 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_30_134 -> relu_20_135 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_20_135 -> conv2d_31_136 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_31_136 -> batchnorm_31_137 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_31_137 -> conv2d_32_138 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_32_138 -> batchnorm_32_139 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_32_139 -> relu_21_140 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.5.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_33_148 -> batchnorm_33_149 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_33_149 -> relu_22_150 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_22_150 -> conv2d_34_151 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_34_151 -> batchnorm_34_152 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_34_152 -> conv2d_35_153 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_35_153 -> batchnorm_35_154 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_35_154 -> relu_23_155 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.6.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_36_163 -> batchnorm_36_164 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_36_164 -> relu_24_165 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_24_165 -> conv2d_37_166 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_37_166 -> batchnorm_37_167 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_37_167 -> conv2d_38_168 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_38_168 -> batchnorm_38_169 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_38_169 -> relu_25_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				fillcolor=white label=<<B>@stage3.7.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_39_178 -> batchnorm_39_179 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_39_179 -> relu_26_180 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_26_180 -> conv2d_40_181 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_40_181 -> batchnorm_40_182 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_40_182 -> conv2d_41_183 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_41_183 -> batchnorm_41_184 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_41_184 -> relu_27_185 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch1_pass1" {
+				fillcolor=white label=<<B>@stage4.0.branch1</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_42_191 -> batchnorm_42_192 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_42_192 -> conv2d_43_193 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_43_193 -> batchnorm_43_194 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_43_194 -> relu_28_195 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				fillcolor=white label=<<B>@stage4.0.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_44_196 -> batchnorm_44_197 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_44_197 -> relu_29_198 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_29_198 -> conv2d_45_199 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_45_199 -> batchnorm_45_200 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_45_200 -> conv2d_46_201 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_46_201 -> batchnorm_46_202 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_46_202 -> relu_30_203 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				fillcolor=white label=<<B>@stage4.1.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_47_211 -> batchnorm_47_212 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_47_212 -> relu_31_213 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_31_213 -> conv2d_48_214 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_48_214 -> batchnorm_48_215 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_48_215 -> conv2d_49_216 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_49_216 -> batchnorm_49_217 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_49_217 -> relu_32_218 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				fillcolor=white label=<<B>@stage4.2.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_50_226 -> batchnorm_50_227 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_50_227 -> relu_33_228 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_33_228 -> conv2d_51_229 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_51_229 -> batchnorm_51_230 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_51_230 -> conv2d_52_231 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_52_231 -> batchnorm_52_232 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_52_232 -> relu_34_233 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				fillcolor=white label=<<B>@stage4.3.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_53_241 -> batchnorm_53_242 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_53_242 -> relu_35_243 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_35_243 -> conv2d_54_244 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_54_244 -> batchnorm_54_245 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_54_245 -> conv2d_55_246 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_55_246 -> batchnorm_55_247 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_55_247 -> relu_36_248 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch1_pass1" {
+				subgraph "cluster_stage2.0.branch1.0_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch1.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch1_pass1" {
+				subgraph "cluster_stage2.0.branch1.1_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch1.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch1_pass1" {
+				subgraph "cluster_stage2.0.branch1.2_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch1.2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch1_pass1" {
+				subgraph "cluster_stage2.0.branch1.3_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch1.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch1_pass1" {
+				subgraph "cluster_stage2.0.branch1.4_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch1.4</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.0_pass1" {
+			subgraph "cluster_stage2.0.branch2_pass1" {
+				subgraph "cluster_stage2.0.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage2.0.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.1_pass1" {
+			subgraph "cluster_stage2.1.branch2_pass1" {
+				subgraph "cluster_stage2.1.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage2.1.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.2_pass1" {
+			subgraph "cluster_stage2.2.branch2_pass1" {
+				subgraph "cluster_stage2.2.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage2.2.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage2_pass1 {
+		subgraph "cluster_stage2.3_pass1" {
+			subgraph "cluster_stage2.3.branch2_pass1" {
+				subgraph "cluster_stage2.3.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage2.3.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch1_pass1" {
+				subgraph "cluster_stage3.0.branch1.0_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch1.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch1_pass1" {
+				subgraph "cluster_stage3.0.branch1.1_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch1.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch1_pass1" {
+				subgraph "cluster_stage3.0.branch1.2_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch1.2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch1_pass1" {
+				subgraph "cluster_stage3.0.branch1.3_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch1.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch1_pass1" {
+				subgraph "cluster_stage3.0.branch1.4_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch1.4</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.0_pass1" {
+			subgraph "cluster_stage3.0.branch2_pass1" {
+				subgraph "cluster_stage3.0.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.0.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.1_pass1" {
+			subgraph "cluster_stage3.1.branch2_pass1" {
+				subgraph "cluster_stage3.1.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.1.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.2_pass1" {
+			subgraph "cluster_stage3.2.branch2_pass1" {
+				subgraph "cluster_stage3.2.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.2.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.3_pass1" {
+			subgraph "cluster_stage3.3.branch2_pass1" {
+				subgraph "cluster_stage3.3.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.3.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.4_pass1" {
+			subgraph "cluster_stage3.4.branch2_pass1" {
+				subgraph "cluster_stage3.4.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.4.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.5_pass1" {
+			subgraph "cluster_stage3.5.branch2_pass1" {
+				subgraph "cluster_stage3.5.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.5.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.6_pass1" {
+			subgraph "cluster_stage3.6.branch2_pass1" {
+				subgraph "cluster_stage3.6.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.6.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage3_pass1 {
+		subgraph "cluster_stage3.7_pass1" {
+			subgraph "cluster_stage3.7.branch2_pass1" {
+				subgraph "cluster_stage3.7.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage3.7.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch1_pass1" {
+				subgraph "cluster_stage4.0.branch1.0_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch1.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch1_pass1" {
+				subgraph "cluster_stage4.0.branch1.1_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch1.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch1_pass1" {
+				subgraph "cluster_stage4.0.branch1.2_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch1.2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch1_pass1" {
+				subgraph "cluster_stage4.0.branch1.3_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch1.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch1_pass1" {
+				subgraph "cluster_stage4.0.branch1.4_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch1.4</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.0_pass1" {
+			subgraph "cluster_stage4.0.branch2_pass1" {
+				subgraph "cluster_stage4.0.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage4.0.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.1_pass1" {
+			subgraph "cluster_stage4.1.branch2_pass1" {
+				subgraph "cluster_stage4.1.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage4.1.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.2_pass1" {
+			subgraph "cluster_stage4.2.branch2_pass1" {
+				subgraph "cluster_stage4.2.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage4.2.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.0_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.1_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.2_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.3_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.4_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.4</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.5_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.5</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.6_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.6</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_stage4_pass1 {
+		subgraph "cluster_stage4.3_pass1" {
+			subgraph "cluster_stage4.3.branch2_pass1" {
+				subgraph "cluster_stage4.3.branch2.7_pass1" {
+					fillcolor=white label=<<B>@stage4.3.branch2.7</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+}

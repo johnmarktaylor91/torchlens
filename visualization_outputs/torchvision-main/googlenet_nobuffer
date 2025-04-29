@@ -1,0 +1,2128 @@
+// Computational graph for the feedforward sweep
+digraph GoogLeNet {
+	graph [label=<<B>GoogLeNet</B><br align='left'/>337 tensors total (286.9 MB)<br align='left'/>13004888 params total (49.6 MB)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>6x3x224x224 (3.4 MB)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_1_1 [label=<<b>conv2d_1_1</b><br/>6x64x112x112 (18.4 MB)<br/>params: 64x3x7x7<br/>@conv1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_1_2 [label=<<b>batchnorm_1_2</b><br/>6x64x112x112 (18.4 MB)<br/>params: x64, x64<br/>@conv1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_3 [label=<<b>relu_1_3</b><br/>6x64x112x112 (18.4 MB)<br/>@conv1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_3 -> maxpool2d_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_1_4 [label=<<b>maxpool2d_1_4</b><br/>6x64x56x56 (4.6 MB)<br/>@maxpool1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_1_4 -> conv2d_2_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_2_5 [label=<<b>conv2d_2_5</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x1x1<br/>@conv2.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_2_6 [label=<<b>batchnorm_2_6</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@conv2.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_7 [label=<<b>relu_2_7</b><br/>6x64x56x56 (4.6 MB)<br/>@conv2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_7 -> conv2d_3_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_3_8 [label=<<b>conv2d_3_8</b><br/>6x192x56x56 (13.8 MB)<br/>params: 192x64x3x3<br/>@conv3.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_3_9 [label=<<b>batchnorm_3_9</b><br/>6x192x56x56 (13.8 MB)<br/>params: x192, x192<br/>@conv3.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_3_10 [label=<<b>relu_3_10</b><br/>6x192x56x56 (13.8 MB)<br/>@conv3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_3_10 -> maxpool2d_2_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_2_11 [label=<<b>maxpool2d_2_11</b><br/>6x192x28x28 (3.4 MB)<br/>@maxpool2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_2_11 -> conv2d_4_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_2_11 -> conv2d_5_15 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_2_11 -> conv2d_7_21 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_2_11 -> maxpool2d_3_27 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_4_12 [label=<<b>conv2d_4_12</b><br/>6x64x28x28 (1.1 MB)<br/>params: 64x192x1x1<br/>@inception3a.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_4_13 [label=<<b>batchnorm_4_13</b><br/>6x64x28x28 (1.1 MB)<br/>params: x64, x64<br/>@inception3a.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_4_14 [label=<<b>relu_4_14</b><br/>6x64x28x28 (1.1 MB)<br/>@inception3a.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_5_15 [label=<<b>conv2d_5_15</b><br/>6x96x28x28 (1.7 MB)<br/>params: 96x192x1x1<br/>@inception3a.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_5_16 [label=<<b>batchnorm_5_16</b><br/>6x96x28x28 (1.7 MB)<br/>params: x96, x96<br/>@inception3a.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_5_17 [label=<<b>relu_5_17</b><br/>6x96x28x28 (1.7 MB)<br/>@inception3a.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_6_18 [label=<<b>conv2d_6_18</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x96x3x3<br/>@inception3a.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_6_19 [label=<<b>batchnorm_6_19</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@inception3a.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_6_20 [label=<<b>relu_6_20</b><br/>6x128x28x28 (2.3 MB)<br/>@inception3a.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_7_21 [label=<<b>conv2d_7_21</b><br/>6x16x28x28 (294.2 KB)<br/>params: 16x192x1x1<br/>@inception3a.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_7_22 [label=<<b>batchnorm_7_22</b><br/>6x16x28x28 (294.2 KB)<br/>params: x16, x16<br/>@inception3a.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_7_23 [label=<<b>relu_7_23</b><br/>6x16x28x28 (294.2 KB)<br/>@inception3a.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_8_24 [label=<<b>conv2d_8_24</b><br/>6x32x28x28 (588.2 KB)<br/>params: 32x16x3x3<br/>@inception3a.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_8_25 [label=<<b>batchnorm_8_25</b><br/>6x32x28x28 (588.2 KB)<br/>params: x32, x32<br/>@inception3a.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_8_26 [label=<<b>relu_8_26</b><br/>6x32x28x28 (588.2 KB)<br/>@inception3a.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_3_27 [label=<<b>maxpool2d_3_27</b><br/>6x192x28x28 (3.4 MB)<br/>@inception3a.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_9_28 [label=<<b>conv2d_9_28</b><br/>6x32x28x28 (588.2 KB)<br/>params: 32x192x1x1<br/>@inception3a.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_9_29 [label=<<b>batchnorm_9_29</b><br/>6x32x28x28 (588.2 KB)<br/>params: x32, x32<br/>@inception3a.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_9_30 [label=<<b>relu_9_30</b><br/>6x32x28x28 (588.2 KB)<br/>@inception3a.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_1_31 [label=<<b>cat_1_31</b><br/>6x256x28x28 (4.6 MB)<br/>@inception3a> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_1_31 -> conv2d_10_32 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_1_31 -> conv2d_11_35 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_1_31 -> conv2d_13_41 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_1_31 -> maxpool2d_4_47 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_10_32 [label=<<b>conv2d_10_32</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x256x1x1<br/>@inception3b.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_10_33 [label=<<b>batchnorm_10_33</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@inception3b.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_10_34 [label=<<b>relu_10_34</b><br/>6x128x28x28 (2.3 MB)<br/>@inception3b.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_11_35 [label=<<b>conv2d_11_35</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x256x1x1<br/>@inception3b.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_11_36 [label=<<b>batchnorm_11_36</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@inception3b.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_11_37 [label=<<b>relu_11_37</b><br/>6x128x28x28 (2.3 MB)<br/>@inception3b.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_12_38 [label=<<b>conv2d_12_38</b><br/>6x192x28x28 (3.4 MB)<br/>params: 192x128x3x3<br/>@inception3b.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_12_39 [label=<<b>batchnorm_12_39</b><br/>6x192x28x28 (3.4 MB)<br/>params: x192, x192<br/>@inception3b.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_12_40 [label=<<b>relu_12_40</b><br/>6x192x28x28 (3.4 MB)<br/>@inception3b.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_13_41 [label=<<b>conv2d_13_41</b><br/>6x32x28x28 (588.2 KB)<br/>params: 32x256x1x1<br/>@inception3b.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_13_42 [label=<<b>batchnorm_13_42</b><br/>6x32x28x28 (588.2 KB)<br/>params: x32, x32<br/>@inception3b.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_13_43 [label=<<b>relu_13_43</b><br/>6x32x28x28 (588.2 KB)<br/>@inception3b.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_14_44 [label=<<b>conv2d_14_44</b><br/>6x96x28x28 (1.7 MB)<br/>params: 96x32x3x3<br/>@inception3b.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_14_45 [label=<<b>batchnorm_14_45</b><br/>6x96x28x28 (1.7 MB)<br/>params: x96, x96<br/>@inception3b.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_14_46 [label=<<b>relu_14_46</b><br/>6x96x28x28 (1.7 MB)<br/>@inception3b.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_4_47 [label=<<b>maxpool2d_4_47</b><br/>6x256x28x28 (4.6 MB)<br/>@inception3b.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_15_48 [label=<<b>conv2d_15_48</b><br/>6x64x28x28 (1.1 MB)<br/>params: 64x256x1x1<br/>@inception3b.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_15_49 [label=<<b>batchnorm_15_49</b><br/>6x64x28x28 (1.1 MB)<br/>params: x64, x64<br/>@inception3b.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_15_50 [label=<<b>relu_15_50</b><br/>6x64x28x28 (1.1 MB)<br/>@inception3b.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_2_51 [label=<<b>cat_2_51</b><br/>6x480x28x28 (8.6 MB)<br/>@inception3b> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_2_51 -> maxpool2d_5_52 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_5_52 [label=<<b>maxpool2d_5_52</b><br/>6x480x14x14 (2.2 MB)<br/>@maxpool3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_5_52 -> conv2d_16_53 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_5_52 -> conv2d_17_56 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_5_52 -> conv2d_19_62 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_5_52 -> maxpool2d_6_68 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_16_53 [label=<<b>conv2d_16_53</b><br/>6x192x14x14 (882.2 KB)<br/>params: 192x480x1x1<br/>@inception4a.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_16_54 [label=<<b>batchnorm_16_54</b><br/>6x192x14x14 (882.2 KB)<br/>params: x192, x192<br/>@inception4a.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_16_55 [label=<<b>relu_16_55</b><br/>6x192x14x14 (882.2 KB)<br/>@inception4a.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_17_56 [label=<<b>conv2d_17_56</b><br/>6x96x14x14 (441.2 KB)<br/>params: 96x480x1x1<br/>@inception4a.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_17_57 [label=<<b>batchnorm_17_57</b><br/>6x96x14x14 (441.2 KB)<br/>params: x96, x96<br/>@inception4a.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_17_58 [label=<<b>relu_17_58</b><br/>6x96x14x14 (441.2 KB)<br/>@inception4a.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_18_59 [label=<<b>conv2d_18_59</b><br/>6x208x14x14 (955.7 KB)<br/>params: 208x96x3x3<br/>@inception4a.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_18_60 [label=<<b>batchnorm_18_60</b><br/>6x208x14x14 (955.7 KB)<br/>params: x208, x208<br/>@inception4a.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_18_61 [label=<<b>relu_18_61</b><br/>6x208x14x14 (955.7 KB)<br/>@inception4a.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_19_62 [label=<<b>conv2d_19_62</b><br/>6x16x14x14 (73.7 KB)<br/>params: 16x480x1x1<br/>@inception4a.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_19_63 [label=<<b>batchnorm_19_63</b><br/>6x16x14x14 (73.7 KB)<br/>params: x16, x16<br/>@inception4a.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_19_64 [label=<<b>relu_19_64</b><br/>6x16x14x14 (73.7 KB)<br/>@inception4a.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_20_65 [label=<<b>conv2d_20_65</b><br/>6x48x14x14 (220.7 KB)<br/>params: 48x16x3x3<br/>@inception4a.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_20_66 [label=<<b>batchnorm_20_66</b><br/>6x48x14x14 (220.7 KB)<br/>params: x48, x48<br/>@inception4a.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_20_67 [label=<<b>relu_20_67</b><br/>6x48x14x14 (220.7 KB)<br/>@inception4a.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_6_68 [label=<<b>maxpool2d_6_68</b><br/>6x480x14x14 (2.2 MB)<br/>@inception4a.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_21_69 [label=<<b>conv2d_21_69</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x480x1x1<br/>@inception4a.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_21_70 [label=<<b>batchnorm_21_70</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4a.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_21_71 [label=<<b>relu_21_71</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4a.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_3_72 [label=<<b>cat_3_72</b><br/>6x512x14x14 (2.3 MB)<br/>@inception4a> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_3_72 -> adaptiveavgpool2d_1_73 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_3_72 -> conv2d_23_82 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_3_72 -> conv2d_24_85 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_3_72 -> conv2d_26_91 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_3_72 -> maxpool2d_7_97 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	adaptiveavgpool2d_1_73 [label=<<b>adaptiveavgpool2d_1_73</b><br/>6x512x4x4 (192.2 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_22_74 [label=<<b>conv2d_22_74</b><br/>6x128x4x4 (48.2 KB)<br/>params: 128x512x1x1<br/>@aux1.conv.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_22_75 [label=<<b>batchnorm_22_75</b><br/>6x128x4x4 (48.2 KB)<br/>params: x128, x128<br/>@aux1.conv.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_22_76 [label=<<b>relu_22_76</b><br/>6x128x4x4 (48.2 KB)<br/>@aux1.conv> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	flatten_1_77 [label=<<b>flatten_1_77</b><br/>6x2048 (48.1 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	linear_1_78 [label=<<b>linear_1_78</b><br/>6x1024 (24.1 KB)<br/>params: 1024x2048, x1024<br/>@aux1.fc1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_23_79 [label=<<b>relu_23_79</b><br/>6x1024 (24.1 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	dropout_1_80 [label=<<b>dropout_1_80</b><br/>6x1024 (24.1 KB)<br/>@aux1.dropout> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_81 [label=<<b>linear_2_81</b><br/>6x1000 (23.6 KB)<br/>params: 1000x1024, x1000<br/>@aux1.fc2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_81 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_23_82 [label=<<b>conv2d_23_82</b><br/>6x160x14x14 (735.2 KB)<br/>params: 160x512x1x1<br/>@inception4b.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_23_83 [label=<<b>batchnorm_23_83</b><br/>6x160x14x14 (735.2 KB)<br/>params: x160, x160<br/>@inception4b.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_24_84 [label=<<b>relu_24_84</b><br/>6x160x14x14 (735.2 KB)<br/>@inception4b.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_24_85 [label=<<b>conv2d_24_85</b><br/>6x112x14x14 (514.7 KB)<br/>params: 112x512x1x1<br/>@inception4b.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_24_86 [label=<<b>batchnorm_24_86</b><br/>6x112x14x14 (514.7 KB)<br/>params: x112, x112<br/>@inception4b.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_25_87 [label=<<b>relu_25_87</b><br/>6x112x14x14 (514.7 KB)<br/>@inception4b.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_25_88 [label=<<b>conv2d_25_88</b><br/>6x224x14x14 (1.0 MB)<br/>params: 224x112x3x3<br/>@inception4b.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_25_89 [label=<<b>batchnorm_25_89</b><br/>6x224x14x14 (1.0 MB)<br/>params: x224, x224<br/>@inception4b.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_26_90 [label=<<b>relu_26_90</b><br/>6x224x14x14 (1.0 MB)<br/>@inception4b.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_26_91 [label=<<b>conv2d_26_91</b><br/>6x24x14x14 (110.4 KB)<br/>params: 24x512x1x1<br/>@inception4b.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_26_92 [label=<<b>batchnorm_26_92</b><br/>6x24x14x14 (110.4 KB)<br/>params: x24, x24<br/>@inception4b.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_27_93 [label=<<b>relu_27_93</b><br/>6x24x14x14 (110.4 KB)<br/>@inception4b.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_27_94 [label=<<b>conv2d_27_94</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x24x3x3<br/>@inception4b.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_27_95 [label=<<b>batchnorm_27_95</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4b.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_28_96 [label=<<b>relu_28_96</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4b.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_7_97 [label=<<b>maxpool2d_7_97</b><br/>6x512x14x14 (2.3 MB)<br/>@inception4b.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_28_98 [label=<<b>conv2d_28_98</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x512x1x1<br/>@inception4b.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_28_99 [label=<<b>batchnorm_28_99</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4b.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_29_100 [label=<<b>relu_29_100</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4b.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_4_101 [label=<<b>cat_4_101</b><br/>6x512x14x14 (2.3 MB)<br/>@inception4b> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_4_101 -> conv2d_29_102 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_4_101 -> conv2d_30_105 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_4_101 -> conv2d_32_111 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_4_101 -> maxpool2d_8_117 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_29_102 [label=<<b>conv2d_29_102</b><br/>6x128x14x14 (588.2 KB)<br/>params: 128x512x1x1<br/>@inception4c.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_29_103 [label=<<b>batchnorm_29_103</b><br/>6x128x14x14 (588.2 KB)<br/>params: x128, x128<br/>@inception4c.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_30_104 [label=<<b>relu_30_104</b><br/>6x128x14x14 (588.2 KB)<br/>@inception4c.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_30_105 [label=<<b>conv2d_30_105</b><br/>6x128x14x14 (588.2 KB)<br/>params: 128x512x1x1<br/>@inception4c.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_30_106 [label=<<b>batchnorm_30_106</b><br/>6x128x14x14 (588.2 KB)<br/>params: x128, x128<br/>@inception4c.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_31_107 [label=<<b>relu_31_107</b><br/>6x128x14x14 (588.2 KB)<br/>@inception4c.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_31_108 [label=<<b>conv2d_31_108</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x128x3x3<br/>@inception4c.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_31_109 [label=<<b>batchnorm_31_109</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@inception4c.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_32_110 [label=<<b>relu_32_110</b><br/>6x256x14x14 (1.1 MB)<br/>@inception4c.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_32_111 [label=<<b>conv2d_32_111</b><br/>6x24x14x14 (110.4 KB)<br/>params: 24x512x1x1<br/>@inception4c.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_32_112 [label=<<b>batchnorm_32_112</b><br/>6x24x14x14 (110.4 KB)<br/>params: x24, x24<br/>@inception4c.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_33_113 [label=<<b>relu_33_113</b><br/>6x24x14x14 (110.4 KB)<br/>@inception4c.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_33_114 [label=<<b>conv2d_33_114</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x24x3x3<br/>@inception4c.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_33_115 [label=<<b>batchnorm_33_115</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4c.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_34_116 [label=<<b>relu_34_116</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4c.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_8_117 [label=<<b>maxpool2d_8_117</b><br/>6x512x14x14 (2.3 MB)<br/>@inception4c.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_34_118 [label=<<b>conv2d_34_118</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x512x1x1<br/>@inception4c.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_34_119 [label=<<b>batchnorm_34_119</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4c.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_35_120 [label=<<b>relu_35_120</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4c.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_5_121 [label=<<b>cat_5_121</b><br/>6x512x14x14 (2.3 MB)<br/>@inception4c> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_5_121 -> conv2d_35_122 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_5_121 -> conv2d_36_125 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_5_121 -> conv2d_38_131 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_5_121 -> maxpool2d_9_137 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_35_122 [label=<<b>conv2d_35_122</b><br/>6x112x14x14 (514.7 KB)<br/>params: 112x512x1x1<br/>@inception4d.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_35_123 [label=<<b>batchnorm_35_123</b><br/>6x112x14x14 (514.7 KB)<br/>params: x112, x112<br/>@inception4d.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_36_124 [label=<<b>relu_36_124</b><br/>6x112x14x14 (514.7 KB)<br/>@inception4d.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_36_125 [label=<<b>conv2d_36_125</b><br/>6x144x14x14 (661.7 KB)<br/>params: 144x512x1x1<br/>@inception4d.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_36_126 [label=<<b>batchnorm_36_126</b><br/>6x144x14x14 (661.7 KB)<br/>params: x144, x144<br/>@inception4d.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_37_127 [label=<<b>relu_37_127</b><br/>6x144x14x14 (661.7 KB)<br/>@inception4d.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_37_128 [label=<<b>conv2d_37_128</b><br/>6x288x14x14 (1.3 MB)<br/>params: 288x144x3x3<br/>@inception4d.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_37_129 [label=<<b>batchnorm_37_129</b><br/>6x288x14x14 (1.3 MB)<br/>params: x288, x288<br/>@inception4d.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_38_130 [label=<<b>relu_38_130</b><br/>6x288x14x14 (1.3 MB)<br/>@inception4d.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_38_131 [label=<<b>conv2d_38_131</b><br/>6x32x14x14 (147.2 KB)<br/>params: 32x512x1x1<br/>@inception4d.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_38_132 [label=<<b>batchnorm_38_132</b><br/>6x32x14x14 (147.2 KB)<br/>params: x32, x32<br/>@inception4d.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_39_133 [label=<<b>relu_39_133</b><br/>6x32x14x14 (147.2 KB)<br/>@inception4d.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_39_134 [label=<<b>conv2d_39_134</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x32x3x3<br/>@inception4d.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_39_135 [label=<<b>batchnorm_39_135</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4d.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_40_136 [label=<<b>relu_40_136</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4d.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_9_137 [label=<<b>maxpool2d_9_137</b><br/>6x512x14x14 (2.3 MB)<br/>@inception4d.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_40_138 [label=<<b>conv2d_40_138</b><br/>6x64x14x14 (294.2 KB)<br/>params: 64x512x1x1<br/>@inception4d.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_40_139 [label=<<b>batchnorm_40_139</b><br/>6x64x14x14 (294.2 KB)<br/>params: x64, x64<br/>@inception4d.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_41_140 [label=<<b>relu_41_140</b><br/>6x64x14x14 (294.2 KB)<br/>@inception4d.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_6_141 [label=<<b>cat_6_141</b><br/>6x528x14x14 (2.4 MB)<br/>@inception4d> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_6_141 -> adaptiveavgpool2d_2_142 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_6_141 -> conv2d_42_151 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_6_141 -> conv2d_43_154 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_6_141 -> conv2d_45_160 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_6_141 -> maxpool2d_10_166 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	adaptiveavgpool2d_2_142 [label=<<b>adaptiveavgpool2d_2_142</b><br/>6x528x4x4 (198.2 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_41_143 [label=<<b>conv2d_41_143</b><br/>6x128x4x4 (48.2 KB)<br/>params: 128x528x1x1<br/>@aux2.conv.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_41_144 [label=<<b>batchnorm_41_144</b><br/>6x128x4x4 (48.2 KB)<br/>params: x128, x128<br/>@aux2.conv.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_42_145 [label=<<b>relu_42_145</b><br/>6x128x4x4 (48.2 KB)<br/>@aux2.conv> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	flatten_2_146 [label=<<b>flatten_2_146</b><br/>6x2048 (48.1 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	linear_3_147 [label=<<b>linear_3_147</b><br/>6x1024 (24.1 KB)<br/>params: 1024x2048, x1024<br/>@aux2.fc1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_43_148 [label=<<b>relu_43_148</b><br/>6x1024 (24.1 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	dropout_2_149 [label=<<b>dropout_2_149</b><br/>6x1024 (24.1 KB)<br/>@aux2.dropout> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_4_150 [label=<<b>linear_4_150</b><br/>6x1000 (23.6 KB)<br/>params: 1000x1024, x1000<br/>@aux2.fc2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_4_150 -> output_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_42_151 [label=<<b>conv2d_42_151</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x528x1x1<br/>@inception4e.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_42_152 [label=<<b>batchnorm_42_152</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@inception4e.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_44_153 [label=<<b>relu_44_153</b><br/>6x256x14x14 (1.1 MB)<br/>@inception4e.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_43_154 [label=<<b>conv2d_43_154</b><br/>6x160x14x14 (735.2 KB)<br/>params: 160x528x1x1<br/>@inception4e.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_43_155 [label=<<b>batchnorm_43_155</b><br/>6x160x14x14 (735.2 KB)<br/>params: x160, x160<br/>@inception4e.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_45_156 [label=<<b>relu_45_156</b><br/>6x160x14x14 (735.2 KB)<br/>@inception4e.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_44_157 [label=<<b>conv2d_44_157</b><br/>6x320x14x14 (1.4 MB)<br/>params: 320x160x3x3<br/>@inception4e.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_44_158 [label=<<b>batchnorm_44_158</b><br/>6x320x14x14 (1.4 MB)<br/>params: x320, x320<br/>@inception4e.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_46_159 [label=<<b>relu_46_159</b><br/>6x320x14x14 (1.4 MB)<br/>@inception4e.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_45_160 [label=<<b>conv2d_45_160</b><br/>6x32x14x14 (147.2 KB)<br/>params: 32x528x1x1<br/>@inception4e.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_45_161 [label=<<b>batchnorm_45_161</b><br/>6x32x14x14 (147.2 KB)<br/>params: x32, x32<br/>@inception4e.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_47_162 [label=<<b>relu_47_162</b><br/>6x32x14x14 (147.2 KB)<br/>@inception4e.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_46_163 [label=<<b>conv2d_46_163</b><br/>6x128x14x14 (588.2 KB)<br/>params: 128x32x3x3<br/>@inception4e.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_46_164 [label=<<b>batchnorm_46_164</b><br/>6x128x14x14 (588.2 KB)<br/>params: x128, x128<br/>@inception4e.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_48_165 [label=<<b>relu_48_165</b><br/>6x128x14x14 (588.2 KB)<br/>@inception4e.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_10_166 [label=<<b>maxpool2d_10_166</b><br/>6x528x14x14 (2.4 MB)<br/>@inception4e.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_47_167 [label=<<b>conv2d_47_167</b><br/>6x128x14x14 (588.2 KB)<br/>params: 128x528x1x1<br/>@inception4e.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_47_168 [label=<<b>batchnorm_47_168</b><br/>6x128x14x14 (588.2 KB)<br/>params: x128, x128<br/>@inception4e.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_49_169 [label=<<b>relu_49_169</b><br/>6x128x14x14 (588.2 KB)<br/>@inception4e.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_7_170 [label=<<b>cat_7_170</b><br/>6x832x14x14 (3.7 MB)<br/>@inception4e> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_7_170 -> maxpool2d_11_171 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_11_171 [label=<<b>maxpool2d_11_171</b><br/>6x832x7x7 (955.7 KB)<br/>@maxpool4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_11_171 -> conv2d_48_172 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_11_171 -> conv2d_49_175 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_11_171 -> conv2d_51_181 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_11_171 -> maxpool2d_12_187 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_48_172 [label=<<b>conv2d_48_172</b><br/>6x256x7x7 (294.2 KB)<br/>params: 256x832x1x1<br/>@inception5a.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_48_173 [label=<<b>batchnorm_48_173</b><br/>6x256x7x7 (294.2 KB)<br/>params: x256, x256<br/>@inception5a.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_50_174 [label=<<b>relu_50_174</b><br/>6x256x7x7 (294.2 KB)<br/>@inception5a.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_49_175 [label=<<b>conv2d_49_175</b><br/>6x160x7x7 (183.9 KB)<br/>params: 160x832x1x1<br/>@inception5a.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_49_176 [label=<<b>batchnorm_49_176</b><br/>6x160x7x7 (183.9 KB)<br/>params: x160, x160<br/>@inception5a.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_51_177 [label=<<b>relu_51_177</b><br/>6x160x7x7 (183.9 KB)<br/>@inception5a.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_50_178 [label=<<b>conv2d_50_178</b><br/>6x320x7x7 (367.7 KB)<br/>params: 320x160x3x3<br/>@inception5a.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_50_179 [label=<<b>batchnorm_50_179</b><br/>6x320x7x7 (367.7 KB)<br/>params: x320, x320<br/>@inception5a.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_52_180 [label=<<b>relu_52_180</b><br/>6x320x7x7 (367.7 KB)<br/>@inception5a.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_51_181 [label=<<b>conv2d_51_181</b><br/>6x32x7x7 (36.9 KB)<br/>params: 32x832x1x1<br/>@inception5a.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_51_182 [label=<<b>batchnorm_51_182</b><br/>6x32x7x7 (36.9 KB)<br/>params: x32, x32<br/>@inception5a.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_53_183 [label=<<b>relu_53_183</b><br/>6x32x7x7 (36.9 KB)<br/>@inception5a.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_52_184 [label=<<b>conv2d_52_184</b><br/>6x128x7x7 (147.2 KB)<br/>params: 128x32x3x3<br/>@inception5a.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_52_185 [label=<<b>batchnorm_52_185</b><br/>6x128x7x7 (147.2 KB)<br/>params: x128, x128<br/>@inception5a.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_54_186 [label=<<b>relu_54_186</b><br/>6x128x7x7 (147.2 KB)<br/>@inception5a.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_12_187 [label=<<b>maxpool2d_12_187</b><br/>6x832x7x7 (955.7 KB)<br/>@inception5a.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_53_188 [label=<<b>conv2d_53_188</b><br/>6x128x7x7 (147.2 KB)<br/>params: 128x832x1x1<br/>@inception5a.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_53_189 [label=<<b>batchnorm_53_189</b><br/>6x128x7x7 (147.2 KB)<br/>params: x128, x128<br/>@inception5a.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_55_190 [label=<<b>relu_55_190</b><br/>6x128x7x7 (147.2 KB)<br/>@inception5a.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_8_191 [label=<<b>cat_8_191</b><br/>6x832x7x7 (955.7 KB)<br/>@inception5a> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_8_191 -> conv2d_54_192 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_8_191 -> conv2d_55_195 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_8_191 -> conv2d_57_201 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cat_8_191 -> maxpool2d_13_207 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_54_192 [label=<<b>conv2d_54_192</b><br/>6x384x7x7 (441.2 KB)<br/>params: 384x832x1x1<br/>@inception5b.branch1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_54_193 [label=<<b>batchnorm_54_193</b><br/>6x384x7x7 (441.2 KB)<br/>params: x384, x384<br/>@inception5b.branch1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_56_194 [label=<<b>relu_56_194</b><br/>6x384x7x7 (441.2 KB)<br/>@inception5b.branch1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_55_195 [label=<<b>conv2d_55_195</b><br/>6x192x7x7 (220.7 KB)<br/>params: 192x832x1x1<br/>@inception5b.branch2.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_55_196 [label=<<b>batchnorm_55_196</b><br/>6x192x7x7 (220.7 KB)<br/>params: x192, x192<br/>@inception5b.branch2.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_57_197 [label=<<b>relu_57_197</b><br/>6x192x7x7 (220.7 KB)<br/>@inception5b.branch2.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_56_198 [label=<<b>conv2d_56_198</b><br/>6x384x7x7 (441.2 KB)<br/>params: 384x192x3x3<br/>@inception5b.branch2.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_56_199 [label=<<b>batchnorm_56_199</b><br/>6x384x7x7 (441.2 KB)<br/>params: x384, x384<br/>@inception5b.branch2.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_58_200 [label=<<b>relu_58_200</b><br/>6x384x7x7 (441.2 KB)<br/>@inception5b.branch2.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_57_201 [label=<<b>conv2d_57_201</b><br/>6x48x7x7 (55.3 KB)<br/>params: 48x832x1x1<br/>@inception5b.branch3.0.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_57_202 [label=<<b>batchnorm_57_202</b><br/>6x48x7x7 (55.3 KB)<br/>params: x48, x48<br/>@inception5b.branch3.0.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_59_203 [label=<<b>relu_59_203</b><br/>6x48x7x7 (55.3 KB)<br/>@inception5b.branch3.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_58_204 [label=<<b>conv2d_58_204</b><br/>6x128x7x7 (147.2 KB)<br/>params: 128x48x3x3<br/>@inception5b.branch3.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_58_205 [label=<<b>batchnorm_58_205</b><br/>6x128x7x7 (147.2 KB)<br/>params: x128, x128<br/>@inception5b.branch3.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_60_206 [label=<<b>relu_60_206</b><br/>6x128x7x7 (147.2 KB)<br/>@inception5b.branch3.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_13_207 [label=<<b>maxpool2d_13_207</b><br/>6x832x7x7 (955.7 KB)<br/>@inception5b.branch4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_59_208 [label=<<b>conv2d_59_208</b><br/>6x128x7x7 (147.2 KB)<br/>params: 128x832x1x1<br/>@inception5b.branch4.1.conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_59_209 [label=<<b>batchnorm_59_209</b><br/>6x128x7x7 (147.2 KB)<br/>params: x128, x128<br/>@inception5b.branch4.1.bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_61_210 [label=<<b>relu_61_210</b><br/>6x128x7x7 (147.2 KB)<br/>@inception5b.branch4.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_9_211 [label=<<b>cat_9_211</b><br/>6x1024x7x7 (1.1 MB)<br/>@inception5b> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_9_211 -> adaptiveavgpool2d_3_212 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	adaptiveavgpool2d_3_212 [label=<<b>adaptiveavgpool2d_3_212</b><br/>6x1024x1x1 (24.2 KB)<br/>@avgpool> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	adaptiveavgpool2d_3_212 -> flatten_3_213 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	flatten_3_213 [label=<<b>flatten_3_213</b><br/>6x1024 (24.1 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	flatten_3_213 -> dropout_3_214 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	dropout_3_214 [label=<<b>dropout_3_214</b><br/>6x1024 (24.1 KB)<br/>@dropout> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	dropout_3_214 -> linear_5_215 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_5_215 [label=<<b>linear_5_215</b><br/>6x1000 (23.6 KB)<br/>params: 1000x1024, x1000<br/>@fc> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_5_215 -> output_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>6x1000 (23.6 KB)<br/>@output.aux_logits1> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	output_2 [label=<<b>output_2</b><br/>6x1000 (23.6 KB)<br/>@output.aux_logits2> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	output_3 [label=<<b>output_3</b><br/>6x1000 (23.6 KB)<br/>@output.logits> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_3
+	}
+	subgraph cluster_conv1_pass1 {
+		fillcolor=white label=<<B>@conv1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_1_1 -> batchnorm_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_1_2 -> relu_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_maxpool1_pass1 {
+		fillcolor=white label=<<B>@maxpool1</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_conv2_pass1 {
+		fillcolor=white label=<<B>@conv2</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_2_5 -> batchnorm_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_2_6 -> relu_2_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_conv3_pass1 {
+		fillcolor=white label=<<B>@conv3</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_3_8 -> batchnorm_3_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_3_9 -> relu_3_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_maxpool2_pass1 {
+		fillcolor=white label=<<B>@maxpool2</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_inception3a_pass1 {
+		fillcolor=white label=<<B>@inception3a</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_4_14 -> cat_1_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_6_20 -> cat_1_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_8_26 -> cat_1_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_9_30 -> cat_1_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_inception3b_pass1 {
+		fillcolor=white label=<<B>@inception3b</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_10_34 -> cat_2_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_12_40 -> cat_2_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_14_46 -> cat_2_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_15_50 -> cat_2_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_maxpool3_pass1 {
+		fillcolor=white label=<<B>@maxpool3</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_inception4a_pass1 {
+		fillcolor=white label=<<B>@inception4a</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_16_55 -> cat_3_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_18_61 -> cat_3_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_20_67 -> cat_3_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_21_71 -> cat_3_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_aux1_pass1 {
+		fillcolor=white label=<<B>@aux1</B><br align='left'/>(InceptionAux)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		adaptiveavgpool2d_1_73 -> conv2d_22_74 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_22_76 -> flatten_1_77 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		flatten_1_77 -> linear_1_78 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		linear_1_78 -> relu_23_79 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_23_79 -> dropout_1_80 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		dropout_1_80 -> linear_2_81 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_inception4b_pass1 {
+		fillcolor=white label=<<B>@inception4b</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_24_84 -> cat_4_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_26_90 -> cat_4_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_28_96 -> cat_4_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_29_100 -> cat_4_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_inception4c_pass1 {
+		fillcolor=white label=<<B>@inception4c</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_30_104 -> cat_5_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_32_110 -> cat_5_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_34_116 -> cat_5_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_35_120 -> cat_5_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_inception4d_pass1 {
+		fillcolor=white label=<<B>@inception4d</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_36_124 -> cat_6_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_38_130 -> cat_6_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_40_136 -> cat_6_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_41_140 -> cat_6_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_aux2_pass1 {
+		fillcolor=white label=<<B>@aux2</B><br align='left'/>(InceptionAux)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		adaptiveavgpool2d_2_142 -> conv2d_41_143 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_42_145 -> flatten_2_146 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		flatten_2_146 -> linear_3_147 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		linear_3_147 -> relu_43_148 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_43_148 -> dropout_2_149 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		dropout_2_149 -> linear_4_150 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_inception4e_pass1 {
+		fillcolor=white label=<<B>@inception4e</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_44_153 -> cat_7_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_46_159 -> cat_7_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_48_165 -> cat_7_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_49_169 -> cat_7_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_maxpool4_pass1 {
+		fillcolor=white label=<<B>@maxpool4</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_inception5a_pass1 {
+		fillcolor=white label=<<B>@inception5a</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_50_174 -> cat_8_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_52_180 -> cat_8_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_54_186 -> cat_8_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_55_190 -> cat_8_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_inception5b_pass1 {
+		fillcolor=white label=<<B>@inception5b</B><br align='left'/>(Inception)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		relu_56_194 -> cat_9_211 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_58_200 -> cat_9_211 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_60_206 -> cat_9_211 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_61_210 -> cat_9_211 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_avgpool_pass1 {
+		fillcolor=white label=<<B>@avgpool</B><br align='left'/>(AdaptiveAvgPool2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_dropout_pass1 {
+		fillcolor=white label=<<B>@dropout</B><br align='left'/>(Dropout)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass1 {
+		fillcolor=white label=<<B>@fc</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_conv1_pass1 {
+		subgraph "cluster_conv1.conv_pass1" {
+			fillcolor=white label=<<B>@conv1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv1_pass1 {
+		subgraph "cluster_conv1.bn_pass1" {
+			fillcolor=white label=<<B>@conv1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv2_pass1 {
+		subgraph "cluster_conv2.conv_pass1" {
+			fillcolor=white label=<<B>@conv2.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv2_pass1 {
+		subgraph "cluster_conv2.bn_pass1" {
+			fillcolor=white label=<<B>@conv2.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv3_pass1 {
+		subgraph "cluster_conv3.conv_pass1" {
+			fillcolor=white label=<<B>@conv3.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_conv3_pass1 {
+		subgraph "cluster_conv3.bn_pass1" {
+			fillcolor=white label=<<B>@conv3.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch1_pass1" {
+			fillcolor=white label=<<B>@inception3a.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_4_12 -> batchnorm_4_13 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_4_13 -> relu_4_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			fillcolor=white label=<<B>@inception3a.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_5_17 -> conv2d_6_18 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			fillcolor=white label=<<B>@inception3a.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_7_23 -> conv2d_8_24 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch4_pass1" {
+			fillcolor=white label=<<B>@inception3a.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_3_27 -> conv2d_9_28 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch1_pass1" {
+			fillcolor=white label=<<B>@inception3b.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_10_32 -> batchnorm_10_33 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_10_33 -> relu_10_34 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			fillcolor=white label=<<B>@inception3b.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_11_37 -> conv2d_12_38 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			fillcolor=white label=<<B>@inception3b.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_13_43 -> conv2d_14_44 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch4_pass1" {
+			fillcolor=white label=<<B>@inception3b.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_4_47 -> conv2d_15_48 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch1_pass1" {
+			fillcolor=white label=<<B>@inception4a.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_16_53 -> batchnorm_16_54 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_16_54 -> relu_16_55 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			fillcolor=white label=<<B>@inception4a.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_17_58 -> conv2d_18_59 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			fillcolor=white label=<<B>@inception4a.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_19_64 -> conv2d_20_65 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch4_pass1" {
+			fillcolor=white label=<<B>@inception4a.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_6_68 -> conv2d_21_69 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_aux1_pass1 {
+		subgraph "cluster_aux1.conv_pass1" {
+			fillcolor=white label=<<B>@aux1.conv</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_22_74 -> batchnorm_22_75 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_22_75 -> relu_22_76 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_aux1_pass1 {
+		subgraph "cluster_aux1.fc1_pass1" {
+			fillcolor=white label=<<B>@aux1.fc1</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_aux1_pass1 {
+		subgraph "cluster_aux1.dropout_pass1" {
+			fillcolor=white label=<<B>@aux1.dropout</B><br align='left'/>(Dropout)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_aux1_pass1 {
+		subgraph "cluster_aux1.fc2_pass1" {
+			fillcolor=white label=<<B>@aux1.fc2</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch1_pass1" {
+			fillcolor=white label=<<B>@inception4b.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_23_82 -> batchnorm_23_83 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_23_83 -> relu_24_84 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			fillcolor=white label=<<B>@inception4b.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_25_87 -> conv2d_25_88 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			fillcolor=white label=<<B>@inception4b.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_27_93 -> conv2d_27_94 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch4_pass1" {
+			fillcolor=white label=<<B>@inception4b.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_7_97 -> conv2d_28_98 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch1_pass1" {
+			fillcolor=white label=<<B>@inception4c.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_29_102 -> batchnorm_29_103 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_29_103 -> relu_30_104 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			fillcolor=white label=<<B>@inception4c.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_31_107 -> conv2d_31_108 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			fillcolor=white label=<<B>@inception4c.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_33_113 -> conv2d_33_114 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch4_pass1" {
+			fillcolor=white label=<<B>@inception4c.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_8_117 -> conv2d_34_118 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch1_pass1" {
+			fillcolor=white label=<<B>@inception4d.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_35_122 -> batchnorm_35_123 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_35_123 -> relu_36_124 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			fillcolor=white label=<<B>@inception4d.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_37_127 -> conv2d_37_128 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			fillcolor=white label=<<B>@inception4d.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_39_133 -> conv2d_39_134 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch4_pass1" {
+			fillcolor=white label=<<B>@inception4d.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_9_137 -> conv2d_40_138 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_aux2_pass1 {
+		subgraph "cluster_aux2.conv_pass1" {
+			fillcolor=white label=<<B>@aux2.conv</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_41_143 -> batchnorm_41_144 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_41_144 -> relu_42_145 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_aux2_pass1 {
+		subgraph "cluster_aux2.fc1_pass1" {
+			fillcolor=white label=<<B>@aux2.fc1</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_aux2_pass1 {
+		subgraph "cluster_aux2.dropout_pass1" {
+			fillcolor=white label=<<B>@aux2.dropout</B><br align='left'/>(Dropout)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_aux2_pass1 {
+		subgraph "cluster_aux2.fc2_pass1" {
+			fillcolor=white label=<<B>@aux2.fc2</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,dashed"
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch1_pass1" {
+			fillcolor=white label=<<B>@inception4e.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_42_151 -> batchnorm_42_152 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_42_152 -> relu_44_153 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			fillcolor=white label=<<B>@inception4e.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_45_156 -> conv2d_44_157 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			fillcolor=white label=<<B>@inception4e.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_47_162 -> conv2d_46_163 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch4_pass1" {
+			fillcolor=white label=<<B>@inception4e.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_10_166 -> conv2d_47_167 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch1_pass1" {
+			fillcolor=white label=<<B>@inception5a.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_48_172 -> batchnorm_48_173 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_48_173 -> relu_50_174 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			fillcolor=white label=<<B>@inception5a.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_51_177 -> conv2d_50_178 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			fillcolor=white label=<<B>@inception5a.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_53_183 -> conv2d_52_184 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch4_pass1" {
+			fillcolor=white label=<<B>@inception5a.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_12_187 -> conv2d_53_188 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch1_pass1" {
+			fillcolor=white label=<<B>@inception5b.branch1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			conv2d_54_192 -> batchnorm_54_193 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_54_193 -> relu_56_194 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			fillcolor=white label=<<B>@inception5b.branch2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_57_197 -> conv2d_56_198 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			fillcolor=white label=<<B>@inception5b.branch3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			relu_59_203 -> conv2d_58_204 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch4_pass1" {
+			fillcolor=white label=<<B>@inception5b.branch4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.0 style="filled,solid"
+			maxpool2d_13_207 -> conv2d_59_208 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch1_pass1" {
+			subgraph "cluster_inception3a.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch1_pass1" {
+			subgraph "cluster_inception3a.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			subgraph "cluster_inception3a.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_5_15 -> batchnorm_5_16 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_5_16 -> relu_5_17 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			subgraph "cluster_inception3a.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_6_18 -> batchnorm_6_19 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_6_19 -> relu_6_20 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			subgraph "cluster_inception3a.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_7_21 -> batchnorm_7_22 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_7_22 -> relu_7_23 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			subgraph "cluster_inception3a.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_8_24 -> batchnorm_8_25 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_8_25 -> relu_8_26 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch4_pass1" {
+			subgraph "cluster_inception3a.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch4_pass1" {
+			subgraph "cluster_inception3a.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception3a.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_9_28 -> batchnorm_9_29 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_9_29 -> relu_9_30 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch1_pass1" {
+			subgraph "cluster_inception3b.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch1_pass1" {
+			subgraph "cluster_inception3b.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			subgraph "cluster_inception3b.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_11_35 -> batchnorm_11_36 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_11_36 -> relu_11_37 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			subgraph "cluster_inception3b.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_12_38 -> batchnorm_12_39 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_12_39 -> relu_12_40 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			subgraph "cluster_inception3b.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_13_41 -> batchnorm_13_42 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_13_42 -> relu_13_43 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			subgraph "cluster_inception3b.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_14_44 -> batchnorm_14_45 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_14_45 -> relu_14_46 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch4_pass1" {
+			subgraph "cluster_inception3b.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch4_pass1" {
+			subgraph "cluster_inception3b.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception3b.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_15_48 -> batchnorm_15_49 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_15_49 -> relu_15_50 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch1_pass1" {
+			subgraph "cluster_inception4a.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch1_pass1" {
+			subgraph "cluster_inception4a.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			subgraph "cluster_inception4a.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_17_56 -> batchnorm_17_57 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_17_57 -> relu_17_58 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			subgraph "cluster_inception4a.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_18_59 -> batchnorm_18_60 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_18_60 -> relu_18_61 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			subgraph "cluster_inception4a.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_19_62 -> batchnorm_19_63 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_19_63 -> relu_19_64 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			subgraph "cluster_inception4a.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_20_65 -> batchnorm_20_66 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_20_66 -> relu_20_67 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch4_pass1" {
+			subgraph "cluster_inception4a.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch4_pass1" {
+			subgraph "cluster_inception4a.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception4a.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_21_69 -> batchnorm_21_70 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_21_70 -> relu_21_71 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_aux1_pass1 {
+		subgraph "cluster_aux1.conv_pass1" {
+			subgraph "cluster_aux1.conv.conv_pass1" {
+				fillcolor=white label=<<B>@aux1.conv.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_aux1_pass1 {
+		subgraph "cluster_aux1.conv_pass1" {
+			subgraph "cluster_aux1.conv.bn_pass1" {
+				fillcolor=white label=<<B>@aux1.conv.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch1_pass1" {
+			subgraph "cluster_inception4b.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch1_pass1" {
+			subgraph "cluster_inception4b.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			subgraph "cluster_inception4b.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_24_85 -> batchnorm_24_86 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_24_86 -> relu_25_87 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			subgraph "cluster_inception4b.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_25_88 -> batchnorm_25_89 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_25_89 -> relu_26_90 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			subgraph "cluster_inception4b.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_26_91 -> batchnorm_26_92 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_26_92 -> relu_27_93 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			subgraph "cluster_inception4b.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_27_94 -> batchnorm_27_95 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_27_95 -> relu_28_96 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch4_pass1" {
+			subgraph "cluster_inception4b.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch4_pass1" {
+			subgraph "cluster_inception4b.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception4b.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_28_98 -> batchnorm_28_99 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_28_99 -> relu_29_100 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch1_pass1" {
+			subgraph "cluster_inception4c.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch1_pass1" {
+			subgraph "cluster_inception4c.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			subgraph "cluster_inception4c.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_30_105 -> batchnorm_30_106 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_30_106 -> relu_31_107 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			subgraph "cluster_inception4c.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_31_108 -> batchnorm_31_109 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_31_109 -> relu_32_110 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			subgraph "cluster_inception4c.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_32_111 -> batchnorm_32_112 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_32_112 -> relu_33_113 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			subgraph "cluster_inception4c.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_33_114 -> batchnorm_33_115 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_33_115 -> relu_34_116 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch4_pass1" {
+			subgraph "cluster_inception4c.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch4_pass1" {
+			subgraph "cluster_inception4c.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception4c.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_34_118 -> batchnorm_34_119 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_34_119 -> relu_35_120 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch1_pass1" {
+			subgraph "cluster_inception4d.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch1_pass1" {
+			subgraph "cluster_inception4d.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			subgraph "cluster_inception4d.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_36_125 -> batchnorm_36_126 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_36_126 -> relu_37_127 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			subgraph "cluster_inception4d.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_37_128 -> batchnorm_37_129 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_37_129 -> relu_38_130 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			subgraph "cluster_inception4d.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_38_131 -> batchnorm_38_132 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_38_132 -> relu_39_133 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			subgraph "cluster_inception4d.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_39_134 -> batchnorm_39_135 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_39_135 -> relu_40_136 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch4_pass1" {
+			subgraph "cluster_inception4d.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch4_pass1" {
+			subgraph "cluster_inception4d.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception4d.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_40_138 -> batchnorm_40_139 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_40_139 -> relu_41_140 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_aux2_pass1 {
+		subgraph "cluster_aux2.conv_pass1" {
+			subgraph "cluster_aux2.conv.conv_pass1" {
+				fillcolor=white label=<<B>@aux2.conv.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_aux2_pass1 {
+		subgraph "cluster_aux2.conv_pass1" {
+			subgraph "cluster_aux2.conv.bn_pass1" {
+				fillcolor=white label=<<B>@aux2.conv.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch1_pass1" {
+			subgraph "cluster_inception4e.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch1_pass1" {
+			subgraph "cluster_inception4e.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			subgraph "cluster_inception4e.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_43_154 -> batchnorm_43_155 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_43_155 -> relu_45_156 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			subgraph "cluster_inception4e.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_44_157 -> batchnorm_44_158 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_44_158 -> relu_46_159 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			subgraph "cluster_inception4e.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_45_160 -> batchnorm_45_161 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_45_161 -> relu_47_162 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			subgraph "cluster_inception4e.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_46_163 -> batchnorm_46_164 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_46_164 -> relu_48_165 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch4_pass1" {
+			subgraph "cluster_inception4e.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch4_pass1" {
+			subgraph "cluster_inception4e.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception4e.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_47_167 -> batchnorm_47_168 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_47_168 -> relu_49_169 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch1_pass1" {
+			subgraph "cluster_inception5a.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch1_pass1" {
+			subgraph "cluster_inception5a.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			subgraph "cluster_inception5a.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_49_175 -> batchnorm_49_176 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_49_176 -> relu_51_177 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			subgraph "cluster_inception5a.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_50_178 -> batchnorm_50_179 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_50_179 -> relu_52_180 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			subgraph "cluster_inception5a.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_51_181 -> batchnorm_51_182 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_51_182 -> relu_53_183 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			subgraph "cluster_inception5a.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_52_184 -> batchnorm_52_185 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_52_185 -> relu_54_186 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch4_pass1" {
+			subgraph "cluster_inception5a.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch4_pass1" {
+			subgraph "cluster_inception5a.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception5a.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_53_188 -> batchnorm_53_189 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_53_189 -> relu_55_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch1_pass1" {
+			subgraph "cluster_inception5b.branch1.conv_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch1_pass1" {
+			subgraph "cluster_inception5b.branch1.bn_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			subgraph "cluster_inception5b.branch2.0_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch2.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_55_195 -> batchnorm_55_196 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_55_196 -> relu_57_197 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			subgraph "cluster_inception5b.branch2.1_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch2.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_56_198 -> batchnorm_56_199 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_56_199 -> relu_58_200 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			subgraph "cluster_inception5b.branch3.0_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch3.0</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_57_201 -> batchnorm_57_202 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_57_202 -> relu_59_203 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			subgraph "cluster_inception5b.branch3.1_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch3.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_58_204 -> batchnorm_58_205 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_58_205 -> relu_60_206 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch4_pass1" {
+			subgraph "cluster_inception5b.branch4.0_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch4.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch4_pass1" {
+			subgraph "cluster_inception5b.branch4.1_pass1" {
+				fillcolor=white label=<<B>@inception5b.branch4.1</B><br align='left'/>(BasicConv2d)<br align='left'/>> labelloc=b penwidth=3.0 style="filled,solid"
+				conv2d_59_208 -> batchnorm_59_209 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_59_209 -> relu_61_210 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			subgraph "cluster_inception3a.branch2.0_pass1" {
+				subgraph "cluster_inception3a.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			subgraph "cluster_inception3a.branch2.0_pass1" {
+				subgraph "cluster_inception3a.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			subgraph "cluster_inception3a.branch2.1_pass1" {
+				subgraph "cluster_inception3a.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch2_pass1" {
+			subgraph "cluster_inception3a.branch2.1_pass1" {
+				subgraph "cluster_inception3a.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			subgraph "cluster_inception3a.branch3.0_pass1" {
+				subgraph "cluster_inception3a.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			subgraph "cluster_inception3a.branch3.0_pass1" {
+				subgraph "cluster_inception3a.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			subgraph "cluster_inception3a.branch3.1_pass1" {
+				subgraph "cluster_inception3a.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch3_pass1" {
+			subgraph "cluster_inception3a.branch3.1_pass1" {
+				subgraph "cluster_inception3a.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch4_pass1" {
+			subgraph "cluster_inception3a.branch4.1_pass1" {
+				subgraph "cluster_inception3a.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3a_pass1 {
+		subgraph "cluster_inception3a.branch4_pass1" {
+			subgraph "cluster_inception3a.branch4.1_pass1" {
+				subgraph "cluster_inception3a.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception3a.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			subgraph "cluster_inception3b.branch2.0_pass1" {
+				subgraph "cluster_inception3b.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			subgraph "cluster_inception3b.branch2.0_pass1" {
+				subgraph "cluster_inception3b.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			subgraph "cluster_inception3b.branch2.1_pass1" {
+				subgraph "cluster_inception3b.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch2_pass1" {
+			subgraph "cluster_inception3b.branch2.1_pass1" {
+				subgraph "cluster_inception3b.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			subgraph "cluster_inception3b.branch3.0_pass1" {
+				subgraph "cluster_inception3b.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			subgraph "cluster_inception3b.branch3.0_pass1" {
+				subgraph "cluster_inception3b.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			subgraph "cluster_inception3b.branch3.1_pass1" {
+				subgraph "cluster_inception3b.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch3_pass1" {
+			subgraph "cluster_inception3b.branch3.1_pass1" {
+				subgraph "cluster_inception3b.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch4_pass1" {
+			subgraph "cluster_inception3b.branch4.1_pass1" {
+				subgraph "cluster_inception3b.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception3b_pass1 {
+		subgraph "cluster_inception3b.branch4_pass1" {
+			subgraph "cluster_inception3b.branch4.1_pass1" {
+				subgraph "cluster_inception3b.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception3b.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			subgraph "cluster_inception4a.branch2.0_pass1" {
+				subgraph "cluster_inception4a.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			subgraph "cluster_inception4a.branch2.0_pass1" {
+				subgraph "cluster_inception4a.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			subgraph "cluster_inception4a.branch2.1_pass1" {
+				subgraph "cluster_inception4a.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch2_pass1" {
+			subgraph "cluster_inception4a.branch2.1_pass1" {
+				subgraph "cluster_inception4a.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			subgraph "cluster_inception4a.branch3.0_pass1" {
+				subgraph "cluster_inception4a.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			subgraph "cluster_inception4a.branch3.0_pass1" {
+				subgraph "cluster_inception4a.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			subgraph "cluster_inception4a.branch3.1_pass1" {
+				subgraph "cluster_inception4a.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch3_pass1" {
+			subgraph "cluster_inception4a.branch3.1_pass1" {
+				subgraph "cluster_inception4a.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch4_pass1" {
+			subgraph "cluster_inception4a.branch4.1_pass1" {
+				subgraph "cluster_inception4a.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4a_pass1 {
+		subgraph "cluster_inception4a.branch4_pass1" {
+			subgraph "cluster_inception4a.branch4.1_pass1" {
+				subgraph "cluster_inception4a.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4a.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			subgraph "cluster_inception4b.branch2.0_pass1" {
+				subgraph "cluster_inception4b.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			subgraph "cluster_inception4b.branch2.0_pass1" {
+				subgraph "cluster_inception4b.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			subgraph "cluster_inception4b.branch2.1_pass1" {
+				subgraph "cluster_inception4b.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch2_pass1" {
+			subgraph "cluster_inception4b.branch2.1_pass1" {
+				subgraph "cluster_inception4b.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			subgraph "cluster_inception4b.branch3.0_pass1" {
+				subgraph "cluster_inception4b.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			subgraph "cluster_inception4b.branch3.0_pass1" {
+				subgraph "cluster_inception4b.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			subgraph "cluster_inception4b.branch3.1_pass1" {
+				subgraph "cluster_inception4b.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch3_pass1" {
+			subgraph "cluster_inception4b.branch3.1_pass1" {
+				subgraph "cluster_inception4b.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch4_pass1" {
+			subgraph "cluster_inception4b.branch4.1_pass1" {
+				subgraph "cluster_inception4b.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4b_pass1 {
+		subgraph "cluster_inception4b.branch4_pass1" {
+			subgraph "cluster_inception4b.branch4.1_pass1" {
+				subgraph "cluster_inception4b.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4b.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			subgraph "cluster_inception4c.branch2.0_pass1" {
+				subgraph "cluster_inception4c.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			subgraph "cluster_inception4c.branch2.0_pass1" {
+				subgraph "cluster_inception4c.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			subgraph "cluster_inception4c.branch2.1_pass1" {
+				subgraph "cluster_inception4c.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch2_pass1" {
+			subgraph "cluster_inception4c.branch2.1_pass1" {
+				subgraph "cluster_inception4c.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			subgraph "cluster_inception4c.branch3.0_pass1" {
+				subgraph "cluster_inception4c.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			subgraph "cluster_inception4c.branch3.0_pass1" {
+				subgraph "cluster_inception4c.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			subgraph "cluster_inception4c.branch3.1_pass1" {
+				subgraph "cluster_inception4c.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch3_pass1" {
+			subgraph "cluster_inception4c.branch3.1_pass1" {
+				subgraph "cluster_inception4c.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch4_pass1" {
+			subgraph "cluster_inception4c.branch4.1_pass1" {
+				subgraph "cluster_inception4c.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4c_pass1 {
+		subgraph "cluster_inception4c.branch4_pass1" {
+			subgraph "cluster_inception4c.branch4.1_pass1" {
+				subgraph "cluster_inception4c.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4c.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			subgraph "cluster_inception4d.branch2.0_pass1" {
+				subgraph "cluster_inception4d.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			subgraph "cluster_inception4d.branch2.0_pass1" {
+				subgraph "cluster_inception4d.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			subgraph "cluster_inception4d.branch2.1_pass1" {
+				subgraph "cluster_inception4d.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch2_pass1" {
+			subgraph "cluster_inception4d.branch2.1_pass1" {
+				subgraph "cluster_inception4d.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			subgraph "cluster_inception4d.branch3.0_pass1" {
+				subgraph "cluster_inception4d.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			subgraph "cluster_inception4d.branch3.0_pass1" {
+				subgraph "cluster_inception4d.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			subgraph "cluster_inception4d.branch3.1_pass1" {
+				subgraph "cluster_inception4d.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch3_pass1" {
+			subgraph "cluster_inception4d.branch3.1_pass1" {
+				subgraph "cluster_inception4d.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch4_pass1" {
+			subgraph "cluster_inception4d.branch4.1_pass1" {
+				subgraph "cluster_inception4d.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4d_pass1 {
+		subgraph "cluster_inception4d.branch4_pass1" {
+			subgraph "cluster_inception4d.branch4.1_pass1" {
+				subgraph "cluster_inception4d.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4d.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			subgraph "cluster_inception4e.branch2.0_pass1" {
+				subgraph "cluster_inception4e.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			subgraph "cluster_inception4e.branch2.0_pass1" {
+				subgraph "cluster_inception4e.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			subgraph "cluster_inception4e.branch2.1_pass1" {
+				subgraph "cluster_inception4e.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch2_pass1" {
+			subgraph "cluster_inception4e.branch2.1_pass1" {
+				subgraph "cluster_inception4e.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			subgraph "cluster_inception4e.branch3.0_pass1" {
+				subgraph "cluster_inception4e.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			subgraph "cluster_inception4e.branch3.0_pass1" {
+				subgraph "cluster_inception4e.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			subgraph "cluster_inception4e.branch3.1_pass1" {
+				subgraph "cluster_inception4e.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch3_pass1" {
+			subgraph "cluster_inception4e.branch3.1_pass1" {
+				subgraph "cluster_inception4e.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch4_pass1" {
+			subgraph "cluster_inception4e.branch4.1_pass1" {
+				subgraph "cluster_inception4e.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception4e_pass1 {
+		subgraph "cluster_inception4e.branch4_pass1" {
+			subgraph "cluster_inception4e.branch4.1_pass1" {
+				subgraph "cluster_inception4e.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception4e.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			subgraph "cluster_inception5a.branch2.0_pass1" {
+				subgraph "cluster_inception5a.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			subgraph "cluster_inception5a.branch2.0_pass1" {
+				subgraph "cluster_inception5a.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			subgraph "cluster_inception5a.branch2.1_pass1" {
+				subgraph "cluster_inception5a.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch2_pass1" {
+			subgraph "cluster_inception5a.branch2.1_pass1" {
+				subgraph "cluster_inception5a.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			subgraph "cluster_inception5a.branch3.0_pass1" {
+				subgraph "cluster_inception5a.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			subgraph "cluster_inception5a.branch3.0_pass1" {
+				subgraph "cluster_inception5a.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			subgraph "cluster_inception5a.branch3.1_pass1" {
+				subgraph "cluster_inception5a.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch3_pass1" {
+			subgraph "cluster_inception5a.branch3.1_pass1" {
+				subgraph "cluster_inception5a.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch4_pass1" {
+			subgraph "cluster_inception5a.branch4.1_pass1" {
+				subgraph "cluster_inception5a.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5a_pass1 {
+		subgraph "cluster_inception5a.branch4_pass1" {
+			subgraph "cluster_inception5a.branch4.1_pass1" {
+				subgraph "cluster_inception5a.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception5a.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			subgraph "cluster_inception5b.branch2.0_pass1" {
+				subgraph "cluster_inception5b.branch2.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch2.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			subgraph "cluster_inception5b.branch2.0_pass1" {
+				subgraph "cluster_inception5b.branch2.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch2.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			subgraph "cluster_inception5b.branch2.1_pass1" {
+				subgraph "cluster_inception5b.branch2.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch2.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch2_pass1" {
+			subgraph "cluster_inception5b.branch2.1_pass1" {
+				subgraph "cluster_inception5b.branch2.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch2.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			subgraph "cluster_inception5b.branch3.0_pass1" {
+				subgraph "cluster_inception5b.branch3.0.conv_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch3.0.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			subgraph "cluster_inception5b.branch3.0_pass1" {
+				subgraph "cluster_inception5b.branch3.0.bn_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch3.0.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			subgraph "cluster_inception5b.branch3.1_pass1" {
+				subgraph "cluster_inception5b.branch3.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch3.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch3_pass1" {
+			subgraph "cluster_inception5b.branch3.1_pass1" {
+				subgraph "cluster_inception5b.branch3.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch3.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch4_pass1" {
+			subgraph "cluster_inception5b.branch4.1_pass1" {
+				subgraph "cluster_inception5b.branch4.1.conv_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch4.1.conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_inception5b_pass1 {
+		subgraph "cluster_inception5b.branch4_pass1" {
+			subgraph "cluster_inception5b.branch4.1_pass1" {
+				subgraph "cluster_inception5b.branch4.1.bn_pass1" {
+					fillcolor=white label=<<B>@inception5b.branch4.1.bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+				}
+			}
+		}
+	}
+}

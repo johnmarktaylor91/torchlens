@@ -1,0 +1,148 @@
+// Computational graph for the feedforward sweep
+digraph UberModel4 {
+	graph [label=<<B>UberModel4</B><br align='left'/>52 tensors total (11.6 KB)<br align='left'/>60 params total (720 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>5x5 (228 B)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> add_1_1pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_1pass1 [label=<<b>add_1_1:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_1pass1 -> mul_1_2pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_2pass1 [label=<<b>mul_1_2:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_2pass1 -> sub_1_3pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_1_3pass1 [label=<<b>sub_1_3:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_1_3pass1 -> add_1_1pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_1pass2 [label=<<b>add_1_1:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_1pass2 -> mul_1_2pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_2pass2 [label=<<b>mul_1_2:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_2pass2 -> sub_1_3pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_1_3pass2 [label=<<b>sub_1_3:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_1_3pass2 -> add_1_1pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_1pass3 [label=<<b>add_1_1:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_1pass3 -> mul_1_2pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_2pass3 [label=<<b>mul_1_2:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_2pass3 -> sub_1_3pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_1_3pass3 [label=<<b>sub_1_3:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_1_3pass3 -> cos_1_4pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cos_1_4pass1 [label=<<b>cos_1_4:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	cos_1_4pass1 -> linear_1_5pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_5pass1 [label=<<b>linear_1_5:1</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1:1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5pass1 -> sin_1_6pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sin_1_6pass1 [label=<<b>sin_1_6:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sin_1_6pass1 -> sub_2_7pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass1 [label=<<b>sub_2_7:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass1 -> mul_2_8pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_8pass1 [label=<<b>mul_2_8:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8pass1 -> linear_2_9pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9pass1 [label=<<b>linear_2_9:1</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2:1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9pass1 -> sub_2_7pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass2 [label=<<b>sub_2_7:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass2 -> sub_2_7pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass3 [label=<<b>sub_2_7:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass3 -> mul_2_8pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_8pass2 [label=<<b>mul_2_8:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8pass2 -> linear_2_9pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9pass2 [label=<<b>linear_2_9:2</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2:2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9pass2 -> sub_2_7pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass4 [label=<<b>sub_2_7:4</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass4 -> log_1_10pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	log_1_10pass1 [label=<<b>log_1_10:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_1_10pass1 -> linear_1_5pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_5pass2 [label=<<b>linear_1_5:2</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1:2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5pass2 -> cos_1_4pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cos_1_4pass2 [label=<<b>cos_1_4:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	cos_1_4pass2 -> linear_1_5pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_5pass3 [label=<<b>linear_1_5:3</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1:3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5pass3 -> sin_1_6pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sin_1_6pass2 [label=<<b>sin_1_6:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sin_1_6pass2 -> sub_2_7pass5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass5 [label=<<b>sub_2_7:5</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass5 -> mul_2_8pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_8pass3 [label=<<b>mul_2_8:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8pass3 -> linear_2_9pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9pass3 [label=<<b>linear_2_9:3</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2:3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9pass3 -> sub_2_7pass6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass6 [label=<<b>sub_2_7:6</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass6 -> sub_2_7pass7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass7 [label=<<b>sub_2_7:7</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass7 -> mul_2_8pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_8pass4 [label=<<b>mul_2_8:4</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8pass4 -> linear_2_9pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9pass4 [label=<<b>linear_2_9:4</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2:4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9pass4 -> sub_2_7pass8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass8 [label=<<b>sub_2_7:8</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass8 -> log_1_10pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	log_1_10pass2 [label=<<b>log_1_10:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_1_10pass2 -> linear_1_5pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_5pass4 [label=<<b>linear_1_5:4</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1:4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5pass4 -> cos_1_4pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	cos_1_4pass3 [label=<<b>cos_1_4:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	cos_1_4pass3 -> linear_1_5pass5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_5pass5 [label=<<b>linear_1_5:5</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1:5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5pass5 -> sin_1_6pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sin_1_6pass3 [label=<<b>sin_1_6:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sin_1_6pass3 -> sub_2_7pass9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass9 [label=<<b>sub_2_7:9</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass9 -> mul_2_8pass5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_8pass5 [label=<<b>mul_2_8:5</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8pass5 -> linear_2_9pass5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9pass5 [label=<<b>linear_2_9:5</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2:5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9pass5 -> sub_2_7pass10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass10 [label=<<b>sub_2_7:10</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass10 -> sub_2_7pass11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass11 [label=<<b>sub_2_7:11</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass11 -> mul_2_8pass6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_8pass6 [label=<<b>mul_2_8:6</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8pass6 -> linear_2_9pass6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9pass6 [label=<<b>linear_2_9:6</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2:6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9pass6 -> sub_2_7pass12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sub_2_7pass12 [label=<<b>sub_2_7:12</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7pass12 -> log_1_10pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	log_1_10pass3 [label=<<b>log_1_10:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_1_10pass3 -> linear_1_5pass6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_5pass6 [label=<<b>linear_1_5:6</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1:6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5pass6 -> mul_3_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_3_11 [label=<<b>mul_3_11</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_3_11 -> tanh_1_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	tanh_1_12 [label=<<b>tanh_1_12</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	tanh_1_12 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>5x5 (228 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_fc1_pass1 {
+		fillcolor=white label=<<B>@fc1:1</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2_pass1 {
+		fillcolor=white label=<<B>@fc2:1</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2_pass2 {
+		fillcolor=white label=<<B>@fc2:2</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc1_pass2 {
+		fillcolor=white label=<<B>@fc1:2</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc1_pass3 {
+		fillcolor=white label=<<B>@fc1:3</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2_pass3 {
+		fillcolor=white label=<<B>@fc2:3</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2_pass4 {
+		fillcolor=white label=<<B>@fc2:4</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc1_pass4 {
+		fillcolor=white label=<<B>@fc1:4</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc1_pass5 {
+		fillcolor=white label=<<B>@fc1:5</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2_pass5 {
+		fillcolor=white label=<<B>@fc2:5</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2_pass6 {
+		fillcolor=white label=<<B>@fc2:6</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc1_pass6 {
+		fillcolor=white label=<<B>@fc1:6</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}

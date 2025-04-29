@@ -1,0 +1,2255 @@
+// Computational graph for the feedforward sweep
+digraph DeepLabV3 {
+	graph [label=<<B>DeepLabV3</B><br align='left'/>321 tensors total (2.1 GB)<br align='left'/>39638869 params total (151.2 MB)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>6x3x224x224 (3.4 MB)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_1_1 [label=<<b>conv2d_1_1</b><br/>6x64x112x112 (18.4 MB)<br/>params: 64x3x7x7<br/>@backbone.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_1_2 [label=<<b>batchnorm_1_2</b><br/>6x64x112x112 (18.4 MB)<br/>params: x64, x64<br/>@backbone.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_3 [label=<<b>relu_1_3</b><br/>6x64x112x112 (18.4 MB)<br/>@backbone.relu> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_1_4 [label=<<b>maxpool2d_1_4</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.maxpool> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_2_5 [label=<<b>conv2d_2_5</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x1x1<br/>@backbone.layer1.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_2_6 [label=<<b>batchnorm_2_6</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@backbone.layer1.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_7 [label=<<b>relu_2_7</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.layer1.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_3_8 [label=<<b>conv2d_3_8</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x3x3<br/>@backbone.layer1.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_3_9 [label=<<b>batchnorm_3_9</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@backbone.layer1.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_3_10 [label=<<b>relu_3_10</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.layer1.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_4_11 [label=<<b>conv2d_4_11</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@backbone.layer1.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_4_12 [label=<<b>batchnorm_4_12</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@backbone.layer1.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_5_13 [label=<<b>conv2d_5_13</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@backbone.layer1.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_5_14 [label=<<b>batchnorm_5_14</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@backbone.layer1.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_1_15 [label=<<b>iadd_1_15</b><br/>6x256x56x56 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_4_16 [label=<<b>relu_4_16</b><br/>6x256x56x56 (18.4 MB)<br/>@backbone.layer1.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_6_17 [label=<<b>conv2d_6_17</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x256x1x1<br/>@backbone.layer1.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_6_18 [label=<<b>batchnorm_6_18</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@backbone.layer1.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_5_19 [label=<<b>relu_5_19</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.layer1.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_7_20 [label=<<b>conv2d_7_20</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x3x3<br/>@backbone.layer1.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_7_21 [label=<<b>batchnorm_7_21</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@backbone.layer1.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_6_22 [label=<<b>relu_6_22</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.layer1.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_8_23 [label=<<b>conv2d_8_23</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@backbone.layer1.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_8_24 [label=<<b>batchnorm_8_24</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@backbone.layer1.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_2_25 [label=<<b>iadd_2_25</b><br/>6x256x56x56 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_7_26 [label=<<b>relu_7_26</b><br/>6x256x56x56 (18.4 MB)<br/>@backbone.layer1.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_9_27 [label=<<b>conv2d_9_27</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x256x1x1<br/>@backbone.layer1.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_9_28 [label=<<b>batchnorm_9_28</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@backbone.layer1.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_8_29 [label=<<b>relu_8_29</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.layer1.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_10_30 [label=<<b>conv2d_10_30</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x3x3<br/>@backbone.layer1.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_10_31 [label=<<b>batchnorm_10_31</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@backbone.layer1.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_9_32 [label=<<b>relu_9_32</b><br/>6x64x56x56 (4.6 MB)<br/>@backbone.layer1.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_11_33 [label=<<b>conv2d_11_33</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@backbone.layer1.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_11_34 [label=<<b>batchnorm_11_34</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@backbone.layer1.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_3_35 [label=<<b>iadd_3_35</b><br/>6x256x56x56 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_10_36 [label=<<b>relu_10_36</b><br/>6x256x56x56 (18.4 MB)<br/>@backbone.layer1.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_12_37 [label=<<b>conv2d_12_37</b><br/>6x128x56x56 (9.2 MB)<br/>params: 128x256x1x1<br/>@backbone.layer2.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_12_38 [label=<<b>batchnorm_12_38</b><br/>6x128x56x56 (9.2 MB)<br/>params: x128, x128<br/>@backbone.layer2.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_11_39 [label=<<b>relu_11_39</b><br/>6x128x56x56 (9.2 MB)<br/>@backbone.layer2.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_13_40 [label=<<b>conv2d_13_40</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@backbone.layer2.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_13_41 [label=<<b>batchnorm_13_41</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_12_42 [label=<<b>relu_12_42</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_14_43 [label=<<b>conv2d_14_43</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@backbone.layer2.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_14_44 [label=<<b>batchnorm_14_44</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer2.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_15_45 [label=<<b>conv2d_15_45</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x256x1x1<br/>@backbone.layer2.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_15_46 [label=<<b>batchnorm_15_46</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer2.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_4_47 [label=<<b>iadd_4_47</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_13_48 [label=<<b>relu_13_48</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer2.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_16_49 [label=<<b>conv2d_16_49</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x512x1x1<br/>@backbone.layer2.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_16_50 [label=<<b>batchnorm_16_50</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_14_51 [label=<<b>relu_14_51</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_17_52 [label=<<b>conv2d_17_52</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@backbone.layer2.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_17_53 [label=<<b>batchnorm_17_53</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_15_54 [label=<<b>relu_15_54</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_18_55 [label=<<b>conv2d_18_55</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@backbone.layer2.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_18_56 [label=<<b>batchnorm_18_56</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer2.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_5_57 [label=<<b>iadd_5_57</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_16_58 [label=<<b>relu_16_58</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer2.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_19_59 [label=<<b>conv2d_19_59</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x512x1x1<br/>@backbone.layer2.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_19_60 [label=<<b>batchnorm_19_60</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_17_61 [label=<<b>relu_17_61</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_20_62 [label=<<b>conv2d_20_62</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@backbone.layer2.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_20_63 [label=<<b>batchnorm_20_63</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_18_64 [label=<<b>relu_18_64</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_21_65 [label=<<b>conv2d_21_65</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@backbone.layer2.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_21_66 [label=<<b>batchnorm_21_66</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer2.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_6_67 [label=<<b>iadd_6_67</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_19_68 [label=<<b>relu_19_68</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer2.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_22_69 [label=<<b>conv2d_22_69</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x512x1x1<br/>@backbone.layer2.3.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_22_70 [label=<<b>batchnorm_22_70</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.3.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_20_71 [label=<<b>relu_20_71</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.3.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_23_72 [label=<<b>conv2d_23_72</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@backbone.layer2.3.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_23_73 [label=<<b>batchnorm_23_73</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@backbone.layer2.3.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_21_74 [label=<<b>relu_21_74</b><br/>6x128x28x28 (2.3 MB)<br/>@backbone.layer2.3.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_24_75 [label=<<b>conv2d_24_75</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@backbone.layer2.3.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_24_76 [label=<<b>batchnorm_24_76</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer2.3.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_7_77 [label=<<b>iadd_7_77</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_22_78 [label=<<b>relu_22_78</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer2.3.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_25_79 [label=<<b>conv2d_25_79</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x512x1x1<br/>@backbone.layer3.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_25_80 [label=<<b>batchnorm_25_80</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_23_81 [label=<<b>relu_23_81</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_26_82 [label=<<b>conv2d_26_82</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@backbone.layer3.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_26_83 [label=<<b>batchnorm_26_83</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_24_84 [label=<<b>relu_24_84</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_27_85 [label=<<b>conv2d_27_85</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x256x1x1<br/>@backbone.layer3.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_27_86 [label=<<b>batchnorm_27_86</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_28_87 [label=<<b>conv2d_28_87</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x512x1x1<br/>@backbone.layer3.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_28_88 [label=<<b>batchnorm_28_88</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_8_89 [label=<<b>iadd_8_89</b><br/>6x1024x28x28 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_25_90 [label=<<b>relu_25_90</b><br/>6x1024x28x28 (18.4 MB)<br/>@backbone.layer3.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_29_91 [label=<<b>conv2d_29_91</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x1024x1x1<br/>@backbone.layer3.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_29_92 [label=<<b>batchnorm_29_92</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_26_93 [label=<<b>relu_26_93</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_30_94 [label=<<b>conv2d_30_94</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@backbone.layer3.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_30_95 [label=<<b>batchnorm_30_95</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_27_96 [label=<<b>relu_27_96</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_31_97 [label=<<b>conv2d_31_97</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x256x1x1<br/>@backbone.layer3.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_31_98 [label=<<b>batchnorm_31_98</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_9_99 [label=<<b>iadd_9_99</b><br/>6x1024x28x28 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_28_100 [label=<<b>relu_28_100</b><br/>6x1024x28x28 (18.4 MB)<br/>@backbone.layer3.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_32_101 [label=<<b>conv2d_32_101</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x1024x1x1<br/>@backbone.layer3.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_32_102 [label=<<b>batchnorm_32_102</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_29_103 [label=<<b>relu_29_103</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_33_104 [label=<<b>conv2d_33_104</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@backbone.layer3.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_33_105 [label=<<b>batchnorm_33_105</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_30_106 [label=<<b>relu_30_106</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_34_107 [label=<<b>conv2d_34_107</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x256x1x1<br/>@backbone.layer3.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_34_108 [label=<<b>batchnorm_34_108</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_10_109 [label=<<b>iadd_10_109</b><br/>6x1024x28x28 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_31_110 [label=<<b>relu_31_110</b><br/>6x1024x28x28 (18.4 MB)<br/>@backbone.layer3.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_35_111 [label=<<b>conv2d_35_111</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x1024x1x1<br/>@backbone.layer3.3.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_35_112 [label=<<b>batchnorm_35_112</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.3.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_32_113 [label=<<b>relu_32_113</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.3.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_36_114 [label=<<b>conv2d_36_114</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@backbone.layer3.3.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_36_115 [label=<<b>batchnorm_36_115</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.3.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_33_116 [label=<<b>relu_33_116</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.3.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_37_117 [label=<<b>conv2d_37_117</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x256x1x1<br/>@backbone.layer3.3.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_37_118 [label=<<b>batchnorm_37_118</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.3.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_11_119 [label=<<b>iadd_11_119</b><br/>6x1024x28x28 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_34_120 [label=<<b>relu_34_120</b><br/>6x1024x28x28 (18.4 MB)<br/>@backbone.layer3.3.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_38_121 [label=<<b>conv2d_38_121</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x1024x1x1<br/>@backbone.layer3.4.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_38_122 [label=<<b>batchnorm_38_122</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.4.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_35_123 [label=<<b>relu_35_123</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.4.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_39_124 [label=<<b>conv2d_39_124</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@backbone.layer3.4.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_39_125 [label=<<b>batchnorm_39_125</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.4.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_36_126 [label=<<b>relu_36_126</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.4.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_40_127 [label=<<b>conv2d_40_127</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x256x1x1<br/>@backbone.layer3.4.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_40_128 [label=<<b>batchnorm_40_128</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.4.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_12_129 [label=<<b>iadd_12_129</b><br/>6x1024x28x28 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_37_130 [label=<<b>relu_37_130</b><br/>6x1024x28x28 (18.4 MB)<br/>@backbone.layer3.4.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_41_131 [label=<<b>conv2d_41_131</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x1024x1x1<br/>@backbone.layer3.5.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_41_132 [label=<<b>batchnorm_41_132</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.5.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_38_133 [label=<<b>relu_38_133</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.5.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_42_134 [label=<<b>conv2d_42_134</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@backbone.layer3.5.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_42_135 [label=<<b>batchnorm_42_135</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@backbone.layer3.5.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_39_136 [label=<<b>relu_39_136</b><br/>6x256x28x28 (4.6 MB)<br/>@backbone.layer3.5.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_43_137 [label=<<b>conv2d_43_137</b><br/>6x1024x28x28 (18.4 MB)<br/>params: 1024x256x1x1<br/>@backbone.layer3.5.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_43_138 [label=<<b>batchnorm_43_138</b><br/>6x1024x28x28 (18.4 MB)<br/>params: x1024, x1024<br/>@backbone.layer3.5.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_13_139 [label=<<b>iadd_13_139</b><br/>6x1024x28x28 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_40_140 [label=<<b>relu_40_140</b><br/>6x1024x28x28 (18.4 MB)<br/>@backbone.layer3.5.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_44_141 [label=<<b>conv2d_44_141</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x1024x1x1<br/>@backbone.layer4.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_44_142 [label=<<b>batchnorm_44_142</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer4.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_41_143 [label=<<b>relu_41_143</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer4.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_45_144 [label=<<b>conv2d_45_144</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x512x3x3<br/>@backbone.layer4.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_45_145 [label=<<b>batchnorm_45_145</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer4.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_42_146 [label=<<b>relu_42_146</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer4.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_46_147 [label=<<b>conv2d_46_147</b><br/>6x2048x28x28 (36.8 MB)<br/>params: 2048x512x1x1<br/>@backbone.layer4.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_46_148 [label=<<b>batchnorm_46_148</b><br/>6x2048x28x28 (36.8 MB)<br/>params: x2048, x2048<br/>@backbone.layer4.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_47_149 [label=<<b>conv2d_47_149</b><br/>6x2048x28x28 (36.8 MB)<br/>params: 2048x1024x1x1<br/>@backbone.layer4.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_47_150 [label=<<b>batchnorm_47_150</b><br/>6x2048x28x28 (36.8 MB)<br/>params: x2048, x2048<br/>@backbone.layer4.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_14_151 [label=<<b>iadd_14_151</b><br/>6x2048x28x28 (36.8 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_43_152 [label=<<b>relu_43_152</b><br/>6x2048x28x28 (36.8 MB)<br/>@backbone.layer4.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_48_153 [label=<<b>conv2d_48_153</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x2048x1x1<br/>@backbone.layer4.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_48_154 [label=<<b>batchnorm_48_154</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer4.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_44_155 [label=<<b>relu_44_155</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer4.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_49_156 [label=<<b>conv2d_49_156</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x512x3x3<br/>@backbone.layer4.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_49_157 [label=<<b>batchnorm_49_157</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer4.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_45_158 [label=<<b>relu_45_158</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer4.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_50_159 [label=<<b>conv2d_50_159</b><br/>6x2048x28x28 (36.8 MB)<br/>params: 2048x512x1x1<br/>@backbone.layer4.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_50_160 [label=<<b>batchnorm_50_160</b><br/>6x2048x28x28 (36.8 MB)<br/>params: x2048, x2048<br/>@backbone.layer4.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_15_161 [label=<<b>iadd_15_161</b><br/>6x2048x28x28 (36.8 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_46_162 [label=<<b>relu_46_162</b><br/>6x2048x28x28 (36.8 MB)<br/>@backbone.layer4.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_51_163 [label=<<b>conv2d_51_163</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x2048x1x1<br/>@backbone.layer4.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_51_164 [label=<<b>batchnorm_51_164</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer4.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_47_165 [label=<<b>relu_47_165</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer4.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_52_166 [label=<<b>conv2d_52_166</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x512x3x3<br/>@backbone.layer4.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_52_167 [label=<<b>batchnorm_52_167</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@backbone.layer4.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_48_168 [label=<<b>relu_48_168</b><br/>6x512x28x28 (9.2 MB)<br/>@backbone.layer4.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_53_169 [label=<<b>conv2d_53_169</b><br/>6x2048x28x28 (36.8 MB)<br/>params: 2048x512x1x1<br/>@backbone.layer4.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_53_170 [label=<<b>batchnorm_53_170</b><br/>6x2048x28x28 (36.8 MB)<br/>params: x2048, x2048<br/>@backbone.layer4.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_16_171 [label=<<b>iadd_16_171</b><br/>6x2048x28x28 (36.8 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_49_172 [label=<<b>relu_49_172</b><br/>6x2048x28x28 (36.8 MB)<br/>@backbone.layer4.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_49_172 -> conv2d_54_173 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_49_172 -> conv2d_55_176 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_49_172 -> conv2d_56_179 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_49_172 -> conv2d_57_182 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_49_172 -> adaptiveavgpool2d_1_185 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_54_173 [label=<<b>conv2d_54_173</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x2048x1x1<br/>@classifier.0.convs.0.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_54_174 [label=<<b>batchnorm_54_174</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@classifier.0.convs.0.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_50_175 [label=<<b>relu_50_175</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.convs.0.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_55_176 [label=<<b>conv2d_55_176</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x2048x3x3<br/>@classifier.0.convs.1.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_55_177 [label=<<b>batchnorm_55_177</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@classifier.0.convs.1.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_51_178 [label=<<b>relu_51_178</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.convs.1.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_56_179 [label=<<b>conv2d_56_179</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x2048x3x3<br/>@classifier.0.convs.2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_56_180 [label=<<b>batchnorm_56_180</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@classifier.0.convs.2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_52_181 [label=<<b>relu_52_181</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.convs.2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_57_182 [label=<<b>conv2d_57_182</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x2048x3x3<br/>@classifier.0.convs.3.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_57_183 [label=<<b>batchnorm_57_183</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@classifier.0.convs.3.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_53_184 [label=<<b>relu_53_184</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.convs.3.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	adaptiveavgpool2d_1_185 [label=<<b>adaptiveavgpool2d_1_185</b><br/>6x2048x1x1 (48.2 KB)<br/>@classifier.0.convs.4.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_58_186 [label=<<b>conv2d_58_186</b><br/>6x256x1x1 (6.2 KB)<br/>params: 256x2048x1x1<br/>@classifier.0.convs.4.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_58_187 [label=<<b>batchnorm_58_187</b><br/>6x256x1x1 (6.2 KB)<br/>params: x256, x256<br/>@classifier.0.convs.4.2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_54_188 [label=<<b>relu_54_188</b><br/>6x256x1x1 (6.2 KB)<br/>@classifier.0.convs.4.3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	interpolate_1_189 [label=<<b>interpolate_1_189</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.convs.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_1_190 [label=<<b>cat_1_190</b><br/>6x1280x28x28 (23.0 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_59_191 [label=<<b>conv2d_59_191</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x1280x1x1<br/>@classifier.0.project.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_59_192 [label=<<b>batchnorm_59_192</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@classifier.0.project.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_55_193 [label=<<b>relu_55_193</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.project.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	dropout_1_194 [label=<<b>dropout_1_194</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.0.project.3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_60_195 [label=<<b>conv2d_60_195</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x256x3x3<br/>@classifier.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_60_196 [label=<<b>batchnorm_60_196</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@classifier.2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_56_197 [label=<<b>relu_56_197</b><br/>6x256x28x28 (4.6 MB)<br/>@classifier.3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_61_198 [label=<<b>conv2d_61_198</b><br/>6x21x28x28 (386.0 KB)<br/>params: 21x256x1x1, x21<br/>@classifier.4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_61_198 -> interpolate_2_199 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	interpolate_2_199 [label=<<b>interpolate_2_199</b><br/>6x21x224x224 (24.1 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	interpolate_2_199 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>6x21x224x224 (24.1 MB)<br/>@output.out> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_backbone_pass1 {
+		fillcolor=white label=<<B>@backbone</B><br align='left'/>(IntermediateLayerGetter)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_1_1 -> batchnorm_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_1_2 -> relu_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_1_3 -> maxpool2d_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_1_4 -> conv2d_2_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_1_4 -> conv2d_5_13 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_10_36 -> conv2d_12_37 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_10_36 -> conv2d_15_45 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_22_78 -> conv2d_25_79 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_22_78 -> conv2d_28_87 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_40_140 -> conv2d_44_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_40_140 -> conv2d_47_149 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_classifier_pass1 {
+		fillcolor=white label=<<B>@classifier</B><br align='left'/>(DeepLabHead)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		dropout_1_194 -> conv2d_60_195 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		conv2d_60_195 -> batchnorm_60_196 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_60_196 -> relu_56_197 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_56_197 -> conv2d_61_198 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.conv1_pass1" {
+			fillcolor=white label=<<B>@backbone.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.bn1_pass1" {
+			fillcolor=white label=<<B>@backbone.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.relu_pass1" {
+			fillcolor=white label=<<B>@backbone.relu</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.maxpool_pass1" {
+			fillcolor=white label=<<B>@backbone.maxpool</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			fillcolor=white label=<<B>@backbone.layer1</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_4_16 -> conv2d_6_17 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_4_16 -> iadd_2_25 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_7_26 -> conv2d_9_27 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_7_26 -> iadd_3_35 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			fillcolor=white label=<<B>@backbone.layer2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_13_48 -> conv2d_16_49 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_13_48 -> iadd_5_57 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_16_58 -> conv2d_19_59 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_16_58 -> iadd_6_67 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_19_68 -> conv2d_22_69 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_19_68 -> iadd_7_77 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			fillcolor=white label=<<B>@backbone.layer3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_25_90 -> conv2d_29_91 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_25_90 -> iadd_9_99 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_28_100 -> conv2d_32_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_28_100 -> iadd_10_109 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_31_110 -> conv2d_35_111 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_31_110 -> iadd_11_119 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_34_120 -> conv2d_38_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_34_120 -> iadd_12_129 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_37_130 -> conv2d_41_131 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_37_130 -> iadd_13_139 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			fillcolor=white label=<<B>@backbone.layer4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_43_152 -> conv2d_48_153 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_43_152 -> iadd_15_161 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_46_162 -> conv2d_51_163 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_46_162 -> iadd_16_171 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			fillcolor=white label=<<B>@classifier.0</B><br align='left'/>(ASPP)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_50_175 -> cat_1_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_51_178 -> cat_1_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_52_181 -> cat_1_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_53_184 -> cat_1_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			interpolate_1_189 -> cat_1_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			cat_1_190 -> conv2d_59_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.1_pass1" {
+			fillcolor=white label=<<B>@classifier.1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.2_pass1" {
+			fillcolor=white label=<<B>@classifier.2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.3_pass1" {
+			fillcolor=white label=<<B>@classifier.3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.4_pass1" {
+			fillcolor=white label=<<B>@classifier.4</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				fillcolor=white label=<<B>@backbone.layer1.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_2_5 -> batchnorm_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_2_6 -> relu_2_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_2_7 -> conv2d_3_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_3_8 -> batchnorm_3_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_3_9 -> relu_3_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_3_10 -> conv2d_4_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_4_11 -> batchnorm_4_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_4_12 -> iadd_1_15 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_5_14 -> iadd_1_15 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_1_15 -> relu_4_16 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				fillcolor=white label=<<B>@backbone.layer1.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_6_17 -> batchnorm_6_18 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_6_18 -> relu_5_19 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_5_19 -> conv2d_7_20 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_7_20 -> batchnorm_7_21 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_7_21 -> relu_6_22 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_6_22 -> conv2d_8_23 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_8_23 -> batchnorm_8_24 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_8_24 -> iadd_2_25 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_2_25 -> relu_7_26 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				fillcolor=white label=<<B>@backbone.layer1.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_9_27 -> batchnorm_9_28 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_9_28 -> relu_8_29 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_8_29 -> conv2d_10_30 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_10_30 -> batchnorm_10_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_10_31 -> relu_9_32 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_9_32 -> conv2d_11_33 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_11_33 -> batchnorm_11_34 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_11_34 -> iadd_3_35 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_3_35 -> relu_10_36 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				fillcolor=white label=<<B>@backbone.layer2.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_12_37 -> batchnorm_12_38 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_12_38 -> relu_11_39 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_11_39 -> conv2d_13_40 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_13_40 -> batchnorm_13_41 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_13_41 -> relu_12_42 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_12_42 -> conv2d_14_43 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_14_43 -> batchnorm_14_44 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_14_44 -> iadd_4_47 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_15_46 -> iadd_4_47 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_4_47 -> relu_13_48 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				fillcolor=white label=<<B>@backbone.layer2.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_16_49 -> batchnorm_16_50 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_16_50 -> relu_14_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_14_51 -> conv2d_17_52 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_17_52 -> batchnorm_17_53 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_17_53 -> relu_15_54 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_15_54 -> conv2d_18_55 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_18_55 -> batchnorm_18_56 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_18_56 -> iadd_5_57 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_5_57 -> relu_16_58 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				fillcolor=white label=<<B>@backbone.layer2.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_19_59 -> batchnorm_19_60 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_19_60 -> relu_17_61 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_17_61 -> conv2d_20_62 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_20_62 -> batchnorm_20_63 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_20_63 -> relu_18_64 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_18_64 -> conv2d_21_65 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_21_65 -> batchnorm_21_66 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_21_66 -> iadd_6_67 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_6_67 -> relu_19_68 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				fillcolor=white label=<<B>@backbone.layer2.3</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_22_69 -> batchnorm_22_70 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_22_70 -> relu_20_71 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_20_71 -> conv2d_23_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_23_72 -> batchnorm_23_73 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_23_73 -> relu_21_74 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_21_74 -> conv2d_24_75 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_24_75 -> batchnorm_24_76 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_24_76 -> iadd_7_77 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_7_77 -> relu_22_78 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				fillcolor=white label=<<B>@backbone.layer3.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_25_79 -> batchnorm_25_80 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_25_80 -> relu_23_81 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_23_81 -> conv2d_26_82 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_26_82 -> batchnorm_26_83 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_26_83 -> relu_24_84 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_24_84 -> conv2d_27_85 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_27_85 -> batchnorm_27_86 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_27_86 -> iadd_8_89 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_28_88 -> iadd_8_89 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_8_89 -> relu_25_90 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				fillcolor=white label=<<B>@backbone.layer3.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_29_91 -> batchnorm_29_92 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_29_92 -> relu_26_93 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_26_93 -> conv2d_30_94 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_30_94 -> batchnorm_30_95 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_30_95 -> relu_27_96 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_27_96 -> conv2d_31_97 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_31_97 -> batchnorm_31_98 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_31_98 -> iadd_9_99 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_9_99 -> relu_28_100 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				fillcolor=white label=<<B>@backbone.layer3.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_32_101 -> batchnorm_32_102 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_32_102 -> relu_29_103 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_29_103 -> conv2d_33_104 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_33_104 -> batchnorm_33_105 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_33_105 -> relu_30_106 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_30_106 -> conv2d_34_107 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_34_107 -> batchnorm_34_108 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_34_108 -> iadd_10_109 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_10_109 -> relu_31_110 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				fillcolor=white label=<<B>@backbone.layer3.3</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_35_111 -> batchnorm_35_112 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_35_112 -> relu_32_113 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_32_113 -> conv2d_36_114 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_36_114 -> batchnorm_36_115 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_36_115 -> relu_33_116 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_33_116 -> conv2d_37_117 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_37_117 -> batchnorm_37_118 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_37_118 -> iadd_11_119 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_11_119 -> relu_34_120 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				fillcolor=white label=<<B>@backbone.layer3.4</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_38_121 -> batchnorm_38_122 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_38_122 -> relu_35_123 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_35_123 -> conv2d_39_124 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_39_124 -> batchnorm_39_125 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_39_125 -> relu_36_126 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_36_126 -> conv2d_40_127 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_40_127 -> batchnorm_40_128 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_40_128 -> iadd_12_129 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_12_129 -> relu_37_130 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				fillcolor=white label=<<B>@backbone.layer3.5</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_41_131 -> batchnorm_41_132 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_41_132 -> relu_38_133 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_38_133 -> conv2d_42_134 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_42_134 -> batchnorm_42_135 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_42_135 -> relu_39_136 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_39_136 -> conv2d_43_137 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_43_137 -> batchnorm_43_138 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_43_138 -> iadd_13_139 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_13_139 -> relu_40_140 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				fillcolor=white label=<<B>@backbone.layer4.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_44_141 -> batchnorm_44_142 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_44_142 -> relu_41_143 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_41_143 -> conv2d_45_144 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_45_144 -> batchnorm_45_145 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_45_145 -> relu_42_146 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_42_146 -> conv2d_46_147 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_46_147 -> batchnorm_46_148 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_46_148 -> iadd_14_151 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_47_150 -> iadd_14_151 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_14_151 -> relu_43_152 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				fillcolor=white label=<<B>@backbone.layer4.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_48_153 -> batchnorm_48_154 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_48_154 -> relu_44_155 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_44_155 -> conv2d_49_156 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_49_156 -> batchnorm_49_157 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_49_157 -> relu_45_158 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_45_158 -> conv2d_50_159 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_50_159 -> batchnorm_50_160 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_50_160 -> iadd_15_161 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_15_161 -> relu_46_162 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				fillcolor=white label=<<B>@backbone.layer4.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_51_163 -> batchnorm_51_164 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_51_164 -> relu_47_165 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_47_165 -> conv2d_52_166 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_52_166 -> batchnorm_52_167 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_52_167 -> relu_48_168 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_48_168 -> conv2d_53_169 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_53_169 -> batchnorm_53_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_53_170 -> iadd_16_171 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_16_171 -> relu_49_172 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.0_pass1" {
+				fillcolor=white label=<<B>@classifier.0.convs.0</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_54_173 -> batchnorm_54_174 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_54_174 -> relu_50_175 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.1_pass1" {
+				fillcolor=white label=<<B>@classifier.0.convs.1</B><br align='left'/>(ASPPConv)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_55_176 -> batchnorm_55_177 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_55_177 -> relu_51_178 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.2_pass1" {
+				fillcolor=white label=<<B>@classifier.0.convs.2</B><br align='left'/>(ASPPConv)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_56_179 -> batchnorm_56_180 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_56_180 -> relu_52_181 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.3_pass1" {
+				fillcolor=white label=<<B>@classifier.0.convs.3</B><br align='left'/>(ASPPConv)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_57_182 -> batchnorm_57_183 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_57_183 -> relu_53_184 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.4_pass1" {
+				fillcolor=white label=<<B>@classifier.0.convs.4</B><br align='left'/>(ASPPPooling)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				adaptiveavgpool2d_1_185 -> conv2d_58_186 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_58_186 -> batchnorm_58_187 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_58_187 -> relu_54_188 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_54_188 -> interpolate_1_189 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.project_pass1" {
+				fillcolor=white label=<<B>@classifier.0.project</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_59_191 -> batchnorm_59_192 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_59_192 -> relu_55_193 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_55_193 -> dropout_1_194 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer1.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.downsample_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_5_13 -> batchnorm_5_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer1.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer1.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.1_pass1" {
+				subgraph "cluster_backbone.layer1.1.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer1.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer1.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer1.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.2_pass1" {
+				subgraph "cluster_backbone.layer1.2.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer1.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer2.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.downsample_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_15_45 -> batchnorm_15_46 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer2.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer2.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.1_pass1" {
+				subgraph "cluster_backbone.layer2.1.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer2.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer2.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.2_pass1" {
+				subgraph "cluster_backbone.layer2.2.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer2.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer2.3.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer2.3.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.3_pass1" {
+				subgraph "cluster_backbone.layer2.3.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer2.3.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer3.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.downsample_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_28_87 -> batchnorm_28_88 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer3.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer3.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.1_pass1" {
+				subgraph "cluster_backbone.layer3.1.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer3.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer3.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.2_pass1" {
+				subgraph "cluster_backbone.layer3.2.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer3.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer3.3.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.3.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.3_pass1" {
+				subgraph "cluster_backbone.layer3.3.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer3.3.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer3.4.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.4.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.4_pass1" {
+				subgraph "cluster_backbone.layer3.4.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer3.4.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer3.5.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer3.5.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.5_pass1" {
+				subgraph "cluster_backbone.layer3.5.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer3.5.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer4.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.downsample_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_47_149 -> batchnorm_47_150 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer4.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer4.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.1_pass1" {
+				subgraph "cluster_backbone.layer4.1.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer4.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.conv1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.bn1_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.relu_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.conv2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.bn2_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.relu_pass2" {
+					fillcolor=white label=<<B>@backbone.layer4.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.conv3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.bn3_pass1" {
+					fillcolor=white label=<<B>@backbone.layer4.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.2_pass1" {
+				subgraph "cluster_backbone.layer4.2.relu_pass3" {
+					fillcolor=white label=<<B>@backbone.layer4.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.0_pass1" {
+				subgraph "cluster_classifier.0.convs.0.0_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.0.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.0_pass1" {
+				subgraph "cluster_classifier.0.convs.0.1_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.0.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.0_pass1" {
+				subgraph "cluster_classifier.0.convs.0.2_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.0.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.1_pass1" {
+				subgraph "cluster_classifier.0.convs.1.0_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.1.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.1_pass1" {
+				subgraph "cluster_classifier.0.convs.1.1_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.1.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.1_pass1" {
+				subgraph "cluster_classifier.0.convs.1.2_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.1.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.2_pass1" {
+				subgraph "cluster_classifier.0.convs.2.0_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.2_pass1" {
+				subgraph "cluster_classifier.0.convs.2.1_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.2_pass1" {
+				subgraph "cluster_classifier.0.convs.2.2_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.2.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.3_pass1" {
+				subgraph "cluster_classifier.0.convs.3.0_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.3.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.3_pass1" {
+				subgraph "cluster_classifier.0.convs.3.1_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.3.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.3_pass1" {
+				subgraph "cluster_classifier.0.convs.3.2_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.3.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.4_pass1" {
+				subgraph "cluster_classifier.0.convs.4.0_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.4.0</B><br align='left'/>(AdaptiveAvgPool2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.4_pass1" {
+				subgraph "cluster_classifier.0.convs.4.1_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.4.1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.4_pass1" {
+				subgraph "cluster_classifier.0.convs.4.2_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.4.2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.convs.4_pass1" {
+				subgraph "cluster_classifier.0.convs.4.3_pass1" {
+					fillcolor=white label=<<B>@classifier.0.convs.4.3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.project_pass1" {
+				subgraph "cluster_classifier.0.project.0_pass1" {
+					fillcolor=white label=<<B>@classifier.0.project.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.project_pass1" {
+				subgraph "cluster_classifier.0.project.1_pass1" {
+					fillcolor=white label=<<B>@classifier.0.project.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.project_pass1" {
+				subgraph "cluster_classifier.0.project.2_pass1" {
+					fillcolor=white label=<<B>@classifier.0.project.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			subgraph "cluster_classifier.0.project_pass1" {
+				subgraph "cluster_classifier.0.project.3_pass1" {
+					fillcolor=white label=<<B>@classifier.0.project.3</B><br align='left'/>(Dropout)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer1.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@backbone.layer1.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer1_pass1" {
+			subgraph "cluster_backbone.layer1.0_pass1" {
+				subgraph "cluster_backbone.layer1.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer1.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@backbone.layer1.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer2.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@backbone.layer2.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer2_pass1" {
+			subgraph "cluster_backbone.layer2.0_pass1" {
+				subgraph "cluster_backbone.layer2.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer2.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@backbone.layer2.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer3.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@backbone.layer3.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer3_pass1" {
+			subgraph "cluster_backbone.layer3.0_pass1" {
+				subgraph "cluster_backbone.layer3.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer3.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@backbone.layer3.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer4.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@backbone.layer4.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_backbone_pass1 {
+		subgraph "cluster_backbone.layer4_pass1" {
+			subgraph "cluster_backbone.layer4.0_pass1" {
+				subgraph "cluster_backbone.layer4.0.downsample_pass1" {
+					subgraph "cluster_backbone.layer4.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@backbone.layer4.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+}

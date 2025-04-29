@@ -26,6 +26,102 @@ MIN_MODULE_PENWIDTH = 2
 PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
+def show_model_graph(
+        model: nn.Module,
+        input_args: Union[torch.Tensor, List, Tuple],
+        input_kwargs: Dict[Any, Any] = None,
+        vis_opt: str = "unrolled",
+        vis_nesting_depth: int = 1000,
+        vis_outpath: str = "graph.gv",
+        vis_graph_overrides: Dict = None,
+        vis_node_overrides: Dict = None,
+        vis_nested_node_overrides: Dict = None,
+        vis_edge_overrides: Dict = None,
+        vis_gradient_edge_overrides: Dict = None,
+        vis_module_overrides: Dict = None,
+        save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        vis_buffer_layers: bool = False,
+        vis_direction: str = "bottomup",
+        random_seed: Optional[int] = None,
+        vis_graph_with_dynamo_explain: bool = False
+) -> None:
+    """Visualize the model graph without saving any activations.
+
+    Args:
+        model: PyTorch model
+        input_args: Arguments for model forward pass
+        input_kwargs: Keyword arguments for model forward pass
+        vis_opt: whether, and how, to visualize the network; 'none' for
+            no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
+            one node per layer if a recurrent network), or 'unrolled' to show the graph
+            in unrolled format (i.e., one node per pass through a layer if a recurrent)
+        vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
+            levels, etc.
+        vis_outpath: file path to save the graph visualization
+        save_only: whether to only save the graph visual without immediately showing it
+        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
+        vis_buffer_layers: whether to visualize the buffer layers
+        vis_direction: either 'bottomup', 'topdown', or 'leftright'
+        random_seed: which random seed to use in case model involves randomness
+
+    Returns:
+        Nothing.
+    """
+    if not input_kwargs:
+        input_kwargs = {}
+
+    if vis_opt not in ["none", "rolled", "unrolled"]:
+        raise ValueError(
+            "Visualization option must be either 'none', 'rolled', or 'unrolled'."
+        )
+
+    model_history = run_model_and_save_specified_activations(
+        model=model,
+        input_args=input_args,
+        input_kwargs=input_kwargs,
+        layers_to_save=None,
+        activation_postfunc=None,
+        mark_input_output_distances=False,
+        detach_saved_tensors=False,
+        save_gradients=False,
+        random_seed=random_seed,
+    )
+
+    if vis_graph_with_dynamo_explain:
+        dynamo_results = dynamo.explain(model.forward)(input_args, **(input_kwargs or {}))
+        model_history.render_graph(
+            vis_opt,
+            vis_nesting_depth,
+            vis_outpath,
+            vis_graph_overrides,
+            vis_node_overrides,
+            vis_nested_node_overrides,
+            vis_edge_overrides,
+            vis_gradient_edge_overrides,
+            vis_module_overrides,
+            save_only,
+            vis_fileformat,
+            vis_buffer_layers,
+            vis_direction,
+            dynamo_results
+        )
+    else:
+        model_history.render_graph(
+            vis_opt,
+            vis_nesting_depth,
+            vis_outpath,
+            vis_graph_overrides,
+            vis_node_overrides,
+            vis_nested_node_overrides,
+            vis_edge_overrides,
+            vis_gradient_edge_overrides,
+            vis_module_overrides,
+            save_only,
+            vis_fileformat,
+            vis_buffer_layers,
+            vis_direction,
+        )
 
 def render_graph(
         self: "ModelHistory",

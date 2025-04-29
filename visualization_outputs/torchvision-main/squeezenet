@@ -1,0 +1,579 @@
+// Computational graph for the feedforward sweep
+digraph SqueezeNet {
+	graph [label=<<B>SqueezeNet</B><br align='left'/>68 tensors total (164.8 MB)<br align='left'/>1235496 params total (4.7 MB)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>6x3x224x224 (3.4 MB)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_1_1 [label=<<b>conv2d_1_1</b><br/>6x64x111x111 (18.0 MB)<br/>params: 64x3x3x3, x64<br/>@features.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_2 [label=<<b>relu_1_2</b><br/>6x64x111x111 (18.0 MB)<br/>@features.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_1_3 [label=<<b>maxpool2d_1_3</b><br/>6x64x55x55 (4.4 MB)<br/>@features.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_2_4 [label=<<b>conv2d_2_4</b><br/>6x16x55x55 (1.1 MB)<br/>params: 16x64x1x1, x16<br/>@features.3.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_5 [label=<<b>relu_2_5</b><br/>6x16x55x55 (1.1 MB)<br/>@features.3.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_3_6 [label=<<b>conv2d_3_6</b><br/>6x64x55x55 (4.4 MB)<br/>params: 64x16x1x1, x64<br/>@features.3.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_3_7 [label=<<b>relu_3_7</b><br/>6x64x55x55 (4.4 MB)<br/>@features.3.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_4_8 [label=<<b>conv2d_4_8</b><br/>6x64x55x55 (4.4 MB)<br/>params: 64x16x3x3, x64<br/>@features.3.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_4_9 [label=<<b>relu_4_9</b><br/>6x64x55x55 (4.4 MB)<br/>@features.3.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_1_10 [label=<<b>cat_1_10</b><br/>6x128x55x55 (8.9 MB)<br/>@features.3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_5_11 [label=<<b>conv2d_5_11</b><br/>6x16x55x55 (1.1 MB)<br/>params: 16x128x1x1, x16<br/>@features.4.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_5_12 [label=<<b>relu_5_12</b><br/>6x16x55x55 (1.1 MB)<br/>@features.4.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_6_13 [label=<<b>conv2d_6_13</b><br/>6x64x55x55 (4.4 MB)<br/>params: 64x16x1x1, x64<br/>@features.4.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_6_14 [label=<<b>relu_6_14</b><br/>6x64x55x55 (4.4 MB)<br/>@features.4.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_7_15 [label=<<b>conv2d_7_15</b><br/>6x64x55x55 (4.4 MB)<br/>params: 64x16x3x3, x64<br/>@features.4.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_7_16 [label=<<b>relu_7_16</b><br/>6x64x55x55 (4.4 MB)<br/>@features.4.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_2_17 [label=<<b>cat_2_17</b><br/>6x128x55x55 (8.9 MB)<br/>@features.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_2_18 [label=<<b>maxpool2d_2_18</b><br/>6x128x27x27 (2.1 MB)<br/>@features.5> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_8_19 [label=<<b>conv2d_8_19</b><br/>6x32x27x27 (546.9 KB)<br/>params: 32x128x1x1, x32<br/>@features.6.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_8_20 [label=<<b>relu_8_20</b><br/>6x32x27x27 (546.9 KB)<br/>@features.6.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_9_21 [label=<<b>conv2d_9_21</b><br/>6x128x27x27 (2.1 MB)<br/>params: 128x32x1x1, x128<br/>@features.6.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_9_22 [label=<<b>relu_9_22</b><br/>6x128x27x27 (2.1 MB)<br/>@features.6.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_10_23 [label=<<b>conv2d_10_23</b><br/>6x128x27x27 (2.1 MB)<br/>params: 128x32x3x3, x128<br/>@features.6.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_10_24 [label=<<b>relu_10_24</b><br/>6x128x27x27 (2.1 MB)<br/>@features.6.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_3_25 [label=<<b>cat_3_25</b><br/>6x256x27x27 (4.3 MB)<br/>@features.6> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_11_26 [label=<<b>conv2d_11_26</b><br/>6x32x27x27 (546.9 KB)<br/>params: 32x256x1x1, x32<br/>@features.7.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_11_27 [label=<<b>relu_11_27</b><br/>6x32x27x27 (546.9 KB)<br/>@features.7.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_12_28 [label=<<b>conv2d_12_28</b><br/>6x128x27x27 (2.1 MB)<br/>params: 128x32x1x1, x128<br/>@features.7.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_12_29 [label=<<b>relu_12_29</b><br/>6x128x27x27 (2.1 MB)<br/>@features.7.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_13_30 [label=<<b>conv2d_13_30</b><br/>6x128x27x27 (2.1 MB)<br/>params: 128x32x3x3, x128<br/>@features.7.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_13_31 [label=<<b>relu_13_31</b><br/>6x128x27x27 (2.1 MB)<br/>@features.7.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_4_32 [label=<<b>cat_4_32</b><br/>6x256x27x27 (4.3 MB)<br/>@features.7> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_3_33 [label=<<b>maxpool2d_3_33</b><br/>6x256x13x13 (1014.2 KB)<br/>@features.8> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_14_34 [label=<<b>conv2d_14_34</b><br/>6x48x13x13 (190.3 KB)<br/>params: 48x256x1x1, x48<br/>@features.9.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_14_35 [label=<<b>relu_14_35</b><br/>6x48x13x13 (190.3 KB)<br/>@features.9.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_15_36 [label=<<b>conv2d_15_36</b><br/>6x192x13x13 (760.7 KB)<br/>params: 192x48x1x1, x192<br/>@features.9.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_15_37 [label=<<b>relu_15_37</b><br/>6x192x13x13 (760.7 KB)<br/>@features.9.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_16_38 [label=<<b>conv2d_16_38</b><br/>6x192x13x13 (760.7 KB)<br/>params: 192x48x3x3, x192<br/>@features.9.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_16_39 [label=<<b>relu_16_39</b><br/>6x192x13x13 (760.7 KB)<br/>@features.9.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_5_40 [label=<<b>cat_5_40</b><br/>6x384x13x13 (1.5 MB)<br/>@features.9> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_17_41 [label=<<b>conv2d_17_41</b><br/>6x48x13x13 (190.3 KB)<br/>params: 48x384x1x1, x48<br/>@features.10.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_17_42 [label=<<b>relu_17_42</b><br/>6x48x13x13 (190.3 KB)<br/>@features.10.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_18_43 [label=<<b>conv2d_18_43</b><br/>6x192x13x13 (760.7 KB)<br/>params: 192x48x1x1, x192<br/>@features.10.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_18_44 [label=<<b>relu_18_44</b><br/>6x192x13x13 (760.7 KB)<br/>@features.10.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_19_45 [label=<<b>conv2d_19_45</b><br/>6x192x13x13 (760.7 KB)<br/>params: 192x48x3x3, x192<br/>@features.10.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_19_46 [label=<<b>relu_19_46</b><br/>6x192x13x13 (760.7 KB)<br/>@features.10.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_6_47 [label=<<b>cat_6_47</b><br/>6x384x13x13 (1.5 MB)<br/>@features.10> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_20_48 [label=<<b>conv2d_20_48</b><br/>6x64x13x13 (253.7 KB)<br/>params: 64x384x1x1, x64<br/>@features.11.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_20_49 [label=<<b>relu_20_49</b><br/>6x64x13x13 (253.7 KB)<br/>@features.11.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_21_50 [label=<<b>conv2d_21_50</b><br/>6x256x13x13 (1014.2 KB)<br/>params: 256x64x1x1, x256<br/>@features.11.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_21_51 [label=<<b>relu_21_51</b><br/>6x256x13x13 (1014.2 KB)<br/>@features.11.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_22_52 [label=<<b>conv2d_22_52</b><br/>6x256x13x13 (1014.2 KB)<br/>params: 256x64x3x3, x256<br/>@features.11.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_22_53 [label=<<b>relu_22_53</b><br/>6x256x13x13 (1014.2 KB)<br/>@features.11.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_7_54 [label=<<b>cat_7_54</b><br/>6x512x13x13 (2.0 MB)<br/>@features.11> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_23_55 [label=<<b>conv2d_23_55</b><br/>6x64x13x13 (253.7 KB)<br/>params: 64x512x1x1, x64<br/>@features.12.squeeze> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_23_56 [label=<<b>relu_23_56</b><br/>6x64x13x13 (253.7 KB)<br/>@features.12.squeeze_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_24_57 [label=<<b>conv2d_24_57</b><br/>6x256x13x13 (1014.2 KB)<br/>params: 256x64x1x1, x256<br/>@features.12.expand1x1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_24_58 [label=<<b>relu_24_58</b><br/>6x256x13x13 (1014.2 KB)<br/>@features.12.expand1x1_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_25_59 [label=<<b>conv2d_25_59</b><br/>6x256x13x13 (1014.2 KB)<br/>params: 256x64x3x3, x256<br/>@features.12.expand3x3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_25_60 [label=<<b>relu_25_60</b><br/>6x256x13x13 (1014.2 KB)<br/>@features.12.expand3x3_activation> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_8_61 [label=<<b>cat_8_61</b><br/>6x512x13x13 (2.0 MB)<br/>@features.12> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	cat_8_61 -> dropout_1_62 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	dropout_1_62 [label=<<b>dropout_1_62</b><br/>6x512x13x13 (2.0 MB)<br/>@classifier.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_26_63 [label=<<b>conv2d_26_63</b><br/>6x1000x13x13 (3.9 MB)<br/>params: 1000x512x1x1, x1000<br/>@classifier.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_26_64 [label=<<b>relu_26_64</b><br/>6x1000x13x13 (3.9 MB)<br/>@classifier.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	adaptiveavgpool2d_1_65 [label=<<b>adaptiveavgpool2d_1_65</b><br/>6x1000x1x1 (23.6 KB)<br/>@classifier.3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	adaptiveavgpool2d_1_65 -> flatten_1_66 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	flatten_1_66 [label=<<b>flatten_1_66</b><br/>6x1000 (23.6 KB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	flatten_1_66 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>6x1000 (23.6 KB)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_features_pass1 {
+		fillcolor=white label=<<B>@features</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		conv2d_1_1 -> relu_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_1_2 -> maxpool2d_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_1_3 -> conv2d_2_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_1_10 -> conv2d_5_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_2_17 -> maxpool2d_2_18 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_2_18 -> conv2d_8_19 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_3_25 -> conv2d_11_26 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_4_32 -> maxpool2d_3_33 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_3_33 -> conv2d_14_34 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_5_40 -> conv2d_17_41 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_6_47 -> conv2d_20_48 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		cat_7_54 -> conv2d_23_55 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_classifier_pass1 {
+		fillcolor=white label=<<B>@classifier</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		dropout_1_62 -> conv2d_26_63 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		conv2d_26_63 -> relu_26_64 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_26_64 -> adaptiveavgpool2d_1_65 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.0_pass1" {
+			fillcolor=white label=<<B>@features.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.1_pass1" {
+			fillcolor=white label=<<B>@features.1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.2_pass1" {
+			fillcolor=white label=<<B>@features.2</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			fillcolor=white label=<<B>@features.3</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_2_4 -> relu_2_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_2_5 -> conv2d_3_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_2_5 -> conv2d_4_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_3_6 -> relu_3_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_3_7 -> cat_1_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_4_8 -> relu_4_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_4_9 -> cat_1_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			fillcolor=white label=<<B>@features.4</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_5_11 -> relu_5_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_5_12 -> conv2d_6_13 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_5_12 -> conv2d_7_15 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_6_13 -> relu_6_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_6_14 -> cat_2_17 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_7_15 -> relu_7_16 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_7_16 -> cat_2_17 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.5_pass1" {
+			fillcolor=white label=<<B>@features.5</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			fillcolor=white label=<<B>@features.6</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_8_19 -> relu_8_20 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_8_20 -> conv2d_9_21 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_8_20 -> conv2d_10_23 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_9_21 -> relu_9_22 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_9_22 -> cat_3_25 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_10_23 -> relu_10_24 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_10_24 -> cat_3_25 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			fillcolor=white label=<<B>@features.7</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_11_26 -> relu_11_27 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_11_27 -> conv2d_12_28 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_11_27 -> conv2d_13_30 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_12_28 -> relu_12_29 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_12_29 -> cat_4_32 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_13_30 -> relu_13_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_13_31 -> cat_4_32 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.8_pass1" {
+			fillcolor=white label=<<B>@features.8</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			fillcolor=white label=<<B>@features.9</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_14_34 -> relu_14_35 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_14_35 -> conv2d_15_36 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_14_35 -> conv2d_16_38 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_15_36 -> relu_15_37 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_15_37 -> cat_5_40 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_16_38 -> relu_16_39 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_16_39 -> cat_5_40 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			fillcolor=white label=<<B>@features.10</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_17_41 -> relu_17_42 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_17_42 -> conv2d_18_43 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_17_42 -> conv2d_19_45 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_18_43 -> relu_18_44 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_18_44 -> cat_6_47 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_19_45 -> relu_19_46 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_19_46 -> cat_6_47 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			fillcolor=white label=<<B>@features.11</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_20_48 -> relu_20_49 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_20_49 -> conv2d_21_50 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_20_49 -> conv2d_22_52 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_21_50 -> relu_21_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_21_51 -> cat_7_54 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_22_52 -> relu_22_53 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_22_53 -> cat_7_54 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			fillcolor=white label=<<B>@features.12</B><br align='left'/>(Fire)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+			conv2d_23_55 -> relu_23_56 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_23_56 -> conv2d_24_57 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_23_56 -> conv2d_25_59 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_24_57 -> relu_24_58 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_24_58 -> cat_8_61 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			conv2d_25_59 -> relu_25_60 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_25_60 -> cat_8_61 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.0_pass1" {
+			fillcolor=white label=<<B>@classifier.0</B><br align='left'/>(Dropout)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.1_pass1" {
+			fillcolor=white label=<<B>@classifier.1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.2_pass1" {
+			fillcolor=white label=<<B>@classifier.2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_classifier_pass1 {
+		subgraph "cluster_classifier.3_pass1" {
+			fillcolor=white label=<<B>@classifier.3</B><br align='left'/>(AdaptiveAvgPool2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			subgraph "cluster_features.3.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.3.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			subgraph "cluster_features.3.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.3.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			subgraph "cluster_features.3.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.3.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			subgraph "cluster_features.3.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.3.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			subgraph "cluster_features.3.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.3.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.3_pass1" {
+			subgraph "cluster_features.3.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.3.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			subgraph "cluster_features.4.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.4.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			subgraph "cluster_features.4.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.4.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			subgraph "cluster_features.4.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.4.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			subgraph "cluster_features.4.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.4.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			subgraph "cluster_features.4.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.4.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.4_pass1" {
+			subgraph "cluster_features.4.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.4.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			subgraph "cluster_features.6.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.6.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			subgraph "cluster_features.6.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.6.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			subgraph "cluster_features.6.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.6.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			subgraph "cluster_features.6.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.6.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			subgraph "cluster_features.6.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.6.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.6_pass1" {
+			subgraph "cluster_features.6.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.6.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			subgraph "cluster_features.7.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.7.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			subgraph "cluster_features.7.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.7.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			subgraph "cluster_features.7.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.7.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			subgraph "cluster_features.7.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.7.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			subgraph "cluster_features.7.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.7.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.7_pass1" {
+			subgraph "cluster_features.7.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.7.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			subgraph "cluster_features.9.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.9.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			subgraph "cluster_features.9.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.9.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			subgraph "cluster_features.9.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.9.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			subgraph "cluster_features.9.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.9.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			subgraph "cluster_features.9.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.9.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.9_pass1" {
+			subgraph "cluster_features.9.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.9.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			subgraph "cluster_features.10.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.10.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			subgraph "cluster_features.10.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.10.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			subgraph "cluster_features.10.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.10.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			subgraph "cluster_features.10.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.10.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			subgraph "cluster_features.10.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.10.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.10_pass1" {
+			subgraph "cluster_features.10.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.10.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			subgraph "cluster_features.11.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.11.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			subgraph "cluster_features.11.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.11.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			subgraph "cluster_features.11.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.11.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			subgraph "cluster_features.11.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.11.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			subgraph "cluster_features.11.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.11.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.11_pass1" {
+			subgraph "cluster_features.11.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.11.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			subgraph "cluster_features.12.squeeze_pass1" {
+				fillcolor=white label=<<B>@features.12.squeeze</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			subgraph "cluster_features.12.squeeze_activation_pass1" {
+				fillcolor=white label=<<B>@features.12.squeeze_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			subgraph "cluster_features.12.expand1x1_pass1" {
+				fillcolor=white label=<<B>@features.12.expand1x1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			subgraph "cluster_features.12.expand1x1_activation_pass1" {
+				fillcolor=white label=<<B>@features.12.expand1x1_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			subgraph "cluster_features.12.expand3x3_pass1" {
+				fillcolor=white label=<<B>@features.12.expand3x3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_features_pass1 {
+		subgraph "cluster_features.12_pass1" {
+			subgraph "cluster_features.12.expand3x3_activation_pass1" {
+				fillcolor=white label=<<B>@features.12.expand3x3_activation</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+			}
+		}
+	}
+}

@@ -1,0 +1,2528 @@
+// Computational graph for the feedforward sweep
+digraph TaskonomyNetwork {
+	graph [label=<<B>TaskonomyNetwork</B><br align='left'/>363 tensors total (1.1 GB)<br align='left'/>40108803 params total (153.0 MB)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>6x3x224x224 (3.4 MB)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> pad_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	pad_1_1 [label=<<b>pad_1_1</b><br/>6x3x230x230 (3.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	conv2d_1_2 [label=<<b>conv2d_1_2</b><br/>6x64x112x112 (18.4 MB)<br/>params: 64x3x7x7<br/>@encoder.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_1_3 [label=<<b>batchnorm_1_3</b><br/>6x64x112x112 (18.4 MB)<br/>params: x64, x64<br/>@encoder.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_4 [label=<<b>relu_1_4</b><br/>6x64x112x112 (18.4 MB)<br/>@encoder.relu> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_1_5 [label=<<b>maxpool2d_1_5</b><br/>6x64x56x56 (4.6 MB)<br/>@encoder.maxpool> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_2_6 [label=<<b>conv2d_2_6</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x1x1<br/>@encoder.layer1.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_2_7 [label=<<b>batchnorm_2_7</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@encoder.layer1.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_8 [label=<<b>relu_2_8</b><br/>6x64x56x56 (4.6 MB)<br/>@encoder.layer1.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_3_9 [label=<<b>conv2d_3_9</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x3x3<br/>@encoder.layer1.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_3_10 [label=<<b>batchnorm_3_10</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@encoder.layer1.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_3_11 [label=<<b>relu_3_11</b><br/>6x64x56x56 (4.6 MB)<br/>@encoder.layer1.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_4_12 [label=<<b>conv2d_4_12</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@encoder.layer1.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_4_13 [label=<<b>batchnorm_4_13</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@encoder.layer1.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_5_14 [label=<<b>conv2d_5_14</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@encoder.layer1.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_5_15 [label=<<b>batchnorm_5_15</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@encoder.layer1.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_1_16 [label=<<b>iadd_1_16</b><br/>6x256x56x56 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_4_17 [label=<<b>relu_4_17</b><br/>6x256x56x56 (18.4 MB)<br/>@encoder.layer1.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_6_18 [label=<<b>conv2d_6_18</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x256x1x1<br/>@encoder.layer1.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_6_19 [label=<<b>batchnorm_6_19</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@encoder.layer1.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_5_20 [label=<<b>relu_5_20</b><br/>6x64x56x56 (4.6 MB)<br/>@encoder.layer1.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_7_21 [label=<<b>conv2d_7_21</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x64x3x3<br/>@encoder.layer1.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_7_22 [label=<<b>batchnorm_7_22</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@encoder.layer1.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_6_23 [label=<<b>relu_6_23</b><br/>6x64x56x56 (4.6 MB)<br/>@encoder.layer1.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_8_24 [label=<<b>conv2d_8_24</b><br/>6x256x56x56 (18.4 MB)<br/>params: 256x64x1x1<br/>@encoder.layer1.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_8_25 [label=<<b>batchnorm_8_25</b><br/>6x256x56x56 (18.4 MB)<br/>params: x256, x256<br/>@encoder.layer1.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_2_26 [label=<<b>iadd_2_26</b><br/>6x256x56x56 (18.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_7_27 [label=<<b>relu_7_27</b><br/>6x256x56x56 (18.4 MB)<br/>@encoder.layer1.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_9_28 [label=<<b>conv2d_9_28</b><br/>6x64x56x56 (4.6 MB)<br/>params: 64x256x1x1<br/>@encoder.layer1.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_9_29 [label=<<b>batchnorm_9_29</b><br/>6x64x56x56 (4.6 MB)<br/>params: x64, x64<br/>@encoder.layer1.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_8_30 [label=<<b>relu_8_30</b><br/>6x64x56x56 (4.6 MB)<br/>@encoder.layer1.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_10_31 [label=<<b>conv2d_10_31</b><br/>6x64x28x28 (1.1 MB)<br/>params: 64x64x3x3<br/>@encoder.layer1.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_10_32 [label=<<b>batchnorm_10_32</b><br/>6x64x28x28 (1.1 MB)<br/>params: x64, x64<br/>@encoder.layer1.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_9_33 [label=<<b>relu_9_33</b><br/>6x64x28x28 (1.1 MB)<br/>@encoder.layer1.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_11_34 [label=<<b>conv2d_11_34</b><br/>6x256x28x28 (4.6 MB)<br/>params: 256x64x1x1<br/>@encoder.layer1.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_11_35 [label=<<b>batchnorm_11_35</b><br/>6x256x28x28 (4.6 MB)<br/>params: x256, x256<br/>@encoder.layer1.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_2_36 [label=<<b>maxpool2d_2_36</b><br/>6x256x28x28 (4.6 MB)<br/>@encoder.layer1.2.downsample.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_3_37 [label=<<b>iadd_3_37</b><br/>6x256x28x28 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_10_38 [label=<<b>relu_10_38</b><br/>6x256x28x28 (4.6 MB)<br/>@encoder.layer1.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_12_39 [label=<<b>conv2d_12_39</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x256x1x1<br/>@encoder.layer2.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_12_40 [label=<<b>batchnorm_12_40</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_11_41 [label=<<b>relu_11_41</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_13_42 [label=<<b>conv2d_13_42</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@encoder.layer2.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_13_43 [label=<<b>batchnorm_13_43</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_12_44 [label=<<b>relu_12_44</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_14_45 [label=<<b>conv2d_14_45</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@encoder.layer2.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_14_46 [label=<<b>batchnorm_14_46</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@encoder.layer2.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_15_47 [label=<<b>conv2d_15_47</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x256x1x1<br/>@encoder.layer2.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_15_48 [label=<<b>batchnorm_15_48</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@encoder.layer2.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_4_49 [label=<<b>iadd_4_49</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_13_50 [label=<<b>relu_13_50</b><br/>6x512x28x28 (9.2 MB)<br/>@encoder.layer2.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_16_51 [label=<<b>conv2d_16_51</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x512x1x1<br/>@encoder.layer2.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_16_52 [label=<<b>batchnorm_16_52</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_14_53 [label=<<b>relu_14_53</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_17_54 [label=<<b>conv2d_17_54</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@encoder.layer2.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_17_55 [label=<<b>batchnorm_17_55</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_15_56 [label=<<b>relu_15_56</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_18_57 [label=<<b>conv2d_18_57</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@encoder.layer2.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_18_58 [label=<<b>batchnorm_18_58</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@encoder.layer2.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_5_59 [label=<<b>iadd_5_59</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_16_60 [label=<<b>relu_16_60</b><br/>6x512x28x28 (9.2 MB)<br/>@encoder.layer2.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_19_61 [label=<<b>conv2d_19_61</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x512x1x1<br/>@encoder.layer2.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_19_62 [label=<<b>batchnorm_19_62</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_17_63 [label=<<b>relu_17_63</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_20_64 [label=<<b>conv2d_20_64</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x128x3x3<br/>@encoder.layer2.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_20_65 [label=<<b>batchnorm_20_65</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_18_66 [label=<<b>relu_18_66</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_21_67 [label=<<b>conv2d_21_67</b><br/>6x512x28x28 (9.2 MB)<br/>params: 512x128x1x1<br/>@encoder.layer2.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_21_68 [label=<<b>batchnorm_21_68</b><br/>6x512x28x28 (9.2 MB)<br/>params: x512, x512<br/>@encoder.layer2.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_6_69 [label=<<b>iadd_6_69</b><br/>6x512x28x28 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_19_70 [label=<<b>relu_19_70</b><br/>6x512x28x28 (9.2 MB)<br/>@encoder.layer2.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_22_71 [label=<<b>conv2d_22_71</b><br/>6x128x28x28 (2.3 MB)<br/>params: 128x512x1x1<br/>@encoder.layer2.3.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_22_72 [label=<<b>batchnorm_22_72</b><br/>6x128x28x28 (2.3 MB)<br/>params: x128, x128<br/>@encoder.layer2.3.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_20_73 [label=<<b>relu_20_73</b><br/>6x128x28x28 (2.3 MB)<br/>@encoder.layer2.3.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_23_74 [label=<<b>conv2d_23_74</b><br/>6x128x14x14 (588.2 KB)<br/>params: 128x128x3x3<br/>@encoder.layer2.3.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_23_75 [label=<<b>batchnorm_23_75</b><br/>6x128x14x14 (588.2 KB)<br/>params: x128, x128<br/>@encoder.layer2.3.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_21_76 [label=<<b>relu_21_76</b><br/>6x128x14x14 (588.2 KB)<br/>@encoder.layer2.3.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_24_77 [label=<<b>conv2d_24_77</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x128x1x1<br/>@encoder.layer2.3.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_24_78 [label=<<b>batchnorm_24_78</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer2.3.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	maxpool2d_3_79 [label=<<b>maxpool2d_3_79</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer2.3.downsample.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_7_80 [label=<<b>iadd_7_80</b><br/>6x512x14x14 (2.3 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_22_81 [label=<<b>relu_22_81</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer2.3.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_25_82 [label=<<b>conv2d_25_82</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x512x1x1<br/>@encoder.layer3.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_25_83 [label=<<b>batchnorm_25_83</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_23_84 [label=<<b>relu_23_84</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_26_85 [label=<<b>conv2d_26_85</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@encoder.layer3.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_26_86 [label=<<b>batchnorm_26_86</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_24_87 [label=<<b>relu_24_87</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_27_88 [label=<<b>conv2d_27_88</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x256x1x1<br/>@encoder.layer3.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_27_89 [label=<<b>batchnorm_27_89</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_28_90 [label=<<b>conv2d_28_90</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x512x1x1<br/>@encoder.layer3.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_28_91 [label=<<b>batchnorm_28_91</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_8_92 [label=<<b>iadd_8_92</b><br/>6x1024x14x14 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_25_93 [label=<<b>relu_25_93</b><br/>6x1024x14x14 (4.6 MB)<br/>@encoder.layer3.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_29_94 [label=<<b>conv2d_29_94</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x1024x1x1<br/>@encoder.layer3.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_29_95 [label=<<b>batchnorm_29_95</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_26_96 [label=<<b>relu_26_96</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_30_97 [label=<<b>conv2d_30_97</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@encoder.layer3.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_30_98 [label=<<b>batchnorm_30_98</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_27_99 [label=<<b>relu_27_99</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_31_100 [label=<<b>conv2d_31_100</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x256x1x1<br/>@encoder.layer3.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_31_101 [label=<<b>batchnorm_31_101</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_9_102 [label=<<b>iadd_9_102</b><br/>6x1024x14x14 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_28_103 [label=<<b>relu_28_103</b><br/>6x1024x14x14 (4.6 MB)<br/>@encoder.layer3.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_32_104 [label=<<b>conv2d_32_104</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x1024x1x1<br/>@encoder.layer3.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_32_105 [label=<<b>batchnorm_32_105</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_29_106 [label=<<b>relu_29_106</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_33_107 [label=<<b>conv2d_33_107</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@encoder.layer3.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_33_108 [label=<<b>batchnorm_33_108</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_30_109 [label=<<b>relu_30_109</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_34_110 [label=<<b>conv2d_34_110</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x256x1x1<br/>@encoder.layer3.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_34_111 [label=<<b>batchnorm_34_111</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_10_112 [label=<<b>iadd_10_112</b><br/>6x1024x14x14 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_31_113 [label=<<b>relu_31_113</b><br/>6x1024x14x14 (4.6 MB)<br/>@encoder.layer3.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_35_114 [label=<<b>conv2d_35_114</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x1024x1x1<br/>@encoder.layer3.3.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_35_115 [label=<<b>batchnorm_35_115</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.3.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_32_116 [label=<<b>relu_32_116</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.3.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_36_117 [label=<<b>conv2d_36_117</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@encoder.layer3.3.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_36_118 [label=<<b>batchnorm_36_118</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.3.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_33_119 [label=<<b>relu_33_119</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.3.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_37_120 [label=<<b>conv2d_37_120</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x256x1x1<br/>@encoder.layer3.3.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_37_121 [label=<<b>batchnorm_37_121</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.3.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_11_122 [label=<<b>iadd_11_122</b><br/>6x1024x14x14 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_34_123 [label=<<b>relu_34_123</b><br/>6x1024x14x14 (4.6 MB)<br/>@encoder.layer3.3.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_38_124 [label=<<b>conv2d_38_124</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x1024x1x1<br/>@encoder.layer3.4.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_38_125 [label=<<b>batchnorm_38_125</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.4.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_35_126 [label=<<b>relu_35_126</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.4.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_39_127 [label=<<b>conv2d_39_127</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@encoder.layer3.4.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_39_128 [label=<<b>batchnorm_39_128</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.4.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_36_129 [label=<<b>relu_36_129</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.4.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_40_130 [label=<<b>conv2d_40_130</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x256x1x1<br/>@encoder.layer3.4.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_40_131 [label=<<b>batchnorm_40_131</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.4.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_12_132 [label=<<b>iadd_12_132</b><br/>6x1024x14x14 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_37_133 [label=<<b>relu_37_133</b><br/>6x1024x14x14 (4.6 MB)<br/>@encoder.layer3.4.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_41_134 [label=<<b>conv2d_41_134</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x1024x1x1<br/>@encoder.layer3.5.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_41_135 [label=<<b>batchnorm_41_135</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.5.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_38_136 [label=<<b>relu_38_136</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.5.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_42_137 [label=<<b>conv2d_42_137</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@encoder.layer3.5.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_42_138 [label=<<b>batchnorm_42_138</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@encoder.layer3.5.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_39_139 [label=<<b>relu_39_139</b><br/>6x256x14x14 (1.1 MB)<br/>@encoder.layer3.5.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_43_140 [label=<<b>conv2d_43_140</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x256x1x1<br/>@encoder.layer3.5.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_43_141 [label=<<b>batchnorm_43_141</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@encoder.layer3.5.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_13_142 [label=<<b>iadd_13_142</b><br/>6x1024x14x14 (4.6 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_40_143 [label=<<b>relu_40_143</b><br/>6x1024x14x14 (4.6 MB)<br/>@encoder.layer3.5.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_44_144 [label=<<b>conv2d_44_144</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x1024x1x1<br/>@encoder.layer4.0.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_44_145 [label=<<b>batchnorm_44_145</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer4.0.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_41_146 [label=<<b>relu_41_146</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer4.0.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_45_147 [label=<<b>conv2d_45_147</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x512x3x3<br/>@encoder.layer4.0.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_45_148 [label=<<b>batchnorm_45_148</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer4.0.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_42_149 [label=<<b>relu_42_149</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer4.0.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_46_150 [label=<<b>conv2d_46_150</b><br/>6x2048x14x14 (9.2 MB)<br/>params: 2048x512x1x1<br/>@encoder.layer4.0.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_46_151 [label=<<b>batchnorm_46_151</b><br/>6x2048x14x14 (9.2 MB)<br/>params: x2048, x2048<br/>@encoder.layer4.0.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_47_152 [label=<<b>conv2d_47_152</b><br/>6x2048x14x14 (9.2 MB)<br/>params: 2048x1024x1x1<br/>@encoder.layer4.0.downsample.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_47_153 [label=<<b>batchnorm_47_153</b><br/>6x2048x14x14 (9.2 MB)<br/>params: x2048, x2048<br/>@encoder.layer4.0.downsample.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_14_154 [label=<<b>iadd_14_154</b><br/>6x2048x14x14 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_43_155 [label=<<b>relu_43_155</b><br/>6x2048x14x14 (9.2 MB)<br/>@encoder.layer4.0.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_48_156 [label=<<b>conv2d_48_156</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x2048x1x1<br/>@encoder.layer4.1.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_48_157 [label=<<b>batchnorm_48_157</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer4.1.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_44_158 [label=<<b>relu_44_158</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer4.1.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_49_159 [label=<<b>conv2d_49_159</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x512x3x3<br/>@encoder.layer4.1.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_49_160 [label=<<b>batchnorm_49_160</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer4.1.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_45_161 [label=<<b>relu_45_161</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer4.1.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_50_162 [label=<<b>conv2d_50_162</b><br/>6x2048x14x14 (9.2 MB)<br/>params: 2048x512x1x1<br/>@encoder.layer4.1.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_50_163 [label=<<b>batchnorm_50_163</b><br/>6x2048x14x14 (9.2 MB)<br/>params: x2048, x2048<br/>@encoder.layer4.1.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_15_164 [label=<<b>iadd_15_164</b><br/>6x2048x14x14 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_46_165 [label=<<b>relu_46_165</b><br/>6x2048x14x14 (9.2 MB)<br/>@encoder.layer4.1.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_51_166 [label=<<b>conv2d_51_166</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x2048x1x1<br/>@encoder.layer4.2.conv1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_51_167 [label=<<b>batchnorm_51_167</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer4.2.bn1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_47_168 [label=<<b>relu_47_168</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer4.2.relu:1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_52_169 [label=<<b>conv2d_52_169</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x512x3x3<br/>@encoder.layer4.2.conv2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_52_170 [label=<<b>batchnorm_52_170</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@encoder.layer4.2.bn2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_48_171 [label=<<b>relu_48_171</b><br/>6x512x14x14 (2.3 MB)<br/>@encoder.layer4.2.relu:2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_53_172 [label=<<b>conv2d_53_172</b><br/>6x2048x14x14 (9.2 MB)<br/>params: 2048x512x1x1<br/>@encoder.layer4.2.conv3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_53_173 [label=<<b>batchnorm_53_173</b><br/>6x2048x14x14 (9.2 MB)<br/>params: x2048, x2048<br/>@encoder.layer4.2.bn3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	iadd_16_174 [label=<<b>iadd_16_174</b><br/>6x2048x14x14 (9.2 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_49_175 [label=<<b>relu_49_175</b><br/>6x2048x14x14 (9.2 MB)<br/>@encoder.layer4.2.relu:3> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_54_176 [label=<<b>conv2d_54_176</b><br/>6x8x14x14 (36.9 KB)<br/>params: 8x2048x3x3<br/>@encoder.compress1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_54_177 [label=<<b>batchnorm_54_177</b><br/>6x8x14x14 (36.9 KB)<br/>params: x8, x8<br/>@encoder.compress_bn> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_50_178 [label=<<b>relu_50_178</b><br/>6x8x14x14 (36.9 KB)<br/>@encoder.relu1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_50_178 -> conv2d_55_179 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_55_179 [label=<<b>conv2d_55_179</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x8x3x3<br/>@decoder.conv2.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_55_180 [label=<<b>batchnorm_55_180</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@decoder.conv2.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_1_181 [label=<<b>leakyrelu_1_181</b><br/>6x1024x14x14 (4.6 MB)<br/>@decoder.conv2.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_56_182 [label=<<b>conv2d_56_182</b><br/>6x1024x14x14 (4.6 MB)<br/>params: 1024x1024x3x3<br/>@decoder.conv3.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_56_183 [label=<<b>batchnorm_56_183</b><br/>6x1024x14x14 (4.6 MB)<br/>params: x1024, x1024<br/>@decoder.conv3.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_2_184 [label=<<b>leakyrelu_2_184</b><br/>6x1024x14x14 (4.6 MB)<br/>@decoder.conv3.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_57_185 [label=<<b>conv2d_57_185</b><br/>6x512x14x14 (2.3 MB)<br/>params: 512x1024x3x3<br/>@decoder.conv4.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_57_186 [label=<<b>batchnorm_57_186</b><br/>6x512x14x14 (2.3 MB)<br/>params: x512, x512<br/>@decoder.conv4.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_3_187 [label=<<b>leakyrelu_3_187</b><br/>6x512x14x14 (2.3 MB)<br/>@decoder.conv4.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_58_188 [label=<<b>conv2d_58_188</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x512x3x3<br/>@decoder.conv5.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_58_189 [label=<<b>batchnorm_58_189</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@decoder.conv5.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_4_190 [label=<<b>leakyrelu_4_190</b><br/>6x256x14x14 (1.1 MB)<br/>@decoder.conv5.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_59_191 [label=<<b>conv2d_59_191</b><br/>6x256x14x14 (1.1 MB)<br/>params: 256x256x3x3<br/>@decoder.conv6.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_59_192 [label=<<b>batchnorm_59_192</b><br/>6x256x14x14 (1.1 MB)<br/>params: x256, x256<br/>@decoder.conv6.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_5_193 [label=<<b>leakyrelu_5_193</b><br/>6x256x14x14 (1.1 MB)<br/>@decoder.conv6.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_60_194 [label=<<b>conv2d_60_194</b><br/>6x128x14x14 (588.2 KB)<br/>params: 128x256x3x3<br/>@decoder.conv7.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_60_195 [label=<<b>batchnorm_60_195</b><br/>6x128x14x14 (588.2 KB)<br/>params: x128, x128<br/>@decoder.conv7.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_6_196 [label=<<b>leakyrelu_6_196</b><br/>6x128x14x14 (588.2 KB)<br/>@decoder.conv7.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	pad_2_197 [label=<<b>pad_2_197</b><br/>6x128x15x15 (675.2 KB)<br/>@decoder.deconv8.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	convtranspose2d_1_198 [label=<<b>convtranspose2d_1_198</b><br/>6x64x29x29 (1.2 MB)<br/>params: 128x64x3x3<br/>@decoder.deconv8.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	getitem_1_199 [label=<<b>getitem_1_199</b><br/>6x64x28x28 (1.1 MB)<br/>@decoder.deconv8.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_61_200 [label=<<b>batchnorm_61_200</b><br/>6x64x28x28 (1.1 MB)<br/>params: x64, x64<br/>@decoder.deconv8.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_7_201 [label=<<b>leakyrelu_7_201</b><br/>6x64x28x28 (1.1 MB)<br/>@decoder.deconv8.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_61_202 [label=<<b>conv2d_61_202</b><br/>6x64x28x28 (1.1 MB)<br/>params: 64x64x3x3<br/>@decoder.conv9.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_62_203 [label=<<b>batchnorm_62_203</b><br/>6x64x28x28 (1.1 MB)<br/>params: x64, x64<br/>@decoder.conv9.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_8_204 [label=<<b>leakyrelu_8_204</b><br/>6x64x28x28 (1.1 MB)<br/>@decoder.conv9.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	pad_3_205 [label=<<b>pad_3_205</b><br/>6x64x29x29 (1.2 MB)<br/>@decoder.deconv10.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	convtranspose2d_2_206 [label=<<b>convtranspose2d_2_206</b><br/>6x32x57x57 (2.4 MB)<br/>params: 64x32x3x3<br/>@decoder.deconv10.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	getitem_2_207 [label=<<b>getitem_2_207</b><br/>6x32x56x56 (2.3 MB)<br/>@decoder.deconv10.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_63_208 [label=<<b>batchnorm_63_208</b><br/>6x32x56x56 (2.3 MB)<br/>params: x32, x32<br/>@decoder.deconv10.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_9_209 [label=<<b>leakyrelu_9_209</b><br/>6x32x56x56 (2.3 MB)<br/>@decoder.deconv10.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_62_210 [label=<<b>conv2d_62_210</b><br/>6x32x56x56 (2.3 MB)<br/>params: 32x32x3x3<br/>@decoder.conv11.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_64_211 [label=<<b>batchnorm_64_211</b><br/>6x32x56x56 (2.3 MB)<br/>params: x32, x32<br/>@decoder.conv11.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_10_212 [label=<<b>leakyrelu_10_212</b><br/>6x32x56x56 (2.3 MB)<br/>@decoder.conv11.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	pad_4_213 [label=<<b>pad_4_213</b><br/>6x32x57x57 (2.4 MB)<br/>@decoder.deconv12.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	convtranspose2d_3_214 [label=<<b>convtranspose2d_3_214</b><br/>6x16x113x113 (4.7 MB)<br/>params: 32x16x3x3<br/>@decoder.deconv12.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	getitem_3_215 [label=<<b>getitem_3_215</b><br/>6x16x112x112 (4.6 MB)<br/>@decoder.deconv12.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_65_216 [label=<<b>batchnorm_65_216</b><br/>6x16x112x112 (4.6 MB)<br/>params: x16, x16<br/>@decoder.deconv12.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_11_217 [label=<<b>leakyrelu_11_217</b><br/>6x16x112x112 (4.6 MB)<br/>@decoder.deconv12.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_63_218 [label=<<b>conv2d_63_218</b><br/>6x32x112x112 (9.2 MB)<br/>params: 32x16x3x3<br/>@decoder.conv13.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_66_219 [label=<<b>batchnorm_66_219</b><br/>6x32x112x112 (9.2 MB)<br/>params: x32, x32<br/>@decoder.conv13.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_12_220 [label=<<b>leakyrelu_12_220</b><br/>6x32x112x112 (9.2 MB)<br/>@decoder.conv13.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	pad_5_221 [label=<<b>pad_5_221</b><br/>6x32x113x113 (9.4 MB)<br/>@decoder.deconv14.0> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	convtranspose2d_4_222 [label=<<b>convtranspose2d_4_222</b><br/>6x16x225x225 (18.5 MB)<br/>params: 32x16x3x3<br/>@decoder.deconv14.1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	getitem_4_223 [label=<<b>getitem_4_223</b><br/>6x16x224x224 (18.4 MB)<br/>@decoder.deconv14.2> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	batchnorm_67_224 [label=<<b>batchnorm_67_224</b><br/>6x16x224x224 (18.4 MB)<br/>params: x16, x16<br/>@decoder.deconv14.3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	leakyrelu_13_225 [label=<<b>leakyrelu_13_225</b><br/>6x16x224x224 (18.4 MB)<br/>@decoder.deconv14.4> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_64_226 [label=<<b>conv2d_64_226</b><br/>6x3x224x224 (3.4 MB)<br/>params: 3x16x3x3, x3<br/>@decoder.decoder_output.0> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	tanh_1_227 [label=<<b>tanh_1_227</b><br/>6x3x224x224 (3.4 MB)<br/>@decoder.decoder_output.1> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	tanh_1_227 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>6x3x224x224 (3.4 MB)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_encoder_pass1 {
+		fillcolor=white label=<<B>@encoder</B><br align='left'/>(TaskonomyEncoder)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		pad_1_1 -> conv2d_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		conv2d_1_2 -> batchnorm_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_1_3 -> relu_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_1_4 -> maxpool2d_1_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_1_5 -> conv2d_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		maxpool2d_1_5 -> conv2d_5_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_10_38 -> conv2d_12_39 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_10_38 -> conv2d_15_47 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_22_81 -> conv2d_25_82 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_22_81 -> conv2d_28_90 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_40_143 -> conv2d_44_144 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_40_143 -> conv2d_47_152 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		relu_49_175 -> conv2d_54_176 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		conv2d_54_176 -> batchnorm_54_177 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		batchnorm_54_177 -> relu_50_178 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_decoder_pass1 {
+		fillcolor=white label=<<B>@decoder</B><br align='left'/>(TaskonomyDecoder)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,solid"
+		leakyrelu_1_181 -> conv2d_56_182 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_2_184 -> conv2d_57_185 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_3_187 -> conv2d_58_188 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_4_190 -> conv2d_59_191 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_5_193 -> conv2d_60_194 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_6_196 -> pad_2_197 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_7_201 -> conv2d_61_202 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_8_204 -> pad_3_205 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_9_209 -> conv2d_62_210 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_10_212 -> pad_4_213 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_11_217 -> conv2d_63_218 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_12_220 -> pad_5_221 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		leakyrelu_13_225 -> conv2d_64_226 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.conv1_pass1" {
+			fillcolor=white label=<<B>@encoder.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.bn1_pass1" {
+			fillcolor=white label=<<B>@encoder.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.relu_pass1" {
+			fillcolor=white label=<<B>@encoder.relu</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.maxpool_pass1" {
+			fillcolor=white label=<<B>@encoder.maxpool</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			fillcolor=white label=<<B>@encoder.layer1</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_4_17 -> conv2d_6_18 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_4_17 -> iadd_2_26 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_7_27 -> conv2d_9_28 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_7_27 -> maxpool2d_2_36 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			fillcolor=white label=<<B>@encoder.layer2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_13_50 -> conv2d_16_51 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_13_50 -> iadd_5_59 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_16_60 -> conv2d_19_61 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_16_60 -> iadd_6_69 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_19_70 -> conv2d_22_71 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_19_70 -> maxpool2d_3_79 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			fillcolor=white label=<<B>@encoder.layer3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_25_93 -> conv2d_29_94 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_25_93 -> iadd_9_102 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_28_103 -> conv2d_32_104 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_28_103 -> iadd_10_112 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_31_113 -> conv2d_35_114 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_31_113 -> iadd_11_122 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_34_123 -> conv2d_38_124 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_34_123 -> iadd_12_132 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_37_133 -> conv2d_41_134 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_37_133 -> iadd_13_142 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			fillcolor=white label=<<B>@encoder.layer4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			relu_43_155 -> conv2d_48_156 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_43_155 -> iadd_15_164 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_46_165 -> conv2d_51_166 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			relu_46_165 -> iadd_16_174 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.compress1_pass1" {
+			fillcolor=white label=<<B>@encoder.compress1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.compress_bn_pass1" {
+			fillcolor=white label=<<B>@encoder.compress_bn</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.relu1_pass1" {
+			fillcolor=white label=<<B>@encoder.relu1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,dashed"
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv2_pass1" {
+			fillcolor=white label=<<B>@decoder.conv2</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_55_179 -> batchnorm_55_180 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_55_180 -> leakyrelu_1_181 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv3_pass1" {
+			fillcolor=white label=<<B>@decoder.conv3</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_56_182 -> batchnorm_56_183 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_56_183 -> leakyrelu_2_184 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv4_pass1" {
+			fillcolor=white label=<<B>@decoder.conv4</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_57_185 -> batchnorm_57_186 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_57_186 -> leakyrelu_3_187 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv5_pass1" {
+			fillcolor=white label=<<B>@decoder.conv5</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_58_188 -> batchnorm_58_189 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_58_189 -> leakyrelu_4_190 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv6_pass1" {
+			fillcolor=white label=<<B>@decoder.conv6</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_59_191 -> batchnorm_59_192 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_59_192 -> leakyrelu_5_193 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv7_pass1" {
+			fillcolor=white label=<<B>@decoder.conv7</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_60_194 -> batchnorm_60_195 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_60_195 -> leakyrelu_6_196 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv8_pass1" {
+			fillcolor=white label=<<B>@decoder.deconv8</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			pad_2_197 -> convtranspose2d_1_198 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			convtranspose2d_1_198 -> getitem_1_199 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			getitem_1_199 -> batchnorm_61_200 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_61_200 -> leakyrelu_7_201 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv9_pass1" {
+			fillcolor=white label=<<B>@decoder.conv9</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_61_202 -> batchnorm_62_203 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_62_203 -> leakyrelu_8_204 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv10_pass1" {
+			fillcolor=white label=<<B>@decoder.deconv10</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			pad_3_205 -> convtranspose2d_2_206 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			convtranspose2d_2_206 -> getitem_2_207 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			getitem_2_207 -> batchnorm_63_208 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_63_208 -> leakyrelu_9_209 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv11_pass1" {
+			fillcolor=white label=<<B>@decoder.conv11</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_62_210 -> batchnorm_64_211 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_64_211 -> leakyrelu_10_212 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv12_pass1" {
+			fillcolor=white label=<<B>@decoder.deconv12</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			pad_4_213 -> convtranspose2d_3_214 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			convtranspose2d_3_214 -> getitem_3_215 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			getitem_3_215 -> batchnorm_65_216 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_65_216 -> leakyrelu_11_217 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv13_pass1" {
+			fillcolor=white label=<<B>@decoder.conv13</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_63_218 -> batchnorm_66_219 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_66_219 -> leakyrelu_12_220 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv14_pass1" {
+			fillcolor=white label=<<B>@decoder.deconv14</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			pad_5_221 -> convtranspose2d_4_222 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			convtranspose2d_4_222 -> getitem_4_223 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			getitem_4_223 -> batchnorm_67_224 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			batchnorm_67_224 -> leakyrelu_13_225 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.decoder_output_pass1" {
+			fillcolor=white label=<<B>@decoder.decoder_output</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=4.25 style="filled,solid"
+			conv2d_64_226 -> tanh_1_227 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				fillcolor=white label=<<B>@encoder.layer1.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_2_6 -> batchnorm_2_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_2_7 -> relu_2_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_2_8 -> conv2d_3_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_3_9 -> batchnorm_3_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_3_10 -> relu_3_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_3_11 -> conv2d_4_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_4_12 -> batchnorm_4_13 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_4_13 -> iadd_1_16 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_5_15 -> iadd_1_16 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_1_16 -> relu_4_17 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				fillcolor=white label=<<B>@encoder.layer1.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_6_18 -> batchnorm_6_19 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_6_19 -> relu_5_20 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_5_20 -> conv2d_7_21 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_7_21 -> batchnorm_7_22 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_7_22 -> relu_6_23 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_6_23 -> conv2d_8_24 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_8_24 -> batchnorm_8_25 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_8_25 -> iadd_2_26 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_2_26 -> relu_7_27 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				fillcolor=white label=<<B>@encoder.layer1.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_9_28 -> batchnorm_9_29 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_9_29 -> relu_8_30 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_8_30 -> conv2d_10_31 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_10_31 -> batchnorm_10_32 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_10_32 -> relu_9_33 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_9_33 -> conv2d_11_34 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_11_34 -> batchnorm_11_35 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_11_35 -> iadd_3_37 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				maxpool2d_2_36 -> iadd_3_37 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_3_37 -> relu_10_38 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				fillcolor=white label=<<B>@encoder.layer2.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_12_39 -> batchnorm_12_40 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_12_40 -> relu_11_41 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_11_41 -> conv2d_13_42 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_13_42 -> batchnorm_13_43 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_13_43 -> relu_12_44 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_12_44 -> conv2d_14_45 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_14_45 -> batchnorm_14_46 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_14_46 -> iadd_4_49 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_15_48 -> iadd_4_49 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_4_49 -> relu_13_50 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				fillcolor=white label=<<B>@encoder.layer2.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_16_51 -> batchnorm_16_52 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_16_52 -> relu_14_53 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_14_53 -> conv2d_17_54 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_17_54 -> batchnorm_17_55 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_17_55 -> relu_15_56 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_15_56 -> conv2d_18_57 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_18_57 -> batchnorm_18_58 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_18_58 -> iadd_5_59 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_5_59 -> relu_16_60 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				fillcolor=white label=<<B>@encoder.layer2.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_19_61 -> batchnorm_19_62 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_19_62 -> relu_17_63 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_17_63 -> conv2d_20_64 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_20_64 -> batchnorm_20_65 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_20_65 -> relu_18_66 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_18_66 -> conv2d_21_67 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_21_67 -> batchnorm_21_68 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_21_68 -> iadd_6_69 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_6_69 -> relu_19_70 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				fillcolor=white label=<<B>@encoder.layer2.3</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_22_71 -> batchnorm_22_72 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_22_72 -> relu_20_73 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_20_73 -> conv2d_23_74 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_23_74 -> batchnorm_23_75 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_23_75 -> relu_21_76 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_21_76 -> conv2d_24_77 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_24_77 -> batchnorm_24_78 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_24_78 -> iadd_7_80 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				maxpool2d_3_79 -> iadd_7_80 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_7_80 -> relu_22_81 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				fillcolor=white label=<<B>@encoder.layer3.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_25_82 -> batchnorm_25_83 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_25_83 -> relu_23_84 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_23_84 -> conv2d_26_85 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_26_85 -> batchnorm_26_86 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_26_86 -> relu_24_87 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_24_87 -> conv2d_27_88 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_27_88 -> batchnorm_27_89 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_27_89 -> iadd_8_92 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_28_91 -> iadd_8_92 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_8_92 -> relu_25_93 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				fillcolor=white label=<<B>@encoder.layer3.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_29_94 -> batchnorm_29_95 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_29_95 -> relu_26_96 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_26_96 -> conv2d_30_97 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_30_97 -> batchnorm_30_98 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_30_98 -> relu_27_99 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_27_99 -> conv2d_31_100 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_31_100 -> batchnorm_31_101 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_31_101 -> iadd_9_102 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_9_102 -> relu_28_103 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				fillcolor=white label=<<B>@encoder.layer3.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_32_104 -> batchnorm_32_105 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_32_105 -> relu_29_106 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_29_106 -> conv2d_33_107 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_33_107 -> batchnorm_33_108 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_33_108 -> relu_30_109 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_30_109 -> conv2d_34_110 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_34_110 -> batchnorm_34_111 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_34_111 -> iadd_10_112 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_10_112 -> relu_31_113 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				fillcolor=white label=<<B>@encoder.layer3.3</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_35_114 -> batchnorm_35_115 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_35_115 -> relu_32_116 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_32_116 -> conv2d_36_117 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_36_117 -> batchnorm_36_118 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_36_118 -> relu_33_119 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_33_119 -> conv2d_37_120 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_37_120 -> batchnorm_37_121 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_37_121 -> iadd_11_122 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_11_122 -> relu_34_123 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				fillcolor=white label=<<B>@encoder.layer3.4</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_38_124 -> batchnorm_38_125 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_38_125 -> relu_35_126 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_35_126 -> conv2d_39_127 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_39_127 -> batchnorm_39_128 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_39_128 -> relu_36_129 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_36_129 -> conv2d_40_130 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_40_130 -> batchnorm_40_131 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_40_131 -> iadd_12_132 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_12_132 -> relu_37_133 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				fillcolor=white label=<<B>@encoder.layer3.5</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_41_134 -> batchnorm_41_135 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_41_135 -> relu_38_136 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_38_136 -> conv2d_42_137 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_42_137 -> batchnorm_42_138 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_42_138 -> relu_39_139 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_39_139 -> conv2d_43_140 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_43_140 -> batchnorm_43_141 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_43_141 -> iadd_13_142 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_13_142 -> relu_40_143 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				fillcolor=white label=<<B>@encoder.layer4.0</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_44_144 -> batchnorm_44_145 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_44_145 -> relu_41_146 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_41_146 -> conv2d_45_147 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_45_147 -> batchnorm_45_148 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_45_148 -> relu_42_149 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_42_149 -> conv2d_46_150 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_46_150 -> batchnorm_46_151 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_46_151 -> iadd_14_154 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_47_153 -> iadd_14_154 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_14_154 -> relu_43_155 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				fillcolor=white label=<<B>@encoder.layer4.1</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_48_156 -> batchnorm_48_157 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_48_157 -> relu_44_158 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_44_158 -> conv2d_49_159 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_49_159 -> batchnorm_49_160 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_49_160 -> relu_45_161 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_45_161 -> conv2d_50_162 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_50_162 -> batchnorm_50_163 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_50_163 -> iadd_15_164 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_15_164 -> relu_46_165 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				fillcolor=white label=<<B>@encoder.layer4.2</B><br align='left'/>(Bottleneck)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,solid"
+				conv2d_51_166 -> batchnorm_51_167 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_51_167 -> relu_47_168 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_47_168 -> conv2d_52_169 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_52_169 -> batchnorm_52_170 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_52_170 -> relu_48_171 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				relu_48_171 -> conv2d_53_172 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				conv2d_53_172 -> batchnorm_53_173 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				batchnorm_53_173 -> iadd_16_174 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				iadd_16_174 -> relu_49_175 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv2_pass1" {
+			subgraph "cluster_decoder.conv2.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv2.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv2_pass1" {
+			subgraph "cluster_decoder.conv2.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv2.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv2_pass1" {
+			subgraph "cluster_decoder.conv2.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv2.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv3_pass1" {
+			subgraph "cluster_decoder.conv3.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv3.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv3_pass1" {
+			subgraph "cluster_decoder.conv3.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv3.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv3_pass1" {
+			subgraph "cluster_decoder.conv3.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv3.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv4_pass1" {
+			subgraph "cluster_decoder.conv4.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv4.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv4_pass1" {
+			subgraph "cluster_decoder.conv4.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv4.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv4_pass1" {
+			subgraph "cluster_decoder.conv4.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv4.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv5_pass1" {
+			subgraph "cluster_decoder.conv5.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv5.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv5_pass1" {
+			subgraph "cluster_decoder.conv5.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv5.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv5_pass1" {
+			subgraph "cluster_decoder.conv5.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv5.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv6_pass1" {
+			subgraph "cluster_decoder.conv6.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv6.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv6_pass1" {
+			subgraph "cluster_decoder.conv6.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv6.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv6_pass1" {
+			subgraph "cluster_decoder.conv6.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv6.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv7_pass1" {
+			subgraph "cluster_decoder.conv7.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv7.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv7_pass1" {
+			subgraph "cluster_decoder.conv7.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv7.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv7_pass1" {
+			subgraph "cluster_decoder.conv7.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv7.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv8_pass1" {
+			subgraph "cluster_decoder.deconv8.0_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv8.0</B><br align='left'/>(ZeroPad2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv8_pass1" {
+			subgraph "cluster_decoder.deconv8.1_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv8.1</B><br align='left'/>(ConvTranspose2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv8_pass1" {
+			subgraph "cluster_decoder.deconv8.2_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv8.2</B><br align='left'/>(Scissor)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv8_pass1" {
+			subgraph "cluster_decoder.deconv8.3_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv8.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv8_pass1" {
+			subgraph "cluster_decoder.deconv8.4_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv8.4</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv9_pass1" {
+			subgraph "cluster_decoder.conv9.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv9.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv9_pass1" {
+			subgraph "cluster_decoder.conv9.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv9.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv9_pass1" {
+			subgraph "cluster_decoder.conv9.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv9.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv10_pass1" {
+			subgraph "cluster_decoder.deconv10.0_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv10.0</B><br align='left'/>(ZeroPad2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv10_pass1" {
+			subgraph "cluster_decoder.deconv10.1_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv10.1</B><br align='left'/>(ConvTranspose2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv10_pass1" {
+			subgraph "cluster_decoder.deconv10.2_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv10.2</B><br align='left'/>(Scissor)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv10_pass1" {
+			subgraph "cluster_decoder.deconv10.3_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv10.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv10_pass1" {
+			subgraph "cluster_decoder.deconv10.4_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv10.4</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv11_pass1" {
+			subgraph "cluster_decoder.conv11.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv11.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv11_pass1" {
+			subgraph "cluster_decoder.conv11.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv11.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv11_pass1" {
+			subgraph "cluster_decoder.conv11.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv11.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv12_pass1" {
+			subgraph "cluster_decoder.deconv12.0_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv12.0</B><br align='left'/>(ZeroPad2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv12_pass1" {
+			subgraph "cluster_decoder.deconv12.1_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv12.1</B><br align='left'/>(ConvTranspose2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv12_pass1" {
+			subgraph "cluster_decoder.deconv12.2_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv12.2</B><br align='left'/>(Scissor)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv12_pass1" {
+			subgraph "cluster_decoder.deconv12.3_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv12.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv12_pass1" {
+			subgraph "cluster_decoder.deconv12.4_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv12.4</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv13_pass1" {
+			subgraph "cluster_decoder.conv13.0_pass1" {
+				fillcolor=white label=<<B>@decoder.conv13.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv13_pass1" {
+			subgraph "cluster_decoder.conv13.1_pass1" {
+				fillcolor=white label=<<B>@decoder.conv13.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.conv13_pass1" {
+			subgraph "cluster_decoder.conv13.2_pass1" {
+				fillcolor=white label=<<B>@decoder.conv13.2</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv14_pass1" {
+			subgraph "cluster_decoder.deconv14.0_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv14.0</B><br align='left'/>(ZeroPad2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv14_pass1" {
+			subgraph "cluster_decoder.deconv14.1_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv14.1</B><br align='left'/>(ConvTranspose2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv14_pass1" {
+			subgraph "cluster_decoder.deconv14.2_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv14.2</B><br align='left'/>(Scissor)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv14_pass1" {
+			subgraph "cluster_decoder.deconv14.3_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv14.3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.deconv14_pass1" {
+			subgraph "cluster_decoder.deconv14.4_pass1" {
+				fillcolor=white label=<<B>@decoder.deconv14.4</B><br align='left'/>(LeakyReLU)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.decoder_output_pass1" {
+			subgraph "cluster_decoder.decoder_output.0_pass1" {
+				fillcolor=white label=<<B>@decoder.decoder_output.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_decoder_pass1 {
+		subgraph "cluster_decoder.decoder_output_pass1" {
+			subgraph "cluster_decoder.decoder_output.1_pass1" {
+				fillcolor=white label=<<B>@decoder.decoder_output.1</B><br align='left'/>(Tanh)<br align='left'/>> labelloc=b penwidth=3.5 style="filled,dashed"
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer1.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.downsample_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_5_14 -> batchnorm_5_15 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer1.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer1.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.1_pass1" {
+				subgraph "cluster_encoder.layer1.1.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer1.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer1.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.downsample_pass1" {
+					fillcolor=white label=<<B>@encoder.layer1.2.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer1.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer2.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.downsample_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_15_47 -> batchnorm_15_48 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer2.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer2.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.1_pass1" {
+				subgraph "cluster_encoder.layer2.1.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer2.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer2.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.2_pass1" {
+				subgraph "cluster_encoder.layer2.2.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer2.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer2.3.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.downsample_pass1" {
+					fillcolor=white label=<<B>@encoder.layer2.3.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer2.3.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer3.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.downsample_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_28_90 -> batchnorm_28_91 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer3.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer3.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.1_pass1" {
+				subgraph "cluster_encoder.layer3.1.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer3.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer3.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.2_pass1" {
+				subgraph "cluster_encoder.layer3.2.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer3.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer3.3.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.3.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.3_pass1" {
+				subgraph "cluster_encoder.layer3.3.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer3.3.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer3.4.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.4.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.4_pass1" {
+				subgraph "cluster_encoder.layer3.4.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer3.4.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer3.5.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer3.5.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.5_pass1" {
+				subgraph "cluster_encoder.layer3.5.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer3.5.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer4.0.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.downsample_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.0.downsample</B><br align='left'/>(Sequential)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,solid"
+					conv2d_47_152 -> batchnorm_47_153 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer4.0.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer4.1.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.1.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.1_pass1" {
+				subgraph "cluster_encoder.layer4.1.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer4.1.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.conv1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.conv1</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.bn1_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.bn1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.relu_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.relu:1</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.conv2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.conv2</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.bn2_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.bn2</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.relu_pass2" {
+					fillcolor=white label=<<B>@encoder.layer4.2.relu:2</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.conv3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.conv3</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.bn3_pass1" {
+					fillcolor=white label=<<B>@encoder.layer4.2.bn3</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.2_pass1" {
+				subgraph "cluster_encoder.layer4.2.relu_pass3" {
+					fillcolor=white label=<<B>@encoder.layer4.2.relu:3</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=2.75 style="filled,dashed"
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer1.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@encoder.layer1.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.0_pass1" {
+				subgraph "cluster_encoder.layer1.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer1.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@encoder.layer1.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer1_pass1" {
+			subgraph "cluster_encoder.layer1.2_pass1" {
+				subgraph "cluster_encoder.layer1.2.downsample_pass1" {
+					subgraph "cluster_encoder.layer1.2.downsample.0_pass1" {
+						fillcolor=white label=<<B>@encoder.layer1.2.downsample.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer2.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@encoder.layer2.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.0_pass1" {
+				subgraph "cluster_encoder.layer2.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer2.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@encoder.layer2.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer2_pass1" {
+			subgraph "cluster_encoder.layer2.3_pass1" {
+				subgraph "cluster_encoder.layer2.3.downsample_pass1" {
+					subgraph "cluster_encoder.layer2.3.downsample.0_pass1" {
+						fillcolor=white label=<<B>@encoder.layer2.3.downsample.0</B><br align='left'/>(MaxPool2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer3.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@encoder.layer3.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer3_pass1" {
+			subgraph "cluster_encoder.layer3.0_pass1" {
+				subgraph "cluster_encoder.layer3.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer3.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@encoder.layer3.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer4.0.downsample.0_pass1" {
+						fillcolor=white label=<<B>@encoder.layer4.0.downsample.0</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+	subgraph cluster_encoder_pass1 {
+		subgraph "cluster_encoder.layer4_pass1" {
+			subgraph "cluster_encoder.layer4.0_pass1" {
+				subgraph "cluster_encoder.layer4.0.downsample_pass1" {
+					subgraph "cluster_encoder.layer4.0.downsample.1_pass1" {
+						fillcolor=white label=<<B>@encoder.layer4.0.downsample.1</B><br align='left'/>(BatchNorm2d)<br align='left'/>> labelloc=b penwidth=2.0 style="filled,dashed"
+					}
+				}
+			}
+		}
+	}
+}

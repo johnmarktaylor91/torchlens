@@ -1,0 +1,56 @@
+// Computational graph for the feedforward sweep
+digraph RecurrentParamsComplex {
+	graph [label=<<B>RecurrentParamsComplex</B><br align='left'/>37 tensors total (8.2 KB)<br align='left'/>60 params total (720 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>5x5 (228 B)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> add_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_1 [label=<<b>add_1_1 (x2)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_1 -> linear_1_2 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid]
+	linear_1_2 [label=<<b>linear_1_2 (x5)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_2 -> mul_1_3 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid taillabel="  Out 1  "]
+	linear_1_2 -> add_2_7 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1,3  " labelfontsize=8 style=solid taillabel="  Out 2,4  "]
+	linear_1_2 -> add_3_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 3  "]
+	linear_1_2 -> add_4_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 5  "]
+	mul_1_3 [label=<<b>mul_1_3 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3 -> linear_2_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1,3,6  " labelfontsize=8 style=solid taillabel="  Out 1-3  "]
+	linear_2_4 [label=<<b>linear_2_4 (x8)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_4 -> log_1_5 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-6  " labelfontsize=8 style=solid taillabel="  Out 1-6  "]
+	linear_2_4 -> tan_1_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 6  "]
+	linear_2_4 -> linear_2_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 7  " labelfontsize=8 style=solid taillabel="  Out 6  "]
+	linear_2_4 -> add_5_13 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 7-8  "]
+	log_1_5 [label=<<b>log_1_5 (x6)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_1_5 -> sin_1_6 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-2  " labelfontsize=8 style=solid taillabel="  Out 1,6  "]
+	log_1_5 -> linear_1_2 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2-4  " labelfontsize=8 style=solid taillabel="  Out 2-3,5  "]
+	log_1_5 -> linear_2_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 5  " labelfontsize=8 style=solid taillabel="  Out 4  "]
+	sin_1_6 [label=<<b>sin_1_6 (x2)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sin_1_6 -> linear_2_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2  " labelfontsize=8 style=solid taillabel="  Out 1  "]
+	sin_1_6 -> linear_1_2 [arrowsize=.7 color=black fontcolor=black headlabel="  In 5  " labelfontsize=8 style=solid taillabel="  Out 2  "]
+	add_2_7 [label=<<b>add_2_7 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_2_7 -> mul_2_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1  "]
+	add_2_7 -> mul_1_3 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2-3  " labelfontsize=8 style=solid taillabel="  Out 2-3  "]
+	mul_2_8 [label=<<b>mul_2_8 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8 -> add_2_7 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2  " labelfontsize=8 style=solid]
+	add_3_9 [label=<<b>add_3_9</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_3_9 -> linear_2_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 4  " labelfontsize=8 style=solid]
+	add_4_10 [label=<<b>add_4_10</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_4_10 -> mul_3_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	tan_1_11 [label=<<b>tan_1_11</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	tan_1_11 -> log_2_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	log_2_12 [label=<<b>log_2_12</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_2_12 -> linear_2_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 8  " labelfontsize=8 style=solid]
+	add_5_13 [label=<<b>add_5_13</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_5_13 -> mul_3_14 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_3_14 [label=<<b>mul_3_14</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_3_14 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>5x5 (228 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_fc1 {
+		fillcolor=white label=<<B>@fc1 (x5)</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2 {
+		fillcolor=white label=<<B>@fc2 (x8)</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}

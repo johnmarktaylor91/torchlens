@@ -1,0 +1,36 @@
+// Computational graph for the feedforward sweep
+digraph ModuleLoopingClash2 {
+	graph [label=<<B>ModuleLoopingClash2</B><br align='left'/>20 tensors total (68.9 MB)<br align='left'/>0 params total (0 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>6x3x224x224 (3.4 MB)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> add_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_1 [label=<<b>add_1_1</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_1 -> sin_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	sin_1_2 [label=<<b>sin_1_2</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sin_1_2 -> relu_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_1_3 [label=<<b>relu_1_3</b><br/>6x3x224x224 (3.4 MB)<br/>@relu> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_1_3 -> log_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	log_1_4 [label=<<b>log_1_4</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_1_4 -> relu_2_5 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid]
+	relu_2_5 [label=<<b>relu_2_5 (x3)</b><br/>6x3x224x224 (3.4 MB)<br/>@relu> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_2_5 -> add_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1-3  "]
+	add_2_6 [label=<<b>add_2_6 (x3)</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_2_6 -> relu_3_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_3_7 [label=<<b>relu_3_7 (x3)</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_3_7 -> add_3_8 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-3  " labelfontsize=8 style=solid]
+	add_3_8 [label=<<b>add_3_8 (x3)</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_3_8 -> relu_2_5 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2-3  " labelfontsize=8 style=solid taillabel="  Out 1-2  "]
+	add_3_8 -> cos_1_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 3  "]
+	cos_1_9 [label=<<b>cos_1_9</b><br/>6x3x224x224 (3.4 MB)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	cos_1_9 -> relu_4_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_4_10 [label=<<b>relu_4_10</b><br/>6x3x224x224 (3.4 MB)<br/>@relu> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	relu_4_10 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>6x3x224x224 (3.4 MB)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_relu {
+		fillcolor=white label=<<B>@relu (x5)</B><br align='left'/>(ReLU)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}

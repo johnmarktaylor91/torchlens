@@ -1,0 +1,34 @@
+// Computational graph for the feedforward sweep
+digraph UberModel3 {
+	graph [label=<<B>UberModel3</B><br align='left'/>22 tensors total (4.9 KB)<br align='left'/>30 params total (360 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>5x5 (228 B)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid]
+	linear_1_1 [label=<<b>linear_1_1 (x7)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1 -> add_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1-3,5  "]
+	linear_1_1 -> add_2_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 4  "]
+	linear_1_1 -> mul_1_3 [arrowsize=.7 color=black fontcolor=black headlabel="  In 5  " labelfontsize=8 style=solid taillabel="  Out 6  "]
+	linear_1_1 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 7  "]
+	add_1_2 [label=<<b>add_1_2 (x4)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_2 -> mul_1_3 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-4  " labelfontsize=8 style=solid]
+	mul_1_3 [label=<<b>mul_1_3 (x5)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2-3,6  " labelfontsize=8 style=solid taillabel="  Out 1-2,4  "]
+	mul_1_3 -> pow_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 3  "]
+	mul_1_3 -> add_3_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 5  "]
+	pow_1_4 [label=<<b>pow_1_4</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	pow_1_4 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 4  " labelfontsize=8 style=solid]
+	add_2_5 [label=<<b>add_2_5</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_2_5 -> mul_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_6 [label=<<b>mul_2_6</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_6 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 5  " labelfontsize=8 style=solid]
+	add_3_7 [label=<<b>add_3_7</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_3_7 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 7  " labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>5x5 (228 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_fc {
+		fillcolor=white label=<<B>@fc (x7)</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}

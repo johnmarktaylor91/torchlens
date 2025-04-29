@@ -1,0 +1,73 @@
+// Computational graph for the feedforward sweep
+digraph UberModel3 {
+	graph [label=<<B>UberModel3</B><br align='left'/>22 tensors total (4.9 KB)<br align='left'/>30 params total (360 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>5x5 (228 B)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> linear_1_1pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass1 [label=<<b>linear_1_1:1</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass1 -> add_1_2pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_2pass1 [label=<<b>add_1_2:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_2pass1 -> mul_1_3pass1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_3pass1 [label=<<b>mul_1_3:1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3pass1 -> linear_1_1pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass2 [label=<<b>linear_1_1:2</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass2 -> add_1_2pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_2pass2 [label=<<b>add_1_2:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_2pass2 -> mul_1_3pass2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_3pass2 [label=<<b>mul_1_3:2</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3pass2 -> linear_1_1pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass3 [label=<<b>linear_1_1:3</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:3> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass3 -> add_1_2pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_2pass3 [label=<<b>add_1_2:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_2pass3 -> mul_1_3pass3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_3pass3 [label=<<b>mul_1_3:3</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3pass3 -> pow_1_4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	pow_1_4 [label=<<b>pow_1_4</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	pow_1_4 -> linear_1_1pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass4 [label=<<b>linear_1_1:4</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:4> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass4 -> add_2_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_2_5 [label=<<b>add_2_5</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_2_5 -> mul_2_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_2_6 [label=<<b>mul_2_6</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_6 -> linear_1_1pass5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass5 [label=<<b>linear_1_1:5</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:5> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass5 -> add_1_2pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_1_2pass4 [label=<<b>add_1_2:4</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_2pass4 -> mul_1_3pass4 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_3pass4 [label=<<b>mul_1_3:4</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3pass4 -> linear_1_1pass6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass6 [label=<<b>linear_1_1:6</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:6> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass6 -> mul_1_3pass5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	mul_1_3pass5 [label=<<b>mul_1_3:5</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_3pass5 -> add_3_7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	add_3_7 [label=<<b>add_3_7</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_3_7 -> linear_1_1pass7 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_1pass7 [label=<<b>linear_1_1:7</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc:7> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_1pass7 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>5x5 (228 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_fc_pass1 {
+		fillcolor=white label=<<B>@fc:1</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass2 {
+		fillcolor=white label=<<B>@fc:2</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass3 {
+		fillcolor=white label=<<B>@fc:3</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass4 {
+		fillcolor=white label=<<B>@fc:4</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass5 {
+		fillcolor=white label=<<B>@fc:5</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass6 {
+		fillcolor=white label=<<B>@fc:6</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass7 {
+		fillcolor=white label=<<B>@fc:7</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}

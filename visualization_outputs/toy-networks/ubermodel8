@@ -1,0 +1,45 @@
+// Computational graph for the feedforward sweep
+digraph UberModel8 {
+	graph [label=<<B>UberModel8</B><br align='left'/>14 tensors total (2.7 KB)<br align='left'/>67 params total (780 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>2x1x3x3 (232 B)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> conv2d_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	conv2d_1_1 [label=<<b>conv2d_1_1</b><br/>2x1x3x3 (232 B)<br/>params: 1x1x3x3, x1<br/>@conv> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	conv2d_1_1 -> relu_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	relu_1_2 [label=<<b>relu_1_2</b><br/>2x1x3x3 (232 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	relu_1_2 -> maxpool2d_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	maxpool2d_1_3 [label=<<b>maxpool2d_1_3</b><br/>2x1x3x3 (232 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	maxpool2d_1_3 -> mul_1_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	ones_1_4 [label=<<b>ones_1_4</b><br/>1x1x3x3 (196 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,dashed"]
+	ones_1_4 -> add_1_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=dashed]
+	zeros_1_5 [label=<<b>zeros_1_5</b><br/>1x1x3x3 (196 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,dashed"]
+	zeros_1_5 -> add_1_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=dashed]
+	add_1_6 [label=<<b>add_1_6</b><br/>1x1x3x3 (196 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,dashed"]
+	add_1_6 -> pow_1_8 [label=<<FONT POINT-SIZE='10'><b>arg 1</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=dashed]
+	rand_1_7 [label=<<b>rand_1_7</b><br/>1x1x3x3 (196 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,dashed"]
+	rand_1_7 -> pow_1_8 [label=<<FONT POINT-SIZE='10'><b>arg 0</b></FONT>> arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=dashed]
+	pow_1_8 [label=<<b>pow_1_8</b><br/>1x1x3x3 (196 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,dashed"]
+	pow_1_8 -> mul_1_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=dashed]
+	mul_1_9 [label=<<b>mul_1_9</b><br/>2x1x3x3 (232 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_9 -> identity_1_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	identity_1_10 [label=<<b>identity_1_10</b><br/>2x1x3x3 (232 B)<br/>@identity> color=black fillcolor=white fontcolor=black ordering=out shape=box style="filled,solid"]
+	identity_1_10 -> flatten_1_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	flatten_1_11 [label=<<b>flatten_1_11</b><br/>x18 (184 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	flatten_1_11 -> linear_1_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_1_12 [label=<<b>linear_1_12</b><br/>x3 (124 B)<br/>params: 3x18, x3<br/>@fc> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_12 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>x3 (124 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_conv_pass1 {
+		fillcolor=white label=<<B>@conv</B><br align='left'/>(Conv2d)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_identity_pass1 {
+		fillcolor=white label=<<B>@identity</B><br align='left'/>(Identity)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc_pass1 {
+		fillcolor=white label=<<B>@fc</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}

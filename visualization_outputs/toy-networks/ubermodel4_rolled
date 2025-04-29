@@ -1,0 +1,47 @@
+// Computational graph for the feedforward sweep
+digraph UberModel4 {
+	graph [label=<<B>UberModel4</B><br align='left'/>52 tensors total (11.6 KB)<br align='left'/>60 params total (720 B)<br align='left'/>> labeljust=left labelloc=t ordering=out rankdir=BT]
+	node [ordering=out]
+	input_1 [label=<<b>input_1</b><br/>5x5 (228 B)<br/>@input.x> color=black fillcolor="#98FB98" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	input_1 -> add_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid]
+	add_1_1 [label=<<b>add_1_1 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	add_1_1 -> mul_1_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1-3  "]
+	mul_1_2 [label=<<b>mul_1_2 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_1_2 -> sub_1_3 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-3  " labelfontsize=8 style=solid]
+	sub_1_3 [label=<<b>sub_1_3 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_1_3 -> add_1_1 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2-3  " labelfontsize=8 style=solid taillabel="  Out 1-2  "]
+	sub_1_3 -> cos_1_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid taillabel="  Out 3  "]
+	cos_1_4 [label=<<b>cos_1_4 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	cos_1_4 -> linear_1_5 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1,3,5  " labelfontsize=8 style=solid taillabel="  Out 1-3  "]
+	linear_1_5 [label=<<b>linear_1_5 (x6)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_1_5 -> sin_1_6 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1,3,5  "]
+	linear_1_5 -> cos_1_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2-3  " labelfontsize=8 style=solid taillabel="  Out 2,4  "]
+	linear_1_5 -> mul_3_11 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 6  "]
+	sin_1_6 [label=<<b>sin_1_6 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sin_1_6 -> sub_2_7 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1,5,9  " labelfontsize=8 style=solid]
+	sub_2_7 [label=<<b>sub_2_7 (x12)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	sub_2_7 -> mul_2_8 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1,3,5,7,9,11  "]
+	sub_2_7 -> sub_2_7 [arrowsize=.7 color=black fontcolor=black headlabel="  In 3,7,11  " labelfontsize=8 style=solid taillabel="  Out 2,6,10  "]
+	sub_2_7 -> log_1_10 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 4,8,12  "]
+	mul_2_8 [label=<<b>mul_2_8 (x6)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_2_8 -> linear_2_9 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	linear_2_9 [label=<<b>linear_2_9 (x6)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc2> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
+	linear_2_9 -> sub_2_7 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2,4,6,8,10,12  " labelfontsize=8 style=solid]
+	log_1_10 [label=<<b>log_1_10 (x3)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	log_1_10 -> linear_1_5 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2,4,6  " labelfontsize=8 style=solid]
+	mul_3_11 [label=<<b>mul_3_11</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	mul_3_11 -> tanh_1_12 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	tanh_1_12 [label=<<b>tanh_1_12</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
+	tanh_1_12 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
+	output_1 [label=<<b>output_1</b><br/>5x5 (228 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
+	{
+		rank=sink
+		output_1
+	}
+	subgraph cluster_fc1 {
+		fillcolor=white label=<<B>@fc1 (x6)</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+	subgraph cluster_fc2 {
+		fillcolor=white label=<<B>@fc2 (x6)</B><br align='left'/>(Linear)<br align='left'/>> labelloc=b penwidth=5.0 style="filled,dashed"
+	}
+}
