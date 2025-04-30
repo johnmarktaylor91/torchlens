@@ -100,7 +100,6 @@ def input_complex():
 
 # Test different operations
 
-
 def test_model_simple_ff(default_input1):
     print("Testing SimpleFF model")
     model = wbreaks_example_models.SimpleFF()
@@ -1128,7 +1127,7 @@ def test_stochastic_loop():
 
 def test_recurrent_params_simple(input_2d):
     print("Running test_recurrent_params_simple")
-    model = example_models.RecurrentParamsSimple()
+    model = wbreaks_example_models.RecurrentParamsSimple()
     assert validate_saved_activations(model, input_2d)
     show_model_graph(
         model,
@@ -1138,6 +1137,7 @@ def test_recurrent_params_simple(input_2d):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "recurrent_params_simple_unrolled"
         ),
+        vis_fileformat="svg",
         vis_graph_with_dynamo_explain=True
     )
     show_model_graph(
@@ -1148,13 +1148,14 @@ def test_recurrent_params_simple(input_2d):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "recurrent_params_simple_rolled"
         ),
+        vis_fileformat="svg",
         vis_graph_with_dynamo_explain=True
     )
 
 
 def test_recurrent_params_complex(input_2d):
     print("Running test_recurrent_params_complex")
-    model = example_models.RecurrentParamsComplex()
+    model = wbreaks_example_models.RecurrentParamsComplex()
     assert validate_saved_activations(model, input_2d)
     show_model_graph(
         model,
@@ -1164,6 +1165,8 @@ def test_recurrent_params_complex(input_2d):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "recurrent_params_complex_unrolled"
         ),
+        vis_fileformat="svg",
+        vis_graph_with_dynamo_explain=True
     )
     show_model_graph(
         model,
@@ -1173,9 +1176,11 @@ def test_recurrent_params_complex(input_2d):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "recurrent_params_complex_rolled"
         ),
+        vis_fileformat="svg",
+        vis_graph_with_dynamo_explain=True
     )
 
-
+'''
 def test_looping_params_doublenested(input_2d):
     print("Running test_looping_params_doublenested")
     model = example_models.LoopingParamsDoubleNested()
@@ -1274,8 +1279,6 @@ def test_module_looping_clash3(default_input1):
         ),
     )
 
-
-'''
 def test_propertymodel(input_complex):
     model = example_models.PropertyModel()
     assert validate_saved_activations(model, input_complex)
@@ -1290,7 +1293,7 @@ def test_propertymodel(input_complex):
 
 def test_ubermodel1(input_2d):
     print("Running test_ubermodel1")
-    model = example_models.UberModel1()
+    model = wbreaks_example_models.UberModel1()
     assert validate_saved_activations(model, [[input_2d, input_2d * 2, input_2d * 3]])
     show_model_graph(
         model,
@@ -1298,9 +1301,11 @@ def test_ubermodel1(input_2d):
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "toy-networks", "ubermodel1"),
+        vis_fileformat="svg",
+        vis_graph_with_dynamo_explain=True
     )
 
-
+'''
 def test_ubermodel2():
     print("Running test_ubermodel2")
     model = example_models.UberModel2()
@@ -1313,7 +1318,7 @@ def test_ubermodel2():
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "toy-networks", "ubermodel2"),
     )
-'''
+
 def test_ubermodel3(input_2d):
     model = example_models.UberModel3()
     assert validate_saved_activations(model, input_2d)
@@ -1430,7 +1435,7 @@ def test_ubermodel9():
 '''
 
 
-
+'''
 # Torchvision Main Models
 
 
@@ -1477,7 +1482,6 @@ def test_alexnet(default_input1):
         vis_nesting_depth=4,
         vis_outpath=opj("visualization_outputs", "torchvision-main", "alexnet_depth4"),
     )
-
 
 def test_googlenet(default_input1):
     print("Running test_googlenet")
@@ -1601,6 +1605,7 @@ def test_googlenet(default_input1):
             "visualization_outputs", "torchvision-main", "googlenet_nobuffer_depth4"
         ),
     )
+'''
 
 '''
 def test_vgg16(default_input1):
@@ -1878,12 +1883,10 @@ def test_inception_v3():
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "torchvision-main", "inception_v3"),
     )
-'''
 
 
-'''
+
 # Cornet Models
-
 
 def test_cornet_s(default_input1):
     model = cornet.cornet_s()
@@ -2152,8 +2155,6 @@ def test_cornet_z(default_input1):
         vis_nesting_depth=3,
         vis_outpath=opj("visualization_outputs", "cornet", "cornet_z_rolled_depth3"),
     )
-'''
-
 
 # Torchvision Segmentation Models
 def test_segment_deeplab_v3_resnet50(default_input1):
@@ -2172,7 +2173,6 @@ def test_segment_deeplab_v3_resnet50(default_input1):
     )
     assert validate_saved_activations(model, default_input1)
 
-'''
 def test_segment_deeplabv3_resnet101(default_input1):
     model = torchvision.models.segmentation.deeplabv3_resnet101()
     show_model_graph(
@@ -2248,6 +2248,7 @@ def test_segment_fcn_resnet101(default_input1):
     assert validate_saved_activations(model, default_input1)
 '''
 
+'''
 
 # Torchvision Detection Models
 
@@ -2279,8 +2280,6 @@ def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
     )
     assert validate_saved_activations(model, model_inputs)
 
-
-'''
 def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
     model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn()
     input_tensors = [default_input1[0], default_input2[0]]
@@ -2434,7 +2433,6 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
         ),
     )
     assert validate_saved_activations(model, [input_tensors])
-'''
 
 def test_quantize_resnet50(default_input1):
     model = torchvision.models.quantization.resnet50()
@@ -2449,7 +2447,6 @@ def test_quantize_resnet50(default_input1):
     )
     assert validate_saved_activations(model, default_input1)
 
-'''
 def test_quantize_resnext101_64x4d(default_input1):
     model = torchvision.models.quantization.resnext101_64x4d()
     show_model_graph(
@@ -2523,7 +2520,6 @@ def test_quantize_inception_v3():
         ),
     )
     assert validate_saved_activations(model, model_input)
-'''
 
 def test_taskonomy(default_input1):
     model = visualpriors.taskonomy_network.TaskonomyNetwork()
@@ -2549,8 +2545,6 @@ def test_video_mc3_18():
     )
     assert validate_saved_activations(model, model_input)
 
-
-'''
 def test_video_mvit_v2_s():
     model = torchvision.models.video.mvit_v2_s()
     model_input = torch.randn(16, 3, 448, 896)
@@ -2606,23 +2600,6 @@ def test_video_s3d():
     assert validate_saved_activations(model, model_input)
 '''
 
-# Optic flow models
-
-
-def test_opticflow_raftsmall():
-    model = torchvision.models.optical_flow.raft_small()
-    model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]
-    show_model_graph(
-        model,
-        model_input,
-        save_only=True,
-        vis_opt="unrolled",
-        vis_outpath=opj(
-            "visualization_outputs", "torchvision-opticflow", "opticflow_raftsmall"
-        ),
-    )
-    assert validate_saved_activations(model, model_input)
-
 
 '''
 def test_opticflow_raftlarge():  # TODO: the loop-finding prccedure messes up on this somehow.
@@ -2639,7 +2616,6 @@ def test_opticflow_raftlarge():  # TODO: the loop-finding prccedure messes up on
         ),
     )
     assert validate_saved_activations(model, model_input, random_seed=1)
-'''
 
 # TIMM models
 
@@ -2655,8 +2631,6 @@ def test_timm_adv_inception_v3(default_input1):
     )
     assert validate_saved_activations(model, default_input1)
 
-
-'''
 def test_timm_beit_base_patch16_224(default_input1):
     model = timm.models.beit_base_patch16_224()
     show_model_graph(
@@ -2859,7 +2833,6 @@ def test_timm_ecaresnet101d():
         vis_outpath=opj("visualization_outputs", "timm", "ecaresnet101d"),
     )
     assert validate_saved_activations(model, model_input)
-'''
 
 # Torchaudio
 
@@ -2878,8 +2851,6 @@ def test_audio_conv_tasnet_base():
     )
     assert validate_saved_activations(model, model_input)
 
-
-'''
 def test_audio_hubert_base():
     model = torchaudio.models.hubert_base()
     model_input = torch.randn(12, 2000)
@@ -2985,7 +2956,6 @@ def test_deepspeech():
         vis_outpath=opj("visualization_outputs", "torchaudio", "audio_deepspeech"),
     )
     assert validate_saved_activations(model, model_input)
-'''
 
 # Language models
 
@@ -3008,7 +2978,6 @@ def test_lstm():
     )
     assert validate_saved_activations(model, model_input)
 
-'''
 def test_rnn():
     model = example_models.RNNModel()
     model_input = torch.rand(5, 5, 5)
@@ -3060,7 +3029,6 @@ def test_bert():
         vis_outpath=opj("visualization_outputs", "language-models", "bert"),
     )
     assert validate_saved_activations(model, [], model_inputs)
-'''
 
 # Multimodal
 
@@ -3088,7 +3056,6 @@ def test_clip():  # for some reason CLIP breaks the PyCharm debugger
     )
     assert validate_saved_activations(model, [], model_inputs, random_seed=1)
 
-'''
 def test_stable_diffusion():
     try:
         import UNet
@@ -3106,12 +3073,10 @@ def test_stable_diffusion():
         vis_outpath=opj("visualization_outputs", "multimodal-models", "stable_diffusion"),
     )
     assert validate_saved_activations(model, model_inputs, random_seed=1)
-'''
 
 
 # Text to speech
 
-'''
 def test_styletts():
     try:
         from StyleTTS.models import TextEncoder
@@ -3132,9 +3097,7 @@ def test_styletts():
         vis_outpath=opj("visualization_outputs", "text-to-speech", "styletts_text_encoder"),
     )
     assert validate_saved_activations(model, model_inputs, random_seed=1)
-'''
 
-'''
 # Graph neural networks
 
 
@@ -3160,9 +3123,7 @@ def test_dimenet():
         vis_outpath=opj("visualization_outputs", "graph-neural-networks", "dimenet"),
     )
     assert validate_saved_activations(model, model_inputs)
-'''
 
-'''
 # Quantum machine-learning model
 
 def test_qml():

@@ -816,9 +816,11 @@ class RecurrentParamsSimple(nn.Module):
     def forward(self, x):
         x = x + 1
         x = self.fc1(x)
+        print("x")  # Cause break
         x = x * 2
         x = self.fc1(x)
         x = torch.log(x)
+        print("x")  # Cause break
         x = torch.tan(x)
         x = self.fc1(x)
         x = x * 2
@@ -848,12 +850,14 @@ class RecurrentParamsComplex(nn.Module):
         x = x + 1
         x = x * 2
         x = self.fc2(x)
+        print("x")
         x = torch.log(x)
         x = self.fc1(x)
         x = x + 2
         x = self.fc2(x)
         x = torch.log(x)
         x = self.fc2(x)
+        print("x")
         x = torch.log(x)
         x = self.fc1(x)
         x = x + 1
@@ -862,6 +866,7 @@ class RecurrentParamsComplex(nn.Module):
         y = torch.log(x)
         y = torch.sin(y)
         y = self.fc1(y)
+        print("y")
         y = y + 3
         z = torch.tan(x)
         z = torch.log(z)
@@ -1005,13 +1010,15 @@ class UberModel1(nn.Module):
 
     @staticmethod
     def forward(x):
-        x, y, z = x
+        x, y, z = x, x, x
         x = x + 1
         y = y * 2
+        print("x")
         y = y ** 3
         w = torch.rand(5, 5)
         w = w * 2
         w = w + 4
+        print("w")
         wa = torch.cos(w)
         wa = torch.sin(wa)
         wb = torch.log(w)
@@ -1021,6 +1028,7 @@ class UberModel1(nn.Module):
         w2 = w - 3
         w2 = w2 + 4
         w2 = w2 * 5
+        print("w2")
         w3 = torch.zeros(5, 5)
         w4 = torch.ones(5, 5)
         w3 = w3 + 1
@@ -1031,10 +1039,12 @@ class UberModel1(nn.Module):
         v = u * 8
         v2 = v + 2
         v2 = v * 3
+        print("v2")
         v3 = v2.sum() > 5
         m = torch.ones(5)
         m1 = m * 2
         m2 = m + 3
+        print("m2")
         v = torch.cos(v)
         return u, v, y
 

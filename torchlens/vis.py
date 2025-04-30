@@ -250,7 +250,9 @@ def render_graph(
     collapsed_modules = set()
     edges_used = set()
 
-    if dynamo_explain_outputs is not None: 
+    # print("printing dynamo_explain: ", dynamo_explain_outputs)
+    # print("printing break_reaons: ", dynamo_explain_outputs.break_reasons)
+    if dynamo_explain_outputs is not None and dynamo_explain_outputs.break_reasons is not None: # More edits
         print("Number of breaks: " + str(len(dynamo_explain_outputs.break_reasons)))
 
     for dynamo_explain_output in dynamo_explain_outputs.break_reasons:

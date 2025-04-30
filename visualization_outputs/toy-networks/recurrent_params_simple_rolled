@@ -6,14 +6,36 @@ digraph RecurrentParamsSimple {
 	input_1 -> add_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid]
 	add_1_1 [label=<<b>add_1_1</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
 	add_1_1 -> linear_1_2 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1  " labelfontsize=8 style=solid]
-	linear_1_2 [label=<<b>linear_1_2 (x4)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1> color=black fillcolor="#E6E6E6" fontcolor=black ordering=out shape=box style="filled,solid"]
-	linear_1_2 -> mul_1_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1,3  "]
-	linear_1_2 -> log_1_4 [arrowsize=.7 color=black fontcolor=black headlabel="  In 1-2  " labelfontsize=8 style=solid taillabel="  Out 2,4  "]
+	linear_1_2 [label=<<b>linear_1_2 (x4)</b><br/>5x5 (228 B)<br/>params: 5x5, x5<br/>@fc1> color=red fillcolor="#E6E6E6" fontcolor=red ordering=out shape=box style="filled,solid" tooltip="Failed to trace builtin operator
+  Explanation: Dynamo does not know how to trace builtin operator `print` with argument types ['str'] (has_kwargs False)
+  Hint: Avoid calling builtin `print` with argument types ['str']. Consider using an equivalent alternative function/method to `print`.
+  Hint: If you are attempting to call a logging function (e.g. `print`), you can try adding it to `torch._dynamo.config.reorderable_logging_functions`.
+  Hint: Please report an issue to PyTorch.
+
+  Developer debug context: builtin print [<class 'torch._dynamo.variables.constant.ConstantVariable'>] False
+
+
+User Stack:
+/Users/taejunseo/Codes/torchlens-HPML/tests/wbreaks_example_models.py:819
+"]
+	linear_1_2 -> mul_1_3 [arrowsize=.7 color=red fontcolor=red labelfontsize=8 style=solid taillabel="  Out 1,3  "]
+	linear_1_2 -> log_1_4 [arrowsize=.7 color=red fontcolor=red headlabel="  In 1-2  " labelfontsize=8 style=solid taillabel="  Out 2,4  "]
 	mul_1_3 [label=<<b>mul_1_3 (x2)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
 	mul_1_3 -> linear_1_2 [arrowsize=.7 color=black fontcolor=black headlabel="  In 2,4  " labelfontsize=8 style=solid]
-	log_1_4 [label=<<b>log_1_4 (x2)</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
-	log_1_4 -> tan_1_5 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 1  "]
-	log_1_4 -> output_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=8 style=solid taillabel="  Out 2  "]
+	log_1_4 [label=<<b>log_1_4 (x2)</b><br/>5x5 (228 B)> color=red fillcolor=white fontcolor=red ordering=out shape=oval style="filled,solid" tooltip="Failed to trace builtin operator
+  Explanation: Dynamo does not know how to trace builtin operator `print` with argument types ['str'] (has_kwargs False)
+  Hint: Avoid calling builtin `print` with argument types ['str']. Consider using an equivalent alternative function/method to `print`.
+  Hint: If you are attempting to call a logging function (e.g. `print`), you can try adding it to `torch._dynamo.config.reorderable_logging_functions`.
+  Hint: Please report an issue to PyTorch.
+
+  Developer debug context: builtin print [<class 'torch._dynamo.variables.constant.ConstantVariable'>] False
+
+
+User Stack:
+/Users/taejunseo/Codes/torchlens-HPML/tests/wbreaks_example_models.py:823
+"]
+	log_1_4 -> tan_1_5 [arrowsize=.7 color=red fontcolor=red labelfontsize=8 style=solid taillabel="  Out 1  "]
+	log_1_4 -> output_1 [arrowsize=.7 color=red fontcolor=red labelfontsize=8 style=solid taillabel="  Out 2  "]
 	tan_1_5 [label=<<b>tan_1_5</b><br/>5x5 (228 B)> color=black fillcolor=white fontcolor=black ordering=out shape=oval style="filled,solid"]
 	tan_1_5 -> linear_1_2 [arrowsize=.7 color=black fontcolor=black headlabel="  In 3  " labelfontsize=8 style=solid]
 	output_1 [label=<<b>output_1</b><br/>5x5 (228 B)<br/>@output> color=black fillcolor="#ff9999" fontcolor=black ordering=out shape=oval style="filled,solid"]
