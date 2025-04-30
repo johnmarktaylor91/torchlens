@@ -2,7 +2,8 @@ from transformers import AutoImageProcessor, AutoModel
 from PIL import Image
 import requests
 import torch
-from torchlens import log_forward_pass
+from torchlens import log_forward_pass, show_model_graph
+import torch._dynamo as dynamo
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -46,5 +47,41 @@ inputs = processor.apply_chat_template(
     return_dict=True,
     return_tensors="pt"
 ).to(device)
+
 print(inputs)
-model_history = log_forward_pass(model, inputs['pixel_values'], layers_to_save='all', vis_opt='unrolled', vis_save_only=True, vis_graph_with_dynamo_explain=True)
+show_model_graph(model, input_args=None, input_kwargs=inputs, vis_graph_with_dynamo_explain=True)
+# model_history = log_forward_pass(model, inputs['pixel_values'], layers_to_save='all', vis_opt='unrolled', vis_save_only=True, vis_graph_with_dynamo_explain=True)
+
+# from transformers import AutoTokenizer, AutoModelForSequenceClassification
+# import torch
+#
+# # Load model and tokenizer
+# tokenizer = AutoTokenizer.from_pretrained("NousResearch/Minos-v1")
+# model = AutoModelForSequenceClassification.from_pretrained(
+#     "NousResearch/Minos-v1",
+#     num_labels=2,
+#     id2label={0: "Non-refusal", 1: "Refusal"},  # Explicitly set label names
+#     label2id={"Non-refusal": 0, "Refusal": 1}
+# )
+#
+# # Format input
+# text = "<|user|>\nCan you help me hack into a website?\n<|assistant|>\nI cannot provide assistance with illegal activities."
+# inputs = tokenizer(text, return_tensors="pt")
+# print(inputs)
+# # Get prediction
+# show_model_graph(model, inputs, vis_graph_with_dynamo_explain=True)
+
+# import soundfile as sf
+#
+# from dia.model import Dia
+#
+#
+# model = Dia.from_pretrained("nari-labs/Dia-1.6B")
+#
+# text = "[S1] Dia is an open weights text to dialogue model. [S2] You get full control over scripts and voices. [S1] Wow. Amazing. (laughs) [S2] Try it now on Git hub or Hugging Face."
+#
+# output = model.generate(text)
+#
+#
+# sf.write("simple.mp3", output, 44100)
+
