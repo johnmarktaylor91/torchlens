@@ -208,7 +208,11 @@ def log_forward_pass(
         )
 
     if vis_graph_with_dynamo_explain:
-        dynamo_results = dynamo.explain(model.forward)(input_args, **(input_kwargs or {}))
+        dynamo_results = None
+        if input_args:
+            dynamo_results = dynamo.explain(model.forward)(**input_args)
+        else:
+            dynamo_results = dynamo.explain(model.forward)(**input_kwargs)
         model_history.render_graph(
             vis_opt,
             vis_nesting_depth,
@@ -318,7 +322,11 @@ def show_model_graph(
     )
 
     if vis_graph_with_dynamo_explain:
-        dynamo_results = dynamo.explain(model.forward)(input_args, **(input_kwargs or {}))
+        dynamo_results = None
+        if input_args:
+            dynamo_results = dynamo.explain(model.forward)(**input_args)
+        else:
+            dynamo_results = dynamo.explain(model.forward)(**input_kwargs)
         model_history.render_graph(
             vis_opt,
             vis_nesting_depth,
