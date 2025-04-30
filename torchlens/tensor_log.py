@@ -38,6 +38,7 @@ class TensorLogEntry:
 
         self.stack_trace = fields_dict["stack_trace"]
         self.is_graph_break_node = fields_dict["is_graph_break_node"]
+        self.graph_break_reason = fields_dict["graph_break_reason"]   # MY ADDITION 
         # General info:
         self.tensor_label_raw = fields_dict["tensor_label_raw"]
         self.layer_label_raw = fields_dict["layer_label_raw"]

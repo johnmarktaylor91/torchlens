@@ -114,6 +114,7 @@ MODEL_HISTORY_FIELD_ORDER = [
 TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "stack_trace",
     "is_graph_break_node",
+    "graph_break_reason",       # MY ADDITION
     # General info
     "layer_label",
     "tensor_label_raw",

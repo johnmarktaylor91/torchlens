@@ -21,6 +21,7 @@ class SimpleFF(nn.Module):
     def forward(x):
         x = x + 1
         x = x * 2
+        print("x")  # Cause break
         return x
 
 

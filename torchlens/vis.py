@@ -3,9 +3,16 @@ from inspect import FrameInfo
 from traceback import FrameSummary
 from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
+import torch
+import torch.nn as nn
+import torch._dynamo   # MY ADDITION
+
 import graphviz
 from IPython.display import display
 from torch._dynamo.backends.debugging import ExplainOutput
+from torch._dynamo.output_graph import GraphCompileReason   # MY ADDITION
+
+from typing import Any, Dict, Optional, List, Tuple, Union
 
 from .helper_funcs import in_notebook, int_list_to_compact_str
 from .postprocess import _roll_graph
@@ -26,6 +33,7 @@ MIN_MODULE_PENWIDTH = 2
 PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
+'''
 def show_model_graph(
         model: nn.Module,
         input_args: Union[torch.Tensor, List, Tuple],
@@ -122,6 +130,7 @@ def show_model_graph(
             vis_buffer_layers,
             vis_direction,
         )
+'''
 
 def render_graph(
         self: "ModelHistory",
@@ -241,10 +250,16 @@ def render_graph(
     collapsed_modules = set()
     edges_used = set()
 
-    print("Number of breaks: " + str(len(dynamo_explain_outputs.break_reasons)))
+    if dynamo_explain_outputs is not None: 
+        print("Number of breaks: " + str(len(dynamo_explain_outputs.break_reasons)))
+
     for dynamo_explain_output in dynamo_explain_outputs.break_reasons:
         best_node_name, best_node = __align_graph_break_to_node(dynamo_explain_output.user_stack, entries_to_plot.items())
+        if not best_node:
+            print("No node found for break reason: " + str(dynamo_explain_output))
+            continue
         best_node.is_graph_break_node = True
+        best_node.graph_break_reason = format_break_reason(dynamo_explain_output)
         entries_to_plot[best_node_name] = best_node
 
     for node_barcode, node in entries_to_plot.items():
@@ -274,7 +289,6 @@ def render_graph(
 
     dot.render(vis_outpath, view=(not save_only))
 
-
 def __align_graph_break_to_node(break_frame: list[FrameSummary], nodes: dict[str, TensorLogEntry] ) -> Tuple[str, TensorLogEntry]:
     target_file = break_frame[0].filename
     target_line = break_frame[0].lineno
@@ -283,7 +297,7 @@ def __align_graph_break_to_node(break_frame: list[FrameSummary], nodes: dict[str
     best_dist = float('inf')
     best_node = None
 
-    for node_name, node in nodes.items():
+    for node_name, node in nodes:
         if node.stack_trace is None:
             continue
 
@@ -364,6 +378,19 @@ def _check_if_collapsed_module(node, vis_nesting_depth):
     else:
         return False
 
+# MY ADDITION: Helper function for formatting the break reason. 
+def format_break_reason(break_reason: GraphCompileReason):
+        # Format the break reason string
+        formatted_reason = break_reason.reason
+        if "builtin: print" in formatted_reason:
+            formatted_reason = f"Unsupported print statement. {formatted_reason}"
+
+        if break_reason.user_stack:
+            formatted_reason += "\n\nUser Stack:\n"
+            for frame in break_reason.user_stack:
+                formatted_reason += f"{frame.filename}:{frame.lineno}\n"
+        return formatted_reason
+
 
 def _construct_layer_node(self: "ModelHistory",
                           node,
@@ -376,6 +403,7 @@ def _construct_layer_node(self: "ModelHistory",
     node_address, node_shape, node_color = _get_node_address_shape_color(
         self, node, show_buffer_layers
     )
+
     node_bg_color = _get_node_bg_color(self, node)
 
     if node.has_input_ancestor:
@@ -396,6 +424,9 @@ def _construct_layer_node(self: "ModelHistory",
                  'shape': node_shape,
                  'ordering': 'out'
                  }
+    if node.is_graph_break_node:
+        node_args["tooltip"] = node.graph_break_reason
+
     for arg_name, arg_val in vis_node_overrides.items():
         if callable(arg_val):
             node_args[arg_name] = str(arg_val(self, node))

@@ -141,6 +141,7 @@ def log_source_tensor_exhaustive(
     fields_dict = {
         "stack_trace": pickle_stack,
         "is_graph_break_node": False,
+        "graph_break_reason": None,   # MY ADDITION
         # General info:
         "tensor_label_raw": tensor_label,
         "layer_label_raw": tensor_label,
@@ -429,6 +430,7 @@ def log_function_output_tensors_exhaustive(
         pickle_stack.append(PickleFrame(stack.filename, stack.lineno))
     fields_dict["stack_trace"] = pickle_stack
     fields_dict["is_graph_break_node"] = False
+    fields_dict["graph_break_reason"] = None  # MY ADDITION
     # General info
     fields_dict["layer_type"] = layer_type
     fields_dict["detach_saved_tensor"] = self.detach_saved_tensors

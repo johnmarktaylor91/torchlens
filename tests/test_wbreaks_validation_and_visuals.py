@@ -24,7 +24,7 @@ from transformers import (
 )
 from torch_geometric.nn import DimeNet
 
-import example_models
+import wbreaks_example_models
 from torchlens.user_funcs import show_model_graph, validate_saved_activations
 
 # Define inputs
@@ -103,7 +103,7 @@ def input_complex():
 
 def test_model_simple_ff(default_input1):
     print("Testing SimpleFF model")
-    model = example_models.SimpleFF()
+    model = wbreaks_example_models.SimpleFF()
     assert validate_saved_activations(model, default_input1)
     show_model_graph(
         model,
@@ -111,6 +111,7 @@ def test_model_simple_ff(default_input1):
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "toy-networks", "simple_ff"),
+        vis_fileformat="svg",
         vis_graph_with_dynamo_explain=True
     )
 
@@ -1137,6 +1138,7 @@ def test_recurrent_params_simple(input_2d):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "recurrent_params_simple_unrolled"
         ),
+        vis_graph_with_dynamo_explain=True
     )
     show_model_graph(
         model,
@@ -1146,6 +1148,7 @@ def test_recurrent_params_simple(input_2d):
         vis_outpath=opj(
             "visualization_outputs", "toy-networks", "recurrent_params_simple_rolled"
         ),
+        vis_graph_with_dynamo_explain=True
     )
 
 
