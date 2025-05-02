@@ -323,10 +323,30 @@ def show_model_graph(
 
     if vis_graph_with_dynamo_explain:
         dynamo_results = None
-        if input_args:
-            dynamo_results = dynamo.explain(model.forward)(**input_args)
+        explain_func = dynamo.explain(model.forward)
+
+        # build a local args_list without touching input_args itself
+        if isinstance(input_args, torch.Tensor):
+            args_list = [input_args]
+        elif isinstance(input_args, tuple):
+            args_list = list(input_args)
+        elif isinstance(input_args, list):
+            # unwrap [[x,y,z]] → [x,y,z] if needed
+            if len(input_args) == 1 and isinstance(input_args[0], (list, tuple)):
+                args_list = list(input_args[0])
+            else:
+                args_list = list(input_args)
+        elif input_args is None:
+            args_list = []
         else:
-            dynamo_results = dynamo.explain(model.forward)(**input_kwargs)
+            args_list = [input_args]
+
+        # now call explain, either by positional args or by kwargs
+        if args_list:
+            dynamo_results = explain_func(*args_list)
+        else:
+            dynamo_results = explain_func(**input_kwargs)
+
         model_history.render_graph(
             vis_opt,
             vis_nesting_depth,

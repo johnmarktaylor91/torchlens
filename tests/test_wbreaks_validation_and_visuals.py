@@ -1294,10 +1294,11 @@ def test_propertymodel(input_complex):
 def test_ubermodel1(input_2d):
     print("Running test_ubermodel1")
     model = wbreaks_example_models.UberModel1()
-    assert validate_saved_activations(model, [[input_2d, input_2d * 2, input_2d * 3]])
+    inputs = (input_2d, input_2d * 2, input_2d * 3)
+    assert validate_saved_activations(model, inputs)
     show_model_graph(
         model,
-        [[input_2d, input_2d * 2, input_2d * 3]],
+        inputs,  # Pass inputs as a tuple, otherwise it won't work as a list
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj("visualization_outputs", "toy-networks", "ubermodel1"),

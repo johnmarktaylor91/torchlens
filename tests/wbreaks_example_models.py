@@ -1009,8 +1009,7 @@ class UberModel1(nn.Module):
         self.buffer = torch.ones(5, 5)
 
     @staticmethod
-    def forward(x):
-        x, y, z = x, x, x
+    def forward(x, y, z):
         x = x + 1
         y = y * 2
         print("x")
