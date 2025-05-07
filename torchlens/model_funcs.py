@@ -142,22 +142,25 @@ def module_forward_decorator(
         for t in input_tensors:
             if (not hasattr(t, 'tl_tensor_label_raw')) and hasattr(t, 'tl_buffer_address'):
                 log_source_tensor(model_log, t, 'buffer', getattr(t, 'tl_buffer_address'))
-            tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
-            input_tensor_labels.add(t.tl_tensor_label_raw)
-            module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
-            tensor_entry.modules_entered.append(module_address)
-            tensor_entry.module_passes_entered.append(module_pass_label)
-            tensor_entry.is_submodule_input = True
-            for arg_key, arg_val in list(enumerate(args)) + list(kwargs.items()):
-                if arg_val is t:
-                    tensor_entry.modules_entered_argnames[
-                        f"{module_pass_label[0]}:{module_pass_label[1]}"].append(arg_key)
-                    model_log.module_layer_argnames[(f"{module_pass_label[0]}:"
-                                                     f"{module_pass_label[1]}")].append(
-                        (t.tl_tensor_label_raw, arg_key))
-            tensor_entry.module_entry_exit_thread_output.append(
-                ("+", module_pass_label[0], module_pass_label[1])
-            )
+            try:
+                tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
+                input_tensor_labels.add(t.tl_tensor_label_raw)
+                module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
+                tensor_entry.modules_entered.append(module_address)
+                tensor_entry.module_passes_entered.append(module_pass_label)
+                tensor_entry.is_submodule_input = True
+                for arg_key, arg_val in list(enumerate(args)) + list(kwargs.items()):
+                    if arg_val is t:
+                        tensor_entry.modules_entered_argnames[
+                            f"{module_pass_label[0]}:{module_pass_label[1]}"].append(arg_key)
+                        model_log.module_layer_argnames[(f"{module_pass_label[0]}:"
+                                                         f"{module_pass_label[1]}")].append(
+                            (t.tl_tensor_label_raw, arg_key))
+                tensor_entry.module_entry_exit_thread_output.append(
+                    ("+", module_pass_label[0], module_pass_label[1])
+                )
+            except:
+                continue
 
         # Check the buffers.
         for buffer_name, buffer_tensor in module.named_buffers():

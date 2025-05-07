@@ -1,5 +1,6 @@
 from collections import defaultdict
 from inspect import FrameInfo
+from pathlib import Path
 from traceback import FrameSummary
 from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
@@ -252,17 +253,18 @@ def render_graph(
 
     # print("printing dynamo_explain: ", dynamo_explain_outputs)
     # print("printing break_reaons: ", dynamo_explain_outputs.break_reasons)
-    if dynamo_explain_outputs is not None and dynamo_explain_outputs.break_reasons is not None: # More edits
+    if dynamo_explain_outputs and dynamo_explain_outputs.break_reasons: # More edits
         print("Number of breaks: " + str(len(dynamo_explain_outputs.break_reasons)))
-
-    for dynamo_explain_output in dynamo_explain_outputs.break_reasons:
-        best_node_name, best_node = __align_graph_break_to_node(dynamo_explain_output.user_stack, entries_to_plot.items())
-        if not best_node:
-            print("No node found for break reason: " + str(dynamo_explain_output))
-            continue
-        best_node.is_graph_break_node = True
-        best_node.graph_break_reason = format_break_reason(dynamo_explain_output)
-        entries_to_plot[best_node_name] = best_node
+        for dynamo_explain_output in dynamo_explain_outputs.break_reasons:
+            best_node_name, best_node = __align_graph_break_to_node(dynamo_explain_output.user_stack, entries_to_plot.items())
+            if not best_node:
+                print("No node found for break reason: " + str(dynamo_explain_output))
+                continue
+            best_node.is_graph_break_node = True
+            best_node.graph_break_reason = format_break_reason(dynamo_explain_output)
+            entries_to_plot[best_node_name] = best_node
+    else:
+        print("No dynamo explain used")
 
     for node_barcode, node in entries_to_plot.items():
         if node.is_buffer_layer and not show_buffer_layers:
@@ -291,6 +293,16 @@ def render_graph(
 
     dot.render(vis_outpath, view=(not save_only))
 
+def find_matching_stack_frame(break_frame_path, stack_frames):
+    path = Path(break_frame_path).resolve()
+    paths_to_check = [path] + list(path.parents)
+    for candidate_path in paths_to_check:
+        for stack_frame in stack_frames:
+            stack_path = Path(stack_frame.filename).resolve()
+            if stack_path == candidate_path:
+                return stack_frame
+    return None
+
 def __align_graph_break_to_node(break_frame: list[FrameSummary], nodes: dict[str, TensorLogEntry] ) -> Tuple[str, TensorLogEntry]:
     target_file = break_frame[0].filename
     target_line = break_frame[0].lineno
@@ -302,16 +314,68 @@ def __align_graph_break_to_node(break_frame: list[FrameSummary], nodes: dict[str
     for node_name, node in nodes:
         if node.stack_trace is None:
             continue
-
-        stack_frames: list[FrameInfo] = node.stack_trace
-
-        for stack_frame in stack_frames:
+        for stack_frame in node.stack_trace:
             if stack_frame.filename == target_file:
                 dist = abs(stack_frame.lineno - target_line)
                 if dist < best_dist:
                     best_dist = dist
                     best_node_name = node_name
                     best_node = node
+
+    if best_node_name is None:
+        import os
+        target_basename = os.path.basename(target_file)
+        for node_name, node in nodes:
+            if node.stack_trace is None:
+                continue
+            for stack_frame in node.stack_trace:
+                if os.path.basename(stack_frame.filename) == target_basename:
+                    dist = abs(stack_frame.lineno - target_line)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_node_name = node_name
+                        best_node = node
+
+    if best_node_name is None:
+        for node_name, node in nodes:
+            if node.stack_trace is None:
+                continue
+            matching_frame = find_matching_stack_frame(target_file, node.stack_trace)
+            if matching_frame:
+                dist = abs(matching_frame.lineno - target_line)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_node_name = node_name
+                    best_node = node
+            if not best_node:
+                best_node = node
+                best_node_name = node_name
+
+
+    # if best_node_name is None:
+    #     for node_name, node in nodes:
+    #         if node.stack_trace is None:
+    #             continue
+    #         for stack_frame in node.stack_trace:
+    #             dist = abs(stack_frame.lineno - target_line)
+    #             if dist < best_dist:
+    #                 best_dist = dist
+    #                 best_node_name = node_name
+    #                 best_node = node
+
+    # for node_name, node in nodes:
+    #     if node.stack_trace is None:
+    #         continue
+    #
+    #     stack_frames: list[FrameInfo] = node.stack_trace
+    #
+    #     for stack_frame in stack_frames:
+    #         if stack_frame.filename == target_file:
+    #             dist = abs(stack_frame.lineno - target_line)
+    #             if dist < best_dist:
+    #                 best_dist = dist
+    #                 best_node_name = node_name
+    #                 best_node = node
 
     return best_node_name, best_node
 
