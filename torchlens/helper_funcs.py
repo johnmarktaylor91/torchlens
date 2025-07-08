@@ -700,3 +700,81 @@ def warn_parallel():
             "torchlens in the main process, since certain operations "
             "depend on execution order."
         )
+
+
+def compute_flops_for_layer(layer_type, t, fields_dict):
+    """
+    Compute FLOPs for a single layer, supporting common types. t is the output tensor, fields_dict contains input shape, parameters, etc.
+    """
+    import math
+    layer_type = str(layer_type).lower()
+    output_shape = tuple(t.shape)
+    param_shapes = fields_dict.get("parent_param_shapes", [])
+    creation_kwargs = fields_dict.get("creation_kwargs", {})
+    prod = lambda x: math.prod(x) if hasattr(math, 'prod') else eval('reduce(lambda a,b:a*b,x,1)', {'reduce': __import__('functools').reduce, 'x': x})
+    numel = lambda shape: int(torch.prod(torch.tensor(shape)))
+
+    if layer_type in {"conv2d", "conv1d", "conv3d"} and param_shapes:
+        weight_shape = param_shapes[0]
+        if weight_shape is not None:
+            out_elements = numel(output_shape)
+            kernel_ops = prod(weight_shape[2:]) if len(weight_shape) > 2 else 1
+            in_channels = weight_shape[1] * creation_kwargs.get("groups", 1)
+            flops = out_elements * (in_channels * kernel_ops)
+            if len(param_shapes) > 1:
+                flops += out_elements
+            return flops
+    if layer_type == "linear" and param_shapes:
+        weight_shape = param_shapes[0]
+        batch = output_shape[0] if output_shape else 1
+        out_features = weight_shape[0]
+        in_features = weight_shape[1]
+        flops = batch * in_features * out_features
+        if len(param_shapes) > 1:
+            flops += batch * out_features
+        return flops
+    if "batchnorm" in layer_type:
+        return numel(output_shape) * 2
+    if layer_type in {"relu", "leakyrelu", "sigmoid", "tanh", "softmax"}:
+        return numel(output_shape)
+    if "pool" in layer_type:
+        return numel(output_shape)
+    if layer_type in {"add", "mul", "matmul"}:
+        return numel(output_shape)
+    if layer_type in {"flatten", "dropout"}:
+        return 0
+    if layer_type in {"upsample", "interpolate"}:
+        return numel(output_shape)
+    if layer_type in {"layernorm", "groupnorm", "instancenorm"}:
+        return numel(output_shape) * 2
+    if layer_type == "embedding" and param_shapes:
+        return numel(output_shape)
+    if "attention" in layer_type:
+        return numel(output_shape) * 2
+    if layer_type in {"convtranspose1d", "convtranspose2d", "convtranspose3d"} and param_shapes:
+        weight_shape = param_shapes[0]
+        if weight_shape is not None:
+            out_elements = numel(output_shape)
+            kernel_ops = prod(weight_shape[2:]) if len(weight_shape) > 2 else 1
+            in_channels = weight_shape[1] * creation_kwargs.get("groups", 1)
+            flops = out_elements * (in_channels * kernel_ops)
+            if len(param_shapes) > 1:
+                flops += out_elements
+            return flops
+    if layer_type in {"gelu", "silu", "mish", "elu", "selu", "celu", "prelu", "softplus", "softsign", "hardtanh", "hardshrink", "hardsigmoid", "hardswish", "swish", "glu", "threshold", "rrelu", "logsigmoid"}:
+        return numel(output_shape)
+    if layer_type in {"pixelshuffle", "pixelunshuffle"}:
+        return numel(output_shape)
+    if layer_type in {"adaptivemaxpool1d", "adaptivemaxpool2d", "adaptivemaxpool3d", "adaptiveavgpool1d", "adaptiveavgpool2d", "adaptiveavgpool3d", "globalavgpool1d", "globalavgpool2d", "globalavgpool3d", "globalmaxpool1d", "globalmaxpool2d", "globalmaxpool3d"}:
+        return numel(output_shape)
+    if layer_type in {"rnn", "lstm", "gru"} and param_shapes:
+        seq_len = output_shape[0] if len(output_shape) > 0 else 1
+        batch = output_shape[1] if len(output_shape) > 1 else 1
+        hidden_size = output_shape[2] if len(output_shape) > 2 else 1
+        flops = seq_len * batch * hidden_size * 4
+        return flops
+    if layer_type == "multiheadattention" and param_shapes:
+        return numel(output_shape) * 2
+    if layer_type in {"softmin", "softplus", "softsign", "logsoftmax"}:
+        return numel(output_shape)
+    return None

@@ -268,6 +268,13 @@ def log_source_tensor_exhaustive(
         "module_entry_exit_thread_output": [],
     }
 
+    # 计算FLOPs
+    from .helper_funcs import compute_flops_for_layer
+    try:
+        fields_dict["flops"] = compute_flops_for_layer(layer_type, t, fields_dict)
+    except Exception:
+        fields_dict["flops"] = None
+
     _make_tensor_log_entry(self, t, fields_dict, (), {}, self.activation_postfunc)
 
     # Tag the tensor itself with its label, and with a reference to the model history log.
@@ -790,6 +797,9 @@ def _log_info_specific_to_single_function_output_tensor(
     realtime_tensor_num = self._tensor_counter
     layer_type_num = self._raw_layer_type_counter[layer_type]
     tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+
+    # 保证flops字段存在
+    fields_dict["flops"] = fields_dict.get("flops", None)
 
     if len(parent_param_passes) > 0:
         operation_equivalence_type = _make_raw_param_group_barcode(indiv_param_barcodes, layer_type)

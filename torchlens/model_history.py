@@ -211,3 +211,15 @@ class ModelHistory:
     _cleanup_model = cleanup_model
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
     _remove_log_entry = _remove_log_entry
+
+    def fill_missing_flops(self):
+        """
+        遍历所有层，补全缺失的FLOPs字段。
+        """
+        from .helper_funcs import compute_flops_for_layer
+        for entry in self.layer_list:
+            if getattr(entry, 'flops', None) is None and getattr(entry, 'layer_type', None) not in ['input', 'output', 'buffer']:
+                try:
+                    entry.flops = compute_flops_for_layer(entry.layer_type, getattr(entry, 'tensor_contents', None), entry.__dict__)
+                except Exception:
+                    entry.flops = None
