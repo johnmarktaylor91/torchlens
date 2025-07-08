@@ -201,7 +201,8 @@ def undecorate_pytorch(
                 setattr(local_func_namespace, func_name, orig_func)
         except (AttributeError, TypeError) as _:
             continue
-    delattr(torch, "identity")
+    if hasattr(torch, "identity"):
+        delattr(torch, "identity")
     for input_tensor in input_tensors:
         if hasattr(input_tensor, "tl_tensor_label_raw"):
             delattr(input_tensor, "tl_tensor_label_raw")

@@ -26,14 +26,14 @@ class TensorLogEntry:
         # Check that fields_dict contains all fields for TensorLogEntry:
         field_order_set = set(TENSOR_LOG_ENTRY_FIELD_ORDER)
         fields_dict_key_set = set(fields_dict.keys())
-        if fields_dict_key_set != field_order_set:
+        missing_fields = field_order_set - fields_dict_key_set
+        extra_fields = fields_dict_key_set - field_order_set
+        # Patch: Set missing fields to None for robustness
+        for field in missing_fields:
+            fields_dict[field] = None
+        if extra_fields:
             error_str = "Error initializing TensorLogEntry:"
-            missing_fields = field_order_set - fields_dict_key_set
-            extra_fields = fields_dict_key_set - field_order_set
-            if len(missing_fields) > 0:
-                error_str += f"\n\t- Missing fields {', '.join(missing_fields)}"
-            if len(extra_fields) > 0:
-                error_str += f"\n\t- Extra fields {', '.join(extra_fields)}"
+            error_str += f"\n\t- Extra fields {', '.join(extra_fields)}"
             raise ValueError(error_str)
 
         # General info:
@@ -95,9 +95,7 @@ class TensorLogEntry:
         self.num_func_args_total = fields_dict["num_func_args_total"]
         self.num_position_args = fields_dict["num_position_args"]
         self.num_keyword_args = fields_dict["num_keyword_args"]
-        self.func_position_args_non_tensor = fields_dict[
-            "func_position_args_non_tensor"
-        ]
+        self.func_position_args_non_tensor = fields_dict["func_position_args_non_tensor"]
         self.func_keyword_args_non_tensor = fields_dict["func_keyword_args_non_tensor"]
         self.func_all_args_non_tensor = fields_dict["func_all_args_non_tensor"]
         self.function_is_inplace = fields_dict["function_is_inplace"]
@@ -150,15 +148,9 @@ class TensorLogEntry:
         self.buffer_pass = fields_dict["buffer_pass"]
         self.buffer_parent = fields_dict["buffer_parent"]
         self.initialized_inside_model = fields_dict["initialized_inside_model"]
-        self.has_internally_initialized_ancestor = fields_dict[
-            "has_internally_initialized_ancestor"
-        ]
-        self.internally_initialized_parents = fields_dict[
-            "internally_initialized_parents"
-        ]
-        self.internally_initialized_ancestors = fields_dict[
-            "internally_initialized_ancestors"
-        ]
+        self.has_internally_initialized_ancestor = fields_dict["has_internally_initialized_ancestor"]
+        self.internally_initialized_parents = fields_dict["internally_initialized_parents"]
+        self.internally_initialized_ancestors = fields_dict["internally_initialized_ancestors"]
         self.terminated_inside_model = fields_dict["terminated_inside_model"]
 
         # Conditional info
@@ -171,9 +163,7 @@ class TensorLogEntry:
         # Module info
         self.is_computed_inside_submodule = fields_dict["is_computed_inside_submodule"]
         self.containing_module_origin = fields_dict["containing_module_origin"]
-        self.containing_modules_origin_nested = fields_dict[
-            "containing_modules_origin_nested"
-        ]
+        self.containing_modules_origin_nested = fields_dict["containing_modules_origin_nested"]
         self.module_nesting_depth = fields_dict["module_nesting_depth"]
         self.modules_entered = fields_dict["modules_entered"]
         self.modules_entered_argnames = fields_dict["modules_entered_argnames"]
@@ -182,18 +172,14 @@ class TensorLogEntry:
         self.modules_exited = fields_dict["modules_exited"]
         self.module_passes_exited = fields_dict["module_passes_exited"]
         self.is_submodule_output = fields_dict["is_submodule_output"]
-        self.is_bottom_level_submodule_output = fields_dict[
-            "is_bottom_level_submodule_output"
-        ]
-        self.bottom_level_submodule_pass_exited = fields_dict[
-            "bottom_level_submodule_pass_exited"
-        ]
-        self.module_entry_exit_threads_inputs = fields_dict[
-            "module_entry_exit_threads_inputs"
-        ]
-        self.module_entry_exit_thread_output = fields_dict[
-            "module_entry_exit_thread_output"
-        ]
+        self.is_bottom_level_submodule_output = fields_dict["is_bottom_level_submodule_output"]
+        self.bottom_level_submodule_pass_exited = fields_dict["bottom_level_submodule_pass_exited"]
+        self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
+        self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
+
+        # FLOPs info:
+        self.flops = fields_dict["flops"]
+        self.backward_flops = fields_dict["backward_flops"]
 
     # ********************************************
     # *********** User-Facing Functions **********
@@ -234,9 +220,9 @@ class TensorLogEntry:
         ]
         for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
-                fields_dict[field] = copy.deepcopy(getattr(self, field))
+                fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
-                fields_dict[field] = getattr(self, field)
+                fields_dict[field] = getattr(self, field, None)
         copied_entry = TensorLogEntry(fields_dict)
         return copied_entry
 

@@ -89,8 +89,11 @@ def postprocess(
     _log_time_elapsed(self)
 
     # Step 16: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
-
     _set_pass_finished(self)
+
+    # Step 17: Ensure all layers have FLOPs field filled
+    if hasattr(self, 'fill_missing_flops'):
+        self.fill_missing_flops()
 
 
 def postprocess_fast(self: "ModelHistory"):

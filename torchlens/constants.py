@@ -242,6 +242,9 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "bottom_level_submodule_pass_exited",
     "module_entry_exit_threads_inputs",
     "module_entry_exit_thread_output",
+    # FLOPs info
+    "flops",
+    "backward_flops",
 ]
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions

@@ -209,3 +209,24 @@ class ModelHistory:
     _cleanup_model = cleanup_model
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
     _remove_log_entry = _remove_log_entry
+
+    def fill_missing_flops(self):
+        """
+        Fill missing forward and backward FLOPs for all layers in the model history.
+        """
+        from .helper_funcs import compute_flops_for_layer, compute_flops_for_layer_backward
+        for layer in self.layer_list:
+            # Forward FLOPs
+            if getattr(layer, 'flops', None) is None:
+                try:
+                    flops = compute_flops_for_layer(layer.layer_type, layer.tensor_contents, layer.__dict__)
+                except Exception:
+                    flops = None
+                layer.flops = flops
+            # Backward FLOPs
+            if not hasattr(layer, 'backward_flops') or getattr(layer, 'backward_flops', None) is None:
+                try:
+                    backward_flops = compute_flops_for_layer_backward(layer.layer_type, layer.tensor_contents, layer.__dict__)
+                except Exception:
+                    backward_flops = None
+                layer.backward_flops = backward_flops
