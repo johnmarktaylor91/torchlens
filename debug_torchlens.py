@@ -71,9 +71,13 @@ def model_log_forward_train(net_list, label2index, x):
 if __name__ == "__main__":
     model = torchvision.models.vgg11().eval()
     x = torch.rand(1, 3, 224, 224)
-    model_history = tl.log_forward_pass(model, x, vis_opt='none', save_function_args=True)
+    model_history = tl.log_forward_pass(model, x, vis_opt='unrolled', save_function_args=True)
     layer_list = model_history.layer_list
     label2index_dict = label2index(layer_list)
     res1 = model_log_forward_eval(layer_list, label2index_dict, x)
     res2 = model(x)
     print("The outputs are the same." if torch.allclose(res1, res2) else "The outputs are different.")
+    # Print per-layer FLOPs
+    print("\nLayer-wise FLOPs (forward, backward):")
+    for layer in layer_list:
+        print(f"{layer.layer_label:40s} | {str(layer.flops):>12} | {str(getattr(layer, 'backward_flops', None)):>12}")

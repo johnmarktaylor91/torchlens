@@ -32,14 +32,14 @@ class TensorLogEntry:
         # Check that fields_dict contains all fields for TensorLogEntry:
         field_order_set = set(TENSOR_LOG_ENTRY_FIELD_ORDER)
         fields_dict_key_set = set(fields_dict.keys())
-        if fields_dict_key_set != field_order_set:
+        missing_fields = field_order_set - fields_dict_key_set
+        extra_fields = fields_dict_key_set - field_order_set
+        # Patch: Set missing fields to None for robustness
+        for field in missing_fields:
+            fields_dict[field] = None
+        if extra_fields:
             error_str = "Error initializing TensorLogEntry:"
-            missing_fields = field_order_set - fields_dict_key_set
-            extra_fields = fields_dict_key_set - field_order_set
-            if len(missing_fields) > 0:
-                error_str += f"\n\t- Missing fields {', '.join(missing_fields)}"
-            if len(extra_fields) > 0:
-                error_str += f"\n\t- Extra fields {', '.join(extra_fields)}"
+            error_str += f"\n\t- Extra fields {', '.join(extra_fields)}"
             raise ValueError(error_str)
 
         # General info:
@@ -188,6 +188,7 @@ class TensorLogEntry:
 
         # FLOPs info:
         self.flops = fields_dict["flops"]
+        self.backward_flops = fields_dict["backward_flops"]
 
     # ********************************************
     # *********** User-Facing Functions **********
@@ -226,9 +227,9 @@ class TensorLogEntry:
         ]
         for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
-                fields_dict[field] = copy.deepcopy(getattr(self, field))
+                fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
-                fields_dict[field] = getattr(self, field)
+                fields_dict[field] = getattr(self, field, None)
         copied_entry = TensorLogEntry(fields_dict)
         return copied_entry
 

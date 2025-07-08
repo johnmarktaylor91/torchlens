@@ -778,3 +778,50 @@ def compute_flops_for_layer(layer_type, t, fields_dict):
     if layer_type in {"softmin", "softplus", "softsign", "logsoftmax"}:
         return numel(output_shape)
     return None
+
+
+def compute_flops_for_layer_backward(layer_type, t, fields_dict):
+    """
+    Estimate backward FLOPs for a single layer. For most layers, backward FLOPs is about 2x forward FLOPs,
+    but for some (e.g. BatchNorm, Pooling, etc.) it can be different. For unknown types, fallback to forward FLOPs or None.
+    """
+    # Try to use the same normalization as forward
+    layer_type = str(layer_type).lower()
+    forward_flops = fields_dict.get("flops", None)
+    output_shape = tuple(t.shape)
+    param_shapes = fields_dict.get("parent_param_shapes", [])
+    # Mainstream layers: use empirical ratios or formulas
+    if layer_type in {"conv2d", "conv1d", "conv3d", "convtranspose1d", "convtranspose2d", "convtranspose3d"}:
+        # Conv backward is about 2x forward (weight+input grad)
+        return 2 * forward_flops if forward_flops is not None else None
+    if layer_type == "linear":
+        return 2 * forward_flops if forward_flops is not None else None
+    if "batchnorm" in layer_type:
+        # BN backward is about 2x forward
+        return 2 * forward_flops if forward_flops is not None else None
+    if layer_type in {"relu", "leakyrelu", "sigmoid", "tanh", "softmax", "gelu", "silu", "mish", "elu", "selu", "celu", "prelu", "softplus", "softsign", "hardtanh", "hardshrink", "hardsigmoid", "hardswish", "swish", "glu", "threshold", "rrelu", "logsigmoid"}:
+        # Most activations: backward is similar to forward
+        return forward_flops
+    if "pool" in layer_type:
+        # Pooling backward is similar to forward
+        return forward_flops
+    if layer_type in {"add", "mul", "matmul"}:
+        return forward_flops
+    if layer_type in {"flatten", "dropout"}:
+        return 0
+    if layer_type in {"upsample", "interpolate"}:
+        return forward_flops
+    if layer_type in {"layernorm", "groupnorm", "instancenorm"}:
+        return 2 * forward_flops if forward_flops is not None else None
+    if layer_type == "embedding":
+        return forward_flops
+    if "attention" in layer_type or layer_type == "multiheadattention":
+        return 2 * forward_flops if forward_flops is not None else None
+    if layer_type in {"softmin", "softplus", "softsign", "logsoftmax"}:
+        return forward_flops
+    if layer_type in {"rnn", "lstm", "gru"}:
+        return 2 * forward_flops if forward_flops is not None else None
+    if layer_type in {"pixelshuffle", "pixelunshuffle"}:
+        return forward_flops
+    # Unknown types: fallback to forward FLOPs or None
+    return forward_flops

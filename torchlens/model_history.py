@@ -214,12 +214,21 @@ class ModelHistory:
 
     def fill_missing_flops(self):
         """
-        遍历所有层，补全缺失的FLOPs字段。
+        Fill missing forward and backward FLOPs for all layers in the model history.
         """
-        from .helper_funcs import compute_flops_for_layer
-        for entry in self.layer_list:
-            if getattr(entry, 'flops', None) is None and getattr(entry, 'layer_type', None) not in ['input', 'output', 'buffer']:
+        from .helper_funcs import compute_flops_for_layer, compute_flops_for_layer_backward
+        for layer in self.layer_list:
+            # Forward FLOPs
+            if getattr(layer, 'flops', None) is None:
                 try:
-                    entry.flops = compute_flops_for_layer(entry.layer_type, getattr(entry, 'tensor_contents', None), entry.__dict__)
+                    flops = compute_flops_for_layer(layer.layer_type, layer.tensor_contents, layer.__dict__)
                 except Exception:
-                    entry.flops = None
+                    flops = None
+                layer.flops = flops
+            # Backward FLOPs
+            if not hasattr(layer, 'backward_flops') or getattr(layer, 'backward_flops', None) is None:
+                try:
+                    backward_flops = compute_flops_for_layer_backward(layer.layer_type, layer.tensor_contents, layer.__dict__)
+                except Exception:
+                    backward_flops = None
+                layer.backward_flops = backward_flops
