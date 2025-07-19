@@ -9,26 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/torchlens/">
-    <img src="https://img.shields.io/pypi/v/torchlens" alt="PyPI - Version">
-  </a>
-  <a href="https://pepy.tech/projects/torchlens">
-    <img src="https://static.pepy.tech/badge/torchlens/month" alt="PyPI Downloads (Month)">
-  </a>
-  <a href="https://pepy.tech/projects/torchlens">
-    <img src="https://static.pepy.tech/badge/torchlens" alt="PyPI Downloads (Total)">
-  </a>
-  <a href="https://github.com/johnmarktaylor91/torchlens/stargazers">
-    <img src="https://img.shields.io/github/stars/johnmarktaylor91/torchlens?style=social" alt="GitHub Stars">
-  </a>
+  <a href="https://pypi.org/project/torchlens/"><img src="https://img.shields.io/pypi/v/torchlens" alt="PyPI - Version"></a>
+  <a href="https://pepy.tech/projects/torchlens"><img src="https://static.pepy.tech/badge/torchlens/month" alt="PyPI Downloads (Month)"></a>
+  <a href="https://pepy.tech/projects/torchlens"><img src="https://static.pepy.tech/badge/torchlens" alt="PyPI Downloads (Total)"></a>
+  <a href="https://github.com/johnmarktaylor91/torchlens/stargazers"><img src="https://img.shields.io/github/stars/johnmarktaylor91/torchlens?style=social" alt="GitHub Stars"></a>
 </p>
 <p align="center">
-  <a href="https://pypi.org/project/torchlens/">
-    <img src="https://img.shields.io/pypi/l/torchlens" alt="PyPI - License">
-  </a>
-  <a href="https://doi.org/10.1038/s41598-023-40807-0">
-    <img src="https://zenodo.org/badge/DOI/10.1038/s41598-023-40807-0.svg" alt="DOI">
-  </a>
+  <a href="https://pypi.org/project/torchlens/"><img src="https://img.shields.io/pypi/l/torchlens" alt="PyPI - License"></a>
+  <a href="https://doi.org/10.1038/s41598-023-40807-0"><img src="https://zenodo.org/badge/DOI/10.1038/s41598-023-40807-0.svg" alt="DOI"></a>
 </p>
 
 
