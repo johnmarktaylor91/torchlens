@@ -1,85 +1,107 @@
-# <img src="images/logo.png" width=8% height=8%> TorchLens
+<p align="center">
+  <img src="images/logo.png" style="max-width: 200px; width: 30%;" alt="TorchLens Logo" />
+</p>
 
-**Quick Links**
+<h1 align="center">TorchLens</h1>
 
-- [Paper introducing TorchLens](https://www.nature.com/articles/s41598-023-40807-0)
-- [CoLab tutorial](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing)
-- [\"Menagerie\" of model visualizations](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb)
-- [Metadata provided by TorchLens](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf)
+<p align="center">
+  Extract and visualize activations and computational graphs from any PyTorch model — in one line.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/torchlens/"><img src="https://img.shields.io/pypi/v/torchlens" alt="PyPI - Version"></a>
+  <a href="https://pepy.tech/projects/torchlens"><img src="https://static.pepy.tech/badge/torchlens/month" alt="PyPI Downloads (Month)"></a>
+  <a href="https://pepy.tech/projects/torchlens"><img src="https://static.pepy.tech/badge/torchlens" alt="PyPI Downloads (Total)"></a>
+  <a href="https://github.com/johnmarktaylor91/torchlens/stargazers"><img src="https://img.shields.io/github/stars/johnmarktaylor91/torchlens?style=social" alt="GitHub Stars"></a>
+</p>
+<p align="center">
+  <a href="https://pypi.org/project/torchlens/"><img src="https://img.shields.io/pypi/l/torchlens" alt="PyPI - License"></a>
+  <a href="https://doi.org/10.1038/s41598-023-40807-0"><img src="https://zenodo.org/badge/DOI/10.1038/s41598-023-40807-0.svg" alt="DOI"></a>
+</p>
+
+
+<p align="center">
+  <a href="https://www.nature.com/articles/s41598-023-40807-0">Paper</a> • 
+  <a href="https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing">CoLab Tutorial</a> • 
+  <a href="https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb">Model Gallery</a> • 
+  <a href="https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf">Metadata Overview</a>
+</p>
+
+---
 
 ## Overview
 
-*TorchLens* is a package for doing exactly two things:
+**TorchLens** is a Python library for doing exactly two things:
 
-1) Easily extracting the activations from every single intermediate operation in a PyTorch model—no
-   modifications needed—in one line of code. "Every operation" means every operation; "one line" means one line.
-2) Understanding the model's computational structure via an intuitive automatic visualization and extensive
-   metadata ([partial list here](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf))
-   about the network's computational graph.
+1. Extract **all intermediate activations** from any PyTorch model with **one line of code**.
+2. Visualize the model's **computational graph** and get extensive metadata.
 
-Here it is in action for a very simple recurrent model; as you can see, you just define the model like normal and pass
-it in, and *TorchLens* returns a full log of the forward pass along with a visualization:
+- #### No model modification required.
+- #### Works for any PyTorch model. (Tested on over 700 different models)
+
+---
+
+## Example:
+```python
+import torchlens as tl
+
+model_history = tl.log_forward_pass(pytorch_model, example_input, vis_opt='rolled')
+```
+This one line performs a forward pass, creates and displays the graph. 
+
+It returns a ModelHistory object containing the intermediate layer activations and accompanying metadata.
+
+
+---
+
+## Installation
+> Requires PyTorch version **1.8.0 or higher**
+
+- #### Install Graphviz (required for visualization)
+  `sudo apt install graphviz`
+
+- #### Install TorchLens
+  `pip install torchlens`
+
+
+---
+## Detailed examples
+
+#### Simple Recurrent Model
 
 ```python
 class SimpleRecurrent(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(in_features=5, out_features=5)
+        self.fc = nn.Linear(5, 5)
 
     def forward(self, x):
-        for r in range(4):
+        for _ in range(4):
             x = self.fc(x)
             x = x + 1
             x = x * 2
         return x
 
-
 simple_recurrent = SimpleRecurrent()
-model_history = tl.log_forward_pass(simple_recurrent, x,
-                                    layers_to_save='all',
-                                    vis_opt='rolled')
-print(model_history['linear_1_1:2'].tensor_contents)  # second pass of first linear layer
-
-'''
-tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
-        [-0.1083, -1.5051, -0.2570, -0.2024,  0.8248],
-        [ 0.1031, -1.4315, -0.5999, -0.4017,  0.7580],
-        [-0.0396, -1.3813, -0.3523, -0.2008,  0.6654],
-        [ 0.0980, -1.4073, -0.5934, -0.3866,  0.7371],
-        [-0.1106, -1.2909, -0.3393, -0.2439,  0.7345]])
-'''
+model_history = tl.log_forward_pass(simple_recurrent, x, layers_to_save='all', vis_opt='rolled')
 ```
+<p align="center">
+<img src="images/simple_recurrent.png" style="max-width: 200px; width: 30%;" />
+</p>
 
-<img src="images/simple_recurrent.png" width=30% height=30%>
 
-And here it is for a very complex transformer model ([swin_v2_b](https://arxiv.org/abs/2103.14030)) with 1932 operations
-in its forward pass; you can grab the saved outputs of every last one:
+#### Complex Transformer Model
 
-<img src="images/swin_v2_b_demo.jpg" width="70%" height="70%">
+TorchLens also works with large models like [Swin V2](https://arxiv.org/abs/2103.14030), with 1932 operations.
+<p align="center">
+  <img src="images/swin_v2_b_demo.jpg" style="max-width: 700px; width: 70%;" />
+</p>
 
-The goal of *TorchLens* is to do this for any PyTorch model whatsoever. You can see a bunch of example model
-visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
+See more examples in the [Model Menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
 
-## Installation
+---
 
-To install *TorchLens*, first install graphviz if you haven't already (required to generate the network visualizations),
-and then install *TorchLens* using pip:
-
-```bash
-sudo apt install graphviz
-pip install torchlens
-```
-
-*TorchLens* is compatible with versions 1.8.0+ of PyTorch.
-
-## How-To Guide
-
-Below is a quick demo of how to use it; for an interactive demonstration, see
-the [CoLab walkthrough](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing).
-
-The main function of *TorchLens* is `log_forward_pass`: when called on a model and input, it runs a
-forward pass on the model and returns a ModelHistory object containing the intermediate layer activations and
-accompanying metadata, along with a visual representation of every operation that occurred during the forward pass:
+## Quickstart
 
 ```python
 import torch
@@ -89,72 +111,19 @@ import torchlens as tl
 alexnet = torchvision.models.alexnet()
 x = torch.rand(1, 3, 224, 224)
 model_history = tl.log_forward_pass(alexnet, x, layers_to_save='all', vis_opt='unrolled')
-print(model_history)
-
-'''
-Log of AlexNet forward pass:
-	Model structure: purely feedforward, without branching; 23 total modules.
-	24 tensors (4.8 MB) computed in forward pass; 24 tensors (4.8 MB) saved.
-	16 parameter operations (61100840 params total; 248.7 MB).
-	Random seed: 3210097511
-	Time elapsed: 0.288s
-	Module Hierarchy:
-		features:
-		    features.0, features.1, features.2, features.3, features.4, features.5, features.6, features.7, 
-		    features.8, features.9, features.10, features.11, features.12
-		avgpool
-		classifier:
-		    classifier.0, classifier.1, classifier.2, classifier.3, classifier.4, classifier.5, classifier.6
-	Layers:
-		0: input_1_0 
-		1: conv2d_1_1 
-		2: relu_1_2 
-		3: maxpool2d_1_3 
-		4: conv2d_2_4 
-		5: relu_2_5 
-		6: maxpool2d_2_6 
-		7: conv2d_3_7 
-		8: relu_3_8 
-		9: conv2d_4_9 
-		10: relu_4_10 
-		11: conv2d_5_11 
-		12: relu_5_12 
-		13: maxpool2d_3_13 
-		14: adaptiveavgpool2d_1_14 
-		15: flatten_1_15 
-		16: dropout_1_16 
-		17: linear_1_17 
-		18: relu_6_18 
-		19: dropout_2_19 
-		20: linear_2_20 
-		21: relu_7_21 
-		22: linear_3_22 
-		23: output_1_23 
-'''
 ```
+<p align="center">
+  <img src="images/alexnet.png" style="max-width: 200px; width: 30%;" />
+</p>
 
-<img src="images/alexnet.png" width=30% height=30%>
 
-You can pull out information about a given layer, including its activations and helpful metadata, by indexing
-the ModelHistory object in any of these equivalent ways:
+### Accessing Layers
 
-1) the name of a layer (with the convention that 'conv2d_3_7' is the 3rd convolutional layer, and the 7th layer overall)
-2) the name of a module (e.g., 'features' or 'classifier.3') for which that layer is an output, or
-3) the ordinal position of the layer (e.g., 2 for the 2nd layer, -5 for the fifth-to-last; inputs and outputs count as
-   layers here).
+You can access any layer’s metadata and activations using several methods:
 
-To quickly figure out these names, you can look at the graph visualization, or at the output of printing the
-ModelHistory object (both shown above). Here are some examples of how to pull out information about a
-particular layer, and also how to pull out the actual activations from that layer:
-
+#### By name:
 ```python
-print(model_history['conv2d_3_7'])  # pulling out layer by its name 
-# The following commented lines pull out the same layer:
-# model_history['conv2d_3'] you can omit the second number (since strictly speaking it's redundant)
-# model_history['conv2d_3_7:1'] colon indicates the pass of a layer (here just one)
-# model_history['features.6'] can grab a layer by the module for which it is an output
-# model_history[7] the 7th layer overall
-# model_history[-17] the 17th-to-last layer
+print(model_history['conv2d_3_7'])
 '''
 Layer conv2d_3_7, operation 8/24:
 	Output tensor: shape=(1, 384, 13, 13), dype=torch.float32, size=253.5 KB
@@ -173,8 +142,17 @@ Layer conv2d_3_7, operation 8/24:
 	Output of bottom-level module: features.6
 	Lookup keys: -17, 7, conv2d_3_7, conv2d_3_7:1, features.6, features.6:1
 '''
-
-# You can pull out the actual output activations from a layer with the tensor_contents field: 
+```
+#### By module
+```python
+print(model_history['features.6'])
+```
+#### By index
+```python
+print(model_history[7])
+```
+#### Activations
+```python
 print(model_history['conv2d_3_7'].tensor_contents)
 '''
 tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
@@ -187,56 +165,42 @@ tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
 '''
 ```
 
-If you do not wish to save the activations for all layers (e.g., to save memory), you can specify which layers to save
-with the `layers_to_save` argument when calling `log_forward_pass`; you can either indicate layers in the same way
-as indexing them above, or by passing in a desired substring for filtering the layers (e.g., 'conv'
-will pull out all conv layers):
+To save only specific layers:
 
 ```python
-# Pull out conv2d_3_7, the output of the 'features' module, the fifth-to-last layer, and all linear (i.e., fc) layers:
-model_history = tl.log_forward_pass(alexnet, x, vis_opt='unrolled',
-                                    layers_to_save=['conv2d_3_7', 'features', -5, 'linear'])
+model_history = tl.log_forward_pass(alexnet, x, vis_opt='unrolled', layers_to_save=['conv2d_3_7', 'features', -5, 'linear'])
 print(model_history.layer_labels)
 '''
 ['conv2d_3_7', 'maxpool2d_3_13', 'linear_1_17', 'dropout_2_19', 'linear_2_20', 'linear_3_22']
 '''
 ```
 
-The main function of *TorchLens* is `log_forward_pass`; the remaining functions are:
+---
 
-1) `get_model_metadata`, to retrieve all model metadata without saving any activations (e.g., to figure out which
-   layers you wish to save; note that this is the same as calling `log_forward_pass` with `layers_to_save=None`)
-2) `show_model_graph`, which visualizes the model graph without saving any activations
-3) `validate_model_activations`, which runs a procedure to check that the activations are correct: specifically,
-   it runs a forward pass and saves all intermediate activations, re-runs the forward pass from each intermediate
-   layer, and checks that the resulting output matches the ground-truth output. It also checks that swapping in
-   random nonsense activations instead of the saved activations generates the wrong output. **If this function ever
-   returns False (i.e., the saved activations are wrong), please contact me via email (johnmarkedwardtaylor@gmail.com)
-   or on this GitHub page with a description of the problem, and I will update TorchLens to fix the problem.**
+## API Reference
 
-And that's it. *TorchLens* remains in active development, and the goal is for it to work with any PyTorch model
-whatosever without exception. As of the time of this writing, it has been tested with over 700
-image, video, auditory, multimodal, and language models, including feedforward, recurrent, transformer,
-and graph neural networks.
+- `log_forward_pass(model, input, ...)`: main function. Logs activations and metadata.
+- `get_model_metadata(model, input)`: get only the metadata (no activations).
+- `show_model_graph(model, input)`: render visual graph without saving tensors.
+- `validate_model_activations(...)`: verify saved activations are accurate.
 
-## Miscellaneous Features
+---
 
-- You can visualize models at different levels of nesting depth using the `vis_nesting_depth` argument
-  to `log_forward_pass`; for example, here you can see one of GoogLeNet's "inception" modules at different levels of
-  nesting depth:
+## Features
 
-<img src="images/nested_modules_example.png" width=80% height=80%>
+#### Visualize modules at different nesting levels:
+Use the `vis_nesting_depth` argument in the `log_forward_pass` function.
+<p align="center">
+  <img src="images/nested_modules_example.png" style="max-width: 800px; width: 80%;" />
+</p>
 
-- An experimental feature is to extract not just the activations from all of a model's operations,
-  but also the gradients from a backward pass (which you can compute based on any intermediate layer, not just the
-  model's
-  output),
-  and also visualize the path taken by the backward pass (shown with blue arrows below). See the CoLab tutorial for
-  instructions on how to do this.
+#### Visualize backward pass and gradients (experimental):
 
-<img src="images/gradients.png" width=30% height=30%>
+<p align="center">
+  <img src="images/gradients.png" style="max-width: 200px; width: 30%;" />
+</p>
 
-- You can see the literal code that was used to run the model with the func_call_stack field:
+#### Inspect the actual code used in each layer:
 
 ```python
 print(model_history['conv2d_3'].func_call_stack[8])
@@ -266,60 +230,63 @@ print(model_history['conv2d_3'].func_call_stack[8])
 '''
 ```
 
-## Planned Features
 
-1) In the further future, I am considering adding functionality to not just save activations,
-   but counterfactually intervene on them (e.g., how would the output have changed if these parameters
-   were different or if a different nonlinearity were used). Let me know if you'd find this useful
-   and if so, what specific kind of functionality you'd want.
-2) I am planning to add an option to only visualize a single submodule of a model rather than the full graph at once.
 
-## Other Packages You Should Check Out
+### Planned Features
+1. Counterfactual activation editing (e.g. modifying activations or operations).
+2. Submodule-only graph visualizations.
 
-The goal is for *TorchLens* to completely solve the problem of extracting activations and metadata
-from deep neural networks and visualizing their structure so that nobody has to think about this stuff ever again, but
-it intentionally leaves out certain functionality: for example, it has no functions for loading models or stimuli, or
-for analyzing the extracted activations. This is in part because it's impossible to predict all the things you might
-want to do with the activations, or all the possible models you might want to look at, but also because there are
-already outstanding packages for doing these things. Here are a few-let me know if I've missed any!
 
-- [Cerbrec](cerbrec.com): Program for interactively visualizing and debugging deep neural networks (uses TorchLens under
-  the hood for extracting the graphs of PyTorch models!)
-- [ThingsVision](https://github.com/ViCCo-Group/thingsvision): has excellent functionality for loading vision models,
-  loading stimuli, and analyzing the extracted activations
-- [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): similar excellent end-to-end functionality to ThingsVision,
-  along with functionality for comparing extracted activations to neural data.
-- [surgeon-pytorch](https://github.com/archinetai/surgeon-pytorch): easy-to-use functionality for extracting activations
-  from models, along with functionality for training a model using loss functions based on intermediate layer
-  activations
-- [deepdive](https://github.com/ColinConwell/DeepDive): has outstanding functionality for loading and benchmarking
-  many different models
-- [torchvision feature_extraction module](https://pytorch.org/vision/stable/feature_extraction.html): can extract
-  activations from models with static computational graphs
-- [rsatoolbox3](https://github.com/rsagroup/rsatoolbox): total solution for performing representational similarity
-  analysis on DNN activations and brain data
-
-## Acknowledgments
-
-The development of *TorchLens* benefitted greatly from discussions with Nikolaus Kriegeskorte, George Alvarez,
-Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University. Thank you to Kale Kundert
-for helpful discussion and for his code contributions enabling PyTorch Lightning compatibility.
-All network visualizations were created with graphviz. Logo created by Nikolaus Kriegeskorte.
-
-## Citing Torchlens
-
-To cite *TorchLens*, you can
-cite [this paper describing the package](https://www.nature.com/articles/s41598-023-40807-0) (and consider adding a star
-to this repo if you find *TorchLens* useful):
-
-Taylor, J., Kriegeskorte, N. Extracting and visualizing hidden activations and computational graphs of PyTorch models
-with *TorchLens*. Sci Rep 13, 14375 (2023). https://doi.org/10.1038/s41598-023-40807-0
+---
 
 ## Contact
 
-As *TorchLens* is still in active development, I would love your feedback. Please contact
-johnmarkedwardtaylor@gmail.com,
-contact me via [twitter](https://twitter.com/johnmark_taylor), or post on
-the [issues](https://github.com/johnmarktaylor91/torchlens/issues)
-or [discussion](https://github.com/johnmarktaylor91/torchlens/discussions) page for this GitHub
-repository, if you have any questions, comments, or suggestions (or if you'd be interested in collaborating!).
+For feedback, questions, or collaboration:
+
+- Email: johnmarkedwardtaylor@gmail.com  
+- Twitter: [@johnmark_taylor](https://twitter.com/johnmark_taylor)  
+- GitHub: [Issues](https://github.com/johnmarktaylor91/torchlens/issues) • [Discussions](https://github.com/johnmarktaylor91/torchlens/discussions)
+
+### The project is actively maintained. Contributions and bug reports are appreciated.
+
+---
+
+
+## Citation
+
+If you use TorchLens, please cite:
+
+```bibtex
+@article{taylor2023extracting,
+  title={Extracting and visualizing hidden activations and computational graphs of PyTorch models with TorchLens},
+  author={Taylor, JohnMark and Kriegeskorte, Nikolaus},
+  journal={Scientific Reports},
+  volume={13},
+  number={1},
+  pages={14375},
+  year={2023},
+  publisher={Nature Publishing Group},
+  doi={10.1038/s41598-023-40807-0}
+}
+```
+
+### Acknowledgments
+
+TorchLens development was supported by conversations with:
+
+Nikolaus Kriegeskorte, George Alvarez, Alfredo Canziani, Tal Golan, and the Visual Inference Lab at Columbia University.  
+Thanks to Kale Kundert for PyTorch Lightning compatibility contributions.  
+All graphs made with Graphviz. Logo by Nikolaus Kriegeskorte.
+
+
+### Related Projects
+
+TorchLens focuses on activation extraction and graph visualization. For other tasks:
+
+- [Cerbrec](https://cerbrec.com): Interactive visualization (uses TorchLens under the hood)
+- [ThingsVision](https://github.com/ViCCo-Group/thingsvision): Model and data loading
+- [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): Neural data comparison
+- [surgeon-pytorch](https://github.com/archinetai/surgeon-pytorch): Activation slicing and loss training
+- [deepdive](https://github.com/ColinConwell/DeepDive): Model benchmarking
+- [torchvision feature_extraction](https://pytorch.org/vision/stable/feature_extraction.html): Static graph extraction
+- [rsatoolbox3](https://github.com/rsagroup/rsatoolbox): RSA for brain/model activations
