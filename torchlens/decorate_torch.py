@@ -66,6 +66,9 @@ def torch_func_decorator(self, func: Callable, func_name: str):
         if func_name in ["__setitem__", "zero_", "__delitem__"]:
             out_orig = args[0]
 
+        if id(out_orig) == id(args[0]):  # special case if the function does nothing
+            out_orig = safe_copy(out_orig)
+
         # Log all output tensors
         output_tensors = get_vars_of_type_from_obj(
             out_orig,
