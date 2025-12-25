@@ -60,24 +60,106 @@ def model_log_forward_fast(net_list, x, label2idx=None):
     return x
 
 
+def format_flops(flops):
+    """Format FLOPs number to human readable string."""
+    if flops is None:
+        return "N/A"
+    if flops >= 1e12:
+        return f"{flops/1e12:.2f}T"
+    elif flops >= 1e9:
+        return f"{flops/1e9:.2f}G"
+    elif flops >= 1e6:
+        return f"{flops/1e6:.2f}M"
+    elif flops >= 1e3:
+        return f"{flops/1e3:.2f}K"
+    else:
+        return str(int(flops))
+
+
+def print_flops_summary(layer_list):
+    """Print FLOPs summary for all layers."""
+    total_forward = 0
+    total_backward = 0
+    
+    print("\n" + "="*80)
+    print(f"{'Layer':<35} {'Type':<20} {'Forward FLOPs':>12} {'Backward FLOPs':>12}")
+    print("="*80)
+    
+    for layer in layer_list:
+        fwd = layer.flops
+        bwd = getattr(layer, 'backward_flops', None)
+        
+        if fwd is not None:
+            total_forward += fwd
+        if bwd is not None:
+            total_backward += bwd
+        
+        # Skip input/output/buffer layers for cleaner output
+        if layer.layer_type in ('input', 'output', 'buffer'):
+            continue
+            
+        print(f"{layer.layer_label:<35} {layer.layer_type:<20} {format_flops(fwd):>12} {format_flops(bwd):>12}")
+    
+    print("="*80)
+    print(f"{'TOTAL':<35} {'':<20} {format_flops(total_forward):>12} {format_flops(total_backward):>12}")
+    print("="*80)
+    
+    return total_forward, total_backward
+
+
 if __name__ == "__main__":
+    # Test with VGG11
+    print("\n" + "="*80)
+    print("Testing VGG11")
+    print("="*80)
+    
     model = torchvision.models.vgg11().eval()
     x = torch.rand(1, 3, 224, 224)
     
-    # 记录模型前向传播
-    model_history = tl.log_forward_pass(model, x, vis_opt='unrolled', save_function_args=True)
+    # Log model forward pass
+    model_history = tl.log_forward_pass(model, x, vis_opt='none', save_function_args=True)
     layer_list = model_history.layer_list
     
-    # 准备快速 replay
+    # Prepare fast replay
     label2idx = prepare_replay_graph(layer_list)
     
-    # 执行 replay
+    # Execute replay
     res1 = model_log_forward_fast(layer_list, x, label2idx)
     res2 = model(x)
     
-    print("The outputs are the same." if torch.allclose(res1, res2) else "The outputs are different.")
+    print("Replay validation:", "PASS" if torch.allclose(res1, res2) else "FAIL")
     
-    # Print per-layer FLOPs
-    print("\nLayer-wise FLOPs (forward, backward):")
-    for layer in layer_list:
-        print(f"{layer.layer_label:40s} | {str(layer.flops):>12} | {str(getattr(layer, 'backward_flops', None)):>12}")
+    # Print FLOPs summary
+    total_fwd, total_bwd = print_flops_summary(layer_list)
+    
+    # Test with ResNet18
+    print("\n" + "="*80)
+    print("Testing ResNet18")
+    print("="*80)
+    
+    model = torchvision.models.resnet18().eval()
+    model_history = tl.log_forward_pass(model, x, vis_opt='none', save_function_args=True)
+    layer_list = model_history.layer_list
+    label2idx = prepare_replay_graph(layer_list)
+    
+    res1 = model_log_forward_fast(layer_list, x, label2idx)
+    res2 = model(x)
+    
+    print("Replay validation:", "PASS" if torch.allclose(res1, res2) else "FAIL")
+    total_fwd, total_bwd = print_flops_summary(layer_list)
+    
+    # Test with ViT
+    print("\n" + "="*80)
+    print("Testing ViT-B/32")
+    print("="*80)
+    
+    model = torchvision.models.vit_b_32(weights=None).eval()
+    model_history = tl.log_forward_pass(model, x, vis_opt='none', save_function_args=True)
+    layer_list = model_history.layer_list
+    label2idx = prepare_replay_graph(layer_list)
+    
+    res1 = model_log_forward_fast(layer_list, x, label2idx)
+    res2 = model(x)
+    
+    print("Replay validation:", "PASS" if torch.allclose(res1, res2) else "FAIL")
+    total_fwd, total_bwd = print_flops_summary(layer_list)

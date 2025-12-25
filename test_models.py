@@ -1,4 +1,4 @@
-"""测试 TorchLens 对 ResNet 和 ViT 系列模型的支持（使用 replay 方式）"""
+"""Test TorchLens support for ResNet and ViT model families (using replay method)"""
 import time
 import torch
 import torchvision
@@ -63,7 +63,7 @@ def model_log_forward_fast(net_list, x, label2idx=None):
 
 
 def test_model(model_name, model, input_tensor, num_runs=5):
-    """测试单个模型 - 使用 replay 方式验证，并统计用时"""
+    """Test a single model - validate using replay method and measure timing"""
     print(f"\n{'='*60}")
     print(f"测试模型: {model_name}")
     print(f"{'='*60}")
@@ -71,28 +71,28 @@ def test_model(model_name, model, input_tensor, num_runs=5):
     try:
         model.eval()
         
-        # 预热
+        # Warmup
         with torch.no_grad():
             _ = model(input_tensor)
         
-        # 测量原始模型用时
+        # Measure original model timing
         t0 = time.perf_counter()
         for _ in range(num_runs):
             with torch.no_grad():
                 res_original = model(input_tensor)
         time_original = (time.perf_counter() - t0) / num_runs * 1000  # ms
         
-        # 使用 torchlens 记录前向传播（只记录一次）
+        # Log forward pass with torchlens (only once)
         model_history = tl.log_forward_pass(model, input_tensor, vis_opt='none', save_function_args=True)
         layer_list = model_history.layer_list
         
-        # 准备 fast replay（同时返回 label2idx）
+        # Prepare fast replay (also returns label2idx)
         label2idx = prepare_replay_graph(layer_list)
         
-        # 预热 replay
+        # Warmup replay
         _ = model_log_forward_fast(layer_list, input_tensor, label2idx)
         
-        # 测量 replay_fast 用时
+        # Measure replay_fast timing
         t0 = time.perf_counter()
         for _ in range(num_runs):
             res_replay = model_log_forward_fast(layer_list, input_tensor, label2idx)
@@ -101,35 +101,35 @@ def test_model(model_name, model, input_tensor, num_runs=5):
         match = torch.allclose(res_replay, res_original, atol=1e-5)
         ratio = time_replay / time_original
         
-        print(f"层数: {len(layer_list)}")
-        print(f"输出形状: {res_replay.shape}")
-        print(f"原始模型用时: {time_original:.2f} ms")
-        print(f"Replay 用时: {time_replay:.2f} ms")
+        print(f"Layers: {len(layer_list)}")
+        print(f"Output shape: {res_replay.shape}")
+        print(f"Original model time: {time_original:.2f} ms")
+        print(f"Replay time: {time_replay:.2f} ms")
         print(f"Replay/Original: {ratio:.2f}x")
-        print(f"Replay 输出一致性: {'✓ 通过' if match else '✗ 失败'}")
+        print(f"Replay output match: {'✓ PASS' if match else '✗ FAIL'}")
         
         if not match:
             diff = (res_replay - res_original).abs().max().item()
-            print(f"最大差异: {diff}")
+            print(f"Max difference: {diff}")
         
         return match, time_original, time_replay
     except Exception as e:
         import traceback
-        print(f"✗ 测试失败: {e}")
+        print(f"✗ Test failed: {e}")
         traceback.print_exc()
         return False, 0, 0
 
 
 def main():
-    # 标准输入
+    # Standard input
     x_224 = torch.rand(1, 3, 224, 224)
     
     results = {}
     times = {}
     
-    # ResNet 系列
+    # ResNet family
     print("\n" + "="*60)
-    print("ResNet 系列模型测试")
+    print("ResNet Model Family Test")
     print("="*60)
     
     resnet_models = [
@@ -143,9 +143,9 @@ def main():
         results[name] = match
         times[name] = (t_orig, t_replay)
     
-    # ViT 系列
+    # ViT family
     print("\n" + "="*60)
-    print("ViT 系列模型测试")
+    print("ViT Model Family Test")
     print("="*60)
     
     vit_models = [
@@ -158,9 +158,9 @@ def main():
         results[name] = match
         times[name] = (t_orig, t_replay)
     
-    # 其他模型
+    # Other models
     print("\n" + "="*60)
-    print("其他模型测试")
+    print("Other Models Test")
     print("="*60)
     
     other_models = [
@@ -174,14 +174,14 @@ def main():
         results[name] = match
         times[name] = (t_orig, t_replay)
     
-    # 汇总结果
+    # Summary
     print("\n" + "="*60)
-    print("测试结果汇总")
+    print("Test Results Summary")
     print("="*60)
     passed = sum(results.values())
     total = len(results)
-    print(f"通过: {passed}/{total}")
-    print(f"\n{'模型':<20} {'原始(ms)':<12} {'Replay(ms)':<12} {'比率':<8}")
+    print(f"Passed: {passed}/{total}")
+    print(f"\n{'Model':<20} {'Original(ms)':<12} {'Replay(ms)':<12} {'Ratio':<8}")
     print("-" * 52)
     for name in results:
         t_orig, t_replay = times[name]
