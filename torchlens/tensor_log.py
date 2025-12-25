@@ -306,6 +306,263 @@ class TensorLogEntry:
     def get_parent_layers(self):
         return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
 
+    def prepare_replay(self):
+        """Precompute replay information for faster execution.
+        
+        Call this once after log_forward_pass to prepare for multiple replay calls.
+        Returns self for method chaining.
+        """
+        func_name = self.func_applied_name
+        
+        # Determine replay mode
+        if func_name and len(func_name) > 2 and func_name[0] == '_' and func_name[1] == '_':
+            self._replay_mode = 'dunder'
+            self._replay_method_name = func_name
+            self._replay_is_setitem = (func_name == '__setitem__')
+        elif self.creation_args is not None:
+            self._replay_mode = 'creation_args'
+            # Precompute integer positions for tensor replacement
+            tensor_arg_locs = self.parent_layer_arg_locs.get("args", {})
+            self._replay_int_positions = tuple(sorted(p for p in tensor_arg_locs if isinstance(p, int)))
+            self._replay_tuple_positions = tuple((p, tensor_arg_locs[p]) for p in tensor_arg_locs if isinstance(p, tuple))
+            self._replay_has_kwargs = bool(self.func_keyword_args_non_tensor)
+            self._replay_kwargs = self.func_keyword_args_non_tensor if self._replay_has_kwargs else None
+        else:
+            self._replay_mode = 'fallback'
+        
+        # Cache commonly accessed attributes
+        self._replay_func = self.func_applied
+        self._replay_params = self.parent_params
+        self._replay_non_tensor = self.func_all_args_non_tensor
+        
+        return self
+
+    def replay_fast(self, input_tensors, buffer_tensors=None):
+        """Fast replay using precomputed information.
+        
+        Args:
+            input_tensors: List or tuple of input tensors.
+            buffer_tensors: List of buffer tensors (optional).
+            
+        Returns:
+            The output tensor from replaying the function.
+        """
+        mode = getattr(self, '_replay_mode', None)
+        
+        if mode == 'dunder':
+            if not input_tensors:
+                return self.replay(*input_tensors, buffer_tensors=buffer_tensors)
+            
+            t0 = input_tensors[0]
+            method = getattr(t0, self._replay_method_name)
+            
+            if self._replay_is_setitem:
+                non_tensor = self._replay_non_tensor
+                if non_tensor and len(non_tensor) >= 2:
+                    method(non_tensor[0], non_tensor[1])
+                elif non_tensor and len(input_tensors) > 1:
+                    method(non_tensor[0], input_tensors[1])
+                return t0
+            
+            # Build other args inline
+            n_inputs = len(input_tensors)
+            params = self._replay_params
+            non_tensor = self._replay_non_tensor
+            
+            if n_inputs == 1 and not params and not buffer_tensors:
+                if not non_tensor:
+                    return method()
+                elif len(non_tensor) == 1:
+                    return method(non_tensor[0])
+                return method(*non_tensor)
+            
+            # Need to build args list
+            other = list(input_tensors[1:]) if n_inputs > 1 else []
+            if params:
+                other.extend(params)
+            if buffer_tensors:
+                other.extend(buffer_tensors)
+            if non_tensor:
+                other.extend(non_tensor)
+            
+            if len(other) == 1:
+                return method(other[0])
+            return method(*other)
+        
+        elif mode == 'creation_args':
+            args = list(self.creation_args)
+            n_inputs = len(input_tensors)
+            n_args = len(args)
+            
+            # Replace at integer positions
+            int_pos = self._replay_int_positions
+            if int_pos and n_inputs > 0:
+                input_idx = 0
+                for pos in int_pos:
+                    if input_idx >= n_inputs or pos >= n_args:
+                        break
+                    args[pos] = input_tensors[input_idx]
+                    input_idx += 1
+            
+            # Handle tuple positions (rare)
+            tuple_pos = self._replay_tuple_positions
+            if tuple_pos and n_inputs > len(int_pos):
+                input_idx = len(int_pos)
+                for pos, _ in tuple_pos:
+                    if input_idx >= n_inputs:
+                        break
+                    outer, inner = pos
+                    if outer < n_args:
+                        lst = list(args[outer])
+                        lst[inner] = input_tensors[input_idx]
+                        args[outer] = tuple(lst)
+                        input_idx += 1
+            
+            if self._replay_has_kwargs:
+                return self._replay_func(*args, **self._replay_kwargs)
+            return self._replay_func(*args)
+        
+        # Fallback to regular replay
+        return self.replay(*input_tensors, buffer_tensors=buffer_tensors)
+
+    def replay(
+        self,
+        *input_tensors: torch.Tensor,
+        buffer_tensors: Optional[List[torch.Tensor]] = None,
+    ) -> torch.Tensor:
+        """Replay the function with the given input tensors.
+
+        Args:
+            *input_tensors: Input tensor(s) from non-buffer parent layers.
+            buffer_tensors: Tensor(s) from buffer parent layers (optional).
+
+        Returns:
+            The output tensor from replaying the function.
+        """
+        func = self.func_applied
+        if func is None:
+            raise ValueError("Cannot replay: func_applied is None for this layer.")
+
+        func_name = self.func_applied_name
+        
+        # Fast path for dunder methods
+        if func_name and func_name[0] == '_' and func_name[1] == '_' and input_tensors:
+            t0 = input_tensors[0]
+            method = getattr(t0, func_name, None)
+            if method:
+                if func_name == '__setitem__':
+                    non_tensor = self.func_all_args_non_tensor
+                    if non_tensor and len(non_tensor) >= 2:
+                        method(non_tensor[0], non_tensor[1])
+                    elif non_tensor and len(input_tensors) > 1:
+                        method(non_tensor[0], input_tensors[1])
+                    return t0
+                
+                # Build other args
+                other = []
+                if len(input_tensors) > 1:
+                    other.extend(input_tensors[1:])
+                if self.parent_params:
+                    other.extend(self.parent_params)
+                if buffer_tensors:
+                    other.extend(buffer_tensors)
+                if self.func_all_args_non_tensor:
+                    other.extend(self.func_all_args_non_tensor)
+                
+                if not other:
+                    return method()
+                elif len(other) == 1:
+                    return method(other[0])
+                else:
+                    return method(*other)
+        
+        # Fast path using creation_args
+        creation_args = self.creation_args
+        if creation_args is not None:
+            tensor_arg_locs = self.parent_layer_arg_locs.get("args")
+            if tensor_arg_locs:
+                args = list(creation_args)
+                input_idx = 0
+                n_inputs = len(input_tensors)
+                n_args = len(args)
+                # Replace tensors at integer positions
+                for pos in sorted(p for p in tensor_arg_locs if isinstance(p, int)):
+                    if input_idx < n_inputs and pos < n_args:
+                        args[pos] = input_tensors[input_idx]
+                        input_idx += 1
+                # Handle tuple positions (rare)
+                for pos in tensor_arg_locs:
+                    if isinstance(pos, tuple) and input_idx < n_inputs:
+                        outer, inner = pos
+                        if outer < n_args:
+                            lst = list(args[outer])
+                            lst[inner] = input_tensors[input_idx]
+                            args[outer] = tuple(lst)
+                            input_idx += 1
+                kwargs = self.func_keyword_args_non_tensor
+                return func(*args) if not kwargs else func(*args, **kwargs)
+            else:
+                kwargs = self.func_keyword_args_non_tensor
+                return func(*creation_args) if not kwargs else func(*creation_args, **kwargs)
+        
+        # Fallback path
+        num_args = self.num_position_args or 0
+        if num_args == 0:
+            all_args = list(input_tensors)
+            if self.parent_params:
+                all_args.extend(self.parent_params)
+            if buffer_tensors:
+                all_args.extend(buffer_tensors)
+            if self.func_all_args_non_tensor:
+                all_args.extend(self.func_all_args_non_tensor)
+            kwargs = self.func_keyword_args_non_tensor
+            return func(*all_args) if not kwargs else func(*all_args, **kwargs)
+        
+        # Build args array
+        args = [None] * num_args
+        tensor_arg_locs = self.parent_layer_arg_locs.get("args", {})
+        
+        input_idx = 0
+        for pos in sorted(p for p in tensor_arg_locs if isinstance(p, int)):
+            if input_idx < len(input_tensors) and pos < num_args:
+                args[pos] = input_tensors[input_idx]
+                input_idx += 1
+        
+        # Handle nested tuple positions
+        nested = {}
+        for pos in tensor_arg_locs:
+            if isinstance(pos, tuple):
+                outer, inner = pos
+                if outer not in nested:
+                    nested[outer] = {}
+                nested[outer][inner] = input_tensors[input_idx] if input_idx < len(input_tensors) else None
+                input_idx += 1
+        for outer, inner_dict in nested.items():
+            if outer < num_args:
+                max_inner = max(inner_dict.keys()) + 1
+                args[outer] = tuple(inner_dict.get(i) for i in range(max_inner))
+        
+        # Fill remaining slots
+        fill_values = []
+        if self.parent_params:
+            fill_values.extend(self.parent_params)
+        if buffer_tensors:
+            fill_values.extend(buffer_tensors)
+        if self.func_all_args_non_tensor:
+            fill_values.extend(self.func_all_args_non_tensor)
+        
+        fill_idx = 0
+        for i in range(num_args):
+            if args[i] is None and fill_idx < len(fill_values):
+                args[i] = fill_values[fill_idx]
+                fill_idx += 1
+        
+        while args and args[-1] is None:
+            args.pop()
+        
+        kwargs = self.func_keyword_args_non_tensor
+        return func(*args) if not kwargs else func(*args, **kwargs)
+
     # ********************************************
     # ************* Built-in Methods *************
     # ********************************************
