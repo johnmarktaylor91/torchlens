@@ -216,7 +216,7 @@ class ModelHistory:
         """
         Fill missing forward and backward FLOPs for all layers in the model history.
         """
-        from .helper_funcs import compute_flops_for_layer, compute_flops_for_layer_backward
+        from .flops import compute_flops_for_layer, compute_flops_for_layer_backward
         for layer in self.layer_list:
             # Forward FLOPs
             if getattr(layer, 'flops', None) is None:

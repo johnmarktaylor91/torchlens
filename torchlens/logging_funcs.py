@@ -272,7 +272,7 @@ def log_source_tensor_exhaustive(
     }
 
     # 计算FLOPs
-    from .helper_funcs import compute_flops_for_layer
+    from .flops import compute_flops_for_layer
     try:
         fields_dict["flops"] = compute_flops_for_layer(layer_type, t, fields_dict)
     except Exception:
