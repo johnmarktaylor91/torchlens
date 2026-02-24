@@ -35,7 +35,6 @@ dependencies = [
 dev = ["black[jupyter]", "pytest", "pre-commit"]
 test = [
     "black",
-    "cornet @ git+https://github.com/dicarlolab/CORnet",
     "lightning",
     "pillow",
     "pytest",
