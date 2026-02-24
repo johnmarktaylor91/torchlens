@@ -32,7 +32,14 @@ jobs:
           python-version: "3.9"
 
       - name: Install dependencies
-        run: pip install python-semantic-release
+        run: pip install "python-semantic-release>=9,<10"
+
+      - name: Debug
+        run: |
+          echo "Tags:" && git tag -l
+          echo "---"
+          semantic-release version --print
+          echo "---"
 
       - name: Semantic Release
         id: release
