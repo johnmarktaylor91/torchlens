@@ -58,7 +58,7 @@ include = ["torchlens*"]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["torchlens/__init__.py:__version__"]
 branch = "main"
-major_on_zero = false
+major_on_zero = true
 build_command = "pip install build && python -m build"
 commit_message = "chore(release): {version}"
 
