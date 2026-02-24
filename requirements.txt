@@ -1,6 +1,0 @@
-numpy
-pandas
-tqdm
-ipython
-graphviz
-torch

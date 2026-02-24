@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchlens"
+version = "0.1.36"
+description = "A package for extracting activations from PyTorch models"
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.9"
+authors = [
+    {name = "JohnMark Taylor", email = "johnmarkedwardtaylor@gmail.com"},
+]
+keywords = ["torch", "torchlens", "features"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "torch",
+    "tqdm",
+    "ipython",
+    "graphviz",
+]
+
+[project.optional-dependencies]
+dev = ["black[jupyter]", "pytest", "pre-commit"]
+test = [
+    "black",
+    "cornet @ git+https://github.com/dicarlolab/CORnet",
+    "lightning",
+    "pillow",
+    "pytest",
+    "requests",
+    "timm",
+    "torchaudio",
+    "torch_geometric",
+    "torchvision",
+    "transformers",
+    "visualpriors",
+]
+
+[project.urls]
+Homepage = "https://github.com/johnmarktaylor91/torchlens"
+Repository = "https://github.com/johnmarktaylor91/torchlens"
+
+[tool.setuptools.packages.find]
+include = ["torchlens*"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["torchlens/__init__.py:__version__"]
+branch = "main"
+build_command = "pip install build && python -m build"
+commit_message = "chore(release): {version}"
+
+[tool.semantic_release.remote]
+type = "github"
+token = { env = "GH_TOKEN" }
+
+[tool.semantic_release.publish]
+upload_to_vcs_release = true
