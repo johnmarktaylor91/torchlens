@@ -32,9 +32,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["black[jupyter]", "pytest", "pre-commit"]
+dev = ["ruff", "pytest", "pre-commit"]
 test = [
-    "black",
     "lightning",
     "pillow",
     "pytest",
@@ -53,6 +52,9 @@ Repository = "https://github.com/johnmarktaylor91/torchlens"
 
 [tool.setuptools.packages.find]
 include = ["torchlens*"]
+
+[tool.ruff]
+line-length = 100
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
