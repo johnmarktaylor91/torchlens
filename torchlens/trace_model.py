@@ -19,12 +19,12 @@ def _get_input_arg_names(model, input_args):
     input_arg_names = inspect.getfullargspec(model.forward).args
     if "self" in input_arg_names:
         input_arg_names.remove("self")
-    input_arg_names = input_arg_names[0: len(input_args)]
+    input_arg_names = input_arg_names[0 : len(input_args)]
     return input_arg_names
 
 
 def _get_op_nums_from_user_labels(
-        self: "ModelHistory", which_layers: Union[str, List[Union[str, int]]]
+    self: "ModelHistory", which_layers: Union[str, List[Union[str, int]]]
 ) -> List[int]:
     """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
     the numbers that were generated on the fly during the forward pass, such that they can be
@@ -45,28 +45,18 @@ def _get_op_nums_from_user_labels(
 
     if type(which_layers) != list:
         which_layers = [which_layers]
-    which_layers = [
-        layer.lower() if (type(layer) == str) else layer for layer in which_layers
-    ]
-
     raw_tensor_nums_to_save = set()
     for layer_key in which_layers:
         # First check if it matches a lookup key. If so, use that.
         if layer_key in self._lookup_keys_to_tensor_num_dict:
-            raw_tensor_nums_to_save.add(
-                self._lookup_keys_to_tensor_num_dict[layer_key]
-            )
+            raw_tensor_nums_to_save.add(self._lookup_keys_to_tensor_num_dict[layer_key])
             continue
 
         # If not, pull out all layers for which the key is a substring.
-        keys_with_substr = [
-            key for key in self.layer_dict_all_keys if layer_key in str(key)
-        ]
+        keys_with_substr = [key for key in self.layer_dict_all_keys if layer_key in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_tensor_nums_to_save.add(
-                    self.layer_dict_all_keys[key].realtime_tensor_num
-                )
+                raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
             continue
 
         # If no luck, try to at least point user in right direction:
@@ -78,10 +68,10 @@ def _get_op_nums_from_user_labels(
 
 
 def _fetch_label_move_input_tensors(
-        input_args: List[Any],
-        input_arg_names: List[str],
-        input_kwargs: Dict,
-        model_device: str,
+    input_args: List[Any],
+    input_arg_names: List[str],
+    input_kwargs: Dict,
+    model_device: str,
 ) -> Tuple[List[torch.Tensor], List[str]]:
     """Fetches input tensors, gets their addresses, and moves them to the model device.
 
@@ -95,15 +85,11 @@ def _fetch_label_move_input_tensors(
         input tensors and their addresses
     """
     input_arg_tensors = [
-        get_vars_of_type_from_obj(
-            arg, torch.Tensor, search_depth=5, return_addresses=True
-        )
+        get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5, return_addresses=True)
         for arg in input_args
     ]
     input_kwarg_tensors = [
-        get_vars_of_type_from_obj(
-            kwarg, torch.Tensor, search_depth=5, return_addresses=True
-        )
+        get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
         for kwarg in input_kwargs.values()
     ]
     for a, arg in enumerate(input_args):
@@ -146,12 +132,12 @@ def _fetch_label_move_input_tensors(
 
 
 def run_and_log_inputs_through_model(
-        self: "ModelHistory",
-        model: nn.Module,
-        input_args: Union[torch.Tensor, List[Any]],
-        input_kwargs: Dict[Any, Any] = None,
-        layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
-        random_seed: Optional[int] = None,
+    self: "ModelHistory",
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any]],
+    input_kwargs: Dict[Any, Any] = None,
+    layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
+    random_seed: Optional[int] = None,
 ):
     """Runs input through model and logs it in ModelHistory.
 
@@ -182,15 +168,13 @@ def run_and_log_inputs_through_model(
     if not input_kwargs:
         input_kwargs = {}
 
-    if (
-            type(model) == nn.DataParallel
-    ):  # Unwrap model from DataParallel if relevant:
+    if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
         model = model.module
 
-    if (
-            len(list(model.parameters())) > 0
-    ):  # Get the model device by looking at the parameters:
+    if len(list(model.parameters())) > 0:
         model_device = next(iter(model.parameters())).device
+    elif len(list(model.buffers())) > 0:
+        model_device = next(iter(model.buffers())).device
     else:
         model_device = "cpu"
 
@@ -201,14 +185,14 @@ def run_and_log_inputs_through_model(
     self.pass_start_time = time.time()
     module_orig_forward_funcs = {}
     orig_func_defs = []
+    input_tensors = []
+    decorated_func_mapper = {}
 
     try:
         (
             input_tensors,
             input_tensor_addresses,
-        ) = _fetch_label_move_input_tensors(
-            input_args, input_arg_names, input_kwargs, model_device
-        )
+        ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
         buffer_tensors = list(model.buffers())
         tensors_to_decorate = input_tensors + buffer_tensors
         decorated_func_mapper = self._decorate_pytorch(torch, orig_func_defs)
@@ -219,7 +203,7 @@ def run_and_log_inputs_through_model(
         self.elapsed_time_setup = time.time() - self.pass_start_time
         outputs = model(*input_args, **input_kwargs)
         self.elapsed_time_forward_pass = (
-                time.time() - self.pass_start_time - self.elapsed_time_setup
+            time.time() - self.pass_start_time - self.elapsed_time_setup
         )
         self._track_tensors = False
         output_tensors_w_addresses_all = get_vars_of_type_from_obj(
@@ -239,12 +223,10 @@ def run_and_log_inputs_through_model(
             addresses_used.append(entry[1])
 
         output_tensors = [t for t, _, _ in output_tensors_w_addresses]
-        output_tensor_addresses = [
-            addr for _, addr, _ in output_tensors_w_addresses
-        ]
+        output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
 
         for t in output_tensors:
-            if self.logging_mode == 'exhaustive':
+            if self.logging_mode == "exhaustive":
                 self.output_layers.append(t.tl_tensor_label_raw)
             self._raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
         tensors_to_undecorate = tensors_to_decorate + output_tensors
@@ -253,9 +235,7 @@ def run_and_log_inputs_through_model(
         self._postprocess(output_tensors, output_tensor_addresses)
         decorated_func_mapper.clear()
 
-    except (
-            Exception
-    ) as e:  # if anything fails, make sure everything gets cleaned up
+    except Exception as e:  # if anything fails, make sure everything gets cleaned up
         undecorate_pytorch(torch, orig_func_defs, input_tensors)
         self._cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
         print(
@@ -264,14 +244,5 @@ def run_and_log_inputs_through_model(
         raise e
 
     finally:  # do garbage collection no matter what
-        if 'input_args' in globals():
-            del input_args
-        if 'input_kwargs' in globals():
-            del input_kwargs
-        if 'input_tensors' in globals():
-            del input_tensors
-        if 'output_tensors' in globals():
-            del output_tensors
-        if 'outputs' in globals():
-            del outputs
+        input_tensors = None
         torch.cuda.empty_cache()

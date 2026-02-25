@@ -64,7 +64,7 @@ def set_rng_from_saved_states(rng_states: Dict):
     random.setstate(rng_states["random"])
     np.random.set_state(rng_states["np"])
     torch.random.set_rng_state(rng_states["torch"])
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and "torch_cuda" in rng_states:
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 
@@ -82,9 +82,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
     return barcode
 
 
-def make_short_barcode_from_input(
-        things_to_hash: List[Any], barcode_len: int = 16
-) -> str:
+def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 16) -> str:
     """Utility function that takes a list of anything and returns a short hash of it.
 
     Args:
@@ -94,7 +92,7 @@ def make_short_barcode_from_input(
     Returns:
         Short hash of the input.
     """
-    barcode = "".join([str(x) for x in things_to_hash])
+    barcode = "\x00".join([str(x) for x in things_to_hash])
     barcode = str(hash(barcode))
     barcode = barcode.encode("utf-8")
     barcode = base64.urlsafe_b64encode(barcode)
@@ -106,8 +104,7 @@ def make_short_barcode_from_input(
 def _get_call_stack_dicts():
     call_stack = inspect.stack()
     call_stack = [
-        inspect.getframeinfo(call_stack[i][0], context=19)
-        for i in range(len(call_stack))
+        inspect.getframeinfo(call_stack[i][0], context=19) for i in range(len(call_stack))
     ]
     call_stack_dicts = [
         {
@@ -120,10 +117,10 @@ def _get_call_stack_dicts():
     ]
 
     for call_stack_dict in call_stack_dicts:
-        if is_iterable(call_stack_dict['code_context']):
-            call_stack_dict['code_context_str'] = ''.join(call_stack_dict['code_context'])
+        if is_iterable(call_stack_dict["code_context"]):
+            call_stack_dict["code_context_str"] = "".join(call_stack_dict["code_context"])
         else:
-            call_stack_dict['code_context_str'] = str(call_stack_dict['code_context'])
+            call_stack_dict["code_context_str"] = str(call_stack_dict["code_context"])
 
     # Only start at the level of that first forward pass, going from shallow to deep.
     tracking = False
@@ -131,16 +128,16 @@ def _get_call_stack_dicts():
     for d in range(len(call_stack_dicts) - 1, -1, -1):
         call_stack_dict = call_stack_dicts[d]
         if any(
-                [
-                    call_stack_dict["call_fname"].endswith("model_history.py"),
-                    call_stack_dict["call_fname"].endswith("torchlens/helper_funcs.py"),
-                    call_stack_dict["call_fname"].endswith("torchlens/user_funcs.py"),
-                    call_stack_dict["call_fname"].endswith("torchlens/trace_model.py"),
-                    call_stack_dict["call_fname"].endswith("torchlens/logging_funcs.py"),
-                    call_stack_dict["call_fname"].endswith("torchlens/decorate_torch.py"),
-                    call_stack_dict["call_fname"].endswith("torchlens/model_funcs.py"),
-                    "_call_impl" in call_stack_dict["function"],
-                ]
+            [
+                call_stack_dict["call_fname"].endswith("model_history.py"),
+                call_stack_dict["call_fname"].endswith("torchlens/helper_funcs.py"),
+                call_stack_dict["call_fname"].endswith("torchlens/user_funcs.py"),
+                call_stack_dict["call_fname"].endswith("torchlens/trace_model.py"),
+                call_stack_dict["call_fname"].endswith("torchlens/logging_funcs.py"),
+                call_stack_dict["call_fname"].endswith("torchlens/decorate_torch.py"),
+                call_stack_dict["call_fname"].endswith("torchlens/model_funcs.py"),
+                "_call_impl" in call_stack_dict["function"],
+            ]
         ):
             continue
         if call_stack_dict["function"] == "forward":
@@ -272,12 +269,12 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
 
 
 def get_vars_of_type_from_obj(
-        obj: Any,
-        which_type: Type,
-        subclass_exceptions: Optional[List] = None,
-        search_depth: int = 3,
-        return_addresses=False,
-        allow_repeats=False,
+    obj: Any,
+    which_type: Type,
+    subclass_exceptions: Optional[List] = None,
+    search_depth: int = 3,
+    return_addresses=False,
+    allow_repeats=False,
 ) -> List:
     """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
     up to the given search depth.
@@ -320,14 +317,14 @@ def get_vars_of_type_from_obj(
 
 
 def search_stack_for_vars_of_type(
-        current_stack: List,
-        which_type: Type,
-        tensors_in_obj: List,
-        tensor_addresses: List,
-        tensor_addresses_full: List,
-        tensor_ids_in_obj: List,
-        subclass_exceptions: List,
-        allow_repeats: bool,
+    current_stack: List,
+    which_type: Type,
+    tensors_in_obj: List,
+    tensor_addresses: List,
+    tensor_addresses_full: List,
+    tensor_ids_in_obj: List,
+    subclass_exceptions: List,
+    allow_repeats: bool,
 ):
     """Helper function that searches current stack for vars of a given type, and
     returns the next stack to search.
@@ -351,9 +348,9 @@ def search_stack_for_vars_of_type(
     while len(current_stack) > 0:
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
-        if any(
-                [issubclass(item_class, subclass) for subclass in subclass_exceptions]
-        ) or ((id(item) in tensor_ids_in_obj) and not allow_repeats):
+        if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or (
+            (id(item) in tensor_ids_in_obj) and not allow_repeats
+        ):
             continue
         if issubclass(item_class, which_type):
             tensors_in_obj.append(item)
@@ -361,15 +358,13 @@ def search_stack_for_vars_of_type(
             tensor_addresses_full.append(address_full)
             tensor_ids_in_obj.append(id(item))
             continue
-        if item_class in [str, int, float, bool, np.ndarray, torch.tensor]:
+        if item_class in [str, int, float, bool, np.ndarray, torch.Tensor]:
             continue
         extend_search_stack_from_item(item, address, address_full, next_stack)
     return next_stack
 
 
-def extend_search_stack_from_item(
-        item: Any, address: str, address_full, next_stack: List
-):
+def extend_search_stack_from_item(item: Any, address: str, address_full, next_stack: List):
     """Utility function to iterate through a single item to populate the next stack to search for.
 
     Args:
@@ -383,10 +378,7 @@ def extend_search_stack_from_item(
             )
         else:
             next_stack.extend(
-                [
-                    (x, f"{address}.{i}", address_full + [("ind", i)])
-                    for i, x in enumerate(item)
-                ]
+                [(x, f"{address}.{i}", address_full + [("ind", i)]) for i, x in enumerate(item)]
             )
 
     if issubclass(type(item), dict):
@@ -403,15 +395,17 @@ def extend_search_stack_from_item(
             )
 
     for attr_name in dir(item):
-        if ((attr_name.startswith("__")) or
-                (attr_name in ['T', 'mT', 'real', 'imag', 'H']) or
-                ('grad' in attr_name)):
+        if (
+            (attr_name.startswith("__"))
+            or (attr_name in ["T", "mT", "real", "imag", "H"])
+            or ("grad" in attr_name)
+        ):
             continue
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 attr = getattr(item, attr_name)
-        except:
+        except Exception:
             continue
         attr_cls = type(attr)
         if attr_cls in [str, int, float, bool, np.ndarray]:
@@ -419,22 +413,18 @@ def extend_search_stack_from_item(
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
         if address == "":
-            next_stack.append(
-                (attr, attr_name.strip("_"), address_full + [("attr", attr_name)])
-            )
+            next_stack.append((attr, attr_name.strip("_"), address_full + [("attr", attr_name)]))
         else:
             next_stack.append(
                 (
                     attr,
-                    f'{address}.{attr_name.strip("_")}',
+                    f"{address}.{attr_name.strip('_')}",
                     address_full + [("attr", attr_name)],
                 )
             )
 
 
-def get_attr_values_from_tensor_list(
-        tensor_list: List[torch.Tensor], field_name: str
-) -> List[Any]:
+def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
     """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
 
     Args:
@@ -471,9 +461,9 @@ def nested_getattr(obj: Any, attr: str) -> Any:
         if a in [
             "volatile",
             "T",
-            'H',
-            'mH',
-            'mT'
+            "H",
+            "mH",
+            "mT",
         ]:  # avoid annoying warning; if there's more, make a list
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -500,14 +490,16 @@ def nested_assign(obj, addr, val):
                     obj = getattr(obj, entry_val)
 
 
-def iter_accessible_attributes(obj: Any, *, short_circuit: Optional[Callable[[Any, str], bool]] = None):
+def iter_accessible_attributes(
+    obj: Any, *, short_circuit: Optional[Callable[[Any, str], bool]] = None
+):
     for attr_name in dir(obj):
         if short_circuit and short_circuit(obj, attr_name):
             continue
 
-        # Attribute access can fail for any number of reasons, especially when 
-        # working with objects that we don't know anything about.  This 
-        # function makes a best-effort attempt to access every attribute, but 
+        # Attribute access can fail for any number of reasons, especially when
+        # working with objects that we don't know anything about.  This
+        # function makes a best-effort attempt to access every attribute, but
         # gracefully skips any that cause problems.
 
         with warnings.catch_warnings():
@@ -541,9 +533,7 @@ def tensor_all_nan(t: torch.Tensor) -> bool:
         return False
 
 
-def tensor_nanequal(t1: torch.Tensor,
-                    t2: torch.Tensor,
-                    allow_tolerance=False) -> bool:
+def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -> bool:
     """Returns True if the two tensors are equal, allowing for nans."""
     if t1.shape != t2.shape:
         return False
@@ -561,10 +551,10 @@ def tensor_nanequal(t1: torch.Tensor,
         return True
 
     if (
-            allow_tolerance
-            and (t1_nonan.dtype != torch.bool)
-            and (t2_nonan.dtype != torch.bool)
-            and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+        allow_tolerance
+        and (t1_nonan.dtype != torch.bool)
+        and (t2_nonan.dtype != torch.bool)
+        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
     ):
         return True
 
@@ -596,10 +586,13 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     Returns:
         Size of tensor in bytes.
     """
-    cpu_data = clean_cpu(t.data)
-    if cpu_data.dtype == torch.bfloat16:
-        cpu_data = clean_to(cpu_data, torch.float16)
-    return getsizeof(np.array(clean_dense(cpu_data)))
+    try:
+        cpu_data = clean_cpu(t.data)
+        if cpu_data.dtype == torch.bfloat16:
+            cpu_data = clean_to(cpu_data, torch.float16)
+        return getsizeof(np.array(clean_dense(cpu_data)))
+    except Exception:
+        return 0
 
 
 def human_readable_size(size: int, decimal_places: int = 1) -> str:
@@ -704,6 +697,6 @@ def warn_parallel():
     if mp.current_process().name != "MainProcess":
         raise RuntimeError(
             "WARNING: It looks like you are using parallel execution; only run "
-            "pytorch-xray in the main process, since certain operations "
+            "torchlens in the main process, since certain operations "
             "depend on execution order."
         )

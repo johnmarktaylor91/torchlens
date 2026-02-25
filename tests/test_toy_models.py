@@ -6,7 +6,6 @@ plus new API coverage tests.
 
 from os.path import join as opj
 
-import pytest
 import torch
 
 import example_models
@@ -787,7 +786,6 @@ def test_varying_loop_noparam1(default_input1):
     )
 
 
-@pytest.mark.xfail
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
     assert validate_saved_activations(model, default_input1)

@@ -5,7 +5,13 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 import torch
 
 from .constants import TENSOR_LOG_ENTRY_FIELD_ORDER
-from .helper_funcs import clean_to, get_tensor_memory_amount, human_readable_size, print_override, safe_copy
+from .helper_funcs import (
+    clean_to,
+    get_tensor_memory_amount,
+    human_readable_size,
+    print_override,
+    safe_copy,
+)
 
 if TYPE_CHECKING:
     from .model_history import ModelHistory
@@ -41,6 +47,7 @@ class TensorLogEntry:
         self.layer_label_raw = fields_dict["layer_label_raw"]
         self.operation_num = fields_dict["operation_num"]
         self.realtime_tensor_num = fields_dict["realtime_tensor_num"]
+        self.index_in_saved_log = fields_dict["index_in_saved_log"]
         self.source_model_history: "ModelHistory" = fields_dict["source_model_history"]
         self._pass_finished = fields_dict["_pass_finished"]
 
@@ -95,9 +102,7 @@ class TensorLogEntry:
         self.num_func_args_total = fields_dict["num_func_args_total"]
         self.num_position_args = fields_dict["num_position_args"]
         self.num_keyword_args = fields_dict["num_keyword_args"]
-        self.func_position_args_non_tensor = fields_dict[
-            "func_position_args_non_tensor"
-        ]
+        self.func_position_args_non_tensor = fields_dict["func_position_args_non_tensor"]
         self.func_keyword_args_non_tensor = fields_dict["func_keyword_args_non_tensor"]
         self.func_all_args_non_tensor = fields_dict["func_all_args_non_tensor"]
         self.function_is_inplace = fields_dict["function_is_inplace"]
@@ -153,12 +158,8 @@ class TensorLogEntry:
         self.has_internally_initialized_ancestor = fields_dict[
             "has_internally_initialized_ancestor"
         ]
-        self.internally_initialized_parents = fields_dict[
-            "internally_initialized_parents"
-        ]
-        self.internally_initialized_ancestors = fields_dict[
-            "internally_initialized_ancestors"
-        ]
+        self.internally_initialized_parents = fields_dict["internally_initialized_parents"]
+        self.internally_initialized_ancestors = fields_dict["internally_initialized_ancestors"]
         self.terminated_inside_model = fields_dict["terminated_inside_model"]
 
         # Conditional info
@@ -171,9 +172,7 @@ class TensorLogEntry:
         # Module info
         self.is_computed_inside_submodule = fields_dict["is_computed_inside_submodule"]
         self.containing_module_origin = fields_dict["containing_module_origin"]
-        self.containing_modules_origin_nested = fields_dict[
-            "containing_modules_origin_nested"
-        ]
+        self.containing_modules_origin_nested = fields_dict["containing_modules_origin_nested"]
         self.module_nesting_depth = fields_dict["module_nesting_depth"]
         self.modules_entered = fields_dict["modules_entered"]
         self.modules_entered_argnames = fields_dict["modules_entered_argnames"]
@@ -182,18 +181,10 @@ class TensorLogEntry:
         self.modules_exited = fields_dict["modules_exited"]
         self.module_passes_exited = fields_dict["module_passes_exited"]
         self.is_submodule_output = fields_dict["is_submodule_output"]
-        self.is_bottom_level_submodule_output = fields_dict[
-            "is_bottom_level_submodule_output"
-        ]
-        self.bottom_level_submodule_pass_exited = fields_dict[
-            "bottom_level_submodule_pass_exited"
-        ]
-        self.module_entry_exit_threads_inputs = fields_dict[
-            "module_entry_exit_threads_inputs"
-        ]
-        self.module_entry_exit_thread_output = fields_dict[
-            "module_entry_exit_thread_output"
-        ]
+        self.is_bottom_level_submodule_output = fields_dict["is_bottom_level_submodule_output"]
+        self.bottom_level_submodule_pass_exited = fields_dict["bottom_level_submodule_pass_exited"]
+        self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
+        self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
     # ********************************************
     # *********** User-Facing Functions **********
@@ -205,9 +196,7 @@ class TensorLogEntry:
 
         for field in dir(self):
             attr = getattr(self, field)
-            if not any(
-                    [field.startswith("_"), field in fields_to_exclude, callable(attr)]
-            ):
+            if not any([field.startswith("_"), field in fields_to_exclude, callable(attr)]):
                 print(f"{field}: {attr}")
 
     # ********************************************
@@ -241,12 +230,12 @@ class TensorLogEntry:
         return copied_entry
 
     def save_tensor_data(
-            self,
-            t: torch.Tensor,
-            t_args: Union[List, Tuple],
-            t_kwargs: Dict,
-            save_function_args: bool,
-            activation_postfunc: Optional[Callable] = None,
+        self,
+        t: torch.Tensor,
+        t_args: Union[List, Tuple],
+        t_kwargs: Dict,
+        save_function_args: bool,
+        activation_postfunc: Optional[Callable] = None,
     ):
         """Saves the tensor data for a given tensor operation.
 
@@ -273,15 +262,15 @@ class TensorLogEntry:
             self.function_args_saved = True
             creation_args = []
             for arg in t_args:
-                if type(arg) == list:
-                    creation_args.append([safe_copy(a) for a in arg])
+                if type(arg) in [list, tuple]:
+                    creation_args.append(type(arg)(safe_copy(a) for a in arg))
                 else:
                     creation_args.append(safe_copy(arg))
 
             creation_kwargs = {}
             for key, value in t_kwargs.items():
-                if type(value) == list:
-                    creation_kwargs[key] = [safe_copy(v) for v in value]
+                if type(value) in [list, tuple]:
+                    creation_kwargs[key] = type(value)(safe_copy(v) for v in value)
                 else:
                     creation_kwargs[key] = safe_copy(value)
             self.creation_args = creation_args
@@ -296,7 +285,7 @@ class TensorLogEntry:
         Args:
             grad: The gradient to save.
         """
-        self.grad_contents = grad
+        self.grad_contents = grad.detach().clone()
         self.has_saved_grad = True
         self.grad_shape = grad.shape
         self.grad_dtype = grad.dtype
@@ -308,15 +297,10 @@ class TensorLogEntry:
     # ********************************************
 
     def get_child_layers(self):
-        return [
-            self.source_model_history[child_label] for child_label in self.child_layers
-        ]
+        return [self.source_model_history[child_label] for child_label in self.child_layers]
 
     def get_parent_layers(self):
-        return [
-            self.source_model_history[parent_label]
-            for parent_label in self.parent_layers
-        ]
+        return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
 
     # ********************************************
     # ************* Built-in Methods *************
@@ -388,10 +372,7 @@ class TensorLogEntry:
         else:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
-            s += (
-                f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) "
-                f"{module_str}"
-            )
+            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) {module_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
             modules_exited_str = ", ".join(self.modules_exited)
@@ -422,9 +403,7 @@ class TensorLogEntry:
                 num_dims = min([tensor_size_shown, saved_shape[-2], saved_shape[-1]])
                 tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
             else:
-                num_dims = min(
-                    [tensor_size_shown, self.tensor_shape[-2], self.tensor_shape[-1]]
-                )
+                num_dims = min([tensor_size_shown, saved_shape[-2], saved_shape[-1]])
                 tensor_slice = self.tensor_contents.data.clone()
                 for _ in range(len(saved_shape) - 2):
                     tensor_slice = tensor_slice[0]
@@ -459,16 +438,12 @@ class TensorLogEntry:
             s += "\n\t\t- shares children with no other layers"
 
         if self.has_input_ancestor:
-            s += "\n\t\t- descendent of input layers: " + ", ".join(
-                self.input_ancestors
-            )
+            s += "\n\t\t- descendent of input layers: " + ", ".join(self.input_ancestors)
         else:
             s += "\n\t\t- tensor was created de novo inside the model (not computed from input)"
 
         if self.is_output_ancestor:
-            s += "\n\t\t- ancestor of output layers: " + ", ".join(
-                self.output_descendents
-            )
+            s += "\n\t\t- ancestor of output layers: " + ", ".join(self.output_descendents)
         else:
             s += "\n\t\t- tensor is not an ancestor of the model output; it terminates within the model"
 
@@ -520,9 +495,7 @@ class RolledTensorLogEntry:
         self.orphan_layers = []
 
         # Module info:
-        self.containing_modules_origin_nested = (
-            source_entry.containing_modules_origin_nested
-        )
+        self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
         self.modules_exited = source_entry.modules_exited
         self.module_passes_exited = source_entry.module_passes_exited
         self.is_bottom_level_submodule_output = False
@@ -549,16 +522,16 @@ class RolledTensorLogEntry:
         if source_node.has_input_ancestor:
             self.has_input_ancestor = True
         if not any(
-                [
-                    self.input_output_address is None,
-                    source_node.input_output_address is None,
-                ]
+            [
+                self.input_output_address is None,
+                source_node.input_output_address is None,
+            ]
         ):
             self.input_output_address = "".join(
-                [
-                    char if (source_node.input_output_address[c] == char) else "*"
-                    for c, char in enumerate(self.input_output_address)
-                ]
+                char if (src_char == char) else "*"
+                for char, src_char in zip(
+                    self.input_output_address, source_node.input_output_address
+                )
             )
             if self.input_output_address[-1] == ".":
                 self.input_output_address = self.input_output_address[:-1]
@@ -595,28 +568,14 @@ class RolledTensorLogEntry:
 
         # Label the passes for each layer, and indicate if any layers vary based on the pass.
         for child_layer in source_node.child_layers:
-            child_layer_label = self.source_model_history[
-                child_layer
-            ].layer_label_no_pass
-            if (
-                    source_node.pass_num
-                    not in self.child_passes_per_layer[child_layer_label]
-            ):
-                self.child_passes_per_layer[child_layer_label].append(
-                    source_node.pass_num
-                )
+            child_layer_label = self.source_model_history[child_layer].layer_label_no_pass
+            if source_node.pass_num not in self.child_passes_per_layer[child_layer_label]:
+                self.child_passes_per_layer[child_layer_label].append(source_node.pass_num)
 
         for parent_layer in source_node.parent_layers:
-            parent_layer_label = self.source_model_history[
-                parent_layer
-            ].layer_label_no_pass
-            if (
-                    source_node.pass_num
-                    not in self.parent_passes_per_layer[parent_layer_label]
-            ):
-                self.parent_passes_per_layer[parent_layer_label].append(
-                    source_node.pass_num
-                )
+            parent_layer_label = self.source_model_history[parent_layer].layer_label_no_pass
+            if source_node.pass_num not in self.parent_passes_per_layer[parent_layer_label]:
+                self.parent_passes_per_layer[parent_layer_label].append(source_node.pass_num)
 
         # Check if any edges vary across passes.
         if source_node.pass_num == source_node.layer_passes_total:
@@ -624,9 +583,7 @@ class RolledTensorLogEntry:
                 self.child_passes_per_layer.values()
             )
             pass_lens = [len(passes) for passes in pass_lists]
-            if any(
-                    [pass_len < source_node.layer_passes_total for pass_len in pass_lens]
-            ):
+            if any([pass_len < source_node.layer_passes_total for pass_len in pass_lens]):
                 self.edges_vary_across_passes = True
             else:
                 self.edges_vary_across_passes = False
@@ -642,12 +599,8 @@ class RolledTensorLogEntry:
         # vary across passes.
 
         for arg_type in ["args", "kwargs"]:
-            for arg_key, layer_label in source_node.parent_layer_arg_locs[
-                arg_type
-            ].items():
-                layer_label_no_pass = self.source_model_history[
-                    layer_label
-                ].layer_label_no_pass
+            for arg_key, layer_label in source_node.parent_layer_arg_locs[arg_type].items():
+                layer_label_no_pass = self.source_model_history[layer_label].layer_label_no_pass
                 self.parent_layer_arg_locs[arg_type][arg_key].add(layer_label_no_pass)
 
     def __str__(self) -> str:
@@ -656,9 +609,9 @@ class RolledTensorLogEntry:
         for field in dir(self):
             attr = getattr(self, field)
             if (
-                    not field.startswith("_")
-                    and field not in fields_not_to_print
-                    and not (callable(attr))
+                not field.startswith("_")
+                and field not in fields_not_to_print
+                and not (callable(attr))
             ):
                 s += f"{field}: {attr}\n"
         return s

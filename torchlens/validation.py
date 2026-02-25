@@ -30,7 +30,7 @@ FUNCS_NOT_TO_PERTURB_IN_VALIDATION = [
 
 
 def validate_saved_activations(
-        self, ground_truth_output_tensors: List[torch.Tensor], verbose: bool = False
+    self, ground_truth_output_tensors: List[torch.Tensor], verbose: bool = False
 ) -> bool:
     """Starting from outputs and internally terminated tensors, checks whether computing their values from the saved
     values of their input tensors yields their actually saved values, and whether computing their values from
@@ -43,9 +43,9 @@ def validate_saved_activations(
     for i, output_layer_label in enumerate(self.output_layers):
         output_layer = self[output_layer_label]
         if not tensor_nanequal(
-                output_layer.tensor_contents,
-                ground_truth_output_tensors[i],
-                allow_tolerance=False,
+            output_layer.tensor_contents,
+            ground_truth_output_tensors[i],
+            allow_tolerance=False,
         ):
             print(
                 f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
@@ -81,12 +81,12 @@ def validate_saved_activations(
 
 
 def validate_parents_of_saved_layer(
-        self,
-        layer_to_validate_parents_for_label: str,
-        validated_layers: Set[str],
-        validated_child_edges_for_each_layer: Dict[str, Set[str]],
-        layers_to_validate_parents_for: List[str],
-        verbose: bool = False,
+    self,
+    layer_to_validate_parents_for_label: str,
+    validated_layers: Set[str],
+    validated_child_edges_for_each_layer: Dict[str, Set[str]],
+    layers_to_validate_parents_for: List[str],
+    verbose: bool = False,
 ) -> bool:
     """Given a layer, checks that 1) all parent tensors appear properly in the saved arguments for that layer,
     2) that executing the function for that layer with the saved parent layer activations yields the
@@ -103,9 +103,7 @@ def validate_parents_of_saved_layer(
     layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
     # Check that the arguments are logged correctly:
-    if not _check_layer_arguments_logged_correctly(
-            self, layer_to_validate_parents_for_label
-    ):
+    if not _check_layer_arguments_logged_correctly(self, layer_to_validate_parents_for_label):
         print(
             f"Parent arguments for layer {layer_to_validate_parents_for_label} are not logged properly; "
             f"either a parent wasn't logged as an argument, or was logged an extra time"
@@ -116,7 +114,7 @@ def validate_parents_of_saved_layer(
     # values of the layer itself:
 
     if not _check_whether_func_on_saved_parents_yields_saved_tensor(
-            self, layer_to_validate_parents_for_label, perturb=False
+        self, layer_to_validate_parents_for_label, perturb=False
     ):
         return False
 
@@ -124,17 +122,14 @@ def validate_parents_of_saved_layer(
     # yields the wrong tensors, when each saved tensor is perturbed in turn:
 
     for perturb_layer in layer_to_validate_parents_for.parent_layers:
-        if (
-                layer_to_validate_parents_for.func_applied_name
-                in FUNCS_NOT_TO_PERTURB_IN_VALIDATION
-        ):
+        if layer_to_validate_parents_for.func_applied_name in FUNCS_NOT_TO_PERTURB_IN_VALIDATION:
             continue
         if not _check_whether_func_on_saved_parents_yields_saved_tensor(
-                self,
-                layer_to_validate_parents_for_label,
-                perturb=True,
-                layers_to_perturb=[perturb_layer],
-                verbose=verbose,
+            self,
+            layer_to_validate_parents_for_label,
+            perturb=True,
+            layers_to_perturb=[perturb_layer],
+            verbose=verbose,
         ):
             return False
 
@@ -146,11 +141,12 @@ def validate_parents_of_saved_layer(
             layer_to_validate_parents_for_label
         )
         if validated_child_edges_for_each_layer[parent_layer_label] == set(
-                parent_layer.child_layers
+            parent_layer.child_layers
         ):
             validated_layers.add(parent_layer_label)
-            if ((not parent_layer.is_input_layer) and
-                    not (parent_layer.is_buffer_layer and (parent_layer.buffer_parent is None))):
+            if (not parent_layer.is_input_layer) and not (
+                parent_layer.is_buffer_layer and (parent_layer.buffer_parent is None)
+            ):
                 layers_to_validate_parents_for.append(parent_layer_label)
 
     return True
@@ -171,9 +167,7 @@ def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bo
     # Make sure that all parent layers appear in at least one argument and that no extra layers appear:
     parent_layers_in_args = set()
     for arg_type in ["args", "kwargs"]:
-        parent_layers_in_args.update(
-            list(target_layer.parent_layer_arg_locs[arg_type].values())
-        )
+        parent_layers_in_args.update(list(target_layer.parent_layer_arg_locs[arg_type].values()))
     if parent_layers_in_args != set(target_layer.parent_layers):
         return False
 
@@ -190,26 +184,20 @@ def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bo
         for arg_type in ["args", "kwargs"]:
             iterfunc, argtype_field = argtype_dict[arg_type]
             for key, val in iterfunc(getattr(target_layer, argtype_field)):
-                validation_correct_for_arg_and_layer = (
-                    _validate_layer_against_arg(
-                        self, target_layer, parent_layer, arg_type, key, val
-                    )
+                validation_correct_for_arg_and_layer = _validate_layer_against_arg(
+                    self, target_layer, parent_layer, arg_type, key, val
                 )
                 if not validation_correct_for_arg_and_layer:
                     return False
     return True
 
 
-def _validate_layer_against_arg(
-        self, target_layer, parent_layer, arg_type, key, val
-):
+def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key, val):
     if type(val) in [list, tuple]:
         for v, subval in enumerate(val):
             argloc_key = (key, v)
-            validation_correct_for_arg_and_layer = (
-                _check_arglocs_correct_for_arg(
-                    self, target_layer, parent_layer, arg_type, argloc_key, subval
-                )
+            validation_correct_for_arg_and_layer = _check_arglocs_correct_for_arg(
+                self, target_layer, parent_layer, arg_type, argloc_key, subval
             )
             if not validation_correct_for_arg_and_layer:
                 return False
@@ -217,10 +205,8 @@ def _validate_layer_against_arg(
     elif type(val) == dict:
         for subkey, subval in val.items():
             argloc_key = (key, subkey)
-            validation_correct_for_arg_and_layer = (
-                _check_arglocs_correct_for_arg(
-                    self, target_layer, parent_layer, arg_type, argloc_key, subval
-                )
+            validation_correct_for_arg_and_layer = _check_arglocs_correct_for_arg(
+                self, target_layer, parent_layer, arg_type, argloc_key, subval
             )
             if not validation_correct_for_arg_and_layer:
                 return False
@@ -236,12 +222,12 @@ def _validate_layer_against_arg(
 
 
 def _check_arglocs_correct_for_arg(
-        self,
-        target_layer: TensorLogEntry,
-        parent_layer: TensorLogEntry,
-        arg_type: str,
-        argloc_key: Union[str, tuple],
-        saved_arg_val: Any,
+    self,
+    target_layer: TensorLogEntry,
+    parent_layer: TensorLogEntry,
+    arg_type: str,
+    argloc_key: Union[str, tuple],
+    saved_arg_val: Any,
 ):
     """For a given layer and an argument to its child layer, checks that it is logged correctly:
     that is, that it's logged as an argument if it matches, and is not logged as an argument if it doesn't match.
@@ -249,9 +235,7 @@ def _check_arglocs_correct_for_arg(
     target_layer_label = target_layer.layer_label
     parent_layer_label = parent_layer.layer_label
     if target_layer_label in parent_layer.children_tensor_versions:
-        parent_activations = parent_layer.children_tensor_versions[
-            target_layer_label
-        ]
+        parent_activations = parent_layer.children_tensor_versions[target_layer_label]
     else:
         parent_activations = parent_layer.tensor_contents
 
@@ -261,28 +245,25 @@ def _check_arglocs_correct_for_arg(
         )
     else:
         parent_layer_matches_arg = False
-    parent_layer_logged_as_arg = (
-                                         argloc_key in target_layer.parent_layer_arg_locs[arg_type]
-                                 ) and (
-                                         target_layer.parent_layer_arg_locs[arg_type][argloc_key]
-                                         == parent_layer_label
-                                 )
+    parent_layer_logged_as_arg = (argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and (
+        target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label
+    )
 
     if (
-            parent_layer_matches_arg
-            and (not parent_layer_logged_as_arg)
-            and (parent_activations.numel() != 0)
-            and (parent_activations.dtype != torch.bool)
-            and (not tensor_all_nan(parent_activations))
-            and (parent_activations.abs().float().mean() != 0)
-            and (parent_activations.abs().float().mean() != 1)
-            and not any(
-        [
-            torch.equal(parent_activations, self[other_parent].tensor_contents)
-            for other_parent in target_layer.parent_layers
-            if other_parent != parent_layer_label
-        ]
-    )
+        parent_layer_matches_arg
+        and (not parent_layer_logged_as_arg)
+        and (parent_activations.numel() != 0)
+        and (parent_activations.dtype != torch.bool)
+        and (not tensor_all_nan(parent_activations))
+        and (parent_activations.abs().float().mean() != 0)
+        and (parent_activations.abs().float().mean() != 1)
+        and not any(
+            [
+                torch.equal(parent_activations, self[other_parent].tensor_contents)
+                for other_parent in target_layer.parent_layers
+                if other_parent != parent_layer_label
+            ]
+        )
     ):
         print(
             f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
@@ -302,11 +283,11 @@ def _check_arglocs_correct_for_arg(
 
 
 def _check_whether_func_on_saved_parents_yields_saved_tensor(
-        self,
-        layer_to_validate_parents_for_label: str,
-        perturb: bool = False,
-        layers_to_perturb: List[str] = None,
-        verbose: bool = False,
+    self,
+    layer_to_validate_parents_for_label: str,
+    perturb: bool = False,
+    layers_to_perturb: List[str] = None,
+    verbose: bool = False,
 ) -> bool:
     """Checks whether executing the saved function for a layer on the saved value of its parent layers
     in fact yields the saved activations for that layer.
@@ -325,126 +306,144 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
     if (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1],
-    )
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
+        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
     ):
         return True
     elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-            and not torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[0],
-    )
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
+        and not torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[0],
+        )
     ):
         return True
-    elif layer_to_validate_parents_for.func_applied_name == 'empty_like':
+    elif layer_to_validate_parents_for.func_applied_name == "empty_like":
         return True
     elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
-            and (layer_to_validate_parents_for.creation_args[1].dtype == torch.bool)
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1],
-    )
-    ):
-        return True
-    elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "cross_entropy")
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1],
-    )
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
+        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and (layer_to_validate_parents_for.creation_args[1].dtype == torch.bool)
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
     ):
         return True
     elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == tuple)
-            and (
-                    type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor
-            )
-            and (layer_to_validate_parents_for.creation_args[1][0].dtype == torch.bool)
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1][0],
-    )
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "cross_entropy")
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
     ):
         return True
     elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "index_select")
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[2],
-    )
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
+        and (type(layer_to_validate_parents_for.creation_args[1]) == tuple)
+        and (type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor)
+        and (layer_to_validate_parents_for.creation_args[1][0].dtype == torch.bool)
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1][0],
+        )
     ):
         return True
     elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "lstm")
-            and (torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1][0]) or
-                 torch.equal(
-                     self[layers_to_perturb[0]].tensor_contents,
-                     layer_to_validate_parents_for.creation_args[1][1]) or
-                 torch.equal(
-                     self[layers_to_perturb[0]].tensor_contents,
-                     layer_to_validate_parents_for.creation_args[2][0]) or
-                 torch.equal(
-                     self[layers_to_perturb[0]].tensor_contents,
-                     layer_to_validate_parents_for.creation_args[2][1]) or
-                 ((type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor) and
-                  torch.equal(
-                      self[layers_to_perturb[0]].tensor_contents,
-                      layer_to_validate_parents_for.creation_args[1])
-                 ))):
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "index_select")
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[2],
+        )
+    ):
         return True
     elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "_pad_packed_sequence")
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1]
-    )):
-        return True
-    elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "masked_fill_")
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[1]
-    )):
-        return True
-    elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "scatter_")
-            and torch.equal(
-        self[layers_to_perturb[0]].tensor_contents,
-        layer_to_validate_parents_for.creation_args[2]
-    )):
-        return True
-    elif (
-            perturb
-            and (layer_to_validate_parents_for.func_applied_name == "interpolate")
-            and ((('scale_factor' in layer_to_validate_parents_for.creation_kwargs)
-                  and (layer_to_validate_parents_for.creation_kwargs['scale_factor'] is not None)
-                  and torch.equal(
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "lstm")
+        and (
+            torch.equal(
                 self[layers_to_perturb[0]].tensor_contents,
-                torch.tensor(layer_to_validate_parents_for.creation_kwargs['scale_factor'])))
-                 or ((len(layer_to_validate_parents_for.creation_args) >= 3)
-                     and torch.equal(
-                        self[layers_to_perturb[0]].tensor_contents,
-                        layer_to_validate_parents_for.creation_args[2])))
+                layer_to_validate_parents_for.creation_args[1][0],
+            )
+            or torch.equal(
+                self[layers_to_perturb[0]].tensor_contents,
+                layer_to_validate_parents_for.creation_args[1][1],
+            )
+            or torch.equal(
+                self[layers_to_perturb[0]].tensor_contents,
+                layer_to_validate_parents_for.creation_args[2][0],
+            )
+            or torch.equal(
+                self[layers_to_perturb[0]].tensor_contents,
+                layer_to_validate_parents_for.creation_args[2][1],
+            )
+            or (
+                (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+                and torch.equal(
+                    self[layers_to_perturb[0]].tensor_contents,
+                    layer_to_validate_parents_for.creation_args[1],
+                )
+            )
+        )
+    ):
+        return True
+    elif (
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "_pad_packed_sequence")
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
+    ):
+        return True
+    elif (
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "masked_fill_")
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[1],
+        )
+    ):
+        return True
+    elif (
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "scatter_")
+        and torch.equal(
+            self[layers_to_perturb[0]].tensor_contents,
+            layer_to_validate_parents_for.creation_args[2],
+        )
+    ):
+        return True
+    elif (
+        perturb
+        and (layer_to_validate_parents_for.func_applied_name == "interpolate")
+        and (
+            (
+                ("scale_factor" in layer_to_validate_parents_for.creation_kwargs)
+                and (layer_to_validate_parents_for.creation_kwargs["scale_factor"] is not None)
+                and torch.equal(
+                    self[layers_to_perturb[0]].tensor_contents,
+                    torch.tensor(layer_to_validate_parents_for.creation_kwargs["scale_factor"]),
+                )
+            )
+            or (
+                (len(layer_to_validate_parents_for.creation_args) >= 3)
+                and torch.equal(
+                    self[layers_to_perturb[0]].tensor_contents,
+                    layer_to_validate_parents_for.creation_args[2],
+                )
+            )
+        )
     ):
         return True
 
@@ -460,8 +459,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     set_rng_from_saved_states(layer_to_validate_parents_for.func_rng_states)
     try:
         recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
-    except:
-        raise Exception(f"Invalid perturbed arguments for layer {layer_to_validate_parents_for_label}")
+    except Exception as e:
+        raise Exception(
+            f"Invalid perturbed arguments for layer {layer_to_validate_parents_for_label}"
+        ) from e
     set_rng_from_saved_states(current_rng_states)
 
     if layer_func.__name__ in [
@@ -472,19 +473,17 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         recomputed_output = input_args["args"][0]
 
     if any([issubclass(type(recomputed_output), which_type) for which_type in [list, tuple]]):
-        recomputed_output = recomputed_output[
-            layer_to_validate_parents_for.iterable_output_index
-        ]
+        recomputed_output = recomputed_output[layer_to_validate_parents_for.iterable_output_index]
 
     if (
-            not (
-                    tensor_nanequal(
-                        recomputed_output,
-                        layer_to_validate_parents_for.tensor_contents,
-                        allow_tolerance=True,
-                    )
+        not (
+            tensor_nanequal(
+                recomputed_output,
+                layer_to_validate_parents_for.tensor_contents,
+                allow_tolerance=True,
             )
-            and not perturb
+        )
+        and not perturb
     ):
         print(
             f"Saved activations for layer {layer_to_validate_parents_for_label} do not match the "
@@ -493,12 +492,12 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         return False
 
     if (
-            tensor_nanequal(
-                recomputed_output,
-                layer_to_validate_parents_for.tensor_contents,
-                allow_tolerance=False,
-            )
-            and perturb
+        tensor_nanequal(
+            recomputed_output,
+            layer_to_validate_parents_for.tensor_contents,
+            allow_tolerance=False,
+        )
+        and perturb
     ):
         return _posthoc_perturb_check(
             self, layer_to_validate_parents_for, layers_to_perturb, verbose
@@ -508,9 +507,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
 
 def _prepare_input_args_for_validating_layer(
-        self,
-        layer_to_validate_parents_for: TensorLogEntry,
-        layers_to_perturb: List[str],
+    self,
+    layer_to_validate_parents_for: TensorLogEntry,
+    layers_to_perturb: List[str],
 ) -> Dict:
     """Prepares the input arguments for validating the saved activations of a layer.
 
@@ -531,14 +530,11 @@ def _prepare_input_args_for_validating_layer(
 
     for arg_type in ["args", "kwargs"]:
         for (
-                key,
-                parent_layer_arg,
+            key,
+            parent_layer_arg,
         ) in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type].items():
             parent_layer = self[parent_layer_arg]
-            if (
-                    layer_to_validate_parents_for.layer_label
-                    in parent_layer.children_tensor_versions
-            ):
+            if layer_to_validate_parents_for.layer_label in parent_layer.children_tensor_versions:
                 parent_values = parent_layer.children_tensor_versions[
                     layer_to_validate_parents_for.layer_label
                 ]
@@ -599,7 +595,7 @@ def _copy_validation_args(input_args: Dict):
 
 
 def _perturb_layer_activations(
-        parent_activations: torch.Tensor, output_activations: torch.Tensor
+    parent_activations: torch.Tensor, output_activations: torch.Tensor
 ) -> torch.Tensor:
     """
     Perturbs the values of a saved tensor.
@@ -654,23 +650,23 @@ def _perturb_layer_activations(
                 0, 2, size=parent_activations.shape, device=device
             ).bool()
     else:
-        mean_output_sqrt = output_activations.detach().float().abs().mean()
-        mean_output_sqrt += torch.rand(mean_output_sqrt.shape) * 100
-        mean_output_sqrt *= torch.rand(mean_output_sqrt.shape)
-        mean_output_sqrt.requires_grad = False
+        mean_output = output_activations.detach().float().abs().mean()
+        mean_output += torch.rand(mean_output.shape, device=mean_output.device) * 100
+        mean_output *= torch.rand(mean_output.shape, device=mean_output.device)
+        mean_output.requires_grad = False
         perturbed_activations = torch.randn_like(
             parent_activations.float(), device=device
-        ) * mean_output_sqrt.to(device)
+        ) * mean_output.to(device)
         perturbed_activations = perturbed_activations.type(parent_activations.dtype)
 
     return perturbed_activations
 
 
 def _posthoc_perturb_check(
-        self,
-        layer_to_validate_parents_for: TensorLogEntry,
-        layers_to_perturb: List[str],
-        verbose: bool = False,
+    self,
+    layer_to_validate_parents_for: TensorLogEntry,
+    layers_to_perturb: List[str],
+    verbose: bool = False,
 ) -> bool:
     """If a layer fails the "perturbation check"--that is, if perturbing the values of parent
     layers doesn't change the values relative to the layer's saved values--checks whether one of the
@@ -688,55 +684,47 @@ def _posthoc_perturb_check(
     if layer_to_validate_parents_for.tensor_dtype == torch.bool:
         return True
     elif (
-            (layer_to_validate_parents_for.func_applied_name == "to")
-            and (len(layer_to_validate_parents_for.creation_args) > 1)
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        (layer_to_validate_parents_for.func_applied_name == "to")
+        and (len(layer_to_validate_parents_for.creation_args) > 1)
+        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
     ):
         return True
     elif (
-            (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-            and (type(layer_to_validate_parents_for.creation_args[2]) == torch.Tensor)
-            and (
-                    layer_to_validate_parents_for.creation_args[0].shape
-                    == layer_to_validate_parents_for.creation_args[2].shape
-            )
+        (layer_to_validate_parents_for.func_applied_name == "__setitem__")
+        and (type(layer_to_validate_parents_for.creation_args[2]) == torch.Tensor)
+        and (
+            layer_to_validate_parents_for.creation_args[0].shape
+            == layer_to_validate_parents_for.creation_args[2].shape
+        )
     ):
         return True
-    elif (
-            layer_to_validate_parents_for.func_applied_name in ["__getitem__", "unbind"]
-    ) and (
-            layer_to_validate_parents_for.tensor_contents.numel() < 20
+    elif (layer_to_validate_parents_for.func_applied_name == "__setitem__") and not isinstance(
+        layer_to_validate_parents_for.creation_args[2], torch.Tensor
+    ):
+        return True
+    elif (layer_to_validate_parents_for.func_applied_name in ["__getitem__", "unbind"]) and (
+        layer_to_validate_parents_for.tensor_contents.numel() < 20
     ):  # some elements can be the same by chance
         return True
     elif (
-            (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-            and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
-            and (layer_to_validate_parents_for.creation_args[1].unique() < 20)
+        (layer_to_validate_parents_for.func_applied_name == "__getitem__")
+        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and (len(layer_to_validate_parents_for.creation_args[1].unique()) < 20)
     ):
         return True
     elif (layer_to_validate_parents_for.func_applied_name == "max") and len(
-            layer_to_validate_parents_for.creation_args
+        layer_to_validate_parents_for.creation_args
     ) > 1:
         return True
-    elif (
-            layer_to_validate_parents_for.func_applied_name == "max"
-    ) and not torch.is_floating_point(
+    elif (layer_to_validate_parents_for.func_applied_name == "max") and not torch.is_floating_point(
         layer_to_validate_parents_for.creation_args[0]
     ):
         return True
     else:
-        num_inf = (
-            torch.isinf(layer_to_validate_parents_for.tensor_contents.abs())
-            .int()
-            .sum()
-        )
-        num_nan = (
-            torch.isnan(layer_to_validate_parents_for.tensor_contents.abs())
-            .int()
-            .sum()
-        )
+        num_inf = torch.isinf(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()
+        num_nan = torch.isnan(layer_to_validate_parents_for.tensor_contents.abs()).int().sum()
         if (num_inf == layer_to_validate_parents_for.tensor_contents.numel()) or (
-                num_nan == layer_to_validate_parents_for.tensor_contents.numel()
+            num_nan == layer_to_validate_parents_for.tensor_contents.numel()
         ):
             return True
 
@@ -750,10 +738,8 @@ def _posthoc_perturb_check(
         iterfunc, fieldname = arg_type_dict[arg_type]
         for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):
             # Skip if it's the argument itself:
-            if (
-                    key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]
-            ) and (
-                    layer_to_validate_parents_for.parent_layer_arg_locs[arg_type][key]
+            if (key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]) and (
+                layer_to_validate_parents_for.parent_layer_arg_locs[arg_type][key]
             ) in layers_to_perturb:
                 continue
             arg_is_special = _check_if_arg_is_special_val(val)
@@ -780,9 +766,9 @@ def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]):
     # If it's one of the other arguments, check if it's all zeros or all ones:
     if type(val) != torch.Tensor:
         try:
-            val = torch.Tensor(val)
-        except:
-            return True
+            val = torch.tensor(val)
+        except (TypeError, ValueError, RuntimeError):
+            return False
     if torch.all(torch.eq(val, 0)) or torch.all(torch.eq(val, 1)) or (val.numel() == 0):
         return True
     else:
