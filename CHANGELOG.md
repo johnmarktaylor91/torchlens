@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v0.3.0 (2026-02-25)
+
+### Chores
+
+- **ci**: Replace black with ruff auto-format on push
+  ([`e0cb9e1`](https://github.com/johnmarktaylor91/torchlens/commit/e0cb9e1c20b347cc2ff2579cb10b1beb959f8252))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **config**: Add ruff config and replace black/isort with ruff in pre-commit
+  ([`c27ced8`](https://github.com/johnmarktaylor91/torchlens/commit/c27ced8f7f8fa9e555dfa6a8313db53575b00305))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **config**: Set major_on_zero to true
+  ([`d63451c`](https://github.com/johnmarktaylor91/torchlens/commit/d63451cdd3360fa2ce6979b2e371a806310ec6ca))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **tests**: Restructure test suite into focused files with metadata coverage
+  ([`31b0353`](https://github.com/johnmarktaylor91/torchlens/commit/31b0353813353a0eaa0dc94e9659f9e84bbaab00))
+
+Split monolithic test_validation_and_visuals.py (3130 lines, 155 tests) into: - conftest.py: shared
+  fixtures and deterministic seeding - test_toy_models.py: 78 tests (66 migrated + 12 new API
+  coverage tests) - test_metadata.py: 44 comprehensive metadata field tests (7 test classes) -
+  test_real_world_models.py: 75 tests with local imports and importorskip
+
+New tests cover: log_forward_pass parameters (layers_to_save, save_function_args,
+  activation_postfunc, mark_distances), get_model_metadata, ModelHistory access patterns,
+  TensorLogEntry field validation, recurrent metadata, and GeluModel.
+
+Removed 13 genuine size-duplicate tests (ResNet101/152, VGG19, etc.). All optional dependencies now
+  use pytest.importorskip for graceful skipping.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.2.0 (2026-02-24)
 
 ### Bug Fixes
