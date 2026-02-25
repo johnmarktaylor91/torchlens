@@ -16,9 +16,7 @@ def cleanup(self):
     torch.cuda.empty_cache()
 
 
-def _remove_log_entry(
-        self, log_entry: TensorLogEntry, remove_references: bool = True
-):
+def _remove_log_entry(self, log_entry: TensorLogEntry, remove_references: bool = True):
     """Given a TensorLogEntry, destroys it and all references to it.
 
     Args:
@@ -32,7 +30,7 @@ def _remove_log_entry(
     for attr in dir(log_entry):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            if not attr.startswith("_") and not callable(getattr(log_entry, attr)):
+            if not attr.startswith("__") and not callable(getattr(log_entry, attr)):
                 delattr(log_entry, attr)
     del log_entry
     if remove_references:
@@ -55,9 +53,7 @@ def _remove_log_entry_references(self, layer_to_remove: str):
     remove_entry_from_list(self.internally_terminated_bool_layers, layer_to_remove)
     remove_entry_from_list(self.layers_with_saved_activations, layer_to_remove)
     remove_entry_from_list(self.layers_with_saved_gradients, layer_to_remove)
-    remove_entry_from_list(
-        self._layers_where_internal_branches_merge_with_input, layer_to_remove
-    )
+    remove_entry_from_list(self._layers_where_internal_branches_merge_with_input, layer_to_remove)
 
     self.conditional_branch_edges = [
         tup for tup in self.conditional_branch_edges if layer_to_remove not in tup
@@ -75,13 +71,4 @@ def _remove_log_entry_references(self, layer_to_remove: str):
     for group_label, group_tensors in self.equivalent_operations.items():
         if layer_to_remove in group_tensors:
             group_tensors.remove(layer_to_remove)
-    self.equivalent_operations = {
-        k: v for k, v in self.equivalent_operations.items() if len(v) > 0
-    }
-
-    for group_label, group_tensors in self.same_layer_operations.items():
-        if layer_to_remove in group_tensors:
-            group_tensors.remove(layer_to_remove)
-    self.same_layer_operations = {
-        k: v for k, v in self.same_layer_operations.items() if len(v) > 0
-    }
+    self.equivalent_operations = {k: v for k, v in self.equivalent_operations.items() if len(v) > 0}

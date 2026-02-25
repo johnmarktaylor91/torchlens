@@ -33,9 +33,7 @@ def _getitem_after_pass(self, ix):
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
 
-    keys_with_substr = [
-        key for key in self.layer_dict_all_keys if str(ix) in str(key)
-    ]
+    keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
     if len(keys_with_substr) == 1:
         return self.layer_dict_all_keys[keys_with_substr[0]]
 
@@ -49,14 +47,15 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
     Args:
         key: Lookup key used by the user.
     """
-    if (type(key) == int) and (
-            key >= len(self.layer_list) or key < -len(self.layer_list)
-    ):
+    if (type(key) == int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
         raise ValueError(
             f"You specified the layer with index {key}, but there are only {len(self.layer_list)} "
             f"layers; please specify an index in the range "
             f"-{len(self.layer_list)} - {len(self.layer_list) - 1}."
         )
+
+    if type(key) != str:
+        raise ValueError(_get_lookup_help_str(self, key, mode))
 
     if key in self.module_addresses:
         module_num_passes = self.module_num_passes[key]
@@ -66,7 +65,7 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
         )
 
     if key.split(":")[0] in self.module_addresses:
-        module, pass_num = key.split(":")
+        module, pass_num = key.split(":", 1)
         module_num_passes = self.module_num_passes[module]
         raise ValueError(
             f"You specified module {module} pass {pass_num}, but {module} only has "
@@ -74,15 +73,15 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
         )
 
     if key in self.layer_labels_no_pass:
-        layer_num_passes = self.layer_num_passes[key]
+        layer_num_passes = self.layer_num_passes.get(key, "unknown")
         raise ValueError(
             f"You specified output of layer {key}, but it has {layer_num_passes} passes; "
             f"please specify e.g. {key}:2 for the second pass of {key}."
         )
 
     if key.split(":")[0] in self.layer_labels_no_pass:
-        layer_label, pass_num = key.split(":")
-        layer_num_passes = self.layer_num_passes[layer_label]
+        layer_label, pass_num = key.split(":", 1)
+        layer_num_passes = self.layer_num_passes.get(layer_label, "unknown")
         raise ValueError(
             f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
             f"{layer_num_passes} passes. Specify a lower number."
@@ -167,7 +166,7 @@ def _str_after_pass(self) -> str:
             pass_str = ""
 
         if self.layer_dict_main_keys[layer_barcode].has_saved_activations and (
-                not self._all_layers_saved
+            not self._all_layers_saved
         ):
             s += "\n\t\t* "
         else:
@@ -305,9 +304,7 @@ def print_all_fields(self):
 
     for field in dir(self):
         attr = getattr(self, field)
-        if not any(
-                [field.startswith("_"), field in fields_to_exclude, callable(attr)]
-        ):
+        if not any([field.startswith("_"), field in fields_to_exclude, callable(attr)]):
             print(f"{field}: {attr}")
 
 

@@ -56,6 +56,9 @@ include = ["torchlens*"]
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+ignore = ["E721", "F401"]
+
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["torchlens/__init__.py:__version__"]

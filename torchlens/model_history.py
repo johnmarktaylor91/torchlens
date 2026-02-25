@@ -8,8 +8,14 @@ from .decorate_torch import decorate_pytorch
 from .helper_funcs import (
     human_readable_size,
 )
-from .interface import (_getitem_after_pass, _getitem_during_pass, _str_after_pass,
-                        _str_during_pass, to_pandas, print_all_fields)
+from .interface import (
+    _getitem_after_pass,
+    _getitem_during_pass,
+    _str_after_pass,
+    _str_during_pass,
+    to_pandas,
+    print_all_fields,
+)
 from .logging_funcs import save_new_activations
 from .model_funcs import cleanup_model, prepare_model
 from .postprocess import postprocess
@@ -19,20 +25,17 @@ from .validation import validate_saved_activations
 from .vis import render_graph
 
 
-# todo add saved_layer field, remove the option to only keep saved layers
-
-
 class ModelHistory:
     def __init__(
-            self,
-            model_name: str,
-            output_device: str = "same",
-            activation_postfunc: Optional[Callable] = None,
-            keep_unsaved_layers: bool = True,
-            save_function_args: bool = False,
-            save_gradients: bool = False,
-            detach_saved_tensors: bool = False,
-            mark_input_output_distances: bool = True,
+        self,
+        model_name: str,
+        output_device: str = "same",
+        activation_postfunc: Optional[Callable] = None,
+        keep_unsaved_layers: bool = True,
+        save_function_args: bool = False,
+        save_gradients: bool = False,
+        detach_saved_tensors: bool = False,
+        mark_input_output_distances: bool = True,
     ):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
@@ -106,7 +109,6 @@ class ModelHistory:
         self.layers_with_saved_gradients: List[str] = []
         self.layers_computed_with_params: Dict[str, List] = defaultdict(list)
         self.equivalent_operations: Dict[str, set] = defaultdict(set)
-        self.same_layer_operations: Dict[str, list] = defaultdict(list)
 
         # Tensor info:
         self.num_tensors_total: int = 0

@@ -65,7 +65,6 @@ MODEL_HISTORY_FIELD_ORDER = [
     "conditional_branch_edges",
     "layers_computed_with_params",
     "equivalent_operations",
-    "same_layer_operations",
     "layers_with_saved_activations",
     "unlogged_layers",
     "layers_with_saved_gradients",
@@ -108,7 +107,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     "elapsed_time_function_calls",
     "elapsed_time_torchlens_logging",
     # Lookup info
-    "func_argnames"
+    "func_argnames",
 ]
 
 TENSOR_LOG_ENTRY_FIELD_ORDER = [
@@ -118,6 +117,7 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "layer_label_raw",
     "operation_num",
     "realtime_tensor_num",
+    "index_in_saved_log",
     "source_model_history",
     "_pass_finished",
     # Other labeling info
@@ -334,7 +334,7 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "imag"),
     ("torch.Tensor", "T"),
     ("torch.Tensor", "mT"),
-    ("torch.Tensor", "H")
+    ("torch.Tensor", "H"),
 ]
 
 
@@ -413,9 +413,7 @@ def my_get_overridable_functions() -> List:
                     "{}.{} is in the tuple returned by torch._overrides.get_ignored_functions "
                     "but still has an explicit override"
                 )
-                assert func not in get_testing_overrides(), msg.format(
-                    namespace, func.__name__
-                )
+                assert func not in get_testing_overrides(), msg.format(namespace, func.__name__)
                 continue
             func_names.append((f"{namespace_str}", func_name))
     return func_names
@@ -427,7 +425,8 @@ TORCHVISION_FUNCS = [
     ("torch.ops.torchvision.ps_roi_align", "_op"),
     ("torch.ops.torchvision.ps_roi_pool", "_op"),
     ("torch.ops.torchvision.roi_align", "_op"),
-    ("torch.ops.torchvision.roi_pool", "_op")]
+    ("torch.ops.torchvision.roi_pool", "_op"),
+]
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
