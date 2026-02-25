@@ -1,6 +1,23 @@
 # CHANGELOG
 
 
+## v0.3.1 (2026-02-25)
+
+### Bug Fixes
+
+- **core**: Fix in-place op tracking, validation, and test stability
+  ([`326b8a9`](https://github.com/johnmarktaylor91/torchlens/commit/326b8a907a170f8c9e4c7ec16296faaecfa56d51))
+
+- Propagate tensor labels back to original tensor after in-place ops (__setitem__, zero_,
+  __delitem__) so subsequent operations see updated labels - Add validation exemption for scalar
+  __setitem__ assignments - Fix torch.Tensor → torch.tensor for correct special value detection -
+  Remove xfail marker from test_varying_loop_noparam2 (now passes) - Add ruff lint ignores for
+  pre-existing E721/F401 across codebase - Includes prior bug-blitz fixes across logging,
+  postprocessing, cleanup, helper functions, visualization, and model tracing
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.3.0 (2026-02-25)
 
 ### Chores
