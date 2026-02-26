@@ -1,7 +1,8 @@
 import itertools as it
 import time
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, deque
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, TYPE_CHECKING, Tuple
 
 import torch
@@ -21,8 +22,24 @@ if TYPE_CHECKING:
     from .model_history import ModelHistory
 
 
+@dataclass
+class SubgraphInfo:
+    """Info about one isomorphic subgraph rooted at a starting node."""
+
+    starting_node: str
+    param_nodes: Set[str] = None
+    node_set: Set[str] = None
+
+    def __post_init__(self):
+        if self.param_nodes is None:
+            self.param_nodes = set()
+        if self.node_set is None:
+            self.node_set = set()
+        self.node_set.add(self.starting_node)
+
+
 def postprocess(
-        self: "ModelHistory", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
+    self: "ModelHistory", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
 ):
     """
     After the forward pass, cleans up the log into its final form.
@@ -63,7 +80,7 @@ def postprocess(
 
     # Step 8: Identify all loops, mark repeated layers.
 
-    _assign_corresponding_tensors_to_same_layer(self)
+    _detect_and_label_loops(self)
 
     # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 
@@ -99,7 +116,9 @@ def postprocess_fast(self: "ModelHistory"):
         output_layer.tensor_contents = self[output_layer.parent_layers[0]].tensor_contents
         output_layer.tensor_fsize = self[output_layer.parent_layers[0]].tensor_fsize
         output_layer.tensor_fsize_nice = self[output_layer.parent_layers[0]].tensor_fsize_nice
-        output_layer.has_saved_activations = self[output_layer.parent_layers[0]].has_saved_activations
+        output_layer.has_saved_activations = self[
+            output_layer.parent_layers[0]
+        ].has_saved_activations
         output_layer.has_saved_grad = self[output_layer.parent_layers[0]].has_saved_grad
         output_layer.grad_contents = self[output_layer.parent_layers[0]].grad_contents
         if output_layer.has_saved_activations:
@@ -114,7 +133,7 @@ def postprocess_fast(self: "ModelHistory"):
 
 
 def _add_output_layers(
-        self: "ModelHistory", output_tensors: List[torch.Tensor], output_addresses: List[str]
+    self: "ModelHistory", output_tensors: List[torch.Tensor], output_addresses: List[str]
 ):
     """
     Adds dedicated output nodes to the graph.
@@ -177,9 +196,7 @@ def _add_output_layers(
         new_output_node.modules_exited = [
             mod_pass[0] for mod_pass in output_node.containing_modules_origin_nested
         ]
-        new_output_node.module_passes_exited = (
-            output_node.containing_modules_origin_nested
-        )
+        new_output_node.module_passes_exited = output_node.containing_modules_origin_nested
         new_output_node.is_submodule_output = False
         new_output_node.is_bottom_level_submodule_output = False
         new_output_node.module_entry_exit_threads_inputs = {}
@@ -212,9 +229,9 @@ def _add_output_layers(
         new_output_node.was_getitem_applied = False
         new_output_node.children_tensor_versions = {}
         if output_node.was_getitem_applied:
-            output_node.children_tensor_versions[
-                new_output_node.tensor_label_raw
-            ] = safe_copy(output_tensors[i])
+            output_node.children_tensor_versions[new_output_node.tensor_label_raw] = safe_copy(
+                output_tensors[i]
+            )
             new_output_node.tensor_contents = safe_copy(output_tensors[i])
 
         # Change original output node:
@@ -239,9 +256,7 @@ def _find_output_ancestors(self):
         for child_node_label in node.child_layers:
             if self[child_node_label].is_output_ancestor:
                 node.is_output_ancestor = True
-                node.output_descendents.update(
-                    self[child_node_label].output_descendents
-                )
+                node.output_descendents.update(self[child_node_label].output_descendents)
         for parent_node_label in node.parent_layers:
             if parent_node_label not in nodes_seen:
                 node_stack.append(parent_node_label)
@@ -259,9 +274,7 @@ def _remove_orphan_nodes(self):
         tensor_label = node_stack.pop()
         nodes_seen.add(tensor_label)
         tensor_entry = self._raw_tensor_dict[tensor_label]
-        if (len(tensor_entry.child_layers) == 0) and (
-                not tensor_entry.is_output_layer
-        ):
+        if (len(tensor_entry.child_layers) == 0) and (not tensor_entry.is_output_layer):
             _log_internally_terminated_tensor(self, tensor_label)
         for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
             if next_label not in nodes_seen:
@@ -340,23 +353,21 @@ def _flood_graph_from_input_or_output_nodes(self, mode: str):
         ) = node_stack.pop()
         nodes_seen.add(current_node_label)
         current_node = self[current_node_label]
-        _update_node_distance_vals(
-            current_node, min_field, max_field, nodes_since_start
-        )
+        _update_node_distance_vals(current_node, min_field, max_field, nodes_since_start)
 
         setattr(current_node, marker_field, True)
         getattr(current_node, layer_logging_field).add(orig_node)
 
         for next_node_label in getattr(current_node, forward_field):
             if _check_whether_to_add_node_to_flood_stack(
-                    self,
-                    next_node_label,
-                    orig_node,
-                    nodes_since_start,
-                    min_field,
-                    max_field,
-                    layer_logging_field,
-                    nodes_seen,
+                self,
+                next_node_label,
+                orig_node,
+                nodes_since_start,
+                min_field,
+                max_field,
+                layer_logging_field,
+                nodes_seen,
             ):
                 node_stack.append(
                     (
@@ -369,10 +380,10 @@ def _flood_graph_from_input_or_output_nodes(self, mode: str):
 
 
 def _update_node_distance_vals(
-        current_node: TensorLogEntry,
-        min_field: str,
-        max_field: str,
-        nodes_since_start: int,
+    current_node: TensorLogEntry,
+    min_field: str,
+    max_field: str,
+    nodes_since_start: int,
 ):
     if getattr(current_node, min_field) is None:
         setattr(current_node, min_field, nodes_since_start)
@@ -394,14 +405,14 @@ def _update_node_distance_vals(
 
 
 def _check_whether_to_add_node_to_flood_stack(
-        self,
-        candidate_node_label: str,
-        orig_node_label: str,
-        nodes_since_start: int,
-        min_field: str,
-        max_field: str,
-        layer_logging_field: str,
-        nodes_seen: set,
+    self,
+    candidate_node_label: str,
+    orig_node_label: str,
+    nodes_since_start: int,
+    min_field: str,
+    max_field: str,
+    layer_logging_field: str,
+    nodes_seen: set,
 ):
     """
     Checker function to trim uninformative nodes when tracing input and output distances:
@@ -430,7 +441,7 @@ def _log_internally_terminated_tensor(self, tensor_label: str):
     if tensor_label not in self.internally_terminated_layers:
         self.internally_terminated_layers.append(tensor_label)
         if tensor_entry.is_atomic_bool_layer and (
-                tensor_label not in self.internally_terminated_bool_layers
+            tensor_label not in self.internally_terminated_bool_layers
         ):
             self.internally_terminated_bool_layers.append(tensor_label)
             tensor_entry.is_terminal_bool_layer = True
@@ -451,15 +462,11 @@ def _mark_conditional_branches(self):
             continue
         for next_tensor_label in node.parent_layers + node.child_layers:
             next_node = self[next_tensor_label]
-            if (
-                    next_node.is_output_ancestor
-            ):  # we found the beginning of a conditional branch
+            if next_node.is_output_ancestor:  # we found the beginning of a conditional branch
                 next_node.cond_branch_start_children.append(node_label)
                 next_node.in_cond_branch = False
                 nodes_seen.add(next_tensor_label)
-                self.conditional_branch_edges.append(
-                    (next_tensor_label, node_label)
-                )
+                self.conditional_branch_edges.append((next_tensor_label, node_label))
             else:
                 if next_tensor_label in nodes_seen:
                     continue
@@ -469,7 +476,7 @@ def _mark_conditional_branches(self):
         nodes_seen.add(node_label)
 
 
-def _assign_corresponding_tensors_to_same_layer(self):
+def _detect_and_label_loops(self):
     """
     Post-processing function that yokes together operations corresponding to the same layer, based on
     the following rule:
@@ -492,12 +499,16 @@ def _assign_corresponding_tensors_to_same_layer(self):
     assigned is equal to the number of operations of that type. If so, it's definitely found everything;
     if not, it runs the procedure again to check if more equivalent operations can be found.
     """
-    node_stack = self.input_layers + self.internally_initialized_layers
-    node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
+    node_stack = deque(
+        sorted(
+            self.input_layers + self.internally_initialized_layers,
+            key=lambda x: self[x].realtime_tensor_num,
+        )
+    )
     operation_equivalence_types_seen = set()
-    while len(node_stack) > 0:
+    while node_stack:
         # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
-        node_label = node_stack.pop(0)
+        node_label = node_stack.popleft()
         node = self[node_label]
         node_operation_equivalence_type = node.operation_equivalence_type
 
@@ -507,7 +518,7 @@ def _assign_corresponding_tensors_to_same_layer(self):
         operation_equivalence_types_seen.add(node_operation_equivalence_type)
         for equiv_op in node.equivalent_operations:
             node_stack.extend(self[equiv_op].child_layers)
-        node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
+        node_stack = deque(sorted(node_stack, key=lambda x: self[x].realtime_tensor_num))
 
         # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
         if len(node.equivalent_operations) == 1:
@@ -521,12 +532,10 @@ def _assign_corresponding_tensors_to_same_layer(self):
 
         # Else, start from this node and any equivalent operations, and work forward, finding
         # more equivalent operations:
-        _find_and_mark_same_layer_operations_starting_from_node(self, node)
+        _expand_isomorphic_subgraphs(self, node)
 
 
-def _find_and_mark_same_layer_operations_starting_from_node(
-        self, node: TensorLogEntry
-):
+def _expand_isomorphic_subgraphs(self, node: TensorLogEntry):
     """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
     and crawls forward, finding and marking corresponding operations until there are none left.
     At the end of this, nodes that have the same position with respect to the original node
@@ -542,15 +551,11 @@ def _find_and_mark_same_layer_operations_starting_from_node(
 
     # Dictionary specifying isomorphic nodes: key is earliest such node, value is list of isomorphic nodes
     iso_node_groups = OrderedDict(
-        {
-            equivalent_operation_starting_labels[
-                0
-            ]: equivalent_operation_starting_labels
-        }
+        {equivalent_operation_starting_labels[0]: equivalent_operation_starting_labels}
     )
 
     # Reverse dictionary mapping each node to its isomorphism group
-    node_to_iso_group_dict = OrderedDict(
+    node_to_iso_leader = OrderedDict(
         {
             label: equivalent_operation_starting_labels[0]
             for label in equivalent_operation_starting_labels
@@ -558,22 +563,15 @@ def _find_and_mark_same_layer_operations_starting_from_node(
     )
 
     # Dictionary of information about each subgraph
-    subgraphs_dict = {}
+    subgraph_info = {}
     for starting_label in equivalent_operation_starting_labels:
-        subgraphs_dict[starting_label] = {
-            "starting_node": starting_label,
-            "param_nodes": set(),
-            "node_set": {starting_label},
-        }
+        subgraph_info[starting_label] = SubgraphInfo(starting_node=starting_label)
         if node.computed_with_params:
-            subgraphs_dict[starting_label]["param_nodes"].add(starting_label)
+            subgraph_info[starting_label].param_nodes.add(starting_label)
 
     # Dictionary mapping each node to the subgraph it is in
-    node_to_subgraph_dict = OrderedDict(
-        {
-            label: subgraphs_dict[label]
-            for label in equivalent_operation_starting_labels
-        }
+    node_to_subgraph = OrderedDict(
+        {label: subgraph_info[label] for label in equivalent_operation_starting_labels}
     )
 
     # Dict mapping each subgraph to the set of subgraphs it's adjacent to; initialize each to be self-adjacent
@@ -582,42 +580,40 @@ def _find_and_mark_same_layer_operations_starting_from_node(
     # The stack will be a list of lists, where each latter list is a list of isomorphic nodes.
     # When adding to the stack, only isomorphic nodes will be added.
 
-    node_stack = [equivalent_operation_starting_labels[:]]
+    node_stack = deque([equivalent_operation_starting_labels[:]])
 
     is_first_node = True  # if the first node, don't look at parents
     while node_stack:
         # Pop a set of isomorphic nodes off of the stack, then add and process the next nodes in the stack.
-        isomorphic_nodes = sorted(node_stack.pop(0))
+        isomorphic_nodes = sorted(node_stack.popleft())
         if len(isomorphic_nodes) == 1:
             continue
-        _fetch_and_process_next_isomorphic_nodes(
+        _advance_bfs_frontier(
             self,
             isomorphic_nodes,
             iso_node_groups,
-            node_to_iso_group_dict,
-            subgraphs_dict,
-            node_to_subgraph_dict,
+            node_to_iso_leader,
+            subgraph_info,
+            node_to_subgraph,
             adjacent_subgraphs,
             is_first_node,
             node_stack,
         )
         is_first_node = False
 
-    _assign_and_log_isomorphic_nodes_to_same_layers(
-        self, iso_node_groups, node_to_subgraph_dict, adjacent_subgraphs
-    )
+    _finalize_layer_assignments(self, iso_node_groups, node_to_subgraph, adjacent_subgraphs)
 
 
-def _fetch_and_process_next_isomorphic_nodes(
-        self,
-        current_iso_nodes: List[str],
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        subgraphs_dict: Dict,
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict[str, set],
-        is_first_node: bool,
-        node_stack: List[List[str]],
+def _advance_bfs_frontier(
+    self,
+    current_iso_nodes: List[str],
+    iso_node_groups: Dict[str, List[str]],
+    node_to_iso_leader: Dict[str, str],
+    subgraph_info: Dict,
+    node_to_subgraph: Dict,
+    adjacent_subgraphs: Dict[str, set],
+    is_first_node: bool,
+    node_stack: List[List[str]],
 ):
     """Function that takes a set of isomorphic nodes, finds all sets of isomorphic successor nodes,
     then processes them and adds them to the stack.
@@ -625,9 +621,9 @@ def _fetch_and_process_next_isomorphic_nodes(
     Args:
         current_iso_nodes: Current set of isomorphic nodes to get the next nodes from.
         iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
-        node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
-        subgraphs_dict: Dict of information about each subgraph
-        node_to_subgraph_dict: Dict mapping each node to its subgraph
+        node_to_iso_leader: Reverse dict mapping each node to its isomorphism group.
+        subgraph_info: Dict of information about each subgraph
+        node_to_subgraph: Dict mapping each node to its subgraph
         adjacent_subgraphs: List of sets of adjacent subgraphs
         is_first_node: Whether it's the first node in the subgraph; if so, just do children, not parents to start.
         node_stack: List of lists of isomorphic nodes in the stack.
@@ -636,12 +632,12 @@ def _fetch_and_process_next_isomorphic_nodes(
     # to their own subgraph yet to avoid backtracking; if run into another subgraph, mark them
     # adjacent and skip.
 
-    successor_nodes_dict = _log_collisions_and_get_candidate_next_nodes(
+    frontier_nodes = _collect_frontier_and_detect_adjacency(
         self,
         current_iso_nodes,
         iso_node_groups,
-        node_to_iso_group_dict,
-        node_to_subgraph_dict,
+        node_to_iso_leader,
+        node_to_subgraph,
         adjacent_subgraphs,
         is_first_node,
     )
@@ -654,39 +650,39 @@ def _fetch_and_process_next_isomorphic_nodes(
             candidate_node_label,
             candidate_node_neighbor_type,
             candidate_node_subgraph,
-        ) = _get_next_candidate_node(successor_nodes_dict)
+        ) = _pop_frontier_node(frontier_nodes)
         if candidate_node_label is None:
             break
 
-        new_equivalent_nodes = _get_nodes_isomorphic_to_candidate_node(
+        new_equivalent_nodes = _find_isomorphic_matches(
             self,
             candidate_node_label,
             candidate_node_neighbor_type,
             candidate_node_subgraph,
-            successor_nodes_dict,
+            frontier_nodes,
         )
 
         # Now log this new set of isomorphic nodes.
 
-        _log_new_isomorphic_nodes(
+        _register_isomorphic_group(
             self,
             new_equivalent_nodes,
             iso_node_groups,
-            node_to_iso_group_dict,
-            subgraphs_dict,
-            node_to_subgraph_dict,
+            node_to_iso_leader,
+            subgraph_info,
+            node_to_subgraph,
             node_stack,
         )
 
 
-def _log_collisions_and_get_candidate_next_nodes(
-        self,
-        current_iso_nodes: List[str],
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict[str, set],
-        is_first_node: bool,
+def _collect_frontier_and_detect_adjacency(
+    self,
+    current_iso_nodes: List[str],
+    iso_node_groups: Dict[str, List[str]],
+    node_to_iso_leader: Dict[str, str],
+    node_to_subgraph: Dict,
+    adjacent_subgraphs: Dict[str, set],
+    is_first_node: bool,
 ) -> Dict:
     """Helper function that checks all parent and children nodes for overlap with nodes already added
     to subgraphs (either the same subgraph or another one), logs any adjacency among subgraphs,
@@ -701,106 +697,91 @@ def _log_collisions_and_get_candidate_next_nodes(
     else:
         node_types_to_use = ["children", "parents"]
 
-    successor_nodes_dict = OrderedDict()
+    frontier_nodes = OrderedDict()
     for node_label in current_iso_nodes:
         node = self[node_label]
-        node_subgraph = node_to_subgraph_dict[node_label]
-        node_subgraph_label = node_subgraph["starting_node"]
+        node_subgraph = node_to_subgraph[node_label]
+        node_subgraph_label = node_subgraph.starting_node
         subgraph_successor_nodes = {"children": [], "parents": []}
         for node_type in node_types_to_use:
             node_type_field = node_type_fields[node_type]
             for neighbor_label in getattr(node, node_type_field):
-                if (
-                        neighbor_label in node_subgraph["node_set"]
-                ):  # skip if backtracking own subgraph
+                if neighbor_label in node_subgraph.node_set:  # skip if backtracking own subgraph
                     continue
                 elif (
-                        neighbor_label in node_to_subgraph_dict
+                    neighbor_label in node_to_subgraph
                 ):  # if hit another subgraph, mark them adjacent.
-                    _check_and_mark_subgraph_adjacency(
+                    _record_subgraph_adjacency(
                         node_label,
                         neighbor_label,
                         iso_node_groups,
-                        node_to_iso_group_dict,
-                        node_to_subgraph_dict,
+                        node_to_iso_leader,
+                        node_to_subgraph,
                         adjacent_subgraphs,
                     )
                 else:  # we have a new, non-overlapping node as a possible candiate, add it:
                     subgraph_successor_nodes[node_type].append(neighbor_label)
-        successor_nodes_dict[node_subgraph_label] = subgraph_successor_nodes
+        frontier_nodes[node_subgraph_label] = subgraph_successor_nodes
 
-    return successor_nodes_dict
+    return frontier_nodes
 
 
-def _check_and_mark_subgraph_adjacency(
-        node_label: str,
-        neighbor_label: str,
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict[str, set],
+def _record_subgraph_adjacency(
+    node_label: str,
+    neighbor_label: str,
+    iso_node_groups: Dict[str, List[str]],
+    node_to_iso_leader: Dict[str, str],
+    node_to_subgraph: Dict,
+    adjacent_subgraphs: Dict[str, set],
 ):
     """Helper function that updates the adjacency status of two subgraphs"""
-    node_subgraph = node_to_subgraph_dict[node_label]
-    node_subgraph_label = node_subgraph["starting_node"]
-    neighbor_subgraph = node_to_subgraph_dict[neighbor_label]
-    neighbor_subgraph_label = neighbor_subgraph["starting_node"]
+    node_subgraph = node_to_subgraph[node_label]
+    node_subgraph_label = node_subgraph.starting_node
+    neighbor_subgraph = node_to_subgraph[neighbor_label]
+    neighbor_subgraph_label = neighbor_subgraph.starting_node
 
     # Subgraphs are adjacent if the node in the neighboring subgraph has an
     # isomorphic node in the current subgraph.
 
-    neighbor_iso_group = node_to_iso_group_dict[neighbor_label]
+    neighbor_iso_group = node_to_iso_leader[neighbor_label]
     nodes_isomorphic_to_neighbor_node = iso_node_groups[neighbor_iso_group]
-    if (
-            len(
-                node_subgraph["node_set"].intersection(
-                    nodes_isomorphic_to_neighbor_node
-                )
-            )
-            == 0
-    ):
+    if len(node_subgraph.node_set.intersection(nodes_isomorphic_to_neighbor_node)) == 0:
         return
 
     # Update adjacency
     if (node_subgraph_label in adjacent_subgraphs) and (
-            neighbor_subgraph_label in adjacent_subgraphs
+        neighbor_subgraph_label in adjacent_subgraphs
     ):
         return
     elif (node_subgraph_label in adjacent_subgraphs) and (
-            neighbor_subgraph_label not in adjacent_subgraphs
+        neighbor_subgraph_label not in adjacent_subgraphs
     ):
         adjacent_subgraphs[node_subgraph_label].add(neighbor_subgraph_label)
-        adjacent_subgraphs[neighbor_subgraph_label] = adjacent_subgraphs[
-            node_subgraph_label
-        ]
+        adjacent_subgraphs[neighbor_subgraph_label] = adjacent_subgraphs[node_subgraph_label]
     elif (node_subgraph_label not in adjacent_subgraphs) and (
-            neighbor_subgraph_label in adjacent_subgraphs
+        neighbor_subgraph_label in adjacent_subgraphs
     ):
         adjacent_subgraphs[neighbor_subgraph_label].add(node_subgraph_label)
-        adjacent_subgraphs[node_subgraph_label] = adjacent_subgraphs[
-            neighbor_subgraph_label
-        ]
+        adjacent_subgraphs[node_subgraph_label] = adjacent_subgraphs[neighbor_subgraph_label]
     else:
         new_adj_set = {node_subgraph_label, neighbor_subgraph_label}
-        adjacent_subgraphs[neighbor_subgraph_label] = new_adj_set
         adjacent_subgraphs[node_subgraph_label] = new_adj_set
+        adjacent_subgraphs[neighbor_subgraph_label] = new_adj_set
 
 
-def _get_next_candidate_node(
-        successor_nodes_dict: Dict,
+def _pop_frontier_node(
+    frontier_nodes: Dict,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Helper function to grab the next candidate node to consider out of the possible successor nodes.
 
     Args:
-        successor_nodes_dict: Dict of successor nodes from the set of subgraphs being considered
+        frontier_nodes: Dict of successor nodes from the set of subgraphs being considered
 
     Returns:
 
     """
-    for subgraph_label, neighbor_type in it.product(
-            successor_nodes_dict, ["children", "parents"]
-    ):
-        subgraph_neighbors = successor_nodes_dict[subgraph_label][neighbor_type]
+    for subgraph_label, neighbor_type in it.product(frontier_nodes, ["children", "parents"]):
+        subgraph_neighbors = frontier_nodes[subgraph_label][neighbor_type]
         if len(subgraph_neighbors) > 0:
             candidate_node_label = subgraph_neighbors.pop(0)
             candidate_node_neighbor_type = neighbor_type
@@ -813,12 +794,12 @@ def _get_next_candidate_node(
     return None, None, None
 
 
-def _get_nodes_isomorphic_to_candidate_node(
-        self,
-        candidate_node_label: str,
-        candidate_node_neighbor_type: str,
-        candidate_node_subgraph: str,
-        successor_nodes_dict: Dict,
+def _find_isomorphic_matches(
+    self,
+    candidate_node_label: str,
+    candidate_node_neighbor_type: str,
+    candidate_node_subgraph: str,
+    frontier_nodes: Dict,
 ) -> List[Tuple[str, str]]:
     """Finds nodes that are isomorphic with a candidate node.
 
@@ -826,31 +807,25 @@ def _get_nodes_isomorphic_to_candidate_node(
         candidate_node_label: Label of candidate node
         candidate_node_neighbor_type: Whether the candidate node is a child or parent node
         candidate_node_subgraph: Subgraph of the candidate node
-        successor_nodes_dict: Dict keeping track of possible successor nodes
+        frontier_nodes: Dict keeping track of possible successor nodes
 
     Returns:
         List of nodes isomorphic with the candidate node
     """
     candidate_node = self[candidate_node_label]
-    candidate_node_operation_equivalence_type = (
-        candidate_node.operation_equivalence_type
-    )
+    candidate_node_operation_equivalence_type = candidate_node.operation_equivalence_type
     new_equivalent_nodes = [(candidate_node_label, candidate_node_subgraph)]
-    for subgraph_label in successor_nodes_dict:
+    for subgraph_label in frontier_nodes:
         if subgraph_label == candidate_node_subgraph:  # ignore same subgraph
             continue
-        other_subgraph_nodes = successor_nodes_dict[subgraph_label][
-            candidate_node_neighbor_type
-        ]
+        other_subgraph_nodes = frontier_nodes[subgraph_label][candidate_node_neighbor_type]
         for c, comparison_node_label in enumerate(other_subgraph_nodes):
             comparison_node = self[comparison_node_label]
             if (
-                    comparison_node.operation_equivalence_type
-                    == candidate_node_operation_equivalence_type
+                comparison_node.operation_equivalence_type
+                == candidate_node_operation_equivalence_type
             ):
-                new_equivalent_nodes.append(
-                    (other_subgraph_nodes.pop(c), subgraph_label)
-                )
+                new_equivalent_nodes.append((other_subgraph_nodes.pop(c), subgraph_label))
                 break  # only add one node per subgraph at most
     new_equivalent_nodes = sorted(new_equivalent_nodes, key=lambda x: x[0])
 
@@ -862,14 +837,14 @@ def _get_nodes_isomorphic_to_candidate_node(
     return new_equivalent_nodes
 
 
-def _log_new_isomorphic_nodes(
-        self,
-        new_isomorphic_nodes: List[Tuple[str, str]],
-        iso_node_groups: Dict[str, List[str]],
-        node_to_iso_group_dict: Dict[str, str],
-        subgraphs_dict: Dict,
-        node_to_subgraph_dict: Dict,
-        node_stack: List[List[str]],
+def _register_isomorphic_group(
+    self,
+    new_isomorphic_nodes: List[Tuple[str, str]],
+    iso_node_groups: Dict[str, List[str]],
+    node_to_iso_leader: Dict[str, str],
+    subgraph_info: Dict,
+    node_to_subgraph: Dict,
+    node_stack: List[List[str]],
 ):
     """Takes a new set of equivalent nodes, and logs them as equivalent, adds them to their subgraphs,
     and adds them to the stack.
@@ -877,9 +852,9 @@ def _log_new_isomorphic_nodes(
     Args:
         new_isomorphic_nodes: Current set of isomorphic nodes to get the next nodes from.
         iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
-        node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
-        subgraphs_dict: Dict of information about each subgraph
-        node_to_subgraph_dict: Dict mapping each node to its subgraph
+        node_to_iso_leader: Reverse dict mapping each node to its isomorphism group.
+        subgraph_info: Dict of information about each subgraph
+        node_to_subgraph: Dict mapping each node to its subgraph
         node_stack: List of lists of isomorphic nodes in the stack.
     """
     if len(new_isomorphic_nodes) > 0:
@@ -887,21 +862,21 @@ def _log_new_isomorphic_nodes(
         equivalent_node_labels = [tup[0] for tup in new_isomorphic_nodes]
         iso_node_groups[iso_group_label] = equivalent_node_labels[:]
         for node_label in equivalent_node_labels:
-            node_to_iso_group_dict[node_label] = iso_group_label
+            node_to_iso_leader[node_label] = iso_group_label
         for node_label, node_subgraph in new_isomorphic_nodes:
             node = self[node_label]
-            subgraphs_dict[node_subgraph]["node_set"].add(node_label)
+            subgraph_info[node_subgraph].node_set.add(node_label)
             if node.computed_with_params:
-                subgraphs_dict[node_subgraph]["param_nodes"].add(node_label)
-            node_to_subgraph_dict[node_label] = subgraphs_dict[node_subgraph]
+                subgraph_info[node_subgraph].param_nodes.add(node_label)
+            node_to_subgraph[node_label] = subgraph_info[node_subgraph]
         node_stack.append(equivalent_node_labels)
 
 
-def _assign_and_log_isomorphic_nodes_to_same_layers(
-        self,
-        iso_node_groups: Dict[str, List],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict,
+def _finalize_layer_assignments(
+    self,
+    iso_node_groups: Dict[str, List],
+    node_to_subgraph: Dict,
+    adjacent_subgraphs: Dict,
 ):
     """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
     goes through and labels the layers as corresponding to each other. The rule is that nodes will be
@@ -910,25 +885,23 @@ def _assign_and_log_isomorphic_nodes_to_same_layers(
 
     Args:
         iso_node_groups: Dict specifying list of isomorphic nodes in each group
-        node_to_subgraph_dict: Dict mapping each node to the subgraph its in.
+        node_to_subgraph: Dict mapping each node to the subgraph its in.
         adjacent_subgraphs: Dict mapping each subgraph to set of adjacent subgraphs.
     """
     # Go through each set of isomorphic nodes, and further partition them into nodes assigned to same layer:
-    same_layer_node_groups = _group_isomorphic_nodes_to_same_layers(
-        self, iso_node_groups, node_to_subgraph_dict, adjacent_subgraphs
+    merged_layer_groups = _merge_iso_groups_to_layers(
+        self, iso_node_groups, node_to_subgraph, adjacent_subgraphs
     )
 
     # Finally, label the nodes corresponding to the same layer.
-    for layer_label, layer_nodes in same_layer_node_groups.items():
+    for layer_label, layer_nodes in merged_layer_groups.items():
         # Skip if the new layer asssignment reduces the number of equivalent layers.
         if len(layer_nodes) < max(
-                [len(self[layer].same_layer_operations) for layer in layer_nodes]
+            [len(self[layer].same_layer_operations) for layer in layer_nodes]
         ):
             continue
         # convert to list and sort
-        layer_nodes = sorted(
-            list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num
-        )
+        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)
         for n, node_label in enumerate(layer_nodes):
             node = self[node_label]
             node.layer_label_raw = layer_label
@@ -937,56 +910,46 @@ def _assign_and_log_isomorphic_nodes_to_same_layers(
             node.layer_passes_total = len(layer_nodes)
 
 
-def _group_isomorphic_nodes_to_same_layers(
-        self,
-        iso_node_groups: Dict[str, List],
-        node_to_subgraph_dict: Dict,
-        adjacent_subgraphs: Dict,
+def _merge_iso_groups_to_layers(
+    self,
+    iso_node_groups: Dict[str, List],
+    node_to_subgraph: Dict,
+    adjacent_subgraphs: Dict,
 ) -> Dict:
-    same_layer_node_groups = defaultdict(
-        set
-    )  # dict of nodes assigned to the same layer
-    node_to_layer_group_dict = (
-        {}
-    )  # reverse mapping: each node to its equivalent layer group
+    merged_layer_groups = defaultdict(set)  # dict of nodes assigned to the same layer
+    node_to_layer_leader = {}  # reverse mapping: each node to its equivalent layer group
 
     for iso_group_label, iso_nodes_orig in iso_node_groups.items():
         iso_nodes = sorted(iso_nodes_orig)
         for node1_label, node2_label in it.combinations(iso_nodes, 2):
-            node1_subgraph = node_to_subgraph_dict[node1_label]
-            node2_subgraph = node_to_subgraph_dict[node2_label]
-            node1_subgraph_label = node1_subgraph["starting_node"]
-            node2_subgraph_label = node2_subgraph["starting_node"]
+            node1_subgraph = node_to_subgraph[node1_label]
+            node2_subgraph = node_to_subgraph[node2_label]
+            node1_subgraph_label = node1_subgraph.starting_node
+            node2_subgraph_label = node2_subgraph.starting_node
             node1_param_types = [
-                self[pnode].operation_equivalence_type
-                for pnode in node1_subgraph["param_nodes"]
+                self[pnode].operation_equivalence_type for pnode in node1_subgraph.param_nodes
             ]
             node2_param_types = [
-                self[pnode].operation_equivalence_type
-                for pnode in node2_subgraph["param_nodes"]
+                self[pnode].operation_equivalence_type for pnode in node2_subgraph.param_nodes
             ]
-            overlapping_param_types = set(node1_param_types).intersection(
-                set(node2_param_types)
-            )
+            overlapping_param_types = set(node1_param_types).intersection(set(node2_param_types))
             subgraphs_are_adjacent = (
-                    node1_subgraph_label in adjacent_subgraphs
-                    and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
+                node1_subgraph_label in adjacent_subgraphs
+                and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
             )
             if (len(overlapping_param_types) > 0) or subgraphs_are_adjacent:
                 earlier_node_label = sorted([node1_label, node2_label])[
                     0
                 ]  # layer label always the first node
-                if earlier_node_label in node_to_layer_group_dict:
-                    layer_group = node_to_layer_group_dict[earlier_node_label]
+                if earlier_node_label in node_to_layer_leader:
+                    layer_group = node_to_layer_leader[earlier_node_label]
                 else:
                     layer_group = earlier_node_label
-                same_layer_node_groups[layer_group].update(
-                    {node1_label, node2_label}
-                )
-                node_to_layer_group_dict[node1_label] = layer_group
-                node_to_layer_group_dict[node2_label] = layer_group
+                merged_layer_groups[layer_group].update({node1_label, node2_label})
+                node_to_layer_leader[node1_label] = layer_group
+                node_to_layer_leader[node2_label] = layer_group
 
-    return same_layer_node_groups
+    return merged_layer_groups
 
 
 def _fix_modules_for_internal_tensors(self):
@@ -1007,9 +970,7 @@ def _fix_modules_for_internal_tensors(self):
         # Propagate modules for any parent nodes:
         for parent_label in node.parent_layers:
             parent_node = self[parent_label]
-            if (not parent_node.has_input_ancestor) and (
-                    parent_label not in nodes_seen
-            ):
+            if (not parent_node.has_input_ancestor) and (parent_label not in nodes_seen):
                 _fix_modules_for_single_internal_tensor(
                     node, parent_node, "parent", node_stack, nodes_seen
                 )
@@ -1018,12 +979,12 @@ def _fix_modules_for_internal_tensors(self):
         for child_label in node.child_layers:
             child_node = self[child_label]
             if any(
-                    [
-                        node.has_input_ancestor,
-                        child_node.has_input_ancestor,
-                        child_label in nodes_seen,
-                        child_node.is_output_layer,
-                    ]
+                [
+                    node.has_input_ancestor,
+                    child_node.has_input_ancestor,
+                    child_label in nodes_seen,
+                    child_node.is_output_layer,
+                ]
             ):
                 continue
             _fix_modules_for_single_internal_tensor(
@@ -1033,20 +994,17 @@ def _fix_modules_for_internal_tensors(self):
     # Now that the module containment is fixed, add this to the operation equivalence types.
     for layer in self:
         module_str = "_".join(
-            [
-                module_pass[0]
-                for module_pass in layer.containing_modules_origin_nested
-            ]
+            [module_pass[0] for module_pass in layer.containing_modules_origin_nested]
         )
         layer.operation_equivalence_type += module_str
 
 
 def _fix_modules_for_single_internal_tensor(
-        starting_node: TensorLogEntry,
-        node_to_fix: TensorLogEntry,
-        node_type_to_fix: str,
-        node_stack: List[str],
-        nodes_seen: Set[str],
+    starting_node: TensorLogEntry,
+    node_to_fix: TensorLogEntry,
+    node_type_to_fix: str,
+    node_stack: List[str],
+    nodes_seen: Set[str],
 ):
     """Helper function to fix the containing modules for a single internally generated tensor.
     The rule is, start from the child node, and apply in reverse any modules that were entered or exited.
@@ -1078,23 +1036,17 @@ def _fix_modules_for_single_internal_tensor(
     for enter_or_exit, module_address, module_pass in thread_modules[::step_val]:
         module_pass_label = (module_address, module_pass)
         if node_type_to_fix == "parent":
-            if (enter_or_exit == "+") and (module_pass_label in node_to_fix.containing_modules_origin_nested):
-                node_to_fix.containing_modules_origin_nested.remove(
-                    module_pass_label
-                )
+            if (enter_or_exit == "+") and (
+                module_pass_label in node_to_fix.containing_modules_origin_nested
+            ):
+                node_to_fix.containing_modules_origin_nested.remove(module_pass_label)
             elif enter_or_exit == "-":
-                node_to_fix.containing_modules_origin_nested.append(
-                    module_pass_label
-                )
+                node_to_fix.containing_modules_origin_nested.append(module_pass_label)
         elif node_type_to_fix == "child":
             if enter_or_exit == "+":
-                node_to_fix.containing_modules_origin_nested.append(
-                    module_pass_label
-                )
+                node_to_fix.containing_modules_origin_nested.append(module_pass_label)
             elif enter_or_exit == "-":
-                node_to_fix.containing_modules_origin_nested.remove(
-                    module_pass_label
-                )
+                node_to_fix.containing_modules_origin_nested.remove(module_pass_label)
     node_stack.append(node_to_fix_label)
     nodes_seen.add(node_to_fix_label)
 
@@ -1112,16 +1064,24 @@ def _fix_buffer_layers(self):
             layer.parent_layers.append(layer.buffer_parent)
             self[layer.buffer_parent].child_layers.append(layer_label)
             layer.func_applied = identity
-            layer.func_applied_name = 'identity'
+            layer.func_applied_name = "identity"
             layer.has_input_ancestor = True
             layer.input_ancestors.update(self[layer.buffer_parent].input_ancestors)
             layer.orig_ancestors.remove(layer.tensor_label_raw)
             layer.orig_ancestors.update(self[layer.buffer_parent].orig_ancestors)
-            layer.parent_layer_arg_locs['args'][0] = layer.buffer_parent
-            if (self[layer.buffer_parent].tensor_contents is not None) and (layer.creation_args is not None):
-                layer.creation_args.append(self[layer.buffer_parent].tensor_contents.detach().clone())
+            layer.parent_layer_arg_locs["args"][0] = layer.buffer_parent
+            if (self[layer.buffer_parent].tensor_contents is not None) and (
+                layer.creation_args is not None
+            ):
+                layer.creation_args.append(
+                    self[layer.buffer_parent].tensor_contents.detach().clone()
+                )
 
-        buffer_hash = str(layer.containing_modules_origin_nested) + str(layer.buffer_parent) + layer.buffer_address
+        buffer_hash = (
+            str(layer.containing_modules_origin_nested)
+            + str(layer.buffer_parent)
+            + layer.buffer_address
+        )
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     # Now go through and merge any layers with the same hash and the same value.
@@ -1132,8 +1092,11 @@ def _fix_buffer_layers(self):
             for unique_buffer_label in unique_buffers:
                 buffer = self[buffer_label]
                 unique_buffer = self[unique_buffer_label]
-                if ((buffer.tensor_contents is not None) and (unique_buffer.tensor_contents is not None) and
-                        (torch.equal(buffer.tensor_contents, unique_buffer.tensor_contents))):
+                if (
+                    (buffer.tensor_contents is not None)
+                    and (unique_buffer.tensor_contents is not None)
+                    and (torch.equal(buffer.tensor_contents, unique_buffer.tensor_contents))
+                ):
                     self._merge_buffer_entries(unique_buffer, buffer)
                     break
                 unique_buffers.append(buffer)
@@ -1148,23 +1111,25 @@ def _fix_buffer_layers(self):
         buffer_counter[buffer_address] += 1
 
 
-def _merge_buffer_entries(self, source_buffer: TensorLogEntry,
-                          buffer_to_remove: TensorLogEntry):
-    """Merges two identical buffer layers.
-    """
+def _merge_buffer_entries(self, source_buffer: TensorLogEntry, buffer_to_remove: TensorLogEntry):
+    """Merges two identical buffer layers."""
     for child_layer in buffer_to_remove.child_layers:
         if child_layer not in source_buffer.child_layers:
             source_buffer.child_layers.append(child_layer)
         self[child_layer].parent_layers.remove(buffer_to_remove.tensor_label_raw)
         self[child_layer].parent_layers.append(source_buffer.tensor_label_raw)
         if buffer_to_remove.tensor_label_raw in self[child_layer].internally_initialized_parents:
-            self[child_layer].internally_initialized_parents.remove(buffer_to_remove.tensor_label_raw)
+            self[child_layer].internally_initialized_parents.remove(
+                buffer_to_remove.tensor_label_raw
+            )
             self[child_layer].internally_initialized_parents.append(source_buffer.tensor_label_raw)
 
-        for arg_type in ['args', 'kwargs']:
+        for arg_type in ["args", "kwargs"]:
             for arg_label, arg_val in self[child_layer].parent_layer_arg_locs[arg_type].items():
                 if arg_val == buffer_to_remove.tensor_label_raw:
-                    self[child_layer].parent_layer_arg_locs[arg_type][arg_label] = source_buffer.tensor_label_raw
+                    self[child_layer].parent_layer_arg_locs[arg_type][arg_label] = (
+                        source_buffer.tensor_label_raw
+                    )
 
     for parent_layer in buffer_to_remove.parent_layers:
         if parent_layer not in source_buffer.parent_layers:
@@ -1245,33 +1210,19 @@ def _map_raw_tensor_labels_to_final_tensor_labels(self):
                 f"{layer_type}_{layer_type_num}_{layer_total_num}"
             )
         else:
-            tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{layer_type_num}:{pass_num}"
-            )
+            tensor_log_entry.layer_label_w_pass = f"{layer_type}_{layer_type_num}:{pass_num}"
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{layer_type_num}"
 
-        tensor_log_entry.layer_label_w_pass_short = (
-            f"{layer_type}_{layer_type_num}:{pass_num}"
-        )
-        tensor_log_entry.layer_label_no_pass_short = (
-            f"{layer_type}_{layer_type_num}"
-        )
+        tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{layer_type_num}:{pass_num}"
+        tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{layer_type_num}"
         if tensor_log_entry.layer_passes_total == 1:
             tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
-            tensor_log_entry.layer_label_short = (
-                tensor_log_entry.layer_label_no_pass_short
-            )
+            tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
         else:
             tensor_log_entry.layer_label = tensor_log_entry.layer_label_w_pass
-            tensor_log_entry.layer_label_short = (
-                tensor_log_entry.layer_label_w_pass_short
-            )
-        raw_to_final_layer_labels[
-            tensor_log_entry.tensor_label_raw
-        ] = tensor_log_entry.layer_label
-        final_to_raw_layer_labels[
-            tensor_log_entry.layer_label
-        ] = tensor_log_entry.tensor_label_raw
+            tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_w_pass_short
+        raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
+        final_to_raw_layer_labels[tensor_log_entry.layer_label] = tensor_log_entry.tensor_label_raw
     self._raw_to_final_layer_labels = raw_to_final_layer_labels
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
@@ -1281,9 +1232,7 @@ def _log_final_info_for_all_layers(self):
     Goes through all layers (before discarding unsaved ones), and logs final info about the model
     and the layers that pertains to all layers (not just saved ones).
     """
-    unique_layers_seen = (
-        set()
-    )  # to avoid double-counting params of recurrent layers
+    unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
     operation_num = 1
     for t, tensor_entry in enumerate(self):
         if tensor_entry.layer_type in ["input", "buffer"]:
@@ -1304,17 +1253,13 @@ def _log_final_info_for_all_layers(self):
             submodule_pass_nice_name = ":".join(
                 [str(i) for i in tensor_entry.bottom_level_submodule_pass_exited]
             )
-            tensor_entry.bottom_level_submodule_pass_exited = (
-                submodule_pass_nice_name
-            )
+            tensor_entry.bottom_level_submodule_pass_exited = submodule_pass_nice_name
 
         # Tally the tensor sizes:
         self.tensor_fsize_total += tensor_entry.tensor_fsize
 
         # Tally the parameter sizes:
-        if (
-                tensor_entry.layer_label_no_pass not in unique_layers_seen
-        ):  # only count params once
+        if tensor_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
             if tensor_entry.computed_with_params:
                 self.total_param_layers += 1
             self.total_params += tensor_entry.num_params_total
@@ -1352,13 +1297,8 @@ def _log_final_info_for_all_layers(self):
         module_parent_nopass = module_parent.split(":")[0]
         for module_child in module_children:
             module_child_nopass = module_child.split(":")[0]
-            if (
-                    module_child_nopass
-                    not in self.module_children[module_parent_nopass]
-            ):
-                self.module_children[module_parent_nopass].append(
-                    module_child_nopass
-                )
+            if module_child_nopass not in self.module_children[module_parent_nopass]:
+                self.module_children[module_parent_nopass].append(module_child_nopass)
 
     self.num_tensors_total = len(self)
 
@@ -1370,15 +1310,13 @@ def _log_final_info_for_all_layers(self):
 def _log_time_elapsed(self):
     self.pass_end_time = time.time()
     self.elapsed_time_cleanup = (
-            self.pass_end_time
-            - self.pass_start_time
-            - self.elapsed_time_setup
-            - self.elapsed_time_forward_pass
+        self.pass_end_time
+        - self.pass_start_time
+        - self.elapsed_time_setup
+        - self.elapsed_time_forward_pass
     )
     self.elapsed_time_total = self.pass_end_time - self.pass_start_time
-    self.elapsed_time_torchlens_logging = (
-            self.elapsed_time_total - self.elapsed_time_function_calls
-    )
+    self.elapsed_time_torchlens_logging = self.elapsed_time_total - self.elapsed_time_function_calls
 
 
 def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLogEntry):
@@ -1407,29 +1345,24 @@ def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLogEntry):
         orig_layer_names = getattr(tensor_entry, field)
         field_type = type(orig_layer_names)
         new_layer_names = field_type(
-            [
-                self._raw_to_final_layer_labels[raw_name]
-                for raw_name in orig_layer_names
-            ]
+            [self._raw_to_final_layer_labels[raw_name] for raw_name in orig_layer_names]
         )
         setattr(tensor_entry, field, new_layer_names)
 
     # Fix the arg locations field:
     for arg_type in ["args", "kwargs"]:
         for key, value in tensor_entry.parent_layer_arg_locs[arg_type].items():
-            tensor_entry.parent_layer_arg_locs[arg_type][
-                key
-            ] = self._raw_to_final_layer_labels[value]
+            tensor_entry.parent_layer_arg_locs[arg_type][key] = self._raw_to_final_layer_labels[
+                value
+            ]
 
     # Fix the field names for different children tensor versions:
     new_child_tensor_versions = {}
     for (
-            child_label,
-            tensor_version,
+        child_label,
+        tensor_version,
     ) in tensor_entry.children_tensor_versions.items():
-        new_child_tensor_versions[
-            self._raw_to_final_layer_labels[child_label]
-        ] = tensor_version
+        new_child_tensor_versions[self._raw_to_final_layer_labels[child_label]] = tensor_version
     tensor_entry.children_tensor_versions = new_child_tensor_versions
 
 
@@ -1441,30 +1374,21 @@ def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLogEntry):
         tensor_entry: Log entry to mark the module hierarchy info for.
     """
     containing_module_pass_label = None
-    for m, module_pass_label in enumerate(
-            tensor_entry.containing_modules_origin_nested
-    ):
+    for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
         module_name, module_pass = module_pass_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
         self.module_num_tensors[module_name] += 1
         self.module_pass_num_tensors[module_pass_nice_label] += 1
         if tensor_entry.layer_label not in self.module_layers[module_name]:
             self.module_layers[module_name].append(tensor_entry.layer_label)
-        if (
-                tensor_entry.layer_label
-                not in self.module_pass_layers[module_pass_nice_label]
-        ):
-            self.module_pass_layers[module_pass_nice_label].append(
-                tensor_entry.layer_label
-            )
-        if (m == 0) and (
-                module_pass_nice_label not in self.top_level_module_passes
-        ):
+        if tensor_entry.layer_label not in self.module_pass_layers[module_pass_nice_label]:
+            self.module_pass_layers[module_pass_nice_label].append(tensor_entry.layer_label)
+        if (m == 0) and (module_pass_nice_label not in self.top_level_module_passes):
             self.top_level_module_passes.append(module_pass_nice_label)
         else:
             if (containing_module_pass_label is not None) and (
-                    module_pass_nice_label
-                    not in self.module_pass_children[containing_module_pass_label]
+                module_pass_nice_label
+                not in self.module_pass_children[containing_module_pass_label]
             ):
                 self.module_pass_children[containing_module_pass_label].append(
                     module_pass_nice_label
@@ -1476,9 +1400,7 @@ def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLogEntry):
             self.module_addresses.append(module_name)
         if module_pass_label not in self.module_passes:
             self.module_passes.append(module_pass_nice_label)
-    tensor_entry.module_nesting_depth = len(
-        tensor_entry.containing_modules_origin_nested
-    )
+    tensor_entry.module_nesting_depth = len(tensor_entry.containing_modules_origin_nested)
 
 
 def _remove_unwanted_entries_and_log_remaining(self):
@@ -1509,9 +1431,7 @@ def _remove_unwanted_entries_and_log_remaining(self):
         # Determine valid lookup keys and relate them to the tensor's realtime operation number:
         if tensor_entry.has_saved_activations or self.keep_unsaved_layers:
             # Add the lookup keys for the layer, to itself and to ModelHistory:
-            _add_lookup_keys_for_tensor_entry(
-                self, tensor_entry, i, num_logged_tensors
-            )
+            _add_lookup_keys_for_tensor_entry(self, tensor_entry, i, num_logged_tensors)
 
             # Log all information:
             self.layer_list.append(tensor_entry)
@@ -1519,14 +1439,10 @@ def _remove_unwanted_entries_and_log_remaining(self):
             self.layer_labels.append(tensor_entry.layer_label)
             self.layer_labels_no_pass.append(tensor_entry.layer_label_no_pass)
             self.layer_labels_w_pass.append(tensor_entry.layer_label_w_pass)
-            self.layer_num_passes[
-                tensor_entry.layer_label
-            ] = tensor_entry.layer_passes_total
+            self.layer_num_passes[tensor_entry.layer_label] = tensor_entry.layer_passes_total
             if tensor_entry.has_saved_activations:
                 self.tensor_fsize_saved += tensor_entry.tensor_fsize
-            _trim_and_reorder_tensor_entry_fields(
-                tensor_entry
-            )  # Final reformatting of fields
+            _trim_and_reorder_tensor_entry_fields(tensor_entry)  # Final reformatting of fields
             i += 1
         else:
             tensors_to_remove.append(tensor_entry)
@@ -1552,7 +1468,7 @@ def _remove_unwanted_entries_and_log_remaining(self):
 
 
 def _add_lookup_keys_for_tensor_entry(
-        self, tensor_entry: TensorLogEntry, tensor_index: int, num_tensors_to_keep: int
+    self, tensor_entry: TensorLogEntry, tensor_index: int, num_tensors_to_keep: int
 ):
     """Adds the user-facing lookup keys for a TensorLogEntry, both to itself
     and to the ModelHistory top-level record.
@@ -1595,8 +1511,11 @@ def _add_lookup_keys_for_tensor_entry(
             for module_name, module_pass in tensor_entry.containing_modules_origin_nested
         ]
         if (tensor_entry.containing_module_origin is None) and len(
-                tensor_entry.containing_modules_origin_nested) > 0:
-            tensor_entry.containing_module_origin = tensor_entry.containing_modules_origin_nested[-1]
+            tensor_entry.containing_modules_origin_nested
+        ) > 0:
+            tensor_entry.containing_module_origin = tensor_entry.containing_modules_origin_nested[
+                -1
+            ]
 
     # Allow indexing by modules exited as well:
     for module_pass in tensor_entry.module_passes_exited:
@@ -1618,12 +1537,8 @@ def _add_lookup_keys_for_tensor_entry(
     # Log in both the tensor and in the ModelHistory object.
     tensor_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
-        self._lookup_keys_to_tensor_num_dict[
-            lookup_key
-        ] = tensor_entry.realtime_tensor_num
-        self._tensor_num_to_lookup_keys_dict[
-            tensor_entry.realtime_tensor_num
-        ].append(lookup_key)
+        self._lookup_keys_to_tensor_num_dict[lookup_key] = tensor_entry.realtime_tensor_num
+        self._tensor_num_to_lookup_keys_dict[tensor_entry.realtime_tensor_num].append(lookup_key)
         self.layer_dict_all_keys[lookup_key] = tensor_entry
 
 
@@ -1661,10 +1576,7 @@ def _rename_model_history_layer_names(self):
         setattr(
             self,
             field,
-            [
-                self._raw_to_final_layer_labels[tensor_label]
-                for tensor_label in tensor_labels
-            ],
+            [self._raw_to_final_layer_labels[tensor_label] for tensor_label in tensor_labels],
         )
 
     new_param_tensors = {}
@@ -1678,10 +1590,7 @@ def _rename_model_history_layer_names(self):
     new_equiv_operations_tensors = {}
     for key, values in self.equivalent_operations.items():
         new_equiv_operations_tensors[key] = set(
-            [
-                self._raw_to_final_layer_labels[tensor_label]
-                for tensor_label in values
-            ]
+            [self._raw_to_final_layer_labels[tensor_label] for tensor_label in values]
         )
     self.equivalent_operations = new_equiv_operations_tensors
 
@@ -1710,8 +1619,11 @@ def _rename_model_history_layer_names(self):
             new_name = self._raw_to_final_layer_labels[raw_name]
             argname = self.module_layer_argnames[module_pass][a][1]
             self.module_layer_argnames[module_pass][a] = (new_name, argname)
-        self.module_layer_argnames[module_pass] = [self.module_layer_argnames[module_pass][i]
-                                                   for i in range(len(arglist)) if i not in inds_to_remove]
+        self.module_layer_argnames[module_pass] = [
+            self.module_layer_argnames[module_pass][i]
+            for i in range(len(arglist))
+            if i not in inds_to_remove
+        ]
 
 
 def _trim_and_reorder_model_history_fields(self):
@@ -1739,14 +1651,10 @@ def _undecorate_all_saved_tensors(self):
             tensors_to_undecorate.append(tensor_entry.tensor_contents)
 
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(
-                tensor_entry.creation_args, torch.Tensor, search_depth=2
-            )
+            get_vars_of_type_from_obj(tensor_entry.creation_args, torch.Tensor, search_depth=2)
         )
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(
-                tensor_entry.creation_kwargs, torch.Tensor, search_depth=2
-            )
+            get_vars_of_type_from_obj(tensor_entry.creation_kwargs, torch.Tensor, search_depth=2)
         )
 
     for t in tensors_to_undecorate:
@@ -1779,7 +1687,7 @@ def _roll_graph(self):
     for layer_label, node in self.layer_dict_main_keys.items():
         layer_label_no_pass = self[layer_label].layer_label_no_pass
         if (
-                layer_label_no_pass in self.layer_dict_rolled
+            layer_label_no_pass in self.layer_dict_rolled
         ):  # If rolled-up layer has already been added, fetch it:
             rolled_node = self.layer_dict_rolled[layer_label_no_pass]
         else:  # If it hasn't been added, make it:

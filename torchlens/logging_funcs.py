@@ -7,9 +7,18 @@ import numpy as np
 import torch
 from torch import nn
 
-from .helper_funcs import (_get_call_stack_dicts, get_attr_values_from_tensor_list, get_tensor_memory_amount,
-                           get_vars_of_type_from_obj, human_readable_size, index_nested, log_current_rng_states,
-                           make_random_barcode, make_short_barcode_from_input, make_var_iterable)
+from .helper_funcs import (
+    _get_call_stack_dicts,
+    get_attr_values_from_tensor_list,
+    get_tensor_memory_amount,
+    get_vars_of_type_from_obj,
+    human_readable_size,
+    index_nested,
+    log_current_rng_states,
+    make_random_barcode,
+    make_short_barcode_from_input,
+    make_var_iterable,
+)
 from .tensor_log import TensorLogEntry
 
 if TYPE_CHECKING:
@@ -18,12 +27,12 @@ if TYPE_CHECKING:
 
 
 def save_new_activations(
-        self: "ModelHistory",
-        model: nn.Module,
-        input_args: Union[torch.Tensor, List[Any]],
-        input_kwargs: Dict[Any, Any] = None,
-        layers_to_save: Union[str, List] = "all",
-        random_seed: Optional[int] = None,
+    self: "ModelHistory",
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any]],
+    input_kwargs: Dict[Any, Any] = None,
+    layers_to_save: Union[str, List] = "all",
+    random_seed: Optional[int] = None,
 ):
     """Saves activations to a new input to the model, replacing existing saved activations.
     This will be much faster than the initial call to log_forward_pass (since all the of the metadata has
@@ -65,9 +74,7 @@ def save_new_activations(
     )
 
 
-def log_source_tensor(
-        self, t: torch.Tensor, source: str, extra_address: Optional[str] = None
-):
+def log_source_tensor(self, t: torch.Tensor, source: str, extra_address: Optional[str] = None):
     if self.logging_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self.logging_mode == "fast":
@@ -75,7 +82,7 @@ def log_source_tensor(
 
 
 def log_source_tensor_exhaustive(
-        self, t: torch.Tensor, source: str, extra_addr: Optional[str] = None
+    self, t: torch.Tensor, source: str, extra_addr: Optional[str] = None
 ):
     """Takes in an input or buffer tensor, marks it in-place with relevant information, and
     adds it to the log.
@@ -119,7 +126,7 @@ def log_source_tensor_exhaustive(
         internally_initialized_ancestors = {tensor_label}
         input_ancestors = set()
         operation_equivalence_type = f"buffer_{extra_addr}"
-        if hasattr(t, 'tl_buffer_parent'):
+        if hasattr(t, "tl_buffer_parent"):
             buffer_parent = t.tl_buffer_parent
         else:
             buffer_parent = None
@@ -200,9 +207,7 @@ def log_source_tensor_exhaustive(
         "parent_params_fsize_nice": human_readable_size(0),
         # Corresponding layer info:
         "operation_equivalence_type": operation_equivalence_type,
-        "equivalent_operations": self.equivalent_operations[
-            operation_equivalence_type
-        ],
+        "equivalent_operations": self.equivalent_operations[operation_equivalence_type],
         "same_layer_operations": [],
         # Graph info:
         "parent_layers": [],
@@ -267,9 +272,7 @@ def log_source_tensor_exhaustive(
     t.tl_tensor_label_raw = tensor_label
 
     # Log info to ModelHistory
-    self.equivalent_operations[operation_equivalence_type].add(
-        t.tl_tensor_label_raw
-    )
+    self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
     if source == "input":
         self.input_layers.append(tensor_label)
     if source == "buffer":
@@ -304,7 +307,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
         return
     orig_tensor_entry = self.layer_dict_all_keys[orig_tensor_label]
     if (self._tensor_nums_to_save == "all") or (
-            orig_tensor_entry.realtime_tensor_num in self._tensor_nums_to_save
+        orig_tensor_entry.realtime_tensor_num in self._tensor_nums_to_save
     ):
         self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
         orig_tensor_entry.save_tensor_data(
@@ -314,23 +317,21 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     orig_tensor_entry.tensor_shape = tuple(t.shape)
     orig_tensor_entry.tensor_dtype = t.dtype
     orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(t)
-    orig_tensor_entry.tensor_fsize_nice = human_readable_size(
-        get_tensor_memory_amount(t)
-    )
+    orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(t))
 
 
 def log_function_output_tensors(
-        self,
-        func: Callable,
-        func_name: str,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        arg_copies: Tuple[Any],
-        kwarg_copies: Dict[str, Any],
-        out_orig: Any,
-        func_time_elapsed: float,
-        func_rng_states: Dict,
-        is_bottom_level_func: bool,
+    self,
+    func: Callable,
+    func_name: str,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    arg_copies: Tuple[Any],
+    kwarg_copies: Dict[str, Any],
+    out_orig: Any,
+    func_time_elapsed: float,
+    func_rng_states: Dict,
+    is_bottom_level_func: bool,
 ):
     if self.logging_mode == "exhaustive":
         log_function_output_tensors_exhaustive(
@@ -362,17 +363,17 @@ def log_function_output_tensors(
 
 
 def log_function_output_tensors_exhaustive(
-        self,
-        func: Callable,
-        func_name: str,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        arg_copies: Tuple[Any],
-        kwarg_copies: Dict[str, Any],
-        out_orig: Any,
-        func_time_elapsed: float,
-        func_rng_states: Dict,
-        is_bottom_level_func: bool,
+    self,
+    func: Callable,
+    func_name: str,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    arg_copies: Tuple[Any],
+    kwarg_copies: Dict[str, Any],
+    out_orig: Any,
+    func_time_elapsed: float,
+    func_rng_states: Dict,
+    is_bottom_level_func: bool,
 ):
     """Logs tensor or set of tensors that were computed from a function call.
 
@@ -391,22 +392,12 @@ def log_function_output_tensors_exhaustive(
     layer_type = func_name.lower().replace("_", "")
     all_args = list(args) + list(kwargs.values())
 
-    fields_dict = (
-        {}
-    )  # dict storing the arguments for initializing the new log entry
+    fields_dict = {}  # dict storing the arguments for initializing the new log entry
 
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
-    non_tensor_kwargs = {
-        key: val
-        for key, val in kwargs.items()
-        if not _check_if_tensor_arg(val)
-    }
-    arg_tensors = get_vars_of_type_from_obj(
-        all_args, torch.Tensor, [torch.nn.Parameter]
-    )
-    parent_layer_labels = get_attr_values_from_tensor_list(
-        arg_tensors, "tl_tensor_label_raw"
-    )
+    non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
+    arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
+    parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw")
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
     # General info
@@ -429,36 +420,30 @@ def log_function_output_tensors_exhaustive(
     fields_dict["func_call_stack"] = _get_call_stack_dicts()
     fields_dict["func_time_elapsed"] = func_time_elapsed
     fields_dict["func_rng_states"] = func_rng_states
-    fields_dict["func_argnames"] = self.func_argnames[func_name.strip('_')]
+    fields_dict["func_argnames"] = self.func_argnames[func_name.strip("_")]
     fields_dict["num_func_args_total"] = len(args) + len(kwargs)
     fields_dict["num_position_args"] = len(args)
     fields_dict["num_keyword_args"] = len(kwargs)
     fields_dict["func_position_args_non_tensor"] = non_tensor_args
     fields_dict["func_keyword_args_non_tensor"] = non_tensor_kwargs
-    fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(
-        non_tensor_kwargs.values()
-    )
+    fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(non_tensor_kwargs.values())
 
     # Graph info
-    parent_layer_arg_locs = _get_parent_tensor_function_call_location(self,
-                                                                      parent_layer_entries, args, kwargs
-                                                                      )
+    parent_layer_arg_locs = _get_parent_tensor_function_call_location(
+        self, parent_layer_entries, args, kwargs
+    )
     (
         input_ancestors,
         internally_initialized_ancestors,
     ) = _get_ancestors_from_parents(parent_layer_entries)
     internal_parent_layer_labels = [
-        label
-        for label in parent_layer_labels
-        if self[label].has_internally_initialized_ancestor
+        label for label in parent_layer_labels if self[label].has_internally_initialized_ancestor
     ]
 
     fields_dict["parent_layers"] = parent_layer_labels
     fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
     fields_dict["has_parents"] = len(fields_dict["parent_layers"]) > 0
-    fields_dict["orig_ancestors"] = input_ancestors.union(
-        internally_initialized_ancestors
-    )
+    fields_dict["orig_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
     fields_dict["child_layers"] = []
     fields_dict["has_children"] = False
     fields_dict["sibling_layers"] = []
@@ -483,22 +468,16 @@ def log_function_output_tensors_exhaustive(
     fields_dict["buffer_pass"] = None
     fields_dict["buffer_parent"] = None
     fields_dict["initialized_inside_model"] = len(parent_layer_labels) == 0
-    fields_dict["has_internally_initialized_ancestor"] = (
-            len(internally_initialized_ancestors) > 0
-    )
+    fields_dict["has_internally_initialized_ancestor"] = len(internally_initialized_ancestors) > 0
     fields_dict["internally_initialized_parents"] = internal_parent_layer_labels
-    fields_dict[
-        "internally_initialized_ancestors"
-    ] = internally_initialized_ancestors
+    fields_dict["internally_initialized_ancestors"] = internally_initialized_ancestors
     fields_dict["terminated_inside_model"] = False
     fields_dict["is_terminal_bool_layer"] = False
     fields_dict["in_cond_branch"] = False
     fields_dict["cond_branch_start_children"] = []
 
     # Param info
-    arg_parameters = get_vars_of_type_from_obj(
-        all_args, torch.nn.parameter.Parameter
-    )
+    arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
     parent_param_passes = _process_parent_param_passes(arg_parameters)
     indiv_param_barcodes = list(parent_param_passes.keys())
 
@@ -507,9 +486,7 @@ def log_function_output_tensors_exhaustive(
     fields_dict["parent_param_barcodes"] = indiv_param_barcodes
     fields_dict["parent_param_passes"] = parent_param_passes
     fields_dict["num_param_tensors"] = len(arg_parameters)
-    fields_dict["parent_param_shapes"] = [
-        tuple(param.shape) for param in arg_parameters
-    ]
+    fields_dict["parent_param_shapes"] = [tuple(param.shape) for param in arg_parameters]
     fields_dict["num_params_total"] = int(
         np.sum([np.prod(shape) for shape in fields_dict["parent_param_shapes"]])
     )
@@ -532,9 +509,7 @@ def log_function_output_tensors_exhaustive(
 
     fields_dict["is_computed_inside_submodule"] = is_computed_inside_submodule
     fields_dict["containing_module_origin"] = containing_module_origin
-    fields_dict[
-        "containing_modules_origin_nested"
-    ] = containing_modules_origin_nested
+    fields_dict["containing_modules_origin_nested"] = containing_modules_origin_nested
     fields_dict["module_nesting_depth"] = len(containing_modules_origin_nested)
     fields_dict["modules_entered"] = []
     fields_dict["modules_entered_argnames"] = defaultdict(list)
@@ -546,12 +521,13 @@ def log_function_output_tensors_exhaustive(
     fields_dict["is_bottom_level_submodule_output"] = False
     fields_dict["bottom_level_submodule_pass_exited"] = None
     fields_dict["module_entry_exit_threads_inputs"] = {
-        p.tensor_label_raw: p.module_entry_exit_thread_output[:]
-        for p in parent_layer_entries
+        p.tensor_label_raw: p.module_entry_exit_thread_output[:] for p in parent_layer_entries
     }
     fields_dict["module_entry_exit_thread_output"] = []
 
-    is_part_of_iterable_output = any([issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]])
+    is_part_of_iterable_output = any(
+        [issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]]
+    )
     fields_dict["is_part_of_iterable_output"] = is_part_of_iterable_output
     out_iter = make_var_iterable(out_orig)  # so we can iterate through it
 
@@ -559,9 +535,7 @@ def log_function_output_tensors_exhaustive(
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
 
-        fields_dict_onetensor = {
-            key: copy.copy(value) for key, value in fields_dict.items()
-        }
+        fields_dict_onetensor = {key: copy.copy(value) for key, value in fields_dict.items()}
         fields_to_deepcopy = [
             "parent_layer_arg_locs",
             "containing_modules_origin_nested",
@@ -589,17 +563,15 @@ def log_function_output_tensors_exhaustive(
         if fields_dict["initialized_inside_model"]:
             self.internally_initialized_layers.append(new_tensor_label)
         if fields_dict["has_input_ancestor"] and any(
-                [
-                    (
-                            self[parent_layer].has_internally_initialized_ancestor
-                            and not self[parent_layer].has_input_ancestor
-                    )
-                    for parent_layer in fields_dict_onetensor["parent_layers"]
-                ]
+            [
+                (
+                    self[parent_layer].has_internally_initialized_ancestor
+                    and not self[parent_layer].has_input_ancestor
+                )
+                for parent_layer in fields_dict_onetensor["parent_layers"]
+            ]
         ):
-            self._layers_where_internal_branches_merge_with_input.append(
-                new_tensor_label
-            )
+            self._layers_where_internal_branches_merge_with_input.append(new_tensor_label)
 
         # Tag the tensor itself with its label, and add a backward hook if saving gradients.
         out.tl_tensor_label_raw = fields_dict_onetensor["tensor_label_raw"]
@@ -608,18 +580,18 @@ def log_function_output_tensors_exhaustive(
 
         # Check if parent is parent of a slice function, and deal with any complexities from that.
         if (new_tensor_entry.func_applied_name == "__getitem__") and (
-                len(new_tensor_entry.parent_layers) > 0
+            len(new_tensor_entry.parent_layers) > 0
         ):
             self[new_tensor_entry.parent_layers[0]].was_getitem_applied = True
 
         for parent_label in new_tensor_entry.parent_layers:
             parent = self[parent_label]
             if all(
-                    [
-                        parent.was_getitem_applied,
-                        parent.has_saved_activations,
-                        self.save_function_args,
-                    ]
+                [
+                    parent.was_getitem_applied,
+                    parent.has_saved_activations,
+                    self.save_function_args,
+                ]
             ):
                 parent_tensor_contents = _get_parent_contents(
                     parent_label,
@@ -627,14 +599,12 @@ def log_function_output_tensors_exhaustive(
                     kwarg_copies,
                     new_tensor_entry.parent_layer_arg_locs,
                 )
-                parent.children_tensor_versions[
-                    new_tensor_entry.tensor_label_raw
-                ] = parent_tensor_contents
+                parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
+                    parent_tensor_contents
+                )
 
 
-def _get_parent_contents(
-        parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs
-):
+def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs):
     """Utility function to get the value of a parent layer from the arguments passed to a function."""
     for pos, label in parent_layer_arg_locs["args"].items():
         if label == parent_label:
@@ -646,30 +616,24 @@ def _get_parent_contents(
 
 
 def log_function_output_tensors_fast(
-        self,
-        func_name: str,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        arg_copies: Tuple[Any],
-        kwarg_copies: Dict[str, Any],
-        out_orig: Any,
-        func_time_elapsed: float,
-        func_rng_states: Dict,
-        is_bottom_level_func: bool,
+    self,
+    func_name: str,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    arg_copies: Tuple[Any],
+    kwarg_copies: Dict[str, Any],
+    out_orig: Any,
+    func_time_elapsed: float,
+    func_rng_states: Dict,
+    is_bottom_level_func: bool,
 ):
     # Collect information.
     layer_type = func_name.lower().replace("_", "")
     all_args = list(args) + list(kwargs.values())
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
-    non_tensor_kwargs = {
-        key: val
-        for key, val in kwargs.items()
-        if not _check_if_tensor_arg(val)
-    }
+    non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
 
-    arg_tensors = get_vars_of_type_from_obj(
-        all_args, torch.Tensor, [torch.nn.Parameter]
-    )
+    arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
     out_iter = make_var_iterable(out_orig)
 
     for i, out in enumerate(out_iter):
@@ -679,17 +643,14 @@ def log_function_output_tensors_fast(
         self._raw_layer_type_counter[layer_type] += 1
         realtime_tensor_num = self._tensor_counter
         layer_type_num = self._raw_layer_type_counter[layer_type]
-        tensor_label_raw = (
-            f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
-        )
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
         if tensor_label_raw in self.orphan_layers:
             continue
         parent_layer_labels_raw = get_attr_values_from_tensor_list(
             arg_tensors, "tl_tensor_label_raw"
         )
         parent_layer_labels_orig = [
-            self._raw_to_final_layer_labels[raw_label]
-            for raw_label in parent_layer_labels_raw
+            self._raw_to_final_layer_labels[raw_label] for raw_label in parent_layer_labels_raw
         ]
         out.tl_tensor_label_raw = tensor_label_raw
         if tensor_label_raw not in self._raw_to_final_layer_labels:
@@ -706,13 +667,12 @@ def log_function_output_tensors_fast(
 
         # Check to make sure the graph didn't change.
         if any(
-                [
-                    orig_tensor_entry.realtime_tensor_num != self._tensor_counter,
-                    orig_tensor_entry.layer_type != layer_type,
-                    orig_tensor_entry.tensor_label_raw != tensor_label_raw,
-                    set(orig_tensor_entry.parent_layers)
-                    != set(parent_layer_labels_orig),
-                ]
+            [
+                orig_tensor_entry.realtime_tensor_num != self._tensor_counter,
+                orig_tensor_entry.layer_type != layer_type,
+                orig_tensor_entry.tensor_label_raw != tensor_label_raw,
+                set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig),
+            ]
         ):
             raise ValueError(
                 "The computational graph changed for this forward pass compared to the original "
@@ -723,7 +683,7 @@ def log_function_output_tensors_fast(
 
         # Update any relevant fields.
         if (self._tensor_nums_to_save == "all") or (
-                orig_tensor_entry.realtime_tensor_num in self._tensor_nums_to_save
+            orig_tensor_entry.realtime_tensor_num in self._tensor_nums_to_save
         ):
             self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
             orig_tensor_entry.save_tensor_data(
@@ -747,9 +707,7 @@ def log_function_output_tensors_fast(
         orig_tensor_entry.tensor_shape = tuple(out.shape)
         orig_tensor_entry.tensor_dtype = out.dtype
         orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(out)
-        orig_tensor_entry.tensor_fsize_nice = human_readable_size(
-            get_tensor_memory_amount(out)
-        )
+        orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(out))
         orig_tensor_entry.func_time_elapsed = func_time_elapsed
         orig_tensor_entry.func_rng_states = func_rng_states
         orig_tensor_entry.func_position_args_non_tensor = non_tensor_args
@@ -796,13 +754,13 @@ def _add_backward_hook(self, t: torch.Tensor, tensor_label):
 
 
 def _log_info_specific_to_single_function_output_tensor(
-        self,
-        t: torch.Tensor,
-        i: int,
-        args: Tuple[Any],
-        kwargs: Dict[str, Any],
-        parent_param_passes: Dict[str, int],
-        fields_dict: Dict[str, Any],
+    self,
+    t: torch.Tensor,
+    i: int,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    parent_param_passes: Dict[str, int],
+    fields_dict: Dict[str, Any],
 ):
     """Function to log handle the logging of info that's specific to a single output tensor
     (e.g., the shape), and not common to all output tensors.
@@ -824,16 +782,10 @@ def _log_info_specific_to_single_function_output_tensor(
     tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
 
     if len(parent_param_passes) > 0:
-        operation_equivalence_type = _make_raw_param_group_barcode(
-            indiv_param_barcodes, layer_type
-        )
+        operation_equivalence_type = _make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
         fields_dict["operation_equivalence_type"] = operation_equivalence_type
-        self.layers_computed_with_params[operation_equivalence_type].append(
-            tensor_label_raw
-        )
-        fields_dict["pass_num"] = len(
-            self.layers_computed_with_params[operation_equivalence_type]
-        )
+        self.layers_computed_with_params[operation_equivalence_type].append(tensor_label_raw)
+        fields_dict["pass_num"] = len(self.layers_computed_with_params[operation_equivalence_type])
     else:
         operation_equivalence_type = _get_operation_equivalence_type(
             args, kwargs, i, layer_type, fields_dict
@@ -842,9 +794,7 @@ def _log_info_specific_to_single_function_output_tensor(
         fields_dict["pass_num"] = 1
 
     self.equivalent_operations[operation_equivalence_type].add(tensor_label_raw)
-    fields_dict["equivalent_operations"] = self.equivalent_operations[
-        operation_equivalence_type
-    ]
+    fields_dict["equivalent_operations"] = self.equivalent_operations[operation_equivalence_type]
 
     fields_dict["function_is_inplace"] = hasattr(t, "tl_tensor_label_raw")
     fields_dict["gradfunc"] = type(t.grad_fn).__name__
@@ -894,9 +844,7 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["tensor_shape"] = tuple(t.shape)
     fields_dict["tensor_dtype"] = t.dtype
     fields_dict["tensor_fsize"] = get_tensor_memory_amount(t)
-    fields_dict["tensor_fsize_nice"] = human_readable_size(
-        fields_dict["tensor_fsize"]
-    )
+    fields_dict["tensor_fsize_nice"] = human_readable_size(fields_dict["tensor_fsize"])
 
     # Slice function complexities (i.e., what if a parent tensor is changed in place)
     fields_dict["was_getitem_applied"] = False
@@ -911,12 +859,12 @@ def _log_info_specific_to_single_function_output_tensor(
 
 
 def _make_tensor_log_entry(
-        self,
-        t: torch.Tensor,
-        fields_dict: Dict,
-        t_args: Optional[Tuple] = None,
-        t_kwargs: Optional[Dict] = None,
-        activation_postfunc: Optional[Callable] = None,
+    self,
+    t: torch.Tensor,
+    fields_dict: Dict,
+    t_args: Optional[Tuple] = None,
+    t_kwargs: Optional[Dict] = None,
+    activation_postfunc: Optional[Callable] = None,
 ):
     """
     Given a tensor, adds it to the model_history, additionally saving the activations and input
@@ -937,7 +885,7 @@ def _make_tensor_log_entry(
 
     new_entry = TensorLogEntry(fields_dict)
     if (self._tensor_nums_to_save == "all") or (
-            new_entry.realtime_tensor_num in self._tensor_nums_to_save
+        new_entry.realtime_tensor_num in self._tensor_nums_to_save
     ):
         new_entry.save_tensor_data(
             t, t_args, t_kwargs, self.save_function_args, activation_postfunc
@@ -1001,10 +949,10 @@ def _check_if_tensor_arg(arg: Any) -> bool:
 
 
 def _get_parent_tensor_function_call_location(
-        self,
-        parent_log_entries: List[TensorLogEntry],
-        args: Tuple[Any],
-        kwargs: Dict[Any, Any],
+    self,
+    parent_log_entries: List[TensorLogEntry],
+    args: Tuple[Any],
+    kwargs: Dict[Any, Any],
 ) -> Dict:
     """Utility function that takes in the parent tensors, the args, and kwargs, and returns a dict specifying
     where in the function call the parent tensors were used.
@@ -1032,10 +980,10 @@ def _get_parent_tensor_function_call_location(
 
 
 def _find_arg_positions_for_single_parent(
-        parent_entry: TensorLogEntry,
-        arg_type: str,
-        arg_struct: Union[List, Tuple, Dict],
-        tensor_all_arg_positions: Dict,
+    parent_entry: TensorLogEntry,
+    arg_type: str,
+    arg_struct: Union[List, Tuple, Dict],
+    tensor_all_arg_positions: Dict,
 ):
     """Helper function that finds where a single parent tensor is used in either the args or kwargs of a function,
     and updates a dict that tracks this information.
@@ -1057,23 +1005,18 @@ def _find_arg_positions_for_single_parent(
 
     for arg_key, arg in iterfunc(arg_struct):
         if getattr(arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
-            tensor_all_arg_positions[arg_type][
-                arg_key
-            ] = parent_entry.tensor_label_raw
+            tensor_all_arg_positions[arg_type][arg_key] = parent_entry.tensor_label_raw
         elif type(arg) in [list, tuple, dict]:
             iterfunc2 = iterfunc_dict[type(arg)]
             for sub_arg_key, sub_arg in iterfunc2(arg):
-                if (
-                        getattr(sub_arg, "tl_tensor_label_raw", -1)
-                        == parent_entry.tensor_label_raw
-                ):
-                    tensor_all_arg_positions[arg_type][
-                        (arg_key, sub_arg_key)
-                    ] = parent_entry.tensor_label_raw
+                if getattr(sub_arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
+                    tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = (
+                        parent_entry.tensor_label_raw
+                    )
 
 
 def _get_ancestors_from_parents(
-        parent_entries: List[TensorLogEntry],
+    parent_entries: List[TensorLogEntry],
 ) -> Tuple[Set[str], Set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
@@ -1088,9 +1031,7 @@ def _get_ancestors_from_parents(
 
     for parent_entry in parent_entries:
         input_ancestors.update(parent_entry.input_ancestors)
-        internally_initialized_ancestors.update(
-            parent_entry.internally_initialized_ancestors
-        )
+        internally_initialized_ancestors.update(parent_entry.internally_initialized_ancestors)
     return input_ancestors, internally_initialized_ancestors
 
 
@@ -1125,13 +1066,11 @@ def _update_tensor_family_links(self, entry_to_update: TensorLogEntry):
     # Set the children of its parents as siblings to each other.
 
     for parent_tensor_label in parent_tensor_labels:
-        _add_sibling_labels_for_new_tensor(
-            self, entry_to_update, self[parent_tensor_label]
-        )
+        _add_sibling_labels_for_new_tensor(self, entry_to_update, self[parent_tensor_label])
 
 
 def _add_sibling_labels_for_new_tensor(
-        self, entry_to_update: TensorLogEntry, parent_tensor: TensorLogEntry
+    self, entry_to_update: TensorLogEntry, parent_tensor: TensorLogEntry
 ):
     """Given a tensor and specified parent tensor, adds sibling labels to that tensor, and
     adds itself as a sibling to all existing children.
@@ -1152,7 +1091,7 @@ def _add_sibling_labels_for_new_tensor(
 
 
 def _process_parent_param_passes(
-        arg_parameters: List[torch.nn.Parameter],
+    arg_parameters: List[torch.nn.Parameter],
 ) -> Dict[str, int]:
     """Utility function to mark the parameters with barcodes, and log which pass they're on.
 
@@ -1191,7 +1130,7 @@ def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: s
 
 
 def _get_operation_equivalence_type(
-        args: Tuple, kwargs: Dict, i: int, layer_type: str, fields_dict: Dict
+    args: Tuple, kwargs: Dict, i: int, layer_type: str, fields_dict: Dict
 ):
     arg_hash = _get_hash_from_args(args, kwargs)
     operation_equivalence_type = f"{layer_type}_{arg_hash}"
@@ -1206,25 +1145,33 @@ def _get_operation_equivalence_type(
 def _get_hash_from_args(args, kwargs):
     """
     Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
+    Preserves positional arg indices, kwarg names, and dict keys to avoid collisions.
     """
     args_to_hash = []
-    for a, arg in enumerate(list(args) + list(kwargs.values())):
-        if hasattr(arg, "tl_tensor_label_raw"):
-            args_to_hash.append(f"arg{a}{arg.shape}")
-        else:
-            arg_iter = make_var_iterable(arg)
-            for i, arg_elem in enumerate(arg_iter):
-                if not hasattr(arg_elem, "tl_tensor_label_raw") and not isinstance(
-                        arg_elem, torch.nn.Parameter
-                ):
-                    args_to_hash.append(arg_elem)
-                elif hasattr(arg_elem, "tl_tensor_label_raw"):
-                    args_to_hash.append(f"arg{a}_iter{i}_{arg_elem.shape}")
+    for a, arg in enumerate(args):
+        _append_arg_hash(arg, f"pos{a}", args_to_hash)
+    for key, arg in kwargs.items():
+        _append_arg_hash(arg, f"kw_{key}", args_to_hash)
 
     if len(args_to_hash) == 0:
         return "no_args"
-    arg_hash = make_short_barcode_from_input(args_to_hash)
-    return arg_hash
+    return make_short_barcode_from_input(args_to_hash)
+
+
+def _append_arg_hash(arg, prefix, args_to_hash):
+    """Append hash-relevant info for a single arg, preserving structure."""
+    if hasattr(arg, "tl_tensor_label_raw"):
+        args_to_hash.append(f"{prefix}_tensor{arg.shape}")
+    elif isinstance(arg, dict):
+        for k, v in arg.items():
+            _append_arg_hash(v, f"{prefix}_dk{k}", args_to_hash)
+    elif isinstance(arg, (list, tuple, set)):
+        for i, elem in enumerate(arg):
+            _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash)
+    elif isinstance(arg, torch.nn.Parameter):
+        pass  # exclude parameters from hash (same as before)
+    else:
+        args_to_hash.append(f"{prefix}_{arg}")
 
 
 def _update_tensor_containing_modules(tensor_entry: TensorLogEntry) -> List[str]:
@@ -1243,9 +1190,7 @@ def _update_tensor_containing_modules(tensor_entry: TensorLogEntry) -> List[str]
     for thread_module in thread_modules:
         if thread_module[0] == "+":
             containing_modules.append(thread_module[1:])
-        elif (thread_module[0] == "-") and (
-                thread_module[1:] in containing_modules
-        ):
+        elif (thread_module[0] == "-") and (thread_module[1:] in containing_modules):
             containing_modules.remove(thread_module[1:])
     return containing_modules
 

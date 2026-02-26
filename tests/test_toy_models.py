@@ -1093,6 +1093,259 @@ def test_module_looping_clash3(default_input1):
 
 
 # =============================================================================
+# Edge-case loop detection models
+# =============================================================================
+
+
+def test_parallel_loops(default_input1):
+    model = example_models.ParallelLoops()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "parallel_loops_unrolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "parallel_loops_rolled"),
+    )
+
+
+def test_shared_param_loop_external(input_2d):
+    model = example_models.SharedParamLoopExternal()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "shared_param_loop_external_unrolled"
+        ),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "shared_param_loop_external_rolled"
+        ),
+    )
+
+
+def test_interleaved_shared_param_loops(input_2d):
+    model = example_models.InterleavedSharedParamLoops()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "interleaved_shared_param_loops_unrolled"
+        ),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "interleaved_shared_param_loops_rolled"
+        ),
+    )
+
+
+def test_nested_loops_independent_params(input_2d):
+    model = example_models.NestedLoopsIndependentParams()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "nested_loops_independent_params_unrolled"
+        ),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "nested_loops_independent_params_rolled"
+        ),
+    )
+
+
+def test_self_feeding_no_param(default_input1):
+    model = example_models.SelfFeedingNoParam()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "self_feeding_no_param_unrolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "self_feeding_no_param_rolled"),
+    )
+
+
+def test_diamond_loop(input_2d):
+    model = example_models.DiamondLoop()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "diamond_loop_unrolled"),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "diamond_loop_rolled"),
+    )
+
+
+def test_accumulator_loop(input_2d):
+    model = example_models.AccumulatorLoop()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "accumulator_loop_unrolled"),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "accumulator_loop_rolled"),
+    )
+
+
+def test_single_iteration_loop(input_2d):
+    model = example_models.SingleIterationLoop()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "single_iteration_loop_unrolled"),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "single_iteration_loop_rolled"),
+    )
+
+
+def test_long_loop(input_2d):
+    model = example_models.LongLoop()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "long_loop_unrolled"),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "long_loop_rolled"),
+    )
+
+
+def test_data_dependent_branch_loop(input_2d):
+    model = example_models.DataDependentBranchLoop()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "data_dependent_branch_loop_unrolled"
+        ),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "data_dependent_branch_loop_rolled"
+        ),
+    )
+
+
+def test_raft_like_multi_branch(input_2d):
+    model = example_models.RAFTLikeMultiBranch()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "raft_like_multi_branch_unrolled"),
+    )
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj("visualization_outputs", "toy-networks", "raft_like_multi_branch_rolled"),
+    )
+
+
+def test_sequential_param_free_loops(default_input1):
+    model = example_models.SequentialParamFreeLoops()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "sequential_param_free_loops_unrolled"
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(
+            "visualization_outputs", "toy-networks", "sequential_param_free_loops_rolled"
+        ),
+    )
+
+
+# =============================================================================
 # Complex models
 # =============================================================================
 

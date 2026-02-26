@@ -268,7 +268,7 @@ class SliceOperations(nn.Module):
         y.zero_()
         y = y + 1
         y = torch.log(y)
-        x = x ** 2
+        x = x**2
         return x
 
 
@@ -313,7 +313,7 @@ class MultiInputs(nn.Module):
     def forward(x, y, z):
         a = x + y
         b = torch.log(z)
-        x = a ** b
+        x = a**b
         return x
 
 
@@ -326,7 +326,7 @@ class ListInput(nn.Module):
         x, y, z = input_list
         a = x + y
         b = torch.log(z)
-        x = a ** b
+        x = a**b
         return x
 
 
@@ -339,7 +339,7 @@ class DictInput(nn.Module):
         x, y, z = input_dict["x"], input_dict["y"], input_dict["z"]
         a = x + y
         b = torch.log(z)
-        x = a ** b
+        x = a**b
         return x
 
 
@@ -438,7 +438,7 @@ class BufferRewriteModule(nn.Module):
         x = x + self.buffer1
         x = x * self.buffer2
         self.buffer1 = torch.rand(12, 12)
-        self.buffer2 = x ** 2
+        self.buffer2 = x**2
         x = self.buffer1 + self.buffer2
         return x
 
@@ -472,7 +472,7 @@ class SimpleBranching(nn.Module):
         y = x * 2
         y = y + 3
         y = torch.log(y)
-        z = x ** 2
+        z = x**2
         z = torch.sin(z)
         x = x + y + z
         return x
@@ -492,7 +492,7 @@ class ConditionalBranching(nn.Module):
             x = torch.cos(x)
             x = x + 1
             x = x * 4
-            x = x ** 2
+            x = x**2
         return x
 
 
@@ -540,7 +540,7 @@ class Level12(nn.Module):
 
     @staticmethod
     def forward(x):
-        x = x ** 3 + torch.ones(x.shape)
+        x = x**3 + torch.ones(x.shape)
         x = x / 5
         return x
 
@@ -602,9 +602,9 @@ class OrphanTensors(nn.Module):
         z = torch.ones(5, 5)
         z = z + 1
         a = z * 2
-        b = z ** 2
+        b = z**2
         c = a + b
-        x = x ** 2
+        x = x**2
         return x
 
 
@@ -668,7 +668,7 @@ class VaryingLoopNoParam1(nn.Module):
             if i % 2 == 0:
                 y = x + 3
                 y = torch.sin(y)
-                y = y ** 2
+                y = y**2
             x = torch.sin(x)
             if i % 2 == 1:
                 z = x + 3
@@ -691,7 +691,7 @@ class VaryingLoopNoParam2(nn.Module):
             if i in [0, 3, 4]:
                 y = x + 3
                 y = torch.sin(y)
-                y = y ** 2
+                y = y**2
             else:
                 y = x * torch.rand(x.shape)
                 y = torch.cos(y)
@@ -716,7 +716,7 @@ class VaryingLoopWithParam(nn.Module):
         x = self.fc(x)
         x = x + 1
         x = x * 2
-        x = x ** 3
+        x = x**3
         x = self.fc(x)
         return x
 
@@ -907,7 +907,7 @@ class ModuleLoopingClash1(nn.Module):
         x = self.relu(x)
         x = torch.log(x)
         for _ in range(
-                4
+            4
         ):  # this tests clashes between what counts as "same"--module-based or looping-based
             x = self.relu(x)
             x = x + 1
@@ -1005,7 +1005,7 @@ class UberModel1(nn.Module):
         x, y, z = x
         x = x + 1
         y = y * 2
-        y = y ** 3
+        y = y**3
         w = torch.rand(5, 5)
         w = w * 2
         w = w + 4
@@ -1073,7 +1073,7 @@ class UberModel3(nn.Module):
         x = self.fc(x)
         x = x + 1
         x = x * 2
-        x = x ** 3
+        x = x**3
         x = self.fc(x)
         x = x + 2
         x = x * 3
@@ -1237,7 +1237,7 @@ class UberModel9(nn.Module):
         a = torch.ones(3, 3)
         b = torch.zeros(3, 3)
         z3 = z2 + a + b
-        w1 = x ** 3
+        w1 = x**3
         x = torch.sum(torch.stack([y4, z3, w1]))
         return x
 
@@ -1255,7 +1255,250 @@ class PropertyModel(nn.Module):
         t = t.data
         t2 = t.T
         m = torch.rand(4, 4, 4)
-        m = m ** 2
+        m = m**2
         m2 = m.mT.mean()
         out = r * i / m2 + t2.mean()
         return out
+
+
+#  ****************************************************
+#  **** Edge-Case Loop Detection Test Models ****
+#  ****************************************************
+
+
+class ParallelLoops(nn.Module):
+    """Two independent loops on separate branches, same op types."""
+
+    @staticmethod
+    def forward(x):
+        a = x + 1
+        b = x + 2
+        for _ in range(3):
+            a = torch.sin(a)
+        for _ in range(3):
+            b = torch.sin(b)
+        return a + b
+
+
+class SharedParamLoopExternal(nn.Module):
+    """Same Linear used both inside and outside a loop."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        for _ in range(3):
+            x = self.fc(x)
+        x = self.fc(x)
+        return x
+
+
+class InterleavedSharedParamLoops(nn.Module):
+    """Same Linear used in two distinct loops with different surrounding ops."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.relu(x)
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.sigmoid(x)
+        return x
+
+
+class NestedLoopsIndependentParams(nn.Module):
+    """Outer loop uses fc_outer, inner loop uses fc_inner. Different params per level."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc_outer = nn.Linear(5, 5)
+        self.fc_inner = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc_outer(x)
+            for _ in range(2):
+                x = self.fc_inner(x)
+        return x
+
+
+class SelfFeedingNoParam(nn.Module):
+    """Output of each iteration feeds directly as input to next, no params."""
+
+    @staticmethod
+    def forward(x):
+        for _ in range(4):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        return x
+
+
+class DiamondLoop(nn.Module):
+    """Loop body has a diamond: split into two paths, then merge."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc(x)
+            a = torch.sin(x)
+            b = torch.cos(x)
+            x = a + b
+        return x
+
+
+class AccumulatorLoop(nn.Module):
+    """Loop appends to output list each iteration."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        outputs = []
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.relu(x)
+            outputs.append(x)
+        return torch.stack(outputs)
+
+
+class SingleIterationLoop(nn.Module):
+    """Loop that runs exactly once — should NOT be detected as multi-pass."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(1):
+            x = self.fc(x)
+            x = torch.relu(x)
+        return x
+
+
+class LongLoop(nn.Module):
+    """Many iterations to test O(n^2) pairwise merge performance."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(20):
+            x = self.fc(x)
+            x = torch.relu(x)
+        return x
+
+
+class DataDependentBranchLoop(nn.Module):
+    """Branch inside loop — some iterations take different paths."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for i in range(4):
+            x = self.fc(x)
+            if i % 2 == 0:
+                x = torch.relu(x)
+            else:
+                x = torch.sigmoid(x)
+        return x
+
+
+class RAFTLikeMultiBranch(nn.Module):
+    """Toy model mimicking RAFT's problematic loop structure.
+
+    Has an iterative update block with:
+    - Two parallel branches (flow + corr) that converge via cat
+    - Recurrent state feedback (hidden state updated each iteration)
+    - Coordinate accumulation (state = state + delta)
+    - Pre-computed cached data used every iteration
+
+    Reproduces the topology that causes loop detection issues in the real RAFT model.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Feature encoder (pre-loop, like RAFT's correlation pyramid)
+        self.feature_enc = nn.Linear(5, 10)
+
+        # Branch A: "flow" path (processes flow estimate)
+        self.flow_fc1 = nn.Linear(5, 5)
+        self.flow_fc2 = nn.Linear(5, 3)
+
+        # Branch B: "corr" path (processes cached features)
+        self.corr_fc1 = nn.Linear(10, 5)
+
+        # Merge after cat: 3 + 5 = 8 → motion features
+        self.merge_fc = nn.Linear(8, 5)
+
+        # Recurrent update: cat(hidden, motion) → new hidden
+        self.recurrent_fc = nn.Linear(10, 5)
+
+        # Flow head: hidden → delta
+        self.flow_head = nn.Linear(5, 5)
+
+    def forward(self, x):
+        # Pre-loop: compute features (cached, reused every iteration)
+        features = self.feature_enc(x)
+
+        # Initialize mutable state
+        hidden = torch.zeros_like(x)
+        coords = torch.zeros_like(x)
+
+        for _ in range(6):
+            # Flow estimate from current coords
+            flow = coords - x
+
+            # Branch A: flow path
+            flow_out = self.flow_fc1(flow)
+            flow_out = torch.relu(flow_out)
+            flow_out = self.flow_fc2(flow_out)
+
+            # Branch B: correlation path (uses cached features)
+            corr_out = self.corr_fc1(features)
+            corr_out = torch.relu(corr_out)
+
+            # Merge branches via cat
+            motion = torch.cat([flow_out, corr_out], dim=-1)
+            motion = self.merge_fc(motion)
+
+            # Recurrent state update
+            recurrent_input = torch.cat([hidden, motion], dim=-1)
+            hidden = self.recurrent_fc(recurrent_input)
+            hidden = torch.relu(hidden)
+
+            # Flow head: predict delta
+            delta = self.flow_head(hidden)
+
+            # Accumulate coords
+            coords = coords + delta
+
+        return coords
+
+
+class SequentialParamFreeLoops(nn.Module):
+    """Two back-to-back param-free loops with identical ops.
+    Tests that adjacency correctly separates them."""
+
+    @staticmethod
+    def forward(x):
+        for _ in range(3):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        x = x + 1
+        for _ in range(3):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        return x

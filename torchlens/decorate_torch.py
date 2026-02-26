@@ -8,8 +8,16 @@ from typing import Callable, Dict, List, TYPE_CHECKING, Tuple
 import torch
 
 from .constants import ORIG_TORCH_FUNCS
-from .helper_funcs import (clean_to, get_vars_of_type_from_obj, identity, log_current_rng_states, make_random_barcode,
-                           nested_getattr, print_override, safe_copy)
+from .helper_funcs import (
+    clean_to,
+    get_vars_of_type_from_obj,
+    identity,
+    log_current_rng_states,
+    make_random_barcode,
+    nested_getattr,
+    print_override,
+    safe_copy,
+)
 from .logging_funcs import log_function_output_tensors, log_source_tensor
 
 if TYPE_CHECKING:
@@ -24,11 +32,7 @@ def torch_func_decorator(self, func: Callable, func_name: str):
     def wrapped_func(*args, **kwargs):
         # Initial bookkeeping; check if it's a special function, organize the arguments.
         self.current_function_call_barcode = 0
-        if (
-                (func_name in funcs_not_to_log)
-                or (not self._track_tensors)
-                or self._pause_logging
-        ):
+        if (func_name in funcs_not_to_log) or (not self._track_tensors) or self._pause_logging:
             out = func(*args, **kwargs)
             return out
         all_args = list(args) + list(kwargs.values())
@@ -37,8 +41,8 @@ def torch_func_decorator(self, func: Callable, func_name: str):
         # Register any buffer tensors in the arguments.
 
         for t in arg_tensorlike:
-            if hasattr(t, 'tl_buffer_address'):
-                log_source_tensor(self, t, 'buffer', getattr(t, 'tl_buffer_address'))
+            if hasattr(t, "tl_buffer_address"):
+                log_source_tensor(self, t, "buffer", getattr(t, "tl_buffer_address"))
 
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
             out = print_override(args[0], func_name)
@@ -59,9 +63,7 @@ def torch_func_decorator(self, func: Callable, func_name: str):
         func_rng_states = log_current_rng_states()
         out_orig = func(*args, **kwargs)
         func_time_elapsed = time.time() - start_time
-        is_bottom_level_func = (
-                self.current_function_call_barcode == func_call_barcode
-        )
+        is_bottom_level_func = self.current_function_call_barcode == func_call_barcode
 
         if func_name in ["__setitem__", "zero_", "__delitem__"]:
             out_orig = args[0]
@@ -91,13 +93,20 @@ def torch_func_decorator(self, func: Callable, func_name: str):
                 is_bottom_level_func,
             )
 
+            # For in-place ops, the original tensor (args[0]) keeps a stale
+            # tl_tensor_label_raw after safe_copy creates a new tensor for
+            # logging. Update it so subsequent ops reference the correct entry.
+            if func_name in ["__setitem__", "zero_", "__delitem__"]:
+                if hasattr(out_orig, "tl_tensor_label_raw"):
+                    args[0].tl_tensor_label_raw = out_orig.tl_tensor_label_raw
+
         return out_orig
 
     return wrapped_func
 
 
 def decorate_pytorch(
-        self: "ModelHistory", torch_module: types.ModuleType, orig_func_defs: List[Tuple]
+    self: "ModelHistory", torch_module: types.ModuleType, orig_func_defs: List[Tuple]
 ) -> Dict[Callable, Callable]:
     """Mutates all PyTorch functions (TEMPORARILY!) to save the outputs of any functions
     that return Tensors, along with marking them with metadata. Returns a list of tuples that
@@ -152,10 +161,16 @@ def decorate_pytorch(
             decorated_func_mapper[orig_func] = new_func
 
         elif type(orig_func) == getset_class:
-            getter_orig, setter_orig, deleter_orig = orig_func.__get__, orig_func.__set__, orig_func.__delete__
-            getter_dec, setter_dec, deleter_dec = (torch_func_decorator(self, getter_orig, func_name),
-                                                   torch_func_decorator(self, setter_orig, func_name),
-                                                   torch_func_decorator(self, deleter_orig, func_name))
+            getter_orig, setter_orig, deleter_orig = (
+                orig_func.__get__,
+                orig_func.__set__,
+                orig_func.__delete__,
+            )
+            getter_dec, setter_dec, deleter_dec = (
+                torch_func_decorator(self, getter_orig, func_name),
+                torch_func_decorator(self, setter_orig, func_name),
+                torch_func_decorator(self, deleter_orig, func_name),
+            )
             getter_dec.tl_is_decorated_function = True
             setter_dec.tl_is_decorated_function = True
             deleter_dec.tl_is_decorated_function = True
@@ -170,14 +185,14 @@ def decorate_pytorch(
             decorated_func_mapper[orig_func] = new_property
 
     # Bolt on the identity function
-    new_identity = torch_func_decorator(self, identity, 'identity')
+    new_identity = torch_func_decorator(self, identity, "identity")
     torch.identity = new_identity
 
     return decorated_func_mapper
 
 
 def undecorate_pytorch(
-        torch_module, orig_func_defs: List[Tuple], input_tensors: List[torch.Tensor]
+    torch_module, orig_func_defs: List[Tuple], input_tensors: List[torch.Tensor]
 ):
     """
     Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
@@ -232,9 +247,7 @@ def undecorate_tensor(t, device: str = "cpu"):
     return new_t
 
 
-def collect_orig_func_defs(
-        torch_module: types.ModuleType, orig_func_defs: List[Tuple]
-):
+def collect_orig_func_defs(torch_module: types.ModuleType, orig_func_defs: List[Tuple]):
     """Collects the original torch function definitions, so they can be restored after the logging is done.
 
     Args:
@@ -255,12 +268,12 @@ def get_func_argnames(self, orig_func: Callable, func_name: str):
     """Attempts to get the argument names for a function, first by checking the signature, then
     by checking the documentation. Adds these names to func_argnames if it can find them,
     doesn't do anything if it can't."""
-    if func_name in ['real', 'imag', 'T', 'mT', 'data', 'H']:
+    if func_name in ["real", "imag", "T", "mT", "data", "H"]:
         return
 
     try:
         argnames = list(inspect.signature(orig_func).parameters.keys())
-        argnames = tuple([arg.replace('*', '') for arg in argnames if arg not in ['cls', 'self']])
+        argnames = tuple([arg.replace("*", "") for arg in argnames if arg not in ["cls", "self"]])
         self.func_argnames[func_name] = argnames
         return
     except ValueError:
@@ -270,17 +283,17 @@ def get_func_argnames(self, orig_func: Callable, func_name: str):
     if (type(docstring) is not str) or (len(docstring) == 0):  # if docstring missing, skip it
         return
 
-    open_ind, close_ind = docstring.find('('), docstring.find(')')
-    argstring = docstring[open_ind + 1: close_ind]
-    arg_list = argstring.split(',')
-    arg_list = [arg.strip(' ') for arg in arg_list]
+    open_ind, close_ind = docstring.find("("), docstring.find(")")
+    argstring = docstring[open_ind + 1 : close_ind]
+    arg_list = argstring.split(",")
+    arg_list = [arg.strip(" ") for arg in arg_list]
     argnames = []
     for arg in arg_list:
-        argname = arg.split('=')[0]
-        if argname in ['*', '/', '//', '']:
+        argname = arg.split("=")[0]
+        if argname in ["*", "/", "//", ""]:
             continue
-        argname = argname.replace('*', '')
+        argname = argname.replace("*", "")
         argnames.append(argname)
-    argnames = tuple([arg for arg in argnames if arg not in ['self', 'cls']])
+    argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])
     self.func_argnames[func_name] = argnames
     return
