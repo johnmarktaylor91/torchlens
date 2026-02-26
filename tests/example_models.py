@@ -42,7 +42,7 @@ class InPlaceFuncs(nn.Module):
         y2 = x2 + 3
         x3 = torch.log(x2)
         x4 = self.relu_module_newtensor(x3)
-        x5 = x4 * 2 + y1 + y2
+        _x5 = x4 * 2 + y1 + y2
         return x
 
 
@@ -268,7 +268,7 @@ class SliceOperations(nn.Module):
         y.zero_()
         y = y + 1
         y = torch.log(y)
-        x = x ** 2
+        x = x**2
         return x
 
 
@@ -313,7 +313,7 @@ class MultiInputs(nn.Module):
     def forward(x, y, z):
         a = x + y
         b = torch.log(z)
-        x = a ** b
+        x = a**b
         return x
 
 
@@ -326,7 +326,7 @@ class ListInput(nn.Module):
         x, y, z = input_list
         a = x + y
         b = torch.log(z)
-        x = a ** b
+        x = a**b
         return x
 
 
@@ -339,7 +339,7 @@ class DictInput(nn.Module):
         x, y, z = input_dict["x"], input_dict["y"], input_dict["z"]
         a = x + y
         b = torch.log(z)
-        x = a ** b
+        x = a**b
         return x
 
 
@@ -438,7 +438,7 @@ class BufferRewriteModule(nn.Module):
         x = x + self.buffer1
         x = x * self.buffer2
         self.buffer1 = torch.rand(12, 12)
-        self.buffer2 = x ** 2
+        self.buffer2 = x**2
         x = self.buffer1 + self.buffer2
         return x
 
@@ -472,7 +472,7 @@ class SimpleBranching(nn.Module):
         y = x * 2
         y = y + 3
         y = torch.log(y)
-        z = x ** 2
+        z = x**2
         z = torch.sin(z)
         x = x + y + z
         return x
@@ -492,7 +492,7 @@ class ConditionalBranching(nn.Module):
             x = torch.cos(x)
             x = x + 1
             x = x * 4
-            x = x ** 2
+            x = x**2
         return x
 
 
@@ -540,7 +540,7 @@ class Level12(nn.Module):
 
     @staticmethod
     def forward(x):
-        x = x ** 3 + torch.ones(x.shape)
+        x = x**3 + torch.ones(x.shape)
         x = x / 5
         return x
 
@@ -602,9 +602,9 @@ class OrphanTensors(nn.Module):
         z = torch.ones(5, 5)
         z = z + 1
         a = z * 2
-        b = z ** 2
-        c = a + b
-        x = x ** 2
+        b = z**2
+        _c = a + b
+        x = x**2
         return x
 
 
@@ -668,11 +668,11 @@ class VaryingLoopNoParam1(nn.Module):
             if i % 2 == 0:
                 y = x + 3
                 y = torch.sin(y)
-                y = y ** 2
+                y = y**2
             x = torch.sin(x)
             if i % 2 == 1:
-                z = x + 3
-                z = torch.cos(x)
+                _z = x + 3
+                _z = torch.cos(x)
         x = x + 3
         return x
 
@@ -691,7 +691,7 @@ class VaryingLoopNoParam2(nn.Module):
             if i in [0, 3, 4]:
                 y = x + 3
                 y = torch.sin(y)
-                y = y ** 2
+                y = y**2
             else:
                 y = x * torch.rand(x.shape)
                 y = torch.cos(y)
@@ -716,7 +716,7 @@ class VaryingLoopWithParam(nn.Module):
         x = self.fc(x)
         x = x + 1
         x = x * 2
-        x = x ** 3
+        x = x**3
         x = self.fc(x)
         return x
 
@@ -907,7 +907,7 @@ class ModuleLoopingClash1(nn.Module):
         x = self.relu(x)
         x = torch.log(x)
         for _ in range(
-                4
+            4
         ):  # this tests clashes between what counts as "same"--module-based or looping-based
             x = self.relu(x)
             x = x + 1
@@ -1005,7 +1005,7 @@ class UberModel1(nn.Module):
         x, y, z = x
         x = x + 1
         y = y * 2
-        y = y ** 3
+        y = y**3
         w = torch.rand(5, 5)
         w = w * 2
         w = w + 4
@@ -1028,10 +1028,10 @@ class UberModel1(nn.Module):
         v = u * 8
         v2 = v + 2
         v2 = v * 3
-        v3 = v2.sum() > 5
+        _v3 = v2.sum() > 5
         m = torch.ones(5)
-        m1 = m * 2
-        m2 = m + 3
+        _m1 = m * 2
+        _m2 = m + 3
         v = torch.cos(v)
         return u, v, y
 
@@ -1073,7 +1073,7 @@ class UberModel3(nn.Module):
         x = self.fc(x)
         x = x + 1
         x = x * 2
-        x = x ** 3
+        x = x**3
         x = self.fc(x)
         x = x + 2
         x = x * 3
@@ -1222,7 +1222,7 @@ class UberModel9(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         x2 = x * 2
-        x3 = x2 + 4
+        _x3 = x2 + 4
         y1 = x + 1
         y2 = y1 * 2
         y31 = y2 + 1
@@ -1237,9 +1237,62 @@ class UberModel9(nn.Module):
         a = torch.ones(3, 3)
         b = torch.zeros(3, 3)
         z3 = z2 + a + b
-        w1 = x ** 3
+        w1 = x**3
         x = torch.sum(torch.stack([y4, z3, w1]))
         return x
+
+
+class NestedParamFreeLoops(nn.Module):
+    """Nested loops where the inner loop has operations that are equivalent across
+    all levels AND operations that differ per level due to level-dependent constants.
+
+    Structure:
+    - Outer loop: 4 iterations with state feedback (coords updated each iteration)
+    - Inner loop: 3 levels, each doing:
+        - A normalization step that divides by a LEVEL-DEPENDENT constant
+          (this creates different operation_equivalence_types per level)
+        - A core operation (sin) that is THE SAME equivalence type across all levels
+        - An accumulation step
+
+    The key challenge for the loop finder: the 12 sin operations (4 outer x 3 inner)
+    all have the same equivalence type, but they are surrounded by operations that
+    have DIFFERENT equivalence types per inner level (because the divisor constant
+    changes). This means the BFS subgraph expansion cannot match operations across
+    inner levels, fragmenting the sin ops into groups of 4 (one per inner level
+    position) instead of one group of 12.
+
+    This replicates the topology of RAFT Large's correlation pyramid, where
+    grid_sample normalizes by spatial dimensions that change at each pyramid level.
+    """
+
+    @staticmethod
+    def forward(x):
+        coords = torch.zeros_like(x)
+        divisors = [2.0, 4.0, 8.0]  # different constant per inner level
+
+        for _ in range(4):
+            # State-dependent value that changes each outer iteration
+            offset = coords - x
+
+            # Inner loop: 3 levels with level-dependent normalization
+            accum = torch.zeros_like(x)
+            scaled = offset
+            for divisor in divisors:
+                # This division uses a DIFFERENT non-tensor arg per level,
+                # giving each level a different operation_equivalence_type
+                normalized = scaled / divisor
+
+                # This sin has the SAME equivalence type across all levels
+                # (same func, no non-tensor args, same shape/dtype)
+                result = torch.sin(normalized)
+
+                accum = accum + result
+                scaled = scaled * 0.5
+
+            # Post-inner-loop processing
+            coords = coords + torch.tanh(accum)
+
+        return coords
 
 
 class PropertyModel(nn.Module):
@@ -1255,7 +1308,7 @@ class PropertyModel(nn.Module):
         t = t.data
         t2 = t.T
         m = torch.rand(4, 4, 4)
-        m = m ** 2
+        m = m**2
         m2 = m.mT.mean()
         out = r * i / m2 + t2.mean()
         return out
