@@ -1,6 +1,37 @@
 # CHANGELOG
 
 
+## v0.4.0 (2026-02-26)
+
+### Chores
+
+- **tests**: Move visualization_outputs into tests/ directory
+  ([`22ed018`](https://github.com/johnmarktaylor91/torchlens/commit/22ed018d80ce274225bb65bae9a0dda3aed1561b))
+
+Anchor vis_outpath to tests/ via VIS_OUTPUT_DIR constant in conftest.py so test outputs don't
+  pollute the project root.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **core**: Generalize in-place op handling, fix loop grouping, and harden validation
+  ([`c72d6a6`](https://github.com/johnmarktaylor91/torchlens/commit/c72d6a6ecabd42471c1badd1b6cb8b0b6958e518))
+
+- Generalize in-place op detection in decorate_torch.py: use `was_inplace` flag based on output
+  identity instead of hardcoded function name list, and propagate tensor labels for all in-place ops
+  - Fix ungrouped isomorphic nodes in postprocess.py: sweep for iso nodes left without a layer group
+  after pairwise grouping (fixes last-iteration loop subgraphs with no params) - Deduplicate ground
+  truth output tensors by address in user_funcs.py to match trace_model.py extraction behavior - Add
+  validation exemptions: bernoulli_/full arg mismatches from in-place RNG ops,
+  meshgrid/broadcast_tensors multi-output perturbation, *_like ops that depend only on
+  shape/dtype/device - Gracefully handle invalid perturbed arguments (e.g. pack_padded_sequence)
+  instead of raising - Guard empty arg_labels in vis.py edge label rendering - Fix test stability:
+  reduce s3d batch size, add eval mode and bool mask dtype for StyleTTS
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.3.1 (2026-02-25)
 
 ### Bug Fixes
