@@ -1086,6 +1086,43 @@ def test_module_looping_clash3(default_input1):
     )
 
 
+def test_nested_param_free_loops(default_input1):
+    """Tests nested loop topology where inner ops have the same equivalence type
+    across levels but surrounding ops differ per level.
+
+    4 outer iterations x 3 inner levels = 12 sin operations, all with the same
+    equivalence type. They should be ONE group of 12 passes.
+    """
+    model = example_models.NestedParamFreeLoops()
+    assert validate_saved_activations(model, default_input1)
+    mh = log_forward_pass(model, default_input1)
+
+    # All sin ops should be in one layer group with 12 passes
+    sin_pass_counts = set()
+    for label in mh.layer_labels:
+        entry = mh[label]
+        if entry.func_applied_name == "sin":
+            sin_pass_counts.add(entry.layer_passes_total)
+    assert sin_pass_counts == {12}, (
+        f"sin ops fragmented into groups with pass counts {sin_pass_counts}, expected {{12}}"
+    )
+
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_param_free_loops_unrolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_param_free_loops_rolled"),
+    )
+
+
 # =============================================================================
 # Complex models
 # =============================================================================

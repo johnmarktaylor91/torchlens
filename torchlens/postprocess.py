@@ -586,9 +586,83 @@ def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLo
         )
         is_first_node = False
 
+    # Refine iso groups: split groups where members occupy structurally
+    # different positions (different directional neighbor iso groups).
+    _refine_iso_groups(self, iso_node_groups, node_to_iso_group_dict)
+
     _assign_and_log_isomorphic_nodes_to_same_layers(
         self, iso_node_groups, node_to_subgraph_dict, adjacent_subgraphs
     )
+
+
+def _refine_iso_groups(
+    self,
+    iso_node_groups: Dict[str, List[str]],
+    node_to_iso_group_dict: Dict[str, str],
+):
+    """Refine iso node groups by splitting groups where members have
+    non-overlapping directional neighborhoods.
+
+    When operations share the same equivalence type but occupy different
+    structural positions (e.g., sin(x) in the main loop body vs sin(y) in
+    a conditional branch), the BFS expansion assigns their neighbors to
+    different iso groups. This function detects such cases by checking
+    direction-aware neighbor iso groups: two members are connected if they
+    share at least one (direction, iso_leader) pair. Connected components
+    within each group become the refined sub-groups.
+    """
+    for group_leader, members in list(iso_node_groups.items()):
+        if len(members) <= 1:
+            continue
+
+        # For each member, compute direction-aware neighbor iso set
+        member_neighbor_isos = {}
+        for member_label in members:
+            member_node = self[member_label]
+            neighbor_groups = set()
+            for child in member_node.child_layers:
+                if child in node_to_iso_group_dict:
+                    neighbor_groups.add(("child", node_to_iso_group_dict[child]))
+            for parent in member_node.parent_layers:
+                if parent in node_to_iso_group_dict:
+                    neighbor_groups.add(("parent", node_to_iso_group_dict[parent]))
+            member_neighbor_isos[member_label] = neighbor_groups
+
+        # Connected components via union-find: members sharing at least
+        # one directional neighbor iso group are connected
+        uf_parent = {m: m for m in members}
+
+        def find(x, uf=uf_parent):
+            while uf[x] != x:
+                uf[x] = uf[uf[x]]
+                x = uf[x]
+            return x
+
+        def union(x, y, uf=uf_parent):
+            rx, ry = find(x), find(y)
+            if rx != ry:
+                uf[rx] = ry
+
+        for m1, m2 in it.combinations(members, 2):
+            if member_neighbor_isos[m1] & member_neighbor_isos[m2]:
+                union(m1, m2)
+
+        # Collect components
+        components = defaultdict(list)
+        for m in members:
+            components[find(m)].append(m)
+
+        if len(components) <= 1:
+            continue  # No split needed
+
+        # Split the group: remove old, create new sub-groups
+        del iso_node_groups[group_leader]
+        for comp_members in components.values():
+            sorted_members = sorted(comp_members)
+            new_leader = sorted_members[0]
+            iso_node_groups[new_leader] = sorted_members
+            for m in sorted_members:
+                node_to_iso_group_dict[m] = new_leader
 
 
 def _fetch_and_process_next_isomorphic_nodes(
