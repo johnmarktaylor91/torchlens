@@ -42,7 +42,7 @@ class InPlaceFuncs(nn.Module):
         y2 = x2 + 3
         x3 = torch.log(x2)
         x4 = self.relu_module_newtensor(x3)
-        x5 = x4 * 2 + y1 + y2
+        _x5 = x4 * 2 + y1 + y2
         return x
 
 
@@ -603,7 +603,7 @@ class OrphanTensors(nn.Module):
         z = z + 1
         a = z * 2
         b = z**2
-        c = a + b
+        _c = a + b
         x = x**2
         return x
 
@@ -671,8 +671,8 @@ class VaryingLoopNoParam1(nn.Module):
                 y = y**2
             x = torch.sin(x)
             if i % 2 == 1:
-                z = x + 3
-                z = torch.cos(x)
+                _z = x + 3
+                _z = torch.cos(x)
         x = x + 3
         return x
 
@@ -1028,10 +1028,10 @@ class UberModel1(nn.Module):
         v = u * 8
         v2 = v + 2
         v2 = v * 3
-        v3 = v2.sum() > 5
+        _v3 = v2.sum() > 5
         m = torch.ones(5)
-        m1 = m * 2
-        m2 = m + 3
+        _m1 = m * 2
+        _m2 = m + 3
         v = torch.cos(v)
         return u, v, y
 
@@ -1222,7 +1222,7 @@ class UberModel9(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         x2 = x * 2
-        x3 = x2 + 4
+        _x3 = x2 + 4
         y1 = x + 1
         y2 = y1 * 2
         y31 = y2 + 1

@@ -720,7 +720,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
     Returns:
         True if the output should be logged, False otherwise.
     """
-    if type(out) != torch.Tensor:  # only log if it's a tensor
+    if type(out) is not torch.Tensor:  # only log if it's a tensor
         return False
 
     if (not hasattr(out, "tl_tensor_label_raw")) or is_bottom_level_func:

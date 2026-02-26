@@ -160,7 +160,7 @@ def decorate_pytorch(
             decorated_func_mapper[new_func] = orig_func
             decorated_func_mapper[orig_func] = new_func
 
-        elif type(orig_func) == getset_class:
+        elif type(orig_func) is getset_class:
             getter_orig, setter_orig, deleter_orig = (
                 orig_func.__get__,
                 orig_func.__set__,

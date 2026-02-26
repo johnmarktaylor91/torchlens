@@ -56,11 +56,6 @@ include = ["torchlens*"]
 [tool.ruff]
 line-length = 100
 
-[tool.ruff.lint]
-# E721: type comparison with == (pre-existing pattern throughout codebase)
-# F841: unused local variables (intentional in test models — ops are traced by torchlens)
-ignore = ["E721", "F841"]
-
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["torchlens/__init__.py:__version__"]
