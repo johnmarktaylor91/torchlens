@@ -942,6 +942,26 @@ def _group_isomorphic_nodes_to_same_layers(
                 node_to_layer_group_dict[node1_label] = layer_group
                 node_to_layer_group_dict[node2_label] = layer_group
 
+    # After pairwise grouping, check for iso nodes left ungrouped.
+    # This handles the case where the last iteration of a loop has a small
+    # subgraph that isn't adjacent to any other subgraph and has no params.
+    for iso_group_label, iso_nodes_orig in iso_node_groups.items():
+        iso_nodes = set(iso_nodes_orig)
+        grouped_nodes = set()
+        iso_group_layer = None
+        iso_group_size = 0
+        for layer_group, group_nodes in same_layer_node_groups.items():
+            overlap = iso_nodes & group_nodes
+            if overlap and len(group_nodes) > iso_group_size:
+                iso_group_size = len(group_nodes)
+                iso_group_layer = layer_group
+                grouped_nodes |= overlap
+        ungrouped = iso_nodes - grouped_nodes
+        if ungrouped and iso_group_layer is not None and iso_group_size >= 2:
+            same_layer_node_groups[iso_group_layer].update(ungrouped)
+            for node_label in ungrouped:
+                node_to_layer_group_dict[node_label] = iso_group_layer
+
     return same_layer_node_groups
 
 
