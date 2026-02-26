@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v0.4.1 (2026-02-26)
+
+### Bug Fixes
+
+- **loops**: Refine iso groups to prevent false equivalence in loop detection
+  ([`5aaad70`](https://github.com/johnmarktaylor91/torchlens/commit/5aaad70196073364ecfa7351fba08fed013e81b4))
+
+When operations share the same equivalence type but occupy structurally different positions (e.g.,
+  sin(x) in a loop body vs sin(y) in a branch), the BFS expansion incorrectly groups them together.
+  Add _refine_iso_groups to split such groups using direction-aware neighbor connectivity.
+
+Also adds NestedParamFreeLoops test model and prefixes intentionally unused variables in test models
+  with underscores to satisfy linting.
+
+### Code Style
+
+- Auto-format with ruff
+  ([`b9413f1`](https://github.com/johnmarktaylor91/torchlens/commit/b9413f1b4e60511eba117e032df60dea15849354))
+
+
 ## v0.4.0 (2026-02-26)
 
 ### Chores
