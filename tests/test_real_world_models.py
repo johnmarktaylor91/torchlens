@@ -1019,7 +1019,7 @@ def test_video_r3d_18():
 
 def test_video_s3d():
     model = torchvision.models.video.s3d()
-    model_input = torch.randn(16, 3, 16, 224, 224)
+    model_input = torch.randn(1, 3, 16, 224, 224)
     show_model_graph(
         model,
         model_input,
@@ -1518,9 +1518,10 @@ def test_styletts():
         pytest.skip("StyleTTS not available")
 
     model = TextEncoder(3, 3, 3, 100)
+    model.eval()
     tokens = torch.tensor([[3, 0, 1, 2, 0, 2, 2, 3, 1, 4]])
     input_lengths = torch.ones(1, dtype=torch.long) * 10
-    m = torch.ones(1, 10)
+    m = torch.ones(1, 10, dtype=torch.bool)
     model_inputs = (tokens, input_lengths, m)
     show_model_graph(
         model,

@@ -67,7 +67,8 @@ def torch_func_decorator(self, func: Callable, func_name: str):
         if func_name in ["__setitem__", "zero_", "__delitem__"]:
             out_orig = args[0]
 
-        if id(out_orig) == id(args[0]):  # special case if the function does nothing
+        was_inplace = len(args) > 0 and id(out_orig) == id(args[0])
+        if was_inplace:
             out_orig = safe_copy(out_orig)
 
         # Log all output tensors
@@ -94,7 +95,7 @@ def torch_func_decorator(self, func: Callable, func_name: str):
 
             # Propagate label to original tensor for in-place ops so
             # subsequent operations see the updated label.
-            if func_name in ["__setitem__", "zero_", "__delitem__"]:
+            if was_inplace:
                 if hasattr(out_orig, "tl_tensor_label_raw"):
                     args[0].tl_tensor_label_raw = out_orig.tl_tensor_label_raw
 

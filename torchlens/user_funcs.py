@@ -345,12 +345,21 @@ def validate_saved_activations(
     input_args_copy = [copy.deepcopy(arg) for arg in input_args]
     input_kwargs_copy = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
     state_dict = model.state_dict()
-    ground_truth_output_tensors = get_vars_of_type_from_obj(
+    ground_truth_output_all = get_vars_of_type_from_obj(
         model(*input_args_copy, **input_kwargs_copy),
         torch.Tensor,
         search_depth=5,
+        return_addresses=True,
         allow_repeats=True,
     )
+    # Deduplicate by address to match trace_model.py output extraction
+    addresses_used = []
+    ground_truth_output_tensors = []
+    for entry in ground_truth_output_all:
+        if entry[1] in addresses_used:
+            continue
+        ground_truth_output_tensors.append(entry[0])
+        addresses_used.append(entry[1])
     model.load_state_dict(state_dict)
     model_history = run_model_and_save_specified_activations(
         model=model,

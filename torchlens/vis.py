@@ -734,6 +734,8 @@ def _label_node_arguments_if_needed(
                 arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
     arg_labels = "<br/>".join(arg_labels)
+    if not arg_labels:
+        return
     arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_labels}</b></FONT>>"
     if "label" not in edge_dict:
         edge_dict["label"] = arg_label
