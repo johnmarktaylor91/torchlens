@@ -601,7 +601,81 @@ def _expand_isomorphic_subgraphs(self, node: TensorLogEntry):
         )
         is_first_node = False
 
+    # Refine iso groups: split groups where members occupy structurally
+    # different positions (different directional neighbor iso groups).
+    _refine_iso_groups(self, iso_node_groups, node_to_iso_leader)
+
     _finalize_layer_assignments(self, iso_node_groups, node_to_subgraph, adjacent_subgraphs)
+
+
+def _refine_iso_groups(
+    self,
+    iso_node_groups: Dict[str, List[str]],
+    node_to_iso_leader: Dict[str, str],
+):
+    """Refine iso node groups by splitting groups where members have
+    non-overlapping directional neighborhoods.
+
+    When operations share the same equivalence type but occupy different
+    structural positions (e.g., sin(x) in the main loop body vs sin(y) in
+    a conditional branch), the BFS expansion assigns their neighbors to
+    different iso groups. This function detects such cases by checking
+    direction-aware neighbor iso groups: two members are connected if they
+    share at least one (direction, iso_leader) pair. Connected components
+    within each group become the refined sub-groups.
+    """
+    for group_leader, members in list(iso_node_groups.items()):
+        if len(members) <= 1:
+            continue
+
+        # For each member, compute direction-aware neighbor iso set
+        member_neighbor_isos = {}
+        for member_label in members:
+            member_node = self[member_label]
+            neighbor_groups = set()
+            for child in member_node.child_layers:
+                if child in node_to_iso_leader:
+                    neighbor_groups.add(("child", node_to_iso_leader[child]))
+            for parent in member_node.parent_layers:
+                if parent in node_to_iso_leader:
+                    neighbor_groups.add(("parent", node_to_iso_leader[parent]))
+            member_neighbor_isos[member_label] = neighbor_groups
+
+        # Connected components via union-find: members sharing at least
+        # one directional neighbor iso group are connected
+        uf_parent = {m: m for m in members}
+
+        def find(x, uf=uf_parent):
+            while uf[x] != x:
+                uf[x] = uf[uf[x]]
+                x = uf[x]
+            return x
+
+        def union(x, y, uf=uf_parent):
+            rx, ry = find(x), find(y)
+            if rx != ry:
+                uf[rx] = ry
+
+        for m1, m2 in it.combinations(members, 2):
+            if member_neighbor_isos[m1] & member_neighbor_isos[m2]:
+                union(m1, m2)
+
+        # Collect components
+        components = defaultdict(list)
+        for m in members:
+            components[find(m)].append(m)
+
+        if len(components) <= 1:
+            continue  # No split needed
+
+        # Split the group: remove old, create new sub-groups
+        del iso_node_groups[group_leader]
+        for comp_members in components.values():
+            sorted_members = sorted(comp_members)
+            new_leader = sorted_members[0]
+            iso_node_groups[new_leader] = sorted_members
+            for m in sorted_members:
+                node_to_iso_leader[m] = new_leader
 
 
 def _advance_bfs_frontier(
@@ -752,6 +826,17 @@ def _record_subgraph_adjacency(
     if (node_subgraph_label in adjacent_subgraphs) and (
         neighbor_subgraph_label in adjacent_subgraphs
     ):
+        # Both already tracked — merge their adjacency sets if different
+        if (
+            adjacent_subgraphs[node_subgraph_label]
+            is not adjacent_subgraphs[neighbor_subgraph_label]
+        ):
+            merged = (
+                adjacent_subgraphs[node_subgraph_label]
+                | adjacent_subgraphs[neighbor_subgraph_label]
+            )
+            for s in merged:
+                adjacent_subgraphs[s] = merged
         return
     elif (node_subgraph_label in adjacent_subgraphs) and (
         neighbor_subgraph_label not in adjacent_subgraphs

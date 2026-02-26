@@ -329,7 +329,6 @@ def test_opticflow_raftsmall():
     assert validate_saved_activations(model, model_input)
 
 
-@pytest.mark.xfail
 def test_opticflow_raftlarge():
     model = torchvision.models.optical_flow.raft_large()
     model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]

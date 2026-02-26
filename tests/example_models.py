@@ -1416,74 +1416,55 @@ class DataDependentBranchLoop(nn.Module):
         return x
 
 
-class RAFTLikeMultiBranch(nn.Module):
-    """Toy model mimicking RAFT's problematic loop structure.
+class NestedParamFreeLoops(nn.Module):
+    """Nested loops where the inner loop has operations that are equivalent across
+    all levels AND operations that differ per level due to level-dependent constants.
 
-    Has an iterative update block with:
-    - Two parallel branches (flow + corr) that converge via cat
-    - Recurrent state feedback (hidden state updated each iteration)
-    - Coordinate accumulation (state = state + delta)
-    - Pre-computed cached data used every iteration
+    Structure:
+    - Outer loop: 4 iterations with state feedback (coords updated each iteration)
+    - Inner loop: 3 levels, each doing:
+        - A normalization step that divides by a LEVEL-DEPENDENT constant
+          (this creates different operation_equivalence_types per level)
+        - A core operation (sin) that is THE SAME equivalence type across all levels
+        - An accumulation step
 
-    Reproduces the topology that causes loop detection issues in the real RAFT model.
+    The key challenge for the loop finder: the 12 sin operations (4 outer × 3 inner)
+    all have the same equivalence type, but they are surrounded by operations that
+    have DIFFERENT equivalence types per inner level (because the divisor constant
+    changes). This means the BFS subgraph expansion cannot match operations across
+    inner levels, fragmenting the sin ops into groups of 4 (one per inner level
+    position) instead of one group of 12.
+
+    This replicates the topology of RAFT Large's correlation pyramid, where
+    grid_sample normalizes by spatial dimensions that change at each pyramid level.
     """
 
-    def __init__(self):
-        super().__init__()
-        # Feature encoder (pre-loop, like RAFT's correlation pyramid)
-        self.feature_enc = nn.Linear(5, 10)
-
-        # Branch A: "flow" path (processes flow estimate)
-        self.flow_fc1 = nn.Linear(5, 5)
-        self.flow_fc2 = nn.Linear(5, 3)
-
-        # Branch B: "corr" path (processes cached features)
-        self.corr_fc1 = nn.Linear(10, 5)
-
-        # Merge after cat: 3 + 5 = 8 → motion features
-        self.merge_fc = nn.Linear(8, 5)
-
-        # Recurrent update: cat(hidden, motion) → new hidden
-        self.recurrent_fc = nn.Linear(10, 5)
-
-        # Flow head: hidden → delta
-        self.flow_head = nn.Linear(5, 5)
-
-    def forward(self, x):
-        # Pre-loop: compute features (cached, reused every iteration)
-        features = self.feature_enc(x)
-
-        # Initialize mutable state
-        hidden = torch.zeros_like(x)
+    @staticmethod
+    def forward(x):
         coords = torch.zeros_like(x)
+        divisors = [2.0, 4.0, 8.0]  # different constant per inner level
 
-        for _ in range(6):
-            # Flow estimate from current coords
-            flow = coords - x
+        for _ in range(4):
+            # State-dependent value that changes each outer iteration
+            offset = coords - x
 
-            # Branch A: flow path
-            flow_out = self.flow_fc1(flow)
-            flow_out = torch.relu(flow_out)
-            flow_out = self.flow_fc2(flow_out)
+            # Inner loop: 3 levels with level-dependent normalization
+            accum = torch.zeros_like(x)
+            scaled = offset
+            for divisor in divisors:
+                # This division uses a DIFFERENT non-tensor arg per level,
+                # giving each level a different operation_equivalence_type
+                normalized = scaled / divisor
 
-            # Branch B: correlation path (uses cached features)
-            corr_out = self.corr_fc1(features)
-            corr_out = torch.relu(corr_out)
+                # This sin has the SAME equivalence type across all levels
+                # (same func, no non-tensor args, same shape/dtype)
+                result = torch.sin(normalized)
 
-            # Merge branches via cat
-            motion = torch.cat([flow_out, corr_out], dim=-1)
-            motion = self.merge_fc(motion)
+                accum = accum + result
+                scaled = scaled * 0.5
 
-            # Recurrent state update
-            recurrent_input = torch.cat([hidden, motion], dim=-1)
-            hidden = self.recurrent_fc(recurrent_input)
-            hidden = torch.relu(hidden)
-
-            # Flow head: predict delta
-            delta = self.flow_head(hidden)
-
-            # Accumulate coords
-            coords = coords + delta
+            # Post-inner-loop processing
+            coords = coords + torch.tanh(accum)
 
         return coords
 
