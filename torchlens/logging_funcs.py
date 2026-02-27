@@ -139,7 +139,6 @@ def log_source_tensor_exhaustive(
         "tensor_label_raw": tensor_label,
         "layer_label_raw": tensor_label,
         "realtime_tensor_num": realtime_tensor_num,
-        "index_in_saved_log": None,
         "operation_num": None,
         "source_model_history": self,
         "_pass_finished": False,
@@ -737,7 +736,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
     Returns:
         True if the output should be logged, False otherwise.
     """
-    if type(out) != torch.Tensor:  # only log if it's a tensor
+    if type(out) is not torch.Tensor:  # only log if it's a tensor
         return False
 
     if (not hasattr(out, "tl_tensor_label_raw")) or is_bottom_level_func:
@@ -826,7 +825,6 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["layer_total_num"] = None
     fields_dict["same_layer_operations"] = []
     fields_dict["realtime_tensor_num"] = realtime_tensor_num
-    fields_dict["index_in_saved_log"] = None
     fields_dict["operation_num"] = None
     fields_dict["source_model_history"] = self
     fields_dict["_pass_finished"] = False
@@ -1162,25 +1160,33 @@ def _get_operation_equivalence_type(
 def _get_hash_from_args(args, kwargs):
     """
     Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
+    Preserves positional arg indices, kwarg names, and dict keys to avoid collisions.
     """
     args_to_hash = []
-    for a, arg in enumerate(list(args) + list(kwargs.values())):
-        if hasattr(arg, "tl_tensor_label_raw"):
-            args_to_hash.append(f"arg{a}{arg.shape}")
-        else:
-            arg_iter = make_var_iterable(arg)
-            for i, arg_elem in enumerate(arg_iter):
-                if not hasattr(arg_elem, "tl_tensor_label_raw") and not isinstance(
-                    arg_elem, torch.nn.Parameter
-                ):
-                    args_to_hash.append(arg_elem)
-                elif hasattr(arg_elem, "tl_tensor_label_raw"):
-                    args_to_hash.append(f"arg{a}_iter{i}_{arg_elem.shape}")
+    for a, arg in enumerate(args):
+        _append_arg_hash(arg, f"pos{a}", args_to_hash)
+    for key, arg in kwargs.items():
+        _append_arg_hash(arg, f"kw_{key}", args_to_hash)
 
     if len(args_to_hash) == 0:
         return "no_args"
-    arg_hash = make_short_barcode_from_input(args_to_hash)
-    return arg_hash
+    return make_short_barcode_from_input(args_to_hash)
+
+
+def _append_arg_hash(arg, prefix, args_to_hash):
+    """Append hash-relevant info for a single arg, preserving structure."""
+    if hasattr(arg, "tl_tensor_label_raw"):
+        args_to_hash.append(f"{prefix}_tensor{arg.shape}")
+    elif isinstance(arg, dict):
+        for k, v in arg.items():
+            _append_arg_hash(v, f"{prefix}_dk{k}", args_to_hash)
+    elif isinstance(arg, (list, tuple, set)):
+        for i, elem in enumerate(arg):
+            _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash)
+    elif isinstance(arg, torch.nn.Parameter):
+        pass  # exclude parameters from hash (same as before)
+    else:
+        args_to_hash.append(f"{prefix}_{arg}")
 
 
 def _update_tensor_containing_modules(tensor_entry: TensorLogEntry) -> List[str]:

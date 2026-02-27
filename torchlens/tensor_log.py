@@ -47,7 +47,6 @@ class TensorLogEntry:
         self.layer_label_raw = fields_dict["layer_label_raw"]
         self.operation_num = fields_dict["operation_num"]
         self.realtime_tensor_num = fields_dict["realtime_tensor_num"]
-        self.index_in_saved_log = fields_dict["index_in_saved_log"]
         self.source_model_history: "ModelHistory" = fields_dict["source_model_history"]
         self._pass_finished = fields_dict["_pass_finished"]
 

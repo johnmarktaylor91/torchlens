@@ -1,7 +1,8 @@
 import itertools as it
 import time
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, deque
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, TYPE_CHECKING, Tuple
 
 import torch
@@ -19,6 +20,22 @@ from .tensor_log import RolledTensorLogEntry, TensorLogEntry
 
 if TYPE_CHECKING:
     from .model_history import ModelHistory
+
+
+@dataclass
+class SubgraphInfo:
+    """Info about one isomorphic subgraph rooted at a starting node."""
+
+    starting_node: str
+    param_nodes: Set[str] = None
+    node_set: Set[str] = None
+
+    def __post_init__(self):
+        if self.param_nodes is None:
+            self.param_nodes = set()
+        if self.node_set is None:
+            self.node_set = set()
+        self.node_set.add(self.starting_node)
 
 
 def postprocess(
@@ -63,7 +80,7 @@ def postprocess(
 
     # Step 8: Identify all loops, mark repeated layers.
 
-    _assign_corresponding_tensors_to_same_layer(self)
+    _detect_and_label_loops(self)
 
     # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 
@@ -96,9 +113,7 @@ def postprocess(
 def postprocess_fast(self: "ModelHistory"):
     for output_layer_label in self.output_layers:
         output_layer = self[output_layer_label]
-        output_layer.tensor_contents = safe_copy(
-            self[output_layer.parent_layers[0]].tensor_contents
-        )
+        output_layer.tensor_contents = self[output_layer.parent_layers[0]].tensor_contents
         output_layer.tensor_fsize = self[output_layer.parent_layers[0]].tensor_fsize
         output_layer.tensor_fsize_nice = self[output_layer.parent_layers[0]].tensor_fsize_nice
         output_layer.has_saved_activations = self[
@@ -461,7 +476,7 @@ def _mark_conditional_branches(self):
         nodes_seen.add(node_label)
 
 
-def _assign_corresponding_tensors_to_same_layer(self):
+def _detect_and_label_loops(self):
     """
     Post-processing function that yokes together operations corresponding to the same layer, based on
     the following rule:
@@ -484,12 +499,16 @@ def _assign_corresponding_tensors_to_same_layer(self):
     assigned is equal to the number of operations of that type. If so, it's definitely found everything;
     if not, it runs the procedure again to check if more equivalent operations can be found.
     """
-    node_stack = self.input_layers + self.internally_initialized_layers
-    node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
+    node_stack = deque(
+        sorted(
+            self.input_layers + self.internally_initialized_layers,
+            key=lambda x: self[x].realtime_tensor_num,
+        )
+    )
     operation_equivalence_types_seen = set()
-    while len(node_stack) > 0:
+    while node_stack:
         # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
-        node_label = node_stack.pop(0)
+        node_label = node_stack.popleft()
         node = self[node_label]
         node_operation_equivalence_type = node.operation_equivalence_type
 
@@ -499,7 +518,7 @@ def _assign_corresponding_tensors_to_same_layer(self):
         operation_equivalence_types_seen.add(node_operation_equivalence_type)
         for equiv_op in node.equivalent_operations:
             node_stack.extend(self[equiv_op].child_layers)
-        node_stack = sorted(node_stack, key=lambda x: self[x].realtime_tensor_num)
+        node_stack = deque(sorted(node_stack, key=lambda x: self[x].realtime_tensor_num))
 
         # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
         if len(node.equivalent_operations) == 1:
@@ -513,10 +532,10 @@ def _assign_corresponding_tensors_to_same_layer(self):
 
         # Else, start from this node and any equivalent operations, and work forward, finding
         # more equivalent operations:
-        _find_and_mark_same_layer_operations_starting_from_node(self, node)
+        _expand_isomorphic_subgraphs(self, node)
 
 
-def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLogEntry):
+def _expand_isomorphic_subgraphs(self, node: TensorLogEntry):
     """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
     and crawls forward, finding and marking corresponding operations until there are none left.
     At the end of this, nodes that have the same position with respect to the original node
@@ -536,7 +555,7 @@ def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLo
     )
 
     # Reverse dictionary mapping each node to its isomorphism group
-    node_to_iso_group_dict = OrderedDict(
+    node_to_iso_leader = OrderedDict(
         {
             label: equivalent_operation_starting_labels[0]
             for label in equivalent_operation_starting_labels
@@ -544,19 +563,15 @@ def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLo
     )
 
     # Dictionary of information about each subgraph
-    subgraphs_dict = {}
+    subgraph_info = {}
     for starting_label in equivalent_operation_starting_labels:
-        subgraphs_dict[starting_label] = {
-            "starting_node": starting_label,
-            "param_nodes": set(),
-            "node_set": {starting_label},
-        }
+        subgraph_info[starting_label] = SubgraphInfo(starting_node=starting_label)
         if node.computed_with_params:
-            subgraphs_dict[starting_label]["param_nodes"].add(starting_label)
+            subgraph_info[starting_label].param_nodes.add(starting_label)
 
     # Dictionary mapping each node to the subgraph it is in
-    node_to_subgraph_dict = OrderedDict(
-        {label: subgraphs_dict[label] for label in equivalent_operation_starting_labels}
+    node_to_subgraph = OrderedDict(
+        {label: subgraph_info[label] for label in equivalent_operation_starting_labels}
     )
 
     # Dict mapping each subgraph to the set of subgraphs it's adjacent to; initialize each to be self-adjacent
@@ -565,21 +580,21 @@ def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLo
     # The stack will be a list of lists, where each latter list is a list of isomorphic nodes.
     # When adding to the stack, only isomorphic nodes will be added.
 
-    node_stack = [equivalent_operation_starting_labels[:]]
+    node_stack = deque([equivalent_operation_starting_labels[:]])
 
     is_first_node = True  # if the first node, don't look at parents
     while node_stack:
         # Pop a set of isomorphic nodes off of the stack, then add and process the next nodes in the stack.
-        isomorphic_nodes = sorted(node_stack.pop(0))
+        isomorphic_nodes = sorted(node_stack.popleft())
         if len(isomorphic_nodes) == 1:
             continue
-        _fetch_and_process_next_isomorphic_nodes(
+        _advance_bfs_frontier(
             self,
             isomorphic_nodes,
             iso_node_groups,
-            node_to_iso_group_dict,
-            subgraphs_dict,
-            node_to_subgraph_dict,
+            node_to_iso_leader,
+            subgraph_info,
+            node_to_subgraph,
             adjacent_subgraphs,
             is_first_node,
             node_stack,
@@ -588,17 +603,15 @@ def _find_and_mark_same_layer_operations_starting_from_node(self, node: TensorLo
 
     # Refine iso groups: split groups where members occupy structurally
     # different positions (different directional neighbor iso groups).
-    _refine_iso_groups(self, iso_node_groups, node_to_iso_group_dict)
+    _refine_iso_groups(self, iso_node_groups, node_to_iso_leader)
 
-    _assign_and_log_isomorphic_nodes_to_same_layers(
-        self, iso_node_groups, node_to_subgraph_dict, adjacent_subgraphs
-    )
+    _finalize_layer_assignments(self, iso_node_groups, node_to_subgraph, adjacent_subgraphs)
 
 
 def _refine_iso_groups(
     self,
     iso_node_groups: Dict[str, List[str]],
-    node_to_iso_group_dict: Dict[str, str],
+    node_to_iso_leader: Dict[str, str],
 ):
     """Refine iso node groups by splitting groups where members have
     non-overlapping directional neighborhoods.
@@ -621,11 +634,11 @@ def _refine_iso_groups(
             member_node = self[member_label]
             neighbor_groups = set()
             for child in member_node.child_layers:
-                if child in node_to_iso_group_dict:
-                    neighbor_groups.add(("child", node_to_iso_group_dict[child]))
+                if child in node_to_iso_leader:
+                    neighbor_groups.add(("child", node_to_iso_leader[child]))
             for parent in member_node.parent_layers:
-                if parent in node_to_iso_group_dict:
-                    neighbor_groups.add(("parent", node_to_iso_group_dict[parent]))
+                if parent in node_to_iso_leader:
+                    neighbor_groups.add(("parent", node_to_iso_leader[parent]))
             member_neighbor_isos[member_label] = neighbor_groups
 
         # Connected components via union-find: members sharing at least
@@ -662,16 +675,16 @@ def _refine_iso_groups(
             new_leader = sorted_members[0]
             iso_node_groups[new_leader] = sorted_members
             for m in sorted_members:
-                node_to_iso_group_dict[m] = new_leader
+                node_to_iso_leader[m] = new_leader
 
 
-def _fetch_and_process_next_isomorphic_nodes(
+def _advance_bfs_frontier(
     self,
     current_iso_nodes: List[str],
     iso_node_groups: Dict[str, List[str]],
-    node_to_iso_group_dict: Dict[str, str],
-    subgraphs_dict: Dict,
-    node_to_subgraph_dict: Dict,
+    node_to_iso_leader: Dict[str, str],
+    subgraph_info: Dict,
+    node_to_subgraph: Dict,
     adjacent_subgraphs: Dict[str, set],
     is_first_node: bool,
     node_stack: List[List[str]],
@@ -682,9 +695,9 @@ def _fetch_and_process_next_isomorphic_nodes(
     Args:
         current_iso_nodes: Current set of isomorphic nodes to get the next nodes from.
         iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
-        node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
-        subgraphs_dict: Dict of information about each subgraph
-        node_to_subgraph_dict: Dict mapping each node to its subgraph
+        node_to_iso_leader: Reverse dict mapping each node to its isomorphism group.
+        subgraph_info: Dict of information about each subgraph
+        node_to_subgraph: Dict mapping each node to its subgraph
         adjacent_subgraphs: List of sets of adjacent subgraphs
         is_first_node: Whether it's the first node in the subgraph; if so, just do children, not parents to start.
         node_stack: List of lists of isomorphic nodes in the stack.
@@ -693,12 +706,12 @@ def _fetch_and_process_next_isomorphic_nodes(
     # to their own subgraph yet to avoid backtracking; if run into another subgraph, mark them
     # adjacent and skip.
 
-    successor_nodes_dict = _log_collisions_and_get_candidate_next_nodes(
+    frontier_nodes = _collect_frontier_and_detect_adjacency(
         self,
         current_iso_nodes,
         iso_node_groups,
-        node_to_iso_group_dict,
-        node_to_subgraph_dict,
+        node_to_iso_leader,
+        node_to_subgraph,
         adjacent_subgraphs,
         is_first_node,
     )
@@ -711,37 +724,37 @@ def _fetch_and_process_next_isomorphic_nodes(
             candidate_node_label,
             candidate_node_neighbor_type,
             candidate_node_subgraph,
-        ) = _get_next_candidate_node(successor_nodes_dict)
+        ) = _pop_frontier_node(frontier_nodes)
         if candidate_node_label is None:
             break
 
-        new_equivalent_nodes = _get_nodes_isomorphic_to_candidate_node(
+        new_equivalent_nodes = _find_isomorphic_matches(
             self,
             candidate_node_label,
             candidate_node_neighbor_type,
             candidate_node_subgraph,
-            successor_nodes_dict,
+            frontier_nodes,
         )
 
         # Now log this new set of isomorphic nodes.
 
-        _log_new_isomorphic_nodes(
+        _register_isomorphic_group(
             self,
             new_equivalent_nodes,
             iso_node_groups,
-            node_to_iso_group_dict,
-            subgraphs_dict,
-            node_to_subgraph_dict,
+            node_to_iso_leader,
+            subgraph_info,
+            node_to_subgraph,
             node_stack,
         )
 
 
-def _log_collisions_and_get_candidate_next_nodes(
+def _collect_frontier_and_detect_adjacency(
     self,
     current_iso_nodes: List[str],
     iso_node_groups: Dict[str, List[str]],
-    node_to_iso_group_dict: Dict[str, str],
-    node_to_subgraph_dict: Dict,
+    node_to_iso_leader: Dict[str, str],
+    node_to_subgraph: Dict,
     adjacent_subgraphs: Dict[str, set],
     is_first_node: bool,
 ) -> Dict:
@@ -758,67 +771,71 @@ def _log_collisions_and_get_candidate_next_nodes(
     else:
         node_types_to_use = ["children", "parents"]
 
-    successor_nodes_dict = OrderedDict()
+    frontier_nodes = OrderedDict()
     for node_label in current_iso_nodes:
         node = self[node_label]
-        node_subgraph = node_to_subgraph_dict[node_label]
-        node_subgraph_label = node_subgraph["starting_node"]
+        node_subgraph = node_to_subgraph[node_label]
+        node_subgraph_label = node_subgraph.starting_node
         subgraph_successor_nodes = {"children": [], "parents": []}
         for node_type in node_types_to_use:
             node_type_field = node_type_fields[node_type]
             for neighbor_label in getattr(node, node_type_field):
-                if neighbor_label in node_subgraph["node_set"]:  # skip if backtracking own subgraph
+                if neighbor_label in node_subgraph.node_set:  # skip if backtracking own subgraph
                     continue
                 elif (
-                    neighbor_label in node_to_subgraph_dict
+                    neighbor_label in node_to_subgraph
                 ):  # if hit another subgraph, mark them adjacent.
-                    _check_and_mark_subgraph_adjacency(
+                    _record_subgraph_adjacency(
                         node_label,
                         neighbor_label,
                         iso_node_groups,
-                        node_to_iso_group_dict,
-                        node_to_subgraph_dict,
+                        node_to_iso_leader,
+                        node_to_subgraph,
                         adjacent_subgraphs,
                     )
                 else:  # we have a new, non-overlapping node as a possible candiate, add it:
                     subgraph_successor_nodes[node_type].append(neighbor_label)
-        successor_nodes_dict[node_subgraph_label] = subgraph_successor_nodes
+        frontier_nodes[node_subgraph_label] = subgraph_successor_nodes
 
-    return successor_nodes_dict
+    return frontier_nodes
 
 
-def _check_and_mark_subgraph_adjacency(
+def _record_subgraph_adjacency(
     node_label: str,
     neighbor_label: str,
     iso_node_groups: Dict[str, List[str]],
-    node_to_iso_group_dict: Dict[str, str],
-    node_to_subgraph_dict: Dict,
+    node_to_iso_leader: Dict[str, str],
+    node_to_subgraph: Dict,
     adjacent_subgraphs: Dict[str, set],
 ):
     """Helper function that updates the adjacency status of two subgraphs"""
-    node_subgraph = node_to_subgraph_dict[node_label]
-    node_subgraph_label = node_subgraph["starting_node"]
-    neighbor_subgraph = node_to_subgraph_dict[neighbor_label]
-    neighbor_subgraph_label = neighbor_subgraph["starting_node"]
+    node_subgraph = node_to_subgraph[node_label]
+    node_subgraph_label = node_subgraph.starting_node
+    neighbor_subgraph = node_to_subgraph[neighbor_label]
+    neighbor_subgraph_label = neighbor_subgraph.starting_node
 
     # Subgraphs are adjacent if the node in the neighboring subgraph has an
     # isomorphic node in the current subgraph.
 
-    neighbor_iso_group = node_to_iso_group_dict[neighbor_label]
+    neighbor_iso_group = node_to_iso_leader[neighbor_label]
     nodes_isomorphic_to_neighbor_node = iso_node_groups[neighbor_iso_group]
-    if len(node_subgraph["node_set"].intersection(nodes_isomorphic_to_neighbor_node)) == 0:
+    if len(node_subgraph.node_set.intersection(nodes_isomorphic_to_neighbor_node)) == 0:
         return
 
     # Update adjacency
     if (node_subgraph_label in adjacent_subgraphs) and (
         neighbor_subgraph_label in adjacent_subgraphs
     ):
-        node_set = adjacent_subgraphs[node_subgraph_label]
-        neighbor_set = adjacent_subgraphs[neighbor_subgraph_label]
-        if node_set is not neighbor_set:
-            merged = node_set | neighbor_set
-            for label in merged:
-                adjacent_subgraphs[label] = merged
+        if (
+            adjacent_subgraphs[node_subgraph_label]
+            is not adjacent_subgraphs[neighbor_subgraph_label]
+        ):
+            merged = (
+                adjacent_subgraphs[node_subgraph_label]
+                | adjacent_subgraphs[neighbor_subgraph_label]
+            )
+            for s in merged:
+                adjacent_subgraphs[s] = merged
         return
     elif (node_subgraph_label in adjacent_subgraphs) and (
         neighbor_subgraph_label not in adjacent_subgraphs
@@ -832,23 +849,23 @@ def _check_and_mark_subgraph_adjacency(
         adjacent_subgraphs[node_subgraph_label] = adjacent_subgraphs[neighbor_subgraph_label]
     else:
         new_adj_set = {node_subgraph_label, neighbor_subgraph_label}
-        adjacent_subgraphs[neighbor_subgraph_label] = new_adj_set
         adjacent_subgraphs[node_subgraph_label] = new_adj_set
+        adjacent_subgraphs[neighbor_subgraph_label] = new_adj_set
 
 
-def _get_next_candidate_node(
-    successor_nodes_dict: Dict,
+def _pop_frontier_node(
+    frontier_nodes: Dict,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Helper function to grab the next candidate node to consider out of the possible successor nodes.
 
     Args:
-        successor_nodes_dict: Dict of successor nodes from the set of subgraphs being considered
+        frontier_nodes: Dict of successor nodes from the set of subgraphs being considered
 
     Returns:
 
     """
-    for subgraph_label, neighbor_type in it.product(successor_nodes_dict, ["children", "parents"]):
-        subgraph_neighbors = successor_nodes_dict[subgraph_label][neighbor_type]
+    for subgraph_label, neighbor_type in it.product(frontier_nodes, ["children", "parents"]):
+        subgraph_neighbors = frontier_nodes[subgraph_label][neighbor_type]
         if len(subgraph_neighbors) > 0:
             candidate_node_label = subgraph_neighbors.pop(0)
             candidate_node_neighbor_type = neighbor_type
@@ -861,12 +878,12 @@ def _get_next_candidate_node(
     return None, None, None
 
 
-def _get_nodes_isomorphic_to_candidate_node(
+def _find_isomorphic_matches(
     self,
     candidate_node_label: str,
     candidate_node_neighbor_type: str,
     candidate_node_subgraph: str,
-    successor_nodes_dict: Dict,
+    frontier_nodes: Dict,
 ) -> List[Tuple[str, str]]:
     """Finds nodes that are isomorphic with a candidate node.
 
@@ -874,7 +891,7 @@ def _get_nodes_isomorphic_to_candidate_node(
         candidate_node_label: Label of candidate node
         candidate_node_neighbor_type: Whether the candidate node is a child or parent node
         candidate_node_subgraph: Subgraph of the candidate node
-        successor_nodes_dict: Dict keeping track of possible successor nodes
+        frontier_nodes: Dict keeping track of possible successor nodes
 
     Returns:
         List of nodes isomorphic with the candidate node
@@ -882,10 +899,10 @@ def _get_nodes_isomorphic_to_candidate_node(
     candidate_node = self[candidate_node_label]
     candidate_node_operation_equivalence_type = candidate_node.operation_equivalence_type
     new_equivalent_nodes = [(candidate_node_label, candidate_node_subgraph)]
-    for subgraph_label in successor_nodes_dict:
+    for subgraph_label in frontier_nodes:
         if subgraph_label == candidate_node_subgraph:  # ignore same subgraph
             continue
-        other_subgraph_nodes = successor_nodes_dict[subgraph_label][candidate_node_neighbor_type]
+        other_subgraph_nodes = frontier_nodes[subgraph_label][candidate_node_neighbor_type]
         for c, comparison_node_label in enumerate(other_subgraph_nodes):
             comparison_node = self[comparison_node_label]
             if (
@@ -904,13 +921,13 @@ def _get_nodes_isomorphic_to_candidate_node(
     return new_equivalent_nodes
 
 
-def _log_new_isomorphic_nodes(
+def _register_isomorphic_group(
     self,
     new_isomorphic_nodes: List[Tuple[str, str]],
     iso_node_groups: Dict[str, List[str]],
-    node_to_iso_group_dict: Dict[str, str],
-    subgraphs_dict: Dict,
-    node_to_subgraph_dict: Dict,
+    node_to_iso_leader: Dict[str, str],
+    subgraph_info: Dict,
+    node_to_subgraph: Dict,
     node_stack: List[List[str]],
 ):
     """Takes a new set of equivalent nodes, and logs them as equivalent, adds them to their subgraphs,
@@ -919,9 +936,9 @@ def _log_new_isomorphic_nodes(
     Args:
         new_isomorphic_nodes: Current set of isomorphic nodes to get the next nodes from.
         iso_node_groups: Dict mapping each isomorphism node group to the list of nodes in it.
-        node_to_iso_group_dict: Reverse dict mapping each node to its isomorphism group.
-        subgraphs_dict: Dict of information about each subgraph
-        node_to_subgraph_dict: Dict mapping each node to its subgraph
+        node_to_iso_leader: Reverse dict mapping each node to its isomorphism group.
+        subgraph_info: Dict of information about each subgraph
+        node_to_subgraph: Dict mapping each node to its subgraph
         node_stack: List of lists of isomorphic nodes in the stack.
     """
     if len(new_isomorphic_nodes) > 0:
@@ -929,20 +946,20 @@ def _log_new_isomorphic_nodes(
         equivalent_node_labels = [tup[0] for tup in new_isomorphic_nodes]
         iso_node_groups[iso_group_label] = equivalent_node_labels[:]
         for node_label in equivalent_node_labels:
-            node_to_iso_group_dict[node_label] = iso_group_label
+            node_to_iso_leader[node_label] = iso_group_label
         for node_label, node_subgraph in new_isomorphic_nodes:
             node = self[node_label]
-            subgraphs_dict[node_subgraph]["node_set"].add(node_label)
+            subgraph_info[node_subgraph].node_set.add(node_label)
             if node.computed_with_params:
-                subgraphs_dict[node_subgraph]["param_nodes"].add(node_label)
-            node_to_subgraph_dict[node_label] = subgraphs_dict[node_subgraph]
+                subgraph_info[node_subgraph].param_nodes.add(node_label)
+            node_to_subgraph[node_label] = subgraph_info[node_subgraph]
         node_stack.append(equivalent_node_labels)
 
 
-def _assign_and_log_isomorphic_nodes_to_same_layers(
+def _finalize_layer_assignments(
     self,
     iso_node_groups: Dict[str, List],
-    node_to_subgraph_dict: Dict,
+    node_to_subgraph: Dict,
     adjacent_subgraphs: Dict,
 ):
     """After extending the subgraphs to maximum size and identifying adjacent subgraphs,
@@ -952,16 +969,16 @@ def _assign_and_log_isomorphic_nodes_to_same_layers(
 
     Args:
         iso_node_groups: Dict specifying list of isomorphic nodes in each group
-        node_to_subgraph_dict: Dict mapping each node to the subgraph its in.
+        node_to_subgraph: Dict mapping each node to the subgraph its in.
         adjacent_subgraphs: Dict mapping each subgraph to set of adjacent subgraphs.
     """
     # Go through each set of isomorphic nodes, and further partition them into nodes assigned to same layer:
-    same_layer_node_groups = _group_isomorphic_nodes_to_same_layers(
-        self, iso_node_groups, node_to_subgraph_dict, adjacent_subgraphs
+    merged_layer_groups = _merge_iso_groups_to_layers(
+        self, iso_node_groups, node_to_subgraph, adjacent_subgraphs
     )
 
     # Finally, label the nodes corresponding to the same layer.
-    for layer_label, layer_nodes in same_layer_node_groups.items():
+    for layer_label, layer_nodes in merged_layer_groups.items():
         # Skip if the new layer asssignment reduces the number of equivalent layers.
         if len(layer_nodes) < max(
             [len(self[layer].same_layer_operations) for layer in layer_nodes]
@@ -977,27 +994,27 @@ def _assign_and_log_isomorphic_nodes_to_same_layers(
             node.layer_passes_total = len(layer_nodes)
 
 
-def _group_isomorphic_nodes_to_same_layers(
+def _merge_iso_groups_to_layers(
     self,
     iso_node_groups: Dict[str, List],
-    node_to_subgraph_dict: Dict,
+    node_to_subgraph: Dict,
     adjacent_subgraphs: Dict,
 ) -> Dict:
-    same_layer_node_groups = defaultdict(set)  # dict of nodes assigned to the same layer
-    node_to_layer_group_dict = {}  # reverse mapping: each node to its equivalent layer group
+    merged_layer_groups = defaultdict(set)  # dict of nodes assigned to the same layer
+    node_to_layer_leader = {}  # reverse mapping: each node to its equivalent layer group
 
     for iso_group_label, iso_nodes_orig in iso_node_groups.items():
         iso_nodes = sorted(iso_nodes_orig)
         for node1_label, node2_label in it.combinations(iso_nodes, 2):
-            node1_subgraph = node_to_subgraph_dict[node1_label]
-            node2_subgraph = node_to_subgraph_dict[node2_label]
-            node1_subgraph_label = node1_subgraph["starting_node"]
-            node2_subgraph_label = node2_subgraph["starting_node"]
+            node1_subgraph = node_to_subgraph[node1_label]
+            node2_subgraph = node_to_subgraph[node2_label]
+            node1_subgraph_label = node1_subgraph.starting_node
+            node2_subgraph_label = node2_subgraph.starting_node
             node1_param_types = [
-                self[pnode].operation_equivalence_type for pnode in node1_subgraph["param_nodes"]
+                self[pnode].operation_equivalence_type for pnode in node1_subgraph.param_nodes
             ]
             node2_param_types = [
-                self[pnode].operation_equivalence_type for pnode in node2_subgraph["param_nodes"]
+                self[pnode].operation_equivalence_type for pnode in node2_subgraph.param_nodes
             ]
             overlapping_param_types = set(node1_param_types).intersection(set(node2_param_types))
             subgraphs_are_adjacent = (
@@ -1008,35 +1025,15 @@ def _group_isomorphic_nodes_to_same_layers(
                 earlier_node_label = sorted([node1_label, node2_label])[
                     0
                 ]  # layer label always the first node
-                if earlier_node_label in node_to_layer_group_dict:
-                    layer_group = node_to_layer_group_dict[earlier_node_label]
+                if earlier_node_label in node_to_layer_leader:
+                    layer_group = node_to_layer_leader[earlier_node_label]
                 else:
                     layer_group = earlier_node_label
-                same_layer_node_groups[layer_group].update({node1_label, node2_label})
-                node_to_layer_group_dict[node1_label] = layer_group
-                node_to_layer_group_dict[node2_label] = layer_group
+                merged_layer_groups[layer_group].update({node1_label, node2_label})
+                node_to_layer_leader[node1_label] = layer_group
+                node_to_layer_leader[node2_label] = layer_group
 
-    # After pairwise grouping, check for iso nodes left ungrouped.
-    # This handles the case where the last iteration of a loop has a small
-    # subgraph that isn't adjacent to any other subgraph and has no params.
-    for iso_group_label, iso_nodes_orig in iso_node_groups.items():
-        iso_nodes = set(iso_nodes_orig)
-        grouped_nodes = set()
-        iso_group_layer = None
-        iso_group_size = 0
-        for layer_group, group_nodes in same_layer_node_groups.items():
-            overlap = iso_nodes & group_nodes
-            if overlap and len(group_nodes) > iso_group_size:
-                iso_group_size = len(group_nodes)
-                iso_group_layer = layer_group
-                grouped_nodes |= overlap
-        ungrouped = iso_nodes - grouped_nodes
-        if ungrouped and iso_group_layer is not None and iso_group_size >= 2:
-            same_layer_node_groups[iso_group_layer].update(ungrouped)
-            for node_label in ungrouped:
-                node_to_layer_group_dict[node_label] = iso_group_layer
-
-    return same_layer_node_groups
+    return merged_layer_groups
 
 
 def _fix_modules_for_internal_tensors(self):
@@ -1564,8 +1561,6 @@ def _add_lookup_keys_for_tensor_entry(
     Args:
         tensor_entry: TensorLogEntry to get the lookup keys for.
     """
-    tensor_entry.index_in_saved_log = tensor_index
-
     # The "default" keys: including the pass if multiple passes, excluding if one pass.
     lookup_keys_for_tensor = [
         tensor_entry.layer_label,

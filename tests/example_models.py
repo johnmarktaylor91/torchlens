@@ -1312,3 +1312,174 @@ class PropertyModel(nn.Module):
         m2 = m.mT.mean()
         out = r * i / m2 + t2.mean()
         return out
+
+
+#  ****************************************************
+#  **** Edge-Case Loop Detection Test Models ****
+#  ****************************************************
+
+
+class ParallelLoops(nn.Module):
+    """Two independent loops on separate branches, same op types."""
+
+    @staticmethod
+    def forward(x):
+        a = x + 1
+        b = x + 2
+        for _ in range(3):
+            a = torch.sin(a)
+        for _ in range(3):
+            b = torch.sin(b)
+        return a + b
+
+
+class SharedParamLoopExternal(nn.Module):
+    """Same Linear used both inside and outside a loop."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        for _ in range(3):
+            x = self.fc(x)
+        x = self.fc(x)
+        return x
+
+
+class InterleavedSharedParamLoops(nn.Module):
+    """Same Linear used in two distinct loops with different surrounding ops."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.relu(x)
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.sigmoid(x)
+        return x
+
+
+class NestedLoopsIndependentParams(nn.Module):
+    """Outer loop uses fc_outer, inner loop uses fc_inner. Different params per level."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc_outer = nn.Linear(5, 5)
+        self.fc_inner = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc_outer(x)
+            for _ in range(2):
+                x = self.fc_inner(x)
+        return x
+
+
+class SelfFeedingNoParam(nn.Module):
+    """Output of each iteration feeds directly as input to next, no params."""
+
+    @staticmethod
+    def forward(x):
+        for _ in range(4):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        return x
+
+
+class DiamondLoop(nn.Module):
+    """Loop body has a diamond: split into two paths, then merge."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc(x)
+            a = torch.sin(x)
+            b = torch.cos(x)
+            x = a + b
+        return x
+
+
+class AccumulatorLoop(nn.Module):
+    """Loop appends to output list each iteration."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        outputs = []
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.relu(x)
+            outputs.append(x)
+        return torch.stack(outputs)
+
+
+class SingleIterationLoop(nn.Module):
+    """Loop that runs exactly once — should NOT be detected as multi-pass."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(1):
+            x = self.fc(x)
+            x = torch.relu(x)
+        return x
+
+
+class LongLoop(nn.Module):
+    """Many iterations to test O(n^2) pairwise merge performance."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(20):
+            x = self.fc(x)
+            x = torch.relu(x)
+        return x
+
+
+class DataDependentBranchLoop(nn.Module):
+    """Branch inside loop — some iterations take different paths."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for i in range(4):
+            x = self.fc(x)
+            if i % 2 == 0:
+                x = torch.relu(x)
+            else:
+                x = torch.sigmoid(x)
+        return x
+
+
+class SequentialParamFreeLoops(nn.Module):
+    """Two back-to-back param-free loops with identical ops.
+    Tests that adjacency correctly separates them."""
+
+    @staticmethod
+    def forward(x):
+        for _ in range(3):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        x = x + 1
+        for _ in range(3):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        return x

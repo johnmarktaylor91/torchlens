@@ -117,7 +117,6 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "layer_label_raw",
     "operation_num",
     "realtime_tensor_num",
-    "index_in_saved_log",
     "source_model_history",
     "_pass_finished",
     # Other labeling info

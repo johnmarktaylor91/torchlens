@@ -159,7 +159,7 @@ def decorate_pytorch(
             except (AttributeError, TypeError):
                 pass
 
-        elif type(orig_func) == getset_class:
+        elif type(orig_func) is getset_class:
             getter_orig, setter_orig, deleter_orig = (
                 orig_func.__get__,
                 orig_func.__set__,
