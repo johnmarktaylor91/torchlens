@@ -331,14 +331,9 @@ def test_gpt2():
 
 
 def test_stable_diffusion():
-    try:
-        import UNet
-    except ModuleNotFoundError:
-        pytest.skip("UNet not available")
-
-    model = UNet(3, 16, 10)
+    model = example_models.ContextUnet(3, 16, 10)
     model_inputs = (
-        torch.rand(6, 3, 224, 224),
+        torch.rand(1, 3, 28, 28),
         torch.tensor([1]),
         torch.tensor([1.0]),
         torch.tensor([3.0]),

@@ -671,10 +671,17 @@ def _perturb_layer_activations(
         mean_output += torch.rand(mean_output.shape, device=mean_output.device) * 100
         mean_output *= torch.rand(mean_output.shape, device=mean_output.device)
         mean_output.requires_grad = False
-        perturbed_activations = torch.randn_like(
-            parent_activations.float(), device=device
-        ) * mean_output.to(device)
-        perturbed_activations = perturbed_activations.type(parent_activations.dtype)
+        scale = mean_output.to(device)
+        if parent_activations.is_complex():
+            perturbed_activations = torch.complex(
+                torch.randn(parent_activations.shape, device=device) * scale,
+                torch.randn(parent_activations.shape, device=device) * scale,
+            ).type(parent_activations.dtype)
+        else:
+            perturbed_activations = (
+                torch.randn_like(parent_activations.float(), device=device) * scale
+            )
+            perturbed_activations = perturbed_activations.type(parent_activations.dtype)
 
     return perturbed_activations
 
