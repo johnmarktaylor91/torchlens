@@ -9,11 +9,13 @@ import torch
 
 from .constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from .helper_funcs import (
+    clean_to,
     get_vars_of_type_from_obj,
     human_readable_size,
     identity,
     log_current_rng_states,
     safe_copy,
+    tensor_nanequal,
     _get_call_stack_dicts,
 )
 from .tensor_log import RolledTensorLogEntry, TensorLogEntry
@@ -227,11 +229,22 @@ def _add_output_layers(
         # Track child tensor variations for output nodes.
         new_output_node.has_child_tensor_variations = False
         new_output_node.children_tensor_versions = {}
-        if output_node.has_child_tensor_variations:
-            output_node.children_tensor_versions[new_output_node.tensor_label_raw] = safe_copy(
-                output_tensors[i]
-            )
-            new_output_node.tensor_contents = safe_copy(output_tensors[i])
+        if output_node.has_saved_activations:
+            actual_output = safe_copy(output_tensors[i])
+            if output_node.output_device not in [str(actual_output.device), "same"]:
+                actual_output = clean_to(actual_output, output_node.output_device)
+            if self.activation_postfunc is not None:
+                self._pause_logging = True
+                try:
+                    actual_output = self.activation_postfunc(actual_output)
+                finally:
+                    self._pause_logging = False
+            if not tensor_nanequal(actual_output, output_node.tensor_contents):
+                output_node.children_tensor_versions[new_output_node.tensor_label_raw] = (
+                    actual_output
+                )
+                output_node.has_child_tensor_variations = True
+                new_output_node.tensor_contents = actual_output
 
         # Change original output node:
 
@@ -532,6 +545,33 @@ def _detect_and_label_loops(self):
         # Else, start from this node and any equivalent operations, and work forward, finding
         # more equivalent operations:
         _expand_isomorphic_subgraphs(self, node)
+
+    # Cleanup: rebuild same_layer_operations and pass numbers from layer_label_raw.
+    # Multiple rounds of _expand_isomorphic_subgraphs can reassign a node to a new group
+    # while leaving stale references in the old group's members. Rebuilding from
+    # layer_label_raw (the authoritative group key) fixes this.
+    _rebuild_pass_assignments(self)
+
+
+def _rebuild_pass_assignments(self):
+    """Rebuild same_layer_operations and pass numbers from layer_label_raw.
+
+    Multiple rounds of _expand_isomorphic_subgraphs can reassign a node to a new group
+    (via _finalize_layer_assignments) while leaving stale references in the old group's
+    same_layer_operations. This function groups all tensors by their current layer_label_raw
+    (the authoritative group key) and rebuilds consistent pass assignments.
+    """
+    groups = defaultdict(list)
+    for entry in self:
+        groups[entry.layer_label_raw].append(entry.tensor_label_raw)
+
+    for raw_label, members in groups.items():
+        members_sorted = sorted(members, key=lambda x: self[x].realtime_tensor_num)
+        for n, member_label in enumerate(members_sorted):
+            member = self[member_label]
+            member.same_layer_operations = members_sorted
+            member.pass_num = n + 1
+            member.layer_passes_total = len(members_sorted)
 
 
 def _expand_isomorphic_subgraphs(self, node: TensorLogEntry):
