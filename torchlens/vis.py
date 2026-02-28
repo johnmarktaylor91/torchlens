@@ -436,13 +436,22 @@ def _get_node_address_shape_color(
 def _check_if_only_non_buffer_in_module(
     self: "ModelHistory", node: Union["TensorLogEntry", "RolledTensorLogEntry"]
 ):
-    """Utility function to check if a layer is the only non-buffer layer in the module"""
+    """Utility function to check if a layer is the only non-buffer layer in a
+    leaf module (one with no child submodules).  Container modules with
+    functional ops at the end should NOT match — those ops are rendered as
+    ovals, not boxes (issue #48).
+    """
     # Check whether it leaves its module:
     if not (
         (len(node.modules_exited) > 0)
         and (len(node.containing_modules_origin_nested) > 0)
         and (node.containing_modules_origin_nested[-1].split(":")[0] in node.modules_exited)
     ):
+        return False
+
+    # Only apply box rendering for leaf modules (no child submodules).
+    exited_module = node.containing_modules_origin_nested[-1].split(":")[0]
+    if len(self.module_children.get(exited_module, [])) > 0:
         return False
 
     # Now check whether all of its parents are either buffers, or are outside the module.

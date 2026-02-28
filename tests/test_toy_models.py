@@ -1763,3 +1763,27 @@ def test_tuple_input_single_arg():
     assert mh is not None
     assert len(mh.layer_labels) > 0
     assert validate_saved_activations(model, input_tuple)
+
+
+# =============================================================================
+# Regression: issue #48 — functional ops at module end rendered as boxes
+# =============================================================================
+
+
+def test_functional_after_submodule_not_box():
+    """Functional ops at the end of container modules should be ovals, not boxes (issue #48).
+
+    A torch.relu after a nn.Linear inside a container module should not get
+    box-shaped rendering (which is reserved for module outputs).
+    """
+    from torchlens.vis import _get_node_address_shape_color
+
+    model = example_models.FunctionalAfterSubmodule()
+    x = torch.rand(2, 5)
+    mh = log_forward_pass(model, x)
+    # Find the relu layer
+    relu_layers = [label for label in mh.layer_labels if "relu" in label.lower()]
+    assert len(relu_layers) > 0, "No relu layer found"
+    relu_entry = mh[relu_layers[0]]
+    _, shape, _ = _get_node_address_shape_color(mh, relu_entry, show_buffer_layers=False)
+    assert shape == "oval", f"Functional relu should be oval, got {shape}"
