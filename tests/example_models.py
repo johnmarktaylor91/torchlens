@@ -1746,3 +1746,19 @@ class WrappedInputModel(nn.Module):
 
     def forward(self, wrapper):
         return self.linear(wrapper.tensor)
+
+
+class TupleInputModel(nn.Module):
+    """Model that takes a single tuple of tensors as its only argument.
+
+    Used to test that torchlens does not incorrectly unpack the tuple into
+    multiple positional args (issue #43).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 5)
+
+    def forward(self, x):
+        a, b = x
+        return self.linear(a) + self.linear(b)
