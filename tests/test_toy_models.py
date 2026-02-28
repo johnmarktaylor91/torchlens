@@ -1787,3 +1787,25 @@ def test_functional_after_submodule_not_box():
     relu_entry = mh[relu_layers[0]]
     _, shape, _ = _get_node_address_shape_color(mh, relu_entry, show_buffer_layers=False)
     assert shape == "oval", f"Functional relu should be oval, got {shape}"
+
+
+# =============================================================================
+# Regression: issue #46 — output layer tensor_contents None with layers_to_save
+# =============================================================================
+
+
+def test_output_layer_saved_with_layers_to_save():
+    """Output layers should have tensor_contents even when layers_to_save is a subset (issue #46).
+
+    The output layer copies tensor_contents from its parent, so the parent must
+    also be saved during the fast pass.
+    """
+    model = example_models.FunctionalAfterSubmodule()
+    x = torch.rand(2, 5)
+    # Save only the relu layer (not explicitly the output)
+    mh = log_forward_pass(model, x, layers_to_save=["relu_1"])
+    for label in mh.output_layers:
+        entry = mh[label]
+        assert entry.tensor_contents is not None, (
+            f"Output layer {label} should have tensor_contents"
+        )
