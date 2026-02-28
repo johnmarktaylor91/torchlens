@@ -830,6 +830,19 @@ def test_taskonomy(default_input1):
 # =============================================================================
 
 
+def test_video_r2plus1_18():
+    model = torchvision.models.video.r2plus1d_18()
+    model_input = torch.randn(16, 3, 16, 112, 112)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r2plus1d_18"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
 def test_video_mc3_18():
     model = torchvision.models.video.mc3_18()
     model_input = torch.randn(6, 3, 16, 112, 112)

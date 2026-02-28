@@ -196,6 +196,47 @@ class ModelHistory:
             return iter(list(self._raw_tensor_dict.values()))
 
     # ********************************************
+    # ************* FLOPs Properties *************
+    # ********************************************
+
+    @property
+    def total_flops_forward(self) -> int:
+        """Total forward FLOPs across all layers (skipping None/unknown)."""
+        return sum(
+            entry.flops_forward for entry in self.layer_list if entry.flops_forward is not None
+        )
+
+    @property
+    def total_flops_backward(self) -> int:
+        """Total backward FLOPs across all layers (skipping None/unknown)."""
+        return sum(
+            entry.flops_backward for entry in self.layer_list if entry.flops_backward is not None
+        )
+
+    @property
+    def total_flops(self) -> int:
+        """Total FLOPs (forward + backward)."""
+        return self.total_flops_forward + self.total_flops_backward
+
+    def flops_by_type(self) -> Dict[str, Dict[str, int]]:
+        """Group FLOPs by layer type.
+
+        Returns:
+            Dict mapping layer_type to {"forward": int, "backward": int, "count": int}.
+        """
+        result: Dict[str, Dict[str, int]] = {}
+        for entry in self.layer_list:
+            lt = entry.layer_type
+            if lt not in result:
+                result[lt] = {"forward": 0, "backward": 0, "count": 0}
+            result[lt]["count"] += 1
+            if entry.flops_forward is not None:
+                result[lt]["forward"] += entry.flops_forward
+            if entry.flops_backward is not None:
+                result[lt]["backward"] += entry.flops_backward
+        return result
+
+    # ********************************************
     # ******** Assign Imported Methods ***********
     # ********************************************
 

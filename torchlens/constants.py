@@ -160,6 +160,8 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "func_applied_name",
     "func_call_stack",
     "func_time_elapsed",
+    "flops_forward",
+    "flops_backward",
     "func_rng_states",
     "func_argnames",
     "num_func_args_total",
