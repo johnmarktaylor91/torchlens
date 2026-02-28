@@ -832,7 +832,7 @@ def test_taskonomy(default_input1):
 
 def test_video_r2plus1_18():
     model = torchvision.models.video.r2plus1d_18()
-    model_input = torch.randn(16, 3, 16, 112, 112)
+    model_input = torch.randn(1, 3, 1, 112, 112)
     show_model_graph(
         model,
         model_input,
