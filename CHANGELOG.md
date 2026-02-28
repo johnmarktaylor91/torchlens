@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v0.6.2 (2026-02-28)
+
+### Bug Fixes
+
+- **postprocess**: Correct _merge_buffer_entries call convention
+  ([#47](https://github.com/johnmarktaylor91/torchlens/pull/47),
+  [`0e539c4`](https://github.com/johnmarktaylor91/torchlens/commit/0e539c4dbd113e066e02c447cd3f5744247c2f27))
+
+_merge_buffer_entries is a module-level function, not a method on ModelHistory. Fixes AttributeError
+  when processing recurrent models with duplicate buffer entries.
+
+Based on gilmoright's contribution in PR #56.
+
+
 ## v0.6.1 (2026-02-28)
 
 ### Bug Fixes
