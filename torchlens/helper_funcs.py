@@ -103,6 +103,44 @@ def safe_copy_kwargs(kwargs: dict) -> dict:
     return {key: _safe_copy_arg(val) for key, val in kwargs.items()}
 
 
+def _model_expects_single_arg(model: nn.Module) -> Optional[bool]:
+    """Check if the model's forward expects exactly 1 positional arg (excluding self).
+
+    Returns True if exactly 1, False if not, None if introspection fails.
+    """
+    try:
+        spec = inspect.getfullargspec(model.forward)
+    except (TypeError, ValueError):
+        return None
+    named_args = [a for a in spec.args if a != "self"]
+    if spec.varargs is not None:
+        return False
+    return len(named_args) == 1
+
+
+def normalize_input_args(input_args, model: nn.Module) -> list:
+    """Normalize input_args into a list suitable for `model(*input_args)`.
+
+    Handles the ambiguity when the user passes a tuple or list: it could be
+    multiple positional args, or a single arg that happens to be a
+    tuple/list (issue #43).  Resolves the ambiguity by checking the model's
+    forward signature.
+    """
+    if type(input_args) in (tuple, list):
+        single = _model_expects_single_arg(model)
+        if single and len(input_args) != 1:
+            # Model expects 1 arg; the tuple/list IS the arg.
+            input_args = [input_args]
+        elif type(input_args) is tuple:
+            input_args = list(input_args)
+        # If already a list and not wrapping, leave as-is.
+    elif input_args is not None:
+        input_args = [input_args]
+    if not input_args:
+        input_args = []
+    return input_args
+
+
 def make_random_barcode(barcode_len: int = 8) -> str:
     """Generates a random integer hash for a layer to use as internal label (invisible from user side).
 

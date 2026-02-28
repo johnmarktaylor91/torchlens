@@ -15,6 +15,7 @@ from .helper_funcs import (
     nested_assign,
     safe_copy_args,
     safe_copy_kwargs,
+    normalize_input_args,
 )
 from .logging_funcs import log_source_tensor
 from .interface import _give_user_feedback_about_lookup_key
@@ -98,6 +99,10 @@ def _fetch_label_move_input_tensors(
         for kwarg in input_kwargs.values()
     ]
     for a, arg in enumerate(input_args):
+        # Convert tuples to lists for device-moving (tuples are immutable)
+        was_tuple = isinstance(arg, tuple)
+        if was_tuple:
+            input_args[a] = list(arg)
         for i, (t, addr, addr_full) in enumerate(input_arg_tensors[a]):
             t_moved = t.to(model_device)
             input_arg_tensors[a][i] = (t_moved, addr, addr_full)
@@ -105,6 +110,8 @@ def _fetch_label_move_input_tensors(
                 input_args[a] = t_moved
             else:
                 nested_assign(input_args[a], addr_full, t_moved)
+        if was_tuple and isinstance(input_args[a], list):
+            input_args[a] = tuple(input_args[a])
 
     for k, (key, val) in enumerate(input_kwargs.items()):
         for i, (t, addr, addr_full) in enumerate(input_kwarg_tensors[k]):
@@ -162,19 +169,13 @@ def run_and_log_inputs_through_model(
 
     self._tensor_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
 
-    if type(input_args) is tuple:
-        input_args = list(input_args)
-    elif (type(input_args) not in [list, tuple]) and (input_args is not None):
-        input_args = [input_args]
+    if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
+        model = model.module
 
-    if not input_args:
-        input_args = []
+    input_args = normalize_input_args(input_args, model)
 
     if not input_kwargs:
         input_kwargs = {}
-
-    if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
-        model = model.module
 
     if len(list(model.parameters())) > 0:
         model_device = next(iter(model.parameters())).device

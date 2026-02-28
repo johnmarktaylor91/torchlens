@@ -1744,3 +1744,22 @@ def test_wrapped_input_no_deepcopy_hang():
     assert len(mh.layer_labels) > 0
     # Original tensor should not have been mutated (same-device case)
     assert torch.equal(wrapper.tensor, original_data)
+
+
+# =============================================================================
+# Regression: issue #43 — tuple of tensors as single forward arg
+# =============================================================================
+
+
+def test_tuple_input_single_arg():
+    """Ensure a tuple of tensors passed as a single arg is not unpacked (issue #43).
+
+    When a model's forward() expects a single argument that IS a tuple,
+    torchlens should not split it into multiple positional args.
+    """
+    model = example_models.TupleInputModel()
+    input_tuple = (torch.rand(5, 5), torch.rand(5, 5))
+    mh = log_forward_pass(model, input_tuple)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    assert validate_saved_activations(model, input_tuple)
