@@ -140,6 +140,7 @@ class ModelHistory:
         self.module_layers: Dict = defaultdict(list)
         self.module_pass_layers: Dict = defaultdict(list)
         self.module_layer_argnames = defaultdict(list)
+        self.module_training_modes: Dict[str, bool] = {}
 
         # Time elapsed:
         self.pass_start_time: float = 0

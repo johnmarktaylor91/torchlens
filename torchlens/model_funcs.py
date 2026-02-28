@@ -138,6 +138,7 @@ def module_forward_decorator(model_log, orig_forward: Callable, module: nn.Modul
 
         # "Pre-hook" operations:
         module_address = module.tl_module_address
+        model_log.module_training_modes[module_address] = module.training
         module.tl_module_pass_num += 1
         module_pass_label = (module_address, module.tl_module_pass_num)
         module.tl_module_pass_labels.append(module_pass_label)

@@ -1,4 +1,3 @@
-import copy
 import os
 import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -8,7 +7,14 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from .helper_funcs import get_vars_of_type_from_obj, set_random_seed, warn_parallel
+from .helper_funcs import (
+    get_vars_of_type_from_obj,
+    set_random_seed,
+    warn_parallel,
+    safe_copy_args,
+    safe_copy_kwargs,
+    normalize_input_args,
+)
 from .model_history import (
     ModelHistory,
 )
@@ -334,16 +340,11 @@ def validate_saved_activations(
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
-    if type(input_args) is tuple:
-        input_args = list(input_args)
-    elif (type(input_args) not in [list, tuple]) and (input_args is not None):
-        input_args = [input_args]
-    if not input_args:
-        input_args = []
+    input_args = normalize_input_args(input_args, model)
     if not input_kwargs:
         input_kwargs = {}
-    input_args_copy = [copy.deepcopy(arg) for arg in input_args]
-    input_kwargs_copy = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
+    input_args_copy = safe_copy_args(input_args)
+    input_kwargs_copy = safe_copy_kwargs(input_kwargs)
     state_dict = model.state_dict()
     ground_truth_output_all = get_vars_of_type_from_obj(
         model(*input_args_copy, **input_kwargs_copy),
