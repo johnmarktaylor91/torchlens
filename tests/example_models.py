@@ -1776,3 +1776,25 @@ class FunctionalAfterSubmodule(nn.Module):
 
     def forward(self, x):
         return torch.relu(self.linear(x))
+
+
+class StochasticDepthModel(nn.Module):
+    """Model with stochastic depth (dropout-like skip) that changes the
+    computational graph between forward passes unless RNG state is restored.
+
+    Used to test that the two-pass architecture handles stochastic models
+    correctly (issue #58).
+    """
+
+    def __init__(self, drop_prob=0.5):
+        super().__init__()
+        self.linear1 = nn.Linear(5, 5)
+        self.linear2 = nn.Linear(5, 5)
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        x = self.linear1(x)
+        # Stochastic depth: randomly skip linear2
+        if self.training and torch.rand(1).item() < self.drop_prob:
+            return x
+        return self.linear2(x)
