@@ -225,14 +225,12 @@ def _add_output_layers(
         self.equivalent_operations[equiv_type].add(new_output_node.tensor_label_raw)
 
         # Track child tensor variations for output nodes.
-        # Always store for output nodes (few per model, negligible cost).
         new_output_node.has_child_tensor_variations = False
         new_output_node.children_tensor_versions = {}
-        if output_node.has_saved_activations:
+        if output_node.has_child_tensor_variations:
             output_node.children_tensor_versions[new_output_node.tensor_label_raw] = safe_copy(
                 output_tensors[i]
             )
-            output_node.has_child_tensor_variations = True
             new_output_node.tensor_contents = safe_copy(output_tensors[i])
 
         # Change original output node:
