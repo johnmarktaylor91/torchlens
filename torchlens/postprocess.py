@@ -9,13 +9,11 @@ import torch
 
 from .constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
 from .helper_funcs import (
-    clean_to,
     get_vars_of_type_from_obj,
     human_readable_size,
     identity,
     log_current_rng_states,
     safe_copy,
-    tensor_nanequal,
     _get_call_stack_dicts,
 )
 from .tensor_log import RolledTensorLogEntry, TensorLogEntry
@@ -226,31 +224,16 @@ def _add_output_layers(
         new_output_node.operation_equivalence_type = equiv_type
         self.equivalent_operations[equiv_type].add(new_output_node.tensor_label_raw)
 
-        # Track child tensor variations for output nodes:
-        # Compare the actual output tensor against the parent's saved tensor_contents.
-        # This catches view mutations, in-place ops through shared storage, and any
-        # case where values changed after the parent was initially logged.
-        # We apply the same transforms (device move + activation_postfunc) that
-        # save_tensor_data applies, so the comparison is apples-to-apples.
-
+        # Track child tensor variations for output nodes.
+        # Always store for output nodes (few per model, negligible cost).
         new_output_node.has_child_tensor_variations = False
         new_output_node.children_tensor_versions = {}
         if output_node.has_saved_activations:
-            actual_transformed = safe_copy(output_tensors[i])
-            if output_node.output_device not in [str(actual_transformed.device), "same"]:
-                actual_transformed = clean_to(actual_transformed, output_node.output_device)
-            if self.activation_postfunc is not None:
-                self._pause_logging = True
-                try:
-                    actual_transformed = self.activation_postfunc(actual_transformed)
-                finally:
-                    self._pause_logging = False
-            if not tensor_nanequal(actual_transformed, output_node.tensor_contents):
-                output_node.children_tensor_versions[new_output_node.tensor_label_raw] = (
-                    actual_transformed
-                )
-                output_node.has_child_tensor_variations = True
-                new_output_node.tensor_contents = actual_transformed.clone()
+            output_node.children_tensor_versions[new_output_node.tensor_label_raw] = safe_copy(
+                output_tensors[i]
+            )
+            output_node.has_child_tensor_variations = True
+            new_output_node.tensor_contents = safe_copy(output_tensors[i])
 
         # Change original output node:
 

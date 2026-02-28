@@ -9,7 +9,6 @@ from torch import nn
 
 from .helper_funcs import (
     _get_call_stack_dicts,
-    clean_to,
     get_attr_values_from_tensor_list,
     get_tensor_memory_amount,
     get_vars_of_type_from_obj,
@@ -586,33 +585,18 @@ def log_function_output_tensors_exhaustive(
         # Track if any parent's tensor_contents differs from what this child received.
         # This catches getitem slicing, view mutations, and any other case where
         # a parent's saved values don't match the arg copy the child actually saw.
-        # We apply the same transforms (device + postfunc) that save_tensor_data
-        # applies, so the comparison is apples-to-apples with tensor_contents.
         for parent_label in new_tensor_entry.parent_layers:
             parent = self[parent_label]
             if parent.has_saved_activations and self.save_function_args:
-                try:
-                    parent_arg_copy = _get_parent_contents(
-                        parent_label,
-                        arg_copies,
-                        kwarg_copies,
-                        new_tensor_entry.parent_layer_arg_locs,
-                    )
-                except ValueError:
-                    continue
-                # Apply the same transforms as save_tensor_data for comparison.
-                arg_for_comparison = safe_copy(parent_arg_copy)
-                if parent.output_device not in [str(arg_for_comparison.device), "same"]:
-                    arg_for_comparison = clean_to(arg_for_comparison, parent.output_device)
-                if self.activation_postfunc is not None:
-                    self._pause_logging = True
-                    try:
-                        arg_for_comparison = self.activation_postfunc(arg_for_comparison)
-                    finally:
-                        self._pause_logging = False
-                if not tensor_nanequal(arg_for_comparison, parent.tensor_contents):
+                parent_tensor_contents = _get_parent_contents(
+                    parent_label,
+                    arg_copies,
+                    kwarg_copies,
+                    new_tensor_entry.parent_layer_arg_locs,
+                )
+                if not tensor_nanequal(parent_tensor_contents, parent.tensor_contents):
                     parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
-                        arg_for_comparison
+                        parent_tensor_contents
                     )
                     parent.has_child_tensor_variations = True
 
