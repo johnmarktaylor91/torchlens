@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.6.1 (2026-02-28)
+
+### Bug Fixes
+
+- **tensor_log**: Use getattr default in TensorLogEntry.copy()
+  ([`538288d`](https://github.com/johnmarktaylor91/torchlens/commit/538288d6170ab95ca24e7b88ada37a7e4196d6d2))
+
+Prevents AttributeError when copying entries that predate newly added fields (e.g., deserialized
+  from an older version).
+
+Co-Authored-By: whisperLiang <whisperLiang@users.noreply.github.com>
+
+
 ## v0.6.0 (2026-02-28)
 
 ### Features
