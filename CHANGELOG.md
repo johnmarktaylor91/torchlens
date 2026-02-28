@@ -1,6 +1,29 @@
 # CHANGELOG
 
 
+## v0.6.0 (2026-02-28)
+
+### Features
+
+- **flops**: Add per-layer FLOPs computation for forward and backward passes
+  ([`31b43e6`](https://github.com/johnmarktaylor91/torchlens/commit/31b43e6659d521f0332b99d02e969b4ac19f1abd))
+
+Compute forward and backward FLOPs at logging time for every traced operation. Uses category-based
+  dispatch: zero-cost ops (view, reshape, etc.), element-wise ops with per-element cost, and
+  specialty handlers for matmul, conv, normalization, pooling, reductions, and loss functions.
+  Unknown ops return None rather than guessing.
+
+- New torchlens/flops.py with compute_forward_flops / compute_backward_flops - ModelHistory gains
+  total_flops_forward, total_flops_backward, total_flops properties and flops_by_type() method -
+  TensorLogEntry and RolledTensorLogEntry gain flops_forward / flops_backward fields - 28 new tests
+  in test_metadata.py (unit + integration) - scripts/check_flops_coverage.py dev utility for
+  auditing op coverage - Move test_video_r2plus1_18 to slow test file
+
+Based on whisperLiang's contribution in PR #53.
+
+Co-Authored-By: whisperLiang <whisperLiang@users.noreply.github.com>
+
+
 ## v0.5.0 (2026-02-28)
 
 ### Bug Fixes
