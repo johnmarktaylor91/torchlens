@@ -1,6 +1,74 @@
 # CHANGELOG
 
 
+## v0.7.0 (2026-02-28)
+
+### Bug Fixes
+
+- **logging**: Capture/restore RNG state for two-pass stochastic models
+  ([#58](https://github.com/johnmarktaylor91/torchlens/pull/58),
+  [`2b3079f`](https://github.com/johnmarktaylor91/torchlens/commit/2b3079f00e89e91bd8a84652bae381a6ab6813df))
+
+Move RNG state capture/restore before pytorch decoration to prevent internal .clone() calls from
+  being intercepted by torchlens' decorated torch functions. Also speed up test_stochastic_loop by
+  using a higher starting value.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **logging**: Ensure output layer parents are saved with layers_to_save
+  ([#46](https://github.com/johnmarktaylor91/torchlens/pull/46),
+  [`a3c74fa`](https://github.com/johnmarktaylor91/torchlens/commit/a3c74fa92215dcd0bd5b300b32559ecf47b0ef97))
+
+When layers_to_save is a subset, the fast pass now automatically includes parents of output layers
+  in the save list. This ensures output layer tensor_contents is populated in postprocess_fast
+  (which copies from parent).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **logging**: Replace copy.deepcopy with safe_copy to prevent infinite loops
+  ([#18](https://github.com/johnmarktaylor91/torchlens/pull/18),
+  [`aa841fe`](https://github.com/johnmarktaylor91/torchlens/commit/aa841fe7def7def929e29cc612f01976d4b12f62))
+
+copy.deepcopy hangs on complex tensor wrappers with circular references (e.g. ESCNN
+  GeometricTensor). Replace with safe_copy_args/safe_copy_kwargs that clone tensors, recurse into
+  standard containers, and leave other objects as references.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **logging**: Use argspec to disambiguate tuple/list input args
+  ([#43](https://github.com/johnmarktaylor91/torchlens/pull/43),
+  [`34f6687`](https://github.com/johnmarktaylor91/torchlens/commit/34f6687770573935257201e99c97e8da70f6e8bf))
+
+When a model's forward() expects a single arg that IS a tuple/list of tensors, torchlens incorrectly
+  unpacked it into multiple positional args. Now uses inspect.getfullargspec to detect single-arg
+  models and wraps the tuple/list as a single arg. Also handles immutable tuples in
+  _fetch_label_move_input_tensors device-move logic.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Functional ops at end of container modules rendered as ovals
+  ([#48](https://github.com/johnmarktaylor91/torchlens/pull/48),
+  [`f886b36`](https://github.com/johnmarktaylor91/torchlens/commit/f886b36c104416120a9a4de8f70a7fbc52848bfe))
+
+_check_if_only_non_buffer_in_module was too broad — it returned True for functional ops (like
+  torch.relu) at the end of container modules with child submodules, causing them to render as
+  boxes. Added a leaf-module check: only apply box rendering for modules with no child submodules.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **metadata**: Track module training mode per submodule
+  ([#52](https://github.com/johnmarktaylor91/torchlens/pull/52),
+  [`6ede005`](https://github.com/johnmarktaylor91/torchlens/commit/6ede0059f5d420d69cd6c65fa2ba744dac248c95))
+
+Capture module.training in module_forward_decorator and store in ModelHistory.module_training_modes
+  dict (keyed by module address). This lets users check whether each submodule was in train or eval
+  mode during the forward pass.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.6.2 (2026-02-28)
 
 ### Bug Fixes
