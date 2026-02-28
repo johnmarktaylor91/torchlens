@@ -97,6 +97,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     "module_layers",
     "module_layer_argnames",
     "module_pass_layers",
+    "module_training_modes",
     # Time elapsed
     "pass_start_time",
     "pass_end_time",
