@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v0.7.2 (2026-02-28)
+
+### Bug Fixes
+
+- **tests**: Reduce r2plus1d_18 input size to prevent OOM
+  ([`952e34e`](https://github.com/johnmarktaylor91/torchlens/commit/952e34e38d940eeff0f77a7f8f16e1912121bfdd))
+
+The test_video_r2plus1_18 test used a (16,3,16,112,112) input (~96M elements) which consistently got
+  OOM-killed. Reduced to (1,3,1,112,112) which passes reliably while still exercising the full
+  model.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.7.1 (2026-02-28)
 
 ### Bug Fixes
