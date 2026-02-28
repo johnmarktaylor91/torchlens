@@ -909,7 +909,7 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
 
 def test_stochastic_loop():
     model = example_models.StochasticLoop()
-    model_input = torch.zeros(2, 2)
+    model_input = torch.full((2, 2), 98.0)
     assert validate_saved_activations(model, model_input)
     show_model_graph(
         model,
@@ -1809,3 +1809,24 @@ def test_output_layer_saved_with_layers_to_save():
         assert entry.tensor_contents is not None, (
             f"Output layer {label} should have tensor_contents"
         )
+
+
+# =============================================================================
+# Regression: issue #58 — two-pass fails for stochastic depth models
+# =============================================================================
+
+
+def test_stochastic_depth_layers_to_save():
+    """Two-pass with layers_to_save should reproduce the same graph for
+    stochastic depth models by restoring the RNG state (issue #58).
+    """
+    model = example_models.StochasticDepthModel(drop_prob=0.5)
+    model.train()
+    x = torch.rand(2, 5)
+    # layers_to_save triggers the two-pass path; use substring match
+    mh = log_forward_pass(model, x, layers_to_save=["linear"])
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    # Linear layers should have saved activations
+    linear_layers = [label for label in mh.layers_with_saved_activations if "linear" in label]
+    assert len(linear_layers) > 0, "linear layers should have saved activations"

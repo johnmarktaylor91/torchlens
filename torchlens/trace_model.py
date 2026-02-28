@@ -12,6 +12,8 @@ from .decorate_torch import undecorate_pytorch
 from .helper_funcs import (
     get_vars_of_type_from_obj,
     set_random_seed,
+    log_current_rng_states,
+    set_rng_from_saved_states,
     nested_assign,
     safe_copy_args,
     safe_copy_kwargs,
@@ -214,12 +216,23 @@ def run_and_log_inputs_through_model(
         ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
         buffer_tensors = list(model.buffers())
         tensors_to_decorate = input_tensors + buffer_tensors
+
+        # Capture/restore RNG state so the fast pass reproduces the same
+        # stochastic graph as the exhaustive pass (issue #58).
+        # Must happen BEFORE decorating pytorch, since the torch RNG
+        # functions internally call .clone() etc. which would be intercepted.
+        if self.logging_mode == "exhaustive":
+            self._pre_forward_rng_states = log_current_rng_states()
+        elif self.logging_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
+            set_rng_from_saved_states(self._pre_forward_rng_states)
+
         decorated_func_mapper = self._decorate_pytorch(torch, orig_func_defs)
         self._track_tensors = True
         for i, t in enumerate(input_tensors):
             log_source_tensor(self, t, "input", input_tensor_addresses[i])
         self._prepare_model(model, module_orig_forward_funcs, decorated_func_mapper)
         self.elapsed_time_setup = time.time() - self.pass_start_time
+
         outputs = model(*input_args, **input_kwargs)
         self.elapsed_time_forward_pass = (
             time.time() - self.pass_start_time - self.elapsed_time_setup
