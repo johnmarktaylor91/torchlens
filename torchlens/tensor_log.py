@@ -96,6 +96,8 @@ class TensorLogEntry:
         self.func_applied_name = fields_dict["func_applied_name"]
         self.func_call_stack = fields_dict["func_call_stack"]
         self.func_time_elapsed = fields_dict["func_time_elapsed"]
+        self.flops_forward = fields_dict["flops_forward"]
+        self.flops_backward = fields_dict["flops_backward"]
         self.func_rng_states = fields_dict["func_rng_states"]
         self.func_argnames = fields_dict["func_argnames"]
         self.num_func_args_total = fields_dict["num_func_args_total"]
@@ -471,6 +473,10 @@ class RolledTensorLogEntry:
         # Saved tensor info
         self.tensor_shape = source_entry.tensor_shape
         self.tensor_fsize_nice = source_entry.tensor_fsize_nice
+
+        # FLOPs info (from first pass; same per pass for identical ops)
+        self.flops_forward = source_entry.flops_forward
+        self.flops_backward = source_entry.flops_backward
 
         # Param info:
         self.computed_with_params = source_entry.computed_with_params

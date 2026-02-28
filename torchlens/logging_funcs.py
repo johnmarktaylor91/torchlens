@@ -21,6 +21,7 @@ from .helper_funcs import (
     safe_copy,
     tensor_nanequal,
 )
+from .flops import compute_backward_flops, compute_forward_flops
 from .tensor_log import TensorLogEntry
 
 if TYPE_CHECKING:
@@ -187,6 +188,8 @@ def log_source_tensor_exhaustive(
         "func_applied_name": "none",
         "func_call_stack": _get_call_stack_dicts(),
         "func_time_elapsed": 0,
+        "flops_forward": 0,
+        "flops_backward": 0,
         "func_rng_states": log_current_rng_states(),
         "func_argnames": tuple([]),
         "num_func_args_total": 0,
@@ -851,6 +854,19 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["tensor_dtype"] = t.dtype
     fields_dict["tensor_fsize"] = get_tensor_memory_amount(t)
     fields_dict["tensor_fsize_nice"] = human_readable_size(fields_dict["tensor_fsize"])
+
+    # FLOPs computation
+    fields_dict["flops_forward"] = compute_forward_flops(
+        fields_dict.get("func_applied_name"),
+        fields_dict["tensor_shape"],
+        fields_dict.get("parent_param_shapes", []),
+        args,
+        kwargs,
+    )
+    fields_dict["flops_backward"] = compute_backward_flops(
+        fields_dict.get("func_applied_name"),
+        fields_dict["flops_forward"],
+    )
 
     # Child tensor variation tracking
     fields_dict["has_child_tensor_variations"] = False
