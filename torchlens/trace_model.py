@@ -1,4 +1,3 @@
-import copy
 import inspect
 import random
 import time
@@ -10,7 +9,16 @@ from torch import nn
 if TYPE_CHECKING:
     from .model_history import ModelHistory
 from .decorate_torch import undecorate_pytorch
-from .helper_funcs import get_vars_of_type_from_obj, set_random_seed, nested_assign
+from .helper_funcs import (
+    get_vars_of_type_from_obj,
+    set_random_seed,
+    log_current_rng_states,
+    set_rng_from_saved_states,
+    nested_assign,
+    safe_copy_args,
+    safe_copy_kwargs,
+    normalize_input_args,
+)
 from .logging_funcs import log_source_tensor
 from .interface import _give_user_feedback_about_lookup_key
 
@@ -93,6 +101,10 @@ def _fetch_label_move_input_tensors(
         for kwarg in input_kwargs.values()
     ]
     for a, arg in enumerate(input_args):
+        # Convert tuples to lists for device-moving (tuples are immutable)
+        was_tuple = isinstance(arg, tuple)
+        if was_tuple:
+            input_args[a] = list(arg)
         for i, (t, addr, addr_full) in enumerate(input_arg_tensors[a]):
             t_moved = t.to(model_device)
             input_arg_tensors[a][i] = (t_moved, addr, addr_full)
@@ -100,6 +112,8 @@ def _fetch_label_move_input_tensors(
                 input_args[a] = t_moved
             else:
                 nested_assign(input_args[a], addr_full, t_moved)
+        if was_tuple and isinstance(input_args[a], list):
+            input_args[a] = tuple(input_args[a])
 
     for k, (key, val) in enumerate(input_kwargs.items()):
         for i, (t, addr, addr_full) in enumerate(input_kwarg_tensors[k]):
@@ -157,19 +171,26 @@ def run_and_log_inputs_through_model(
 
     self._tensor_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
 
-    if type(input_args) is tuple:
-        input_args = list(input_args)
-    elif (type(input_args) not in [list, tuple]) and (input_args is not None):
-        input_args = [input_args]
-
-    if not input_args:
-        input_args = []
-
-    if not input_kwargs:
-        input_kwargs = {}
+    # In fast mode, also save parents of output layers so output tensor_contents
+    # can be populated in postprocess_fast (issue #46).
+    if self._tensor_nums_to_save != "all" and self._pass_finished:
+        output_parent_nums = set()
+        for output_label in self.output_layers:
+            output_entry = self[output_label]
+            for parent_label in output_entry.parent_layers:
+                parent_entry = self[parent_label]
+                output_parent_nums.add(parent_entry.realtime_tensor_num)
+        if output_parent_nums:
+            combined = set(self._tensor_nums_to_save) | output_parent_nums
+            self._tensor_nums_to_save = sorted(combined)
 
     if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
         model = model.module
+
+    input_args = normalize_input_args(input_args, model)
+
+    if not input_kwargs:
+        input_kwargs = {}
 
     if len(list(model.parameters())) > 0:
         model_device = next(iter(model.parameters())).device
@@ -178,9 +199,9 @@ def run_and_log_inputs_through_model(
     else:
         model_device = "cpu"
 
-    input_args = [copy.deepcopy(arg) for arg in input_args]
+    input_args = safe_copy_args(input_args)
     input_arg_names = _get_input_arg_names(model, input_args)
-    input_kwargs = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
+    input_kwargs = safe_copy_kwargs(input_kwargs)
 
     self.pass_start_time = time.time()
     module_orig_forward_funcs = {}
@@ -195,12 +216,23 @@ def run_and_log_inputs_through_model(
         ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
         buffer_tensors = list(model.buffers())
         tensors_to_decorate = input_tensors + buffer_tensors
+
+        # Capture/restore RNG state so the fast pass reproduces the same
+        # stochastic graph as the exhaustive pass (issue #58).
+        # Must happen BEFORE decorating pytorch, since the torch RNG
+        # functions internally call .clone() etc. which would be intercepted.
+        if self.logging_mode == "exhaustive":
+            self._pre_forward_rng_states = log_current_rng_states()
+        elif self.logging_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
+            set_rng_from_saved_states(self._pre_forward_rng_states)
+
         decorated_func_mapper = self._decorate_pytorch(torch, orig_func_defs)
         self._track_tensors = True
         for i, t in enumerate(input_tensors):
             log_source_tensor(self, t, "input", input_tensor_addresses[i])
         self._prepare_model(model, module_orig_forward_funcs, decorated_func_mapper)
         self.elapsed_time_setup = time.time() - self.pass_start_time
+
         outputs = model(*input_args, **input_kwargs)
         self.elapsed_time_forward_pass = (
             time.time() - self.pass_start_time - self.elapsed_time_setup

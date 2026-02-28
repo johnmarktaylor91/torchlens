@@ -1720,3 +1720,81 @@ class OutputMatchesParent(nn.Module):
         y = x + 1
         z = y * 2
         return z
+
+
+class TensorWrapper:
+    """Simulates complex tensor wrappers (like ESCNN's GeometricTensor) that
+    cause copy.deepcopy to hang.  The circular reference makes deepcopy
+    loop infinitely, while the .tensor attribute lets torchlens extract
+    the underlying data."""
+
+    def __init__(self, tensor):
+        self.tensor = tensor
+        self._self_ref = self  # circular reference → deepcopy hangs
+
+
+class WrappedInputModel(nn.Module):
+    """Model that receives a TensorWrapper and extracts its .tensor.
+
+    Used to test that torchlens can handle non-deepcopy-safe input
+    arguments without hanging (issue #18).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 5)
+
+    def forward(self, wrapper):
+        return self.linear(wrapper.tensor)
+
+
+class TupleInputModel(nn.Module):
+    """Model that takes a single tuple of tensors as its only argument.
+
+    Used to test that torchlens does not incorrectly unpack the tuple into
+    multiple positional args (issue #43).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 5)
+
+    def forward(self, x):
+        a, b = x
+        return self.linear(a) + self.linear(b)
+
+
+class FunctionalAfterSubmodule(nn.Module):
+    """Container module with a functional op (relu) after a leaf submodule (linear).
+
+    The relu should render as an oval in the graph, not a box (issue #48).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 5)
+
+    def forward(self, x):
+        return torch.relu(self.linear(x))
+
+
+class StochasticDepthModel(nn.Module):
+    """Model with stochastic depth (dropout-like skip) that changes the
+    computational graph between forward passes unless RNG state is restored.
+
+    Used to test that the two-pass architecture handles stochastic models
+    correctly (issue #58).
+    """
+
+    def __init__(self, drop_prob=0.5):
+        super().__init__()
+        self.linear1 = nn.Linear(5, 5)
+        self.linear2 = nn.Linear(5, 5)
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        x = self.linear1(x)
+        # Stochastic depth: randomly skip linear2
+        if self.training and torch.rand(1).item() < self.drop_prob:
+            return x
+        return self.linear2(x)

@@ -6,6 +6,7 @@ plus new API coverage tests.
 
 from os.path import join as opj
 
+import pytest
 import torch
 
 from conftest import VIS_OUTPUT_DIR
@@ -908,7 +909,7 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
 
 def test_stochastic_loop():
     model = example_models.StochasticLoop()
-    model_input = torch.zeros(2, 2)
+    model_input = torch.full((2, 2), 98.0)
     assert validate_saved_activations(model, model_input)
     show_model_graph(
         model,
@@ -1719,3 +1720,113 @@ def test_output_matches_parent_no_false_positive(input_2d):
             f"Layer {label} should not have child tensor variations in a "
             f"mutation-free model, but has_child_tensor_variations={entry.has_child_tensor_variations}"
         )
+
+
+# =============================================================================
+# Regression: issue #18 — deepcopy hangs on complex tensor wrappers
+# =============================================================================
+
+
+@pytest.mark.timeout(30)
+def test_wrapped_input_no_deepcopy_hang():
+    """Ensure torchlens handles non-deepcopy-safe input args (issue #18).
+
+    copy.deepcopy would loop infinitely on objects with circular references
+    (e.g. ESCNN's GeometricTensor).  The safe_copy_args helper clones tensors
+    and leaves other objects as-is, avoiding the hang.
+    """
+    original_tensor = torch.rand(5, 5)
+    original_data = original_tensor.clone()
+    wrapper = example_models.TensorWrapper(original_tensor)
+    model = example_models.WrappedInputModel()
+    mh = log_forward_pass(model, wrapper)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    # Original tensor should not have been mutated (same-device case)
+    assert torch.equal(wrapper.tensor, original_data)
+
+
+# =============================================================================
+# Regression: issue #43 — tuple of tensors as single forward arg
+# =============================================================================
+
+
+def test_tuple_input_single_arg():
+    """Ensure a tuple of tensors passed as a single arg is not unpacked (issue #43).
+
+    When a model's forward() expects a single argument that IS a tuple,
+    torchlens should not split it into multiple positional args.
+    """
+    model = example_models.TupleInputModel()
+    input_tuple = (torch.rand(5, 5), torch.rand(5, 5))
+    mh = log_forward_pass(model, input_tuple)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    assert validate_saved_activations(model, input_tuple)
+
+
+# =============================================================================
+# Regression: issue #48 — functional ops at module end rendered as boxes
+# =============================================================================
+
+
+def test_functional_after_submodule_not_box():
+    """Functional ops at the end of container modules should be ovals, not boxes (issue #48).
+
+    A torch.relu after a nn.Linear inside a container module should not get
+    box-shaped rendering (which is reserved for module outputs).
+    """
+    from torchlens.vis import _get_node_address_shape_color
+
+    model = example_models.FunctionalAfterSubmodule()
+    x = torch.rand(2, 5)
+    mh = log_forward_pass(model, x)
+    # Find the relu layer
+    relu_layers = [label for label in mh.layer_labels if "relu" in label.lower()]
+    assert len(relu_layers) > 0, "No relu layer found"
+    relu_entry = mh[relu_layers[0]]
+    _, shape, _ = _get_node_address_shape_color(mh, relu_entry, show_buffer_layers=False)
+    assert shape == "oval", f"Functional relu should be oval, got {shape}"
+
+
+# =============================================================================
+# Regression: issue #46 — output layer tensor_contents None with layers_to_save
+# =============================================================================
+
+
+def test_output_layer_saved_with_layers_to_save():
+    """Output layers should have tensor_contents even when layers_to_save is a subset (issue #46).
+
+    The output layer copies tensor_contents from its parent, so the parent must
+    also be saved during the fast pass.
+    """
+    model = example_models.FunctionalAfterSubmodule()
+    x = torch.rand(2, 5)
+    # Save only the relu layer (not explicitly the output)
+    mh = log_forward_pass(model, x, layers_to_save=["relu_1"])
+    for label in mh.output_layers:
+        entry = mh[label]
+        assert entry.tensor_contents is not None, (
+            f"Output layer {label} should have tensor_contents"
+        )
+
+
+# =============================================================================
+# Regression: issue #58 — two-pass fails for stochastic depth models
+# =============================================================================
+
+
+def test_stochastic_depth_layers_to_save():
+    """Two-pass with layers_to_save should reproduce the same graph for
+    stochastic depth models by restoring the RNG state (issue #58).
+    """
+    model = example_models.StochasticDepthModel(drop_prob=0.5)
+    model.train()
+    x = torch.rand(2, 5)
+    # layers_to_save triggers the two-pass path; use substring match
+    mh = log_forward_pass(model, x, layers_to_save=["linear"])
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    # Linear layers should have saved activations
+    linear_layers = [label for label in mh.layers_with_saved_activations if "linear" in label]
+    assert len(linear_layers) > 0, "linear layers should have saved activations"
