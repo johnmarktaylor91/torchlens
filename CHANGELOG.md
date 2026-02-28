@@ -1,6 +1,96 @@
 # CHANGELOG
 
 
+## v0.5.0 (2026-02-28)
+
+### Bug Fixes
+
+- **logging**: Revert children_tensor_versions to proven simpler detection
+  ([`ade9c39`](https://github.com/johnmarktaylor91/torchlens/commit/ade9c39f15604459af9134ffcb770ae08238f5cf))
+
+The refactor version applied device/postfunc transforms to the stored value in
+  children_tensor_versions, but validation compares against creation_args which are always raw. This
+  caused fasterrcnn validation to fail. Revert to the simpler approach that stores raw arg copies
+  and was verified passing twice.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **postprocess**: Gate output node variations on has_child_tensor_variations
+  ([`4106be9`](https://github.com/johnmarktaylor91/torchlens/commit/4106be93168cbff4b346a70f06417556c3444490))
+
+Don't unconditionally store children_tensor_versions for output nodes. Gate on
+  has_child_tensor_variations (set during exhaustive logging) to avoid false positives and preserve
+  postfunc-applied tensor_contents.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **postprocess**: Rebuild pass assignments after loop detection and fix output handler
+  ([`847b2a7`](https://github.com/johnmarktaylor91/torchlens/commit/847b2a79202cee13bf2ba231153b71068cf6311a))
+
+Two fixes:
+
+1. _rebuild_pass_assignments: Multiple rounds of _expand_isomorphic_subgraphs can reassign a node to
+  a new group while leaving stale same_layer_operations in the old group's members. This caused
+  multiple raw tensors to map to the same layer:pass label, producing validation failures (e.g.
+  fasterrcnn). The cleanup step groups tensors by their authoritative layer_label_raw and rebuilds
+  consistent pass numbers.
+
+2. Output node handler: Replaced the has_child_tensor_variations gate with a direct comparison of
+  actual output (with device/postfunc transforms) against tensor_contents using tensor_nanequal.
+  This correctly handles in-place mutations through views (e.g. InPlaceZeroTensor) while preserving
+  postfunc values for unmodified outputs.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Handle bool and complex tensor perturbation properly
+  ([`dfd2d7b`](https://github.com/johnmarktaylor91/torchlens/commit/dfd2d7be8dce252312235f954446e98357ccfe35))
+
+- Generate proper complex perturbations using torch.complex() instead of casting away imaginary part
+  - Fix bool tensor crash by reordering .float().abs() (bool doesn't support abs, but float
+  conversion handles it) - Add ContextUnet diffusion model to example_models.py for self-contained
+  stable_diffusion test - Update test_stable_diffusion to use example_models.ContextUnet
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **logging**: Generalize was_getitem_applied to has_child_tensor_variations
+  ([`1177f60`](https://github.com/johnmarktaylor91/torchlens/commit/1177f607bf6406d47424c8b05755aec86d992dcb))
+
+Replace the getitem-specific parent detection with runtime mismatch detection that catches any case
+  where a parent's tensor_contents diverges from what children actually received (getitem slicing,
+  view mutations through shared storage, in-place ops after logging, etc.).
+
+Key changes: - Rename was_getitem_applied → has_child_tensor_variations - Detection now compares arg
+  copies against parent tensor_contents at child-creation time, with transform-awareness (device +
+  postfunc) - Output nodes now detect value changes vs parent tensor_contents - Use tensor_nanequal
+  (not torch.equal) for dtype/NaN consistency - Fix fast-mode: clear stale state on re-run, prevent
+  double-postfunc - Use clean_to and try/finally for _pause_logging safety - Add 6 view-mutation
+  stress tests (unsqueeze, reshape, transpose, multiple, chained, false-positive control)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **loops**: Cherry-pick approved changes from feat/loop-detection-hardening
+  ([`33e0f22`](https://github.com/johnmarktaylor91/torchlens/commit/33e0f223d12aae806799f3853ed6e221b1232274))
+
+- Rename 10 loop detection functions to clearer names (e.g.
+  _assign_corresponding_tensors_to_same_layer → _detect_and_label_loops,
+  _fetch_and_process_next_isomorphic_nodes → _advance_bfs_frontier) - Rename 6 local variables for
+  clarity (e.g. node_to_iso_group_dict → node_to_iso_leader, subgraphs_dict → subgraph_info) - Add
+  SubgraphInfo dataclass replacing dict-based subgraph bookkeeping - Replace list.pop(0) with
+  deque.popleft() in BFS traversals - Remove ungrouped sweep in _merge_iso_groups_to_layers - Remove
+  safe_copy in postprocess_fast (direct reference suffices) - Rewrite _get_hash_from_args to
+  preserve positional indices, kwarg names, and dict keys via recursive _append_arg_hash helper -
+  Remove vestigial index_in_saved_log field from TensorLogEntry, constants.py, logging_funcs.py, and
+  postprocess.py - Fix PEP8: type(x) ==/!= Y → type(x) is/is not Y in two files - Split
+  test_real_world_models.py into fast and slow test files - Add 12 new edge-case loop detection test
+  models and test functions
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.4.1 (2026-02-26)
 
 ### Bug Fixes
