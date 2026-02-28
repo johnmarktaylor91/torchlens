@@ -1,4 +1,3 @@
-import copy
 import inspect
 import random
 import time
@@ -10,7 +9,13 @@ from torch import nn
 if TYPE_CHECKING:
     from .model_history import ModelHistory
 from .decorate_torch import undecorate_pytorch
-from .helper_funcs import get_vars_of_type_from_obj, set_random_seed, nested_assign
+from .helper_funcs import (
+    get_vars_of_type_from_obj,
+    set_random_seed,
+    nested_assign,
+    safe_copy_args,
+    safe_copy_kwargs,
+)
 from .logging_funcs import log_source_tensor
 from .interface import _give_user_feedback_about_lookup_key
 
@@ -178,9 +183,9 @@ def run_and_log_inputs_through_model(
     else:
         model_device = "cpu"
 
-    input_args = [copy.deepcopy(arg) for arg in input_args]
+    input_args = safe_copy_args(input_args)
     input_arg_names = _get_input_arg_names(model, input_args)
-    input_kwargs = {key: copy.deepcopy(val) for key, val in input_kwargs.items()}
+    input_kwargs = safe_copy_kwargs(input_kwargs)
 
     self.pass_start_time = time.time()
     module_orig_forward_funcs = {}

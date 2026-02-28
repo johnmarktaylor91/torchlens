@@ -68,6 +68,41 @@ def set_rng_from_saved_states(rng_states: Dict):
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 
+def _safe_copy_arg(arg):
+    """Copy a single argument safely, avoiding deepcopy on arbitrary objects.
+
+    Clones tensors, recurses into standard containers (list, tuple, dict),
+    and leaves everything else as-is.  This prevents infinite loops that
+    copy.deepcopy can trigger on complex tensor wrappers (e.g. ESCNN
+    GeometricTensor) while still protecting user inputs from in-place
+    mutations like device moves.
+
+    Note: custom objects containing tensors are passed by reference.  If the
+    model is on a different device, _fetch_label_move_input_tensors may
+    mutate the wrapper's tensor attribute in-place.  This is acceptable
+    because pre-fix such inputs caused an infinite hang.
+    """
+    if isinstance(arg, torch.Tensor):
+        return arg.clone()
+    elif isinstance(arg, dict):
+        return type(arg)({k: _safe_copy_arg(v) for k, v in arg.items()})
+    elif isinstance(arg, (list, tuple)):
+        copied = [_safe_copy_arg(item) for item in arg]
+        return type(arg)(*copied) if hasattr(type(arg), "_fields") else type(arg)(copied)
+    else:
+        return arg
+
+
+def safe_copy_args(args: list) -> list:
+    """Safely copy a list of function arguments."""
+    return [_safe_copy_arg(arg) for arg in args]
+
+
+def safe_copy_kwargs(kwargs: dict) -> dict:
+    """Safely copy a dict of keyword arguments."""
+    return {key: _safe_copy_arg(val) for key, val in kwargs.items()}
+
+
 def make_random_barcode(barcode_len: int = 8) -> str:
     """Generates a random integer hash for a layer to use as internal label (invisible from user side).
 
