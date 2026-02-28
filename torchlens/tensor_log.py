@@ -224,9 +224,9 @@ class TensorLogEntry:
         ]
         for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
-                fields_dict[field] = copy.deepcopy(getattr(self, field))
+                fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
-                fields_dict[field] = getattr(self, field)
+                fields_dict[field] = getattr(self, field, None)
         copied_entry = TensorLogEntry(fields_dict)
         return copied_entry
 
