@@ -746,6 +746,36 @@ def test_flops_coverage_on_model():
     assert coverage >= 0.5, f"FLOPs coverage too low: {coverage:.1%}"
 
 
+# =============================================================================
+# Module training mode tracking (issue #52)
+# =============================================================================
+
+
+def test_module_training_modes_populated(small_input):
+    """module_training_modes should map module addresses to their training flag."""
+    model = example_models.SimpleFF()
+    model.train()
+    mh = log_forward_pass(model, small_input)
+    # SimpleFF has no submodules, so dict should be empty
+    assert isinstance(mh.module_training_modes, dict)
+
+
+def test_module_training_modes_train_vs_eval():
+    """Training mode should be captured correctly for each submodule."""
+    model = nn.Sequential(nn.Linear(5, 5), nn.ReLU(), nn.Linear(5, 3))
+    x = torch.rand(2, 5)
+
+    model.train()
+    mh_train = log_forward_pass(model, x)
+    for addr, mode in mh_train.module_training_modes.items():
+        assert mode is True, f"Module {addr} should be training=True"
+
+    model.eval()
+    mh_eval = log_forward_pass(model, x)
+    for addr, mode in mh_eval.module_training_modes.items():
+        assert mode is False, f"Module {addr} should be training=False"
+
+
 @pytest.mark.slow
 def test_flops_resnet18_range():
     """ResNet-18 ~ 1.8 GFLOPs. Check we're in the right ballpark."""
