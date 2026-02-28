@@ -1653,3 +1653,69 @@ def test_rolled_vs_unrolled_visualization(input_2d):
     # Both should produce output files
     assert os.path.exists(unrolled_path + ".pdf") or os.path.exists(unrolled_path)
     assert os.path.exists(rolled_path + ".pdf") or os.path.exists(rolled_path)
+
+
+# =============================================================================
+# View mutation / child tensor variation tests
+# =============================================================================
+
+
+def test_view_mutation_unsqueeze(input_2d):
+    """Mutation through unsqueeze view should be logged without error."""
+    model = example_models.ViewMutationUnsqueeze()
+    assert validate_saved_activations(model, input_2d)
+    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+
+
+def test_view_mutation_reshape(input_2d):
+    """Mutation through reshape view should be logged without error."""
+    model = example_models.ViewMutationReshape()
+    assert validate_saved_activations(model, input_2d)
+    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+
+
+def test_view_mutation_transpose(input_2d):
+    """Mutation through transpose view should be logged without error."""
+    model = example_models.ViewMutationTranspose()
+    assert validate_saved_activations(model, input_2d)
+    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+
+
+def test_multiple_view_mutations(input_2d):
+    """Multiple views mutated independently should be logged without error."""
+    model = example_models.MultipleViewMutations()
+    assert validate_saved_activations(model, input_2d)
+    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+
+
+def test_chained_view_mutation(input_2d):
+    """Mutation through chained views should be logged without error."""
+    model = example_models.ChainedViewMutation()
+    assert validate_saved_activations(model, input_2d)
+    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+
+
+def test_output_matches_parent_no_false_positive(input_2d):
+    """No mutation model: verify no false-positive child tensor variations."""
+    model = example_models.OutputMatchesParent()
+    assert validate_saved_activations(model, input_2d)
+    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    # No layer should have child tensor variations since nothing is mutated
+    for label in mh.layer_labels:
+        entry = mh[label]
+        assert not entry.has_child_tensor_variations, (
+            f"Layer {label} should not have child tensor variations in a "
+            f"mutation-free model, but has_child_tensor_variations={entry.has_child_tensor_variations}"
+        )

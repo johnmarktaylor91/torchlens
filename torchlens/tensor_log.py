@@ -78,8 +78,8 @@ class TensorLogEntry:
         self.tensor_fsize = fields_dict["tensor_fsize"]
         self.tensor_fsize_nice = fields_dict["tensor_fsize_nice"]
 
-        # Dealing with getitem complexities
-        self.was_getitem_applied = fields_dict["was_getitem_applied"]
+        # Child tensor variation tracking
+        self.has_child_tensor_variations = fields_dict["has_child_tensor_variations"]
         self.children_tensor_versions = fields_dict["children_tensor_versions"]
 
         # Saved gradient info

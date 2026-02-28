@@ -9,6 +9,7 @@ from torch import nn
 
 from .helper_funcs import (
     _get_call_stack_dicts,
+    clean_to,
     get_attr_values_from_tensor_list,
     get_tensor_memory_amount,
     get_vars_of_type_from_obj,
@@ -19,6 +20,7 @@ from .helper_funcs import (
     make_short_barcode_from_input,
     make_var_iterable,
     safe_copy,
+    tensor_nanequal,
 )
 from .tensor_log import TensorLogEntry
 
@@ -60,6 +62,8 @@ def save_new_activations(
         tensor_log_entry.has_saved_activations = False
         tensor_log_entry.has_saved_grad = False
         tensor_log_entry.grad_contents = None
+        tensor_log_entry.has_child_tensor_variations = False
+        tensor_log_entry.children_tensor_versions = {}
 
     # Reset relevant fields.
     self.layers_with_saved_activations = []
@@ -168,8 +172,8 @@ def log_source_tensor_exhaustive(
         "tensor_dtype": t.dtype,
         "tensor_fsize": get_tensor_memory_amount(t),
         "tensor_fsize_nice": human_readable_size(get_tensor_memory_amount(t)),
-        # Get-item complexities
-        "was_getitem_applied": False,
+        # Child tensor variation tracking
+        "has_child_tensor_variations": False,
         "children_tensor_versions": {},
         # Grad info:
         "grad_contents": None,
@@ -579,30 +583,38 @@ def log_function_output_tensors_exhaustive(
         if self.save_gradients:
             _add_backward_hook(self, out, out.tl_tensor_label_raw)
 
-        # Check if parent is parent of a slice function, and deal with any complexities from that.
-        if (new_tensor_entry.func_applied_name == "__getitem__") and (
-            len(new_tensor_entry.parent_layers) > 0
-        ):
-            self[new_tensor_entry.parent_layers[0]].was_getitem_applied = True
-
+        # Track if any parent's tensor_contents differs from what this child received.
+        # This catches getitem slicing, view mutations, and any other case where
+        # a parent's saved values don't match the arg copy the child actually saw.
+        # We apply the same transforms (device + postfunc) that save_tensor_data
+        # applies, so the comparison is apples-to-apples with tensor_contents.
         for parent_label in new_tensor_entry.parent_layers:
             parent = self[parent_label]
-            if all(
-                [
-                    parent.was_getitem_applied,
-                    parent.has_saved_activations,
-                    self.save_function_args,
-                ]
-            ):
-                parent_tensor_contents = _get_parent_contents(
-                    parent_label,
-                    arg_copies,
-                    kwarg_copies,
-                    new_tensor_entry.parent_layer_arg_locs,
-                )
-                parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
-                    parent_tensor_contents
-                )
+            if parent.has_saved_activations and self.save_function_args:
+                try:
+                    parent_arg_copy = _get_parent_contents(
+                        parent_label,
+                        arg_copies,
+                        kwarg_copies,
+                        new_tensor_entry.parent_layer_arg_locs,
+                    )
+                except ValueError:
+                    continue
+                # Apply the same transforms as save_tensor_data for comparison.
+                arg_for_comparison = safe_copy(parent_arg_copy)
+                if parent.output_device not in [str(arg_for_comparison.device), "same"]:
+                    arg_for_comparison = clean_to(arg_for_comparison, parent.output_device)
+                if self.activation_postfunc is not None:
+                    self._pause_logging = True
+                    try:
+                        arg_for_comparison = self.activation_postfunc(arg_for_comparison)
+                    finally:
+                        self._pause_logging = False
+                if not tensor_nanequal(arg_for_comparison, parent.tensor_contents):
+                    parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
+                        arg_for_comparison
+                    )
+                    parent.has_child_tensor_variations = True
 
 
 def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs):
@@ -703,17 +715,18 @@ def log_function_output_tensors_fast(
                 if child_layer in self.output_layers:
                     child_output = self.layer_dict_main_keys[child_layer]
                     if (
-                        orig_tensor_entry.was_getitem_applied
+                        orig_tensor_entry.has_child_tensor_variations
                         and child_layer in orig_tensor_entry.children_tensor_versions
                     ):
+                        # children_tensor_versions already has transforms applied
                         tensor_to_save = orig_tensor_entry.children_tensor_versions[child_layer]
+                        child_output.tensor_contents = safe_copy(tensor_to_save)
                     else:
-                        tensor_to_save = out
-                    child_output.tensor_contents = safe_copy(tensor_to_save)
-                    if self.activation_postfunc is not None:
-                        child_output.tensor_contents = self.activation_postfunc(
-                            child_output.tensor_contents
-                        )
+                        child_output.tensor_contents = safe_copy(out)
+                        if self.activation_postfunc is not None:
+                            child_output.tensor_contents = self.activation_postfunc(
+                                child_output.tensor_contents
+                            )
                     child_output.has_saved_activations = True
                     child_output.tensor_fsize = get_tensor_memory_amount(
                         child_output.tensor_contents
@@ -855,8 +868,8 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["tensor_fsize"] = get_tensor_memory_amount(t)
     fields_dict["tensor_fsize_nice"] = human_readable_size(fields_dict["tensor_fsize"])
 
-    # Slice function complexities (i.e., what if a parent tensor is changed in place)
-    fields_dict["was_getitem_applied"] = False
+    # Child tensor variation tracking
+    fields_dict["has_child_tensor_variations"] = False
     fields_dict["children_tensor_versions"] = {}
 
     # If internally initialized, fix this information:

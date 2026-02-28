@@ -1621,3 +1621,102 @@ class ContextUnet(nn.Module):
         up3 = self.up2(cemb2 * up2 + temb2, down1)
         out = self.out(torch.cat((up3, x), 1))
         return out
+
+
+#  ****************************************************
+#  **** View Mutation / Child Tensor Variation Models ****
+#  ****************************************************
+
+
+class ViewMutationUnsqueeze(nn.Module):
+    """Mutation through unsqueeze view: y = x.unsqueeze(0); y.fill_(0); return x.
+    The fill_ mutates x's storage through the view, so x's tensor_contents at
+    logging time differs from what children actually receive."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.unsqueeze(0)
+        y.fill_(0)
+        return x
+
+
+class ViewMutationReshape(nn.Module):
+    """Mutation through reshape view: y = x.reshape(1, -1); y.zero_(); return x.
+    The zero_ mutates x's storage through the reshaped view."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.reshape(1, -1)
+        y.zero_()
+        return x
+
+
+class ViewMutationTranspose(nn.Module):
+    """Mutation through transpose view: y = x.t(); y.fill_(42); return x.
+    The fill_ mutates x's storage through the transposed view."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.t()
+        y.fill_(42)
+        return x
+
+
+class MultipleViewMutations(nn.Module):
+    """Multiple views mutated independently: y = x[0:2]; z = x[2:4];
+    y.zero_(); z.fill_(1); return x.  Two different slices mutated."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x[0:2]
+        z = x[2:4]
+        y.zero_()
+        z.fill_(1)
+        return x
+
+
+class ChainedViewMutation(nn.Module):
+    """Mutation through chained views: y = x.unsqueeze(0); z = y.squeeze(0);
+    z.zero_(); return x.  The zero_ propagates through two levels of views."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.unsqueeze(0)
+        z = y.squeeze(0)
+        z.zero_()
+        return x
+
+
+class OutputMatchesParent(nn.Module):
+    """No mutation: output IS the same tensor as the linear output.
+    Verifies no false-positive child tensor variations are detected."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x + 1
+        z = y * 2
+        return z

@@ -144,8 +144,8 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "tensor_dtype",
     "tensor_fsize",
     "tensor_fsize_nice",
-    # Tensor slice-changing complications
-    "was_getitem_applied",
+    # Child tensor variation tracking
+    "has_child_tensor_variations",
     "children_tensor_versions",
     # Saved gradient info
     "grad_contents",
