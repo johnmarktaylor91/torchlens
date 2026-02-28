@@ -1221,7 +1221,7 @@ def _fix_buffer_layers(self):
                     and (unique_buffer.tensor_contents is not None)
                     and (torch.equal(buffer.tensor_contents, unique_buffer.tensor_contents))
                 ):
-                    self._merge_buffer_entries(unique_buffer, buffer)
+                    _merge_buffer_entries(self, unique_buffer, buffer)
                     break
                 unique_buffers.append(buffer_label)
 
