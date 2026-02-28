@@ -1720,3 +1720,29 @@ class OutputMatchesParent(nn.Module):
         y = x + 1
         z = y * 2
         return z
+
+
+class TensorWrapper:
+    """Simulates complex tensor wrappers (like ESCNN's GeometricTensor) that
+    cause copy.deepcopy to hang.  The circular reference makes deepcopy
+    loop infinitely, while the .tensor attribute lets torchlens extract
+    the underlying data."""
+
+    def __init__(self, tensor):
+        self.tensor = tensor
+        self._self_ref = self  # circular reference → deepcopy hangs
+
+
+class WrappedInputModel(nn.Module):
+    """Model that receives a TensorWrapper and extracts its .tensor.
+
+    Used to test that torchlens can handle non-deepcopy-safe input
+    arguments without hanging (issue #18).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 5)
+
+    def forward(self, wrapper):
+        return self.linear(wrapper.tensor)

@@ -6,6 +6,7 @@ plus new API coverage tests.
 
 from os.path import join as opj
 
+import pytest
 import torch
 
 from conftest import VIS_OUTPUT_DIR
@@ -1719,3 +1720,27 @@ def test_output_matches_parent_no_false_positive(input_2d):
             f"Layer {label} should not have child tensor variations in a "
             f"mutation-free model, but has_child_tensor_variations={entry.has_child_tensor_variations}"
         )
+
+
+# =============================================================================
+# Regression: issue #18 — deepcopy hangs on complex tensor wrappers
+# =============================================================================
+
+
+@pytest.mark.timeout(30)
+def test_wrapped_input_no_deepcopy_hang():
+    """Ensure torchlens handles non-deepcopy-safe input args (issue #18).
+
+    copy.deepcopy would loop infinitely on objects with circular references
+    (e.g. ESCNN's GeometricTensor).  The safe_copy_args helper clones tensors
+    and leaves other objects as-is, avoiding the hang.
+    """
+    original_tensor = torch.rand(5, 5)
+    original_data = original_tensor.clone()
+    wrapper = example_models.TensorWrapper(original_tensor)
+    model = example_models.WrappedInputModel()
+    mh = log_forward_pass(model, wrapper)
+    assert mh is not None
+    assert len(mh.layer_labels) > 0
+    # Original tensor should not have been mutated (same-device case)
+    assert torch.equal(wrapper.tensor, original_data)
