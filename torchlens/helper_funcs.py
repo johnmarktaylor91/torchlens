@@ -617,8 +617,12 @@ def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -
     if not torch.equal(t1.isinf(), t2.isinf()):
         return False
 
-    t1_nonan = torch.nan_to_num(t1, 0.7234691827346)
-    t2_nonan = torch.nan_to_num(t2, 0.7234691827346)
+    if t1.is_complex():
+        t1_nonan = torch.view_as_complex(torch.nan_to_num(torch.view_as_real(t1), 0.7234691827346))
+        t2_nonan = torch.view_as_complex(torch.nan_to_num(torch.view_as_real(t2), 0.7234691827346))
+    else:
+        t1_nonan = torch.nan_to_num(t1, 0.7234691827346)
+        t2_nonan = torch.nan_to_num(t2, 0.7234691827346)
 
     if torch.equal(t1_nonan, t2_nonan):
         return True
