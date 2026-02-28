@@ -19,6 +19,7 @@ from .helper_funcs import (
     make_short_barcode_from_input,
     make_var_iterable,
     safe_copy,
+    tensor_nanequal,
 )
 from .tensor_log import TensorLogEntry
 
@@ -60,6 +61,8 @@ def save_new_activations(
         tensor_log_entry.has_saved_activations = False
         tensor_log_entry.has_saved_grad = False
         tensor_log_entry.grad_contents = None
+        tensor_log_entry.has_child_tensor_variations = False
+        tensor_log_entry.children_tensor_versions = {}
 
     # Reset relevant fields.
     self.layers_with_saved_activations = []
@@ -139,7 +142,6 @@ def log_source_tensor_exhaustive(
         "tensor_label_raw": tensor_label,
         "layer_label_raw": tensor_label,
         "realtime_tensor_num": realtime_tensor_num,
-        "index_in_saved_log": None,
         "operation_num": None,
         "source_model_history": self,
         "_pass_finished": False,
@@ -169,8 +171,8 @@ def log_source_tensor_exhaustive(
         "tensor_dtype": t.dtype,
         "tensor_fsize": get_tensor_memory_amount(t),
         "tensor_fsize_nice": human_readable_size(get_tensor_memory_amount(t)),
-        # Get-item complexities
-        "was_getitem_applied": False,
+        # Child tensor variation tracking
+        "has_child_tensor_variations": False,
         "children_tensor_versions": {},
         # Grad info:
         "grad_contents": None,
@@ -580,30 +582,23 @@ def log_function_output_tensors_exhaustive(
         if self.save_gradients:
             _add_backward_hook(self, out, out.tl_tensor_label_raw)
 
-        # Check if parent is parent of a slice function, and deal with any complexities from that.
-        if (new_tensor_entry.func_applied_name == "__getitem__") and (
-            len(new_tensor_entry.parent_layers) > 0
-        ):
-            self[new_tensor_entry.parent_layers[0]].was_getitem_applied = True
-
+        # Track if any parent's tensor_contents differs from what this child received.
+        # This catches getitem slicing, view mutations, and any other case where
+        # a parent's saved values don't match the arg copy the child actually saw.
         for parent_label in new_tensor_entry.parent_layers:
             parent = self[parent_label]
-            if all(
-                [
-                    parent.was_getitem_applied,
-                    parent.has_saved_activations,
-                    self.save_function_args,
-                ]
-            ):
+            if parent.has_saved_activations and self.save_function_args:
                 parent_tensor_contents = _get_parent_contents(
                     parent_label,
                     arg_copies,
                     kwarg_copies,
                     new_tensor_entry.parent_layer_arg_locs,
                 )
-                parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
-                    parent_tensor_contents
-                )
+                if not tensor_nanequal(parent_tensor_contents, parent.tensor_contents):
+                    parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
+                        parent_tensor_contents
+                    )
+                    parent.has_child_tensor_variations = True
 
 
 def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs):
@@ -704,17 +699,18 @@ def log_function_output_tensors_fast(
                 if child_layer in self.output_layers:
                     child_output = self.layer_dict_main_keys[child_layer]
                     if (
-                        orig_tensor_entry.was_getitem_applied
+                        orig_tensor_entry.has_child_tensor_variations
                         and child_layer in orig_tensor_entry.children_tensor_versions
                     ):
+                        # children_tensor_versions already has transforms applied
                         tensor_to_save = orig_tensor_entry.children_tensor_versions[child_layer]
+                        child_output.tensor_contents = safe_copy(tensor_to_save)
                     else:
-                        tensor_to_save = out
-                    child_output.tensor_contents = safe_copy(tensor_to_save)
-                    if self.activation_postfunc is not None:
-                        child_output.tensor_contents = self.activation_postfunc(
-                            child_output.tensor_contents
-                        )
+                        child_output.tensor_contents = safe_copy(out)
+                        if self.activation_postfunc is not None:
+                            child_output.tensor_contents = self.activation_postfunc(
+                                child_output.tensor_contents
+                            )
                     child_output.has_saved_activations = True
                     child_output.tensor_fsize = get_tensor_memory_amount(
                         child_output.tensor_contents
@@ -737,7 +733,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
     Returns:
         True if the output should be logged, False otherwise.
     """
-    if type(out) != torch.Tensor:  # only log if it's a tensor
+    if type(out) is not torch.Tensor:  # only log if it's a tensor
         return False
 
     if (not hasattr(out, "tl_tensor_label_raw")) or is_bottom_level_func:
@@ -826,7 +822,6 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["layer_total_num"] = None
     fields_dict["same_layer_operations"] = []
     fields_dict["realtime_tensor_num"] = realtime_tensor_num
-    fields_dict["index_in_saved_log"] = None
     fields_dict["operation_num"] = None
     fields_dict["source_model_history"] = self
     fields_dict["_pass_finished"] = False
@@ -857,8 +852,8 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["tensor_fsize"] = get_tensor_memory_amount(t)
     fields_dict["tensor_fsize_nice"] = human_readable_size(fields_dict["tensor_fsize"])
 
-    # Slice function complexities (i.e., what if a parent tensor is changed in place)
-    fields_dict["was_getitem_applied"] = False
+    # Child tensor variation tracking
+    fields_dict["has_child_tensor_variations"] = False
     fields_dict["children_tensor_versions"] = {}
 
     # If internally initialized, fix this information:
@@ -1162,25 +1157,33 @@ def _get_operation_equivalence_type(
 def _get_hash_from_args(args, kwargs):
     """
     Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
+    Preserves positional arg indices, kwarg names, and dict keys to avoid collisions.
     """
     args_to_hash = []
-    for a, arg in enumerate(list(args) + list(kwargs.values())):
-        if hasattr(arg, "tl_tensor_label_raw"):
-            args_to_hash.append(f"arg{a}{arg.shape}")
-        else:
-            arg_iter = make_var_iterable(arg)
-            for i, arg_elem in enumerate(arg_iter):
-                if not hasattr(arg_elem, "tl_tensor_label_raw") and not isinstance(
-                    arg_elem, torch.nn.Parameter
-                ):
-                    args_to_hash.append(arg_elem)
-                elif hasattr(arg_elem, "tl_tensor_label_raw"):
-                    args_to_hash.append(f"arg{a}_iter{i}_{arg_elem.shape}")
+    for a, arg in enumerate(args):
+        _append_arg_hash(arg, f"pos{a}", args_to_hash)
+    for key, arg in kwargs.items():
+        _append_arg_hash(arg, f"kw_{key}", args_to_hash)
 
     if len(args_to_hash) == 0:
         return "no_args"
-    arg_hash = make_short_barcode_from_input(args_to_hash)
-    return arg_hash
+    return make_short_barcode_from_input(args_to_hash)
+
+
+def _append_arg_hash(arg, prefix, args_to_hash):
+    """Append hash-relevant info for a single arg, preserving structure."""
+    if hasattr(arg, "tl_tensor_label_raw"):
+        args_to_hash.append(f"{prefix}_tensor{arg.shape}")
+    elif isinstance(arg, dict):
+        for k, v in arg.items():
+            _append_arg_hash(v, f"{prefix}_dk{k}", args_to_hash)
+    elif isinstance(arg, (list, tuple, set)):
+        for i, elem in enumerate(arg):
+            _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash)
+    elif isinstance(arg, torch.nn.Parameter):
+        pass  # exclude parameters from hash (same as before)
+    else:
+        args_to_hash.append(f"{prefix}_{arg}")
 
 
 def _update_tensor_containing_modules(tensor_entry: TensorLogEntry) -> List[str]:

@@ -1312,3 +1312,411 @@ class PropertyModel(nn.Module):
         m2 = m.mT.mean()
         out = r * i / m2 + t2.mean()
         return out
+
+
+#  ****************************************************
+#  **** Edge-Case Loop Detection Test Models ****
+#  ****************************************************
+
+
+class ParallelLoops(nn.Module):
+    """Two independent loops on separate branches, same op types."""
+
+    @staticmethod
+    def forward(x):
+        a = x + 1
+        b = x + 2
+        for _ in range(3):
+            a = torch.sin(a)
+        for _ in range(3):
+            b = torch.sin(b)
+        return a + b
+
+
+class SharedParamLoopExternal(nn.Module):
+    """Same Linear used both inside and outside a loop."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        for _ in range(3):
+            x = self.fc(x)
+        x = self.fc(x)
+        return x
+
+
+class InterleavedSharedParamLoops(nn.Module):
+    """Same Linear used in two distinct loops with different surrounding ops."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.relu(x)
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.sigmoid(x)
+        return x
+
+
+class NestedLoopsIndependentParams(nn.Module):
+    """Outer loop uses fc_outer, inner loop uses fc_inner. Different params per level."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc_outer = nn.Linear(5, 5)
+        self.fc_inner = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc_outer(x)
+            for _ in range(2):
+                x = self.fc_inner(x)
+        return x
+
+
+class SelfFeedingNoParam(nn.Module):
+    """Output of each iteration feeds directly as input to next, no params."""
+
+    @staticmethod
+    def forward(x):
+        for _ in range(4):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        return x
+
+
+class DiamondLoop(nn.Module):
+    """Loop body has a diamond: split into two paths, then merge."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(3):
+            x = self.fc(x)
+            a = torch.sin(x)
+            b = torch.cos(x)
+            x = a + b
+        return x
+
+
+class AccumulatorLoop(nn.Module):
+    """Loop appends to output list each iteration."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        outputs = []
+        for _ in range(3):
+            x = self.fc(x)
+            x = torch.relu(x)
+            outputs.append(x)
+        return torch.stack(outputs)
+
+
+class SingleIterationLoop(nn.Module):
+    """Loop that runs exactly once — should NOT be detected as multi-pass."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(1):
+            x = self.fc(x)
+            x = torch.relu(x)
+        return x
+
+
+class LongLoop(nn.Module):
+    """Many iterations to test O(n^2) pairwise merge performance."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for _ in range(20):
+            x = self.fc(x)
+            x = torch.relu(x)
+        return x
+
+
+class DataDependentBranchLoop(nn.Module):
+    """Branch inside loop — some iterations take different paths."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        for i in range(4):
+            x = self.fc(x)
+            if i % 2 == 0:
+                x = torch.relu(x)
+            else:
+                x = torch.sigmoid(x)
+        return x
+
+
+class SequentialParamFreeLoops(nn.Module):
+    """Two back-to-back param-free loops with identical ops.
+    Tests that adjacency correctly separates them."""
+
+    @staticmethod
+    def forward(x):
+        for _ in range(3):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        x = x + 1
+        for _ in range(3):
+            x = torch.sin(x)
+            x = torch.cos(x)
+        return x
+
+
+# =============================================================================
+# Conditional Diffusion UNet
+# =============================================================================
+# Adapted from TeaPearce/Conditional_Diffusion_MNIST:
+# https://github.com/TeaPearce/Conditional_Diffusion_MNIST
+
+
+class _ResidualConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, is_res=False):
+        super().__init__()
+        self.same_channels = in_channels == out_channels
+        self.is_res = is_res
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, 1, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU(),
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, 3, 1, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU(),
+        )
+
+    def forward(self, x):
+        if self.is_res:
+            x1 = self.conv1(x)
+            x2 = self.conv2(x1)
+            if self.same_channels:
+                out = x + x2
+            else:
+                out = x1 + x2
+            return out / 1.414
+        else:
+            x1 = self.conv1(x)
+            x2 = self.conv2(x1)
+            return x2
+
+
+class _UnetDown(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.model = nn.Sequential(_ResidualConvBlock(in_channels, out_channels), nn.MaxPool2d(2))
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class _UnetUp(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, 2, 2),
+            _ResidualConvBlock(out_channels, out_channels),
+            _ResidualConvBlock(out_channels, out_channels),
+        )
+
+    def forward(self, x, skip):
+        x = torch.cat((x, skip), 1)
+        x = self.model(x)
+        return x
+
+
+class _EmbedFC(nn.Module):
+    def __init__(self, input_dim, emb_dim):
+        super().__init__()
+        self.input_dim = input_dim
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, emb_dim),
+            nn.GELU(),
+            nn.Linear(emb_dim, emb_dim),
+        )
+
+    def forward(self, x):
+        x = x.view(-1, self.input_dim)
+        return self.model(x)
+
+
+class ContextUnet(nn.Module):
+    """Conditional UNet for diffusion models."""
+
+    def __init__(self, in_channels, n_feat=256, n_classes=10):
+        super().__init__()
+        self.in_channels = in_channels
+        self.n_feat = n_feat
+        self.n_classes = n_classes
+
+        self.init_conv = _ResidualConvBlock(in_channels, n_feat, is_res=True)
+
+        self.down1 = _UnetDown(n_feat, n_feat)
+        self.down2 = _UnetDown(n_feat, 2 * n_feat)
+
+        self.to_vec = nn.Sequential(nn.AvgPool2d(7), nn.GELU())
+
+        self.timeembed1 = _EmbedFC(1, 2 * n_feat)
+        self.timeembed2 = _EmbedFC(1, 1 * n_feat)
+        self.contextembed1 = _EmbedFC(n_classes, 2 * n_feat)
+        self.contextembed2 = _EmbedFC(n_classes, 1 * n_feat)
+
+        self.up0 = nn.Sequential(
+            nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, 7, 7),
+            nn.GroupNorm(8, 2 * n_feat),
+            nn.ReLU(),
+        )
+
+        self.up1 = _UnetUp(4 * n_feat, n_feat)
+        self.up2 = _UnetUp(2 * n_feat, n_feat)
+        self.out = nn.Sequential(
+            nn.Conv2d(2 * n_feat, n_feat, 3, 1, 1),
+            nn.GroupNorm(8, n_feat),
+            nn.ReLU(),
+            nn.Conv2d(n_feat, self.in_channels, 3, 1, 1),
+        )
+
+    def forward(self, x, c, t, context_mask):
+        x = self.init_conv(x)
+        down1 = self.down1(x)
+        down2 = self.down2(down1)
+        hiddenvec = self.to_vec(down2)
+
+        c = nn.functional.one_hot(c, num_classes=self.n_classes).type(torch.float)
+
+        context_mask = context_mask[:, None]
+        context_mask = context_mask.repeat(1, self.n_classes)
+        context_mask = -1 * (1 - context_mask)
+        c = c * context_mask
+
+        cemb1 = self.contextembed1(c).view(-1, self.n_feat * 2, 1, 1)
+        temb1 = self.timeembed1(t).view(-1, self.n_feat * 2, 1, 1)
+        cemb2 = self.contextembed2(c).view(-1, self.n_feat, 1, 1)
+        temb2 = self.timeembed2(t).view(-1, self.n_feat, 1, 1)
+
+        up1 = self.up0(hiddenvec)
+        up2 = self.up1(cemb1 * up1 + temb1, down2)
+        up3 = self.up2(cemb2 * up2 + temb2, down1)
+        out = self.out(torch.cat((up3, x), 1))
+        return out
+
+
+#  ****************************************************
+#  **** View Mutation / Child Tensor Variation Models ****
+#  ****************************************************
+
+
+class ViewMutationUnsqueeze(nn.Module):
+    """Mutation through unsqueeze view: y = x.unsqueeze(0); y.fill_(0); return x.
+    The fill_ mutates x's storage through the view, so x's tensor_contents at
+    logging time differs from what children actually receive."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.unsqueeze(0)
+        y.fill_(0)
+        return x
+
+
+class ViewMutationReshape(nn.Module):
+    """Mutation through reshape view: y = x.reshape(1, -1); y.zero_(); return x.
+    The zero_ mutates x's storage through the reshaped view."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.reshape(1, -1)
+        y.zero_()
+        return x
+
+
+class ViewMutationTranspose(nn.Module):
+    """Mutation through transpose view: y = x.t(); y.fill_(42); return x.
+    The fill_ mutates x's storage through the transposed view."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.t()
+        y.fill_(42)
+        return x
+
+
+class MultipleViewMutations(nn.Module):
+    """Multiple views mutated independently: y = x[0:2]; z = x[2:4];
+    y.zero_(); z.fill_(1); return x.  Two different slices mutated."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x[0:2]
+        z = x[2:4]
+        y.zero_()
+        z.fill_(1)
+        return x
+
+
+class ChainedViewMutation(nn.Module):
+    """Mutation through chained views: y = x.unsqueeze(0); z = y.squeeze(0);
+    z.zero_(); return x.  The zero_ propagates through two levels of views."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x.unsqueeze(0)
+        z = y.squeeze(0)
+        z.zero_()
+        return x
+
+
+class OutputMatchesParent(nn.Module):
+    """No mutation: output IS the same tensor as the linear output.
+    Verifies no false-positive child tensor variations are detected."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        y = x + 1
+        z = y * 2
+        return z

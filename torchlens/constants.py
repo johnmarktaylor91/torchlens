@@ -117,7 +117,6 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "layer_label_raw",
     "operation_num",
     "realtime_tensor_num",
-    "index_in_saved_log",
     "source_model_history",
     "_pass_finished",
     # Other labeling info
@@ -145,8 +144,8 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "tensor_dtype",
     "tensor_fsize",
     "tensor_fsize_nice",
-    # Tensor slice-changing complications
-    "was_getitem_applied",
+    # Child tensor variation tracking
+    "has_child_tensor_variations",
     "children_tensor_versions",
     # Saved gradient info
     "grad_contents",

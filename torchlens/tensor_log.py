@@ -47,7 +47,6 @@ class TensorLogEntry:
         self.layer_label_raw = fields_dict["layer_label_raw"]
         self.operation_num = fields_dict["operation_num"]
         self.realtime_tensor_num = fields_dict["realtime_tensor_num"]
-        self.index_in_saved_log = fields_dict["index_in_saved_log"]
         self.source_model_history: "ModelHistory" = fields_dict["source_model_history"]
         self._pass_finished = fields_dict["_pass_finished"]
 
@@ -79,8 +78,8 @@ class TensorLogEntry:
         self.tensor_fsize = fields_dict["tensor_fsize"]
         self.tensor_fsize_nice = fields_dict["tensor_fsize_nice"]
 
-        # Dealing with getitem complexities
-        self.was_getitem_applied = fields_dict["was_getitem_applied"]
+        # Child tensor variation tracking
+        self.has_child_tensor_variations = fields_dict["has_child_tensor_variations"]
         self.children_tensor_versions = fields_dict["children_tensor_versions"]
 
         # Saved gradient info
