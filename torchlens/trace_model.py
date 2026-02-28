@@ -169,6 +169,19 @@ def run_and_log_inputs_through_model(
 
     self._tensor_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
 
+    # In fast mode, also save parents of output layers so output tensor_contents
+    # can be populated in postprocess_fast (issue #46).
+    if self._tensor_nums_to_save != "all" and self._pass_finished:
+        output_parent_nums = set()
+        for output_label in self.output_layers:
+            output_entry = self[output_label]
+            for parent_label in output_entry.parent_layers:
+                parent_entry = self[parent_label]
+                output_parent_nums.add(parent_entry.realtime_tensor_num)
+        if output_parent_nums:
+            combined = set(self._tensor_nums_to_save) | output_parent_nums
+            self._tensor_nums_to_save = sorted(combined)
+
     if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
         model = model.module
 
