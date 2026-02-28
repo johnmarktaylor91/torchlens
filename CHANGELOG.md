@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v0.7.1 (2026-02-28)
+
+### Bug Fixes
+
+- **logging**: Handle complex-dtype tensors in tensor_nanequal
+  ([`fe58f25`](https://github.com/johnmarktaylor91/torchlens/commit/fe58f25c27a246ff4c2f29ef1deaa8809fd269fa))
+
+torch.nan_to_num does not support complex tensors, which caused test_qml to fail when PennyLane
+  quantum ops produced complex outputs. Use view_as_real/view_as_complex to handle NaN replacement
+  for complex dtypes.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.7.0 (2026-02-28)
 
 ### Bug Fixes
