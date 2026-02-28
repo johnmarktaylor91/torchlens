@@ -1762,3 +1762,17 @@ class TupleInputModel(nn.Module):
     def forward(self, x):
         a, b = x
         return self.linear(a) + self.linear(b)
+
+
+class FunctionalAfterSubmodule(nn.Module):
+    """Container module with a functional op (relu) after a leaf submodule (linear).
+
+    The relu should render as an oval in the graph, not a box (issue #48).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(5, 5)
+
+    def forward(self, x):
+        return torch.relu(self.linear(x))
