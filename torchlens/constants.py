@@ -22,6 +22,7 @@ MODEL_HISTORY_FIELD_ORDER = [
     "detach_saved_tensors",
     "output_device",
     "save_function_args",
+    "num_context_lines",
     "save_gradients",
     "has_saved_gradients",
     "activation_postfunc",
@@ -244,6 +245,19 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "bottom_level_submodule_pass_exited",
     "module_entry_exit_threads_inputs",
     "module_entry_exit_thread_output",
+]
+
+FUNC_CALL_LOCATION_FIELD_ORDER = [
+    "file",
+    "line_number",
+    "func_name",
+    "func_signature",
+    "func_docstring",
+    "call_line",
+    "code_context",
+    "code_context_str",
+    "code_context_labeled",
+    "num_context_lines",
 ]
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions

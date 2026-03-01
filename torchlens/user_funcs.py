@@ -33,6 +33,7 @@ def run_model_and_save_specified_activations(
     save_function_args: bool = False,
     save_gradients: bool = False,
     random_seed: Optional[int] = None,
+    num_context_lines: int = 7,
 ) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
@@ -67,6 +68,7 @@ def run_model_and_save_specified_activations(
         save_gradients,
         detach_saved_tensors,
         mark_input_output_distances,
+        num_context_lines,
     )
     model_history._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
@@ -100,6 +102,7 @@ def log_forward_pass(
     vis_gradient_edge_overrides: Dict = None,
     vis_module_overrides: Dict = None,
     random_seed: Optional[int] = None,
+    num_context_lines: int = 7,
 ) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -166,6 +169,7 @@ def log_forward_pass(
             save_function_args=save_function_args,
             save_gradients=save_gradients,
             random_seed=random_seed,
+            num_context_lines=num_context_lines,
         )
     else:
         model_history = run_model_and_save_specified_activations(
@@ -181,6 +185,7 @@ def log_forward_pass(
             save_function_args=save_function_args,
             save_gradients=save_gradients,
             random_seed=random_seed,
+            num_context_lines=num_context_lines,
         )
         model_history.keep_unsaved_layers = keep_unsaved_layers
         model_history.save_new_activations(

@@ -16,7 +16,7 @@ from .helper_funcs import (
     log_current_rng_states,
     safe_copy,
     tensor_nanequal,
-    _get_call_stack_dicts,
+    _get_func_call_stack,
 )
 from .tensor_log import RolledTensorLogEntry, TensorLogEntry
 
@@ -161,7 +161,7 @@ def _add_output_layers(
 
         new_output_node.func_applied = identity
         new_output_node.func_applied_name = "none"
-        new_output_node.func_call_stack = _get_call_stack_dicts()
+        new_output_node.func_call_stack = _get_func_call_stack(self.num_context_lines)
         new_output_node.func_time_elapsed = 0
         new_output_node.func_rng_states = log_current_rng_states()
         new_output_node.func_argnames = tuple([])

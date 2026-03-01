@@ -174,52 +174,133 @@ def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 
     return barcode
 
 
-def _get_call_stack_dicts():
-    call_stack = inspect.stack()
-    call_stack = [
-        inspect.getframeinfo(call_stack[i][0], context=19) for i in range(len(call_stack))
-    ]
-    call_stack_dicts = [
-        {
-            "call_fname": caller.filename,
-            "call_linenum": caller.lineno,
-            "function": caller.function,
-            "code_context": caller.code_context,
-        }
-        for caller in call_stack
+def _get_func_call_stack(num_context_lines: int = 7):
+    """Build a list of FuncCallLocation objects for the current call stack.
+
+    Filters out torchlens internals and ``_call_impl`` frames, keeping only
+    user-visible frames starting from the ``log_forward_pass`` call site
+    through the model's ``forward`` method and any deeper user calls.
+
+    Args:
+        num_context_lines: Number of source lines to show on each side of
+            the call line.  The total context window is
+            ``2 * num_context_lines + 1``.
+
+    Returns:
+        List[FuncCallLocation] ordered shallow-to-deep.
+    """
+    from .data_classes import FuncCallLocation
+
+    _TORCHLENS_SUFFIXES = (
+        "model_history.py",
+        "torchlens/helper_funcs.py",
+        "torchlens/user_funcs.py",
+        "torchlens/trace_model.py",
+        "torchlens/logging_funcs.py",
+        "torchlens/decorate_torch.py",
+        "torchlens/model_funcs.py",
+    )
+
+    context_window = 2 * num_context_lines + 1
+    raw_stack = inspect.stack()
+    frame_infos = [
+        inspect.getframeinfo(raw_stack[i][0], context=context_window) for i in range(len(raw_stack))
     ]
 
-    for call_stack_dict in call_stack_dicts:
-        if is_iterable(call_stack_dict["code_context"]):
-            call_stack_dict["code_context_str"] = "".join(call_stack_dict["code_context"])
-        else:
-            call_stack_dict["code_context_str"] = str(call_stack_dict["code_context"])
-
-    # Only start at the level of that first forward pass, going from shallow to deep.
+    # Walk bottom-up (deepest caller last → first in output) and collect
+    # non-internal frames.  Start tracking once we hit a ``forward`` frame,
+    # but also include the frame *before* the first ``forward`` (the user's
+    # script that called ``log_forward_pass``).
     tracking = False
-    filtered_dicts = []
-    for d in range(len(call_stack_dicts) - 1, -1, -1):
-        call_stack_dict = call_stack_dicts[d]
-        if any(
-            [
-                call_stack_dict["call_fname"].endswith("model_history.py"),
-                call_stack_dict["call_fname"].endswith("torchlens/helper_funcs.py"),
-                call_stack_dict["call_fname"].endswith("torchlens/user_funcs.py"),
-                call_stack_dict["call_fname"].endswith("torchlens/trace_model.py"),
-                call_stack_dict["call_fname"].endswith("torchlens/logging_funcs.py"),
-                call_stack_dict["call_fname"].endswith("torchlens/decorate_torch.py"),
-                call_stack_dict["call_fname"].endswith("torchlens/model_funcs.py"),
-                "_call_impl" in call_stack_dict["function"],
-            ]
-        ):
+    pre_forward_frame_idx = None
+    filtered_indices = []
+
+    for idx in range(len(frame_infos) - 1, -1, -1):
+        info = frame_infos[idx]
+        fname = info.filename
+
+        # Skip torchlens internals and PyTorch _call_impl
+        if any(fname.endswith(s) for s in _TORCHLENS_SUFFIXES):
             continue
-        if call_stack_dict["function"] == "forward":
+        if "_call_impl" in info.function:
+            continue
+
+        if info.function == "forward" and not tracking:
             tracking = True
+            # Look for the user-script frame that called log_forward_pass
+            # — it's the next non-internal frame above (higher index = shallower).
+            for j in range(idx + 1, len(frame_infos)):
+                jinfo = frame_infos[j]
+                if (
+                    not any(jinfo.filename.endswith(s) for s in _TORCHLENS_SUFFIXES)
+                    and "_call_impl" not in jinfo.function
+                ):
+                    pre_forward_frame_idx = j
+                    break
 
         if tracking:
-            filtered_dicts.append(call_stack_dict)
+            filtered_indices.append(idx)
 
-    return filtered_dicts
+    # Prepend the log_forward_pass call-site frame if found and not already included
+    if pre_forward_frame_idx is not None and pre_forward_frame_idx not in filtered_indices:
+        filtered_indices.append(pre_forward_frame_idx)
+
+    # Build FuncCallLocation objects
+    result = []
+    for idx in filtered_indices:
+        info = frame_infos[idx]
+        frame = raw_stack[idx][0]
+
+        # Try to extract function object for signature / docstring
+        func_signature = None
+        func_docstring = None
+        func_obj = frame.f_locals.get(info.function) or frame.f_globals.get(info.function)
+        if func_obj is not None and callable(func_obj):
+            try:
+                func_signature = str(inspect.signature(func_obj))
+            except (ValueError, TypeError):
+                pass
+            doc = getattr(func_obj, "__doc__", None)
+            if doc:
+                func_docstring = doc
+
+        code_context = info.code_context
+        if code_context is not None:
+            code_context_str = "".join(code_context)
+            # The call line is at position info.index within the context list
+            call_line_idx = info.index if info.index is not None else num_context_lines
+            call_line = (
+                code_context[call_line_idx].strip() if call_line_idx < len(code_context) else ""
+            )
+
+            # Build labeled context with arrow at the call line
+            labeled_lines = []
+            for i, line in enumerate(code_context):
+                if i == call_line_idx:
+                    labeled_lines.append(f"  --->  {line.rstrip()}")
+                else:
+                    labeled_lines.append(f"        {line.rstrip()}")
+            code_context_labeled = "\n".join(labeled_lines)
+        else:
+            code_context_str = "None"
+            call_line = ""
+            code_context_labeled = ""
+
+        loc = FuncCallLocation(
+            file=info.filename,
+            line_number=info.lineno,
+            func_name=info.function,
+            func_signature=func_signature,
+            func_docstring=func_docstring,
+            call_line=call_line,
+            code_context=code_context,
+            code_context_str=code_context_str,
+            code_context_labeled=code_context_labeled,
+            num_context_lines=len(code_context) if code_context is not None else 0,
+        )
+        result.append(loc)
+
+    return result
 
 
 def is_iterable(obj: Any) -> bool:

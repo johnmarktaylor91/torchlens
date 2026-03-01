@@ -100,36 +100,36 @@ Log of AlexNet forward pass:
 	Time elapsed: 0.288s
 	Module Hierarchy:
 		features:
-		    features.0, features.1, features.2, features.3, features.4, features.5, features.6, features.7, 
+		    features.0, features.1, features.2, features.3, features.4, features.5, features.6, features.7,
 		    features.8, features.9, features.10, features.11, features.12
 		avgpool
 		classifier:
 		    classifier.0, classifier.1, classifier.2, classifier.3, classifier.4, classifier.5, classifier.6
 	Layers:
-		0: input_1_0 
-		1: conv2d_1_1 
-		2: relu_1_2 
-		3: maxpool2d_1_3 
-		4: conv2d_2_4 
-		5: relu_2_5 
-		6: maxpool2d_2_6 
-		7: conv2d_3_7 
-		8: relu_3_8 
-		9: conv2d_4_9 
-		10: relu_4_10 
-		11: conv2d_5_11 
-		12: relu_5_12 
-		13: maxpool2d_3_13 
-		14: adaptiveavgpool2d_1_14 
-		15: flatten_1_15 
-		16: dropout_1_16 
-		17: linear_1_17 
-		18: relu_6_18 
-		19: dropout_2_19 
-		20: linear_2_20 
-		21: relu_7_21 
-		22: linear_3_22 
-		23: output_1_23 
+		0: input_1_0
+		1: conv2d_1_1
+		2: relu_1_2
+		3: maxpool2d_1_3
+		4: conv2d_2_4
+		5: relu_2_5
+		6: maxpool2d_2_6
+		7: conv2d_3_7
+		8: relu_3_8
+		9: conv2d_4_9
+		10: relu_4_10
+		11: conv2d_5_11
+		12: relu_5_12
+		13: maxpool2d_3_13
+		14: adaptiveavgpool2d_1_14
+		15: flatten_1_15
+		16: dropout_1_16
+		17: linear_1_17
+		18: relu_6_18
+		19: dropout_2_19
+		20: linear_2_20
+		21: relu_7_21
+		22: linear_3_22
+		23: output_1_23
 '''
 ```
 
@@ -148,7 +148,7 @@ ModelHistory object (both shown above). Here are some examples of how to pull ou
 particular layer, and also how to pull out the actual activations from that layer:
 
 ```python
-print(model_history['conv2d_3_7'])  # pulling out layer by its name 
+print(model_history['conv2d_3_7'])  # pulling out layer by its name
 # The following commented lines pull out the same layer:
 # model_history['conv2d_3'] you can omit the second number (since strictly speaking it's redundant)
 # model_history['conv2d_3_7:1'] colon indicates the pass of a layer (here just one)
@@ -166,7 +166,7 @@ Layer conv2d_3_7, operation 8/24:
 	Params: Computed from params with shape (384,), (384, 192, 3, 3); 663936 params total (2.5 MB)
 	Parent Layers: maxpool2d_2_6
 	Child Layers: relu_3_8
-	Function: conv2d (gradfunc=ConvolutionBackward0) 
+	Function: conv2d (gradfunc=ConvolutionBackward0)
 	Computed inside module: features.6
 	Time elapsed:  5.670E-04s
 	Output of modules: features.6
@@ -174,7 +174,7 @@ Layer conv2d_3_7, operation 8/24:
 	Lookup keys: -17, 7, conv2d_3_7, conv2d_3_7:1, features.6, features.6:1
 '''
 
-# You can pull out the actual output activations from a layer with the tensor_contents field: 
+# You can pull out the actual output activations from a layer with the tensor_contents field:
 print(model_history['conv2d_3_7'].tensor_contents)
 '''
 tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
@@ -236,33 +236,21 @@ and graph neural networks.
 
 <img src="images/gradients.png" width=30% height=30%>
 
-- You can see the literal code that was used to run the model with the func_call_stack field:
+- You can see the literal code that was used to run the model with the func_call_stack field.
+  Each entry is a `FuncCallLocation` object with a clean repr and source context:
 
 ```python
-print(model_history['conv2d_3'].func_call_stack[8])
+print(model_history['conv2d_3'].func_call_stack[0])
 '''
-{'call_fname': '/usr/local/lib/python3.10/dist-packages/torchvision/models/alexnet.py',
- 'call_linenum': 48,
- 'function': 'forward',
- 'code_context': ['            nn.Linear(256 * 6 * 6, 4096),\n',
-  '            nn.ReLU(inplace=True),\n',
-  '            nn.Dropout(p=dropout),\n',
-  '            nn.Linear(4096, 4096),\n',
-  '            nn.ReLU(inplace=True),\n',
-  '            nn.Linear(4096, num_classes),\n',
-  '        )\n',
-  '\n',
-  '    def forward(self, x: torch.Tensor) -> torch.Tensor:\n',
-  '        x = self.features(x)\n',
-  '        x = self.avgpool(x)\n',
-  '        x = torch.flatten(x, 1)\n',
-  '        x = self.classifier(x)\n',
-  '        return x\n',
-  '\n',
-  '\n',
-  'class AlexNet_Weights(WeightsEnum):\n',
-  '    IMAGENET1K_V1 = Weights(\n',
-  '        url="https://download.pytorch.org/models/alexnet-owt-7be5be79.pth",\n']}
+FuncCallLocation:
+  file: /usr/local/lib/python3.10/dist-packages/torchvision/models/alexnet.py
+  line: 48
+  function: forward
+  code:
+          x = self.features(x)
+          x = self.avgpool(x)
+    --->  x = self.classifier(x)
+          return x
 '''
 ```
 
