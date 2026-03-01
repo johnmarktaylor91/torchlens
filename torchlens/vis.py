@@ -6,10 +6,10 @@ from IPython.display import display
 
 from .helper_funcs import in_notebook, int_list_to_compact_str
 from .postprocess import _roll_graph
-from .tensor_log import RolledTensorLogEntry, TensorLogEntry
+from .data_classes.tensor_log import RolledTensorLog, TensorLog
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_log import ModelLog
 
 INPUT_COLOR = "#98FB98"
 OUTPUT_COLOR = "#ff9999"
@@ -27,7 +27,7 @@ COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
 
 def render_graph(
-    self: "ModelHistory",
+    self: "ModelLog",
     vis_opt: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
@@ -184,8 +184,8 @@ def render_graph(
 
 
 def _add_node_to_graphviz(
-    self: "ModelHistory",
-    node: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    self: "ModelLog",
+    node: Union["TensorLog", "RolledTensorLog"],
     graphviz_graph,
     module_edge_dict: Dict,
     edges_used: Set,
@@ -255,7 +255,7 @@ def _check_if_collapsed_module(node, vis_nesting_depth):
 
 
 def _construct_layer_node(
-    self: "ModelHistory", node, graphviz_graph, show_buffer_layers, vis_opt, vis_node_overrides
+    self: "ModelLog", node, graphviz_graph, show_buffer_layers, vis_opt, vis_node_overrides
 ):
     # Get the address, shape, color, and line style:
 
@@ -303,7 +303,7 @@ def _construct_layer_node(
 
 
 def _construct_collapsed_module_node(
-    self: "ModelHistory",
+    self: "ModelLog",
     node,
     graphviz_graph,
     collapsed_modules,
@@ -417,8 +417,8 @@ def _construct_collapsed_module_node(
 
 
 def _get_node_address_shape_color(
-    self: "ModelHistory",
-    node: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    self: "ModelLog",
+    node: Union["TensorLog", "RolledTensorLog"],
     show_buffer_layers: bool,
 ) -> Tuple[str, str, str]:
     """Gets the node shape, address, and color for the graphviz figure.
@@ -439,7 +439,7 @@ def _get_node_address_shape_color(
     if (node.is_bottom_level_submodule_output or only_non_buffer_layer) and (
         len(node.containing_modules_origin_nested) > 0
     ):
-        if type(node) == TensorLogEntry:
+        if type(node) == TensorLog:
             module_pass_exited = node.containing_modules_origin_nested[-1]
             module, _ = module_pass_exited.split(":")
             if self.module_num_passes[module] == 1:
@@ -456,7 +456,7 @@ def _get_node_address_shape_color(
         node_color = "black"
     elif node.is_buffer_layer:
         if (self.buffer_num_passes[node.buffer_address] == 1) or (
-            isinstance(node, RolledTensorLogEntry) and node.layer_passes_total > 1
+            isinstance(node, RolledTensorLog) and node.layer_passes_total > 1
         ):
             buffer_address = node.buffer_address
         else:
@@ -477,7 +477,7 @@ def _get_node_address_shape_color(
 
 
 def _check_if_only_non_buffer_in_module(
-    self: "ModelHistory", node: Union["TensorLogEntry", "RolledTensorLogEntry"]
+    self: "ModelLog", node: Union["TensorLog", "RolledTensorLog"]
 ):
     """Utility function to check if a layer is the only non-buffer layer in a
     leaf module (one with no child submodules).  Container modules with
@@ -501,7 +501,7 @@ def _check_if_only_non_buffer_in_module(
     # If any aren't, return False.
 
     for parent_layer_label in node.parent_layers:
-        if type(node) == TensorLogEntry:
+        if type(node) == TensorLog:
             parent_layer = self[parent_layer_label]
         else:
             parent_layer = self.layer_dict_rolled[parent_layer_label]
@@ -515,9 +515,7 @@ def _check_if_only_non_buffer_in_module(
     return True
 
 
-def _get_node_bg_color(
-    self: "ModelHistory", node: Union["TensorLogEntry", "RolledTensorLogEntry"]
-) -> str:
+def _get_node_bg_color(self: "ModelLog", node: Union["TensorLog", "RolledTensorLog"]) -> str:
     """Gets the node background color for the graphviz figure.
 
     Args:
@@ -552,7 +550,7 @@ def _get_node_bg_color(
 
 
 def _make_node_label(
-    node: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    node: Union["TensorLog", "RolledTensorLog"],
     node_address: str,
     vis_opt: str,
 ) -> str:
@@ -610,7 +608,7 @@ def _format_shape_str(shape: tuple) -> str:
     return "x1"
 
 
-def _make_param_label(node: Union["TensorLogEntry", "RolledTensorLogEntry"]) -> str:
+def _make_param_label(node: Union["TensorLog", "RolledTensorLog"]) -> str:
     """Makes the label for parameters of a node.
 
     Uses param names and bracket convention when ParamLog objects are available:
@@ -636,8 +634,8 @@ def _make_param_label(node: Union["TensorLogEntry", "RolledTensorLogEntry"]) -> 
 
 
 def _add_edges_for_node(
-    self: "ModelHistory",
-    parent_node: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    self: "ModelLog",
+    parent_node: Union["TensorLog", "RolledTensorLog"],
     parent_is_collapsed_module: bool,
     vis_nesting_depth: int,
     node_color: str,
@@ -790,9 +788,9 @@ def _add_edges_for_node(
 
 
 def _label_node_arguments_if_needed(
-    self: "ModelHistory",
-    parent_node: Union["TensorLogEntry", "RolledTensorLogEntry"],
-    child_node: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    self: "ModelLog",
+    parent_node: Union["TensorLog", "RolledTensorLog"],
+    child_node: Union["TensorLog", "RolledTensorLog"],
     edge_dict: Dict,
     show_buffer_layers: bool = False,
 ):
@@ -824,23 +822,23 @@ def _label_node_arguments_if_needed(
 
 
 def _check_whether_to_mark_arguments_on_edge(
-    self: "ModelHistory",
-    child_node: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    self: "ModelLog",
+    child_node: Union["TensorLog", "RolledTensorLog"],
     show_buffer_layers: bool = False,
 ):
     if child_node.layer_type in COMMUTE_FUNCS:
         return False
 
-    if isinstance(child_node, TensorLogEntry):
+    if isinstance(child_node, TensorLog):
         return _check_whether_to_mark_arguments_on_unrolled_edge(
             self, child_node, show_buffer_layers
         )
-    elif isinstance(child_node, RolledTensorLogEntry):
+    elif isinstance(child_node, RolledTensorLog):
         return _check_whether_to_mark_arguments_on_rolled_edge(self, child_node)
 
 
 def _check_whether_to_mark_arguments_on_unrolled_edge(
-    self, child_node: "TensorLogEntry", show_buffer_layers: bool = False
+    self, child_node: "TensorLog", show_buffer_layers: bool = False
 ):
     num_parents_shown = len(child_node.parent_layers)
 
@@ -856,7 +854,7 @@ def _check_whether_to_mark_arguments_on_unrolled_edge(
 
 
 def _check_whether_to_mark_arguments_on_rolled_edge(
-    self: "ModelHistory", child_node: "RolledTensorLogEntry", show_buffer_layers: bool = False
+    self: "ModelLog", child_node: "RolledTensorLog", show_buffer_layers: bool = False
 ):
     for pass_num, pass_parents in child_node.parent_layers_per_pass.items():
         num_parents_shown = len(pass_parents)
@@ -871,8 +869,8 @@ def _check_whether_to_mark_arguments_on_rolled_edge(
 
 
 def _label_rolled_pass_nums(
-    child_node: "RolledTensorLogEntry",
-    parent_node: "RolledTensorLogEntry",
+    child_node: "RolledTensorLog",
+    parent_node: "RolledTensorLog",
     edge_dict: Dict,
 ):
     """Adds labels for the pass numbers to the edge dict for rolled nodes.
@@ -893,8 +891,8 @@ def _label_rolled_pass_nums(
 
 
 def _get_lowest_containing_module_for_two_nodes(
-    node1: Union["TensorLogEntry", "RolledTensorLogEntry"],
-    node2: Union["TensorLogEntry", "RolledTensorLogEntry"],
+    node1: Union["TensorLog", "RolledTensorLog"],
+    node2: Union["TensorLog", "RolledTensorLog"],
     both_nodes_collapsed_modules: bool,
     vis_nesting_depth: int,
 ):
@@ -911,7 +909,7 @@ def _get_lowest_containing_module_for_two_nodes(
     node1_modules = node1.containing_modules_origin_nested[:]
     node2_modules = node2.containing_modules_origin_nested[:]
 
-    if isinstance(node1, RolledTensorLogEntry):
+    if isinstance(node1, RolledTensorLog):
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
@@ -953,7 +951,7 @@ def _get_lowest_containing_module_for_two_nodes(
 
 
 def _add_gradient_edge(
-    self: "ModelHistory",
+    self: "ModelLog",
     parent_layer,
     child_layer,
     edge_style,
@@ -986,7 +984,7 @@ def _add_gradient_edge(
 
 
 def _set_up_subgraphs(
-    self: "ModelHistory",
+    self: "ModelLog",
     graphviz_graph,
     vis_opt: str,
     module_edge_dict: Dict,
@@ -1032,7 +1030,7 @@ def _set_up_subgraphs(
 
 
 def _setup_subgraphs_recurse(
-    self: "ModelHistory",
+    self: "ModelLog",
     starting_subgraph,
     parent_graph_list: List,
     module_edge_dict,

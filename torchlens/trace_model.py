@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_log import ModelLog
 from .decorate_torch import undecorate_pytorch
 from .helper_funcs import (
     get_vars_of_type_from_obj,
@@ -32,7 +32,7 @@ def _get_input_arg_names(model, input_args):
 
 
 def _get_op_nums_from_user_labels(
-    self: "ModelHistory", which_layers: Union[str, List[Union[str, int]]]
+    self: "ModelLog", which_layers: Union[str, List[Union[str, int]]]
 ) -> List[int]:
     """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
     the numbers that were generated on the fly during the forward pass, such that they can be
@@ -146,14 +146,14 @@ def _fetch_label_move_input_tensors(
 
 
 def run_and_log_inputs_through_model(
-    self: "ModelHistory",
+    self: "ModelLog",
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any]],
     input_kwargs: Dict[Any, Any] = None,
     layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
     random_seed: Optional[int] = None,
 ):
-    """Runs input through model and logs it in ModelHistory.
+    """Runs input through model and logs it in ModelLog.
 
     Args:
         model: Model for which to save activations
@@ -162,7 +162,7 @@ def run_and_log_inputs_through_model(
         layers_to_save: List of tensor numbers to save
         random_seed: Which random seed to use
     Returns:
-        Nothing, but now the ModelHistory object will have saved activations for the new input.
+        Nothing, but now the ModelLog object will have saved activations for the new input.
     """
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)

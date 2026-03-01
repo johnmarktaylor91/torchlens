@@ -22,15 +22,15 @@ from .helper_funcs import (
     tensor_nanequal,
 )
 from .flops import compute_backward_flops, compute_forward_flops
-from .tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLog
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
-    from .tensor_log import TensorLogEntry
+    from .data_classes.model_log import ModelLog
+    from .data_classes.tensor_log import TensorLog
 
 
 def save_new_activations(
-    self: "ModelHistory",
+    self: "ModelLog",
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any]],
     input_kwargs: Dict[Any, Any] = None,
@@ -52,7 +52,7 @@ def save_new_activations(
         layers_to_save: List of layers to save, using any valid lookup keys
         random_seed: Which random seed to use
     Returns:
-        Nothing, but now the ModelHistory object will have saved activations for the new input.
+        Nothing, but now the ModelLog object will have saved activations for the new input.
     """
     self.logging_mode = "fast"
 
@@ -144,7 +144,7 @@ def log_source_tensor_exhaustive(
         "layer_label_raw": tensor_label,
         "realtime_tensor_num": realtime_tensor_num,
         "operation_num": None,
-        "source_model_history": self,
+        "source_model_log": self,
         "_pass_finished": False,
         # Label Info:
         "layer_label": None,
@@ -281,7 +281,7 @@ def log_source_tensor_exhaustive(
     # Tag the tensor itself with its label, and with a reference to the model history log.
     t.tl_tensor_label_raw = tensor_label
 
-    # Log info to ModelHistory
+    # Log info to ModelLog
     self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
     if source == "input":
         self.input_layers.append(tensor_label)
@@ -297,7 +297,7 @@ def log_source_tensor_exhaustive(
 
 def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     """NOTES TO SELF--fields to change are:
-    for ModelHistory: pass timing, num tensors saved, tensor fsize
+    for ModelLog: pass timing, num tensors saved, tensor fsize
     for Tensors: tensor contents, fsize, args, kwargs, make sure to clear gradients.
     Add a minimal postprocessing thing for tallying stuff pertaining to saved tensors.
     Have some minimal checker to make sure the graph didn't change.
@@ -582,8 +582,8 @@ def log_function_output_tensors_exhaustive(
         new_tensor_label = new_tensor_entry.tensor_label_raw
         _update_tensor_family_links(self, new_tensor_entry)
 
-        # Update relevant fields of ModelHistory
-        # Add layer to relevant fields of ModelHistory:
+        # Update relevant fields of ModelLog
+        # Add layer to relevant fields of ModelLog:
         if fields_dict["initialized_inside_model"]:
             self.internally_initialized_layers.append(new_tensor_label)
         if fields_dict["has_input_ancestor"] and any(
@@ -763,7 +763,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
 
 
 def _add_backward_hook(self, t: torch.Tensor, tensor_label):
-    """Adds a backward hook to the tensor that saves the gradients to ModelHistory if specified.
+    """Adds a backward hook to the tensor that saves the gradients to ModelLog if specified.
 
     Args:
         t: tensor
@@ -797,7 +797,7 @@ def _log_info_specific_to_single_function_output_tensor(
         args: positional args to the function that created the tensor
         kwargs: keyword args to the function that created the tensor
         parent_param_passes: Dict mapping barcodes of parent params to how many passes they've seen
-        fields_dict: dictionary of fields with which to initialize the new TensorLogEntry
+        fields_dict: dictionary of fields with which to initialize the new TensorLog
     """
     layer_type = fields_dict["layer_type"]
     indiv_param_barcodes = list(parent_param_passes.keys())
@@ -843,7 +843,7 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["same_layer_operations"] = []
     fields_dict["realtime_tensor_num"] = realtime_tensor_num
     fields_dict["operation_num"] = None
-    fields_dict["source_model_history"] = self
+    fields_dict["source_model_log"] = self
     fields_dict["_pass_finished"] = False
 
     # Other labeling info
@@ -908,11 +908,11 @@ def _make_tensor_log_entry(
     """
     Given a tensor, adds it to the model_history, additionally saving the activations and input
     arguments if specified. Also tags the tensor itself with its raw tensor label
-    and a pointer to ModelHistory.
+    and a pointer to ModelLog.
 
     Args:
         t: tensor to log
-        fields_dict: dictionary of fields to log in TensorLogEntry
+        fields_dict: dictionary of fields to log in TensorLog
         t_args: Positional arguments to the function that created the tensor
         t_kwargs: Keyword arguments to the function that created the tensor
         activation_postfunc: Function to apply to activations before saving them.
@@ -922,7 +922,7 @@ def _make_tensor_log_entry(
     if t_kwargs is None:
         t_kwargs = {}
 
-    new_entry = TensorLogEntry(fields_dict)
+    new_entry = TensorLog(fields_dict)
     if (self._tensor_nums_to_save == "all") or (
         new_entry.realtime_tensor_num in self._tensor_nums_to_save
     ):
@@ -995,7 +995,7 @@ def _check_if_tensor_arg(arg: Any) -> bool:
 
 def _get_parent_tensor_function_call_location(
     self,
-    parent_log_entries: List[TensorLogEntry],
+    parent_log_entries: List[TensorLog],
     args: Tuple[Any],
     kwargs: Dict[Any, Any],
 ) -> Dict:
@@ -1025,7 +1025,7 @@ def _get_parent_tensor_function_call_location(
 
 
 def _find_arg_positions_for_single_parent(
-    parent_entry: TensorLogEntry,
+    parent_entry: TensorLog,
     arg_type: str,
     arg_struct: Union[List, Tuple, Dict],
     tensor_all_arg_positions: Dict,
@@ -1061,7 +1061,7 @@ def _find_arg_positions_for_single_parent(
 
 
 def _get_ancestors_from_parents(
-    parent_entries: List[TensorLogEntry],
+    parent_entries: List[TensorLog],
 ) -> Tuple[Set[str], Set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
@@ -1080,12 +1080,12 @@ def _get_ancestors_from_parents(
     return input_ancestors, internally_initialized_ancestors
 
 
-def _update_tensor_family_links(self, entry_to_update: TensorLogEntry):
+def _update_tensor_family_links(self, entry_to_update: TensorLog):
     """For a given tensor, updates family information for its links to parents, children, siblings, and
     spouses, in both directions (i.e., mutually adding the labels for each family pair).
 
     Args:
-        entry_to_update: dict of information about the TensorLogEntry to be created
+        entry_to_update: dict of information about the TensorLog to be created
     """
     tensor_label = entry_to_update.tensor_label_raw
     parent_tensor_labels = entry_to_update.parent_layers
@@ -1114,9 +1114,7 @@ def _update_tensor_family_links(self, entry_to_update: TensorLogEntry):
         _add_sibling_labels_for_new_tensor(self, entry_to_update, self[parent_tensor_label])
 
 
-def _add_sibling_labels_for_new_tensor(
-    self, entry_to_update: TensorLogEntry, parent_tensor: TensorLogEntry
-):
+def _add_sibling_labels_for_new_tensor(self, entry_to_update: TensorLog, parent_tensor: TensorLog):
     """Given a tensor and specified parent tensor, adds sibling labels to that tensor, and
     adds itself as a sibling to all existing children.
 
@@ -1219,7 +1217,7 @@ def _append_arg_hash(arg, prefix, args_to_hash):
         args_to_hash.append(f"{prefix}_{arg}")
 
 
-def _update_tensor_containing_modules(tensor_entry: TensorLogEntry) -> List[str]:
+def _update_tensor_containing_modules(tensor_entry: TensorLog) -> List[str]:
     """Utility function that updates the containing modules of a Tensor by starting from the containing modules
     as of the last function call, then looks at the sequence of module transitions (in or out of a module) as of
     the last module it saw, and updates accordingly.

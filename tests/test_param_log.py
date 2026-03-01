@@ -87,7 +87,7 @@ class TestParamLogFields:
 
 
 # ---------------------------------------------------------------------------
-# ParamAccessor on ModelHistory
+# ParamAccessor on ModelLog
 # ---------------------------------------------------------------------------
 
 
@@ -133,7 +133,7 @@ class TestParamAccessorMH:
 
 
 # ---------------------------------------------------------------------------
-# ParamAccessor on TensorLogEntry
+# ParamAccessor on TensorLog
 # ---------------------------------------------------------------------------
 
 

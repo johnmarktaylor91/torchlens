@@ -192,7 +192,7 @@ def _get_func_call_stack(num_context_lines: int = 7):
     from .data_classes import FuncCallLocation
 
     _TORCHLENS_SUFFIXES = (
-        "model_history.py",
+        "model_log.py",
         "torchlens/helper_funcs.py",
         "torchlens/user_funcs.py",
         "torchlens/trace_model.py",
