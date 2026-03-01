@@ -1,12 +1,27 @@
 # CHANGELOG
 
 
-## v0.7.2 (2026-02-28)
+## v0.8.0 (2026-03-01)
+
+### Features
+
+- **data**: Add FuncCallLocation class for structured call stack metadata
+  ([`49ada0e`](https://github.com/johnmarktaylor91/torchlens/commit/49ada0ef1415441562c2f3dd5b71d36de8478472))
+
+Replace unstructured List[Dict] func_call_stack with List[FuncCallLocation] providing clean repr
+  with source context arrows, __getitem__/__len__ support, and optional
+  func_signature/func_docstring extraction. Introduces torchlens/data_classes/ package and threads a
+  configurable num_context_lines parameter through the full call chain.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
+## v0.7.2 (2026-03-01)
 
 ### Bug Fixes
 
 - **tests**: Reduce r2plus1d_18 input size to prevent OOM
-  ([`952e34e`](https://github.com/johnmarktaylor91/torchlens/commit/952e34e38d940eeff0f77a7f8f16e1912121bfdd))
+  ([`2c73fcd`](https://github.com/johnmarktaylor91/torchlens/commit/2c73fcd7af620a29749fd55f753f1b6d3d915b7a))
 
 The test_video_r2plus1_18 test used a (16,3,16,112,112) input (~96M elements) which consistently got
   OOM-killed. Reduced to (1,3,1,112,112) which passes reliably while still exercising the full
@@ -20,7 +35,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ### Bug Fixes
 
 - **logging**: Handle complex-dtype tensors in tensor_nanequal
-  ([`fe58f25`](https://github.com/johnmarktaylor91/torchlens/commit/fe58f25c27a246ff4c2f29ef1deaa8809fd269fa))
+  ([`b425cbe`](https://github.com/johnmarktaylor91/torchlens/commit/b425cbed76fdaf7bef6f2fc94fa6fdc02404b4c2))
 
 torch.nan_to_num does not support complex tensors, which caused test_qml to fail when PennyLane
   quantum ops produced complex outputs. Use view_as_real/view_as_complex to handle NaN replacement
@@ -35,7 +50,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **logging**: Capture/restore RNG state for two-pass stochastic models
   ([#58](https://github.com/johnmarktaylor91/torchlens/pull/58),
-  [`2b3079f`](https://github.com/johnmarktaylor91/torchlens/commit/2b3079f00e89e91bd8a84652bae381a6ab6813df))
+  [`271cef3`](https://github.com/johnmarktaylor91/torchlens/commit/271cef345d8c94e709bc5eeccc8e4d64b951c64d))
 
 Move RNG state capture/restore before pytorch decoration to prevent internal .clone() calls from
   being intercepted by torchlens' decorated torch functions. Also speed up test_stochastic_loop by
@@ -45,7 +60,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **logging**: Ensure output layer parents are saved with layers_to_save
   ([#46](https://github.com/johnmarktaylor91/torchlens/pull/46),
-  [`a3c74fa`](https://github.com/johnmarktaylor91/torchlens/commit/a3c74fa92215dcd0bd5b300b32559ecf47b0ef97))
+  [`b104094`](https://github.com/johnmarktaylor91/torchlens/commit/b10409445dc036ce8957e4e52e314b3b4a38dc4f))
 
 When layers_to_save is a subset, the fast pass now automatically includes parents of output layers
   in the save list. This ensures output layer tensor_contents is populated in postprocess_fast
@@ -55,7 +70,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **logging**: Replace copy.deepcopy with safe_copy to prevent infinite loops
   ([#18](https://github.com/johnmarktaylor91/torchlens/pull/18),
-  [`aa841fe`](https://github.com/johnmarktaylor91/torchlens/commit/aa841fe7def7def929e29cc612f01976d4b12f62))
+  [`e1ad9ae`](https://github.com/johnmarktaylor91/torchlens/commit/e1ad9ae08937b11ccffe83c47efc45a052397c6c))
 
 copy.deepcopy hangs on complex tensor wrappers with circular references (e.g. ESCNN
   GeometricTensor). Replace with safe_copy_args/safe_copy_kwargs that clone tensors, recurse into
@@ -65,7 +80,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **logging**: Use argspec to disambiguate tuple/list input args
   ([#43](https://github.com/johnmarktaylor91/torchlens/pull/43),
-  [`34f6687`](https://github.com/johnmarktaylor91/torchlens/commit/34f6687770573935257201e99c97e8da70f6e8bf))
+  [`a91e378`](https://github.com/johnmarktaylor91/torchlens/commit/a91e378125e1d3ee0a9483b9240c3f7730faba3a))
 
 When a model's forward() expects a single arg that IS a tuple/list of tensors, torchlens incorrectly
   unpacked it into multiple positional args. Now uses inspect.getfullargspec to detect single-arg
@@ -76,7 +91,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **vis**: Functional ops at end of container modules rendered as ovals
   ([#48](https://github.com/johnmarktaylor91/torchlens/pull/48),
-  [`f886b36`](https://github.com/johnmarktaylor91/torchlens/commit/f886b36c104416120a9a4de8f70a7fbc52848bfe))
+  [`7d1c68c`](https://github.com/johnmarktaylor91/torchlens/commit/7d1c68c502c3274bf1418bfcac2de9d81eef9d77))
 
 _check_if_only_non_buffer_in_module was too broad — it returned True for functional ops (like
   torch.relu) at the end of container modules with child submodules, causing them to render as
@@ -88,7 +103,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **metadata**: Track module training mode per submodule
   ([#52](https://github.com/johnmarktaylor91/torchlens/pull/52),
-  [`6ede005`](https://github.com/johnmarktaylor91/torchlens/commit/6ede0059f5d420d69cd6c65fa2ba744dac248c95))
+  [`e5197ca`](https://github.com/johnmarktaylor91/torchlens/commit/e5197ca2e48d4510df750ea420196e68f038c0b6))
 
 Capture module.training in module_forward_decorator and store in ModelHistory.module_training_modes
   dict (keyed by module address). This lets users check whether each submodule was in train or eval
@@ -103,12 +118,14 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 - **postprocess**: Correct _merge_buffer_entries call convention
   ([#47](https://github.com/johnmarktaylor91/torchlens/pull/47),
-  [`0e539c4`](https://github.com/johnmarktaylor91/torchlens/commit/0e539c4dbd113e066e02c447cd3f5744247c2f27))
+  [`07df691`](https://github.com/johnmarktaylor91/torchlens/commit/07df6911dae2d6aa22e13cf2aa2fe4793320e314))
 
 _merge_buffer_entries is a module-level function, not a method on ModelHistory. Fixes AttributeError
   when processing recurrent models with duplicate buffer entries.
 
 Based on gilmoright's contribution in PR #56.
+
+Co-authored-by: gilmoright <artem.dahaka@gmail.com>
 
 
 ## v0.6.1 (2026-02-28)
