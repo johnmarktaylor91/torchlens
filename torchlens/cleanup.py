@@ -2,22 +2,22 @@ import warnings
 
 import torch
 
-from .constants import MODEL_HISTORY_FIELD_ORDER
+from .constants import MODEL_LOG_FIELD_ORDER
 from .helper_funcs import remove_entry_from_list
-from .data_classes.tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLog
 
 
 def cleanup(self):
     """Deletes all log entries in the model."""
     for tensor_log_entry in self:
         self._remove_log_entry(tensor_log_entry, remove_references=True)
-    for attr in MODEL_HISTORY_FIELD_ORDER:
+    for attr in MODEL_LOG_FIELD_ORDER:
         delattr(self, attr)
     torch.cuda.empty_cache()
 
 
-def _remove_log_entry(self, log_entry: TensorLogEntry, remove_references: bool = True):
-    """Given a TensorLogEntry, destroys it and all references to it.
+def _remove_log_entry(self, log_entry: TensorLog, remove_references: bool = True):
+    """Given a TensorLog, destroys it and all references to it.
 
     Args:
         log_entry: Tensor log entry to remove.
@@ -41,12 +41,12 @@ def _remove_log_entry(self, log_entry: TensorLogEntry, remove_references: bool =
 
 
 def _remove_log_entry_references(self, layer_to_remove: str):
-    """Removes all references to a given TensorLogEntry in the ModelHistory object.
+    """Removes all references to a given TensorLog in the ModelLog object.
 
     Args:
         layer_to_remove: The log entry to remove.
     """
-    # Clear any fields in ModelHistory referring to the entry.
+    # Clear any fields in ModelLog referring to the entry.
 
     remove_entry_from_list(self.input_layers, layer_to_remove)
     remove_entry_from_list(self.output_layers, layer_to_remove)

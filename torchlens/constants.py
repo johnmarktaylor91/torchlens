@@ -7,7 +7,7 @@ import warnings
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
-MODEL_HISTORY_FIELD_ORDER = [
+MODEL_LOG_FIELD_ORDER = [
     # General info
     "model_name",
     "_pass_finished",
@@ -117,14 +117,14 @@ MODEL_HISTORY_FIELD_ORDER = [
     "func_argnames",
 ]
 
-TENSOR_LOG_ENTRY_FIELD_ORDER = [
+TENSOR_LOG_FIELD_ORDER = [
     # General info
     "layer_label",
     "tensor_label_raw",
     "layer_label_raw",
     "operation_num",
     "realtime_tensor_num",
-    "source_model_history",
+    "source_model_log",
     "_pass_finished",
     # Other labeling info
     "layer_label_short",

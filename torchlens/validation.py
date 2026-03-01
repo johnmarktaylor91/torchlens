@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from .data_classes.tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLog
 
 if TYPE_CHECKING:
     pass
@@ -224,8 +224,8 @@ def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key,
 
 def _check_arglocs_correct_for_arg(
     self,
-    target_layer: TensorLogEntry,
-    parent_layer: TensorLogEntry,
+    target_layer: TensorLog,
+    parent_layer: TensorLog,
     arg_type: str,
     argloc_key: Union[str, tuple],
     saved_arg_val: Any,
@@ -525,7 +525,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
 def _prepare_input_args_for_validating_layer(
     self,
-    layer_to_validate_parents_for: TensorLogEntry,
+    layer_to_validate_parents_for: TensorLog,
     layers_to_perturb: List[str],
 ) -> Dict:
     """Prepares the input arguments for validating the saved activations of a layer.
@@ -688,7 +688,7 @@ def _perturb_layer_activations(
 
 def _posthoc_perturb_check(
     self,
-    layer_to_validate_parents_for: TensorLogEntry,
+    layer_to_validate_parents_for: TensorLog,
     layers_to_perturb: List[str],
     verbose: bool = False,
 ) -> bool:

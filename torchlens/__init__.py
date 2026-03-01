@@ -9,6 +9,6 @@ from .user_funcs import (
     validate_saved_activations,
     validate_batch_of_models_and_inputs,
 )
-from .data_classes.model_history import ModelHistory
-from .data_classes.tensor_log import TensorLogEntry, RolledTensorLogEntry
+from .data_classes.model_log import ModelLog
+from .data_classes.tensor_log import TensorLog, RolledTensorLog
 from .data_classes import FuncCallLocation, ParamLog

@@ -20,7 +20,7 @@ from .helper_funcs import (
 from .logging_funcs import log_function_output_tensors, log_source_tensor
 
 if TYPE_CHECKING:
-    from .data_classes.model_history import ModelHistory
+    from .data_classes.model_log import ModelLog
 
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 print_funcs = ["__repr__", "__str__", "_str"]
@@ -105,7 +105,7 @@ def torch_func_decorator(self, func: Callable, func_name: str):
 
 
 def decorate_pytorch(
-    self: "ModelHistory", torch_module: types.ModuleType, orig_func_defs: List[Tuple]
+    self: "ModelLog", torch_module: types.ModuleType, orig_func_defs: List[Tuple]
 ) -> Dict[Callable, Callable]:
     """Mutates all PyTorch functions (TEMPORARILY!) to save the outputs of any functions
     that return Tensors, along with marking them with metadata. Returns a list of tuples that
@@ -196,7 +196,7 @@ def undecorate_pytorch(
     """
     Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
     This is done for the output tensors and history_dict too to avoid ugliness. Also deletes
-    the mutant versions of the functions to remove any references to old ModelHistory object.
+    the mutant versions of the functions to remove any references to old ModelLog object.
 
     args:
         torch_module: The torch module object.

@@ -17,11 +17,11 @@ from .helper_funcs import (
 from .logging_funcs import log_source_tensor
 
 if TYPE_CHECKING:
-    from .data_classes.model_history import ModelHistory
+    from .data_classes.model_log import ModelLog
 
 
 def prepare_model(
-    model_log: "ModelHistory",
+    model_log: "ModelLog",
     model: nn.Module,
     module_orig_forward_funcs: Dict,
     decorated_func_mapper: Dict[Callable, Callable],
@@ -39,7 +39,7 @@ def prepare_model(
     """
     model_log.model_name = str(type(model).__name__)
     model.tl_module_address = ""
-    model.tl_source_model_history = model_log
+    model.tl_source_model_log = model_log
 
     module_stack = [(model, "")]  # list of tuples (name, module)
 
@@ -67,7 +67,7 @@ def prepare_model(
         if module == model:  # don't tag the model itself.
             continue
 
-        module.tl_source_model_history = model_log
+        module.tl_source_model_log = model_log
         module.tl_module_type = str(type(module).__name__)
         model_log.module_types[module.tl_module_address] = module.tl_module_type
         module.tl_module_pass_num = 0

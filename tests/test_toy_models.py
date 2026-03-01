@@ -1577,15 +1577,15 @@ def test_log_forward_pass_mark_distances(default_input1):
 
 
 def test_get_model_metadata(default_input1):
-    """Test get_model_metadata returns ModelHistory without saving activations."""
+    """Test get_model_metadata returns ModelLog without saving activations."""
     model = example_models.SimpleFF()
     mh = get_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
     assert mh.num_tensors_total > 0
 
 
-def test_model_history_getitem_by_index(default_input1):
-    """Test ModelHistory supports integer indexing."""
+def test_model_log_getitem_by_index(default_input1):
+    """Test ModelLog supports integer indexing."""
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, default_input1)
     first = mh[0]
@@ -1594,8 +1594,8 @@ def test_model_history_getitem_by_index(default_input1):
     assert last.layer_label == mh.layer_labels[-1]
 
 
-def test_model_history_getitem_by_label(default_input1):
-    """Test ModelHistory supports string label access."""
+def test_model_log_getitem_by_label(default_input1):
+    """Test ModelLog supports string label access."""
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, default_input1)
     label = mh.layer_labels[0]
@@ -1603,22 +1603,22 @@ def test_model_history_getitem_by_label(default_input1):
     assert entry.layer_label == label
 
 
-def test_model_history_len(default_input1):
-    """Test len(ModelHistory) matches layer count."""
+def test_model_log_len(default_input1):
+    """Test len(ModelLog) matches layer count."""
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, default_input1)
     assert len(mh) == len(mh.layer_labels)
 
 
-def test_model_history_iter(default_input1):
-    """Test iteration over ModelHistory yields entries."""
+def test_model_log_iter(default_input1):
+    """Test iteration over ModelLog yields entries."""
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, default_input1)
     items = list(mh)
     assert len(items) == len(mh.layer_labels)
 
 
-def test_model_history_layer_labels(default_input1):
+def test_model_log_layer_labels(default_input1):
     """Test layer_labels, layer_labels_no_pass, layer_labels_w_pass properties."""
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, default_input1)

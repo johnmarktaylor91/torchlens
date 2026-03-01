@@ -1,4 +1,4 @@
-# This file is for defining the ModelHistory class that stores the representation of the forward pass.
+# This file is for defining the ModelLog class that stores the representation of the forward pass.
 import copy
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -20,13 +20,13 @@ from ..interface import (
 from ..logging_funcs import save_new_activations
 from ..model_funcs import cleanup_model, prepare_model
 from ..postprocess import postprocess
-from .tensor_log import RolledTensorLogEntry, TensorLogEntry
+from .tensor_log import RolledTensorLog, TensorLog
 from ..trace_model import run_and_log_inputs_through_model
 from ..validation import validate_saved_activations
 from ..vis import render_graph
 
 
-class ModelHistory:
+class ModelLog:
     def __init__(
         self,
         model_name: str,
@@ -75,16 +75,16 @@ class ModelHistory:
         self.model_is_branching = False
 
         # Tensor Tracking:
-        self.layer_list: List[TensorLogEntry] = []
-        self.layer_list_rolled: List[RolledTensorLogEntry] = []
-        self.layer_dict_main_keys: Dict[str, TensorLogEntry] = OrderedDict()
-        self.layer_dict_all_keys: Dict[str, TensorLogEntry] = OrderedDict()
-        self.layer_dict_rolled: Dict[str, RolledTensorLogEntry] = OrderedDict()
+        self.layer_list: List[TensorLog] = []
+        self.layer_list_rolled: List[RolledTensorLog] = []
+        self.layer_dict_main_keys: Dict[str, TensorLog] = OrderedDict()
+        self.layer_dict_all_keys: Dict[str, TensorLog] = OrderedDict()
+        self.layer_dict_rolled: Dict[str, RolledTensorLog] = OrderedDict()
         self.layer_labels: List[str] = []
         self.layer_labels_w_pass: List[str] = []
         self.layer_labels_no_pass: List[str] = []
         self.layer_num_passes: Dict[str, int] = OrderedDict()
-        self._raw_tensor_dict: Dict[str, TensorLogEntry] = OrderedDict()
+        self._raw_tensor_dict: Dict[str, TensorLog] = OrderedDict()
         self._raw_tensor_labels_list: List[str] = []
         self._tensor_nums_to_save: List[int] = []
         self._tensor_counter: int = 0
@@ -175,7 +175,7 @@ class ModelHistory:
         else:
             return len(self._raw_tensor_dict)
 
-    def __getitem__(self, ix) -> TensorLogEntry:
+    def __getitem__(self, ix) -> TensorLog:
         """Returns an object logging a model layer given an index. If the pass is finished,
         it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
 

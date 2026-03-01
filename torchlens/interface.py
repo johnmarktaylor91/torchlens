@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    from .data_classes.model_history import ModelHistory
+    from .data_classes.model_log import ModelLog
 
-from .data_classes.tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLog
 
 
-def _getitem_during_pass(self: "ModelHistory", ix) -> TensorLogEntry:
+def _getitem_during_pass(self: "ModelLog", ix) -> TensorLog:
     """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
     Args:
@@ -22,7 +22,7 @@ def _getitem_during_pass(self: "ModelHistory", ix) -> TensorLogEntry:
     if ix in self._raw_tensor_dict:
         return self._raw_tensor_dict[ix]
     else:
-        raise ValueError(f"{ix} not found in the ModelHistory object.")
+        raise ValueError(f"{ix} not found in the ModelLog object.")
 
 
 def _getitem_after_pass(self, ix):
@@ -293,7 +293,7 @@ def _module_hierarchy_str_helper(self, module_pass, level):
 
 
 def print_all_fields(self):
-    """Print all data fields for ModelHistory."""
+    """Print all data fields for ModelLog."""
     fields_to_exclude = [
         "layer_list",
         "layer_dict_main_keys",

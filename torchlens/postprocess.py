@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING, Tuple
 
 import torch
 
-from .constants import MODEL_HISTORY_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER
+from .constants import MODEL_LOG_FIELD_ORDER, TENSOR_LOG_FIELD_ORDER
 from .helper_funcs import (
     clean_to,
     get_vars_of_type_from_obj,
@@ -18,10 +18,10 @@ from .helper_funcs import (
     tensor_nanequal,
     _get_func_call_stack,
 )
-from .data_classes.tensor_log import RolledTensorLogEntry, TensorLogEntry
+from .data_classes.tensor_log import RolledTensorLog, TensorLog
 
 if TYPE_CHECKING:
-    from .data_classes.model_history import ModelHistory
+    from .data_classes.model_log import ModelLog
 
 
 @dataclass
@@ -41,7 +41,7 @@ class SubgraphInfo:
 
 
 def postprocess(
-    self: "ModelHistory", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
+    self: "ModelLog", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
 ):
     """
     After the forward pass, cleans up the log into its final form.
@@ -91,7 +91,7 @@ def postprocess(
     # Step 10: Go through and log information pertaining to all layers:
     _log_final_info_for_all_layers(self)
 
-    # Step 11: Rename the raw tensor entries in the fields of ModelHistory:
+    # Step 11: Rename the raw tensor entries in the fields of ModelLog:
     _rename_model_history_layer_names(self)
     _trim_and_reorder_model_history_fields(self)
 
@@ -110,12 +110,12 @@ def postprocess(
     # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
     _finalize_param_logs(self)
 
-    # Step 17: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+    # Step 17: log the pass as finished, changing the ModelLog behavior to its user-facing version.
 
     _set_pass_finished(self)
 
 
-def postprocess_fast(self: "ModelHistory"):
+def postprocess_fast(self: "ModelLog"):
     for output_layer_label in self.output_layers:
         output_layer = self[output_layer_label]
         output_layer.tensor_contents = self[output_layer.parent_layers[0]].tensor_contents
@@ -138,7 +138,7 @@ def postprocess_fast(self: "ModelHistory"):
 
 
 def _add_output_layers(
-    self: "ModelHistory", output_tensors: List[torch.Tensor], output_addresses: List[str]
+    self: "ModelLog", output_tensors: List[torch.Tensor], output_addresses: List[str]
 ):
     """
     Adds dedicated output nodes to the graph.
@@ -398,7 +398,7 @@ def _flood_graph_from_input_or_output_nodes(self, mode: str):
 
 
 def _update_node_distance_vals(
-    current_node: TensorLogEntry,
+    current_node: TensorLog,
     min_field: str,
     max_field: str,
     nodes_since_start: int,
@@ -580,7 +580,7 @@ def _rebuild_pass_assignments(self):
             member.layer_passes_total = len(members_sorted)
 
 
-def _expand_isomorphic_subgraphs(self, node: TensorLogEntry):
+def _expand_isomorphic_subgraphs(self, node: TensorLog):
     """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
     and crawls forward, finding and marking corresponding operations until there are none left.
     At the end of this, nodes that have the same position with respect to the original node
@@ -1129,8 +1129,8 @@ def _fix_modules_for_internal_tensors(self):
 
 
 def _fix_modules_for_single_internal_tensor(
-    starting_node: TensorLogEntry,
-    node_to_fix: TensorLogEntry,
+    starting_node: TensorLog,
+    node_to_fix: TensorLog,
     node_type_to_fix: str,
     node_stack: List[str],
     nodes_seen: Set[str],
@@ -1241,7 +1241,7 @@ def _fix_buffer_layers(self):
         buffer_counter[buffer_address] += 1
 
 
-def _merge_buffer_entries(self, source_buffer: TensorLogEntry, buffer_to_remove: TensorLogEntry):
+def _merge_buffer_entries(self, source_buffer: TensorLog, buffer_to_remove: TensorLog):
     """Merges two identical buffer layers."""
     for child_layer in buffer_to_remove.child_layers:
         if child_layer not in source_buffer.child_layers:
@@ -1453,13 +1453,13 @@ def _log_time_elapsed(self):
     self.elapsed_time_torchlens_logging = self.elapsed_time_total - self.elapsed_time_function_calls
 
 
-def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLogEntry):
+def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLog):
     """
-    Replaces all layer names in the fields of a TensorLogEntry with their final
+    Replaces all layer names in the fields of a TensorLog with their final
     layer names.
 
     Args:
-        tensor_entry: TensorLogEntry to replace layer names for.
+        tensor_entry: TensorLog to replace layer names for.
     """
     list_fields_to_rename = [
         "parent_layers",
@@ -1500,7 +1500,7 @@ def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLogEntry):
     tensor_entry.children_tensor_versions = new_child_tensor_versions
 
 
-def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLogEntry):
+def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog):
     """
     Logs the module hierarchy information for a single layer.
 
@@ -1538,7 +1538,7 @@ def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLogEntry):
 
 
 def _remove_unwanted_entries_and_log_remaining(self):
-    """Removes entries from ModelHistory that we don't want in the final saved output,
+    """Removes entries from ModelLog that we don't want in the final saved output,
     and logs information about the remaining entries.
     """
     tensors_to_remove = []
@@ -1564,7 +1564,7 @@ def _remove_unwanted_entries_and_log_remaining(self):
         tensor_entry = self._raw_tensor_dict[raw_tensor_label]
         # Determine valid lookup keys and relate them to the tensor's realtime operation number:
         if getattr(tensor_entry, "has_saved_activations", False) or self.keep_unsaved_layers:
-            # Add the lookup keys for the layer, to itself and to ModelHistory:
+            # Add the lookup keys for the layer, to itself and to ModelLog:
             _add_lookup_keys_for_tensor_entry(self, tensor_entry, i, num_logged_tensors)
 
             # Log all information:
@@ -1602,13 +1602,13 @@ def _remove_unwanted_entries_and_log_remaining(self):
 
 
 def _add_lookup_keys_for_tensor_entry(
-    self, tensor_entry: TensorLogEntry, tensor_index: int, num_tensors_to_keep: int
+    self, tensor_entry: TensorLog, tensor_index: int, num_tensors_to_keep: int
 ):
-    """Adds the user-facing lookup keys for a TensorLogEntry, both to itself
-    and to the ModelHistory top-level record.
+    """Adds the user-facing lookup keys for a TensorLog, both to itself
+    and to the ModelLog top-level record.
 
     Args:
-        tensor_entry: TensorLogEntry to get the lookup keys for.
+        tensor_entry: TensorLog to get the lookup keys for.
     """
     # The "default" keys: including the pass if multiple passes, excluding if one pass.
     lookup_keys_for_tensor = [
@@ -1666,7 +1666,7 @@ def _add_lookup_keys_for_tensor_entry(
 
     lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
 
-    # Log in both the tensor and in the ModelHistory object.
+    # Log in both the tensor and in the ModelLog object.
     tensor_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_tensor_num_dict:
@@ -1675,14 +1675,14 @@ def _add_lookup_keys_for_tensor_entry(
         self._tensor_num_to_lookup_keys_dict[tensor_entry.realtime_tensor_num].append(lookup_key)
 
 
-def _trim_and_reorder_tensor_entry_fields(tensor_entry: TensorLogEntry):
+def _trim_and_reorder_tensor_entry_fields(tensor_entry: TensorLog):
     """
-    Sorts the fields in TensorLogEntry into their desired order, and trims any
+    Sorts the fields in TensorLog into their desired order, and trims any
     fields that aren't useful after the pass.
     """
     old_dict = tensor_entry.__dict__
     new_dir_dict = OrderedDict()
-    for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
+    for field in TENSOR_LOG_FIELD_ORDER:
         if field in old_dict:
             new_dir_dict[field] = old_dict[field]
     for field, value in old_dict.items():
@@ -1692,7 +1692,7 @@ def _trim_and_reorder_tensor_entry_fields(tensor_entry: TensorLogEntry):
 
 
 def _rename_model_history_layer_names(self):
-    """Renames all the metadata fields in ModelHistory with the final layer names, replacing the
+    """Renames all the metadata fields in ModelLog with the final layer names, replacing the
     realtime debugging names.
     """
     list_fields_to_rename = [
@@ -1755,11 +1755,11 @@ def _rename_model_history_layer_names(self):
 
 def _trim_and_reorder_model_history_fields(self):
     """
-    Sorts the fields in ModelHistory into their desired order, and trims any
+    Sorts the fields in ModelLog into their desired order, and trims any
     fields that aren't useful after the pass.
     """
     new_dir_dict = OrderedDict()
-    for field in MODEL_HISTORY_FIELD_ORDER:
+    for field in MODEL_LOG_FIELD_ORDER:
         new_dir_dict[field] = getattr(self, field)
     for field in dir(self):
         if field.startswith("_"):
@@ -1789,7 +1789,7 @@ def _undecorate_all_saved_tensors(self):
             delattr(t, "tl_tensor_label_raw")
 
 
-def _finalize_param_logs(self: "ModelHistory"):
+def _finalize_param_logs(self: "ModelLog"):
     """Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata."""
     from .helper_funcs import get_tensor_memory_amount, human_readable_size
 
@@ -1820,7 +1820,7 @@ def _finalize_param_logs(self: "ModelHistory"):
 
 
 def _set_pass_finished(self):
-    """Sets the ModelHistory to "pass finished" status, indicating that the pass is done, so
+    """Sets the ModelLog to "pass finished" status, indicating that the pass is done, so
     the "final" rather than "realtime debugging" mode of certain functions should be used.
     """
     for layer_label in self.layer_dict_main_keys:
@@ -1841,7 +1841,7 @@ def _roll_graph(self):
         ):  # If rolled-up layer has already been added, fetch it:
             rolled_node = self.layer_dict_rolled[layer_label_no_pass]
         else:  # If it hasn't been added, make it:
-            rolled_node = RolledTensorLogEntry(node)
+            rolled_node = RolledTensorLog(node)
             self.layer_dict_rolled[node.layer_label_no_pass] = rolled_node
             self.layer_list_rolled.append(rolled_node)
         rolled_node.update_data(node)

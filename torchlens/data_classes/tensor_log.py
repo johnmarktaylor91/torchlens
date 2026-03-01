@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
-from ..constants import TENSOR_LOG_ENTRY_FIELD_ORDER
+from ..constants import TENSOR_LOG_FIELD_ORDER
 from ..helper_funcs import (
     clean_to,
     get_tensor_memory_amount,
@@ -16,26 +16,26 @@ from ..helper_funcs import (
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
     from .param_log import ParamLog
-    from .model_history import ModelHistory
+    from .model_log import ModelLog
 
 
-class TensorLogEntry:
+class TensorLog:
     def __init__(self, fields_dict: Dict):
         """Object that stores information about a single tensor operation in the forward pass,
         including metadata and the tensor itself (if specified). Initialized by passing in a dictionary with
         values for all fields.
         Args:
-            fields_dict: Dict with values for all fields in TensorLogEntry.
+            fields_dict: Dict with values for all fields in TensorLog.
         """
         # Note: this all has to be tediously initialized instead of a for-loop in order for
         # autocomplete features to work well. But, this also serves as a reference for all attributes
         # of a tensor log entry.
 
-        # Check that fields_dict contains all fields for TensorLogEntry:
-        field_order_set = set(TENSOR_LOG_ENTRY_FIELD_ORDER)
+        # Check that fields_dict contains all fields for TensorLog:
+        field_order_set = set(TENSOR_LOG_FIELD_ORDER)
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != field_order_set:
-            error_str = "Error initializing TensorLogEntry:"
+            error_str = "Error initializing TensorLog:"
             missing_fields = field_order_set - fields_dict_key_set
             extra_fields = fields_dict_key_set - field_order_set
             if len(missing_fields) > 0:
@@ -49,7 +49,7 @@ class TensorLogEntry:
         self.layer_label_raw = fields_dict["layer_label_raw"]
         self.operation_num = fields_dict["operation_num"]
         self.realtime_tensor_num = fields_dict["realtime_tensor_num"]
-        self.source_model_history: "ModelHistory" = fields_dict["source_model_history"]
+        self.source_model_log: "ModelLog" = fields_dict["source_model_log"]
         self._pass_finished = fields_dict["_pass_finished"]
 
         # Label info:
@@ -198,7 +198,7 @@ class TensorLogEntry:
 
     def print_all_fields(self):
         """Print all data fields in the layer."""
-        fields_to_exclude = ["source_model_history", "func_rng_states"]
+        fields_to_exclude = ["source_model_log", "func_rng_states"]
 
         for field in dir(self):
             attr = getattr(self, field)
@@ -219,7 +219,7 @@ class TensorLogEntry:
         fields_not_to_deepcopy = [
             "func_applied",
             "gradfunc",
-            "source_model_history",
+            "source_model_log",
             "func_rng_states",
             "creation_args",
             "creation_kwargs",
@@ -227,12 +227,12 @@ class TensorLogEntry:
             "tensor_contents",
             "children_tensor_versions",
         ]
-        for field in TENSOR_LOG_ENTRY_FIELD_ORDER:
+        for field in TENSOR_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
                 fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
                 fields_dict[field] = getattr(self, field, None)
-        copied_entry = TensorLogEntry(fields_dict)
+        copied_entry = TensorLog(fields_dict)
         return copied_entry
 
     def save_tensor_data(
@@ -257,9 +257,9 @@ class TensorLogEntry:
         if self.output_device not in [str(self.tensor_contents.device), "same"]:
             self.tensor_contents = clean_to(self.tensor_contents, self.output_device)
         if activation_postfunc is not None:
-            self.source_model_history._pause_logging = True
+            self.source_model_log._pause_logging = True
             self.tensor_contents = activation_postfunc(self.tensor_contents)
-            self.source_model_history._pause_logging = False
+            self.source_model_log._pause_logging = False
 
         self.has_saved_activations = True
 
@@ -303,10 +303,10 @@ class TensorLogEntry:
     # ********************************************
 
     def get_child_layers(self):
-        return [self.source_model_history[child_label] for child_label in self.child_layers]
+        return [self.source_model_log[child_label] for child_label in self.child_layers]
 
     def get_parent_layers(self):
-        return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
+        return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
 
     @property
     def params(self):
@@ -364,7 +364,7 @@ class TensorLogEntry:
         s = (
             f"Layer {self.layer_label_no_pass}"
             f"{pass_str}operation {self.operation_num}/"
-            f"{self.source_model_history.num_operations}:"
+            f"{self.source_model_log.num_operations}:"
         )
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
         if not self.has_saved_activations:
@@ -467,13 +467,13 @@ class TensorLogEntry:
         return self.__str__()
 
 
-class RolledTensorLogEntry:
-    def __init__(self, source_entry: TensorLogEntry):
-        """Stripped-down version TensorLogEntry that only encodes the information needed to plot the model
+class RolledTensorLog:
+    def __init__(self, source_entry: TensorLog):
+        """Stripped-down version TensorLog that only encodes the information needed to plot the model
         in its rolled-up form.
 
         Args:
-            source_entry: The source TensorLogEntry from which the rolled node is constructed
+            source_entry: The source TensorLog from which the rolled node is constructed
         """
         # Label & general info
         self.layer_label = source_entry.layer_label_no_pass
@@ -481,7 +481,7 @@ class RolledTensorLogEntry:
         self.layer_type_num = source_entry.layer_type_num
         self.layer_total_num = source_entry.layer_total_num
         self.layer_passes_total = source_entry.layer_passes_total
-        self.source_model_history = source_entry.source_model_history
+        self.source_model_log = source_entry.source_model_log
 
         # Saved tensor info
         self.tensor_shape = source_entry.tensor_shape
@@ -535,7 +535,7 @@ class RolledTensorLogEntry:
             "kwargs": defaultdict(set),
         }
 
-    def update_data(self, source_node: TensorLogEntry):
+    def update_data(self, source_node: TensorLog):
         """Updates the data as need be.
         Args:
             source_node: the source node
@@ -559,7 +559,7 @@ class RolledTensorLogEntry:
             if self.input_output_address[-1] == "*":
                 self.input_output_address = self.input_output_address.strip("*") + "*"
 
-    def add_pass_info(self, source_node: TensorLogEntry):
+    def add_pass_info(self, source_node: TensorLog):
         """Adds information about another pass of the same layer: namely, mark information about what the
         child and parent layers are for each pass.
 
@@ -568,8 +568,7 @@ class RolledTensorLogEntry:
         """
         # Label the layers for each pass
         child_layer_labels = [
-            self.source_model_history[child].layer_label_no_pass
-            for child in source_node.child_layers
+            self.source_model_log[child].layer_label_no_pass for child in source_node.child_layers
         ]
         for child_layer in child_layer_labels:
             if child_layer not in self.child_layers:
@@ -578,7 +577,7 @@ class RolledTensorLogEntry:
                 self.child_layers_per_pass[source_node.pass_num].append(child_layer)
 
         parent_layer_labels = [
-            self.source_model_history[parent].layer_label_no_pass
+            self.source_model_log[parent].layer_label_no_pass
             for parent in source_node.parent_layers
         ]
         for parent_layer in parent_layer_labels:
@@ -589,12 +588,12 @@ class RolledTensorLogEntry:
 
         # Label the passes for each layer, and indicate if any layers vary based on the pass.
         for child_layer in source_node.child_layers:
-            child_layer_label = self.source_model_history[child_layer].layer_label_no_pass
+            child_layer_label = self.source_model_log[child_layer].layer_label_no_pass
             if source_node.pass_num not in self.child_passes_per_layer[child_layer_label]:
                 self.child_passes_per_layer[child_layer_label].append(source_node.pass_num)
 
         for parent_layer in source_node.parent_layers:
-            parent_layer_label = self.source_model_history[parent_layer].layer_label_no_pass
+            parent_layer_label = self.source_model_log[parent_layer].layer_label_no_pass
             if source_node.pass_num not in self.parent_passes_per_layer[parent_layer_label]:
                 self.parent_passes_per_layer[parent_layer_label].append(source_node.pass_num)
 
@@ -621,11 +620,11 @@ class RolledTensorLogEntry:
 
         for arg_type in ["args", "kwargs"]:
             for arg_key, layer_label in source_node.parent_layer_arg_locs[arg_type].items():
-                layer_label_no_pass = self.source_model_history[layer_label].layer_label_no_pass
+                layer_label_no_pass = self.source_model_log[layer_label].layer_label_no_pass
                 self.parent_layer_arg_locs[arg_type][arg_key].add(layer_label_no_pass)
 
     def __str__(self) -> str:
-        fields_not_to_print = ["source_model_history"]
+        fields_not_to_print = ["source_model_log"]
         s = ""
         for field in dir(self):
             attr = getattr(self, field)

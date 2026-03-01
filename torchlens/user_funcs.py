@@ -15,8 +15,8 @@ from .helper_funcs import (
     safe_copy_kwargs,
     normalize_input_args,
 )
-from .data_classes.model_history import (
-    ModelHistory,
+from .data_classes.model_log import (
+    ModelLog,
 )
 
 
@@ -35,7 +35,7 @@ def run_model_and_save_specified_activations(
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
-) -> ModelHistory:
+) -> ModelLog:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
     they will be generated from the nicer human-readable names and then fed in).
@@ -45,7 +45,7 @@ def run_model_and_save_specified_activations(
         input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
         input_kwargs: Keyword arguments to the model's forward pass.
         layers_to_save: List of layers to save
-        keep_unsaved_layers: Whether to keep layers in the ModelHistory log if they don't have saved activations.
+        keep_unsaved_layers: Whether to keep layers in the ModelLog log if they don't have saved activations.
         output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
             'cpu' or 'cuda' to move to cpu or cuda.
         activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
@@ -58,10 +58,10 @@ def run_model_and_save_specified_activations(
         optimizer: Optional optimizer to tag which params are being optimized.
 
     Returns:
-        ModelHistory object with full log of the forward pass
+        ModelLog object with full log of the forward pass
     """
     model_name = str(type(model).__name__)
-    model_history = ModelHistory(
+    model_log = ModelLog(
         model_name,
         output_device,
         activation_postfunc,
@@ -73,10 +73,10 @@ def run_model_and_save_specified_activations(
         num_context_lines,
         optimizer,
     )
-    model_history._run_and_log_inputs_through_model(
+    model_log._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
     )
-    return model_history
+    return model_log
 
 
 def log_forward_pass(
@@ -107,8 +107,8 @@ def log_forward_pass(
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
-) -> ModelHistory:
-    """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
+) -> ModelLog:
+    """Runs a forward pass through a model given input x, and returns a ModelLog object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
     and optionally visualizes the model graph if vis_opt is set to 'rolled' or 'unrolled'.
 
@@ -146,7 +146,7 @@ def log_forward_pass(
         random_seed: which random seed to use in case model involves randomness
 
     Returns:
-        ModelHistory object with layer activations and metadata
+        ModelLog object with layer activations and metadata
     """
     warn_parallel()
 
@@ -160,7 +160,7 @@ def log_forward_pass(
         layers_to_save = layers_to_save.lower()
 
     if layers_to_save in ["all", "none", None, []]:
-        model_history = run_model_and_save_specified_activations(
+        model_log = run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -177,7 +177,7 @@ def log_forward_pass(
             optimizer=optimizer,
         )
     else:
-        model_history = run_model_and_save_specified_activations(
+        model_log = run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -193,8 +193,8 @@ def log_forward_pass(
             num_context_lines=num_context_lines,
             optimizer=optimizer,
         )
-        model_history.keep_unsaved_layers = keep_unsaved_layers
-        model_history.save_new_activations(
+        model_log.keep_unsaved_layers = keep_unsaved_layers
+        model_log.save_new_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -204,7 +204,7 @@ def log_forward_pass(
 
     # Visualize if desired.
     if vis_opt != "none":
-        model_history.render_graph(
+        model_log.render_graph(
             vis_opt,
             vis_nesting_depth,
             vis_outpath,
@@ -220,14 +220,14 @@ def log_forward_pass(
             vis_direction,
         )
 
-    return model_history
+    return model_log
 
 
 def get_model_metadata(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
     input_kwargs: Dict[Any, Any] = None,
-) -> ModelHistory:
+) -> ModelLog:
     """Logs all metadata for a given model and inputs without saving any activations. NOTE: this function
     will be removed in a future version of TorchLens, since calling it is identical to calling
     log_forward_pass without saving any layers.
@@ -237,16 +237,16 @@ def get_model_metadata(
         input_args: list of input positional arguments, or a single tensor
         input_kwargs: dict of keyword arguments
     Returns:
-        ModelHistory object with metadata about the model.
+        ModelLog object with metadata about the model.
     """
-    model_history = log_forward_pass(
+    model_log = log_forward_pass(
         model,
         input_args,
         input_kwargs,
         layers_to_save=None,
         mark_input_output_distances=True,
     )
-    return model_history
+    return model_log
 
 
 def show_model_graph(
@@ -296,7 +296,7 @@ def show_model_graph(
     if vis_opt not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    model_history = run_model_and_save_specified_activations(
+    model_log = run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -307,7 +307,7 @@ def show_model_graph(
         save_gradients=False,
         random_seed=random_seed,
     )
-    model_history.render_graph(
+    model_log.render_graph(
         vis_opt,
         vis_nesting_depth,
         vis_outpath,
@@ -373,7 +373,7 @@ def validate_saved_activations(
         ground_truth_output_tensors.append(entry[0])
         addresses_used.append(entry[1])
     model.load_state_dict(state_dict)
-    model_history = run_model_and_save_specified_activations(
+    model_log = run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -386,12 +386,12 @@ def validate_saved_activations(
         save_function_args=True,
         random_seed=random_seed,
     )
-    activations_are_valid = model_history.validate_saved_activations(
+    activations_are_valid = model_log.validate_saved_activations(
         ground_truth_output_tensors, verbose
     )
 
-    model_history.cleanup()
-    del model_history
+    model_log.cleanup()
+    del model_log
     return activations_are_valid
 
 
