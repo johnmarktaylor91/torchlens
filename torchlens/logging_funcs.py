@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 from .helper_funcs import (
-    _get_call_stack_dicts,
+    _get_func_call_stack,
     get_attr_values_from_tensor_list,
     get_tensor_memory_amount,
     get_vars_of_type_from_obj,
@@ -186,7 +186,7 @@ def log_source_tensor_exhaustive(
         # Function call info:
         "func_applied": None,
         "func_applied_name": "none",
-        "func_call_stack": _get_call_stack_dicts(),
+        "func_call_stack": _get_func_call_stack(self.num_context_lines),
         "func_time_elapsed": 0,
         "flops_forward": 0,
         "flops_backward": 0,
@@ -424,7 +424,7 @@ def log_function_output_tensors_exhaustive(
     # Function call info
     fields_dict["func_applied"] = func
     fields_dict["func_applied_name"] = func_name
-    fields_dict["func_call_stack"] = _get_call_stack_dicts()
+    fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)
     fields_dict["func_time_elapsed"] = func_time_elapsed
     fields_dict["func_rng_states"] = func_rng_states
     fields_dict["func_argnames"] = self.func_argnames[func_name.strip("_")]

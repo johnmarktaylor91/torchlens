@@ -36,6 +36,7 @@ class ModelHistory:
         save_gradients: bool = False,
         detach_saved_tensors: bool = False,
         mark_input_output_distances: bool = True,
+        num_context_lines: int = 7,
     ):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
@@ -46,6 +47,7 @@ class ModelHistory:
 
         # General info
         self.model_name = model_name
+        self.num_context_lines = num_context_lines
         self._pass_finished = False
         self._track_tensors = False
         self.logging_mode = "exhaustive"

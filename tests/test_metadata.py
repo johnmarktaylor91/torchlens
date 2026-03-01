@@ -10,6 +10,7 @@ import torch.nn as nn
 
 import example_models
 from torchlens import log_forward_pass
+from torchlens.data_classes import FuncCallLocation
 from torchlens.flops import (
     BACKWARD_MULTIPLIERS,
     ELEMENTWISE_FLOPS,
@@ -786,3 +787,204 @@ def test_flops_resnet18_range():
     mh = log_forward_pass(model, x)
     gflops = mh.total_flops_forward / 1e9
     assert 1.0 < gflops < 5.0, f"ResNet-18 FLOPs = {gflops:.2f}G, expected ~1.8G"
+
+
+# =============================================================================
+# FuncCallLocation tests
+# =============================================================================
+
+
+def _get_func_call_stack(small_input):
+    """Helper: run a model and return the func_call_stack from a non-input layer."""
+    model = example_models.SimpleFF()
+    mh = log_forward_pass(model, small_input)
+    for label in mh.layer_labels:
+        entry = mh[label]
+        if not entry.is_input_layer:
+            return entry.func_call_stack, mh
+    raise RuntimeError("No non-input layer found")
+
+
+# --- Class structure ---
+
+
+def test_func_call_stack_returns_list_of_func_call_locations(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    assert isinstance(stack, list)
+    assert len(stack) > 0
+    for loc in stack:
+        assert isinstance(loc, FuncCallLocation)
+
+
+def test_func_call_location_fields_populated(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    loc = stack[0]
+    assert isinstance(loc.file, str)
+    assert isinstance(loc.line_number, int)
+    assert isinstance(loc.func_name, str)
+    assert isinstance(loc.call_line, str)
+    assert isinstance(loc.code_context, (list, type(None)))
+    assert isinstance(loc.code_context_str, str)
+    assert isinstance(loc.code_context_labeled, str)
+    assert isinstance(loc.num_context_lines, int)
+
+
+def test_optional_fields_are_str_or_none(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        assert loc.func_signature is None or isinstance(loc.func_signature, str)
+        assert loc.func_docstring is None or isinstance(loc.func_docstring, str)
+
+
+# --- Content correctness ---
+
+
+def test_forward_frame_present(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    func_names = [loc.func_name for loc in stack]
+    assert "forward" in func_names
+
+
+def test_no_torchlens_internals_in_stack(small_input):
+    internal_files = (
+        "model_history.py",
+        "torchlens/helper_funcs.py",
+        "torchlens/user_funcs.py",
+        "torchlens/trace_model.py",
+        "torchlens/logging_funcs.py",
+        "torchlens/decorate_torch.py",
+        "torchlens/model_funcs.py",
+    )
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        for suffix in internal_files:
+            assert not loc.file.endswith(suffix), (
+                f"Internal file {suffix} should not appear in stack"
+            )
+
+
+def test_call_line_is_stripped(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        if loc.call_line:
+            assert loc.call_line == loc.call_line.strip()
+
+
+# --- Dunders ---
+
+
+def test_repr_contains_key_info(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    # Find a frame with code context
+    loc = None
+    for entry in stack:
+        if entry.code_context is not None:
+            loc = entry
+            break
+    assert loc is not None
+    r = repr(loc)
+    assert loc.file in r
+    assert str(loc.line_number) in r
+    assert loc.func_name in r
+    assert "--->" in r
+
+
+def test_repr_source_unavailable():
+    loc = FuncCallLocation(
+        file="test.py",
+        line_number=1,
+        func_name="test",
+        func_signature=None,
+        func_docstring=None,
+        call_line="",
+        code_context=None,
+        code_context_str="None",
+        code_context_labeled="",
+        num_context_lines=0,
+    )
+    r = repr(loc)
+    assert "source unavailable" in r
+
+
+def test_getitem_returns_context_line(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    loc = None
+    for entry in stack:
+        if entry.code_context is not None and len(entry.code_context) > 0:
+            loc = entry
+            break
+    assert loc is not None
+    assert loc[0] == loc.code_context[0]
+
+
+def test_getitem_slice(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    loc = None
+    for entry in stack:
+        if entry.code_context is not None and len(entry.code_context) >= 3:
+            loc = entry
+            break
+    assert loc is not None
+    sliced = loc[1:3]
+    assert isinstance(sliced, list)
+    assert len(sliced) == 2
+    assert sliced == loc.code_context[1:3]
+
+
+def test_len_matches_code_context(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        if loc.code_context is not None:
+            assert len(loc) == len(loc.code_context) == loc.num_context_lines
+
+
+# --- Context lines parameter ---
+
+
+def test_default_num_context_lines(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        if loc.code_context is not None:
+            assert loc.num_context_lines == 15  # 7 + 1 + 7
+            break
+
+
+def test_custom_num_context_lines(small_input):
+    model = example_models.SimpleFF()
+    mh = log_forward_pass(model, small_input, num_context_lines=3)
+    for label in mh.layer_labels:
+        entry = mh[label]
+        if not entry.is_input_layer and entry.func_call_stack:
+            for loc in entry.func_call_stack:
+                if loc.code_context is not None:
+                    assert loc.num_context_lines == 7  # 3 + 1 + 3
+                    return
+    pytest.skip("No non-input layer with code context found")
+
+
+def test_num_context_lines_stored_on_model_history(small_input):
+    model = example_models.SimpleFF()
+    mh = log_forward_pass(model, small_input, num_context_lines=5)
+    assert mh.num_context_lines == 5
+
+
+# --- Labeled code context ---
+
+
+def test_code_context_labeled_has_arrow(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        if loc.code_context is not None:
+            assert loc.code_context_labeled.count("  --->  ") == 1
+            break
+
+
+def test_code_context_labeled_arrow_points_to_call_line(small_input):
+    stack, _ = _get_func_call_stack(small_input)
+    for loc in stack:
+        if loc.code_context is not None and loc.call_line:
+            for line in loc.code_context_labeled.split("\n"):
+                if "--->" in line:
+                    assert loc.call_line in line
+                    break
+            break

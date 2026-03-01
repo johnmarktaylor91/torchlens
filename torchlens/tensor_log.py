@@ -14,6 +14,7 @@ from .helper_funcs import (
 )
 
 if TYPE_CHECKING:
+    from .data_classes import FuncCallLocation
     from .model_history import ModelHistory
 
 
@@ -94,7 +95,7 @@ class TensorLogEntry:
         # Function call info:
         self.func_applied = fields_dict["func_applied"]
         self.func_applied_name = fields_dict["func_applied_name"]
-        self.func_call_stack = fields_dict["func_call_stack"]
+        self.func_call_stack: List["FuncCallLocation"] = fields_dict["func_call_stack"]
         self.func_time_elapsed = fields_dict["func_time_elapsed"]
         self.flops_forward = fields_dict["flops_forward"]
         self.flops_backward = fields_dict["flops_backward"]
