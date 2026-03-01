@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.9.0 (2026-03-01)
+
+### Features
+
+- **data**: Add ParamLog class for structured parameter metadata
+  ([`f21f3e9`](https://github.com/johnmarktaylor91/torchlens/commit/f21f3e9c7a57facd2dfd0bcf7b5c76da66b62fe2))
+
+Introduce ParamLog — a dedicated data class for parameter metadata — and ParamAccessor for
+  convenient dict-like access by address, index, or short name. Parameters are now first-class
+  objects with full metadata including trainable/frozen status, module info, linked params, gradient
+  tracking, and optional optimizer tagging.
+
+Key additions: - ParamLog class with lazy gradient detection via _param_ref - ParamAccessor on both
+  ModelHistory (mh.params) and TensorLogEntry (entry.params) - Trainable/frozen tallies on MH, TLE,
+  and per-module - Optional optimizer= param on log_forward_pass() - Visualization: param names with
+  bracket convention, trainable/frozen color coding, gradient fills for mixed layers, caption
+  breakdown - 68 new tests covering all functionality
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.8.0 (2026-03-01)
 
 ### Features
