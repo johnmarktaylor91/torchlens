@@ -78,9 +78,12 @@ MODEL_HISTORY_FIELD_ORDER = [
     "tensor_fsize_saved",
     "tensor_fsize_saved_nice",
     # Param info
+    "param_logs",
     "total_param_tensors",
     "total_param_layers",
     "total_params",
+    "total_params_trainable",
+    "total_params_frozen",
     "total_params_fsize",
     "total_params_fsize_nice",
     # Module info
@@ -93,6 +96,8 @@ MODEL_HISTORY_FIELD_ORDER = [
     "top_level_modules",
     "top_level_module_passes",
     "module_nparams",
+    "module_nparams_trainable",
+    "module_nparams_frozen",
     "module_num_tensors",
     "module_pass_num_tensors",
     "module_layers",
@@ -181,9 +186,12 @@ TENSOR_LOG_ENTRY_FIELD_ORDER = [
     "parent_params",
     "parent_param_barcodes",
     "parent_param_passes",
+    "parent_param_logs",
     "num_param_tensors",
     "parent_param_shapes",
     "num_params_total",
+    "num_params_trainable",
+    "num_params_frozen",
     "parent_params_fsize",
     "parent_params_fsize_nice",
     # Corresponding layer info
@@ -258,6 +266,30 @@ FUNC_CALL_LOCATION_FIELD_ORDER = [
     "code_context_str",
     "code_context_labeled",
     "num_context_lines",
+]
+
+PARAM_LOG_FIELD_ORDER = [
+    "address",
+    "name",
+    "shape",
+    "dtype",
+    "num_params",
+    "fsize",
+    "fsize_nice",
+    "trainable",
+    "is_quantized",
+    "has_optimizer",
+    "module_address",
+    "module_type",
+    "barcode",
+    "num_passes",
+    "tensor_log_entries",
+    "linked_params",
+    "has_grad",
+    "grad_shape",
+    "grad_dtype",
+    "grad_fsize",
+    "grad_fsize_nice",
 ]
 
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions

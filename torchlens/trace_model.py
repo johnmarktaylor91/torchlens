@@ -230,7 +230,9 @@ def run_and_log_inputs_through_model(
         self._track_tensors = True
         for i, t in enumerate(input_tensors):
             log_source_tensor(self, t, "input", input_tensor_addresses[i])
-        self._prepare_model(model, module_orig_forward_funcs, decorated_func_mapper)
+        self._prepare_model(
+            model, module_orig_forward_funcs, decorated_func_mapper, self._optimizer
+        )
         self.elapsed_time_setup = time.time() - self.pass_start_time
 
         outputs = model(*input_args, **input_kwargs)

@@ -4,6 +4,7 @@ from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .cleanup import _remove_log_entry, cleanup
+from .data_classes import ParamAccessor
 from .decorate_torch import decorate_pytorch
 from .helper_funcs import (
     human_readable_size,
@@ -37,6 +38,7 @@ class ModelHistory:
         detach_saved_tensors: bool = False,
         mark_input_output_distances: bool = True,
         num_context_lines: int = 7,
+        optimizer=None,
     ):
         """Object that stores the history of a model's forward pass.
         Both logs the history in real time, and stores a nice
@@ -48,6 +50,7 @@ class ModelHistory:
         # General info
         self.model_name = model_name
         self.num_context_lines = num_context_lines
+        self._optimizer = optimizer
         self._pass_finished = False
         self._track_tensors = False
         self.logging_mode = "exhaustive"
@@ -121,9 +124,12 @@ class ModelHistory:
         self.tensor_fsize_saved_nice: str = human_readable_size(0)
 
         # Param info:
+        self.param_logs: "ParamAccessor" = ParamAccessor({})
         self.total_param_tensors: int = 0
         self.total_param_layers: int = 0
         self.total_params: int = 0
+        self.total_params_trainable: int = 0
+        self.total_params_frozen: int = 0
         self.total_params_fsize: int = 0
         self.total_params_fsize_nice: str = human_readable_size(0)
 
@@ -137,6 +143,8 @@ class ModelHistory:
         self.module_children: Dict = defaultdict(list)
         self.module_pass_children: Dict = defaultdict(list)
         self.module_nparams: Dict = defaultdict(lambda: 0)
+        self.module_nparams_trainable: Dict = defaultdict(lambda: 0)
+        self.module_nparams_frozen: Dict = defaultdict(lambda: 0)
         self.module_num_tensors: Dict = defaultdict(lambda: 0)
         self.module_pass_num_tensors: Dict = defaultdict(lambda: 0)
         self.module_layers: Dict = defaultdict(list)
@@ -238,6 +246,15 @@ class ModelHistory:
             if entry.flops_backward is not None:
                 result[lt]["backward"] += entry.flops_backward
         return result
+
+    # ********************************************
+    # ************* Params Accessor **************
+    # ********************************************
+
+    @property
+    def params(self) -> ParamAccessor:
+        """Access parameter metadata by address, short name, or index."""
+        return self.param_logs
 
     # ********************************************
     # ******** Assign Imported Methods ***********

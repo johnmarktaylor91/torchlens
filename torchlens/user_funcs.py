@@ -34,6 +34,7 @@ def run_model_and_save_specified_activations(
     save_gradients: bool = False,
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
+    optimizer=None,
 ) -> ModelHistory:
     """Internal function that runs the given input through the given model, and saves the
     specified activations, as given by the tensor numbers (these will not be visible to the user;
@@ -54,6 +55,7 @@ def run_model_and_save_specified_activations(
         save_function_args: whether to save the arguments to each function
         save_gradients: whether to save gradients from any subsequent backward pass
         random_seed: Which random seed to use.
+        optimizer: Optional optimizer to tag which params are being optimized.
 
     Returns:
         ModelHistory object with full log of the forward pass
@@ -69,6 +71,7 @@ def run_model_and_save_specified_activations(
         detach_saved_tensors,
         mark_input_output_distances,
         num_context_lines,
+        optimizer,
     )
     model_history._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
@@ -103,6 +106,7 @@ def log_forward_pass(
     vis_module_overrides: Dict = None,
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
+    optimizer=None,
 ) -> ModelHistory:
     """Runs a forward pass through a model given input x, and returns a ModelHistory object containing a log
     (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
@@ -170,6 +174,7 @@ def log_forward_pass(
             save_gradients=save_gradients,
             random_seed=random_seed,
             num_context_lines=num_context_lines,
+            optimizer=optimizer,
         )
     else:
         model_history = run_model_and_save_specified_activations(
@@ -186,6 +191,7 @@ def log_forward_pass(
             save_gradients=save_gradients,
             random_seed=random_seed,
             num_context_lines=num_context_lines,
+            optimizer=optimizer,
         )
         model_history.keep_unsaved_layers = keep_unsaved_layers
         model_history.save_new_activations(

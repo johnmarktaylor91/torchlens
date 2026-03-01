@@ -14,7 +14,7 @@ from .helper_funcs import (
 )
 
 if TYPE_CHECKING:
-    from .data_classes import FuncCallLocation
+    from .data_classes import FuncCallLocation, ParamLog
     from .model_history import ModelHistory
 
 
@@ -117,9 +117,12 @@ class TensorLogEntry:
         self.parent_params = fields_dict["parent_params"]
         self.parent_param_barcodes = fields_dict["parent_param_barcodes"]
         self.parent_param_passes = fields_dict["parent_param_passes"]
+        self.parent_param_logs: List["ParamLog"] = fields_dict["parent_param_logs"]
         self.num_param_tensors = fields_dict["num_param_tensors"]
         self.parent_param_shapes = fields_dict["parent_param_shapes"]
         self.num_params_total = fields_dict["num_params_total"]
+        self.num_params_trainable = fields_dict["num_params_trainable"]
+        self.num_params_frozen = fields_dict["num_params_frozen"]
         self.parent_params_fsize = fields_dict["parent_params_fsize"]
         self.parent_params_fsize_nice = fields_dict["parent_params_fsize_nice"]
 
@@ -304,6 +307,14 @@ class TensorLogEntry:
     def get_parent_layers(self):
         return [self.source_model_history[parent_label] for parent_label in self.parent_layers]
 
+    @property
+    def params(self):
+        """Access parameter metadata by address, short name, or index."""
+        from .data_classes import ParamAccessor
+
+        param_dict = {pl.address: pl for pl in self.parent_param_logs}
+        return ParamAccessor(param_dict)
+
     # ********************************************
     # ************* Built-in Methods *************
     # ********************************************
@@ -483,6 +494,9 @@ class RolledTensorLogEntry:
         self.computed_with_params = source_entry.computed_with_params
         self.parent_param_shapes = source_entry.parent_param_shapes
         self.num_param_tensors = source_entry.num_param_tensors
+        self.num_params_trainable = source_entry.num_params_trainable
+        self.num_params_frozen = source_entry.num_params_frozen
+        self.parent_param_logs = source_entry.parent_param_logs
 
         # Graph info
         self.is_input_layer = source_entry.is_input_layer
