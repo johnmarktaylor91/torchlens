@@ -207,9 +207,12 @@ def log_source_tensor_exhaustive(
         "parent_params": [],
         "parent_param_barcodes": [],
         "parent_param_passes": {},
+        "parent_param_logs": [],
         "num_param_tensors": 0,
         "parent_param_shapes": [],
         "num_params_total": int(0),
+        "num_params_trainable": 0,
+        "num_params_frozen": 0,
         "parent_params_fsize": 0,
         "parent_params_fsize_nice": human_readable_size(0),
         # Corresponding layer info:
@@ -488,14 +491,28 @@ def log_function_output_tensors_exhaustive(
     parent_param_passes = _process_parent_param_passes(arg_parameters)
     indiv_param_barcodes = list(parent_param_passes.keys())
 
+    # Look up ParamLog objects by address
+    parent_param_logs = []
+    for param in arg_parameters:
+        addr = getattr(param, "tl_param_address", None)
+        if addr is not None and addr in self.param_logs:
+            parent_param_logs.append(self.param_logs[addr])
+
     fields_dict["computed_with_params"] = len(parent_param_passes) > 0
     fields_dict["parent_params"] = arg_parameters
     fields_dict["parent_param_barcodes"] = indiv_param_barcodes
     fields_dict["parent_param_passes"] = parent_param_passes
+    fields_dict["parent_param_logs"] = parent_param_logs
     fields_dict["num_param_tensors"] = len(arg_parameters)
     fields_dict["parent_param_shapes"] = [tuple(param.shape) for param in arg_parameters]
     fields_dict["num_params_total"] = int(
         np.sum([np.prod(shape) for shape in fields_dict["parent_param_shapes"]])
+    )
+    fields_dict["num_params_trainable"] = sum(
+        pl.num_params for pl in parent_param_logs if pl.trainable
+    )
+    fields_dict["num_params_frozen"] = sum(
+        pl.num_params for pl in parent_param_logs if not pl.trainable
     )
     fields_dict["parent_params_fsize"] = int(
         np.sum([get_tensor_memory_amount(p) for p in arg_parameters])

@@ -31,6 +31,9 @@ def _remove_log_entry(self, log_entry: TensorLogEntry, remove_references: bool =
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             if not attr.startswith("__") and not callable(getattr(log_entry, attr)):
+                # Skip properties defined on the class (they have no instance deleter)
+                if isinstance(getattr(type(log_entry), attr, None), property):
+                    continue
                 delattr(log_entry, attr)
     del log_entry
     if remove_references:

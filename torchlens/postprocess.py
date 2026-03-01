@@ -107,7 +107,10 @@ def postprocess(
     # Step 15: Log time elapsed.
     _log_time_elapsed(self)
 
-    # Step 16: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
+    # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
+    _finalize_param_logs(self)
+
+    # Step 17: log the pass as finished, changing the ModelHistory behavior to its user-facing version.
 
     _set_pass_finished(self)
 
@@ -181,9 +184,12 @@ def _add_output_layers(
         new_output_node.parent_params = []
         new_output_node.parent_param_barcodes = []
         new_output_node.parent_param_passes = {}
+        new_output_node.parent_param_logs = []
         new_output_node.num_param_tensors = 0
         new_output_node.parent_param_shapes = []
         new_output_node.num_params_total = int(0)
+        new_output_node.num_params_trainable = 0
+        new_output_node.num_params_frozen = 0
         new_output_node.parent_params_fsize = 0
         new_output_node.parent_params_fsize_nice = human_readable_size(0)
 
@@ -1387,11 +1393,15 @@ def _log_final_info_for_all_layers(self):
             if tensor_entry.computed_with_params:
                 self.total_param_layers += 1
             self.total_params += tensor_entry.num_params_total
+            self.total_params_trainable += tensor_entry.num_params_trainable
+            self.total_params_frozen += tensor_entry.num_params_frozen
             self.total_param_tensors += tensor_entry.num_param_tensors
             self.total_params_fsize += tensor_entry.parent_params_fsize
             # Tally for modules, too.
             for module_name, _ in tensor_entry.containing_modules_origin_nested:
                 self.module_nparams[module_name] += tensor_entry.num_params_total
+                self.module_nparams_trainable[module_name] += tensor_entry.num_params_trainable
+                self.module_nparams_frozen[module_name] += tensor_entry.num_params_frozen
 
         unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
@@ -1777,6 +1787,36 @@ def _undecorate_all_saved_tensors(self):
     for t in tensors_to_undecorate:
         if hasattr(t, "tl_tensor_label_raw"):
             delattr(t, "tl_tensor_label_raw")
+
+
+def _finalize_param_logs(self: "ModelHistory"):
+    """Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata."""
+    from .helper_funcs import get_tensor_memory_amount, human_readable_size
+
+    # Build tensor_log_entries and linked_params from TensorLogEntries
+    for tensor_entry in self.layer_list:
+        if not tensor_entry.parent_param_logs:
+            continue
+        addresses_in_op = [pl.address for pl in tensor_entry.parent_param_logs]
+        for pl in tensor_entry.parent_param_logs:
+            if tensor_entry.layer_label not in pl.tensor_log_entries:
+                pl.tensor_log_entries.append(tensor_entry.layer_label)
+            # Link to other params in the same operation
+            for other_addr in addresses_in_op:
+                if other_addr != pl.address and other_addr not in pl.linked_params:
+                    pl.linked_params.append(other_addr)
+
+    # Populate num_passes: how many times this parameter was used in the forward pass
+    for pl in self.param_logs:
+        pl.num_passes = max(1, len(pl.tensor_log_entries))
+
+    # ParamLog gradient metadata is populated lazily via backward hooks in _log_tensor_grad.
+    # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
+    # reads param.grad after backward is called.
+
+    # Clear actual Parameter tensor references from TensorLogEntries to save memory
+    for tensor_entry in self.layer_list:
+        tensor_entry.parent_params = None
 
 
 def _set_pass_finished(self):

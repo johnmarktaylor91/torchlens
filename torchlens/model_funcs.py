@@ -5,9 +5,13 @@ from typing import Callable, Dict, List, TYPE_CHECKING
 import torch
 from torch import nn
 
+from .data_classes import ParamAccessor, ParamLog
 from .helper_funcs import (
+    get_tensor_memory_amount,
     get_vars_of_type_from_obj,
+    human_readable_size,
     iter_accessible_attributes,
+    make_random_barcode,
     remove_attributes_starting_with_str,
 )
 from .logging_funcs import log_source_tensor
@@ -21,6 +25,7 @@ def prepare_model(
     model: nn.Module,
     module_orig_forward_funcs: Dict,
     decorated_func_mapper: Dict[Callable, Callable],
+    optimizer=None,
 ):
     """Adds annotations and hooks to the model, and decorates any functions in the model.
 
@@ -79,10 +84,55 @@ def prepare_model(
             module.forward = module_forward_decorator(model_log, module.forward, module)
             module.forward.tl_forward_call_is_decorated = True
 
-    # Mark all parameters with requires_grad = True, and mark what they were before, so they can be restored on cleanup.
-    for param in model.parameters():
+    # Build optimizer lookup if provided
+    optimized_param_ids = set()
+    if optimizer is not None:
+        for group in optimizer.param_groups:
+            for p in group["params"]:
+                optimized_param_ids.add(id(p))
+
+    # Create ParamLog objects and mark all parameters with requires_grad = True
+    param_logs = {}
+    for address, param in model.named_parameters():
         param.tl_requires_grad = param.requires_grad
         param.requires_grad = True
+
+        barcode = make_random_barcode()
+        param.tl_param_barcode = barcode
+        param.tl_param_address = address
+        param.tl_pass_num = 0
+
+        # Derive module address and short name
+        parts = address.rsplit(".", 1)
+        module_address = parts[0] if len(parts) > 1 else ""
+        param_name = parts[-1]
+
+        # Get module type
+        module = model
+        if module_address:
+            for attr in module_address.split("."):
+                module = getattr(module, attr)
+        module_type = type(module).__name__
+
+        param_fsize = get_tensor_memory_amount(param)
+        param_log = ParamLog(
+            address=address,
+            name=param_name,
+            shape=tuple(param.shape),
+            dtype=param.dtype,
+            num_params=param.numel(),
+            fsize=param_fsize,
+            fsize_nice=human_readable_size(param_fsize),
+            trainable=param.tl_requires_grad,
+            module_address=module_address,
+            module_type=module_type,
+            barcode=barcode,
+            has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
+        )
+        param_log._param_ref = param
+        param_logs[address] = param_log
+
+    model_log.param_logs = ParamAccessor(param_logs)
 
     # And prepare any buffer tensors.
     prepare_buffer_tensors(model_log, model)

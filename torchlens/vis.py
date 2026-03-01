@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 INPUT_COLOR = "#98FB98"
 OUTPUT_COLOR = "#ff9999"
 PARAMS_NODE_BG_COLOR = "#E6E6E6"
+TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"
+FROZEN_PARAMS_BG_COLOR = "#B0B0B0"
 BUFFER_NODE_COLOR = "#888888"
 GRADIENT_ARROW_COLOR = "#9197F6"
 DEFAULT_BG_COLOR = "white"
@@ -104,10 +106,25 @@ def render_graph(
     else:
         raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
 
+    if self.total_params == 0:
+        params_detail = "0 params"
+    elif self.total_params_frozen == 0:
+        params_detail = (
+            f"{self.total_params} params (all trainable, {self.total_params_fsize_nice})"
+        )
+    elif self.total_params_trainable == 0:
+        params_detail = f"{self.total_params} params (all frozen, {self.total_params_fsize_nice})"
+    else:
+        params_detail = (
+            f"{self.total_params} params "
+            f"({self.total_params_trainable}/{self.total_params} trainable, "
+            f"{self.total_params_fsize_nice})"
+        )
+
     graph_caption = (
         f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors_total} "
         f"tensors total ({self.tensor_fsize_total_nice})"
-        f"<br align='left'/>{self.total_params} params total ({self.total_params_fsize_nice})<br align='left'/>>"
+        f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
 
     dot = graphviz.Digraph(
@@ -266,6 +283,9 @@ def _construct_layer_node(
         "shape": node_shape,
         "ordering": "out",
     }
+    if ":" in node_bg_color:
+        node_args["gradientangle"] = "0"
+
     for arg_name, arg_val in vis_node_overrides.items():
         if callable(arg_val):
             node_args[arg_name] = str(arg_val(self, node))
@@ -334,8 +354,16 @@ def _construct_collapsed_module_node(
     else:
         tensor_shape_str = "x1"
 
+    module_nparams_trainable = self.module_nparams_trainable[module_address]
+    module_nparams_frozen = self.module_nparams_frozen[module_address]
+
     if module_nparams > 0:
-        bg_color = PARAMS_NODE_BG_COLOR
+        if module_nparams_frozen == 0:
+            bg_color = TRAINABLE_PARAMS_BG_COLOR
+        elif module_nparams_trainable == 0:
+            bg_color = FROZEN_PARAMS_BG_COLOR
+        else:
+            bg_color = TRAINABLE_PARAMS_BG_COLOR + ":" + FROZEN_PARAMS_BG_COLOR
     else:
         bg_color = DEFAULT_BG_COLOR
 
@@ -344,12 +372,25 @@ def _construct_collapsed_module_node(
     else:
         line_style = "dashed"
 
+    # Build param detail string for collapsed module
+    if module_nparams == 0:
+        param_detail = "0 parameters"
+    elif module_nparams_frozen == 0:
+        param_detail = f"{module_nparams} params (all trainable)"
+    elif module_nparams_trainable == 0:
+        param_detail = f"{module_nparams} params (all frozen)"
+    else:
+        param_detail = (
+            f"{module_nparams} params ({module_nparams_trainable} trainable, "
+            f"{module_nparams_frozen} frozen)"
+        )
+
     node_label = (
         f"<{node_title}<br/>"
         f"{module_type}<br/>"
         f"{tensor_shape_str} ({module_output_fsize})<br/>"
         f"{module_num_tensors} layers total<br/>"
-        f"{module_nparams} parameters>"
+        f"{param_detail}>"
     )
 
     node_args = {
@@ -362,6 +403,8 @@ def _construct_collapsed_module_node(
         "shape": "box3d",
         "ordering": "out",
     }
+    if ":" in bg_color:
+        node_args["gradientangle"] = "0"
 
     for arg_name, arg_val in vis_collapsed_node_overrides.items():
         if callable(arg_val):
@@ -490,7 +533,19 @@ def _get_node_bg_color(
     elif node.is_terminal_bool_layer:
         bg_color = BOOL_NODE_COLOR
     elif node.computed_with_params:
-        bg_color = PARAMS_NODE_BG_COLOR
+        param_logs = getattr(node, "parent_param_logs", [])
+        if param_logs:
+            trainable_flags = [pl.trainable for pl in param_logs]
+            all_trainable = all(trainable_flags)
+            all_frozen = not any(trainable_flags)
+            if all_trainable:
+                bg_color = TRAINABLE_PARAMS_BG_COLOR
+            elif all_frozen:
+                bg_color = FROZEN_PARAMS_BG_COLOR
+            else:
+                bg_color = TRAINABLE_PARAMS_BG_COLOR + ":" + FROZEN_PARAMS_BG_COLOR
+        else:
+            bg_color = PARAMS_NODE_BG_COLOR
     else:
         bg_color = DEFAULT_BG_COLOR
     return bg_color
@@ -546,21 +601,37 @@ def _make_node_label(
     return node_label
 
 
+def _format_shape_str(shape: tuple) -> str:
+    """Formats a shape tuple as a compact string like '3x3x64'."""
+    if len(shape) > 1:
+        return "x".join(str(s) for s in shape)
+    elif len(shape) == 1:
+        return f"x{shape[0]}"
+    return "x1"
+
+
 def _make_param_label(node: Union["TensorLogEntry", "RolledTensorLogEntry"]) -> str:
-    """Makes the label for parameters of a node."""
+    """Makes the label for parameters of a node.
+
+    Uses param names and bracket convention when ParamLog objects are available:
+    round brackets () for trainable, square brackets [] for frozen.
+    """
     if node.num_param_tensors == 0:
         return ""
 
-    each_param_shape = []
-    for param_shape in node.parent_param_shapes:
-        if len(param_shape) > 1:
-            each_param_shape.append("x".join([str(s) for s in param_shape]))
-        elif len(param_shape) == 1:
-            each_param_shape.append(f"x{param_shape[0]}")
-        else:
-            each_param_shape.append("x1")
-
-    param_label = "<br/>params: " + ", ".join([param_shape for param_shape in each_param_shape])
+    param_logs = getattr(node, "parent_param_logs", [])
+    if param_logs:
+        parts = []
+        for pl in param_logs:
+            shape_str = _format_shape_str(pl.shape)
+            if pl.trainable:
+                parts.append(f"{pl.name}: ({shape_str})")
+            else:
+                parts.append(f"{pl.name}: [{shape_str}]")
+        param_label = "<br/>params: " + ", ".join(parts)
+    else:
+        each_param_shape = [_format_shape_str(s) for s in node.parent_param_shapes]
+        param_label = "<br/>params: " + ", ".join(each_param_shape)
     return param_label
 
 
