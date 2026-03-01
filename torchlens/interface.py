@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_history import ModelHistory
 
-from .tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLogEntry
 
 
 def _getitem_during_pass(self: "ModelHistory", ix) -> TensorLogEntry:

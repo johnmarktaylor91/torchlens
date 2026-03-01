@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_history import ModelHistory
 from .decorate_torch import undecorate_pytorch
 from .helper_funcs import (
     get_vars_of_type_from_obj,

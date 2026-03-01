@@ -22,11 +22,11 @@ from .helper_funcs import (
     tensor_nanequal,
 )
 from .flops import compute_backward_flops, compute_forward_flops
-from .tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLogEntry
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
-    from .tensor_log import TensorLogEntry
+    from .data_classes.model_history import ModelHistory
+    from .data_classes.tensor_log import TensorLogEntry
 
 
 def save_new_activations(

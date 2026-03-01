@@ -4,7 +4,7 @@ import torch
 
 from .constants import MODEL_HISTORY_FIELD_ORDER
 from .helper_funcs import remove_entry_from_list
-from .tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLogEntry
 
 
 def cleanup(self):

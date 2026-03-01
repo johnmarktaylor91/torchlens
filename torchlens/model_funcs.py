@@ -17,7 +17,7 @@ from .helper_funcs import (
 from .logging_funcs import log_source_tensor
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_history import ModelHistory
 
 
 def prepare_model(

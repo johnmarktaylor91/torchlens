@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from .tensor_log import TensorLogEntry
+from .data_classes.tensor_log import TensorLogEntry
 
 if TYPE_CHECKING:
     pass

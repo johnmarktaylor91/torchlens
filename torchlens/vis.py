@@ -6,10 +6,10 @@ from IPython.display import display
 
 from .helper_funcs import in_notebook, int_list_to_compact_str
 from .postprocess import _roll_graph
-from .tensor_log import RolledTensorLogEntry, TensorLogEntry
+from .data_classes.tensor_log import RolledTensorLogEntry, TensorLogEntry
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_history import ModelHistory
 
 INPUT_COLOR = "#98FB98"
 OUTPUT_COLOR = "#ff9999"

@@ -4,8 +4,8 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
-from .constants import TENSOR_LOG_ENTRY_FIELD_ORDER
-from .helper_funcs import (
+from ..constants import TENSOR_LOG_ENTRY_FIELD_ORDER
+from ..helper_funcs import (
     clean_to,
     get_tensor_memory_amount,
     human_readable_size,
@@ -14,7 +14,8 @@ from .helper_funcs import (
 )
 
 if TYPE_CHECKING:
-    from .data_classes import FuncCallLocation, ParamLog
+    from .func_call_location import FuncCallLocation
+    from .param_log import ParamLog
     from .model_history import ModelHistory
 
 
@@ -310,7 +311,7 @@ class TensorLogEntry:
     @property
     def params(self):
         """Access parameter metadata by address, short name, or index."""
-        from .data_classes import ParamAccessor
+        from .param_log import ParamAccessor
 
         param_dict = {pl.address: pl for pl in self.parent_param_logs}
         return ParamAccessor(param_dict)

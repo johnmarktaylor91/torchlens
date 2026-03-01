@@ -18,10 +18,10 @@ from .helper_funcs import (
     tensor_nanequal,
     _get_func_call_stack,
 )
-from .tensor_log import RolledTensorLogEntry, TensorLogEntry
+from .data_classes.tensor_log import RolledTensorLogEntry, TensorLogEntry
 
 if TYPE_CHECKING:
-    from .model_history import ModelHistory
+    from .data_classes.model_history import ModelHistory
 
 
 @dataclass

@@ -3,13 +3,13 @@ import copy
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from .cleanup import _remove_log_entry, cleanup
-from .data_classes import ParamAccessor
-from .decorate_torch import decorate_pytorch
-from .helper_funcs import (
+from ..cleanup import _remove_log_entry, cleanup
+from .param_log import ParamAccessor
+from ..decorate_torch import decorate_pytorch
+from ..helper_funcs import (
     human_readable_size,
 )
-from .interface import (
+from ..interface import (
     _getitem_after_pass,
     _getitem_during_pass,
     _str_after_pass,
@@ -17,13 +17,13 @@ from .interface import (
     to_pandas,
     print_all_fields,
 )
-from .logging_funcs import save_new_activations
-from .model_funcs import cleanup_model, prepare_model
-from .postprocess import postprocess
+from ..logging_funcs import save_new_activations
+from ..model_funcs import cleanup_model, prepare_model
+from ..postprocess import postprocess
 from .tensor_log import RolledTensorLogEntry, TensorLogEntry
-from .trace_model import run_and_log_inputs_through_model
-from .validation import validate_saved_activations
-from .vis import render_graph
+from ..trace_model import run_and_log_inputs_through_model
+from ..validation import validate_saved_activations
+from ..vis import render_graph
 
 
 class ModelHistory:

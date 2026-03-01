@@ -15,7 +15,7 @@ from .helper_funcs import (
     safe_copy_kwargs,
     normalize_input_args,
 )
-from .model_history import (
+from .data_classes.model_history import (
     ModelHistory,
 )
 

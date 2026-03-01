@@ -20,7 +20,7 @@ from .helper_funcs import (
 from .logging_funcs import log_function_output_tensors, log_source_tensor
 
 if TYPE_CHECKING:
-    from model_history import ModelHistory
+    from .data_classes.model_history import ModelHistory
 
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 print_funcs = ["__repr__", "__str__", "_str"]
