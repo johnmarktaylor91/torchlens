@@ -9,9 +9,10 @@ torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 torch.use_deterministic_algorithms(True)
 
-# Visualization output directories — anchored to tests/ so they don't pollute project root
+# Output directories — anchored to tests/ so they don't pollute project root
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-VIS_OUTPUT_DIR = opj(TESTS_DIR, "visualization_outputs")
+TEST_OUTPUTS_DIR = opj(TESTS_DIR, "test_outputs")
+VIS_OUTPUT_DIR = TEST_OUTPUTS_DIR
 
 sub_dirs = [
     "cornet",
@@ -28,8 +29,10 @@ sub_dirs = [
     "torchvision-video",
     "torchvision-quantize",
     "toy-networks",
+    "aesthetic_test_models",
 ]
 
+os.makedirs(TEST_OUTPUTS_DIR, exist_ok=True)
 for sub_dir in sub_dirs:
     os.makedirs(opj(VIS_OUTPUT_DIR, sub_dir), exist_ok=True)
 

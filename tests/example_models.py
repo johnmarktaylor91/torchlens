@@ -1798,3 +1798,131 @@ class StochasticDepthModel(nn.Module):
         if self.training and torch.rand(1).item() < self.drop_prob:
             return x
         return self.linear2(x)
+
+
+#  *****************************************************
+#  **** Aesthetic Testing Models (8-dim for speed) ****
+#  *****************************************************
+
+
+class AestheticDeepNested(nn.Module):
+    """Tests nesting depth visualization at levels 0, 1, 2, 3, full.
+    Root → outer (Linear+mul) → mid (add) → inner (Linear+relu)
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.outer = _AestheticOuter()
+
+    def forward(self, x):
+        return self.outer(x)
+
+
+class _AestheticOuter(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(8, 8)
+        self.mid = _AestheticMid()
+
+    def forward(self, x):
+        x = self.linear(x)
+        x = x * 2
+        return self.mid(x)
+
+
+class _AestheticMid(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.inner = _AestheticInner()
+
+    def forward(self, x):
+        x = x + 1
+        return self.inner(x)
+
+
+class _AestheticInner(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = nn.Linear(8, 8)
+
+    def forward(self, x):
+        x = self.linear(x)
+        return torch.relu(x)
+
+
+class AestheticSharedModule(nn.Module):
+    """Tests rolled vs unrolled visualization. Single Linear module called 4 times with relu between."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(8, 8)
+
+    def forward(self, x):
+        x = self.fc(x)
+        x = torch.relu(x)
+        x = self.fc(x)
+        x = torch.relu(x)
+        x = self.fc(x)
+        x = torch.relu(x)
+        x = self.fc(x)
+        return x
+
+
+class AestheticBufferBranch(nn.Module):
+    """Tests buffer visibility toggle and branching. Has a registered buffer, a Linear, and a sin branch that merges."""
+
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("scale", torch.ones(8) * 0.5)
+        self.linear = nn.Linear(8, 8)
+
+    def forward(self, x):
+        x = x * self.scale
+        a = self.linear(x)
+        b = torch.sin(x)
+        return a + b
+
+
+class AestheticKitchenSink(nn.Module):
+    """Combines nesting + shared modules + buffers + branching. Exercises everything in one graph."""
+
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("bias", torch.randn(8))
+        self.shared_fc = nn.Linear(8, 8)
+        self.nest = _AestheticKitchenNest()
+
+    def forward(self, x):
+        x = x + self.bias
+        a = self.shared_fc(x)
+        b = self.nest(x)
+        x = a + b
+        x = self.shared_fc(x)
+        return torch.relu(x)
+
+
+class _AestheticKitchenNest(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(8, 8)
+
+    def forward(self, x):
+        return torch.sigmoid(self.fc(x))
+
+
+class AestheticFrozenMix(nn.Module):
+    """Has both frozen and trainable params for testing frozen-param aesthetics."""
+
+    def __init__(self):
+        super().__init__()
+        self.frozen_fc = nn.Linear(8, 8)
+        self.trainable_fc = nn.Linear(8, 8)
+        # Freeze the first layer
+        for param in self.frozen_fc.parameters():
+            param.requires_grad = False
+
+    def forward(self, x):
+        x = self.frozen_fc(x)
+        x = torch.relu(x)
+        x = self.trainable_fc(x)
+        return x
