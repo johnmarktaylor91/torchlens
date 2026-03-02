@@ -5,6 +5,9 @@ pytest.importorskip() for non-torchvision packages. Tests with missing
 packages show as SKIPPED, never ERROR.
 
 Only torch, torchvision, pytest, and torchlens are imported at the top level.
+
+Tests that take >5 minutes are marked @pytest.mark.slow. To skip them:
+    pytest tests/test_real_world_models.py -m "not slow"
 """
 
 from os.path import join as opj
@@ -93,6 +96,323 @@ def test_vit(default_input1):
     )
 
 
+@pytest.mark.slow
+def test_googlenet(default_input1):
+    model = torchvision.models.GoogLeNet()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=True,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=False,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_buffer_layers=False,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_rolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=True,
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=False,
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=True,
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=False,
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=True,
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth3"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=False,
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth3"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=True,
+        vis_nesting_depth=4,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth4"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_buffer_layers=False,
+        vis_nesting_depth=4,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth4"),
+    )
+
+
+@pytest.mark.slow
+def test_resnet50(default_input1):
+    model = torchvision.models.resnet50()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "resnet50"),
+    )
+
+
+@pytest.mark.slow
+def test_convnext_large(default_input1):
+    model = torchvision.models.convnext_large()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "convnext_large"),
+    )
+
+
+@pytest.mark.slow
+def test_densenet121(default_input1):
+    model = torchvision.models.densenet121()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth3"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=4,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth4"),
+    )
+
+
+@pytest.mark.slow
+def test_efficientnet_b6(default_input1):
+    model = torchvision.models.efficientnet_b6()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "efficientnet_b6"),
+    )
+
+
+@pytest.mark.slow
+def test_squeezenet(default_input1):
+    model = torchvision.models.squeezenet1_1()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "squeezenet"),
+    )
+
+
+@pytest.mark.slow
+def test_mobilenet(default_input1):
+    model = torchvision.models.mobilenet_v3_large()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "mobilenet_vg_large"),
+    )
+
+
+@pytest.mark.slow
+def test_wide_resnet(default_input1):
+    model = torchvision.models.wide_resnet101_2()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "wide_resnet101_2"),
+    )
+
+
+@pytest.mark.slow
+def test_mnasnet(default_input1):
+    model = torchvision.models.mnasnet1_3()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "mnasnet1_3"),
+    )
+
+
+@pytest.mark.slow
+def test_shufflenet(default_input1):
+    model = torchvision.models.shufflenet_v2_x1_5()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "shufflenet_v2_x1_5"),
+    )
+
+
+@pytest.mark.slow
+def test_resnext(default_input1):
+    model = torchvision.models.resnext101_64x4d()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "resnext101_64x4d"),
+    )
+
+
+@pytest.mark.slow
+def test_regnet(default_input1):
+    model = torchvision.models.regnet_x_32gf()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "regnet_x_32gf"),
+    )
+
+
+@pytest.mark.slow
+def test_swin_v2b(default_input1):
+    model = torchvision.models.swin_v2_b()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "swin_v2b"),
+    )
+
+
+@pytest.mark.slow
+def test_maxvit(default_input1):
+    model = torchvision.models.maxvit_t()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "max_vit_t"),
+    )
+
+
+@pytest.mark.slow
+def test_inception_v3():
+    model = torchvision.models.inception_v3()
+    model_input = torch.randn(2, 3, 299, 299)
+    assert validate_saved_activations(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "inception_v3"),
+    )
+
+
 # =============================================================================
 # CORNet Models (requires cornet package)
 # =============================================================================
@@ -166,6 +486,214 @@ def test_cornet_z(default_input1):
     )
 
 
+@pytest.mark.slow
+def test_cornet_s(default_input1):
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_s()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth3"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth3"),
+    )
+
+
+@pytest.mark.slow
+def test_cornet_r(default_input1):
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_r()
+    assert validate_saved_activations(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth1"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth2"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth3"),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth3"),
+    )
+
+
+@pytest.mark.slow
+def test_cornet_rt():
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_rt()
+    model_input = torch.rand((6, 3, 224, 224)).to("cuda")
+    assert validate_saved_activations(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth1"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=1,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth1"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth2"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=2,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth2"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth3"),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="rolled",
+        vis_nesting_depth=3,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth3"),
+    )
+
+
 # =============================================================================
 # TIMM Models (requires timm)
 # =============================================================================
@@ -212,6 +740,226 @@ def test_timm_ecaresnet101d():
     assert validate_saved_activations(model, model_input)
 
 
+def test_mobilevit_xxs():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("mobilevitv2_050", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "mobilevitv2_050"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_adv_inception_v3(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.models.adv_inception_v3(pretrained=True)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_adv_inception_v3"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_timm_cait_s24_224(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.models.cait_s24_224()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_cait_s24_224"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_timm_coat_mini(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.models.coat_mini()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_coat_mini"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_timm_convit_base(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("convit_base", pretrained=True)
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_convit_base"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_timm_darknet21():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("darknet21", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_darknet21"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_ghostnet_100():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("ghostnet_100", pretrained=True)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_ghostnet_100"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_mixnet_m():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("mixnet_m", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_mixnet_m"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_poolformer_s24():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("poolformer_s24", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_poolformer_s24"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_resnest14d():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("resnest14d", pretrained=False)
+    model_input = torch.randn(6, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_resnest14d"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_edgenext_small():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("edgenext_small", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_edgenext_small"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_hardcorenas_f():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("hardcorenas_f", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "hardcorenas_f"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_semnasnet_100():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("semnasnet_100", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "semnasnet_100"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_xcit_tiny_24_p8_224():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("xcit_tiny_24_p8_224", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "xcit_tiny_24_p8_224"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_seresnet152():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("seresnet152", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "seresnet152"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
 # =============================================================================
 # Torchaudio Models (requires torchaudio)
 # =============================================================================
@@ -243,6 +991,93 @@ def test_audio_wav2letter():
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wav2letter"),
     )
     assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_audio_hubert_base():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.hubert_base()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_hubert_base"),
+        random_seed=1,
+    )
+    assert validate_saved_activations(model, model_input, random_seed=1)
+
+
+@pytest.mark.slow
+def test_audio_wav2vec2_base():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.wav2vec2_base()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wave2vec2_base"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_deepspeech():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.DeepSpeech(3)
+    model_input = torch.randn(12, 2000, 3)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_deepspeech"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_conformer():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.Conformer(
+        input_dim=80,
+        num_heads=4,
+        ffn_dim=128,
+        num_layers=2,
+        depthwise_conv_kernel_size=31,
+    )
+    lengths = torch.tensor([50, 40])
+    model_input = torch.randn(2, 50, 80)
+    model_inputs = (model_input, lengths)
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "conformer"),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
+
+@pytest.mark.slow
+def test_whisper_tiny():
+    transformers = pytest.importorskip("transformers")
+    model = transformers.WhisperModel.from_pretrained("openai/whisper-tiny")
+    input_features = torch.randn(1, 80, 3000)
+    decoder_input_ids = torch.tensor([[50258, 50259, 50359]])
+    model_kwargs = {"input_features": input_features, "decoder_input_ids": decoder_input_ids}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "whisper_tiny"),
+    )
+    assert validate_saved_activations(model, [], model_kwargs)
 
 
 # =============================================================================
@@ -307,8 +1142,130 @@ def test_gpt2():
     assert validate_saved_activations(model, [], model_inputs)
 
 
+def test_distilbert():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    model = transformers.DistilBertModel.from_pretrained("distilbert-base-uncased")
+    model_inputs = tokenizer("to be or not to be", return_tensors="pt")
+    show_model_graph(
+        model,
+        [],
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "distilbert"),
+    )
+    assert validate_saved_activations(model, [], model_inputs)
+
+
+def test_electra_small():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained("google/electra-small-discriminator")
+    model = transformers.ElectraModel.from_pretrained("google/electra-small-discriminator")
+    model_inputs = tokenizer("to be or not to be", return_tensors="pt")
+    show_model_graph(
+        model,
+        [],
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "electra_small"),
+    )
+    assert validate_saved_activations(model, [], model_inputs)
+
+
+@pytest.mark.slow
+def test_bert():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-uncased")
+    model = transformers.BertForNextSentencePrediction.from_pretrained("bert-base-uncased")
+    model_inputs = ("to be or not to be", "that is the question")
+    model_inputs = tokenizer(*model_inputs, return_tensors="pt")
+    model_inputs["labels"] = torch.LongTensor([1])
+    show_model_graph(
+        model,
+        [],
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "bert"),
+    )
+    assert validate_saved_activations(model, [], model_inputs)
+
+
+@pytest.mark.slow
+def test_t5_small():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
+    model = transformers.T5ForConditionalGeneration.from_pretrained("t5-small")
+    input_ids = tokenizer("translate English to German: Hello", return_tensors="pt").input_ids
+    decoder_input_ids = tokenizer("Hallo", return_tensors="pt").input_ids
+    model_kwargs = {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "t5_small"),
+    )
+    assert validate_saved_activations(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_bart_base():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained("facebook/bart-base")
+    model = transformers.BartModel.from_pretrained("facebook/bart-base")
+    inputs = tokenizer("Hello, my name is Claude", return_tensors="pt")
+    show_model_graph(
+        model,
+        [],
+        inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "bart_base"),
+    )
+    assert validate_saved_activations(model, [], inputs)
+
+
+@pytest.mark.slow
+def test_roberta_base():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained("roberta-base")
+    model = transformers.RobertaModel.from_pretrained("roberta-base")
+    inputs = tokenizer("Hello world", return_tensors="pt")
+    show_model_graph(
+        model,
+        [],
+        inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "roberta_base"),
+    )
+    assert validate_saved_activations(model, [], inputs)
+
+
+@pytest.mark.slow
+def test_sentence_transformer():
+    sentence_transformers = pytest.importorskip("sentence_transformers")
+    model = sentence_transformers.SentenceTransformer("all-MiniLM-L6-v2")
+    transformer_model = model[0].auto_model
+    tokenizer = model.tokenizer
+    inputs = tokenizer("Hello world", return_tensors="pt", padding=True, truncation=True)
+    show_model_graph(
+        transformer_model,
+        [],
+        inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "sentence_transformer"),
+    )
+    assert validate_saved_activations(transformer_model, [], inputs)
+
+
 # =============================================================================
-# Multimodal / Special Models
+# Multimodal / Vision-Language / Special Models
 # =============================================================================
 
 
@@ -411,5 +1368,567 @@ def test_lightning():
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "lightning", "one-hot-autoencoder"),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
+
+@pytest.mark.slow
+def test_clip():
+    transformers = pytest.importorskip("transformers")
+    from PIL import Image
+
+    model = transformers.CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    processor = transformers.CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    image = Image.fromarray(np.random.random((640, 480, 3)).astype(np.uint8))
+    model_inputs = processor(
+        text=["a photo of a cat", "a photo of a dog"],
+        images=image,
+        return_tensors="pt",
+        padding=True,
+    )
+    show_model_graph(
+        model,
+        [],
+        model_inputs,
+        random_seed=1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "clip"),
+    )
+    assert validate_saved_activations(model, [], model_inputs, random_seed=1)
+
+
+@pytest.mark.slow
+def test_blip_base():
+    transformers = pytest.importorskip("transformers")
+    from PIL import Image
+
+    model = transformers.BlipModel.from_pretrained("Salesforce/blip-image-captioning-base")
+    processor = transformers.BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    image = Image.fromarray(np.random.random((224, 224, 3)).astype(np.uint8))
+    model_inputs = processor(images=image, text="a photo", return_tensors="pt")
+    show_model_graph(
+        model,
+        [],
+        model_inputs,
+        random_seed=1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip_base"),
+    )
+    assert validate_saved_activations(model, [], model_inputs, random_seed=1)
+
+
+@pytest.mark.slow
+def test_vit_mae():
+    transformers = pytest.importorskip("transformers")
+    model = transformers.ViTMAEModel.from_pretrained("facebook/vit-mae-base")
+    pixel_values = torch.randn(1, 3, 224, 224)
+    model_kwargs = {"pixel_values": pixel_values}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        random_seed=1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "vit_mae"),
+    )
+    assert validate_saved_activations(model, [], model_kwargs, random_seed=1)
+
+
+# =============================================================================
+# Built-in Architecture Tests (no external deps)
+# =============================================================================
+
+
+def test_simple_moe():
+    """Mixture of Experts with top-2 routing — built-in, no external deps."""
+    import torch.nn as nn
+
+    class SimpleMoE(nn.Module):
+        def __init__(self, input_dim=16, hidden_dim=32, num_experts=4, top_k=2):
+            super().__init__()
+            self.experts = nn.ModuleList(
+                [
+                    nn.Sequential(
+                        nn.Linear(input_dim, hidden_dim),
+                        nn.ReLU(),
+                        nn.Linear(hidden_dim, input_dim),
+                    )
+                    for _ in range(num_experts)
+                ]
+            )
+            self.gate = nn.Linear(input_dim, num_experts)
+            self.top_k = top_k
+
+        def forward(self, x):
+            gate_logits = self.gate(x)
+            weights, indices = torch.topk(torch.softmax(gate_logits, dim=-1), self.top_k, dim=-1)
+            weights = weights / weights.sum(dim=-1, keepdim=True)
+            output = torch.zeros_like(x)
+            for i in range(self.top_k):
+                expert_idx = indices[:, :, i] if x.dim() == 3 else indices[:, i]
+                for j, expert in enumerate(self.experts):
+                    mask = expert_idx == j
+                    if mask.any():
+                        if x.dim() == 3:
+                            expert_input = x[mask]
+                        else:
+                            expert_input = x[mask]
+                        expert_output = expert(expert_input)
+                        w = weights[:, :, i][mask] if x.dim() == 3 else weights[:, i][mask]
+                        output[mask] = output[mask] + w.unsqueeze(-1) * expert_output
+            return output
+
+    model = SimpleMoE()
+    x = torch.rand(2, 16)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_moe"),
+    )
+    assert validate_saved_activations(model, x)
+
+
+# =============================================================================
+# TorchVision Segmentation Models
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_segment_deeplab_v3_resnet50(default_input1):
+    model = torchvision.models.segmentation.deeplabv3_resnet50()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-segmentation",
+            "segment_deeplabv3_resnet50",
+        ),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_segment_deeplabv3_mobilenet(default_input1):
+    model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-segmentation",
+            "segment_deeplabv3_mobilenet_v3_large",
+        ),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_segment_lraspp_mobilenet(default_input1):
+    model = torchvision.models.segmentation.lraspp_mobilenet_v3_large()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-segmentation",
+            "segment_lraspp_mobilenet_v3_large",
+        ),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+@pytest.mark.slow
+def test_segment_fcn_resnet50(default_input1):
+    model = torchvision.models.segmentation.fcn_resnet50()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-segmentation", "segment_fcn_resnet50"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+# =============================================================================
+# TorchVision Detection Models
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
+    model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+    ]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_fasterrcnn_mobilenet_v3_large_320_fpn_train",
+        ),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
+
+@pytest.mark.slow
+def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
+    model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(
+        model,
+        [input_tensors],
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_fasterrcnn_mobilenet_v3_large_320_fpn_eval",
+        ),
+    )
+    assert validate_saved_activations(model, [input_tensors])
+
+
+@pytest.mark.slow
+def test_fcos_resnet50_train(default_input1, default_input2):
+    model = torchvision.models.detection.fcos_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+    ]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_fcos_resnet50_fpn_train",
+        ),
+        random_seed=1,
+    )
+    assert validate_saved_activations(model, model_inputs, random_seed=1)
+
+
+@pytest.mark.slow
+def test_fcos_resnet50_eval(default_input1, default_input2):
+    model = torchvision.models.detection.fcos_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(
+        model,
+        [input_tensors],
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_fcos_resnet50_fpn_eval",
+        ),
+    )
+    assert validate_saved_activations(model, [input_tensors])
+
+
+@pytest.mark.slow
+def test_retinanet_resnet50_train(default_input1, default_input2):
+    model = torchvision.models.detection.retinanet_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+    ]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_retinanet_resnet50_fpn_train",
+        ),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
+
+@pytest.mark.slow
+def test_retinanet_resnet50_eval(default_input1, default_input2):
+    model = torchvision.models.detection.retinanet_resnet50_fpn()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(
+        model,
+        [input_tensors],
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_retinanet_resnet50_fpn_eval",
+        ),
+    )
+    assert validate_saved_activations(model, [input_tensors])
+
+
+@pytest.mark.slow
+def test_ssd300_vgg16_train(default_input1, default_input2):
+    model = torchvision.models.detection.ssd300_vgg16()
+    input_tensors = [default_input1[0], default_input2[0]]
+    targets = [
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+        {
+            "boxes": torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            "labels": torch.tensor([1, 2]),
+        },
+    ]
+    model_inputs = (input_tensors, targets)
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(
+            VIS_OUTPUT_DIR,
+            "torchvision-detection",
+            "detect_ssd300_vgg16_train",
+        ),
+    )
+    assert validate_saved_activations(model, model_inputs)
+
+
+@pytest.mark.slow
+def test_ssd300_vgg16_eval(default_input1, default_input2):
+    model = torchvision.models.detection.ssd300_vgg16()
+    input_tensors = [default_input1[0], default_input2[0]]
+    model = model.eval()
+    show_model_graph(
+        model,
+        [input_tensors],
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "detect_ssd300_vgg16_eval"),
+    )
+    assert validate_saved_activations(model, [input_tensors])
+
+
+# =============================================================================
+# TorchVision Quantized Models
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_quantize_resnet50(default_input1):
+    model = torchvision.models.quantization.resnet50()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-quantize", "quantize_resnet50"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+# =============================================================================
+# TorchVision Video Models
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_video_r2plus1_18():
+    model = torchvision.models.video.r2plus1d_18()
+    model_input = torch.randn(1, 3, 1, 112, 112)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r2plus1d_18"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_video_mc3_18():
+    model = torchvision.models.video.mc3_18()
+    model_input = torch.randn(6, 3, 16, 112, 112)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_mc3_18"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_video_mvit_v2_s():
+    model = torchvision.models.video.mvit_v2_s()
+    model_input = torch.randn(16, 3, 448, 896)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_mvit_v2_s"),
+    )
+
+
+@pytest.mark.slow
+def test_video_r3d_18():
+    model = torchvision.models.video.r3d_18()
+    model_input = torch.randn(16, 3, 16, 112, 112)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r3d_18"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_video_s3d():
+    model = torchvision.models.video.s3d()
+    model_input = torch.randn(1, 3, 16, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_s3d"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+# =============================================================================
+# Optical Flow
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_opticflow_raftsmall():
+    model = torchvision.models.optical_flow.raft_small()
+    model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftsmall"),
+    )
+    assert validate_saved_activations(model, model_input)
+
+
+@pytest.mark.slow
+def test_opticflow_raftlarge():
+    # NOTE: the loop-finding procedure messes up on this somehow.
+    model = torchvision.models.optical_flow.raft_large()
+    model_input = [torch.rand(6, 3, 224, 224), torch.rand(6, 3, 224, 224)]
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        random_seed=1,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftlarge"),
+    )
+    assert validate_saved_activations(model, model_input, random_seed=1)
+
+
+# =============================================================================
+# Taskonomy (requires visualpriors)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_taskonomy(default_input1):
+    visualpriors = pytest.importorskip("visualpriors")
+    model = visualpriors.taskonomy_network.TaskonomyNetwork()
+    show_model_graph(
+        model,
+        default_input1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "taskonomy", "taskonomy"),
+    )
+    assert validate_saved_activations(model, default_input1)
+
+
+# =============================================================================
+# Graph Neural Networks (requires torch_geometric)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_dimenet():
+    torch_geometric_nn = pytest.importorskip("torch_geometric.nn")
+    DimeNet = torch_geometric_nn.DimeNet
+    model = DimeNet(6, 3, 4, 2, 6, 3)
+    z = torch.tensor([6, 1, 1, 1, 1])
+    pose = torch.tensor(
+        [
+            [-1.2700e-02, 1.0858e00, 8.0000e-03],
+            [2.2000e-03, -6.0000e-03, 2.0000e-03],
+            [1.0117e00, 1.4638e00, 3.0000e-04],
+            [-5.4080e-01, 1.4475e00, -8.7660e-01],
+            [-5.2380e-01, 1.4379e00, 9.0640e-01],
+        ]
+    )
+    batch = None
+    model_inputs = (z, pose, batch)
+    show_model_graph(
+        model,
+        model_inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "dimenet"),
     )
     assert validate_saved_activations(model, model_inputs)

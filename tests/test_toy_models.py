@@ -1830,3 +1830,873 @@ def test_stochastic_depth_layers_to_save():
     # Linear layers should have saved activations
     linear_layers = [label for label in mh.layers_with_saved_activations if "linear" in label]
     assert len(linear_layers) > 0, "linear layers should have saved activations"
+
+
+# =============================================================================
+# Group A: Attention & Transformers
+# =============================================================================
+
+
+def test_multihead_attention(seq_input):
+    model = example_models.MultiheadAttentionModel()
+    assert validate_saved_activations(model, seq_input)
+    show_model_graph(
+        model,
+        seq_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "multihead_attention"),
+    )
+
+
+def test_scaled_dot_product_attention():
+    model = example_models.ScaledDotProductAttentionModel()
+    x = torch.rand(2, 4, 10, 8)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "scaled_dot_product_attention"),
+    )
+
+
+def test_transformer_encoder(seq_input):
+    model = example_models.TransformerEncoderModel()
+    assert validate_saved_activations(model, seq_input)
+    show_model_graph(
+        model,
+        seq_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "transformer_encoder"),
+    )
+
+
+def test_transformer_decoder():
+    model = example_models.TransformerDecoderModel()
+    tgt = torch.rand(5, 2, 16)
+    memory = torch.rand(10, 2, 16)
+    assert validate_saved_activations(model, (tgt, memory))
+    show_model_graph(
+        model,
+        (tgt, memory),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "transformer_decoder"),
+    )
+
+
+def test_embedding_positional(token_input):
+    model = example_models.EmbeddingPositionalModel()
+    assert validate_saved_activations(model, token_input)
+    show_model_graph(
+        model,
+        token_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "embedding_positional"),
+    )
+
+
+def test_einsum():
+    model = example_models.EinsumModel()
+    x = torch.rand(2, 3, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "einsum"),
+    )
+
+
+# =============================================================================
+# Group B: Container Modules
+# =============================================================================
+
+
+def test_module_list(input_2d):
+    model = example_models.ModuleListModel()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "module_list"),
+    )
+
+
+def test_module_list_indexed(input_2d):
+    model = example_models.ModuleListIndexedModel()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "module_list_indexed"),
+    )
+
+
+def test_module_dict(input_2d):
+    model = example_models.ModuleDictModel()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "module_dict"),
+    )
+
+
+def test_var_args():
+    model = example_models.VarArgsModel()
+    inputs = [torch.rand(2, 5), torch.rand(2, 5), torch.rand(2, 5)]
+    assert validate_saved_activations(model, inputs)
+    show_model_graph(
+        model,
+        inputs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "var_args"),
+    )
+
+
+def test_kwargs():
+    model = example_models.KwargsModel()
+    kwargs = {"a": torch.rand(2, 5), "b": torch.rand(2, 5)}
+    assert validate_saved_activations(model, [], kwargs)
+    show_model_graph(
+        model,
+        [],
+        kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "kwargs"),
+    )
+
+
+# =============================================================================
+# Group C: Conditional & Dynamic Ops
+# =============================================================================
+
+
+def test_torch_where():
+    model = example_models.TorchWhereModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "torch_where"),
+    )
+
+
+def test_scatter_gather():
+    model = example_models.ScatterGatherModel()
+    x = torch.rand(3, 5)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "scatter_gather"),
+    )
+
+
+def test_no_grad_block(small_input):
+    model = example_models.NoGradBlockModel()
+    assert validate_saved_activations(model, small_input)
+    show_model_graph(
+        model,
+        small_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "no_grad_block"),
+    )
+
+
+def test_while_loop():
+    model = example_models.WhileLoopModel()
+    x = torch.rand(5, 5) * 10
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "while_loop"),
+    )
+
+
+def test_nested_conditional_loop():
+    model = example_models.NestedConditionalLoopModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_conditional_loop"),
+    )
+
+
+# =============================================================================
+# Group D: Normalization & Conv Variants
+# =============================================================================
+
+
+def test_layer_norm():
+    model = example_models.LayerNormModel()
+    x = torch.rand(2, 3, 8)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "layer_norm"),
+    )
+
+
+def test_group_norm():
+    model = example_models.GroupNormModel()
+    x = torch.rand(2, 8, 4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "group_norm"),
+    )
+
+
+def test_instance_norm():
+    model = example_models.InstanceNormModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "instance_norm"),
+    )
+
+
+def test_conv1d(input_1d_seq):
+    model = example_models.Conv1dModel()
+    assert validate_saved_activations(model, input_1d_seq)
+    show_model_graph(
+        model,
+        input_1d_seq,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "conv1d"),
+    )
+
+
+def test_conv3d(input_3d):
+    model = example_models.Conv3dModel()
+    assert validate_saved_activations(model, input_3d)
+    show_model_graph(
+        model,
+        input_3d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "conv3d"),
+    )
+
+
+# =============================================================================
+# Group E: Residual & Parameter Sharing
+# =============================================================================
+
+
+def test_residual_block():
+    model = example_models.ResidualBlockModel()
+    x = torch.rand(2, 16, 8, 8)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "residual_block"),
+    )
+
+
+def test_shared_param_branch(input_2d):
+    model = example_models.SharedParamBranchModel()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "shared_param_branch"),
+    )
+
+
+def test_model_calling_model(small_input):
+    model = example_models.ModelCallingModelModel()
+    assert validate_saved_activations(model, small_input)
+    show_model_graph(
+        model,
+        small_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "model_calling_model"),
+    )
+
+
+def test_bidirectional_gru():
+    model = example_models.BidirectionalGRUModel()
+    x = torch.rand(5, 2, 8)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "bidirectional_gru"),
+    )
+
+
+# =============================================================================
+# Group F: In-Place & Type Operations
+# =============================================================================
+
+
+def test_in_place_chain():
+    model = example_models.InPlaceChainModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "in_place_chain"),
+    )
+
+
+def test_type_cast_chain():
+    model = example_models.TypeCastChainModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "type_cast_chain"),
+    )
+
+
+def test_like_ops():
+    model = example_models.LikeOpsModel()
+    x = torch.rand(3, 3)
+    assert validate_saved_activations(model, x, random_seed=42)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        random_seed=42,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "like_ops"),
+    )
+
+
+def test_multi_tensor_return():
+    model = example_models.MultiTensorReturnModel()
+    x = torch.rand(3, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_tensor_return"),
+    )
+
+
+def test_mixed_dtype():
+    model = example_models.MixedDtypeModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "mixed_dtype"),
+    )
+
+
+# =============================================================================
+# Group G: Scalar & Broadcasting
+# =============================================================================
+
+
+def test_scalar_tensor():
+    model = example_models.ScalarTensorModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "scalar_tensor"),
+    )
+
+
+def test_broadcasting():
+    model = example_models.BroadcastingModel()
+    x = torch.rand(3, 4, 5)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "broadcasting"),
+    )
+
+
+def test_packed_sequence():
+    model = example_models.PackedSequenceModel()
+    x = torch.rand(5, 3, 8)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "packed_sequence"),
+    )
+
+
+def test_custom_autograd():
+    model = example_models.CustomAutogradModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "custom_autograd"),
+    )
+
+
+# =============================================================================
+# Group H: Exemption Registry Stress Tests
+# =============================================================================
+
+
+def test_cross_entropy():
+    model = example_models.CrossEntropyModel()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "cross_entropy"),
+    )
+
+
+def test_index_select():
+    model = example_models.IndexSelectModel()
+    x = torch.rand(5, 3)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "index_select"),
+    )
+
+
+def test_interpolate():
+    model = example_models.InterpolateModel()
+    x = torch.rand(1, 1, 4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "interpolate"),
+    )
+
+
+def test_forward_hooks(input_2d):
+    model = example_models.ForwardHooksModel()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "forward_hooks"),
+    )
+
+
+# =============================================================================
+# Group I: Architecture Patterns
+# =============================================================================
+
+
+def test_simple_vae():
+    model = example_models.SimpleVAE()
+    x = torch.rand(2, 1, 28, 28)
+    assert validate_saved_activations(model, x, random_seed=42)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        random_seed=42,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "simple_vae"),
+    )
+
+
+def test_simple_generator():
+    model = example_models.SimpleGenerator()
+    z = torch.randn(2, 100)
+    assert validate_saved_activations(model, z)
+    show_model_graph(
+        model,
+        z,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "simple_generator"),
+    )
+
+
+def test_simple_discriminator():
+    model = example_models.SimpleDiscriminator()
+    x = torch.rand(2, 1, 28, 28)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "simple_discriminator"),
+    )
+
+
+def test_small_unet():
+    model = example_models.SmallUNet()
+    x = torch.rand(1, 1, 32, 32)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "small_unet"),
+    )
+
+
+def test_temporal_conv_net():
+    model = example_models.TemporalConvNet()
+    x = torch.rand(2, 3, 32)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "temporal_conv_net"),
+    )
+
+
+def test_espcn_super_res():
+    model = example_models.ESPCNSuperRes()
+    x = torch.rand(1, 1, 16, 16)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "super-resolution", "espcn_super_res"),
+    )
+
+
+def test_simple_pointnet():
+    model = example_models.SimplePointNet()
+    x = torch.rand(2, 3, 128)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "point-cloud", "simple_pointnet"),
+    )
+
+
+def test_actor_critic():
+    model = example_models.ActorCritic()
+    x = torch.rand(2, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "actor_critic"),
+    )
+
+
+def test_two_tower_recommender():
+    model = example_models.TwoTowerRecommender()
+    user = torch.rand(2, 8)
+    item = torch.rand(2, 8)
+    assert validate_saved_activations(model, (user, item))
+    show_model_graph(
+        model,
+        (user, item),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "two_tower_recommender"),
+    )
+
+
+def test_simple_depth_estimator():
+    model = example_models.SimpleDepthEstimator()
+    x = torch.rand(1, 3, 64, 64)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_depth_estimator"),
+    )
+
+
+# =============================================================================
+# Group Z: Adversarial Edge Cases
+# =============================================================================
+
+
+def test_same_tensor_all_args():
+    model = example_models.SameTensorAllArgs()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "same_tensor_all_args"),
+    )
+
+
+def test_view_chain_mutate_middle():
+    model = example_models.ViewChainMutateMiddle()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "view_chain_mutate_middle"),
+    )
+
+
+def test_self_caching_model(input_2d):
+    model = example_models.SelfCachingModel()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "self_caching_model"),
+    )
+
+
+def test_delete_tensor_mid_forward(input_2d):
+    model = example_models.DeleteTensorMidForward()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "delete_tensor_mid_forward"),
+    )
+
+
+def test_dynamic_module_creation(input_2d):
+    model = example_models.DynamicModuleCreation()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "dynamic_module_creation"),
+    )
+
+
+def test_non_persistent_buffer(input_2d):
+    model = example_models.NonPersistentBuffer()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "non_persistent_buffer"),
+    )
+
+
+def test_contiguous_no_op(input_2d):
+    model = example_models.ContiguousNoOp()
+    assert validate_saved_activations(model, input_2d)
+    show_model_graph(
+        model,
+        input_2d,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "contiguous_no_op"),
+    )
+
+
+def test_stack_views_of_same_tensor():
+    model = example_models.StackViewsOfSameTensor()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "stack_views_same_tensor"),
+    )
+
+
+def test_saturated_softmax():
+    model = example_models.SaturatedSoftmax()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "saturated_softmax"),
+    )
+
+
+def test_duplicate_value_parents():
+    model = example_models.DuplicateValueParents()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "duplicate_value_parents"),
+    )
+
+
+def test_empty_tensor_chain():
+    model = example_models.EmptyTensorChain()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "empty_tensor_chain"),
+    )
+
+
+def test_clamp_narrow_range():
+    model = example_models.ClampNarrowRange()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "clamp_narrow_range"),
+    )
+
+
+def test_round_near_integers():
+    model = example_models.RoundNearIntegers()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "round_near_integers"),
+    )
+
+
+def test_bool_cast_exploit():
+    model = example_models.BoolCastExploit()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "bool_cast_exploit"),
+    )
+
+
+def test_fake_loop_same_op_type():
+    model = example_models.FakeLoopSameOpType()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "fake_loop_same_op_type"),
+    )
+
+
+def test_autocast_mid_forward():
+    model = example_models.AutocastMidForward()
+    x = torch.rand(4, 4)
+    assert validate_saved_activations(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "autocast_mid_forward"),
+    )
