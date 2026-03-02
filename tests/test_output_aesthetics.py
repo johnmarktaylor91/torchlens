@@ -431,6 +431,81 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section("F.8 ParamAccessor field dump", level=3))
     out.write(_field_dump(log.params, "ParamAccessor"))
 
+    # ===== G. Gradient System =====
+    # Only for models with params — log with save_gradients=True and run backward
+    if len(log.params) > 0:
+        out.write(_section("G. Gradient System (save_gradients=True + backward)", level=2))
+        try:
+            grad_log = log_forward_pass(model, x, save_gradients=True, random_seed=42)
+            output_label = grad_log.output_layers[0]
+            output_tensor = grad_log[output_label].tensor_contents
+            output_tensor.sum().backward()
+
+            out.write(_capture("grad_log.has_saved_gradients", grad_log.has_saved_gradients))
+            out.write(
+                _capture(
+                    "grad_log.layers_with_saved_gradients",
+                    grad_log.layers_with_saved_gradients,
+                )
+            )
+
+            # Show gradient fields on a TensorLog that has saved grad
+            for entry in grad_log.layer_list:
+                if entry.has_saved_grad:
+                    out.write(
+                        _section(
+                            f"G.1 TensorLog gradient fields — {entry.layer_label}",
+                            level=3,
+                        )
+                    )
+                    out.write(_capture("has_saved_grad", entry.has_saved_grad))
+                    out.write(_capture("grad_contents", entry.grad_contents))
+                    out.write(_capture("grad_shape", entry.grad_shape))
+                    out.write(_capture("grad_dtype", entry.grad_dtype))
+                    out.write(_capture("grad_fsize", entry.grad_fsize))
+                    out.write(_capture("grad_fsize_nice", entry.grad_fsize_nice))
+                    break
+
+            # Show a TensorLog WITHOUT grad for contrast
+            for entry in grad_log.layer_list:
+                if not entry.has_saved_grad:
+                    out.write(
+                        _section(
+                            f"G.2 TensorLog without grad — {entry.layer_label}",
+                            level=3,
+                        )
+                    )
+                    out.write(_capture("has_saved_grad", entry.has_saved_grad))
+                    out.write(_capture("grad_contents", entry.grad_contents))
+                    break
+
+            # ParamLog gradient fields
+            for pl in grad_log.params:
+                if pl.has_grad:
+                    out.write(_section(f"G.3 ParamLog gradient fields — {pl.address}", level=3))
+                    out.write(_capture("has_grad", pl.has_grad))
+                    out.write(_capture("grad_shape", pl.grad_shape))
+                    out.write(_capture("grad_dtype", pl.grad_dtype))
+                    out.write(_capture("grad_fsize", pl.grad_fsize))
+                    out.write(_capture("grad_fsize_nice", pl.grad_fsize_nice))
+                    break
+
+            # Show frozen param without grad (if applicable)
+            for pl in grad_log.params:
+                if not pl.trainable:
+                    out.write(
+                        _section(
+                            f"G.4 Frozen ParamLog — no grad — {pl.address}",
+                            level=3,
+                        )
+                    )
+                    out.write(_capture("has_grad", pl.has_grad))
+                    out.write(_capture("trainable", pl.trainable))
+                    break
+        except Exception as e:
+            out.write(f"  (gradient capture failed: {type(e).__name__}: {e})\n")
+            out.write(f"  {traceback.format_exc()}\n")
+
     return out.getvalue()
 
 
@@ -749,6 +824,56 @@ VIS_GALLERY = [
     ),
 ]
 
+# Gradient visualization gallery — rendered with save_gradients=True + backward()
+# (filename_stem, caption, model_name, input_shape_desc, vis_opt, depth, direction)
+GRADIENT_VIS_GALLERY = [
+    (
+        "gradient_deep_nested",
+        "AestheticDeepNested — with gradient arrows",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+    ),
+    (
+        "gradient_deep_nested_topdown",
+        "AestheticDeepNested — gradients, top-down",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "topdown",
+    ),
+    (
+        "gradient_frozen_mix",
+        "AestheticFrozenMix — gradients (frozen + trainable)",
+        "AestheticFrozenMix",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+    ),
+    (
+        "gradient_kitchen_sink",
+        "AestheticKitchenSink — gradients + nesting",
+        "AestheticKitchenSink",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+    ),
+    (
+        "gradient_kitchen_sink_depth1",
+        "AestheticKitchenSink — gradients, depth=1",
+        "AestheticKitchenSink",
+        "(1,8)",
+        "unrolled",
+        1,
+        "bottomup",
+    ),
+]
+
 
 def _tex_escape(text: str) -> str:
     """Escape special LaTeX characters for use in normal text (not verbatim)."""
@@ -1043,16 +1168,38 @@ def _build_latex_report() -> str:
         doc.write(f"\\caption{{{_tex_escape(caption)} \\\\\\small\\texttt{{{param_str}}}}}\n")
         doc.write("\\end{figure}\n\n")
 
+    # --- Section 3: Gradient Visualization Gallery ---
+    doc.write("\\section{Gradient Visualization Gallery}\n\n")
+    doc.write(
+        "Graphs below show backward-pass gradient edges (blue arrows) rendered after "
+        "\\texttt{log\\_forward\\_pass(save\\_gradients=True)} and \\texttt{.backward()}. "
+        "Gradient arrows only appear in unrolled mode.\n\n"
+    )
+
+    for stem, caption, model_name, input_desc, vis_opt, depth, direction in GRADIENT_VIS_GALLERY:
+        pdf_path = opj(VIS_DIR, f"{stem}.pdf")
+        if not os.path.exists(pdf_path):
+            continue
+        param_str = (
+            f"save\\_gradients=True, "
+            f"vis\\_opt={_tex_escape(vis_opt)}, "
+            f"depth={depth}, "
+            f"direction={_tex_escape(direction)}"
+        )
+        doc.write("\\begin{figure}[H]\n")
+        doc.write("\\centering\n")
+        doc.write(
+            f"\\includegraphics[max width=0.95\\textwidth, max height=0.85\\textheight]{{{pdf_path}}}\n"
+        )
+        doc.write(f"\\caption{{{_tex_escape(caption)} \\\\\\small\\texttt{{{param_str}}}}}\n")
+        doc.write("\\end{figure}\n\n")
+
     doc.write("\\end{document}\n")
     return doc.getvalue()
 
 
 def _ensure_vis_pdfs_exist():
     """Generate any missing visualization PDFs so the LaTeX report can include them."""
-    missing = [g for g in VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))]
-    if not missing:
-        return
-
     # Map model names to (class, input)
     model_inputs = {
         "AestheticDeepNested": (example_models.AestheticDeepNested(), torch.rand(1, 8)),
@@ -1064,11 +1211,22 @@ def _ensure_vis_pdfs_exist():
         "LoopingParamsDoubleNested": (example_models.LoopingParamsDoubleNested(), torch.rand(5, 5)),
         "NestedModules": (example_models.NestedModules(), torch.rand(5, 5)),
     }
+
+    # Standard gallery
+    missing = [g for g in VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))]
     for stem, caption, model_name, _, vis_opt, depth, direction, buffers in missing:
         model, x = model_inputs[model_name]
         _vis(
             model, x, stem, vis_opt=vis_opt, depth=depth, direction=direction, buffer_layers=buffers
         )
+
+    # Gradient gallery
+    grad_missing = [
+        g for g in GRADIENT_VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))
+    ]
+    for stem, caption, model_name, _, vis_opt, depth, direction in grad_missing:
+        model, x = model_inputs[model_name]
+        _vis_gradient(model, x, stem, vis_opt=vis_opt, depth=depth, direction=direction)
 
 
 @pytest.mark.skipif(
@@ -1137,6 +1295,25 @@ def _vis(
         vis_buffer_layers=buffer_layers,
         vis_direction=direction,
         random_seed=42,
+    )
+
+
+def _vis_gradient(model, x, filename, vis_opt="unrolled", depth=1000, direction="bottomup"):
+    """Generate a visualization PDF with gradient backward arrows.
+
+    Uses log_forward_pass(save_gradients=True) + backward() + render_graph()
+    since show_model_graph() hardcodes save_gradients=False.
+    """
+    log = log_forward_pass(model, x, save_gradients=True, random_seed=42)
+    output = log[log.output_layers[0]].tensor_contents
+    output.sum().backward()
+    log.render_graph(
+        vis_opt=vis_opt,
+        vis_nesting_depth=depth,
+        vis_outpath=opj(VIS_DIR, filename),
+        save_only=True,
+        vis_fileformat="pdf",
+        direction=direction,
     )
 
 
@@ -1220,3 +1397,27 @@ def test_aesthetic_loop_visualizations():
     _vis(model, x_5d, "nested_modules_rolled", vis_opt="rolled")
     _vis(model, x_5d, "nested_modules_depth1", depth=1)
     _vis(model, x_5d, "nested_modules_depth2", depth=2)
+
+
+def test_aesthetic_gradient_visualizations():
+    """Gradient backward arrows (blue) — requires save_gradients=True + backward().
+
+    Note: gradient edges only render in unrolled mode.
+    TODO: Consider supporting gradient arrows in rolled mode.
+    """
+    # DeepNested: simple nested model with gradients
+    model = example_models.AestheticDeepNested()
+    x = torch.rand(1, 8)
+    _vis_gradient(model, x, "gradient_deep_nested")
+    _vis_gradient(model, x, "gradient_deep_nested_topdown", direction="topdown")
+
+    # FrozenMix: frozen params shouldn't have gradient arrows, trainable ones should
+    model = example_models.AestheticFrozenMix()
+    x = torch.rand(1, 8)
+    _vis_gradient(model, x, "gradient_frozen_mix")
+
+    # KitchenSink: gradients with nesting, branching, buffers
+    model = example_models.AestheticKitchenSink()
+    x = torch.rand(1, 8)
+    _vis_gradient(model, x, "gradient_kitchen_sink")
+    _vis_gradient(model, x, "gradient_kitchen_sink_depth1", depth=1)
