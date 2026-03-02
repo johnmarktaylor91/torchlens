@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v0.11.2 (2026-03-02)
+
+### Performance Improvements
+
+- **postprocess**: Optimize 6 remaining hot-path bottlenecks in log_forward_pass
+  ([`ed62350`](https://github.com/johnmarktaylor91/torchlens/commit/ed623508d8f8353634066cc4702d39bf8f0ca981))
+
+Cache dir() per type, replace sorted deque with heapq in loop detection, use __dict__ + empty-field
+  skip in label renaming, two-phase stack capture, batch orphan removal, and shadow sets for module
+  hierarchy membership checks. 8-33% wall time reduction across models.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.11.1 (2026-03-02)
 
 ### Performance Improvements
