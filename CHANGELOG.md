@@ -1,6 +1,38 @@
 # CHANGELOG
 
 
+## v0.11.1 (2026-03-02)
+
+### Performance Improvements
+
+- **logging**: Optimize 5 hot-path bottlenecks in log_forward_pass
+  ([`d4a5d3a`](https://github.com/johnmarktaylor91/torchlens/commit/d4a5d3a57e52a22c6b312e8b77f3ec6a6d896efc))
+
+- Cache torch.cuda.is_available() (called per-op, ~2ms each) - Replace tensor CPU copy + numpy +
+  getsizeof with nelement * element_size - Hoist warnings.catch_warnings() out of per-attribute loop
+  - Cache class-level module metadata (inspect.getsourcelines, signature) - Replace
+  inspect.stack()/getframeinfo() with sys._getframe() chain; defer source context + signature
+  loading in FuncCallLocation to first property access via linecache
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **decoration**: Comprehensive tests for permanent decoration architecture
+  ([`f6305c8`](https://github.com/johnmarktaylor91/torchlens/commit/f6305c8c0f30337bdb2e5f6f265b0d253b7bb05e))
+
+61 tests across 14 test classes covering: - Toggle state (on/off/exception/KeyboardInterrupt
+  recovery) - Passthrough behavior when logging disabled - Detached import patching (module-level,
+  class attrs, lists, dicts, late imports) - Permanent model preparation (WeakSet caching, session
+  cleanup) - pause_logging context manager (nesting, exception safety) - Wrapper transparency
+  (functools.wraps, __name__, __doc__) - torch.identity installation and graph presence - JIT
+  builtin table registration and shared-original wrapper reuse - Decoration consistency
+  (bidirectional mapper, idempotency) - In-place ops, property descriptors, edge cases - Signal
+  safety (SIGALRM during forward) - Session isolation (no cross-session leakage)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.11.0 (2026-03-02)
 
 ### Features
