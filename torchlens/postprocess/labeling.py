@@ -75,6 +75,19 @@ def _log_final_info_for_all_layers(self):
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
     operation_num = 1
+
+    # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
+    # Lists are kept as primary storage (insertion order matters for downstream consumers),
+    # but linear `in` checks on lists are expensive for large models.
+    _shadow_sets = {
+        "module_layers": defaultdict(set),
+        "module_pass_layers": defaultdict(set),
+        "top_level_module_passes": set(),
+        "module_pass_children": defaultdict(set),
+        "module_addresses": set(),
+        "module_passes": set(),
+    }
+
     for t, tensor_entry in enumerate(self):
         if tensor_entry.layer_type in ["input", "buffer"]:
             tensor_entry.operation_num = 0
@@ -89,7 +102,7 @@ def _log_final_info_for_all_layers(self):
         _replace_layer_names_for_tensor_entry(self, tensor_entry)
 
         # Log the module hierarchy information:
-        _log_module_hierarchy_info_for_layer(self, tensor_entry)
+        _log_module_hierarchy_info_for_layer(self, tensor_entry, _shadow_sets)
         if tensor_entry.bottom_level_submodule_pass_exited is not None:
             submodule_pass_nice_name = ":".join(
                 [str(i) for i in tensor_entry.bottom_level_submodule_pass_exited]
@@ -152,6 +165,22 @@ def _log_final_info_for_all_layers(self):
     self.total_params_fsize_nice = human_readable_size(self.total_params_fsize)
 
 
+_LIST_FIELDS_TO_RENAME = [
+    "parent_layers",
+    "orig_ancestors",
+    "child_layers",
+    "sibling_layers",
+    "spouse_layers",
+    "input_ancestors",
+    "output_descendents",
+    "internally_initialized_parents",
+    "internally_initialized_ancestors",
+    "cond_branch_start_children",
+    "equivalent_operations",
+    "same_layer_operations",
+]
+
+
 def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLog):
     """
     Replaces all layer names in the fields of a TensorLog with their final
@@ -160,78 +189,81 @@ def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLog):
     Args:
         tensor_entry: TensorLog to replace layer names for.
     """
-    list_fields_to_rename = [
-        "parent_layers",
-        "orig_ancestors",
-        "child_layers",
-        "sibling_layers",
-        "spouse_layers",
-        "input_ancestors",
-        "output_descendents",
-        "internally_initialized_parents",
-        "internally_initialized_ancestors",
-        "cond_branch_start_children",
-        "equivalent_operations",
-        "same_layer_operations",
-    ]
-    for field in list_fields_to_rename:
-        orig_layer_names = getattr(tensor_entry, field)
-        field_type = type(orig_layer_names)
-        new_layer_names = field_type(
-            [self._raw_to_final_layer_labels[raw_name] for raw_name in orig_layer_names]
-        )
-        setattr(tensor_entry, field, new_layer_names)
+    mapping = self._raw_to_final_layer_labels
+    d = tensor_entry.__dict__
+
+    for field in _LIST_FIELDS_TO_RENAME:
+        orig = d.get(field)
+        if not orig:
+            continue
+        if isinstance(orig, list):
+            d[field] = [mapping[raw] for raw in orig]
+        else:  # set
+            d[field] = type(orig)(mapping[raw] for raw in orig)
 
     # Fix the arg locations field:
-    for arg_type in ["args", "kwargs"]:
-        for key, value in tensor_entry.parent_layer_arg_locs[arg_type].items():
-            tensor_entry.parent_layer_arg_locs[arg_type][key] = self._raw_to_final_layer_labels[
-                value
-            ]
+    arg_locs = d.get("parent_layer_arg_locs")
+    if arg_locs:
+        for arg_type in ("args", "kwargs"):
+            sub = arg_locs[arg_type]
+            for key, value in sub.items():
+                sub[key] = mapping[value]
 
     # Fix the field names for different children tensor versions:
-    new_child_tensor_versions = {}
-    for (
-        child_label,
-        tensor_version,
-    ) in tensor_entry.children_tensor_versions.items():
-        new_child_tensor_versions[self._raw_to_final_layer_labels[child_label]] = tensor_version
-    tensor_entry.children_tensor_versions = new_child_tensor_versions
+    ctv = d.get("children_tensor_versions")
+    if ctv:
+        d["children_tensor_versions"] = {
+            mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()
+        }
 
 
-def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog):
+def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog, _shadow_sets: dict):
     """
     Logs the module hierarchy information for a single layer.
 
     Args:
         tensor_entry: Log entry to mark the module hierarchy info for.
+        _shadow_sets: Shadow sets for O(1) membership checks.
     """
+    _ml_seen = _shadow_sets["module_layers"]
+    _mpl_seen = _shadow_sets["module_pass_layers"]
+    _tlmp_seen = _shadow_sets["top_level_module_passes"]
+    _mpc_seen = _shadow_sets["module_pass_children"]
+    _ma_seen = _shadow_sets["module_addresses"]
+    _mp_seen = _shadow_sets["module_passes"]
+
     containing_module_pass_label = None
+    layer_label = tensor_entry.layer_label
     for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
         module_name, module_pass = module_pass_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
         self.module_num_tensors[module_name] += 1
         self.module_pass_num_tensors[module_pass_nice_label] += 1
-        if tensor_entry.layer_label not in self.module_layers[module_name]:
-            self.module_layers[module_name].append(tensor_entry.layer_label)
-        if tensor_entry.layer_label not in self.module_pass_layers[module_pass_nice_label]:
-            self.module_pass_layers[module_pass_nice_label].append(tensor_entry.layer_label)
-        if (m == 0) and (module_pass_nice_label not in self.top_level_module_passes):
+        if layer_label not in _ml_seen[module_name]:
+            _ml_seen[module_name].add(layer_label)
+            self.module_layers[module_name].append(layer_label)
+        if layer_label not in _mpl_seen[module_pass_nice_label]:
+            _mpl_seen[module_pass_nice_label].add(layer_label)
+            self.module_pass_layers[module_pass_nice_label].append(layer_label)
+        if (m == 0) and (module_pass_nice_label not in _tlmp_seen):
+            _tlmp_seen.add(module_pass_nice_label)
             self.top_level_module_passes.append(module_pass_nice_label)
         else:
             if (containing_module_pass_label is not None) and (
-                module_pass_nice_label
-                not in self.module_pass_children[containing_module_pass_label]
+                module_pass_nice_label not in _mpc_seen[containing_module_pass_label]
             ):
+                _mpc_seen[containing_module_pass_label].add(module_pass_nice_label)
                 self.module_pass_children[containing_module_pass_label].append(
                     module_pass_nice_label
                 )
         containing_module_pass_label = module_pass_nice_label
         if self.module_num_passes[module_name] < module_pass:
             self.module_num_passes[module_name] = module_pass
-        if module_name not in self.module_addresses:
+        if module_name not in _ma_seen:
+            _ma_seen.add(module_name)
             self.module_addresses.append(module_name)
-        if module_pass_label not in self.module_passes:
+        if module_pass_nice_label not in _mp_seen:
+            _mp_seen.add(module_pass_nice_label)
             self.module_passes.append(module_pass_nice_label)
     tensor_entry.module_nesting_depth = len(tensor_entry.containing_modules_origin_nested)
 

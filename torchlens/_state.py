@@ -51,6 +51,9 @@ _decorated_func_mapper: Dict[Callable, Callable] = {}
 _crawled_module_keys: Set[str] = set()
 """sys.modules keys already scanned; only scan new ones on each call."""
 
+_dir_cache: Dict[type, list] = {}
+"""Per-type cache of filtered dir() results for extend_search_stack_from_item."""
+
 _prepared_models: "weakref.WeakSet" = weakref.WeakSet()
 """Models whose forwards are already wrapped; WeakSet prevents GC issues."""
 

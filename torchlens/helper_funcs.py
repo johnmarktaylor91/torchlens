@@ -217,16 +217,19 @@ def _get_func_call_stack(num_context_lines: int = 7):
         "torchlens/model_funcs.py",
     )
 
-    # Collect lightweight frame data using sys._getframe() — no file I/O
+    # Phase 1: Collect lightweight frame data — only co_filename, co_name, f_lineno.
+    # Do NOT do f_locals/f_globals dict lookups yet (expensive, ~50/call).
     raw_frames = []
     frame = sys._getframe(0)
     while frame is not None:
-        filename = frame.f_code.co_filename
-        func_name = frame.f_code.co_name
-        lineno = frame.f_lineno
-        # Extract function object eagerly (cheap dict lookup) for lazy sig/doc later
-        func_obj = frame.f_locals.get(func_name) or frame.f_globals.get(func_name)
-        raw_frames.append((filename, func_name, lineno, func_obj))
+        raw_frames.append(
+            (
+                frame.f_code.co_filename,
+                frame.f_code.co_name,
+                frame.f_lineno,
+                frame,  # keep reference for phase 2 func_obj lookup
+            )
+        )
         frame = frame.f_back
 
     # Walk bottom-up (deepest caller last → first in output) and collect
@@ -238,7 +241,7 @@ def _get_func_call_stack(num_context_lines: int = 7):
     filtered_indices = []
 
     for idx in range(len(raw_frames) - 1, -1, -1):
-        filename, func_name, lineno, func_obj = raw_frames[idx]
+        filename, func_name, lineno, frame_ref = raw_frames[idx]
 
         # Skip torchlens internals and PyTorch _call_impl
         if any(filename.endswith(s) for s in _TORCHLENS_SUFFIXES):
@@ -265,10 +268,12 @@ def _get_func_call_stack(num_context_lines: int = 7):
     if pre_forward_frame_idx is not None and pre_forward_frame_idx not in filtered_indices:
         filtered_indices.append(pre_forward_frame_idx)
 
-    # Build FuncCallLocation objects — source loading is deferred
+    # Phase 2: Build FuncCallLocation objects only for surviving frames (~5-10).
+    # Do the expensive f_locals/f_globals dict lookup only here.
     result = []
     for idx in filtered_indices:
-        filename, func_name, lineno, func_obj = raw_frames[idx]
+        filename, func_name, lineno, frame_ref = raw_frames[idx]
+        func_obj = frame_ref.f_locals.get(func_name) or frame_ref.f_globals.get(func_name)
         loc = FuncCallLocation(
             file=filename,
             line_number=lineno,
@@ -503,6 +508,8 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
         item: The item
         next_stack: Stack to add to
     """
+    from . import _state
+
     if type(item) in [list, tuple, set]:
         if address == "":
             next_stack.extend(
@@ -526,15 +533,22 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
                 ]
             )
 
+    # Cache dir() results per type — dir() walks the full MRO and is expensive.
+    # Same types (e.g. every nn.Conv2d) have identical dir() output.
+    obj_type = type(item)
+    if obj_type not in _state._dir_cache:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _state._dir_cache[obj_type] = [
+                a
+                for a in dir(item)
+                if not a.startswith("__") and a not in _ATTR_SKIP_SET and "grad" not in a
+            ]
+    filtered_attrs = _state._dir_cache[obj_type]
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        for attr_name in dir(item):
-            if (
-                (attr_name.startswith("__"))
-                or (attr_name in _ATTR_SKIP_SET)
-                or ("grad" in attr_name)
-            ):
-                continue
+        for attr_name in filtered_attrs:
             try:
                 attr = getattr(item, attr_name)
             except Exception:

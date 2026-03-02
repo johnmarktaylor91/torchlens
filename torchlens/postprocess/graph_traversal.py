@@ -182,17 +182,17 @@ def _remove_orphan_nodes(self):
     orphan_nodes = orig_nodes - nodes_seen
     self.orphan_layers = list(orphan_nodes)
 
-    # Now remove all orphaned nodes.
+    # Now remove all orphaned nodes using batch removal.
+
+    orphan_entries = [self._raw_tensor_dict[label] for label in orphan_nodes]
+    self._batch_remove_log_entries(orphan_entries, remove_references=True)
 
     new_tensor_dict = OrderedDict()
     new_tensor_list = []
     for tensor_label in self._raw_tensor_labels_list:
-        tensor_entry = self[tensor_label]
         if tensor_label not in orphan_nodes:
-            new_tensor_dict[tensor_label] = tensor_entry
+            new_tensor_dict[tensor_label] = self._raw_tensor_dict[tensor_label]
             new_tensor_list.append(tensor_label)
-        else:
-            self._remove_log_entry(tensor_entry, remove_references=True)
     self._raw_tensor_labels_list = new_tensor_list
     self._raw_tensor_dict = new_tensor_dict
 

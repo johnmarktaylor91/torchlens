@@ -3,7 +3,7 @@ import copy
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from ..cleanup import _remove_log_entry, cleanup
+from ..cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
 from ..helper_funcs import (
@@ -280,3 +280,4 @@ class ModelLog:
     _postprocess = postprocess
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
     _remove_log_entry = _remove_log_entry
+    _batch_remove_log_entries = _batch_remove_log_entries
