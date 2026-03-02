@@ -6,7 +6,6 @@ import random
 import secrets
 import string
 import warnings
-from sys import getsizeof
 from typing import Any, Callable, Dict, List, Optional, Type
 
 import numpy as np
@@ -15,6 +14,17 @@ from IPython import get_ipython
 from torch import nn
 
 MAX_FLOATING_POINT_TOLERANCE = 3e-6
+
+_ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
+
+_cuda_available: Optional[bool] = None
+
+
+def _is_cuda_available() -> bool:
+    global _cuda_available
+    if _cuda_available is None:
+        _cuda_available = torch.cuda.is_available()
+    return _cuda_available
 
 
 def identity(x):
@@ -47,7 +57,7 @@ def log_current_rng_states() -> Dict:
         "np": np.random.get_state(),
         "torch": torch.random.get_rng_state(),
     }
-    if torch.cuda.is_available():
+    if _is_cuda_available():
         rng_dict["torch_cuda"] = torch.cuda.get_rng_state("cuda")
     return rng_dict
 
@@ -64,7 +74,7 @@ def set_rng_from_saved_states(rng_states: Dict):
     random.setstate(rng_states["random"])
     np.random.set_state(rng_states["np"])
     torch.random.set_rng_state(rng_states["torch"])
-    if torch.cuda.is_available() and "torch_cuda" in rng_states:
+    if _is_cuda_available() and "torch_cuda" in rng_states:
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 
@@ -181,6 +191,10 @@ def _get_func_call_stack(num_context_lines: int = 7):
     user-visible frames starting from the ``log_forward_pass`` call site
     through the model's ``forward`` method and any deeper user calls.
 
+    Uses ``sys._getframe()`` instead of ``inspect.stack()`` to avoid
+    expensive per-frame source file I/O.  Source context is loaded lazily
+    by ``FuncCallLocation`` on first access via ``linecache``.
+
     Args:
         num_context_lines: Number of source lines to show on each side of
             the call line.  The total context window is
@@ -189,6 +203,8 @@ def _get_func_call_stack(num_context_lines: int = 7):
     Returns:
         List[FuncCallLocation] ordered shallow-to-deep.
     """
+    import sys
+
     from .data_classes import FuncCallLocation
 
     _TORCHLENS_SUFFIXES = (
@@ -201,11 +217,17 @@ def _get_func_call_stack(num_context_lines: int = 7):
         "torchlens/model_funcs.py",
     )
 
-    context_window = 2 * num_context_lines + 1
-    raw_stack = inspect.stack()
-    frame_infos = [
-        inspect.getframeinfo(raw_stack[i][0], context=context_window) for i in range(len(raw_stack))
-    ]
+    # Collect lightweight frame data using sys._getframe() — no file I/O
+    raw_frames = []
+    frame = sys._getframe(0)
+    while frame is not None:
+        filename = frame.f_code.co_filename
+        func_name = frame.f_code.co_name
+        lineno = frame.f_lineno
+        # Extract function object eagerly (cheap dict lookup) for lazy sig/doc later
+        func_obj = frame.f_locals.get(func_name) or frame.f_globals.get(func_name)
+        raw_frames.append((filename, func_name, lineno, func_obj))
+        frame = frame.f_back
 
     # Walk bottom-up (deepest caller last → first in output) and collect
     # non-internal frames.  Start tracking once we hit a ``forward`` frame,
@@ -215,25 +237,23 @@ def _get_func_call_stack(num_context_lines: int = 7):
     pre_forward_frame_idx = None
     filtered_indices = []
 
-    for idx in range(len(frame_infos) - 1, -1, -1):
-        info = frame_infos[idx]
-        fname = info.filename
+    for idx in range(len(raw_frames) - 1, -1, -1):
+        filename, func_name, lineno, func_obj = raw_frames[idx]
 
         # Skip torchlens internals and PyTorch _call_impl
-        if any(fname.endswith(s) for s in _TORCHLENS_SUFFIXES):
+        if any(filename.endswith(s) for s in _TORCHLENS_SUFFIXES):
             continue
-        if "_call_impl" in info.function:
+        if "_call_impl" in func_name:
             continue
 
-        if info.function == "forward" and not tracking:
+        if func_name == "forward" and not tracking:
             tracking = True
             # Look for the user-script frame that called log_forward_pass
-            # — it's the next non-internal frame above (higher index = shallower).
-            for j in range(idx + 1, len(frame_infos)):
-                jinfo = frame_infos[j]
+            for j in range(idx + 1, len(raw_frames)):
+                j_filename, j_func_name, _, _ = raw_frames[j]
                 if (
-                    not any(jinfo.filename.endswith(s) for s in _TORCHLENS_SUFFIXES)
-                    and "_call_impl" not in jinfo.function
+                    not any(j_filename.endswith(s) for s in _TORCHLENS_SUFFIXES)
+                    and "_call_impl" not in j_func_name
                 ):
                     pre_forward_frame_idx = j
                     break
@@ -245,58 +265,16 @@ def _get_func_call_stack(num_context_lines: int = 7):
     if pre_forward_frame_idx is not None and pre_forward_frame_idx not in filtered_indices:
         filtered_indices.append(pre_forward_frame_idx)
 
-    # Build FuncCallLocation objects
+    # Build FuncCallLocation objects — source loading is deferred
     result = []
     for idx in filtered_indices:
-        info = frame_infos[idx]
-        frame = raw_stack[idx][0]
-
-        # Try to extract function object for signature / docstring
-        func_signature = None
-        func_docstring = None
-        func_obj = frame.f_locals.get(info.function) or frame.f_globals.get(info.function)
-        if func_obj is not None and callable(func_obj):
-            try:
-                func_signature = str(inspect.signature(func_obj))
-            except (ValueError, TypeError):
-                pass
-            doc = getattr(func_obj, "__doc__", None)
-            if doc:
-                func_docstring = doc
-
-        code_context = info.code_context
-        if code_context is not None:
-            code_context_str = "".join(code_context)
-            # The call line is at position info.index within the context list
-            call_line_idx = info.index if info.index is not None else num_context_lines
-            call_line = (
-                code_context[call_line_idx].strip() if call_line_idx < len(code_context) else ""
-            )
-
-            # Build labeled context with arrow at the call line
-            labeled_lines = []
-            for i, line in enumerate(code_context):
-                if i == call_line_idx:
-                    labeled_lines.append(f"  --->  {line.rstrip()}")
-                else:
-                    labeled_lines.append(f"        {line.rstrip()}")
-            code_context_labeled = "\n".join(labeled_lines)
-        else:
-            code_context_str = "None"
-            call_line = ""
-            code_context_labeled = ""
-
+        filename, func_name, lineno, func_obj = raw_frames[idx]
         loc = FuncCallLocation(
-            file=info.filename,
-            line_number=info.lineno,
-            func_name=info.function,
-            func_signature=func_signature,
-            func_docstring=func_docstring,
-            call_line=call_line,
-            code_context=code_context,
-            code_context_str=code_context_str,
-            code_context_labeled=code_context_labeled,
-            num_context_lines=len(code_context) if code_context is not None else 0,
+            file=filename,
+            line_number=lineno,
+            func_name=func_name,
+            num_context_lines_requested=num_context_lines,
+            _frame_func_obj=func_obj,
         )
         result.append(loc)
 
@@ -548,34 +526,36 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
                 ]
             )
 
-    for attr_name in dir(item):
-        if (
-            (attr_name.startswith("__"))
-            or (attr_name in ["T", "mT", "real", "imag", "H"])
-            or ("grad" in attr_name)
-        ):
-            continue
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for attr_name in dir(item):
+            if (
+                (attr_name.startswith("__"))
+                or (attr_name in _ATTR_SKIP_SET)
+                or ("grad" in attr_name)
+            ):
+                continue
+            try:
                 attr = getattr(item, attr_name)
-        except Exception:
-            continue
-        attr_cls = type(attr)
-        if attr_cls in [str, int, float, bool, np.ndarray]:
-            continue
-        if callable(attr) and not issubclass(attr_cls, nn.Module):
-            continue
-        if address == "":
-            next_stack.append((attr, attr_name.strip("_"), address_full + [("attr", attr_name)]))
-        else:
-            next_stack.append(
-                (
-                    attr,
-                    f"{address}.{attr_name.strip('_')}",
-                    address_full + [("attr", attr_name)],
+            except Exception:
+                continue
+            attr_cls = type(attr)
+            if attr_cls in [str, int, float, bool, np.ndarray]:
+                continue
+            if callable(attr) and not issubclass(attr_cls, nn.Module):
+                continue
+            if address == "":
+                next_stack.append(
+                    (attr, attr_name.strip("_"), address_full + [("attr", attr_name)])
                 )
-            )
+            else:
+                next_stack.append(
+                    (
+                        attr,
+                        f"{address}.{attr_name.strip('_')}",
+                        address_full + [("attr", attr_name)],
+                    )
+                )
 
 
 def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
@@ -751,10 +731,7 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
 
     try:
         with pause_logging():
-            cpu_data = t.data.cpu()
-            if cpu_data.dtype == torch.bfloat16:
-                cpu_data = cpu_data.to(torch.float16)
-            return getsizeof(np.array(cpu_data.to_dense()))
+            return t.nelement() * t.element_size()
     except Exception:
         return 0
 
