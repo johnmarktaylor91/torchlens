@@ -317,25 +317,20 @@ def _construct_collapsed_module_node(
     module_output_shape = module_output_layer.tensor_shape
     module_output_fsize = module_output_layer.tensor_fsize_nice
     module_address, pass_num = module_tuple
-    module_type = self.module_types[module_address]
-    module_num_passes = self.module_num_passes[module_address]
-    module_nparams = self.module_nparams[module_address]
+    ml = self.modules[module_address]
+    module_type = ml.module_class_name
+    module_num_passes = ml.num_passes
+    module_nparams = ml.num_params
 
     if vis_opt == "unrolled":
         node_name = "pass".join(module_tuple)
-        module_num_tensors = self.module_pass_num_tensors[module_address_w_pass]
-        module_has_input_ancestor = any(
-            [
-                self[layer].has_input_ancestor
-                for layer in self.module_pass_layers[module_address_w_pass]
-            ]
-        )
+        mpl = self.modules[module_address_w_pass]
+        module_num_tensors = mpl.num_layers
+        module_has_input_ancestor = any([self[layer].has_input_ancestor for layer in mpl.layers])
     else:
         node_name = module_tuple[0]
-        module_num_tensors = self.module_num_tensors[module_address]
-        module_has_input_ancestor = any(
-            [self[layer].has_input_ancestor for layer in self.module_layers[module_address]]
-        )
+        module_num_tensors = ml.num_layers
+        module_has_input_ancestor = any([self[layer].has_input_ancestor for layer in ml.all_layers])
 
     if node_name in collapsed_modules:
         return  # collapsed node already added
@@ -354,8 +349,8 @@ def _construct_collapsed_module_node(
     else:
         tensor_shape_str = "x1"
 
-    module_nparams_trainable = self.module_nparams_trainable[module_address]
-    module_nparams_frozen = self.module_nparams_frozen[module_address]
+    module_nparams_trainable = ml.num_params_trainable
+    module_nparams_frozen = ml.num_params_frozen
 
     if module_nparams > 0:
         if module_nparams_frozen == 0:
@@ -442,7 +437,7 @@ def _get_node_address_shape_color(
         if type(node) == TensorLog:
             module_pass_exited = node.containing_modules_origin_nested[-1]
             module, _ = module_pass_exited.split(":")
-            if self.module_num_passes[module] == 1:
+            if self.modules[module].num_passes == 1:
                 node_address = module
             else:
                 node_address = module_pass_exited
@@ -494,7 +489,7 @@ def _check_if_only_non_buffer_in_module(
 
     # Only apply box rendering for leaf modules (no child submodules).
     exited_module = node.containing_modules_origin_nested[-1].split(":")[0]
-    if len(self.module_children.get(exited_module, [])) > 0:
+    if exited_module in self.modules and len(self.modules[exited_module].call_children) > 0:
         return False
 
     # Now check whether all of its parents are either buffers, or are outside the module.
@@ -1001,11 +996,16 @@ def _set_up_subgraphs(
             edge specified as a dict with all necessary arguments for creating that edge.
     """
     if vis_opt == "unrolled":
-        module_submodule_dict = self.module_pass_children.copy()
-        subgraphs = self.top_level_module_passes[:]
+        module_submodule_dict = defaultdict(list)
+        for pass_label, mpl in self.modules._pass_dict.items():
+            module_submodule_dict[pass_label] = list(mpl.call_children)
+        subgraphs = list(self.modules["self"].passes[1].call_children)
     else:
-        module_submodule_dict = self.module_children.copy()
-        subgraphs = self.top_level_modules[:]
+        module_submodule_dict = defaultdict(list)
+        for ml in self.modules:
+            if ml.address != "self":
+                module_submodule_dict[ml.address] = list(ml.call_children)
+        subgraphs = list(self.modules["self"].call_children)
 
     # Get the max module nesting depth:
 
@@ -1063,11 +1063,12 @@ def _setup_subgraphs_recurse(
         subgraph_name = subgraph_module
     else:
         raise ValueError("vis_opt must be 'rolled' or 'unrolled'")
-    module_type = self.module_types[subgraph_module]
-    if (self.module_num_passes[subgraph_module] > 1) and (vis_opt == "unrolled"):
+    sg_ml = self.modules[subgraph_module]
+    module_type = sg_ml.module_class_name
+    if (sg_ml.num_passes > 1) and (vis_opt == "unrolled"):
         subgraph_title = subgraph_name_w_pass
-    elif (self.module_num_passes[subgraph_module] > 1) and (vis_opt == "rolled"):
-        subgraph_title = f"{subgraph_module} (x{self.module_num_passes[subgraph_module]})"
+    elif (sg_ml.num_passes > 1) and (vis_opt == "rolled"):
+        subgraph_title = f"{subgraph_module} (x{sg_ml.num_passes})"
     else:
         subgraph_title = subgraph_module
 

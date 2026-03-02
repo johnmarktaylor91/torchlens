@@ -61,16 +61,16 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
     if type(key) != str:
         raise ValueError(_get_lookup_help_str(self, key, mode))
 
-    if key in self.module_addresses:
-        module_num_passes = self.module_num_passes[key]
+    if hasattr(self, "_module_logs") and key in self._module_logs:
+        module_num_passes = self._module_logs[key].num_passes
         raise ValueError(
             f"You specified output of module {key}, but it has {module_num_passes} passes; "
             f"please specify e.g. {key}:2 for the second pass of {key}."
         )
 
-    if key.split(":")[0] in self.module_addresses:
+    if hasattr(self, "_module_logs") and key.split(":")[0] in self._module_logs:
         module, pass_num = key.split(":", 1)
-        module_num_passes = self.module_num_passes[module]
+        module_num_passes = self._module_logs[module].num_passes
         raise ValueError(
             f"You specified module {module} pass {pass_num}, but {module} only has "
             f"{module_num_passes} passes; specify a lower number."
@@ -131,7 +131,7 @@ def _str_after_pass(self) -> str:
     if len(self.buffer_layers) > 0:
         s += f"\n\t\t- contains {len(self.buffer_layers)} buffer layers"
 
-    s += f"\n\t\t- {len(self.module_addresses)} total modules"
+    s += f"\n\t\t- {len(self.modules) - 1} total modules"  # -1 to exclude root "self"
 
     # Model tensors:
 
@@ -218,9 +218,13 @@ def _get_lookup_help_str(self, layer_label: Union[int, str], mode: str) -> str:
     """Generates a help string to be used in error messages when indexing fails."""
     sample_layer1 = random.choice(self.layer_labels_w_pass)
     sample_layer2 = random.choice(self.layer_labels_no_pass)
-    if len(self.module_addresses) > 0:
-        sample_module1 = random.choice(self.module_addresses)
-        sample_module2 = random.choice(self.module_passes)
+    module_addrs = [ml.address for ml in self.modules if ml.address != "self"]
+    if len(module_addrs) > 0:
+        sample_module1 = random.choice(module_addrs)
+        all_pass_labels = [
+            pl for ml in self.modules for pl in ml.pass_labels if ml.address != "self"
+        ]
+        sample_module2 = random.choice(all_pass_labels) if all_pass_labels else "features.4:2"
     else:
         sample_module1 = "features.3"
         sample_module2 = "features.4:2"
@@ -255,10 +259,13 @@ def _module_hierarchy_str(self):
     Utility function to print the nested module hierarchy.
     """
     s = ""
-    for module_pass in self.top_level_module_passes:
+    root_pass = self.modules["self"].passes.get(1)
+    if root_pass is None:
+        return s
+    for module_pass in root_pass.call_children:
         module, pass_num = module_pass.split(":")
         s += f"\n\t\t{module}"
-        if self.module_num_passes[module] > 1:
+        if self.modules[module].num_passes > 1:
             s += f":{pass_num}"
         s += _module_hierarchy_str_helper(self, module_pass, 1)
     return s
@@ -269,24 +276,21 @@ def _module_hierarchy_str_helper(self, module_pass, level):
     Helper function for _module_hierarchy_str.
     """
     s = ""
-    any_grandchild_modules = any(
-        [
-            len(self.module_pass_children[submodule_pass]) > 0
-            for submodule_pass in self.module_pass_children[module_pass]
-        ]
-    )
-    if any_grandchild_modules or len(self.module_pass_children[module_pass]) == 0:
-        for submodule_pass in self.module_pass_children[module_pass]:
+    mpl = self.modules[module_pass]
+    children = mpl.call_children
+    any_grandchild_modules = any([len(self.modules[sp].call_children) > 0 for sp in children])
+    if any_grandchild_modules or len(children) == 0:
+        for submodule_pass in children:
             submodule, pass_num = submodule_pass.split(":")
             s += f"\n\t\t{'    ' * level}{submodule}"
-            if self.module_num_passes[submodule] > 1:
+            if self.modules[submodule].num_passes > 1:
                 s += f":{pass_num}"
             s += _module_hierarchy_str_helper(self, submodule_pass, level + 1)
     else:
         submodule_list = []
-        for submodule_pass in self.module_pass_children[module_pass]:
+        for submodule_pass in children:
             submodule, pass_num = submodule_pass.split(":")
-            if self.module_num_passes[submodule] == 1:
+            if self.modules[submodule].num_passes == 1:
                 submodule_list.append(submodule)
             else:
                 submodule_list.append(submodule_pass)
