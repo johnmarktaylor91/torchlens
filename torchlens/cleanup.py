@@ -21,9 +21,11 @@ def _clear_entry_attributes(log_entry: TensorLog):
     for attr in dir(log_entry):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            if not attr.startswith("__") and not callable(getattr(log_entry, attr)):
-                if isinstance(getattr(type(log_entry), attr, None), property):
-                    continue
+            if attr.startswith("__"):
+                continue
+            if isinstance(getattr(type(log_entry), attr, None), property):
+                continue
+            if not callable(getattr(log_entry, attr, None)):
                 delattr(log_entry, attr)
 
 

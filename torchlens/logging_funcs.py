@@ -22,6 +22,7 @@ from .helper_funcs import (
     tensor_nanequal,
 )
 from .flops import compute_backward_flops, compute_forward_flops
+from .data_classes.buffer_log import BufferLog
 from .data_classes.tensor_log import TensorLog
 
 if TYPE_CHECKING:
@@ -925,7 +926,10 @@ def _make_tensor_log_entry(
     if t_kwargs is None:
         t_kwargs = {}
 
-    new_entry = TensorLog(fields_dict)
+    if fields_dict.get("is_buffer_layer"):
+        new_entry = BufferLog(fields_dict)
+    else:
+        new_entry = TensorLog(fields_dict)
     if (self._tensor_nums_to_save == "all") or (
         new_entry.realtime_tensor_num in self._tensor_nums_to_save
     ):

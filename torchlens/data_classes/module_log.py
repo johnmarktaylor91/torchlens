@@ -143,6 +143,7 @@ class ModuleLog:
         self.requires_grad = requires_grad
 
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
+        self._buffer_accessor = None  # populated by _build_module_logs
 
         self.training_mode = training_mode
         self.has_forward_hooks = has_forward_hooks
@@ -187,6 +188,26 @@ class ModuleLog:
     @property
     def forward_kwargs(self) -> Optional[dict]:
         return self._single_pass_or_error("forward_kwargs")
+
+    @property
+    def buffers(self):
+        """Scoped BufferAccessor for buffers belonging to this module."""
+        if self._buffer_accessor is not None:
+            return self._buffer_accessor
+        # Build on first access from the source ModelLog
+        from .buffer_log import BufferAccessor
+
+        if self._source_model_log is None or self._source_model_log._buffer_accessor is None:
+            self._buffer_accessor = BufferAccessor({})
+            return self._buffer_accessor
+        parent_accessor = self._source_model_log._buffer_accessor
+        scoped = {
+            addr: bl
+            for addr, bl in parent_accessor._dict.items()
+            if bl.module_address == self.address
+        }
+        self._buffer_accessor = BufferAccessor(scoped, source_model_log=self._source_model_log)
+        return self._buffer_accessor
 
     def __repr__(self) -> str:
         lines = [

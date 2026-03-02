@@ -434,7 +434,7 @@ def _get_node_address_shape_color(
     if (node.is_bottom_level_submodule_output or only_non_buffer_layer) and (
         len(node.containing_modules_origin_nested) > 0
     ):
-        if type(node) == TensorLog:
+        if isinstance(node, TensorLog) and not isinstance(node, RolledTensorLog):
             module_pass_exited = node.containing_modules_origin_nested[-1]
             module, _ = module_pass_exited.split(":")
             if self.modules[module].num_passes == 1:
@@ -496,7 +496,7 @@ def _check_if_only_non_buffer_in_module(
     # If any aren't, return False.
 
     for parent_layer_label in node.parent_layers:
-        if type(node) == TensorLog:
+        if isinstance(node, TensorLog) and not isinstance(node, RolledTensorLog):
             parent_layer = self[parent_layer_label]
         else:
             parent_layer = self.layer_dict_rolled[parent_layer_label]
