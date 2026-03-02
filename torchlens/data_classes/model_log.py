@@ -1,7 +1,10 @@
 # This file is for defining the ModelLog class that stores the representation of the forward pass.
 import copy
 from collections import OrderedDict, defaultdict
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Tuple
+
+if TYPE_CHECKING:
+    from .buffer_log import BufferAccessor
 
 from ..cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup
 from .module_log import ModuleAccessor
@@ -100,6 +103,7 @@ class ModelLog:
         self.output_layers: List[str] = []
         self.buffer_layers: List[str] = []
         self.buffer_num_passes: Dict = {}
+        self._buffer_accessor = None
         self.internally_initialized_layers: List[str] = []
         self._layers_where_internal_branches_merge_with_input: List[str] = []
         self.internally_terminated_layers: List[str] = []
@@ -266,6 +270,11 @@ class ModelLog:
     def root_module(self):
         """The root module (the model itself)."""
         return self._module_logs["self"]
+
+    @property
+    def buffers(self) -> "BufferAccessor":
+        """Access buffer metadata by address, short name, or index."""
+        return self._buffer_accessor
 
     # ********************************************
     # ******** Assign Imported Methods ***********

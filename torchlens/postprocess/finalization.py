@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from ..data_classes.tensor_log import RolledTensorLog
 from ..helper_funcs import get_vars_of_type_from_obj, human_readable_size
@@ -330,6 +331,15 @@ def _build_module_logs(self: "ModelLog"):
 
     # --- Build ModuleAccessor and assign to ModelLog ---
     self._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
+
+    # --- Build BufferAccessor ---
+    buffer_dict = {}
+    for label in self.buffer_layers:
+        if label in self.layer_dict_all_keys:
+            entry = self.layer_dict_all_keys[label]
+            if entry.buffer_address is not None:
+                buffer_dict[entry.buffer_address] = entry
+    self._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=self)
 
     # --- Clean up temporary state ---
     self._module_metadata = {}

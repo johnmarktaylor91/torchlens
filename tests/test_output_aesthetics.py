@@ -272,6 +272,64 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         out.write(f"  Total trainable: {log.total_params_trainable}\n")
         out.write(f"  Total params: {log.total_params}\n")
 
+    # ===== C.2 Buffer System =====
+    if hasattr(log, "buffers") and log.buffers is not None and len(log.buffers) > 0:
+        out.write(_section("C.2 Buffer System", level=3))
+
+        out.write(_capture("repr(log.buffers)", repr(log.buffers)))
+
+        # Show first buffer by index
+        first_buf = log.buffers[0]
+        out.write(
+            _capture(
+                "repr(log.buffers[0]) — first buffer by index",
+                repr(first_buf),
+            )
+        )
+
+        # Show by full address
+        if first_buf.buffer_address is not None:
+            out.write(
+                _capture(
+                    f'repr(log.buffers["{first_buf.buffer_address}"]) — by full address',
+                    repr(log.buffers[first_buf.buffer_address]),
+                )
+            )
+
+        # Show by short name
+        if first_buf.name:
+            try:
+                buf_by_name = log.buffers[first_buf.name]
+                out.write(
+                    _capture(
+                        f'repr(log.buffers["{first_buf.name}"]) — by short name',
+                        repr(buf_by_name),
+                    )
+                )
+            except KeyError:
+                pass  # ambiguous short name, skip
+
+        # Show scoped module buffers if there's a module with buffers
+        if first_buf.module_address:
+            try:
+                mod_bufs = log.modules[first_buf.module_address].buffers
+                out.write(
+                    _capture(
+                        f'repr(log.modules["{first_buf.module_address}"].buffers) — scoped',
+                        repr(mod_bufs),
+                    )
+                )
+            except (KeyError, AttributeError):
+                pass
+
+        # Show that buffer is also accessible as a layer (isinstance check)
+        from torchlens.data_classes.buffer_log import BufferLog
+        from torchlens.data_classes.tensor_log import TensorLog
+
+        out.write(f"  isinstance(log.buffers[0], BufferLog): {isinstance(first_buf, BufferLog)}\n")
+        out.write(f"  isinstance(log.buffers[0], TensorLog): {isinstance(first_buf, TensorLog)}\n")
+        out.write("\n")
+
     # ===== D. TensorLog / Layer Access =====
     out.write(_section("D. TensorLog / Layer Access", level=2))
 
@@ -999,6 +1057,17 @@ def _build_latex_report() -> str:
             frozen_text += f"Total trainable: {log.total_params_trainable}\n"
             frozen_text += f"Total params: {log.total_params}\n"
             doc.write(_verbatim_box("C.1 Frozen vs Trainable Parameters", frozen_text))
+
+        # C.2 Buffers
+        if hasattr(log, "buffers") and log.buffers is not None and len(log.buffers) > 0:
+            doc.write(_verbatim_box("C.2 Buffers — repr(log.buffers)", repr(log.buffers)))
+            first_buf = log.buffers[0]
+            doc.write(
+                _verbatim_box(
+                    "C.2 First Buffer — repr(log.buffers[0])",
+                    repr(first_buf),
+                )
+            )
 
         # D. Layer Access — first and last
         doc.write(_verbatim_box("D. First Layer — repr(log[0])", repr(log[0])))

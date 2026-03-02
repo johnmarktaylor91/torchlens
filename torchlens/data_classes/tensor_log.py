@@ -233,7 +233,7 @@ class TensorLog:
                 fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
                 fields_dict[field] = getattr(self, field, None)
-        copied_entry = TensorLog(fields_dict)
+        copied_entry = type(self)(fields_dict)
         return copied_entry
 
     def save_tensor_data(
