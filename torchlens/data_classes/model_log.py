@@ -4,6 +4,7 @@ from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ..cleanup import _remove_log_entry, cleanup
+from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
 from ..decorate_torch import decorate_pytorch
 from ..helper_funcs import (
@@ -152,6 +153,13 @@ class ModelLog:
         self.module_layer_argnames = defaultdict(list)
         self.module_training_modes: Dict[str, bool] = {}
 
+        # Structured module info:
+        self._module_logs: ModuleAccessor = ModuleAccessor({})
+
+        # Temporary storage for module metadata capture (consumed by _build_module_logs):
+        self._module_metadata: Dict = {}
+        self._module_forward_args: Dict = {}
+
         # Time elapsed:
         self.pass_start_time: float = 0
         self.pass_end_time: float = 0
@@ -255,6 +263,16 @@ class ModelLog:
     def params(self) -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
         return self.param_logs
+
+    @property
+    def modules(self) -> "ModuleAccessor":
+        """Access structured per-module metadata by address, index, or pass notation."""
+        return self._module_logs
+
+    @property
+    def root_module(self):
+        """The root module (the model itself)."""
+        return self._module_logs["self"]
 
     # ********************************************
     # ******** Assign Imported Methods ***********

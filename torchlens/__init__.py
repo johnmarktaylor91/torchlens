@@ -11,4 +11,4 @@ from .user_funcs import (
 )
 from .data_classes.model_log import ModelLog
 from .data_classes.tensor_log import TensorLog, RolledTensorLog
-from .data_classes import FuncCallLocation, ParamLog
+from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog

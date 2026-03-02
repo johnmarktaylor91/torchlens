@@ -292,6 +292,67 @@ PARAM_LOG_FIELD_ORDER = [
     "grad_fsize_nice",
 ]
 
+MODULE_PASS_LOG_FIELD_ORDER = [
+    "module_address",
+    "pass_num",
+    "pass_label",
+    "layers",
+    "num_layers",
+    "input_layers",
+    "output_layers",
+    "forward_args",
+    "forward_kwargs",
+    "call_parent",
+    "call_children",
+]
+
+MODULE_LOG_FIELD_ORDER = [
+    # Identity
+    "address",
+    "all_addresses",
+    "name",
+    "module_class_name",
+    # Source info
+    "source_file",
+    "source_line",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
+    # Hierarchy — address-based
+    "address_parent",
+    "address_children",
+    "address_depth",
+    # Hierarchy — call-based
+    "call_parent",
+    "call_children",
+    "nesting_depth",
+    # Pass info
+    "num_passes",
+    "passes",
+    "pass_labels",
+    # Layers
+    "all_layers",
+    "num_layers",
+    # Parameters
+    "params",
+    "num_params",
+    "num_params_trainable",
+    "num_params_frozen",
+    "params_fsize",
+    "params_fsize_nice",
+    "requires_grad",
+    # Buffers
+    "buffer_layers",
+    # Module state
+    "training_mode",
+    "has_forward_hooks",
+    "has_backward_hooks",
+    "extra_attributes",
+    "methods",
+]
+
 # Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 IGNORED_FUNCS = [
     ("torch", "load"),
