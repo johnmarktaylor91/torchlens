@@ -144,8 +144,6 @@ def decorate_pytorch(
         orig_func = getattr(local_func_namespace, func_name)
         if func_name not in self.func_argnames:
             get_func_argnames(self, orig_func, func_name)
-        if getattr(orig_func, "__name__", False) == "wrapped_func":
-            continue
 
         if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
             new_func = torch_func_decorator(self, orig_func, func_name)
@@ -185,7 +183,8 @@ def decorate_pytorch(
 
     # Bolt on the identity function
     new_identity = torch_func_decorator(self, identity, "identity")
-    torch.identity = new_identity
+    if not hasattr(torch, "identity"):
+        torch.identity = new_identity
 
     return decorated_func_mapper
 

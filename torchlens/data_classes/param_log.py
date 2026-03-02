@@ -51,7 +51,14 @@ class ParamLog:
 
     @property
     def is_quantized(self) -> bool:
-        return not self.dtype.is_floating_point
+        _QUANTIZED_DTYPES = {
+            torch.qint8,
+            torch.quint8,
+            torch.qint32,
+            torch.quint4x2,
+            torch.quint2x4,
+        }
+        return self.dtype in _QUANTIZED_DTYPES
 
     def _check_param_grad(self):
         """Check if the parameter reference has a gradient and cache the result."""
