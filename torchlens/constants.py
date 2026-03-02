@@ -11,9 +11,7 @@ MODEL_LOG_FIELD_ORDER = [
     # General info
     "model_name",
     "_pass_finished",
-    "_track_tensors",
     "logging_mode",
-    "_pause_logging",
     "_all_layers_logged",
     "_all_layers_saved",
     "keep_unsaved_layers",
@@ -113,8 +111,6 @@ MODEL_LOG_FIELD_ORDER = [
     "elapsed_time_total",
     "elapsed_time_function_calls",
     "elapsed_time_torchlens_logging",
-    # Lookup info
-    "func_argnames",
 ]
 
 TENSOR_LOG_FIELD_ORDER = [

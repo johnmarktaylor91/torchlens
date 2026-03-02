@@ -6,9 +6,11 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 import torch
 from torch import nn
 
+from . import _state
+from .model_funcs import _ensure_model_prepared, _prepare_model_session, _cleanup_model_session
+
 if TYPE_CHECKING:
     from .data_classes.model_log import ModelLog
-from .decorate_torch import undecorate_pytorch
 from .helper_funcs import (
     get_vars_of_type_from_obj,
     set_random_seed,
@@ -34,18 +36,7 @@ def _get_input_arg_names(model, input_args):
 def _get_op_nums_from_user_labels(
     self: "ModelLog", which_layers: Union[str, List[Union[str, int]]]
 ) -> Union[List[int], str]:
-    """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
-    the numbers that were generated on the fly during the forward pass, such that they can be
-    saved on a subsequent pass). Raises an error if the user's labels don't correspond to any layers.
-
-    Args:
-        which_layers: List of layers to include, using any indexing desired: either the layer label,
-        the module label, or the ordinal position of the layer. If a layer has multiple passes and
-        none is specified, will return all of them.
-
-    Returns:
-        Ordered, unique list of raw tensor numbers associated with the specified layers.
-    """
+    """Given list of user layer labels, returns the original tensor numbers for those labels."""
     if which_layers == "all":
         return which_layers
     elif which_layers in [None, "none", "None", "NONE", []]:
@@ -55,19 +46,15 @@ def _get_op_nums_from_user_labels(
         which_layers = [which_layers]
     raw_tensor_nums_to_save = set()
     for layer_key in which_layers:
-        # First check if it matches a lookup key. If so, use that.
         if layer_key in self._lookup_keys_to_tensor_num_dict:
             raw_tensor_nums_to_save.add(self._lookup_keys_to_tensor_num_dict[layer_key])
             continue
 
-        # If not, pull out all layers for which the key is a substring.
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
                 raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
             continue
-
-        # If no luck, try to at least point user in right direction:
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
 
@@ -81,17 +68,7 @@ def _fetch_label_move_input_tensors(
     input_kwargs: Dict,
     model_device: str,
 ) -> Tuple[List[torch.Tensor], List[str]]:
-    """Fetches input tensors, gets their addresses, and moves them to the model device.
-
-    Args:
-        input_args: input arguments
-        input_arg_names: name of input arguments
-        input_kwargs: input keyword arguments
-        model_device: model device
-
-    Returns:
-        input tensors and their addresses
-    """
+    """Fetches input tensors, gets their addresses, and moves them to the model device."""
     input_arg_tensors = [
         get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5, return_addresses=True)
         for arg in input_args
@@ -101,7 +78,6 @@ def _fetch_label_move_input_tensors(
         for kwarg in input_kwargs.values()
     ]
     for a, arg in enumerate(input_args):
-        # Convert tuples to lists for device-moving (tuples are immutable)
         was_tuple = isinstance(arg, tuple)
         if was_tuple:
             input_args[a] = list(arg)
@@ -155,16 +131,11 @@ def run_and_log_inputs_through_model(
 ):
     """Runs input through model and logs it in ModelLog.
 
-    Args:
-        model: Model for which to save activations
-        input_args: Either a single tensor input to the model, or list of input arguments.
-        input_kwargs: Dict of keyword arguments to the model.
-        layers_to_save: List of tensor numbers to save
-        random_seed: Which random seed to use
-    Returns:
-        Nothing, but now the ModelLog object will have saved activations for the new input.
+    Uses toggle-gated decoration: torch functions are already decorated
+    at import time.  ``active_logging()`` turns the toggle on for the
+    forward pass, ``_cleanup_model_session()`` cleans up session state.
     """
-    if random_seed is None:  # set random seed
+    if random_seed is None:
         random_seed = random.randint(1, 4294967294)
     self.random_seed_used = random_seed
     set_random_seed(random_seed)
@@ -184,7 +155,7 @@ def run_and_log_inputs_through_model(
             combined = set(self._tensor_nums_to_save) | output_parent_nums
             self._tensor_nums_to_save = sorted(combined)
 
-    if type(model) == nn.DataParallel:  # Unwrap model from DataParallel if relevant:
+    if type(model) == nn.DataParallel:
         model = model.module
 
     input_args = normalize_input_args(input_args, model)
@@ -204,42 +175,39 @@ def run_and_log_inputs_through_model(
     input_kwargs = safe_copy_kwargs(input_kwargs)
 
     self.pass_start_time = time.time()
-    module_orig_forward_funcs = {}
-    orig_func_defs = []
     input_tensors = []
-    decorated_func_mapper = {}
 
     try:
         (
             input_tensors,
             input_tensor_addresses,
         ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
-        buffer_tensors = list(model.buffers())
-        tensors_to_decorate = input_tensors + buffer_tensors
 
         # Capture/restore RNG state so the fast pass reproduces the same
         # stochastic graph as the exhaustive pass (issue #58).
-        # Must happen BEFORE decorating pytorch, since the torch RNG
-        # functions internally call .clone() etc. which would be intercepted.
         if self.logging_mode == "exhaustive":
             self._pre_forward_rng_states = log_current_rng_states()
         elif self.logging_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
             set_rng_from_saved_states(self._pre_forward_rng_states)
 
-        decorated_func_mapper = self._decorate_pytorch(torch, orig_func_defs)
-        self._track_tensors = True
-        for i, t in enumerate(input_tensors):
-            log_source_tensor(self, t, "input", input_tensor_addresses[i])
-        self._prepare_model(
-            model, module_orig_forward_funcs, decorated_func_mapper, self._optimizer
-        )
+        # One-time model preparation + incremental sys.modules crawl
+        _ensure_model_prepared(model)
+
+        # Per-session model preparation
+        _prepare_model_session(self, model, self._optimizer)
         self.elapsed_time_setup = time.time() - self.pass_start_time
 
-        outputs = model(*input_args, **input_kwargs)
+        # Activate logging toggle and run forward pass
+        with _state.active_logging(self):
+            for i, t in enumerate(input_tensors):
+                log_source_tensor(self, t, "input", input_tensor_addresses[i])
+
+            outputs = model(*input_args, **input_kwargs)
+
         self.elapsed_time_forward_pass = (
             time.time() - self.pass_start_time - self.elapsed_time_setup
         )
-        self._track_tensors = False
+
         output_tensors_w_addresses_all = get_vars_of_type_from_obj(
             outputs,
             torch.Tensor,
@@ -247,7 +215,7 @@ def run_and_log_inputs_through_model(
             return_addresses=True,
             allow_repeats=True,
         )
-        # Remove duplicate addresses TODO: make this match the validation procedure so they work the same way
+        # Remove duplicate addresses
         addresses_used = []
         output_tensors_w_addresses = []
         for entry in output_tensors_w_addresses_all:
@@ -263,22 +231,19 @@ def run_and_log_inputs_through_model(
             if self.logging_mode == "exhaustive":
                 self.output_layers.append(t.tl_tensor_label_raw)
             self._raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
-        tensors_to_undecorate = tensors_to_decorate + output_tensors
-        undecorate_pytorch(torch, orig_func_defs, tensors_to_undecorate)
-        self._cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
-        self._postprocess(output_tensors, output_tensor_addresses)
-        decorated_func_mapper.clear()
 
-    except Exception as e:  # if anything fails, make sure everything gets cleaned up
-        self._track_tensors = False
-        self._pause_logging = False
-        undecorate_pytorch(torch, orig_func_defs, input_tensors)
-        self._cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
+        _cleanup_model_session(model, input_tensors)
+        self._postprocess(output_tensors, output_tensor_addresses)
+
+    except Exception as e:
+        # active_logging's finally already turned off the toggle.
+        # Just clean up model state.
+        _cleanup_model_session(model, input_tensors)
         print(
             "************\nFeature extraction failed; returning model and environment to normal\n*************"
         )
         raise e
 
-    finally:  # do garbage collection no matter what
+    finally:
         input_tensors = None
         torch.cuda.empty_cache()

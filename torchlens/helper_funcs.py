@@ -729,8 +729,11 @@ def safe_to(x: Any, device: str):
     Returns:
         Object either moved to device if a tensor, same object if otherwise.
     """
+    from ._state import pause_logging
+
     if type(x) == torch.Tensor:
-        return clean_to(x, device)
+        with pause_logging():
+            return x.to(device)
     else:
         return x
 
@@ -744,11 +747,14 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
     Returns:
         Size of tensor in bytes.
     """
+    from ._state import pause_logging
+
     try:
-        cpu_data = clean_cpu(t.data)
-        if cpu_data.dtype == torch.bfloat16:
-            cpu_data = clean_to(cpu_data, torch.float16)
-        return getsizeof(np.array(clean_dense(cpu_data)))
+        with pause_logging():
+            cpu_data = t.data.cpu()
+            if cpu_data.dtype == torch.bfloat16:
+                cpu_data = cpu_data.to(torch.float16)
+            return getsizeof(np.array(cpu_data.to_dense()))
     except Exception:
         return 0
 
@@ -774,15 +780,6 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     return f"{size} {unit}"
 
 
-clean_from_numpy = copy.deepcopy(torch.from_numpy)
-clean_new_param = copy.deepcopy(torch.nn.Parameter)
-clean_clone = copy.deepcopy(torch.clone)
-clean_cpu = copy.deepcopy(torch.Tensor.cpu)
-clean_cuda = copy.deepcopy(torch.Tensor.cuda)
-clean_to = copy.deepcopy(torch.Tensor.to)
-clean_dense = copy.deepcopy(torch.Tensor.to_dense)
-
-
 def print_override(t: torch.Tensor, func_name: str):
     """Overrides the __str__ and __repr__ methods of Tensor so as not to lead to any infinite recursion.
 
@@ -793,9 +790,12 @@ def print_override(t: torch.Tensor, func_name: str):
     Returns:
         The string representation of the tensor.
     """
-    cpu_data = clean_cpu(t.data)
-    if cpu_data.dtype == torch.bfloat16:
-        cpu_data = clean_to(cpu_data, torch.float16)
+    from ._state import pause_logging
+
+    with pause_logging():
+        cpu_data = t.data.cpu()
+        if cpu_data.dtype == torch.bfloat16:
+            cpu_data = cpu_data.to(torch.float16)
     n = np.array(cpu_data)
     np_str = getattr(n, func_name)()
     np_str = np_str.replace("array", "tensor")
@@ -809,8 +809,9 @@ def print_override(t: torch.Tensor, func_name: str):
 
 
 def safe_copy(x, detach_tensor: bool = False):
-    """Utility function to make a copy of a tensor or parameter when torch is in mutated mode, or just copy
-    the thing if it's not a tensor.
+    """Utility function to make a copy of a tensor or parameter, or just copy
+    the thing if it's not a tensor.  Uses ``pause_logging()`` so that
+    clone / cpu / to calls don't get logged.
 
     Args:
         x: Input
@@ -819,20 +820,23 @@ def safe_copy(x, detach_tensor: bool = False):
     Returns:
         Safely copied variant of the input with same values and same class, but different memory
     """
+    from ._state import pause_logging
+
     if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
-        if not detach_tensor:
-            return clean_clone(x)
-        vals_cpu = clean_cpu(x.data)
-        if vals_cpu.dtype == torch.bfloat16:
-            vals_cpu = clean_to(vals_cpu, torch.float16)
-        vals_np = vals_cpu.numpy()
-        vals_tensor = clean_from_numpy(vals_np)
-        if hasattr(x, "tl_tensor_label_raw"):
-            vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
-        if type(x) == torch.Tensor:
-            return vals_tensor
-        elif type(x) == torch.nn.Parameter:
-            return clean_new_param(vals_tensor)
+        with pause_logging():
+            if not detach_tensor:
+                return x.clone()
+            vals_cpu = x.data.cpu()
+            if vals_cpu.dtype == torch.bfloat16:
+                vals_cpu = vals_cpu.to(torch.float16)
+            vals_np = vals_cpu.numpy()
+            vals_tensor = torch.from_numpy(vals_np)
+            if hasattr(x, "tl_tensor_label_raw"):
+                vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
+            if type(x) == torch.Tensor:
+                return vals_tensor
+            elif type(x) == torch.nn.Parameter:
+                return torch.nn.Parameter(vals_tensor)
     else:
         return copy.copy(x)
 
