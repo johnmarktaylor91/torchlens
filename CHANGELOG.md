@@ -1,6 +1,69 @@
 # CHANGELOG
 
 
+## v0.10.0 (2026-03-02)
+
+### Features
+
+- **data**: Add ModuleLog, ModulePassLog, and ModuleAccessor
+  ([`5b0baa8`](https://github.com/johnmarktaylor91/torchlens/commit/5b0baa84903cd7e89f4192fa94fb444eebf5ceb5))
+
+Introduce structured per-module metadata classes following the ParamLog/ParamAccessor pattern.
+  log.modules["features.3"] now returns a rich ModuleLog with class, params, layers, source info,
+  hierarchy, hooks, forward signature, and nesting depth. Multi-pass modules support per-call access
+  via passes dict and pass notation (e.g. "fc1:2").
+
+- ModulePassLog: per-(module, pass) lightweight container - ModuleLog: per-module-object user-facing
+  class with delegating properties for single-pass modules - ModuleAccessor: dict-like accessor with
+  summary()/to_pandas() - Metadata captured in prepare_model() before cleanup strips tl_* attrs -
+  Forward args/kwargs captured per pass in module_forward_decorator() - _build_module_logs() in
+  postprocess Step 17 assembles everything - Old module_* dicts kept alive for vis.py backward
+  compat - 44 new tests, 315 total passing
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **data**: Move ModelHistory & TensorLogEntry into data_classes/
+  ([`6ecc7e5`](https://github.com/johnmarktaylor91/torchlens/commit/6ecc7e5880eadffd8c13e82bd39d3aa9c5544672))
+
+Move model_history.py and tensor_log.py into torchlens/data_classes/ alongside the existing
+  FuncCallLocation and ParamLog data classes. Update all relative imports across 12 consumer files.
+  Also fixes a missing-dot bug in decorate_torch.py's TYPE_CHECKING import.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **data**: Rename ModelHistory/TensorLogEntry to ModelLog/TensorLog
+  ([`f36718e`](https://github.com/johnmarktaylor91/torchlens/commit/f36718e6a471838ef40af0e25e8e41357d9b9a30))
+
+- Rename classes: ModelHistory → ModelLog, TensorLogEntry → TensorLog, RolledTensorLogEntry →
+  RolledTensorLog - Rename file: data_classes/model_history.py → data_classes/model_log.py - Rename
+  variables: model_history → model_log, source_model_history → source_model_log - Rename constants:
+  MODEL_HISTORY_FIELD_ORDER → MODEL_LOG_FIELD_ORDER, TENSOR_LOG_ENTRY_FIELD_ORDER →
+  TENSOR_LOG_FIELD_ORDER - Fold test_meta_validation.py into test_metadata.py
+
+- **vis**: Migrate vis.py and interface.py from module_* dicts to ModuleAccessor API
+  ([`8e64d43`](https://github.com/johnmarktaylor91/torchlens/commit/8e64d439d78081551c4112c0cc49b8c300609296))
+
+Replace all direct accesses to old module_types, module_nparams, module_num_passes,
+  module_pass_layers, module_pass_children, module_children, module_layers, module_num_tensors,
+  module_pass_num_tensors, top_level_module_passes, and top_level_modules dicts with the new
+  ModuleAccessor API (self.modules[addr]).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **validation**: Add meta-validation tests for corruption detection
+  ([`11de9da`](https://github.com/johnmarktaylor91/torchlens/commit/11de9da7209b3f504dd3ed6433a0d04367c38d22))
+
+Add 9 tests that deliberately corrupt saved activations and verify validate_saved_activations()
+  catches each corruption: output/intermediate replacement, layer swap, zeroing, noise, scaling,
+  wrong shape, and corrupted creation_args.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.9.0 (2026-03-01)
 
 ### Features
