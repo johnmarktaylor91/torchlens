@@ -30,6 +30,11 @@ sub_dirs = [
     "torchvision-quantize",
     "toy-networks",
     "aesthetic_test_models",
+    "generative-models",
+    "nlp-models",
+    "time-series",
+    "point-cloud",
+    "super-resolution",
 ]
 
 os.makedirs(TEST_OUTPUTS_DIR, exist_ok=True)
@@ -88,3 +93,27 @@ def input_complex():
 @pytest.fixture
 def small_input():
     return torch.rand(2, 3, 32, 32)
+
+
+@pytest.fixture
+def seq_input():
+    """(seq_len, batch, embed_dim) for transformer models."""
+    return torch.rand(10, 2, 16)
+
+
+@pytest.fixture
+def token_input():
+    """Integer tokens for embedding models."""
+    return torch.randint(0, 100, (2, 10))
+
+
+@pytest.fixture
+def input_3d():
+    """Volumetric input for Conv3d models."""
+    return torch.rand(1, 1, 4, 4, 4)
+
+
+@pytest.fixture
+def input_1d_seq():
+    """1D sequence input for Conv1d models."""
+    return torch.rand(2, 3, 16)

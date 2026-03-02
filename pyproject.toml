@@ -53,6 +53,11 @@ Repository = "https://github.com/johnmarktaylor91/torchlens"
 [tool.setuptools.packages.find]
 include = ["torchlens*"]
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
 [tool.ruff]
 line-length = 100
 

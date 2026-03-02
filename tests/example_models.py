@@ -1926,3 +1926,1019 @@ class AestheticFrozenMix(nn.Module):
         x = torch.relu(x)
         x = self.trainable_fc(x)
         return x
+
+
+# =============================================================================
+# Group A: Attention & Transformers
+# =============================================================================
+
+
+class MultiheadAttentionModel(nn.Module):
+    """nn.MultiheadAttention with multi-output (attn_output, attn_weights)."""
+
+    def __init__(self):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(embed_dim=16, num_heads=2, batch_first=False)
+
+    def forward(self, x):
+        attn_output, _attn_weights = self.attn(x, x, x)
+        return attn_output
+
+
+class ScaledDotProductAttentionModel(nn.Module):
+    """F.scaled_dot_product_attention (fused kernel)."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (batch, heads, seq_len, head_dim) = (2, 4, 10, 8)
+        return torch.nn.functional.scaled_dot_product_attention(x, x, x)
+
+
+class TransformerEncoderModel(nn.Module):
+    """nn.TransformerEncoder + nn.TransformerEncoderLayer, 2 layers."""
+
+    def __init__(self):
+        super().__init__()
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=16, nhead=2, dim_feedforward=32, batch_first=False
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
+
+    def forward(self, x):
+        return self.encoder(x)
+
+
+class TransformerDecoderModel(nn.Module):
+    """nn.TransformerDecoder with cross-attention, multi-input."""
+
+    def __init__(self):
+        super().__init__()
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=16, nhead=2, dim_feedforward=32, batch_first=False
+        )
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=2)
+
+    def forward(self, tgt, memory):
+        return self.decoder(tgt, memory)
+
+
+class EmbeddingPositionalModel(nn.Module):
+    """nn.Embedding with sinusoidal positional encoding."""
+
+    def __init__(self):
+        super().__init__()
+        self.embedding = nn.Embedding(100, 16)
+        self.fc = nn.Linear(16, 16)
+
+    def forward(self, x):
+        # x: integer tokens (2, 10)
+        emb = self.embedding(x)
+        # Simple sin/cos positional encoding
+        seq_len = emb.size(1)
+        pos = torch.arange(seq_len, dtype=torch.float, device=emb.device).unsqueeze(1)
+        pe = torch.sin(pos * 0.01)
+        emb = emb + pe
+        return self.fc(emb)
+
+
+class EinsumModel(nn.Module):
+    """torch.einsum with multiple contraction patterns."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (2, 3, 4)
+        # Batch matrix multiply
+        y = torch.einsum("bij,bjk->bik", x, x.transpose(-1, -2))
+        # Batch trace
+        z = torch.einsum("bii->b", y)
+        return z
+
+
+# =============================================================================
+# Group B: Container Modules
+# =============================================================================
+
+
+class ModuleListModel(nn.Module):
+    """nn.ModuleList iterated in a loop."""
+
+    def __init__(self):
+        super().__init__()
+        self.layers = nn.ModuleList([nn.Linear(5, 5) for _ in range(3)])
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = torch.relu(layer(x))
+        return x
+
+
+class ModuleListIndexedModel(nn.Module):
+    """nn.ModuleList with sparse index access (skip middle)."""
+
+    def __init__(self):
+        super().__init__()
+        self.layers = nn.ModuleList([nn.Linear(5, 5) for _ in range(4)])
+
+    def forward(self, x):
+        x = self.layers[0](x)
+        x = self.layers[3](x)
+        return x
+
+
+class ModuleDictModel(nn.Module):
+    """nn.ModuleDict with string-key dispatch."""
+
+    def __init__(self):
+        super().__init__()
+        self.branches = nn.ModuleDict(
+            {
+                "path_a": nn.Linear(5, 5),
+                "path_b": nn.Linear(5, 5),
+            }
+        )
+
+    def forward(self, x):
+        a = self.branches["path_a"](x)
+        b = self.branches["path_b"](x)
+        return a + b
+
+
+class VarArgsModel(nn.Module):
+    """*args forward signature, variable-length inputs."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, *args):
+        out = args[0]
+        for t in args[1:]:
+            out = out + t
+        return self.fc(out)
+
+
+class KwargsModel(nn.Module):
+    """**kwargs forward, keyword-only tensors."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, **kwargs):
+        out = kwargs["a"] + kwargs["b"]
+        return self.fc(out)
+
+
+# =============================================================================
+# Group C: Conditional & Dynamic Ops
+# =============================================================================
+
+
+class TorchWhereModel(nn.Module):
+    """torch.where() conditional tensor selection."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        condition = x > 0.5
+        return torch.where(condition, x, torch.zeros_like(x))
+
+
+class ScatterGatherModel(nn.Module):
+    """torch.scatter + torch.gather with index tensors."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (3, 5)
+        idx = torch.tensor([[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [2, 2, 2, 2, 2]])
+        gathered = torch.gather(x, 1, idx)
+        out = torch.zeros_like(x)
+        out = out.scatter(1, idx, gathered)
+        return out
+
+
+class NoGradBlockModel(nn.Module):
+    """torch.no_grad() context inside forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(32, 32)
+
+    def forward(self, x):
+        x = x.flatten(1)
+        x = self.fc(x)
+        with torch.no_grad():
+            scale = (x * 2).mean()
+        return x * scale
+
+
+class WhileLoopModel(nn.Module):
+    """Data-dependent while loop (converging x*0.9)."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        count = 0
+        while x.mean() > 0.1 and count < 10:
+            x = x * 0.9
+            count += 1
+        return x
+
+
+class NestedConditionalLoopModel(nn.Module):
+    """Conditionals inside loops (different graph per iteration)."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        for i in range(4):
+            if i % 2 == 0:
+                x = torch.sin(x)
+            else:
+                x = torch.cos(x)
+            if i > 1:
+                x = x + 0.1
+        return x
+
+
+# =============================================================================
+# Group D: Normalization & Conv Variants
+# =============================================================================
+
+
+class LayerNormModel(nn.Module):
+    """nn.LayerNorm."""
+
+    def __init__(self):
+        super().__init__()
+        self.ln = nn.LayerNorm(8)
+        self.fc = nn.Linear(8, 8)
+
+    def forward(self, x):
+        x = self.ln(x)
+        return self.fc(x)
+
+
+class GroupNormModel(nn.Module):
+    """nn.GroupNorm."""
+
+    def __init__(self):
+        super().__init__()
+        self.gn = nn.GroupNorm(4, 8)
+        self.conv = nn.Conv2d(8, 8, 3, padding=1)
+
+    def forward(self, x):
+        x = self.gn(x)
+        return self.conv(x)
+
+
+class InstanceNormModel(nn.Module):
+    """nn.InstanceNorm2d."""
+
+    def __init__(self):
+        super().__init__()
+        self.inorm = nn.InstanceNorm2d(3)
+        self.conv = nn.Conv2d(3, 3, 3, padding=1)
+
+    def forward(self, x):
+        x = self.inorm(x)
+        return self.conv(x)
+
+
+class Conv1dModel(nn.Module):
+    """nn.Conv1d + nn.AdaptiveAvgPool1d."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv1d(3, 8, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Linear(8, 4)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = torch.relu(x)
+        x = self.pool(x).squeeze(-1)
+        return self.fc(x)
+
+
+class Conv3dModel(nn.Module):
+    """nn.Conv3d + nn.AdaptiveAvgPool3d."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv3d(1, 4, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(4, 2)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = torch.relu(x)
+        x = self.pool(x).flatten(1)
+        return self.fc(x)
+
+
+# =============================================================================
+# Group E: Residual & Parameter Sharing
+# =============================================================================
+
+
+class ResidualBlockModel(nn.Module):
+    """ResNet-style Conv→BN→ReLU→Conv→BN + skip."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(16, 16, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 16, 3, padding=1)
+        self.bn2 = nn.BatchNorm2d(16)
+
+    def forward(self, x):
+        residual = x
+        out = torch.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        return torch.relu(out + residual)
+
+
+class SharedParamBranchModel(nn.Module):
+    """Same nn.Linear called in two independent branches with different inputs."""
+
+    def __init__(self):
+        super().__init__()
+        self.shared_fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        a = self.shared_fc(x + 1)
+        b = self.shared_fc(x * 2)
+        return a + b
+
+
+class ModelCallingModelModel(nn.Module):
+    """One nn.Module calling another full nn.Module as submodule."""
+
+    def __init__(self):
+        super().__init__()
+        self.sub = nn.Sequential(nn.Linear(32, 16), nn.ReLU(), nn.Linear(16, 8))
+        self.head = nn.Linear(8, 4)
+
+    def forward(self, x):
+        x = x.flatten(1)
+        x = self.sub(x)
+        return self.head(x)
+
+
+class BidirectionalGRUModel(nn.Module):
+    """nn.GRU(bidirectional=True), concatenated hidden states."""
+
+    def __init__(self):
+        super().__init__()
+        self.gru = nn.GRU(8, 4, batch_first=False, bidirectional=True)
+        self.fc = nn.Linear(8, 4)
+
+    def forward(self, x):
+        # x: (seq_len=5, batch=2, features=8)
+        output, _hidden = self.gru(x)
+        # Use last timestep
+        return self.fc(output[-1])
+
+
+# =============================================================================
+# Group F: In-Place & Type Operations
+# =============================================================================
+
+
+class InPlaceChainModel(nn.Module):
+    """Chained in-place: add_(), mul_(), relu_() in sequence."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        y = x.clone()
+        y.add_(1)
+        y.mul_(2)
+        y.relu_()
+        return y
+
+
+class TypeCastChainModel(nn.Module):
+    """.float() → .long() → .float() → linear."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x):
+        x = x.float()
+        x = (x * 100).long()
+        x = x.float() / 100
+        return self.fc(x)
+
+
+class LikeOpsModel(nn.Module):
+    """full_like, rand_like, randn_like (untested *_like ops)."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        a = torch.full_like(x, 0.5)
+        b = torch.rand_like(x)
+        c = torch.randn_like(x)
+        return x + a + b + c
+
+
+class MultiTensorReturnModel(nn.Module):
+    """torch.chunk, torch.unbind — ops returning multiple tensors."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (3, 4) → chunk into 3 pieces
+        chunks = torch.chunk(x, 3, dim=0)
+        return chunks[0] + chunks[1] + chunks[2]
+
+
+class MixedDtypeModel(nn.Module):
+    """Int index tensors mixed with float computation."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (4, 4) float
+        idx = torch.arange(4)
+        selected = x[idx]
+        return selected.sum()
+
+
+# =============================================================================
+# Group G: Scalar & Broadcasting
+# =============================================================================
+
+
+class ScalarTensorModel(nn.Module):
+    """0-dim scalar tensors as arguments in binary ops."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        scale = torch.tensor(2.0)
+        bias = torch.tensor(0.5)
+        return x * scale + bias
+
+
+class BroadcastingModel(nn.Module):
+    """Mismatched-shape broadcasting: (3,4,5)+(1,4,1)*(5,)."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (3, 4, 5)
+        b = torch.ones(1, 4, 1)
+        c = torch.ones(5)
+        return (x + b) * c
+
+
+class PackedSequenceModel(nn.Module):
+    """pack_padded_sequence / pad_packed_sequence + LSTM."""
+
+    def __init__(self):
+        super().__init__()
+        self.lstm = nn.LSTM(8, 4, batch_first=False)
+        self.fc = nn.Linear(4, 2)
+
+    def forward(self, x):
+        # x: (5, 3, 8) — seq_len=5, batch=3, features=8
+        # Simulate lengths: [5, 3, 2]
+        lengths = torch.tensor([5, 3, 2])
+        packed = nn.utils.rnn.pack_padded_sequence(x, lengths, enforce_sorted=True)
+        output, (_h, _c) = self.lstm(packed)
+        padded, _lens = nn.utils.rnn.pad_packed_sequence(output)
+        return self.fc(padded[-1])
+
+
+class CustomAutogradModel(nn.Module):
+    """torch.autograd.Function subclass in forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x):
+        x = self.fc(x)
+        x = _DoubleFunction.apply(x)
+        return x
+
+
+class _DoubleFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return x * 2
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output * 2
+
+
+# =============================================================================
+# Group H: Exemption Registry Stress Tests
+# =============================================================================
+
+
+class CrossEntropyModel(nn.Module):
+    """F.cross_entropy — STRUCTURAL_ARG_POSITIONS[1]."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 10)
+
+    def forward(self, x):
+        logits = self.fc(x)
+        targets = torch.zeros(logits.size(0), dtype=torch.long)
+        return torch.nn.functional.cross_entropy(logits, targets)
+
+
+class IndexSelectModel(nn.Module):
+    """torch.index_select — STRUCTURAL_ARG_POSITIONS[2]."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (5, 3)
+        idx = torch.tensor([0, 2, 4])
+        return torch.index_select(x, 0, idx)
+
+
+class InterpolateModel(nn.Module):
+    """F.interpolate with scale_factor — CUSTOM_EXEMPTION_CHECKS."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (1, 1, 4, 4)
+        return torch.nn.functional.interpolate(x, scale_factor=2, mode="nearest")
+
+
+class ForwardHooksModel(nn.Module):
+    """register_forward_hook on submodule — hooks during logging."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+        self._hook_output = None
+        self.fc.register_forward_hook(self._save_hook)
+
+    def _save_hook(self, module, input, output):
+        self._hook_output = output
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+# =============================================================================
+# Group I: Architecture Patterns (built-in, no external deps)
+# =============================================================================
+
+
+class SimpleVAE(nn.Module):
+    """Encoder→reparameterize→decoder, sampling in forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 16, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        self.fc_mu = nn.Linear(32 * 7 * 7, 16)
+        self.fc_logvar = nn.Linear(32 * 7 * 7, 16)
+        self.decoder_fc = nn.Linear(16, 32 * 7 * 7)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        h = self.encoder(x)
+        h = h.flatten(1)
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        z = mu + eps * std
+        h = self.decoder_fc(z).view(-1, 32, 7, 7)
+        return self.decoder(h)
+
+
+class SimpleGenerator(nn.Module):
+    """GAN generator: Linear→BN→ReLU→Linear→Tanh."""
+
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(100, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Linear(256, 784),
+            nn.Tanh(),
+        )
+
+    def forward(self, z):
+        return self.net(z).view(-1, 1, 28, 28)
+
+
+class SimpleDiscriminator(nn.Module):
+    """GAN discriminator: Conv→LeakyReLU→Conv→Sigmoid."""
+
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(1, 16, 3, stride=2, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(16, 32, 3, stride=2, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(32, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class SmallUNet(nn.Module):
+    """Encoder-decoder with skip connections."""
+
+    def __init__(self):
+        super().__init__()
+        self.enc1 = nn.Sequential(nn.Conv2d(1, 16, 3, padding=1), nn.ReLU())
+        self.enc2 = nn.Sequential(nn.Conv2d(16, 32, 3, padding=1), nn.ReLU())
+        self.pool = nn.MaxPool2d(2)
+        self.bottleneck = nn.Sequential(nn.Conv2d(32, 64, 3, padding=1), nn.ReLU())
+        self.up = nn.ConvTranspose2d(64, 32, 2, stride=2)
+        self.dec1 = nn.Sequential(nn.Conv2d(64, 32, 3, padding=1), nn.ReLU())
+        self.up2 = nn.ConvTranspose2d(32, 16, 2, stride=2)
+        self.dec2 = nn.Sequential(nn.Conv2d(32, 16, 3, padding=1), nn.ReLU())
+        self.out = nn.Conv2d(16, 1, 1)
+
+    def forward(self, x):
+        e1 = self.enc1(x)
+        e2 = self.enc2(self.pool(e1))
+        b = self.bottleneck(self.pool(e2))
+        d1 = self.dec1(torch.cat([self.up(b), e2], dim=1))
+        d2 = self.dec2(torch.cat([self.up2(d1), e1], dim=1))
+        return self.out(d2)
+
+
+class TemporalConvNet(nn.Module):
+    """TCN with dilated causal convolutions (dilation 1, 2, 4)."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv1d(3, 8, 3, padding=1, dilation=1)
+        self.conv2 = nn.Conv1d(8, 8, 3, padding=2, dilation=2)
+        self.conv3 = nn.Conv1d(8, 8, 3, padding=4, dilation=4)
+        self.fc = nn.Linear(8, 4)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = torch.relu(self.conv3(x))
+        return self.fc(x.mean(dim=-1))
+
+
+class ESPCNSuperRes(nn.Module):
+    """Sub-pixel convolution (nn.PixelShuffle)."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, 3, padding=1)
+        self.conv2 = nn.Conv2d(16, 4, 3, padding=1)
+        self.shuffle = nn.PixelShuffle(2)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = self.conv2(x)
+        return self.shuffle(x)
+
+
+class SimplePointNet(nn.Module):
+    """PointNet: Conv1d shared MLPs→global max pool→FC."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv1d(3, 32, 1)
+        self.conv2 = nn.Conv1d(32, 64, 1)
+        self.fc = nn.Linear(64, 10)
+
+    def forward(self, x):
+        # x: (batch, 3, num_points) = (2, 3, 128)
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = x.max(dim=-1)[0]  # global max pool
+        return self.fc(x)
+
+
+class ActorCritic(nn.Module):
+    """Shared backbone with two heads (actor+critic), multi-output."""
+
+    def __init__(self):
+        super().__init__()
+        self.backbone = nn.Sequential(nn.Linear(4, 32), nn.ReLU())
+        self.actor = nn.Linear(32, 2)
+        self.critic = nn.Linear(32, 1)
+
+    def forward(self, x):
+        h = self.backbone(x)
+        return self.actor(h), self.critic(h)
+
+
+class TwoTowerRecommender(nn.Module):
+    """Independent parallel branches with dot-product interaction."""
+
+    def __init__(self):
+        super().__init__()
+        self.user_tower = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 8))
+        self.item_tower = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 8))
+
+    def forward(self, user, item):
+        u = self.user_tower(user)
+        i = self.item_tower(item)
+        return (u * i).sum(dim=-1)
+
+
+class SimpleDepthEstimator(nn.Module):
+    """Encoder-decoder for single-channel depth prediction."""
+
+    def __init__(self):
+        super().__init__()
+        self.enc = nn.Sequential(
+            nn.Conv2d(3, 16, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        self.dec = nn.Sequential(
+            nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 1, 4, stride=2, padding=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.dec(self.enc(x))
+
+
+# =============================================================================
+# Group Z: EVIL ADVERSARIAL EDGE CASES
+# =============================================================================
+
+
+class SameTensorAllArgs(nn.Module):
+    """Z1: torch.addmm(x, x, x) — same tensor in ALL 3 arg positions.
+    Attacks parent_layer_arg_locs dedup."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (4, 4)
+        return torch.addmm(x, x, x)
+
+
+class ViewChainMutateMiddle(nn.Module):
+    """Z2: Creates 3 views, mutates MIDDLE view in-place, reads from FIRST view."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (4, 4)
+        y = x.clone()
+        v1 = y.view(2, 8)
+        v2 = y.view(4, 4)
+        _v3 = y.view(8, 2)
+        v2.fill_(0)
+        return v1.sum()
+
+
+class SelfCachingModel(nn.Module):
+    """Z4: Stores intermediate results on self.cache during forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+        self.cache = None
+
+    def forward(self, x):
+        self.cache = self.fc(x)
+        intermediate = torch.relu(self.cache)
+        return intermediate + self.cache
+
+
+class DeleteTensorMidForward(nn.Module):
+    """Z5: Creates tensor, uses it, dels it, creates new tensor."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        temp = self.fc(x)
+        result = temp * 2
+        del temp
+        other = self.fc(x + 1)
+        return result + other
+
+
+class DynamicModuleCreation(nn.Module):
+    """Z6: Creates a NEW nn.Linear INSIDE forward and uses it."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        dynamic_layer = nn.Linear(5, 5)
+        dynamic_layer.weight = self.fc.weight
+        dynamic_layer.bias = self.fc.bias
+        return dynamic_layer(x)
+
+
+class NonPersistentBuffer(nn.Module):
+    """Z8: register_buffer with persistent=False, then uses buffer in forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("buf", torch.ones(5) * 0.5, persistent=False)
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        return self.fc(x * self.buf)
+
+
+class ContiguousNoOp(nn.Module):
+    """Z9: Calls x.contiguous() on already-contiguous tensor."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 5)
+
+    def forward(self, x):
+        x = self.fc(x)
+        x = x.contiguous()
+        return x * 2
+
+
+class StackViewsOfSameTensor(nn.Module):
+    """Z10: torch.stack([x[0], x[1], x[2]]) — stacking views of same parent."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # x: (4, 4) — stack first 3 rows
+        return torch.stack([x[0], x[1], x[2]])
+
+
+class SaturatedSoftmax(nn.Module):
+    """Z13: F.softmax(x * 1000) — extreme values saturate softmax."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x):
+        x = self.fc(x)
+        return torch.nn.functional.softmax(x * 1000, dim=-1)
+
+
+class DuplicateValueParents(nn.Module):
+    """Z15: Two DIFFERENT parent tensors with IDENTICAL values."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        a = torch.full_like(x, 0.5)
+        b = torch.full_like(x, 0.5)
+        return x * a + x * b
+
+
+class EmptyTensorChain(nn.Module):
+    """Z16: Operations on empty tensors (numel==0)."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        empty = x[:0]  # empty tensor
+        reshaped = empty.reshape(0, x.size(1))
+        unsqueezed = reshaped.unsqueeze(0)
+        # Return something non-empty so the model has an output
+        return x.sum() + unsqueezed.sum()
+
+
+class ClampNarrowRange(nn.Module):
+    """Z17: torch.clamp(x, 0.499, 0.501) — perturbation lands in same range."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        return torch.clamp(x, 0.499, 0.501)
+
+
+class RoundNearIntegers(nn.Module):
+    """Z18: torch.round(x) where input is near-integer values."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        # Scale to near-integers
+        near_int = x * 0.0001 + torch.arange(x.numel(), dtype=x.dtype).reshape(x.shape)
+        return torch.round(near_int)
+
+
+class BoolCastExploit(nn.Module):
+    """Z19: (x > 0).long() * 10 — bool intermediate cast to long."""
+
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def forward(x):
+        mask = (x > 0).long()
+        return mask * 10
+
+
+class FakeLoopSameOpType(nn.Module):
+    """Z20: relu→matmul→relu→matmul alternating ops that look like a loop but aren't."""
+
+    def __init__(self):
+        super().__init__()
+        self.w1 = nn.Parameter(torch.randn(4, 4))
+        self.w2 = nn.Parameter(torch.randn(4, 4))
+
+    def forward(self, x):
+        a = torch.relu(x)
+        b = torch.matmul(a, self.w1)
+        c = torch.relu(b + 1)  # different args — not a loop
+        d = torch.matmul(c, self.w2)  # different weight
+        return d
+
+
+class AutocastMidForward(nn.Module):
+    """Z22: torch.amp.autocast('cpu') context wrapping part of forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        with torch.amp.autocast("cpu"):
+            x = self.fc2(x)
+        return x
