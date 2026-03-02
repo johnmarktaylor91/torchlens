@@ -37,11 +37,13 @@ def _getitem_after_pass(self, ix):
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
         return self._module_logs[ix]
 
-    keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
-    if len(keys_with_substr) == 1:
-        return self.layer_dict_all_keys[keys_with_substr[0]]
+    if not isinstance(ix, int):
+        keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
+        if len(keys_with_substr) == 1:
+            return self.layer_dict_all_keys[keys_with_substr[0]]
 
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
+    raise KeyError(ix)
 
 
 def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
@@ -60,13 +62,6 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
 
     if type(key) != str:
         raise ValueError(_get_lookup_help_str(self, key, mode))
-
-    if hasattr(self, "_module_logs") and key in self._module_logs:
-        module_num_passes = self._module_logs[key].num_passes
-        raise ValueError(
-            f"You specified output of module {key}, but it has {module_num_passes} passes; "
-            f"please specify e.g. {key}:2 for the second pass of {key}."
-        )
 
     if hasattr(self, "_module_logs") and key.split(":")[0] in self._module_logs:
         module, pass_num = key.split(":", 1)
@@ -131,7 +126,7 @@ def _str_after_pass(self) -> str:
     if len(self.buffer_layers) > 0:
         s += f"\n\t\t- contains {len(self.buffer_layers)} buffer layers"
 
-    s += f"\n\t\t- {len(self.modules) - 1} total modules"  # -1 to exclude root "self"
+    s += f"\n\t\t- {max(0, len(self.modules) - 1)} total modules"  # -1 to exclude root "self"
 
     # Model tensors:
 
@@ -216,8 +211,12 @@ def pretty_print_list_w_line_breaks(lst, indent_chars: str, line_break_every=5):
 
 def _get_lookup_help_str(self, layer_label: Union[int, str], mode: str) -> str:
     """Generates a help string to be used in error messages when indexing fails."""
-    sample_layer1 = random.choice(self.layer_labels_w_pass)
-    sample_layer2 = random.choice(self.layer_labels_no_pass)
+    if not self.layer_labels_w_pass:
+        sample_layer1 = "conv2d_1_1:1"
+        sample_layer2 = "conv2d_1_1"
+    else:
+        sample_layer1 = random.choice(self.layer_labels_w_pass)
+        sample_layer2 = random.choice(self.layer_labels_no_pass)
     module_addrs = [ml.address for ml in self.modules if ml.address != "self"]
     if len(module_addrs) > 0:
         sample_module1 = random.choice(module_addrs)

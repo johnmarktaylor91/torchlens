@@ -43,6 +43,8 @@ class FuncCallLocation:
         return "\n".join(lines)
 
     def __getitem__(self, i: Union[int, slice]) -> Union[str, List[str]]:
+        if self.code_context is None:
+            raise IndexError("code_context is None (source unavailable)")
         return self.code_context[i]
 
     def __len__(self) -> int:

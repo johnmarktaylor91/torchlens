@@ -829,7 +829,7 @@ def _check_whether_to_mark_arguments_on_edge(
             self, child_node, show_buffer_layers
         )
     elif isinstance(child_node, RolledTensorLog):
-        return _check_whether_to_mark_arguments_on_rolled_edge(self, child_node)
+        return _check_whether_to_mark_arguments_on_rolled_edge(self, child_node, show_buffer_layers)
 
 
 def _check_whether_to_mark_arguments_on_unrolled_edge(

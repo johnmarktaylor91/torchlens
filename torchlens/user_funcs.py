@@ -307,21 +307,24 @@ def show_model_graph(
         save_gradients=False,
         random_seed=random_seed,
     )
-    model_log.render_graph(
-        vis_opt,
-        vis_nesting_depth,
-        vis_outpath,
-        vis_graph_overrides,
-        vis_node_overrides,
-        vis_nested_node_overrides,
-        vis_edge_overrides,
-        vis_gradient_edge_overrides,
-        vis_module_overrides,
-        save_only,
-        vis_fileformat,
-        vis_buffer_layers,
-        vis_direction,
-    )
+    try:
+        model_log.render_graph(
+            vis_opt,
+            vis_nesting_depth,
+            vis_outpath,
+            vis_graph_overrides,
+            vis_node_overrides,
+            vis_nested_node_overrides,
+            vis_edge_overrides,
+            vis_gradient_edge_overrides,
+            vis_module_overrides,
+            save_only,
+            vis_fileformat,
+            vis_buffer_layers,
+            vis_direction,
+        )
+    finally:
+        model_log.cleanup()
 
 
 def validate_saved_activations(
@@ -386,12 +389,13 @@ def validate_saved_activations(
         save_function_args=True,
         random_seed=random_seed,
     )
-    activations_are_valid = model_log.validate_saved_activations(
-        ground_truth_output_tensors, verbose
-    )
-
-    model_log.cleanup()
-    del model_log
+    try:
+        activations_are_valid = model_log.validate_saved_activations(
+            ground_truth_output_tensors, verbose
+        )
+    finally:
+        model_log.cleanup()
+        del model_log
     return activations_are_valid
 
 

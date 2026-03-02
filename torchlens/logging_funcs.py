@@ -68,6 +68,8 @@ def save_new_activations(
     # Reset relevant fields.
     self.layers_with_saved_activations = []
     self.layers_with_saved_gradients = []
+    self.has_saved_gradients = False
+    self.unlogged_layers = []
     self.num_tensors_saved = 0
     self.tensor_fsize_saved = 0
     self._tensor_counter = 0
@@ -856,7 +858,6 @@ def _log_info_specific_to_single_function_output_tensor(
     fields_dict["layer_type"] = layer_type
     fields_dict["layer_label_raw"] = tensor_label_raw
     fields_dict["layer_type_num"] = layer_type_num
-    fields_dict["pass_num"] = 1
     fields_dict["layer_passes_total"] = 1
     fields_dict["lookup_keys"] = []
 

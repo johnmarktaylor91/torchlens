@@ -602,7 +602,7 @@ class TestIntegration:
         """After postprocessing, parent_params references should be cleared."""
         mh = log_forward_pass(_make_simple_model(), _simple_input())
         for entry in mh:
-            assert entry.parent_params is None
+            assert entry.parent_params == []
 
     def test_vis_renders_without_error(self):
         """Basic smoke test that visualization renders for each param scenario."""

@@ -117,7 +117,6 @@ ZERO_FLOPS_OPS = {
     "clone",
     "detach",
     "detach_",
-    "contiguous",
     "copy_",
     # Indexing / gathering (memory access, not arithmetic)
     "__getitem__",

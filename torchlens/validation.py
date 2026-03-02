@@ -240,7 +240,7 @@ def _check_arglocs_correct_for_arg(
     else:
         parent_activations = parent_layer.tensor_contents
 
-    if type(saved_arg_val) == torch.Tensor:
+    if isinstance(saved_arg_val, torch.Tensor):
         parent_layer_matches_arg = tensor_nanequal(
             saved_arg_val, parent_activations, allow_tolerance=False
         )
@@ -316,7 +316,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if (
         perturb
         and (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and isinstance(layer_to_validate_parents_for.creation_args[1], torch.Tensor)
         and torch.equal(
             self[layers_to_perturb[0]].tensor_contents,
             layer_to_validate_parents_for.creation_args[1],
@@ -337,7 +337,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     elif (
         perturb
         and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and isinstance(layer_to_validate_parents_for.creation_args[1], torch.Tensor)
         and (layer_to_validate_parents_for.creation_args[1].dtype == torch.bool)
         and torch.equal(
             self[layers_to_perturb[0]].tensor_contents,
@@ -358,7 +358,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         perturb
         and (layer_to_validate_parents_for.func_applied_name == "__setitem__")
         and (type(layer_to_validate_parents_for.creation_args[1]) == tuple)
-        and (type(layer_to_validate_parents_for.creation_args[1][0]) == torch.Tensor)
+        and isinstance(layer_to_validate_parents_for.creation_args[1][0], torch.Tensor)
         and (layer_to_validate_parents_for.creation_args[1][0].dtype == torch.bool)
         and torch.equal(
             self[layers_to_perturb[0]].tensor_contents,
@@ -396,7 +396,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                 layer_to_validate_parents_for.creation_args[2][1],
             )
             or (
-                (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+                isinstance(layer_to_validate_parents_for.creation_args[1], torch.Tensor)
                 and torch.equal(
                     self[layers_to_perturb[0]].tensor_contents,
                     layer_to_validate_parents_for.creation_args[1],
@@ -579,12 +579,12 @@ def _prepare_input_args_for_validating_layer(
 def _copy_validation_args(input_args: Dict):
     new_args = []
     for i, val in enumerate(input_args["args"]):
-        if type(val) == torch.Tensor:
+        if isinstance(val, torch.Tensor):
             new_args.append(val.detach().clone())
         elif type(val) in [list, tuple, set]:
             new_iter = []
             for i2, val2 in enumerate(val):
-                if type(val2) == torch.Tensor:
+                if isinstance(val2, torch.Tensor):
                     new_iter.append(val2.detach().clone())
                 else:
                     new_iter.append(val2)
@@ -595,12 +595,12 @@ def _copy_validation_args(input_args: Dict):
 
     new_kwargs = {}
     for key, val in input_args["kwargs"].items():
-        if type(val) == torch.Tensor:
+        if isinstance(val, torch.Tensor):
             new_kwargs[key] = val.detach().clone()
         elif type(val) in [list, tuple, set]:
             new_iter = []
             for i2, val2 in enumerate(val):
-                if type(val2) == torch.Tensor:
+                if isinstance(val2, torch.Tensor):
                     new_iter.append(val2.detach().clone())
                 else:
                     new_iter.append(val2)
@@ -667,11 +667,11 @@ def _perturb_layer_activations(
                 0, 2, size=parent_activations.shape, device=device
             ).bool()
     else:
-        mean_output = output_activations.detach().float().abs().mean()
-        mean_output += torch.rand(mean_output.shape, device=mean_output.device) * 100
-        mean_output *= torch.rand(mean_output.shape, device=mean_output.device)
-        mean_output.requires_grad = False
-        scale = mean_output.to(device)
+        output_std = output_activations.detach().float().abs().mean()
+        output_std += torch.rand(output_std.shape, device=output_std.device) * 100
+        output_std *= torch.rand(output_std.shape, device=output_std.device)
+        output_std.requires_grad = False
+        scale = output_std.to(device)
         if parent_activations.is_complex():
             perturbed_activations = torch.complex(
                 torch.randn(parent_activations.shape, device=device) * scale,
@@ -710,12 +710,12 @@ def _posthoc_perturb_check(
     elif (
         (layer_to_validate_parents_for.func_applied_name == "to")
         and (len(layer_to_validate_parents_for.creation_args) > 1)
-        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and isinstance(layer_to_validate_parents_for.creation_args[1], torch.Tensor)
     ):
         return True
     elif (
         (layer_to_validate_parents_for.func_applied_name == "__setitem__")
-        and (type(layer_to_validate_parents_for.creation_args[2]) == torch.Tensor)
+        and isinstance(layer_to_validate_parents_for.creation_args[2], torch.Tensor)
         and (
             layer_to_validate_parents_for.creation_args[0].shape
             == layer_to_validate_parents_for.creation_args[2].shape
@@ -746,7 +746,7 @@ def _posthoc_perturb_check(
         return True
     elif (
         (layer_to_validate_parents_for.func_applied_name == "__getitem__")
-        and (type(layer_to_validate_parents_for.creation_args[1]) == torch.Tensor)
+        and isinstance(layer_to_validate_parents_for.creation_args[1], torch.Tensor)
         and (len(layer_to_validate_parents_for.creation_args[1].unique()) < 20)
     ):
         return True
@@ -802,7 +802,7 @@ def _posthoc_perturb_check(
 
 def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]):
     # If it's one of the other arguments, check if it's all zeros or all ones:
-    if type(val) != torch.Tensor:
+    if not isinstance(val, torch.Tensor):
         try:
             val = torch.tensor(val)
         except (TypeError, ValueError, RuntimeError):

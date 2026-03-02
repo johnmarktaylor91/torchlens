@@ -557,7 +557,7 @@ class RolledTensorLog:
             if self.input_output_address[-1] == ".":
                 self.input_output_address = self.input_output_address[:-1]
             if self.input_output_address[-1] == "*":
-                self.input_output_address = self.input_output_address.strip("*") + "*"
+                self.input_output_address = self.input_output_address.rstrip("*") + "*"
 
     def add_pass_info(self, source_node: TensorLog):
         """Adds information about another pass of the same layer: namely, mark information about what the

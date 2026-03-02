@@ -531,11 +531,7 @@ def restore_module_attributes(
     for attribute_name, attr in iter_accessible_attributes(
         module, short_circuit=del_attrs_with_prefix
     ):
-        if (
-            isinstance(attr, Callable)
-            and (attr in decorated_func_mapper)
-            and (attribute_name[0:2] != "__")
-        ):
+        if callable(attr) and (attr in decorated_func_mapper) and (attribute_name[0:2] != "__"):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 setattr(module, attribute_name, decorated_func_mapper[attr])
