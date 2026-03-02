@@ -1,6 +1,28 @@
 # CHANGELOG
 
 
+## v0.11.0 (2026-03-02)
+
+### Features
+
+- **core**: Permanent toggle-gated decoration of torch functions
+  ([`cbeaa83`](https://github.com/johnmarktaylor91/torchlens/commit/cbeaa83aa08098ea721e319a2f1af9a559279892))
+
+Replace the per-call decorate/undecorate cycle (~2000 torch functions) with one-time permanent
+  decoration at import time. A single boolean toggle (_state._logging_enabled) gates whether
+  wrappers log or pass through, eliminating repeated overhead and fixing detached import blindness
+  (e.g. `from torch import cos`).
+
+Key changes: - New _state.py: global toggle, active_logging/pause_logging context managers -
+  decorate_all_once(): one-time decoration with JIT builtin table registration -
+  patch_detached_references(): sys.modules crawl for detached imports - Split model prep:
+  _prepare_model_once (WeakSet) + _prepare_model_session - Delete clean_* escape hatches;
+  safe_copy/safe_to use pause_logging() - Fix tensor_log.py activation_postfunc exception-safety bug
+  (#89) - Fix GC issues: closures no longer capture ModelLog (GC-6, GC-7)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.10.1 (2026-03-02)
 
 ### Bug Fixes
