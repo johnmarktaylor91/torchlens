@@ -33,6 +33,10 @@ def _getitem_after_pass(self, ix):
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
 
+    # Check if it's a module address or pass notation → return ModuleLog/ModulePassLog
+    if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
+        return self._module_logs[ix]
+
     keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
     if len(keys_with_substr) == 1:
         return self.layer_dict_all_keys[keys_with_substr[0]]

@@ -1,3 +1,4 @@
+import inspect
 import warnings
 from functools import wraps
 from typing import Callable, Dict, List, TYPE_CHECKING
@@ -43,9 +44,23 @@ def prepare_model(
 
     module_stack = [(model, "")]  # list of tuples (name, module)
 
+    # Track module objects we've already seen (for detecting reuse / multiple addresses)
+    _seen_module_ids = {}  # id(module) -> primary address
+
     while len(module_stack) > 0:
         module, parent_address = module_stack.pop()
         module_children = list(module.named_children())
+
+        # Capture module metadata before anything else (module objects are cleaned up
+        # in cleanup_model() BEFORE postprocessing, so we must capture here).
+        _capture_module_metadata(
+            model_log,
+            module,
+            parent_address,
+            module_children,
+            _seen_module_ids,
+            is_root=(module == model),
+        )
 
         # Decorate any torch functions in the model:
         for func_name, func in module.__dict__.items():
@@ -138,6 +153,119 @@ def prepare_model(
     prepare_buffer_tensors(model_log, model)
 
 
+def _capture_module_metadata(
+    model_log: "ModelLog",
+    module: nn.Module,
+    parent_address: str,
+    module_children: list,
+    seen_module_ids: dict,
+    is_root: bool = False,
+):
+    """Capture live module metadata during prepare_model(), before cleanup strips tl_* attrs.
+
+    Stores metadata in model_log._module_metadata[address].
+    """
+    address = "self" if is_root else parent_address
+
+    # Detect module reuse (same object under multiple addresses)
+    mid = id(module)
+    if mid in seen_module_ids:
+        primary = seen_module_ids[mid]
+        if primary in model_log._module_metadata:
+            model_log._module_metadata[primary]["all_addresses"].append(address)
+        return
+    seen_module_ids[mid] = address
+
+    meta = {}
+    meta["module_class_name"] = type(module).__name__
+    meta["all_addresses"] = [address]
+
+    # Source info — best-effort, some modules won't have inspectable source
+    try:
+        meta["source_file"] = inspect.getfile(type(module))
+    except (TypeError, OSError):
+        meta["source_file"] = None
+    try:
+        _, line = inspect.getsourcelines(type(module))
+        meta["source_line"] = line
+    except (TypeError, OSError):
+        meta["source_line"] = None
+
+    meta["class_docstring"] = type(module).__doc__
+
+    try:
+        meta["init_signature"] = str(inspect.signature(type(module).__init__))
+    except (ValueError, TypeError):
+        meta["init_signature"] = None
+    meta["init_docstring"] = getattr(type(module).__init__, "__doc__", None)
+
+    try:
+        meta["forward_signature"] = str(inspect.signature(module.forward))
+    except (ValueError, TypeError):
+        meta["forward_signature"] = None
+    meta["forward_docstring"] = getattr(module.forward, "__doc__", None)
+
+    # Hooks
+    meta["has_forward_hooks"] = bool(module._forward_hooks)
+    meta["has_backward_hooks"] = bool(module._backward_hooks)
+
+    # Training mode
+    meta["training_mode"] = module.training
+
+    # Address children (from named_children at this point in traversal)
+    child_addresses = []
+    for child_name, _ in module_children:
+        if is_root:
+            child_addresses.append(child_name)
+        else:
+            child_addresses.append(f"{parent_address}.{child_name}")
+    meta["address_children"] = child_addresses
+
+    # Extra attributes: non-dunder, non-private, non-method, non-PyTorch-internal
+    _pytorch_internal = {
+        "_parameters",
+        "_buffers",
+        "_modules",
+        "_backward_hooks",
+        "_backward_pre_hooks",
+        "_forward_hooks",
+        "_forward_pre_hooks",
+        "_state_dict_hooks",
+        "_load_state_dict_pre_hooks",
+        "_load_state_dict_post_hooks",
+        "_non_persistent_buffers_set",
+        "training",
+        "T_destination",
+        "dump_patches",
+        "call_super_init",
+    }
+    extra_attrs = {}
+    user_methods = []
+    nn_module_attrs = set(dir(nn.Module))
+    for attr_name in dir(module):
+        if attr_name.startswith("_"):
+            continue
+        if attr_name.startswith("tl_"):
+            continue
+        if attr_name in _pytorch_internal:
+            continue
+        try:
+            val = getattr(module, attr_name)
+        except Exception:
+            continue
+        if callable(val):
+            # Only capture methods defined on the subclass (not inherited from nn.Module)
+            if attr_name not in nn_module_attrs:
+                user_methods.append(attr_name)
+        else:
+            if attr_name not in nn_module_attrs:
+                extra_attrs[attr_name] = val
+    meta["extra_attributes"] = extra_attrs
+    meta["methods"] = user_methods
+
+    model_log._module_metadata[address] = meta
+
+
 def prepare_buffer_tensors(model_log, model: nn.Module):
     """Goes through a model and all its submodules, and prepares any "buffer" tensors: tensors
     attached to the module that aren't model parameters.
@@ -192,6 +320,10 @@ def module_forward_decorator(model_log, orig_forward: Callable, module: nn.Modul
         module.tl_module_pass_num += 1
         module_pass_label = (module_address, module.tl_module_pass_num)
         module.tl_module_pass_labels.append(module_pass_label)
+
+        # Capture forward args/kwargs for this pass (consumed by _build_module_logs)
+        model_log._module_forward_args[(module_address, module.tl_module_pass_num)] = (args, kwargs)
+
         input_tensors = get_vars_of_type_from_obj(
             [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
         )
