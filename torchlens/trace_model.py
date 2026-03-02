@@ -24,7 +24,7 @@ from .interface import _give_user_feedback_about_lookup_key
 
 
 def _get_input_arg_names(model, input_args):
-    input_arg_names = inspect.getfullargspec(model.forward).args
+    input_arg_names = list(inspect.getfullargspec(model.forward).args)
     if "self" in input_arg_names:
         input_arg_names.remove("self")
     input_arg_names = input_arg_names[0 : len(input_args)]
@@ -33,7 +33,7 @@ def _get_input_arg_names(model, input_args):
 
 def _get_op_nums_from_user_labels(
     self: "ModelLog", which_layers: Union[str, List[Union[str, int]]]
-) -> List[int]:
+) -> Union[List[int], str]:
     """Given list of user layer labels, returns the original tensor numbers for those labels (i.e.,
     the numbers that were generated on the fly during the forward pass, such that they can be
     saved on a subsequent pass). Raises an error if the user's labels don't correspond to any layers.
@@ -61,7 +61,7 @@ def _get_op_nums_from_user_labels(
             continue
 
         # If not, pull out all layers for which the key is a substring.
-        keys_with_substr = [key for key in self.layer_dict_all_keys if layer_key in str(key)]
+        keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
                 raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
@@ -270,6 +270,8 @@ def run_and_log_inputs_through_model(
         decorated_func_mapper.clear()
 
     except Exception as e:  # if anything fails, make sure everything gets cleaned up
+        self._track_tensors = False
+        self._pause_logging = False
         undecorate_pytorch(torch, orig_func_defs, input_tensors)
         self._cleanup_model(model, module_orig_forward_funcs, decorated_func_mapper)
         print(

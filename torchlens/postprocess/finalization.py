@@ -73,7 +73,7 @@ def _finalize_param_logs(self: "ModelLog"):
 
     # Clear actual Parameter tensor references from TensorLogEntries to save memory
     for tensor_entry in self.layer_list:
-        tensor_entry.parent_params = None
+        tensor_entry.parent_params = []
 
 
 def _build_module_logs(self: "ModelLog"):
