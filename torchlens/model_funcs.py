@@ -116,6 +116,7 @@ def _prepare_model_session(
     creates ParamLog objects, and tags buffer tensors.
     """
     _module_class_metadata_cache.clear()
+    _state._dir_cache.clear()
     model_log.model_name = str(type(model).__name__)
     model.tl_source_model_log = model_log
 

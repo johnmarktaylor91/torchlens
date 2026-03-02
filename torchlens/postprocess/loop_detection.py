@@ -1,5 +1,6 @@
 """Step 8: Loop detection, isomorphic subgraph expansion, and layer assignment."""
 
+import heapq
 import itertools as it
 from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
@@ -50,16 +51,18 @@ def _detect_and_label_loops(self):
     assigned is equal to the number of operations of that type. If so, it's definitely found everything;
     if not, it runs the procedure again to check if more equivalent operations can be found.
     """
-    node_stack = deque(
-        sorted(
-            self.input_layers + self.internally_initialized_layers,
-            key=lambda x: self[x].realtime_tensor_num,
-        )
-    )
+    # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
+    _sort_keys = {label: self[label].realtime_tensor_num for label in self._raw_tensor_labels_list}
+
+    initial_labels = self.input_layers + self.internally_initialized_layers
+    node_heap = [(_sort_keys[label], label) for label in initial_labels]
+    heapq.heapify(node_heap)
+    heap_seen = set(initial_labels)
+
     operation_equivalence_types_seen = set()
-    while node_stack:
+    while node_heap:
         # Grab the earliest node in the stack, add its children in sorted order to the stack in advance.
-        node_label = node_stack.popleft()
+        _, node_label = heapq.heappop(node_heap)
         node = self[node_label]
         node_operation_equivalence_type = node.operation_equivalence_type
 
@@ -68,8 +71,10 @@ def _detect_and_label_loops(self):
             continue
         operation_equivalence_types_seen.add(node_operation_equivalence_type)
         for equiv_op in node.equivalent_operations:
-            node_stack.extend(self[equiv_op].child_layers)
-        node_stack = deque(sorted(node_stack, key=lambda x: self[x].realtime_tensor_num))
+            for child in self[equiv_op].child_layers:
+                if child not in heap_seen:
+                    heap_seen.add(child)
+                    heapq.heappush(node_heap, (_sort_keys[child], child))
 
         # If no equivalent operations for this node, skip it; it's the only operation for this "layer"
         if len(node.equivalent_operations) == 1:
