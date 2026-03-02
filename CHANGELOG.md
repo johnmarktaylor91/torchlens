@@ -1,6 +1,109 @@
 # CHANGELOG
 
 
+## v0.10.1 (2026-03-02)
+
+### Bug Fixes
+
+- **core**: Fix one-liners and small guard additions across codebase
+  ([`3d1591b`](https://github.com/johnmarktaylor91/torchlens/commit/3d1591b003675d91191e7a0abc728ad5eb562fae))
+
+- Remove duplicate "contiguous" from ZERO_FLOPS_OPS (flops.py) - Fix strip("*") → rstrip("*") to
+  avoid stripping leading chars (tensor_log.py) - Fix return type annotation to include str return
+  (trace_model.py) - Replace isinstance(attr, Callable) with callable(attr) (model_funcs.py) -
+  Remove dead pass_num=1 overwrite of parameterized value (logging_funcs.py) - Fix
+  parent_params=None → [] for consistency (finalization.py) - Add int key guard in
+  _getitem_after_pass (interface.py) - Add max(0, ...) guard for empty model module count
+  (interface.py) - Add empty list guard in _get_lookup_help_str (interface.py) - Add explicit
+  KeyError raise for failed lookups (interface.py) - Remove dead unreachable module address check
+  (interface.py) - Add str() cast for integer layer keys (trace_model.py) - Add list() copy to
+  prevent getfullargspec mutation (trace_model.py) - Reset has_saved_gradients and unlogged_layers
+  in save_new_activations (logging_funcs.py)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **misc**: Fix decoration, param detection, vis forwarding, and guards
+  ([`4269c4d`](https://github.com/johnmarktaylor91/torchlens/commit/4269c4d35beeabf54468fbc99b083290e830ff98))
+
+- Remove dead double-decoration guard in decorate_torch.py - Add hasattr guard for torch.identity
+  installation - Add None guard for code_context in FuncCallLocation.__getitem__ - Fix is_quantized
+  to check actual qint dtypes, not all non-float - Forward show_buffer_layers to rolled edge check
+  in vis.py
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **safety**: Add try/finally cleanup and exception state resets
+  ([`c9bdb7f`](https://github.com/johnmarktaylor91/torchlens/commit/c9bdb7fc354c0b44f3cfcf6bde17e623a3b6f6db))
+
+- Wrap validate_saved_activations in try/finally for cleanup (user_funcs.py) - Wrap show_model_graph
+  render_graph in try/finally with cleanup (user_funcs.py) - Reset _track_tensors and _pause_logging
+  in exception handler (trace_model.py) - Update test to expect [] instead of None for cleared
+  parent_params
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Fix isinstance checks and misleading variable name
+  ([`581f286`](https://github.com/johnmarktaylor91/torchlens/commit/581f286fc7c25f50b8b82b44d1f3fcbe03b4f01c))
+
+- Replace type(val) == torch.Tensor with isinstance() (12 occurrences) - Rename mean_output to
+  output_std for accuracy
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **postprocess**: Split monolithic postprocess.py into thematic package
+  ([`cd14d27`](https://github.com/johnmarktaylor91/torchlens/commit/cd14d2744ea60db3a911905c377fc6c52123a1cc))
+
+Break 2,115-line postprocess.py into a postprocess/ package with 5 modules: - graph_traversal.py:
+  Steps 1-4 (output nodes, ancestry, orphans, distances) - control_flow.py: Steps 5-7 (conditional
+  branches, module fixes, buffers) - loop_detection.py: Step 8 (loop detection, isomorphic subgraph
+  expansion) - labeling.py: Steps 9-12 (label mapping, final info, renaming, cleanup) -
+  finalization.py: Steps 13-18 (undecoration, timing, params, modules, finish)
+
+No behavioral changes — pure file reorganization.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **aesthetic**: Add aesthetic testing infrastructure for visual inspection
+  ([`73cdf01`](https://github.com/johnmarktaylor91/torchlens/commit/73cdf017c29f2385cebb721e7b08b88177807365))
+
+Add regenerable human-inspectable outputs in tests/test_outputs/: - Comprehensive text report
+  (aesthetic_report.txt) covering all user-facing reprs, accessors, DataFrames, error messages, and
+  field dumps for every major data structure (ModelLog, TensorLog, RolledTensorLog, ModuleLog,
+  ModulePassLog, ParamLog, ModuleAccessor, ParamAccessor) - 28 visualization PDFs exercising nesting
+  depth, rolled/unrolled views, buffer visibility, graph direction, frozen params, and loop
+  detection - 6 new aesthetic test models (AestheticDeepNested, AestheticSharedModule,
+  AestheticBufferBranch, AestheticKitchenSink, AestheticFrozenMix) - Rename visualization_outputs/ →
+  test_outputs/ for cleaner structure
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **aesthetic**: Add gradient visualization coverage
+  ([`085dcd9`](https://github.com/johnmarktaylor91/torchlens/commit/085dcd9caf95b1ca364f83a7f97bd020f611c521))
+
+Add gradient backward arrows (blue edges) to aesthetic testing: - New _vis_gradient helper using
+  log_forward_pass(save_gradients=True) + backward() - 5 gradient vis PDFs: deep nested, frozen mix,
+  kitchen sink (various configs) - Gradient section (G) in text report: TensorLog/ParamLog grad
+  fields, frozen contrast - GRADIENT_VIS_GALLERY integrated into LaTeX PDF report as Section 3
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **aesthetic**: Add LaTeX PDF report with embedded visualizations
+  ([`d101326`](https://github.com/johnmarktaylor91/torchlens/commit/d101326906573b95d62f5d518b13ee4be7025cb9))
+
+Generate a comprehensive PDF report (aesthetic_report.pdf) alongside the text report, with: -
+  tcolorbox-formatted sections for each model's outputs - Full field dumps for all data structures -
+  All 28 visualization PDFs embedded inline with captions - Table of contents, figure numbering,
+  proper typography - Skips gracefully if pdflatex not installed
+
+Also saves the .tex source for customization.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.10.0 (2026-03-02)
 
 ### Features
