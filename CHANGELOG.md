@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.12.0 (2026-03-02)
+
+### Features
+
+- **data_classes**: Add BufferLog subclass and BufferAccessor for first-class buffer support
+  ([`5a9b4c6`](https://github.com/johnmarktaylor91/torchlens/commit/5a9b4c6bc7079176eaa4b259144b7316ef13699c))
+
+Buffers now get their own dedicated class (BufferLog) that subclasses TensorLog, giving them focused
+  repr, convenience properties (name, module_address), and ergonomic access via BufferAccessor on
+  both ModelLog and ModuleLog.
+
+- BufferLog(TensorLog) subclass with clean __repr__ and computed properties - BufferAccessor with
+  indexing by address, short name, or ordinal position - Scoped mh.modules["addr"].buffers for
+  per-module buffer access - Fix vis.py type(node) == TensorLog checks to use isinstance (supports
+  subclasses) - Fix TensorLog.copy() to preserve subclass type via type(self)(fields_dict) - Fix
+  cleanup.py property-before-callable check order to prevent AttributeError - Add buffer repr
+  sections to aesthetic test reports (text + PDF)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.11.2 (2026-03-02)
 
 ### Performance Improvements
