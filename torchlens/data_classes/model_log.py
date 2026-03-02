@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from ..cleanup import _remove_log_entry, cleanup
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
-from ..decorate_torch import decorate_pytorch
 from ..helper_funcs import (
     human_readable_size,
 )
@@ -19,7 +18,6 @@ from ..interface import (
     print_all_fields,
 )
 from ..logging_funcs import save_new_activations
-from ..model_funcs import cleanup_model, prepare_model
 from ..postprocess import postprocess
 from .tensor_log import RolledTensorLog, TensorLog
 from ..trace_model import run_and_log_inputs_through_model
@@ -53,9 +51,7 @@ class ModelLog:
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
         self._pass_finished = False
-        self._track_tensors = False
         self.logging_mode = "exhaustive"
-        self._pause_logging = False
         self._all_layers_logged = False
         self._all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
@@ -170,9 +166,6 @@ class ModelLog:
         self.elapsed_time_function_calls: float = 0
         self.elapsed_time_torchlens_logging: float = 0
 
-        # Reference info
-        self.func_argnames: Dict[str, tuple] = defaultdict(lambda: tuple([]))
-
     # ********************************************
     # ************ Built-in Methods **************
     # ********************************************
@@ -285,8 +278,5 @@ class ModelLog:
     validate_saved_activations = validate_saved_activations
     cleanup = cleanup
     _postprocess = postprocess
-    _decorate_pytorch = decorate_pytorch
-    _prepare_model = prepare_model
-    _cleanup_model = cleanup_model
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
     _remove_log_entry = _remove_log_entry

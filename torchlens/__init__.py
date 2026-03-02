@@ -12,3 +12,12 @@ from .user_funcs import (
 from .data_classes.model_log import ModelLog
 from .data_classes.tensor_log import TensorLog, RolledTensorLog
 from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog
+
+# One-time decoration of all torch functions.
+# After this, all torch functions are permanently wrapped with toggle-gated
+# wrappers that pass through when _state._logging_enabled is False.
+# JIT builtins are registered so torch.jit.script still works.
+from .decorate_torch import decorate_all_once, patch_detached_references
+
+decorate_all_once()
+patch_detached_references()

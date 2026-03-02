@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING, List
 
 import torch
 
+from .._state import pause_logging
 from ..helper_funcs import (
-    clean_to,
     human_readable_size,
     identity,
     log_current_rng_states,
     safe_copy,
+    safe_to,
     tensor_nanequal,
     _get_func_call_stack,
 )
@@ -121,13 +122,10 @@ def _add_output_layers(
         if output_node.has_saved_activations:
             actual_output = safe_copy(output_tensors[i])
             if output_node.output_device not in [str(actual_output.device), "same"]:
-                actual_output = clean_to(actual_output, output_node.output_device)
+                actual_output = safe_to(actual_output, output_node.output_device)
             if self.activation_postfunc is not None:
-                self._pause_logging = True
-                try:
+                with pause_logging():
                     actual_output = self.activation_postfunc(actual_output)
-                finally:
-                    self._pause_logging = False
             if not tensor_nanequal(actual_output, output_node.tensor_contents):
                 output_node.children_tensor_versions[new_output_node.tensor_label_raw] = (
                     actual_output

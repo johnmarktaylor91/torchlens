@@ -432,7 +432,9 @@ def log_function_output_tensors_exhaustive(
     fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)
     fields_dict["func_time_elapsed"] = func_time_elapsed
     fields_dict["func_rng_states"] = func_rng_states
-    fields_dict["func_argnames"] = self.func_argnames[func_name.strip("_")]
+    from . import _state as _st
+
+    fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())
     fields_dict["num_func_args_total"] = len(args) + len(kwargs)
     fields_dict["num_position_args"] = len(args)
     fields_dict["num_keyword_args"] = len(kwargs)

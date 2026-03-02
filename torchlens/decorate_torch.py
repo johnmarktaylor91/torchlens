@@ -1,4 +1,5 @@
 import inspect
+import sys
 import time
 import types
 import warnings
@@ -7,6 +8,7 @@ from typing import Callable, Dict, List, TYPE_CHECKING, Tuple
 
 import torch
 
+from . import _state
 from .constants import ORIG_TORCH_FUNCS
 from .helper_funcs import (
     get_vars_of_type_from_obj,
@@ -26,29 +28,41 @@ funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 print_funcs = ["__repr__", "__str__", "_str"]
 
 
-def torch_func_decorator(self, func: Callable, func_name: str):
+def torch_func_decorator(func: Callable, func_name: str):
+    """Wrap a torch function with toggle-gated logging.
+
+    When ``_state._logging_enabled`` is False, the wrapper is a near-noop
+    (one bool check).  When True, it logs all tensor outputs into the
+    active ModelLog.
+    """
+
     @wraps(func)
     def wrapped_func(*args, **kwargs):
-        # Initial bookkeeping; check if it's a special function, organize the arguments.
-        self.current_function_call_barcode = 0
-        if (func_name in funcs_not_to_log) or (not self._track_tensors) or self._pause_logging:
-            out = func(*args, **kwargs)
-            return out
+        # Fast path: if logging is off, pass through immediately.
+        if not _state._logging_enabled or _state._active_model_log is None:
+            return func(*args, **kwargs)
+
+        model_log = _state._active_model_log
+
+        # Initial bookkeeping; check if it's a special function.
+        model_log.current_function_call_barcode = 0
+        if func_name in funcs_not_to_log:
+            return func(*args, **kwargs)
+
         all_args = list(args) + list(kwargs.values())
         arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
 
         # Register any buffer tensors in the arguments.
-
         for t in arg_tensorlike:
             if hasattr(t, "tl_buffer_address"):
-                log_source_tensor(self, t, "buffer", getattr(t, "tl_buffer_address"))
+                log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
 
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
             out = print_override(args[0], func_name)
             return out
 
         # Copy the args and kwargs in case they change in-place:
-        if self.save_function_args:
+        if model_log.save_function_args:
             arg_copies = tuple([safe_copy(arg) for arg in args])
             kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
         else:
@@ -57,12 +71,12 @@ def torch_func_decorator(self, func: Callable, func_name: str):
 
         # Call the function, tracking the timing, rng states, and whether it's a nested function
         func_call_barcode = make_random_barcode()
-        self.current_function_call_barcode = func_call_barcode
+        model_log.current_function_call_barcode = func_call_barcode
         start_time = time.time()
         func_rng_states = log_current_rng_states()
         out_orig = func(*args, **kwargs)
         func_time_elapsed = time.time() - start_time
-        is_bottom_level_func = self.current_function_call_barcode == func_call_barcode
+        is_bottom_level_func = model_log.current_function_call_barcode == func_call_barcode
 
         if func_name in ["__setitem__", "zero_", "__delitem__"]:
             out_orig = args[0]
@@ -80,7 +94,7 @@ def torch_func_decorator(self, func: Callable, func_name: str):
 
         if len(output_tensors) > 0:
             log_function_output_tensors(
-                self,
+                model_log,
                 func,
                 func_name,
                 args,
@@ -101,163 +115,39 @@ def torch_func_decorator(self, func: Callable, func_name: str):
 
         return out_orig
 
+    # For built-in functions (no __code__), remove __wrapped__ to prevent
+    # inspect.unwrap from following it and failing when torch.jit.script
+    # tries to get source (e.g. timm's @torch.jit.script decorators).
+    if not hasattr(func, "__code__"):
+        try:
+            del wrapped_func.__wrapped__
+        except AttributeError:
+            pass
+
     return wrapped_func
 
 
-def decorate_pytorch(
-    self: "ModelLog", torch_module: types.ModuleType, orig_func_defs: List[Tuple]
-) -> Dict[Callable, Callable]:
-    """Mutates all PyTorch functions (TEMPORARILY!) to save the outputs of any functions
-    that return Tensors, along with marking them with metadata. Returns a list of tuples that
-    save the current state of the functions, such that they can be restored when done.
-
-    args:
-        torch_module: The top-level torch module (i.e., from "import torch").
-            This is supplied as an argument on the off-chance that the user has imported torch
-            and done their own monkey-patching.
-        tensors_to_mutate: A list of tensors that will be mutated (since any tensors created
-            before calling the torch mutation function will not be mutated).
-        orig_func_defs: Supply a list from outside to guarantee it can be cleaned up properly.
-        tensor_record: A list to which the outputs of the functions will be appended.
-
-    returns:
-        List of tuples consisting of [namespace, func_name, orig_func], sufficient
-        to return torch to normal when finished, and also a dict mapping mutated functions to original functions.
-    """
-
-    # Do a pass to save the original func defs.
-    collect_orig_func_defs(torch_module, orig_func_defs)
-    decorated_func_mapper = {}
-
-    # Get references to the function classes.
-    function_class = type(lambda: 0)
-    builtin_class = type(torch.mean)
-    method_class = type(torch.Tensor.__add__)
-    wrapper_class = type(torch.Tensor.__getitem__)
-    getset_class = type(torch.Tensor.real)
-
-    for namespace_name, func_name in ORIG_TORCH_FUNCS:
-        namespace_name_notorch = namespace_name.replace("torch.", "")
-        local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
-        if not hasattr(local_func_namespace, func_name):
-            continue
-        orig_func = getattr(local_func_namespace, func_name)
-        if func_name not in self.func_argnames:
-            get_func_argnames(self, orig_func, func_name)
-
-        if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
-            new_func = torch_func_decorator(self, orig_func, func_name)
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    setattr(local_func_namespace, func_name, new_func)
-                new_func.tl_is_decorated_function = True
-                decorated_func_mapper[new_func] = orig_func
-                decorated_func_mapper[orig_func] = new_func
-            except (AttributeError, TypeError):
-                pass
-
-        elif type(orig_func) is getset_class:
-            getter_orig, setter_orig, deleter_orig = (
-                orig_func.__get__,
-                orig_func.__set__,
-                orig_func.__delete__,
-            )
-            getter_dec, setter_dec, deleter_dec = (
-                torch_func_decorator(self, getter_orig, func_name),
-                torch_func_decorator(self, setter_orig, func_name),
-                torch_func_decorator(self, deleter_orig, func_name),
-            )
-            getter_dec.tl_is_decorated_function = True
-            setter_dec.tl_is_decorated_function = True
-            deleter_dec.tl_is_decorated_function = True
-            new_property = property(getter_dec, setter_dec, deleter_dec, doc=func_name)
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    setattr(local_func_namespace, func_name, new_property)
-            except (AttributeError, TypeError) as _:
-                pass
-            decorated_func_mapper[new_property] = orig_func
-            decorated_func_mapper[orig_func] = new_property
-
-    # Bolt on the identity function
-    new_identity = torch_func_decorator(self, identity, "identity")
-    if not hasattr(torch, "identity"):
-        torch.identity = new_identity
-
-    return decorated_func_mapper
+# ---------------------------------------------------------------------------
+# get_func_argnames — now writes to _state._func_argnames instead of self
+# ---------------------------------------------------------------------------
 
 
-def undecorate_pytorch(
-    torch_module, orig_func_defs: List[Tuple], input_tensors: List[torch.Tensor]
-):
-    """
-    Returns all PyTorch functions back to the definitions they had when mutate_pytorch was called.
-    This is done for the output tensors and history_dict too to avoid ugliness. Also deletes
-    the mutant versions of the functions to remove any references to old ModelLog object.
-
-    args:
-        torch_module: The torch module object.
-        orig_func_defs: List of tuples consisting of [namespace_name, func_name, orig_func], sufficient
-            to regenerate the original functions.
-        input_tensors: List of input tensors whose fucntions will be undecorated.
-        decorated_func_mapper: Maps the decorated function to the original function
-    """
-    for namespace_name, func_name, orig_func in orig_func_defs:
-        namespace_name_notorch = namespace_name.replace("torch.", "")
-        local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            decorated_func = getattr(local_func_namespace, func_name)
-        del decorated_func
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                setattr(local_func_namespace, func_name, orig_func)
-        except (AttributeError, TypeError) as _:
-            continue
-    if hasattr(torch, "identity"):
-        delattr(torch, "identity")
-    for input_tensor in input_tensors:
-        if hasattr(input_tensor, "tl_tensor_label_raw"):
-            delattr(input_tensor, "tl_tensor_label_raw")
-
-
-def collect_orig_func_defs(torch_module: types.ModuleType, orig_func_defs: List[Tuple]):
-    """Collects the original torch function definitions, so they can be restored after the logging is done.
-
-    Args:
-        torch_module: The top-level torch module
-        orig_func_defs: List of tuples keeping track of the original function definitions
-    """
-    for namespace_name, func_name in ORIG_TORCH_FUNCS:
-        namespace_name_notorch = namespace_name.replace("torch.", "")
-        local_func_namespace = nested_getattr(torch_module, namespace_name_notorch)
-        if not hasattr(local_func_namespace, func_name):
-            continue
-        orig_func = getattr(local_func_namespace, func_name)
-        orig_func_defs.append((namespace_name, func_name, orig_func))
-
-
-# TODO: hard-code some of the arg names; for example truediv, getitem, etc. Can crawl through and see what isn't working
-def get_func_argnames(self, orig_func: Callable, func_name: str):
+def get_func_argnames(orig_func: Callable, func_name: str):
     """Attempts to get the argument names for a function, first by checking the signature, then
-    by checking the documentation. Adds these names to func_argnames if it can find them,
-    doesn't do anything if it can't."""
+    by checking the documentation. Adds these names to ``_state._func_argnames``."""
     if func_name in ["real", "imag", "T", "mT", "data", "H"]:
         return
 
     try:
         argnames = list(inspect.signature(orig_func).parameters.keys())
         argnames = tuple([arg.replace("*", "") for arg in argnames if arg not in ["cls", "self"]])
-        self.func_argnames[func_name] = argnames
+        _state._func_argnames[func_name] = argnames
         return
     except ValueError:
         pass
 
     docstring = orig_func.__doc__
-    if (type(docstring) is not str) or (len(docstring) == 0):  # if docstring missing, skip it
+    if (type(docstring) is not str) or (len(docstring) == 0):
         return
 
     open_ind, close_ind = docstring.find("("), docstring.find(")")
@@ -272,5 +162,252 @@ def get_func_argnames(self, orig_func: Callable, func_name: str):
         argname = argname.replace("*", "")
         argnames.append(argname)
     argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])
-    self.func_argnames[func_name] = argnames
-    return
+    _state._func_argnames[func_name] = argnames
+
+
+# ---------------------------------------------------------------------------
+# One-time decoration at import time
+# ---------------------------------------------------------------------------
+
+
+def decorate_all_once():
+    """Decorate all torch functions once at import time.
+
+    Wraps every function in ``ORIG_TORCH_FUNCS`` with a toggle-gated
+    wrapper.  Pre-computes ``_state._func_argnames`` and populates
+    ``_state._orig_to_decorated`` / ``_state._decorated_to_orig``.
+    Also permanently installs ``torch.identity``.
+
+    This function is idempotent — calling it again is a no-op.
+    """
+    if _state._orig_to_decorated:
+        return  # already decorated
+
+    function_class = type(lambda: 0)
+    builtin_class = type(torch.mean)
+    method_class = type(torch.Tensor.__add__)
+    wrapper_class = type(torch.Tensor.__getitem__)
+    getset_class = type(torch.Tensor.real)
+
+    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+        namespace_name_notorch = namespace_name.replace("torch.", "")
+        local_func_namespace = nested_getattr(torch, namespace_name_notorch)
+        if not hasattr(local_func_namespace, func_name):
+            continue
+        orig_func = getattr(local_func_namespace, func_name)
+
+        # Skip already-decorated functions (duplicates in ORIG_TORCH_FUNCS)
+        if getattr(orig_func, "tl_is_decorated_function", False):
+            continue
+
+        # Pre-compute argnames
+        if func_name not in _state._func_argnames:
+            get_func_argnames(orig_func, func_name)
+
+        if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
+            # If this exact original func was already wrapped under a different
+            # namespace (e.g. torch.cos and torch._VF.cos share the same
+            # builtin), reuse the existing wrapper to keep mappings consistent.
+            if id(orig_func) in _state._orig_to_decorated:
+                existing = _state._orig_to_decorated[id(orig_func)]
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        setattr(local_func_namespace, func_name, existing)
+                except (AttributeError, TypeError):
+                    pass
+                continue
+
+            new_func = torch_func_decorator(orig_func, func_name)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(local_func_namespace, func_name, new_func)
+                new_func.tl_is_decorated_function = True
+                _state._orig_to_decorated[id(orig_func)] = new_func
+                _state._decorated_to_orig[id(new_func)] = orig_func
+                _state._decorated_func_mapper[new_func] = orig_func
+                _state._decorated_func_mapper[orig_func] = new_func
+            except (AttributeError, TypeError):
+                pass
+
+        elif type(orig_func) is getset_class:
+            getter_orig, setter_orig, deleter_orig = (
+                orig_func.__get__,
+                orig_func.__set__,
+                orig_func.__delete__,
+            )
+            getter_dec = torch_func_decorator(getter_orig, func_name)
+            setter_dec = torch_func_decorator(setter_orig, func_name)
+            deleter_dec = torch_func_decorator(deleter_orig, func_name)
+            getter_dec.tl_is_decorated_function = True
+            setter_dec.tl_is_decorated_function = True
+            deleter_dec.tl_is_decorated_function = True
+            new_property = property(getter_dec, setter_dec, deleter_dec, doc=func_name)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    setattr(local_func_namespace, func_name, new_property)
+            except (AttributeError, TypeError):
+                pass
+            _state._orig_to_decorated[id(orig_func)] = new_property
+            _state._decorated_to_orig[id(new_property)] = orig_func
+            _state._decorated_func_mapper[new_property] = orig_func
+            _state._decorated_func_mapper[orig_func] = new_property
+
+    # Register wrappers with JIT builtin table so torch.jit.script
+    # recognizes them as known ATen ops (prevents JIT compilation errors).
+    try:
+        import torch.jit._builtins as _jit_builtins
+
+        for orig_id, decorated_func in _state._orig_to_decorated.items():
+            builtin_name = _jit_builtins._builtin_table.get(orig_id)
+            if builtin_name is not None:
+                _jit_builtins._builtin_table[id(decorated_func)] = builtin_name
+                # For properties, also register getter/setter/deleter if they exist
+                if isinstance(decorated_func, property):
+                    for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
+                        if accessor is not None:
+                            _jit_builtins._builtin_table[id(accessor)] = builtin_name
+    except (ImportError, AttributeError):
+        pass  # JIT internals may change across PyTorch versions
+
+    # Permanently install torch.identity
+    new_identity = torch_func_decorator(identity, "identity")
+    torch.identity = new_identity
+
+
+# ---------------------------------------------------------------------------
+# sys.modules deep crawl
+# ---------------------------------------------------------------------------
+
+
+def patch_detached_references():
+    """Crawl ``sys.modules`` and replace detached references to original
+    torch functions with their decorated counterparts.
+
+    Levels:
+      1. Module ``__dict__`` values
+      2. Class ``__dict__`` values found in modules
+      3. Function ``__defaults__`` / ``__kwdefaults__``
+      4. (Model instances are handled separately at log_forward_pass time)
+
+    Uses ``_state._crawled_module_keys`` to avoid re-scanning modules.
+    """
+    new_keys = set(sys.modules.keys()) - _state._crawled_module_keys
+    if not new_keys:
+        return
+
+    mapping = _state._orig_to_decorated
+    if not mapping:
+        return
+
+    for mod_key in new_keys:
+        _state._crawled_module_keys.add(mod_key)
+        mod = sys.modules.get(mod_key)
+        if mod is None:
+            continue
+        # Skip torchlens internals
+        if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
+            continue
+
+        try:
+            mod_dict = vars(mod)
+        except TypeError:
+            continue
+
+        for attr_name, attr_val in list(mod_dict.items()):
+            # Level 1: module-level references
+            if id(attr_val) in mapping:
+                try:
+                    mod_dict[attr_name] = mapping[id(attr_val)]
+                except (TypeError, KeyError):
+                    pass
+                continue
+
+            # Level 2: class dicts
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    is_type = isinstance(attr_val, type)
+            except Exception:
+                is_type = False
+            if is_type:
+                try:
+                    cls_dict = vars(attr_val)
+                except TypeError:
+                    continue
+                for cls_attr_name, cls_attr_val in list(cls_dict.items()):
+                    if id(cls_attr_val) in mapping:
+                        try:
+                            setattr(attr_val, cls_attr_name, mapping[id(cls_attr_val)])
+                        except (AttributeError, TypeError):
+                            pass
+
+            # Level 3: function defaults
+            try:
+                is_callable = callable(attr_val) and not is_type
+            except Exception:
+                is_callable = False
+            if is_callable:
+                _patch_function_defaults(attr_val, mapping)
+
+
+def _patch_function_defaults(func, mapping):
+    """Patch __defaults__ and __kwdefaults__ of a function if they contain
+    original torch function references."""
+    try:
+        defaults = getattr(func, "__defaults__", None)
+    except Exception:
+        return
+    if defaults is not None:
+        new_defaults = []
+        changed = False
+        for d in defaults:
+            if id(d) in mapping:
+                new_defaults.append(mapping[id(d)])
+                changed = True
+            else:
+                new_defaults.append(d)
+        if changed:
+            try:
+                func.__defaults__ = tuple(new_defaults)
+            except (AttributeError, TypeError):
+                pass
+
+    try:
+        kwdefaults = getattr(func, "__kwdefaults__", None)
+    except Exception:
+        return
+    if kwdefaults is not None and isinstance(kwdefaults, dict):
+        for k, v in list(kwdefaults.items()):
+            if id(v) in mapping:
+                try:
+                    kwdefaults[k] = mapping[id(v)]
+                except (TypeError, KeyError):
+                    pass
+
+
+def patch_model_instance(model):
+    """Level 4 crawl: patch detached torch function references on a model instance.
+
+    Scans ``vars(model)`` and all submodules for attributes that are original
+    torch functions and replaces them with decorated versions.
+    """
+    mapping = _state._orig_to_decorated
+    if not mapping:
+        return
+
+    for module in model.modules():
+        try:
+            mod_dict = vars(module)
+        except TypeError:
+            continue
+        for attr_name, attr_val in list(mod_dict.items()):
+            if attr_name.startswith("__"):
+                continue
+            if id(attr_val) in mapping:
+                try:
+                    mod_dict[attr_name] = mapping[id(attr_val)]
+                except (TypeError, KeyError):
+                    pass

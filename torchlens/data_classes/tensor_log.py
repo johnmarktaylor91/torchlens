@@ -5,12 +5,13 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 import torch
 
 from ..constants import TENSOR_LOG_FIELD_ORDER
+from .._state import pause_logging
 from ..helper_funcs import (
-    clean_to,
     get_tensor_memory_amount,
     human_readable_size,
     print_override,
     safe_copy,
+    safe_to,
 )
 
 if TYPE_CHECKING:
@@ -255,11 +256,10 @@ class TensorLog:
         # The tensor itself:
         self.tensor_contents = safe_copy(t, self.detach_saved_tensor)
         if self.output_device not in [str(self.tensor_contents.device), "same"]:
-            self.tensor_contents = clean_to(self.tensor_contents, self.output_device)
+            self.tensor_contents = safe_to(self.tensor_contents, self.output_device)
         if activation_postfunc is not None:
-            self.source_model_log._pause_logging = True
-            self.tensor_contents = activation_postfunc(self.tensor_contents)
-            self.source_model_log._pause_logging = False
+            with pause_logging():
+                self.tensor_contents = activation_postfunc(self.tensor_contents)
 
         self.has_saved_activations = True
 
