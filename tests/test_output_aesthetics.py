@@ -16,9 +16,13 @@ EXTENDING THIS FILE:
 """
 
 import io
+import os
+import shutil
+import subprocess
 import traceback
 from os.path import join as opj
 
+import pytest
 import torch
 
 from conftest import TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
@@ -461,6 +465,656 @@ def test_generate_aesthetic_report():
     assert "ModelLog" in content
     assert "TensorLog" in content
     assert "ParamLog" in content
+
+
+# ---------------------------------------------------------------------------
+# LaTeX PDF report
+# ---------------------------------------------------------------------------
+
+TEX_PATH = opj(TEST_OUTPUTS_DIR, "aesthetic_report.tex")
+PDF_PATH = opj(TEST_OUTPUTS_DIR, "aesthetic_report.pdf")
+
+# Visualization configurations for the gallery section
+VIS_GALLERY = [
+    # (filename_stem, caption, model_class, input_shape_desc, vis_opt, depth, direction, buffers)
+    (
+        "deep_nested_depth1",
+        "AestheticDeepNested — depth=1",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        1,
+        "bottomup",
+        False,
+    ),
+    (
+        "deep_nested_depth2",
+        "AestheticDeepNested — depth=2",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        2,
+        "bottomup",
+        False,
+    ),
+    (
+        "deep_nested_depth3",
+        "AestheticDeepNested — depth=3",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        3,
+        "bottomup",
+        False,
+    ),
+    (
+        "deep_nested_full",
+        "AestheticDeepNested — full depth",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "deep_nested_topdown",
+        "AestheticDeepNested — top-down",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "topdown",
+        False,
+    ),
+    (
+        "deep_nested_leftright",
+        "AestheticDeepNested — left-right",
+        "AestheticDeepNested",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "leftright",
+        False,
+    ),
+    (
+        "shared_unrolled",
+        "AestheticSharedModule — unrolled",
+        "AestheticSharedModule",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "shared_rolled",
+        "AestheticSharedModule — rolled",
+        "AestheticSharedModule",
+        "(1,8)",
+        "rolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "shared_rolled_depth1",
+        "AestheticSharedModule — rolled depth=1",
+        "AestheticSharedModule",
+        "(1,8)",
+        "rolled",
+        1,
+        "bottomup",
+        False,
+    ),
+    (
+        "buffer_visible",
+        "AestheticBufferBranch — buffers visible",
+        "AestheticBufferBranch",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+        True,
+    ),
+    (
+        "buffer_hidden",
+        "AestheticBufferBranch — buffers hidden",
+        "AestheticBufferBranch",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "buffer_topdown",
+        "AestheticBufferBranch — top-down",
+        "AestheticBufferBranch",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "topdown",
+        True,
+    ),
+    (
+        "buffer_leftright",
+        "AestheticBufferBranch — left-right",
+        "AestheticBufferBranch",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "leftright",
+        True,
+    ),
+    (
+        "kitchen_sink_unrolled",
+        "AestheticKitchenSink — unrolled",
+        "AestheticKitchenSink",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+        True,
+    ),
+    (
+        "kitchen_sink_rolled",
+        "AestheticKitchenSink — rolled",
+        "AestheticKitchenSink",
+        "(1,8)",
+        "rolled",
+        1000,
+        "bottomup",
+        True,
+    ),
+    (
+        "kitchen_sink_depth1",
+        "AestheticKitchenSink — depth=1",
+        "AestheticKitchenSink",
+        "(1,8)",
+        "unrolled",
+        1,
+        "bottomup",
+        True,
+    ),
+    (
+        "kitchen_sink_depth2",
+        "AestheticKitchenSink — depth=2",
+        "AestheticKitchenSink",
+        "(1,8)",
+        "unrolled",
+        2,
+        "bottomup",
+        True,
+    ),
+    (
+        "frozen_mix_unrolled",
+        "AestheticFrozenMix — unrolled",
+        "AestheticFrozenMix",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "frozen_mix_topdown",
+        "AestheticFrozenMix — top-down",
+        "AestheticFrozenMix",
+        "(1,8)",
+        "unrolled",
+        1000,
+        "topdown",
+        False,
+    ),
+    (
+        "loop_simple_unrolled",
+        "RecurrentParamsSimple — unrolled",
+        "RecurrentParamsSimple",
+        "(5,5)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "loop_simple_rolled",
+        "RecurrentParamsSimple — rolled",
+        "RecurrentParamsSimple",
+        "(5,5)",
+        "rolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "loop_double_nested_unrolled",
+        "LoopingParamsDoubleNested — unrolled",
+        "LoopingParamsDoubleNested",
+        "(5,5)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "loop_double_nested_rolled",
+        "LoopingParamsDoubleNested — rolled",
+        "LoopingParamsDoubleNested",
+        "(5,5)",
+        "rolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "nested_modules_unrolled",
+        "NestedModules — unrolled",
+        "NestedModules",
+        "(5,5)",
+        "unrolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "nested_modules_rolled",
+        "NestedModules — rolled",
+        "NestedModules",
+        "(5,5)",
+        "rolled",
+        1000,
+        "bottomup",
+        False,
+    ),
+    (
+        "nested_modules_depth1",
+        "NestedModules — depth=1",
+        "NestedModules",
+        "(5,5)",
+        "unrolled",
+        1,
+        "bottomup",
+        False,
+    ),
+    (
+        "nested_modules_depth2",
+        "NestedModules — depth=2",
+        "NestedModules",
+        "(5,5)",
+        "unrolled",
+        2,
+        "bottomup",
+        False,
+    ),
+]
+
+
+def _tex_escape(text: str) -> str:
+    """Escape special LaTeX characters for use in normal text (not verbatim)."""
+    replacements = [
+        ("\\", "\\textbackslash{}"),
+        ("&", "\\&"),
+        ("%", "\\%"),
+        ("$", "\\$"),
+        ("#", "\\#"),
+        ("_", "\\_"),
+        ("{", "\\{"),
+        ("}", "\\}"),
+        ("~", "\\textasciitilde{}"),
+        ("^", "\\textasciicircum{}"),
+    ]
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
+
+def _verbatim_box(title: str, content: str, color: str = "codebg") -> str:
+    """Wrap content in a tcolorbox with Verbatim interior."""
+    # Truncate very long content to keep PDF reasonable
+    lines = content.split("\n")
+    if len(lines) > 80:
+        lines = lines[:75] + [f"... ({len(lines) - 75} more lines, see aesthetic_report.txt)"]
+    truncated = "\n".join(lines)
+    return (
+        f"\\begin{{tcolorbox}}[title={{{_tex_escape(title)}}}, "
+        f"colback={color}, colframe=sectioncolor, "
+        f"fonttitle=\\bfseries\\small, breakable, "
+        f"left=2pt, right=2pt, top=2pt, bottom=2pt]\n"
+        f"\\begin{{Verbatim}}[fontsize=\\tiny, breaklines=true, breaksymbol=]\n"
+        f"{truncated}\n"
+        f"\\end{{Verbatim}}\n"
+        f"\\end{{tcolorbox}}\n\n"
+    )
+
+
+def _build_latex_report() -> str:
+    """Build the full LaTeX document string."""
+    doc = io.StringIO()
+
+    # Preamble
+    doc.write(r"""\documentclass[10pt, letterpaper]{article}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{fancyvrb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[breakable, skins]{tcolorbox}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{float}
+
+% Colors
+\definecolor{codebg}{HTML}{F5F5F0}
+\definecolor{sectioncolor}{HTML}{2C3E50}
+\definecolor{accentcolor}{HTML}{E74C3C}
+\definecolor{linkcolor}{HTML}{2980B9}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkcolor,
+    urlcolor=linkcolor,
+}
+
+\tcbset{
+    enhanced,
+    boxrule=0.5pt,
+    arc=3pt,
+    fonttitle=\bfseries,
+}
+
+\title{\textbf{\Huge TorchLens Aesthetic Report} \\[10pt]
+    \large Visual inspection of all user-facing outputs}
+\author{Auto-generated by \texttt{test\_output\_aesthetics.py}}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+""")
+
+    # --- Section 1: Model Reports ---
+    doc.write("\\section{Model Reports}\n\n")
+    doc.write(
+        "Each model below shows the key user-facing outputs: "
+        "model summary, module hierarchy, parameter system, "
+        "layer access, error messages, and field dumps.\n\n"
+    )
+
+    for name, model_cls, x, description in AESTHETIC_TEXT_MODELS:
+        model = model_cls()
+        log = log_forward_pass(model, x, random_seed=42)
+        if log.model_is_recurrent:
+            _roll_graph(log)
+
+        doc.write(f"\\subsection{{{_tex_escape(name)} --- {_tex_escape(description)}}}\n\n")
+
+        # A. Model Summary
+        doc.write(_verbatim_box("A. Model Summary — str(log)", str(log)))
+
+        # B. Module System
+        doc.write(_verbatim_box("B. Module Accessor — repr(log.modules)", repr(log.modules)))
+        doc.write(
+            _verbatim_box("B. Module Summary Table — log.modules.summary()", log.modules.summary())
+        )
+
+        # C. Parameters
+        if len(log.params) > 0:
+            doc.write(_verbatim_box("C. Parameters — repr(log.params)", repr(log.params)))
+
+        # Frozen vs trainable highlight
+        if any(not pl.trainable for pl in log.params):
+            frozen_text = ""
+            for pl in log.params:
+                status = "FROZEN" if not pl.trainable else "TRAINABLE"
+                frozen_text += f"[{status}] {pl.address}\n{repr(pl)}\n\n"
+            frozen_text += f"Total frozen: {log.total_params_frozen}\n"
+            frozen_text += f"Total trainable: {log.total_params_trainable}\n"
+            frozen_text += f"Total params: {log.total_params}\n"
+            doc.write(_verbatim_box("C.1 Frozen vs Trainable Parameters", frozen_text))
+
+        # D. Layer Access — first and last
+        doc.write(_verbatim_box("D. First Layer — repr(log[0])", repr(log[0])))
+        doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
+
+        # D.1 Rolled TensorLog
+        if log.model_is_recurrent and len(log.layer_list_rolled) > 0:
+            for rtl in log.layer_list_rolled:
+                if rtl.layer_passes_total > 1:
+                    doc.write(
+                        _verbatim_box(
+                            f"D.1 RolledTensorLog — {rtl.layer_label} ({rtl.layer_passes_total} passes)",
+                            repr(rtl),
+                        )
+                    )
+                    break
+
+        # Multi-pass module
+        if log.model_is_recurrent:
+            for ml in log.modules:
+                if ml.num_passes > 1 and ml.address != "self":
+                    passes_text = repr(ml) + "\n\n"
+                    for p in sorted(ml.passes.keys()):
+                        passes_text += f"--- Pass {p} ---\n{repr(ml.passes[p])}\n\n"
+                    doc.write(
+                        _verbatim_box(
+                            f"B.1 Multi-Pass Module — {ml.address} ({ml.num_passes} passes)",
+                            passes_text,
+                        )
+                    )
+                    break
+
+        # E. Error Messages
+        error_text = ""
+        try:
+            log[9999]
+        except Exception as e:
+            error_text += f"log[9999]:\n{type(e).__name__}: {e}\n\n"
+        try:
+            log["nonexistent"]
+        except Exception as e:
+            error_text += f'log["nonexistent"]:\n{type(e).__name__}: {e}\n\n'
+        for label, num_p in log.layer_num_passes.items():
+            if num_p > 1:
+                try:
+                    log[label]
+                except Exception as e:
+                    error_text += f'log["{label}"] (multi-pass):\n{type(e).__name__}: {e}\n\n'
+                break
+        if error_text:
+            doc.write(_verbatim_box("E. Convenience Error Messages", error_text))
+
+        # F. Field Dumps (just ModelLog headline fields + one TensorLog)
+        # ModelLog field dump
+        model_fields = ""
+        for field in sorted(dir(log)):
+            if field.startswith("_"):
+                continue
+            try:
+                attr = getattr(log, field)
+            except Exception:
+                continue
+            if callable(attr):
+                continue
+            if field in {
+                "source_model_log",
+                "func_rng_states",
+                "layer_list",
+                "layer_dict_main_keys",
+                "layer_dict_all_keys",
+            }:
+                continue
+            model_fields += f"{field}: {attr}\n"
+        doc.write(_verbatim_box("F.1 ModelLog — All Fields", model_fields))
+
+        # TensorLog field dump — pick a layer with params
+        tensor_for_dump = None
+        for entry in log.layer_list:
+            if entry.computed_with_params:
+                tensor_for_dump = entry
+                break
+        if tensor_for_dump is None:
+            tensor_for_dump = log[len(log) // 2]
+        tensor_fields = ""
+        for field in sorted(dir(tensor_for_dump)):
+            if field.startswith("_"):
+                continue
+            try:
+                attr = getattr(tensor_for_dump, field)
+            except Exception:
+                continue
+            if callable(attr):
+                continue
+            if field in {"source_model_log", "func_rng_states"}:
+                continue
+            tensor_fields += f"{field}: {attr}\n"
+        doc.write(_verbatim_box(f"F.2 TensorLog — {tensor_for_dump.layer_label}", tensor_fields))
+
+        # ModuleLog field dump
+        param_module_addr = None
+        for ml in log.modules:
+            if ml.address != "self" and ml.num_params > 0:
+                param_module_addr = ml.address
+                break
+        if param_module_addr is None:
+            for ml in log.modules:
+                if ml.address != "self":
+                    param_module_addr = ml.address
+                    break
+        if param_module_addr:
+            mod_dump = log.modules[param_module_addr]
+            mod_fields = ""
+            for field in sorted(dir(mod_dump)):
+                if field.startswith("_"):
+                    continue
+                try:
+                    attr = getattr(mod_dump, field)
+                except Exception as e:
+                    mod_fields += f"{field}: <{type(e).__name__}: {e}>\n"
+                    continue
+                if callable(attr):
+                    continue
+                mod_fields += f"{field}: {attr}\n"
+            doc.write(_verbatim_box(f"F.4 ModuleLog — {mod_dump.address}", mod_fields))
+
+        # ParamLog field dump
+        if len(log.params) > 0:
+            pl = log.params[0]
+            pl_fields = ""
+            for field in sorted(dir(pl)):
+                if field.startswith("_"):
+                    continue
+                try:
+                    attr = getattr(pl, field)
+                except Exception:
+                    continue
+                if callable(attr):
+                    continue
+                pl_fields += f"{field}: {attr}\n"
+            doc.write(_verbatim_box(f"F.6 ParamLog — {pl.address}", pl_fields))
+
+        doc.write("\\newpage\n\n")
+
+    # --- Section 2: Visualization Gallery ---
+    doc.write("\\section{Visualization Gallery}\n\n")
+    doc.write(
+        "Each figure below shows a computational graph rendered by "
+        "\\texttt{show\\_model\\_graph()} with the specified parameters.\n\n"
+    )
+
+    for stem, caption, model_name, input_desc, vis_opt, depth, direction, buffers in VIS_GALLERY:
+        pdf_path = opj(VIS_DIR, f"{stem}.pdf")
+        if not os.path.exists(pdf_path):
+            continue
+        buf_str = ", buffers=True" if buffers else ""
+        param_str = (
+            f"vis\\_opt={_tex_escape(vis_opt)}, "
+            f"depth={depth}, "
+            f"direction={_tex_escape(direction)}"
+            f"{_tex_escape(buf_str)}"
+        )
+        doc.write("\\begin{figure}[H]\n")
+        doc.write("\\centering\n")
+        doc.write(
+            f"\\includegraphics[max width=0.95\\textwidth, max height=0.85\\textheight]{{{pdf_path}}}\n"
+        )
+        doc.write(f"\\caption{{{_tex_escape(caption)} \\\\\\small\\texttt{{{param_str}}}}}\n")
+        doc.write("\\end{figure}\n\n")
+
+    doc.write("\\end{document}\n")
+    return doc.getvalue()
+
+
+def _ensure_vis_pdfs_exist():
+    """Generate any missing visualization PDFs so the LaTeX report can include them."""
+    missing = [g for g in VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))]
+    if not missing:
+        return
+
+    # Map model names to (class, input)
+    model_inputs = {
+        "AestheticDeepNested": (example_models.AestheticDeepNested(), torch.rand(1, 8)),
+        "AestheticSharedModule": (example_models.AestheticSharedModule(), torch.rand(1, 8)),
+        "AestheticBufferBranch": (example_models.AestheticBufferBranch(), torch.rand(1, 8)),
+        "AestheticKitchenSink": (example_models.AestheticKitchenSink(), torch.rand(1, 8)),
+        "AestheticFrozenMix": (example_models.AestheticFrozenMix(), torch.rand(1, 8)),
+        "RecurrentParamsSimple": (example_models.RecurrentParamsSimple(), torch.rand(5, 5)),
+        "LoopingParamsDoubleNested": (example_models.LoopingParamsDoubleNested(), torch.rand(5, 5)),
+        "NestedModules": (example_models.NestedModules(), torch.rand(5, 5)),
+    }
+    for stem, caption, model_name, _, vis_opt, depth, direction, buffers in missing:
+        model, x = model_inputs[model_name]
+        _vis(
+            model, x, stem, vis_opt=vis_opt, depth=depth, direction=direction, buffer_layers=buffers
+        )
+
+
+@pytest.mark.skipif(
+    shutil.which("pdflatex") is None,
+    reason="pdflatex not installed (install texlive for PDF report generation)",
+)
+def test_generate_pdf_report():
+    """Generate the LaTeX PDF report with all outputs and visualizations.
+
+    Requires pdflatex (system package, e.g. texlive). Skipped if not available.
+    Run the visualization tests first to populate the PDFs:
+        pytest tests/test_output_aesthetics.py -v
+    """
+    # Ensure vis PDFs exist by generating them if needed
+    _ensure_vis_pdfs_exist()
+
+    # Build LaTeX source
+    tex_content = _build_latex_report()
+
+    with open(TEX_PATH, "w") as f:
+        f.write(tex_content)
+
+    # Compile PDF (run twice for TOC)
+    for _ in range(2):
+        result = subprocess.run(
+            [
+                "pdflatex",
+                "-interaction=nonstopmode",
+                "-output-directory",
+                TEST_OUTPUTS_DIR,
+                TEX_PATH,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+    assert os.path.exists(PDF_PATH), f"PDF not generated. pdflatex stderr:\n{result.stderr[-2000:]}"
+    pdf_size = os.path.getsize(PDF_PATH)
+    assert pdf_size > 10000, f"PDF too small ({pdf_size} bytes)"
+
+    # Clean up LaTeX auxiliary files
+    for ext in [".aux", ".log", ".out", ".toc"]:
+        aux_path = opj(TEST_OUTPUTS_DIR, f"aesthetic_report{ext}")
+        if os.path.exists(aux_path):
+            os.remove(aux_path)
 
 
 # ---------------------------------------------------------------------------
