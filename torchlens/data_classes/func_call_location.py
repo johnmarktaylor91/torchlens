@@ -1,32 +1,201 @@
+import inspect
+import linecache
 from typing import List, Optional, Union
+
+# Sentinel to distinguish "not yet loaded" from None
+_UNSET = object()
 
 
 class FuncCallLocation:
-    """A location in source code where a function call occurred."""
+    """A location in source code where a function call occurred.
+
+    Supports two construction paths:
+
+    **New path** (from ``_get_func_call_stack``): pass ``file``, ``line_number``,
+    ``func_name``, ``num_context_lines_requested``, and optionally
+    ``_frame_func_obj``.  Source context and signature/docstring are loaded
+    lazily on first access.
+
+    **Legacy path** (direct construction, e.g. tests): pass all 10 original
+    keyword arguments.  Values are stored directly with no lazy loading.
+    """
 
     def __init__(
         self,
         file: str,
         line_number: int,
         func_name: str,
-        func_signature: Optional[str],
-        func_docstring: Optional[str],
-        call_line: str,
-        code_context: Optional[List[str]],
-        code_context_str: str,
-        code_context_labeled: str,
-        num_context_lines: int,
+        # New-path args
+        num_context_lines_requested: int = _UNSET,
+        _frame_func_obj=_UNSET,
+        # Legacy-path args (all default to sentinel)
+        func_signature: Optional[str] = _UNSET,
+        func_docstring: Optional[str] = _UNSET,
+        call_line: str = _UNSET,
+        code_context: Optional[List[str]] = _UNSET,
+        code_context_str: str = _UNSET,
+        code_context_labeled: str = _UNSET,
+        num_context_lines: int = _UNSET,
     ):
         self.file = file
         self.line_number = line_number
         self.func_name = func_name
-        self.func_signature = func_signature
-        self.func_docstring = func_docstring
-        self.call_line = call_line
-        self.code_context = code_context
-        self.code_context_str = code_context_str
-        self.code_context_labeled = code_context_labeled
-        self.num_context_lines = num_context_lines
+
+        # Detect legacy path: if any legacy kwarg was explicitly passed
+        legacy = func_signature is not _UNSET
+
+        if legacy:
+            # Store all values directly — no lazy loading needed
+            self._func_signature = func_signature
+            self._func_docstring = func_docstring if func_docstring is not _UNSET else None
+            self._call_line = call_line if call_line is not _UNSET else ""
+            self._code_context = code_context if code_context is not _UNSET else None
+            self._code_context_str = code_context_str if code_context_str is not _UNSET else "None"
+            self._code_context_labeled = (
+                code_context_labeled if code_context_labeled is not _UNSET else ""
+            )
+            self._num_context_lines = num_context_lines if num_context_lines is not _UNSET else 0
+            self._num_context_lines_requested = 0
+            self._frame_func_obj = None
+            self._source_loaded = True
+        else:
+            # New path — defer source loading
+            self._num_context_lines_requested = (
+                num_context_lines_requested if num_context_lines_requested is not _UNSET else 7
+            )
+            self._frame_func_obj = _frame_func_obj if _frame_func_obj is not _UNSET else None
+            self._source_loaded = False
+            # Placeholders (set by _load_source)
+            self._code_context = _UNSET
+            self._code_context_str = _UNSET
+            self._code_context_labeled = _UNSET
+            self._call_line = _UNSET
+            self._num_context_lines = _UNSET
+            self._func_signature = _UNSET
+            self._func_docstring = _UNSET
+
+    def _load_source(self):
+        """Load source context and function metadata from disk (once)."""
+        if self._source_loaded:
+            return
+        self._source_loaded = True
+
+        context_window = 2 * self._num_context_lines_requested + 1
+
+        # Load source lines via linecache (cached per file, no re-reads)
+        all_lines = linecache.getlines(self.file)
+        if all_lines:
+            # Extract context window around the call line
+            start = max(0, self.line_number - self._num_context_lines_requested - 1)
+            end = min(len(all_lines), start + context_window)
+            code_lines = all_lines[start:end]
+
+            self._code_context = code_lines
+            self._code_context_str = "".join(code_lines)
+            self._num_context_lines = len(code_lines)
+
+            # The call line is at the position within the context window
+            call_line_idx = self.line_number - 1 - start
+            if 0 <= call_line_idx < len(code_lines):
+                self._call_line = code_lines[call_line_idx].strip()
+            else:
+                self._call_line = ""
+
+            # Build labeled context with arrow at the call line
+            labeled_lines = []
+            for i, line in enumerate(code_lines):
+                if i == call_line_idx:
+                    labeled_lines.append(f"  --->  {line.rstrip()}")
+                else:
+                    labeled_lines.append(f"        {line.rstrip()}")
+            self._code_context_labeled = "\n".join(labeled_lines)
+        else:
+            self._code_context = None
+            self._code_context_str = "None"
+            self._call_line = ""
+            self._code_context_labeled = ""
+            self._num_context_lines = 0
+
+        # Resolve function signature and docstring from stored func object
+        func_obj = self._frame_func_obj
+        if func_obj is not None and callable(func_obj):
+            try:
+                self._func_signature = str(inspect.signature(func_obj))
+            except (ValueError, TypeError):
+                self._func_signature = None
+            doc = getattr(func_obj, "__doc__", None)
+            self._func_docstring = doc
+        else:
+            self._func_signature = None
+            self._func_docstring = None
+
+        # Release the func obj reference
+        self._frame_func_obj = None
+
+    # --- Lazy properties ---
+
+    @property
+    def code_context(self) -> Optional[List[str]]:
+        self._load_source()
+        return self._code_context
+
+    @code_context.setter
+    def code_context(self, value):
+        self._code_context = value
+
+    @property
+    def code_context_str(self) -> str:
+        self._load_source()
+        return self._code_context_str
+
+    @code_context_str.setter
+    def code_context_str(self, value):
+        self._code_context_str = value
+
+    @property
+    def code_context_labeled(self) -> str:
+        self._load_source()
+        return self._code_context_labeled
+
+    @code_context_labeled.setter
+    def code_context_labeled(self, value):
+        self._code_context_labeled = value
+
+    @property
+    def call_line(self) -> str:
+        self._load_source()
+        return self._call_line
+
+    @call_line.setter
+    def call_line(self, value):
+        self._call_line = value
+
+    @property
+    def num_context_lines(self) -> int:
+        self._load_source()
+        return self._num_context_lines
+
+    @num_context_lines.setter
+    def num_context_lines(self, value):
+        self._num_context_lines = value
+
+    @property
+    def func_signature(self) -> Optional[str]:
+        self._load_source()
+        return self._func_signature
+
+    @func_signature.setter
+    def func_signature(self, value):
+        self._func_signature = value
+
+    @property
+    def func_docstring(self) -> Optional[str]:
+        self._load_source()
+        return self._func_docstring
+
+    @func_docstring.setter
+    def func_docstring(self, value):
+        self._func_docstring = value
 
     def __repr__(self) -> str:
         lines = [

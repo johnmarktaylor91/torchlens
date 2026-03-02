@@ -17,6 +17,10 @@ from .helper_funcs import (
 )
 from .logging_funcs import log_source_tensor
 
+# Cache class-level module metadata (shared across instances of the same class).
+# Cleared at the start of each session in _prepare_model_session.
+_module_class_metadata_cache: Dict[type, dict] = {}
+
 if TYPE_CHECKING:
     from .data_classes.model_log import ModelLog
 
@@ -111,6 +115,7 @@ def _prepare_model_session(
     captures module metadata, forces ``requires_grad=True`` on all params,
     creates ParamLog objects, and tags buffer tensors.
     """
+    _module_class_metadata_cache.clear()
     model_log.model_name = str(type(model).__name__)
     model.tl_source_model_log = model_log
 
@@ -205,6 +210,43 @@ def _prepare_model_session(
 # ---------------------------------------------------------------------------
 
 
+def _get_class_metadata(module_class: type) -> dict:
+    """Return class-level metadata for a module class, cached across instances."""
+    cached = _module_class_metadata_cache.get(module_class)
+    if cached is not None:
+        return cached
+
+    meta = {}
+    meta["module_class_name"] = module_class.__name__
+
+    try:
+        meta["source_file"] = inspect.getfile(module_class)
+    except (TypeError, OSError):
+        meta["source_file"] = None
+    try:
+        _, line = inspect.getsourcelines(module_class)
+        meta["source_line"] = line
+    except (TypeError, OSError):
+        meta["source_line"] = None
+
+    meta["class_docstring"] = module_class.__doc__
+
+    try:
+        meta["init_signature"] = str(inspect.signature(module_class.__init__))
+    except (ValueError, TypeError):
+        meta["init_signature"] = None
+    meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)
+
+    try:
+        meta["forward_signature"] = str(inspect.signature(module_class.forward))
+    except (ValueError, TypeError):
+        meta["forward_signature"] = None
+    meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)
+
+    _module_class_metadata_cache[module_class] = meta
+    return meta
+
+
 def _capture_module_metadata(
     model_log: "ModelLog",
     module: nn.Module,
@@ -224,34 +266,23 @@ def _capture_module_metadata(
         return
     seen_module_ids[mid] = address
 
-    meta = {}
-    meta["module_class_name"] = type(module).__name__
+    # Start from cached class-level metadata (shallow copy — lists/dicts are replaced below)
+    class_meta = _get_class_metadata(type(module))
+    meta = dict(class_meta)
     meta["all_addresses"] = [address]
 
-    try:
-        meta["source_file"] = inspect.getfile(type(module))
-    except (TypeError, OSError):
-        meta["source_file"] = None
-    try:
-        _, line = inspect.getsourcelines(type(module))
-        meta["source_line"] = line
-    except (TypeError, OSError):
-        meta["source_line"] = None
+    # Per-instance forward override (rare — e.g. user assigned forward on instance before prep)
+    if "forward" in module.__dict__:
+        fwd = module.__dict__["forward"]
+        try:
+            meta["forward_signature"] = str(inspect.signature(fwd))
+        except (ValueError, TypeError):
+            pass
+        doc = getattr(fwd, "__doc__", None)
+        if doc is not None:
+            meta["forward_docstring"] = doc
 
-    meta["class_docstring"] = type(module).__doc__
-
-    try:
-        meta["init_signature"] = str(inspect.signature(type(module).__init__))
-    except (ValueError, TypeError):
-        meta["init_signature"] = None
-    meta["init_docstring"] = getattr(type(module).__init__, "__doc__", None)
-
-    try:
-        meta["forward_signature"] = str(inspect.signature(module.forward))
-    except (ValueError, TypeError):
-        meta["forward_signature"] = None
-    meta["forward_docstring"] = getattr(module.forward, "__doc__", None)
-
+    # Instance-specific fields
     meta["has_forward_hooks"] = bool(module._forward_hooks)
     meta["has_backward_hooks"] = bool(module._backward_hooks)
     meta["training_mode"] = module.training
