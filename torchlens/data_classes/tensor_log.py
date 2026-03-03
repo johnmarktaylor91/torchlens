@@ -11,6 +11,8 @@ from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
 from ..utils.display import human_readable_size
 
+_TENSOR_LOG_FIELD_ORDER_SET = frozenset(TENSOR_LOG_FIELD_ORDER)
+
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
     from .param_log import ParamLog
@@ -30,12 +32,11 @@ class TensorLog:
         # of a tensor log entry.
 
         # Check that fields_dict contains all fields for TensorLog:
-        field_order_set = set(TENSOR_LOG_FIELD_ORDER)
         fields_dict_key_set = set(fields_dict.keys())
-        if fields_dict_key_set != field_order_set:
+        if fields_dict_key_set != _TENSOR_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing TensorLog:"
-            missing_fields = field_order_set - fields_dict_key_set
-            extra_fields = fields_dict_key_set - field_order_set
+            missing_fields = _TENSOR_LOG_FIELD_ORDER_SET - fields_dict_key_set
+            extra_fields = fields_dict_key_set - _TENSOR_LOG_FIELD_ORDER_SET
             if len(missing_fields) > 0:
                 error_str += f"\n\t- Missing fields {', '.join(missing_fields)}"
             if len(extra_fields) > 0:
@@ -293,8 +294,9 @@ class TensorLog:
         self.has_saved_grad = True
         self.grad_shape = grad.shape
         self.grad_dtype = grad.dtype
-        self.grad_fsize = get_tensor_memory_amount(grad)
-        self.grad_fsize_nice = human_readable_size(get_tensor_memory_amount(grad))
+        grad_fsize = get_tensor_memory_amount(grad)
+        self.grad_fsize = grad_fsize
+        self.grad_fsize_nice = human_readable_size(grad_fsize)
 
     # ********************************************
     # ************* Fetcher Functions ************
@@ -414,14 +416,14 @@ class TensorLog:
                 num_dims = min(tensor_size_shown, saved_shape[0])
                 tensor_slice = self.tensor_contents[0:num_dims]
             elif len(saved_shape) == 2:
-                num_dims = min([tensor_size_shown, saved_shape[-2], saved_shape[-1]])
+                num_dims = min(tensor_size_shown, saved_shape[-2], saved_shape[-1])
                 tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
             else:
-                num_dims = min([tensor_size_shown, saved_shape[-2], saved_shape[-1]])
-                tensor_slice = self.tensor_contents.data.clone()
+                num_dims = min(tensor_size_shown, saved_shape[-2], saved_shape[-1])
+                tensor_slice = self.tensor_contents.data
                 for _ in range(len(saved_shape) - 2):
                     tensor_slice = tensor_slice[0]
-                tensor_slice = tensor_slice[0:num_dims, 0:num_dims]
+                tensor_slice = tensor_slice[0:num_dims, 0:num_dims].clone()
             tensor_slice = tensor_slice.detach()
             tensor_slice.requires_grad = False
             s += f"\n\t\t{str(tensor_slice)}"

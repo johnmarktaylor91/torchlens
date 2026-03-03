@@ -290,7 +290,7 @@ def _update_node_distance_vals(
         setattr(
             current_node,
             min_field,
-            min([nodes_since_start, getattr(current_node, min_field)]),
+            min(nodes_since_start, getattr(current_node, min_field)),
         )
 
     if getattr(current_node, max_field) is None:
@@ -299,7 +299,7 @@ def _update_node_distance_vals(
         setattr(
             current_node,
             max_field,
-            max([nodes_since_start, getattr(current_node, max_field)]),
+            max(nodes_since_start, getattr(current_node, max_field)),
         )
 
 

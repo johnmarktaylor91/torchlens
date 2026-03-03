@@ -1,9 +1,11 @@
 """Barcode generation and argument hashing for tensor identity tracking."""
 
 import base64
-import secrets
+import random
 import string
 from typing import Any, List
+
+_BARCODE_ALPHABET = string.ascii_letters + string.digits
 
 
 def make_random_barcode(barcode_len: int = 8) -> str:
@@ -15,9 +17,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
     Returns:
         Random alphanumeric string.
     """
-    alphabet = string.ascii_letters + string.digits
-    barcode = "".join(secrets.choice(alphabet) for _ in range(barcode_len))
-    return barcode
+    return "".join(random.choices(_BARCODE_ALPHABET, k=barcode_len))
 
 
 def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 16) -> str:

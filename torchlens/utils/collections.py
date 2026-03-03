@@ -31,9 +31,9 @@ def ensure_iterable(obj: Any) -> Any:
     Returns:
         Iterable output
     """
-    if any([issubclass(type(obj), cls) for cls in [list, tuple, set]]):
+    if isinstance(obj, (list, tuple, set)):
         return obj
-    elif issubclass(type(obj), dict):
+    elif isinstance(obj, dict):
         return list(obj.values())
     else:
         return [obj]

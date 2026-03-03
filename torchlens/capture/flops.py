@@ -129,20 +129,12 @@ ZERO_FLOPS_OPS = {
     "select",
     "scatter",
     "scatter_",
-    "scatter_add",
-    "scatter_add_",
-    "scatter_reduce",
-    "scatter_reduce_",
     "index_put",
     "index_put_",
-    "index_add",
-    "index_add_",
     "index_copy",
     "index_copy_",
     "index_fill",
     "index_fill_",
-    "index_reduce",
-    "index_reduce_",
     # Type / device conversion
     "to",
     "cpu",
@@ -594,6 +586,15 @@ ELEMENTWISE_FLOPS: Dict[str, int] = {
     "logit": 12,
     "logit_": 12,  # log(x / (1 - x))
     "expit": 4,  # same as sigmoid
+    # Scatter/index arithmetic ops: 1 add/reduce per source element
+    "scatter_add": 1,
+    "scatter_add_": 1,
+    "scatter_reduce": 1,
+    "scatter_reduce_": 1,
+    "index_add": 1,
+    "index_add_": 1,
+    "index_reduce": 1,
+    "index_reduce_": 1,
 }
 
 
@@ -942,6 +943,34 @@ def _binary_cross_entropy_flops(output_shape, parent_param_shapes, creation_args
     return None
 
 
+def _sdpa_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Scaled dot-product attention: Q@K^T + scale + softmax + attn@V.
+
+    FLOPs = 2*B*H*S_q*S_k*D + B*H*S_q*S_k + 5*B*H*S_q*S_k + 2*B*H*S_q*D*S_k
+    where Q=(B,H,S_q,D), K=(B,H,S_k,D), V=(B,H,S_k,D_v).
+    """
+    if not creation_args or len(creation_args) < 3:
+        return None
+    q_shape = _safe_shape(creation_args[0])
+    k_shape = _safe_shape(creation_args[1])
+    v_shape = _safe_shape(creation_args[2])
+    if not q_shape or not k_shape or not v_shape:
+        return None
+    if len(q_shape) < 2 or len(k_shape) < 2 or len(v_shape) < 2:
+        return None
+    s_q, d = q_shape[-2], q_shape[-1]
+    s_k = k_shape[-2]
+    d_v = v_shape[-1]
+    batch = _prod(q_shape[:-2]) if len(q_shape) > 2 else 1
+    # Q@K^T: 2*batch*s_q*s_k*d
+    qk_flops = 2 * batch * s_q * s_k * d
+    # Scale + softmax: ~6*batch*s_q*s_k (1 scale + 5 softmax)
+    softmax_flops = 6 * batch * s_q * s_k
+    # attn@V: 2*batch*s_q*d_v*s_k
+    av_flops = 2 * batch * s_q * d_v * s_k
+    return qk_flops + softmax_flops + av_flops
+
+
 # Registry mapping func_applied_name to handler
 SPECIALTY_HANDLERS = {
     # MatMul family
@@ -952,10 +981,10 @@ SPECIALTY_HANDLERS = {
     "bmm": _matmul_flops,
     "addmm": _addmm_flops,
     "addmm_": _addmm_flops,
-    "addbmm": _matmul_flops,
-    "addbmm_": _matmul_flops,
-    "baddbmm": _matmul_flops,
-    "baddbmm_": _matmul_flops,
+    "addbmm": _addmm_flops,
+    "addbmm_": _addmm_flops,
+    "baddbmm": _addmm_flops,
+    "baddbmm_": _addmm_flops,
     "multi_dot": _matmul_flops,
     "chain_matmul": _matmul_flops,
     "linear": _linear_flops,
@@ -1116,8 +1145,10 @@ SPECIALTY_HANDLERS = {
     "pdist": _norm_flops,
     "cdist": _norm_flops,
     # Attention
-    "scaled_dot_product_attention": _matmul_flops,
-    "multi_head_attention_forward": _matmul_flops,
+    "scaled_dot_product_attention": _sdpa_flops,
+    # MHA is a composite op; FLOPs from its sub-ops (linear, sdpa) are captured
+    # individually. Return None to avoid double-counting.
+    "multi_head_attention_forward": lambda *_: None,
 }
 
 

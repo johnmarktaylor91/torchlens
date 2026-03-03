@@ -1,7 +1,5 @@
 """ModelLog cleanup: removing individual log entries and post-session teardown."""
 
-import warnings
-
 import torch
 
 from ..constants import MODEL_LOG_FIELD_ORDER
@@ -11,24 +9,19 @@ from .tensor_log import TensorLog
 
 def cleanup(self) -> None:
     """Deletes all log entries in the model and frees GPU memory."""
+    # Skip reference removal since all data structures are about to be deleted.
     for tensor_log_entry in self:
-        self._remove_log_entry(tensor_log_entry, remove_references=True)
+        _clear_entry_attributes(tensor_log_entry)
     for attr in MODEL_LOG_FIELD_ORDER:
-        delattr(self, attr)
+        if hasattr(self, attr):
+            delattr(self, attr)
     torch.cuda.empty_cache()
 
 
 def _clear_entry_attributes(log_entry: TensorLog) -> None:
     """Clear all instance attributes from a TensorLog entry."""
-    for attr in dir(log_entry):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            if attr.startswith("__"):
-                continue
-            if isinstance(getattr(type(log_entry), attr, None), property):
-                continue
-            if not callable(getattr(log_entry, attr, None)):
-                delattr(log_entry, attr)
+    for attr in list(log_entry.__dict__):
+        delattr(log_entry, attr)
 
 
 def _remove_log_entry(self, log_entry: TensorLog, remove_references: bool = True) -> None:
@@ -46,7 +39,6 @@ def _remove_log_entry(self, log_entry: TensorLog, remove_references: bool = True
     else:
         tensor_label = log_entry.tensor_label_raw
     _clear_entry_attributes(log_entry)
-    del log_entry
     if remove_references:
         _remove_log_entry_references(self, tensor_label)
 

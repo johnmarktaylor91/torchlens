@@ -8,9 +8,9 @@ new activations).
 
 import copy
 from collections import defaultdict
+from math import prod
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
-import numpy as np
 import torch
 
 from .. import _state as _st
@@ -167,8 +167,8 @@ def _build_param_fields(
     fields_dict["parent_param_logs"] = parent_param_logs
     fields_dict["num_param_tensors"] = len(arg_parameters)
     fields_dict["parent_param_shapes"] = [tuple(param.shape) for param in arg_parameters]
-    fields_dict["num_params_total"] = int(
-        np.sum([np.prod(shape) for shape in fields_dict["parent_param_shapes"]])
+    fields_dict["num_params_total"] = sum(
+        prod(shape) for shape in fields_dict["parent_param_shapes"]
     )
     fields_dict["num_params_trainable"] = sum(
         pl.num_params for pl in parent_param_logs if pl.trainable
@@ -176,9 +176,7 @@ def _build_param_fields(
     fields_dict["num_params_frozen"] = sum(
         pl.num_params for pl in parent_param_logs if not pl.trainable
     )
-    fields_dict["parent_params_fsize"] = int(
-        np.sum([get_tensor_memory_amount(p) for p in arg_parameters])
-    )
+    fields_dict["parent_params_fsize"] = sum(get_tensor_memory_amount(p) for p in arg_parameters)
     fields_dict["parent_params_fsize_nice"] = human_readable_size(
         fields_dict["parent_params_fsize"]
     )
@@ -370,13 +368,20 @@ def log_function_output_tensors_exhaustive(
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
 
-        fields_dict_onetensor = {key: copy.copy(value) for key, value in fields_dict.items()}
-        fields_to_deepcopy = [
+        # Shallow-copy only mutable containers; immutable values (str, int, bool,
+        # None, tuple, torch.dtype) don't need copying.
+        fields_dict_onetensor = {}
+        for key, value in fields_dict.items():
+            if isinstance(value, (list, dict, set)):
+                fields_dict_onetensor[key] = copy.copy(value)
+            else:
+                fields_dict_onetensor[key] = value
+        # These nested structures need deep copies to avoid cross-tensor mutation.
+        for field in (
             "parent_layer_arg_locs",
             "containing_modules_origin_nested",
             "parent_param_passes",
-        ]
-        for field in fields_to_deepcopy:
+        ):
             fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
         _log_output_tensor_info(
             self, out, i, args, kwargs, parent_param_passes, fields_dict_onetensor
@@ -472,13 +477,11 @@ def log_function_output_tensors_fast(
             _add_backward_hook(self, out, orig_tensor_label)
 
         # Check to make sure the graph didn't change.
-        if any(
-            [
-                orig_tensor_entry.realtime_tensor_num != self._tensor_counter,
-                orig_tensor_entry.layer_type != layer_type,
-                orig_tensor_entry.tensor_label_raw != tensor_label_raw,
-                set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig),
-            ]
+        if (
+            orig_tensor_entry.realtime_tensor_num != self._tensor_counter
+            or orig_tensor_entry.layer_type != layer_type
+            or orig_tensor_entry.tensor_label_raw != tensor_label_raw
+            or set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig)
         ):
             raise ValueError(
                 "The computational graph changed for this forward pass compared to the original "
@@ -523,8 +526,9 @@ def log_function_output_tensors_fast(
 
         orig_tensor_entry.tensor_shape = tuple(out.shape)
         orig_tensor_entry.tensor_dtype = out.dtype
-        orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(out)
-        orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(out))
+        fsize = get_tensor_memory_amount(out)
+        orig_tensor_entry.tensor_fsize = fsize
+        orig_tensor_entry.tensor_fsize_nice = human_readable_size(fsize)
         orig_tensor_entry.func_time_elapsed = exec_ctx.time_elapsed
         orig_tensor_entry.func_rng_states = exec_ctx.rng_states
         orig_tensor_entry.func_autocast_state = exec_ctx.autocast_state
