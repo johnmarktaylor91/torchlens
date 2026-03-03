@@ -48,6 +48,7 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
 # ---------------------------------------------------------------------------
 STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "cross_entropy": {1},  # target labels (LongTensor)
+    "embedding": {1},  # index tensor — random indices cause CUDA OOB
     "index_select": {2},  # index tensor
     "scatter_": {2},  # index tensor
     "masked_fill_": {1},  # mask tensor
