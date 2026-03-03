@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     pass
 
 from ..helper_funcs import (
+    AutocastRestore,
     log_current_rng_states,
     set_rng_from_saved_states,
     tuple_tolerant_assign,
@@ -347,12 +348,13 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
     input_args = _prepare_input_args_for_validating_layer(self, layer, layers_to_perturb)
 
-    # Set the saved rng value:
+    # Restore saved rng and autocast state:
     layer_func = layer.func_applied
     current_rng_states = log_current_rng_states()
     set_rng_from_saved_states(layer.func_rng_states)
     try:
-        recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
+        with AutocastRestore(layer.func_autocast_state):
+            recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
     except Exception as e:
         if verbose:
             print(

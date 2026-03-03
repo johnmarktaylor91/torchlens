@@ -102,6 +102,7 @@ class TensorLog:
         self.flops_forward = fields_dict["flops_forward"]
         self.flops_backward = fields_dict["flops_backward"]
         self.func_rng_states = fields_dict["func_rng_states"]
+        self.func_autocast_state = fields_dict["func_autocast_state"]
         self.func_argnames = fields_dict["func_argnames"]
         self.num_func_args_total = fields_dict["num_func_args_total"]
         self.num_position_args = fields_dict["num_position_args"]

@@ -194,6 +194,7 @@ def log_source_tensor_exhaustive(
         "flops_forward": 0,
         "flops_backward": 0,
         "func_rng_states": log_current_rng_states(),
+        "func_autocast_state": {},
         "func_argnames": tuple([]),
         "num_func_args_total": 0,
         "num_position_args": 0,
@@ -344,6 +345,7 @@ def log_function_output_tensors(
     out_orig: Any,
     func_time_elapsed: float,
     func_rng_states: Dict,
+    func_autocast_state: Dict,
     is_bottom_level_func: bool,
 ):
     if self.logging_mode == "exhaustive":
@@ -358,6 +360,7 @@ def log_function_output_tensors(
             out_orig,
             func_time_elapsed,
             func_rng_states,
+            func_autocast_state,
             is_bottom_level_func,
         )
     elif self.logging_mode == "fast":
@@ -371,6 +374,7 @@ def log_function_output_tensors(
             out_orig,
             func_time_elapsed,
             func_rng_states,
+            func_autocast_state,
             is_bottom_level_func,
         )
 
@@ -386,6 +390,7 @@ def log_function_output_tensors_exhaustive(
     out_orig: Any,
     func_time_elapsed: float,
     func_rng_states: Dict,
+    func_autocast_state: Dict,
     is_bottom_level_func: bool,
 ):
     """Logs tensor or set of tensors that were computed from a function call.
@@ -433,6 +438,7 @@ def log_function_output_tensors_exhaustive(
     fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)
     fields_dict["func_time_elapsed"] = func_time_elapsed
     fields_dict["func_rng_states"] = func_rng_states
+    fields_dict["func_autocast_state"] = func_autocast_state
     from . import _state as _st
 
     fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())
@@ -647,6 +653,7 @@ def log_function_output_tensors_fast(
     out_orig: Any,
     func_time_elapsed: float,
     func_rng_states: Dict,
+    func_autocast_state: Dict,
     is_bottom_level_func: bool,
 ):
     # Collect information.
@@ -748,6 +755,7 @@ def log_function_output_tensors_fast(
         orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(out))
         orig_tensor_entry.func_time_elapsed = func_time_elapsed
         orig_tensor_entry.func_rng_states = func_rng_states
+        orig_tensor_entry.func_autocast_state = func_autocast_state
         orig_tensor_entry.func_position_args_non_tensor = non_tensor_args
         orig_tensor_entry.func_keyword_args_non_tensor = non_tensor_kwargs
 

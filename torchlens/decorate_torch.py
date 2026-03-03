@@ -13,6 +13,7 @@ from .constants import ORIG_TORCH_FUNCS
 from .helper_funcs import (
     get_vars_of_type_from_obj,
     identity,
+    log_current_autocast_state,
     log_current_rng_states,
     make_random_barcode,
     nested_getattr,
@@ -119,6 +120,7 @@ def torch_func_decorator(func: Callable, func_name: str):
         model_log.current_function_call_barcode = func_call_barcode
         start_time = time.time()
         func_rng_states = log_current_rng_states()
+        func_autocast_state = log_current_autocast_state()
         out_orig = func(*args, **kwargs)
         func_time_elapsed = time.time() - start_time
         is_bottom_level_func = model_log.current_function_call_barcode == func_call_barcode
@@ -149,6 +151,7 @@ def torch_func_decorator(func: Callable, func_name: str):
                 out_orig,
                 func_time_elapsed,
                 func_rng_states,
+                func_autocast_state,
                 is_bottom_level_func,
             )
 

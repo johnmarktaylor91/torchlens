@@ -2692,14 +2692,9 @@ def test_fake_loop_same_op_type():
 
 
 def test_autocast_mid_forward():
-    """Verify torchlens can log through autocast without crashing.
-    Validation skipped: autocast context is not captured during logging,
-    so replay produces different precision results.
-    """
     model = example_models.AutocastMidForward()
     x = torch.rand(4, 4)
-    model_log = log_forward_pass(model, x)
-    assert len(model_log.layer_labels) > 0
+    assert validate_saved_activations(model, x)
     show_model_graph(
         model,
         x,

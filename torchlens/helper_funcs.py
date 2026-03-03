@@ -78,6 +78,59 @@ def set_rng_from_saved_states(rng_states: Dict):
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 
+# ---------------------------------------------------------------------------
+# Autocast state capture/restore
+# ---------------------------------------------------------------------------
+
+_AUTOCAST_DEVICES = ("cpu", "cuda")
+
+
+def log_current_autocast_state() -> Dict:
+    """Capture the current autocast enabled/dtype state for all supported devices.
+
+    Returns:
+        Dict mapping device name to {enabled: bool, dtype: torch.dtype}.
+    """
+    state = {}
+    for device in _AUTOCAST_DEVICES:
+        try:
+            state[device] = {
+                "enabled": torch.is_autocast_enabled(device),
+                "dtype": torch.get_autocast_dtype(device),
+            }
+        except (RuntimeError, TypeError):
+            pass
+    return state
+
+
+class AutocastRestore:
+    """Context manager that restores saved autocast states.
+
+    Usage::
+
+        with AutocastRestore(saved_state):
+            result = func(*args, **kwargs)
+    """
+
+    __slots__ = ("_autocast_state", "_contexts")
+
+    def __init__(self, autocast_state: Dict):
+        self._autocast_state = autocast_state
+        self._contexts = []
+
+    def __enter__(self):
+        for device, state in self._autocast_state.items():
+            if state["enabled"]:
+                ctx = torch.amp.autocast(device, dtype=state["dtype"])
+                ctx.__enter__()
+                self._contexts.append(ctx)
+        return self
+
+    def __exit__(self, *exc_info):
+        for ctx in reversed(self._contexts):
+            ctx.__exit__(*exc_info)
+
+
 def _safe_copy_arg(arg):
     """Copy a single argument safely, avoiding deepcopy on arbitrary objects.
 
