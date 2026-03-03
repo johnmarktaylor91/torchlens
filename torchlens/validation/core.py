@@ -18,7 +18,7 @@ from ..helper_funcs import (
     AutocastRestore,
     log_current_rng_states,
     set_rng_from_saved_states,
-    tuple_tolerant_assign,
+    assign_to_sequence_or_dict,
     tensor_nanequal,
     tensor_all_nan,
 )
@@ -199,7 +199,23 @@ def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bo
     return True
 
 
-def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key, val):
+def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key, val) -> bool:
+    """Validate whether a parent layer is correctly logged for a specific argument of a target layer.
+
+    Handles nested argument structures (lists, tuples, dicts) by recursing into them
+    and delegating to ``_check_arglocs_correct_for_arg`` for each leaf value.
+
+    Args:
+        target_layer: The child layer whose argument log is being checked.
+        parent_layer: The parent layer being tested against the argument.
+        arg_type: Either ``"args"`` or ``"kwargs"``.
+        key: The positional index (for args) or keyword string (for kwargs) of the argument.
+        val: The saved argument value to inspect.
+
+    Returns:
+        True if the parent layer is correctly logged for all sub-positions of this argument,
+        False if any position is inconsistently logged.
+    """
     if type(val) in [list, tuple]:
         for v, subval in enumerate(val):
             argloc_key = (key, v)
@@ -235,7 +251,7 @@ def _check_arglocs_correct_for_arg(
     arg_type: str,
     argloc_key: Union[str, tuple],
     saved_arg_val: Any,
-):
+) -> bool:
     """For a given layer and an argument to its child layer, checks that it is logged correctly:
     that is, that it's logged as an argument if it matches, and is not logged as an argument if it doesn't match.
     """
@@ -327,8 +343,8 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
     if perturb:
         # Empty tensor parents cannot be meaningfully perturbed
-        for p_label in layers_to_perturb:
-            p_entry = self[p_label]
+        for perturbed_label in layers_to_perturb:
+            p_entry = self[perturbed_label]
             if p_entry.tensor_contents is not None and p_entry.tensor_contents.numel() == 0:
                 return True
 
@@ -457,14 +473,14 @@ def _prepare_input_args_for_validating_layer(
             if type(key) != tuple:
                 input_args[arg_type][key] = parent_layer_func_values
             else:
-                input_args[arg_type][key[0]] = tuple_tolerant_assign(
+                input_args[arg_type][key[0]] = assign_to_sequence_or_dict(
                     input_args[arg_type][key[0]], key[1], parent_layer_func_values
                 )
 
     return input_args
 
 
-def _deep_clone_tensors(val):
+def _deep_clone_tensors(val: Any) -> Any:
     """Recursively clone all tensors in a nested structure."""
     if isinstance(val, torch.Tensor):
         return val.detach().clone()
@@ -476,7 +492,16 @@ def _deep_clone_tensors(val):
     return val
 
 
-def _copy_validation_args(input_args: Dict):
+def _copy_validation_args(input_args: Dict) -> Dict:
+    """Deep-clone all tensors in the input argument dict to avoid in-place mutation during validation.
+
+    Args:
+        input_args: Dict with ``"args"`` (list) and ``"kwargs"`` (dict) keys holding
+            the raw creation arguments for a layer.
+
+    Returns:
+        A new dict with the same structure but with every tensor replaced by a detached clone.
+    """
     return {
         "args": [_deep_clone_tensors(v) for v in input_args["args"]],
         "kwargs": {k: _deep_clone_tensors(v) for k, v in input_args["kwargs"].items()},

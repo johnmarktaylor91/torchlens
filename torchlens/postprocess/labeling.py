@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 
-def _map_raw_tensor_labels_to_final_tensor_labels(self):
+def _map_raw_tensor_labels_to_final_tensor_labels(self) -> None:
     """
     Determines the final label for each tensor, and stores this mapping as a dictionary
     in order to then go through and rename everything in the next preprocessing step.
@@ -68,7 +68,7 @@ def _map_raw_tensor_labels_to_final_tensor_labels(self):
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
 
-def _log_final_info_for_all_layers(self):
+def _log_final_info_for_all_layers(self) -> None:
     """
     Goes through all layers (before discarding unsaved ones), and logs final info about the model
     and the layers that pertains to all layers (not just saved ones).
@@ -181,7 +181,7 @@ _LIST_FIELDS_TO_RENAME = [
 ]
 
 
-def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLog):
+def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLog) -> None:
     """
     Replaces all layer names in the fields of a TensorLog with their final
     layer names.
@@ -217,7 +217,7 @@ def _replace_layer_names_for_tensor_entry(self, tensor_entry: TensorLog):
         }
 
 
-def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog, _shadow_sets: dict):
+def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog, _shadow_sets: dict) -> None:
     """
     Logs the module hierarchy information for a single layer.
 
@@ -225,50 +225,51 @@ def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog, _shadow_
         tensor_entry: Log entry to mark the module hierarchy info for.
         _shadow_sets: Shadow sets for O(1) membership checks.
     """
-    _ml_seen = _shadow_sets["module_layers"]
-    _mpl_seen = _shadow_sets["module_pass_layers"]
-    _tlmp_seen = _shadow_sets["top_level_module_passes"]
-    _mpc_seen = _shadow_sets["module_pass_children"]
-    _ma_seen = _shadow_sets["module_addresses"]
-    _mp_seen = _shadow_sets["module_passes"]
+    _module_labels_seen = _shadow_sets["module_layers"]
+    _module_pass_labels_seen = _shadow_sets["module_pass_layers"]
+    _top_level_module_passes_seen = _shadow_sets["top_level_module_passes"]
+    _module_pass_children_seen = _shadow_sets["module_pass_children"]
+    _module_addresses_seen = _shadow_sets["module_addresses"]
+    _module_passes_seen = _shadow_sets["module_passes"]
 
     containing_module_pass_label = None
     layer_label = tensor_entry.layer_label
-    for m, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
+    for module_index, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
         module_name, module_pass = module_pass_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
         self.module_num_tensors[module_name] += 1
         self.module_pass_num_tensors[module_pass_nice_label] += 1
-        if layer_label not in _ml_seen[module_name]:
-            _ml_seen[module_name].add(layer_label)
+        if layer_label not in _module_labels_seen[module_name]:
+            _module_labels_seen[module_name].add(layer_label)
             self.module_layers[module_name].append(layer_label)
-        if layer_label not in _mpl_seen[module_pass_nice_label]:
-            _mpl_seen[module_pass_nice_label].add(layer_label)
+        if layer_label not in _module_pass_labels_seen[module_pass_nice_label]:
+            _module_pass_labels_seen[module_pass_nice_label].add(layer_label)
             self.module_pass_layers[module_pass_nice_label].append(layer_label)
-        if (m == 0) and (module_pass_nice_label not in _tlmp_seen):
-            _tlmp_seen.add(module_pass_nice_label)
+        if (module_index == 0) and (module_pass_nice_label not in _top_level_module_passes_seen):
+            _top_level_module_passes_seen.add(module_pass_nice_label)
             self.top_level_module_passes.append(module_pass_nice_label)
         else:
             if (containing_module_pass_label is not None) and (
-                module_pass_nice_label not in _mpc_seen[containing_module_pass_label]
+                module_pass_nice_label
+                not in _module_pass_children_seen[containing_module_pass_label]
             ):
-                _mpc_seen[containing_module_pass_label].add(module_pass_nice_label)
+                _module_pass_children_seen[containing_module_pass_label].add(module_pass_nice_label)
                 self.module_pass_children[containing_module_pass_label].append(
                     module_pass_nice_label
                 )
         containing_module_pass_label = module_pass_nice_label
         if self.module_num_passes[module_name] < module_pass:
             self.module_num_passes[module_name] = module_pass
-        if module_name not in _ma_seen:
-            _ma_seen.add(module_name)
+        if module_name not in _module_addresses_seen:
+            _module_addresses_seen.add(module_name)
             self.module_addresses.append(module_name)
-        if module_pass_nice_label not in _mp_seen:
-            _mp_seen.add(module_pass_nice_label)
+        if module_pass_nice_label not in _module_passes_seen:
+            _module_passes_seen.add(module_pass_nice_label)
             self.module_passes.append(module_pass_nice_label)
     tensor_entry.module_nesting_depth = len(tensor_entry.containing_modules_origin_nested)
 
 
-def _remove_unwanted_entries_and_log_remaining(self):
+def _remove_unwanted_entries_and_log_remaining(self) -> None:
     """Removes entries from ModelLog that we don't want in the final saved output,
     and logs information about the remaining entries.
     """
@@ -334,12 +335,15 @@ def _remove_unwanted_entries_and_log_remaining(self):
 
 def _add_lookup_keys_for_tensor_entry(
     self, tensor_entry: TensorLog, tensor_index: int, num_tensors_to_keep: int
-):
+) -> None:
     """Adds the user-facing lookup keys for a TensorLog, both to itself
     and to the ModelLog top-level record.
 
     Args:
         tensor_entry: TensorLog to get the lookup keys for.
+        tensor_index: Zero-based position of this tensor in the final ordered layer list.
+        num_tensors_to_keep: Total number of tensors that will be kept, used to compute
+            negative-index lookup keys.
     """
     # The "default" keys: including the pass if multiple passes, excluding if one pass.
     lookup_keys_for_tensor = [
@@ -406,7 +410,7 @@ def _add_lookup_keys_for_tensor_entry(
         self._tensor_num_to_lookup_keys_dict[tensor_entry.realtime_tensor_num].append(lookup_key)
 
 
-def _trim_and_reorder_tensor_entry_fields(tensor_entry: TensorLog):
+def _trim_and_reorder_tensor_entry_fields(tensor_entry: TensorLog) -> None:
     """
     Sorts the fields in TensorLog into their desired order, and trims any
     fields that aren't useful after the pass.
@@ -422,7 +426,7 @@ def _trim_and_reorder_tensor_entry_fields(tensor_entry: TensorLog):
     tensor_entry.__dict__ = new_dir_dict
 
 
-def _rename_model_history_layer_names(self):
+def _rename_model_history_layer_names(self) -> None:
     """Renames all the metadata fields in ModelLog with the final layer names, replacing the
     realtime debugging names.
     """
@@ -484,7 +488,7 @@ def _rename_model_history_layer_names(self):
         ]
 
 
-def _trim_and_reorder_model_history_fields(self):
+def _trim_and_reorder_model_history_fields(self) -> None:
     """
     Sorts the fields in ModelLog into their desired order, and trims any
     fields that aren't useful after the pass.
