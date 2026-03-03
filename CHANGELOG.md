@@ -1,6 +1,124 @@
 # CHANGELOG
 
 
+## v0.13.0 (2026-03-03)
+
+### Bug Fixes
+
+- **logging**: Prevent label-steal on no-op same-object returns
+  ([`c8ec165`](https://github.com/johnmarktaylor91/torchlens/commit/c8ec1653919660d7b93e26046d3fe3706e40bc42))
+
+Functions like `to(same_dtype)` and `contiguous()` on already-contiguous tensors return the same
+  Python object without modifying it. TorchLens was treating these as in-place ops and propagating
+  the new label back to the original tensor, breaking module thread cleanup in T5 and other
+  encoder-decoder models with pre-norm residual patterns.
+
+Fix 1 (decorate_torch.py): Split `was_inplace` into `same_object_returned` (always safe_copy) vs
+  true in-place (func ends with `_` or starts with `__i`) — only true in-place ops propagate the
+  label back.
+
+Fix 2 (model_funcs.py): Module post-hook thread cleanup now uses labels captured at pre-hook time
+  rather than reading from live tensors that may have been overwritten by true in-place ops
+  mid-forward.
+
+Also removes the cycle-protection band-aid in vis.py (visited sets in _get_max_nesting_depth and
+  _set_up_subgraphs) since the root cause of module_pass_children cycles is now fixed.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **multi**: Resolve 16 test failures across suite
+  ([`6fcf72f`](https://github.com/johnmarktaylor91/torchlens/commit/6fcf72f6677ac30cd0f63bfc62250b2c133f028e))
+
+- Add soxr to test deps (transformers 5.2 unconditionally imports it) - Fix test_no_grad_block and
+  test_model_calling_model shape mismatch (use inline torch.rand(2, 32) instead of small_input
+  fixture) - Fix _get_input_arg_names for *args signatures (generate synthetic names) - Add empty
+  tensor perturbation exemption in validation core - Add topk/sort integer indices posthoc exemption
+  - Add type_as structural arg position exemption - Fix _append_arg_hash infinite recursion (tensor
+  formatting triggers wrapped methods; use isinstance check + shape-only representation) - Fix
+  TorchFunctionMode/DeviceContext bypass in decorated wrappers (Python wrappers skip C-level
+  dispatch, so torch.device('meta') context wasn't injecting device kwargs into factory functions,
+  causing corrupt buffers during transformers from_pretrained) - Rewrite test_autocast_mid_forward
+  to skip validation (autocast context not captured during logging)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Exempt setitem when perturbing all-zeros/all-ones destination
+  ([`a3a24ad`](https://github.com/johnmarktaylor91/torchlens/commit/a3a24ad75ba36ffcd1a87994d2c0abc5dce97102))
+
+BART creates position embeddings by new_zeros() then __setitem__ to fill. Perturbing the all-zeros
+  destination has no effect since setitem overwrites it. Add Case 3 to _check_setitem_exempt: when
+  the perturbed tensor is the destination (args[0]) and it's a special value (all-zeros/all-ones),
+  exempt.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Add cycle protection to _get_max_nesting_depth and subgraph setup
+  ([`8779af9`](https://github.com/johnmarktaylor91/torchlens/commit/8779af9bc95743f55232660432dcf6bcb0055842))
+
+call_children can contain cycles in models like T5 where residual connections cross module
+  boundaries (e.g. layer_norm -> next block). _get_max_nesting_depth looped infinitely, causing
+  >600s timeout.
+
+Also: - Add visited set to _set_up_subgraphs while-loop for same reason - Add min with multiple args
+  to posthoc exemption (same as max) - Remove @pytest.mark.slow from test_t5_small (now 15s, was
+  infinite)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **validation**: Capture and restore autocast context during logging and replay
+  ([`19bbcb6`](https://github.com/johnmarktaylor91/torchlens/commit/19bbcb665c55f9e022263b51f673a781d5b80410))
+
+Autocast state (enabled/dtype per device) is now captured alongside RNG state when each function
+  executes during logging. During validation replay, the saved autocast context is restored so
+  operations run at the same precision as the original forward pass.
+
+- Add log_current_autocast_state() and AutocastRestore context manager - Thread func_autocast_state
+  through exhaustive and fast logging paths - Wrap validation replay in AutocastRestore - Restore
+  validate_saved_activations in test_autocast_mid_forward
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **validation**: Restructure into subpackage with data-driven exemption registries
+  ([`ff85efd`](https://github.com/johnmarktaylor91/torchlens/commit/ff85efd282df188e5202d35944c0782ed1e16c3f))
+
+Replace the monolithic validation.py (814 lines) with a clean torchlens/validation/ subpackage. The
+  141-line elif chain and three separate exemption mechanisms are now consolidated into four
+  declarative registries in exemptions.py (SKIP_VALIDATION_ENTIRELY, SKIP_PERTURBATION_ENTIRELY,
+  STRUCTURAL_ARG_POSITIONS, CUSTOM_EXEMPTION_CHECKS), with posthoc checks kept as
+  belt-and-suspenders.
+
+Secondary fixes: - mean==0/mean==1 heuristic replaced with exact torch.all() checks - Bare except
+  Exception now logs error details when verbose=True - _copy_validation_args uses recursive
+  _deep_clone_tensors helper - While-loop perturbation bounded by MAX_PERTURB_ATTEMPTS=100
+
+Adds 23 new tests covering imports, registry consistency, perturbation unit tests, deep clone
+  helpers, and integration tests through specific exemption paths. All 399 existing tests pass with
+  zero regressions.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **suite**: Exhaustive test suite expansion (~559 tests)
+  ([`b489120`](https://github.com/johnmarktaylor91/torchlens/commit/b489120b91af4e41496cd206ce9ad20ab0a37092))
+
+Add ~76 new tests covering major gaps in architecture and edge-case coverage: - 64 new toy model
+  tests (attention, transformers, containers, conditionals, normalization variants, residual/param
+  sharing, in-place/type ops, scalar/ broadcasting, exemption stress tests, architecture patterns,
+  adversarial edge cases) - 12 new real-world model tests (DistilBERT, ELECTRA, MobileViT, MoE, T5,
+  BART, RoBERTa, BLIP, Whisper, ViT-MAE, Conformer, SentenceTransformer)
+
+Merge test_real_world_models_slow.py into test_real_world_models.py organized by
+  architecture/modality, using @pytest.mark.slow for heavy tests. Register the slow marker in
+  pyproject.toml.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.12.0 (2026-03-02)
 
 ### Features
