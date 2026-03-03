@@ -4,7 +4,7 @@ Orchestrates forward replay and perturbation checks, delegating exemption
 decisions to the registries and helpers in exemptions.py.
 """
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
@@ -55,10 +55,10 @@ def validate_saved_activations(
     # Validate the parents of each validated layer.
     validated_child_edges_for_each_layer = defaultdict(set)
     validated_layers = set(self.output_layers + self.internally_terminated_layers)
-    layers_to_validate_parents_for = list(validated_layers)
+    layers_to_validate_parents_for = deque(validated_layers)
 
     while len(layers_to_validate_parents_for) > 0:
-        layer_to_validate_parents_for = layers_to_validate_parents_for.pop(0)
+        layer_to_validate_parents_for = layers_to_validate_parents_for.popleft()
         parent_layers_valid = validate_parents_of_saved_layer(
             self,
             layer_to_validate_parents_for,

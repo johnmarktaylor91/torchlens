@@ -1,6 +1,5 @@
 """Steps 9-12: Label mapping, final info logging, renaming, cleanup, and lookup keys."""
 
-import warnings
 from collections import OrderedDict, defaultdict
 from typing import TYPE_CHECKING
 
@@ -478,11 +477,11 @@ def _rename_model_history_layer_names(self) -> None:
         self.conditional_branch_edges[t] = (new_child, new_parent)
 
     for module_pass, arglist in self.module_layer_argnames.items():
-        inds_to_remove = []
+        inds_to_remove = set()
         for a, arg in enumerate(arglist):
             raw_name = self.module_layer_argnames[module_pass][a][0]
             if raw_name not in self._raw_to_final_layer_labels:
-                inds_to_remove.append(a)
+                inds_to_remove.add(a)
                 continue
             new_name = self._raw_to_final_layer_labels[raw_name]
             argname = self.module_layer_argnames[module_pass][a][1]
@@ -502,9 +501,7 @@ def _trim_and_reorder_model_history_fields(self) -> None:
     new_dir_dict = OrderedDict()
     for field in MODEL_LOG_FIELD_ORDER:
         new_dir_dict[field] = getattr(self, field)
-    for field in dir(self):
-        if field.startswith("_"):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                new_dir_dict[field] = getattr(self, field)
+    for field, value in self.__dict__.items():
+        if field.startswith("_") and field not in new_dir_dict:
+            new_dir_dict[field] = value
     self.__dict__ = new_dir_dict

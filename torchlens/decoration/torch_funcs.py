@@ -100,7 +100,7 @@ def torch_func_decorator(func: Callable, func_name: str):
         if func_name in funcs_not_to_log:
             return func(*args, **kwargs)
 
-        all_args = list(args) + list(kwargs.values())
+        all_args = args if not kwargs else (*args, *kwargs.values())
         arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
 
         # Register any buffer tensors in the arguments.

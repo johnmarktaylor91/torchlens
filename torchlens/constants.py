@@ -457,7 +457,6 @@ def _get_torch_overridable_functions() -> List:
     runs once per process.  The returned list is used to build ``ORIG_TORCH_FUNCS``,
     which drives the one-time decoration performed by ``decorate_all_once()``.
     """
-    index = {}
     func_names = []
     tested_namespaces = [
         ("torch", torch, torch.__all__ + dir(torch._C._VariableFunctions)),
@@ -485,12 +484,10 @@ def _get_torch_overridable_functions() -> List:
                 elif func_name == "unique_dim":
                     continue
             else:
-                func = getattr(namespace, func_name)
-                if getattr(object, func_name, None) == func:
-                    continue
                 if func_name == "__weakref__":
                     continue
             func = getattr(namespace, func_name)
+            # Skip methods inherited from object (e.g. __hash__, __repr__ on Tensor)
             if namespace is torch.Tensor and getattr(object, func_name, None) == func:
                 continue
             # ignore re-exported modules
@@ -501,8 +498,6 @@ def _get_torch_overridable_functions() -> List:
                 continue
 
             if not callable(func) and hasattr(func, "__get__"):
-                index[func.__get__] = f"{namespace_str}.{func_name}.__get__"
-                index[func.__set__] = f"{namespace_str}.{func_name}.__set__"
                 if ignore:
                     continue
                 if func.__get__ in get_ignored_functions():
@@ -521,12 +516,10 @@ def _get_torch_overridable_functions() -> List:
             if not callable(func):
                 continue
 
-            index[func] = f"{namespace_str}.{func_name}"
-
             if ignore:
                 continue
 
-            # cannot be overriden by __torch_function__
+            # cannot be overridden by __torch_function__
             if func in get_ignored_functions():
                 msg = (
                     "{}.{} is in the tuple returned by torch._overrides.get_ignored_functions "

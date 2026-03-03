@@ -1,6 +1,7 @@
 """Model preparation: attaches metadata attributes and forward hooks to nn.Modules before logging."""
 
 import inspect
+import itertools
 import warnings
 from functools import wraps
 from typing import Callable, Dict, List, TYPE_CHECKING
@@ -420,7 +421,7 @@ def _handle_module_entry(model_log, module, args, kwargs):
         tensor_entry.modules_entered.append(module_address)
         tensor_entry.module_passes_entered.append(module_pass_label)
         tensor_entry.is_submodule_input = True
-        for arg_key, arg_val in list(enumerate(args)) + list(kwargs.items()):
+        for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
                 tensor_entry.modules_entered_argnames[
                     f"{module_pass_label[0]}:{module_pass_label[1]}"
@@ -567,15 +568,12 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
 
 
 def get_all_submodules(model: nn.Module, is_top_level_model: bool = True) -> List[nn.Module]:
-    """Recursively gets list of all submodules for given module."""
-    submodules = []
-    if is_top_level_model:
-        submodules.append(model)
-    for module in model.children():
-        if module not in submodules:
-            submodules.append(module)
-        submodules += get_all_submodules(module, is_top_level_model=False)
-    return submodules
+    """Return all modules reachable from ``model`` (including itself when top-level).
+
+    Uses ``model.modules()`` which handles shared-module deduplication
+    internally via ``id()`` checks.
+    """
+    return list(model.modules())
 
 
 def clear_hooks(hook_handles: List):
@@ -599,13 +597,10 @@ def _cleanup_model_session(model: nn.Module, input_tensors=None) -> None:
     Does NOT remove permanent attributes (``tl_module_address``,
     ``tl_module_type``) or restore original forward functions.
     """
-    # Restore requires_grad on parameters
+    # Restore requires_grad and remove session-scoped param attributes
     for param in model.parameters():
         if hasattr(param, "tl_requires_grad"):
             param.requires_grad = param.tl_requires_grad
-
-    # Remove session-scoped param attributes
-    for param in model.parameters():
         for attr_name in _SESSION_PARAM_ATTRS:
             if hasattr(param, attr_name):
                 try:

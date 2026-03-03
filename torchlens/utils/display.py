@@ -3,7 +3,6 @@
 import multiprocessing as mp
 from typing import Any, List
 
-import numpy as np
 from IPython import get_ipython
 
 
@@ -65,7 +64,7 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
     if unit == "B":
         size = int(size)
     else:
-        size = np.round(size, decimals=decimal_places)
+        size = round(size, decimal_places)
     return f"{size} {unit}"
 
 

@@ -83,6 +83,8 @@ def log_source_tensor_exhaustive(
     else:
         raise ValueError("source must be either 'input' or 'buffer'")
 
+    tensor_fsize = get_tensor_memory_amount(t)
+
     fields_dict = {
         # General info:
         "tensor_label_raw": tensor_label,
@@ -115,8 +117,8 @@ def log_source_tensor_exhaustive(
         "creation_kwargs": None,
         "tensor_shape": tuple(t.shape),
         "tensor_dtype": t.dtype,
-        "tensor_fsize": get_tensor_memory_amount(t),
-        "tensor_fsize_nice": human_readable_size(get_tensor_memory_amount(t)),
+        "tensor_fsize": tensor_fsize,
+        "tensor_fsize_nice": human_readable_size(tensor_fsize),
         # Child tensor variation tracking
         "has_child_tensor_variations": False,
         "children_tensor_versions": {},
@@ -137,7 +139,7 @@ def log_source_tensor_exhaustive(
         "flops_backward": 0,
         "func_rng_states": log_current_rng_states(),
         "func_autocast_state": {},
-        "func_argnames": tuple([]),
+        "func_argnames": (),
         "num_func_args_total": 0,
         "num_position_args": 0,
         "num_keyword_args": 0,
@@ -274,8 +276,9 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
 
     orig_tensor_entry.tensor_shape = tuple(t.shape)
     orig_tensor_entry.tensor_dtype = t.dtype
-    orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(t)
-    orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(t))
+    fsize = get_tensor_memory_amount(t)
+    orig_tensor_entry.tensor_fsize = fsize
+    orig_tensor_entry.tensor_fsize_nice = human_readable_size(fsize)
 
 
 def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:

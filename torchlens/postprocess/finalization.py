@@ -1,7 +1,7 @@
 """Steps 13-18: Tensor undecoration, timing, param logs, module logs, pass finish, graph rolling."""
 
 import time
-from collections import deque
+from collections import defaultdict, deque
 from typing import NamedTuple, TYPE_CHECKING
 
 import torch
@@ -170,7 +170,11 @@ def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None
 
 
 def _build_submodule_pass_logs(
-    self: "ModelLog", address: str, num_passes: int, pass_dict: dict
+    self: "ModelLog",
+    address: str,
+    num_passes: int,
+    pass_dict: dict,
+    _child_to_parent_pass: dict = None,
 ) -> tuple:
     """Build ModulePassLog objects for all passes of a single submodule.
 
@@ -204,12 +208,8 @@ def _build_submodule_pass_logs(
         # Call children for this pass
         call_children_pass = list(self.module_pass_children.get(pass_label, []))
 
-        # Call parent for this pass: find which module:pass contains this one
-        call_parent_pass = None
-        for parent_pass_label, children in self.module_pass_children.items():
-            if pass_label in children:
-                call_parent_pass = parent_pass_label
-                break
+        # Call parent for this pass: look up from pre-computed reverse mapping
+        call_parent_pass = _child_to_parent_pass.get(pass_label) if _child_to_parent_pass else None
         if call_parent_pass is None and pass_label in self.top_level_module_passes:
             call_parent_pass = "self:1"
 
@@ -270,7 +270,7 @@ def _build_module_param_info(self: "ModelLog", address: str) -> ModuleParamInfo:
     """Gather parameter and buffer layer info for a single module."""
     from ..data_classes.param_log import ParamAccessor
 
-    module_param_dict = {pl.address: pl for pl in self.param_logs if pl.module_address == address}
+    module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}
     module_params = ParamAccessor(module_param_dict)
     m_num_params = self.module_nparams.get(address, 0)
     m_num_trainable = self.module_nparams_trainable.get(address, 0)
@@ -306,6 +306,17 @@ def _build_module_logs(self: "ModelLog") -> None:
     module_dict["self"] = root_module
     module_order.append(root_module)
 
+    # Pre-compute param_logs grouped by module address
+    self._param_logs_by_module = defaultdict(list)
+    for pl in self.param_logs:
+        self._param_logs_by_module[pl.module_address].append(pl)
+
+    # Pre-compute reverse mapping: child_pass_label -> parent_pass_label
+    _child_to_parent_pass = {}
+    for parent_pass_label, children in self.module_pass_children.items():
+        for child_label in children:
+            _child_to_parent_pass[child_label] = parent_pass_label
+
     # --- Build ModuleLogs for each submodule ---
     for address in self.module_addresses:
         meta = self._module_metadata.get(address, {})
@@ -316,7 +327,9 @@ def _build_module_logs(self: "ModelLog") -> None:
         address_depth = address.count(".") + 1
         all_layers = list(self.module_layers.get(address, []))
 
-        passes, pass_labels_list = _build_submodule_pass_logs(self, address, num_passes, pass_dict)
+        passes, pass_labels_list = _build_submodule_pass_logs(
+            self, address, num_passes, pass_dict, _child_to_parent_pass
+        )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
         param_info = _build_module_param_info(self, address)
 
@@ -400,8 +413,10 @@ def _roll_graph(self) -> None:
     the graph for display. Each node in the rolled graph represents all passes of a
     given layer instead of having separate nodes for each pass.
     """
+    if self.layer_dict_rolled:
+        return
     for layer_label, node in self.layer_dict_main_keys.items():
-        layer_label_no_pass = self[layer_label].layer_label_no_pass
+        layer_label_no_pass = node.layer_label_no_pass
         if (
             layer_label_no_pass in self.layer_dict_rolled
         ):  # If rolled-up layer has already been added, fetch it:

@@ -112,6 +112,7 @@ class ModelLog:
         self.orphan_layers: List[str] = []
         self.unlogged_layers: List[str] = []
         self.layers_with_saved_gradients: List[str] = []
+        self._saved_gradients_set: set = set()
         self.layers_computed_with_params: Dict[str, List] = defaultdict(list)
         self.equivalent_operations: Dict[str, set] = defaultdict(set)
 

@@ -64,6 +64,7 @@ def save_new_activations(
     # Reset relevant fields.
     self.layers_with_saved_activations = []
     self.layers_with_saved_gradients = []
+    self._saved_gradients_set = set()
     self.has_saved_gradients = False
     self.unlogged_layers = []
     self.num_tensors_saved = 0
@@ -201,10 +202,12 @@ def _setup_inputs_and_device(
     if not input_kwargs:
         input_kwargs = {}
 
-    if len(list(model.parameters())) > 0:
-        model_device = next(iter(model.parameters())).device
-    elif len(list(model.buffers())) > 0:
-        model_device = next(iter(model.buffers())).device
+    first_param = next(model.parameters(), None)
+    first_buffer = next(model.buffers(), None)
+    if first_param is not None:
+        model_device = first_param.device
+    elif first_buffer is not None:
+        model_device = first_buffer.device
     else:
         model_device = "cpu"
 
@@ -232,13 +235,13 @@ def _extract_and_mark_outputs(
         allow_repeats=True,
     )
     # Remove duplicate addresses
-    addresses_used = []
+    addresses_seen = set()
     output_tensors_w_addresses = []
     for entry in output_tensors_w_addresses_all:
-        if entry[1] in addresses_used:
+        if entry[1] in addresses_seen:
             continue
         output_tensors_w_addresses.append(entry)
-        addresses_used.append(entry[1])
+        addresses_seen.add(entry[1])
 
     output_tensors = [t for t, _, _ in output_tensors_w_addresses]
     output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]

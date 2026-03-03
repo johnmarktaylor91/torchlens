@@ -49,15 +49,10 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
 
     for layer_label in layers_to_update:
         layer = self[layer_label]
-        if layer_label not in self.layers_with_saved_gradients:
+        if layer_label not in self._saved_gradients_set:
+            self._saved_gradients_set.add(layer_label)
             self.layers_with_saved_gradients.append(layer_label)
-
         layer.log_tensor_grad(grad)
-
-    layer_order = {layer: i for i, layer in enumerate(self.layer_labels)}
-    self.layers_with_saved_gradients = sorted(
-        self.layers_with_saved_gradients, key=lambda x: layer_order[x]
-    )
 
 
 def _locate_parent_tensors_in_args(
@@ -195,10 +190,12 @@ def _add_sibling_labels_for_new_tensor(
         if sibling_tensor_label == new_tensor_label:
             continue
         sibling_tensor = self[sibling_tensor_label]
-        sibling_tensor.sibling_layers.append(new_tensor_label)
-        sibling_tensor.has_siblings = True
-        entry_to_update.sibling_layers.append(sibling_tensor_label)
-        entry_to_update.has_siblings = True
+        if new_tensor_label not in sibling_tensor.sibling_layers:
+            sibling_tensor.sibling_layers.append(new_tensor_label)
+            sibling_tensor.has_siblings = True
+        if sibling_tensor_label not in entry_to_update.sibling_layers:
+            entry_to_update.sibling_layers.append(sibling_tensor_label)
+            entry_to_update.has_siblings = True
 
 
 def _process_parent_param_passes(
@@ -311,7 +308,9 @@ def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> N
     if _depth > 10:
         args_to_hash.append(f"{prefix}_deep")
         return
-    if isinstance(arg, torch.Tensor):
+    if isinstance(arg, torch.nn.Parameter):
+        pass  # exclude parameters from hash — must check before Tensor (Parameter is a subclass)
+    elif isinstance(arg, torch.Tensor):
         # Use shape/dtype only — formatting a tensor can trigger wrapped
         # methods (item, __format__) which re-enter logging and cause
         # infinite recursion.
@@ -322,8 +321,6 @@ def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> N
     elif isinstance(arg, (list, tuple, set)):
         for i, elem in enumerate(arg):
             _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash, _depth + 1)
-    elif isinstance(arg, torch.nn.Parameter):
-        pass  # exclude parameters from hash (same as before)
     else:
         args_to_hash.append(f"{prefix}_{arg}")
 

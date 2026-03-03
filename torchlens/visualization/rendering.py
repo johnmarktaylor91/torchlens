@@ -352,11 +352,11 @@ def _build_collapsed_module_node(
         node_name = "pass".join(module_tuple)
         mpl = self.modules[module_address_w_pass]
         module_num_tensors = mpl.num_layers
-        module_has_input_ancestor = any([self[layer].has_input_ancestor for layer in mpl.layers])
+        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in mpl.layers)
     else:
         node_name = module_tuple[0]
         module_num_tensors = ml.num_layers
-        module_has_input_ancestor = any([self[layer].has_input_ancestor for layer in ml.all_layers])
+        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.all_layers)
 
     if node_name in collapsed_modules:
         return  # collapsed node already added
@@ -991,7 +991,7 @@ def _get_lowest_containing_module_for_two_nodes(
             return containing_module
 
     containing_module = node1_modules[0]
-    for m in range(min([len(node1_modules), len(node2_modules)])):
+    for m in range(min(len(node1_modules), len(node2_modules))):
         if node1_modules[m] != node2_modules[m]:
             break
         containing_module = node1_modules[m]

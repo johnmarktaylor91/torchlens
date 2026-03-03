@@ -39,7 +39,7 @@ def get_vars_of_type_from_obj(
     found_items = []
     found_addresses = []
     found_addresses_full = []
-    found_ids = []
+    found_ids = set()
     for _ in range(search_depth):
         this_stack = _search_stack_for_vars_of_type(
             this_stack,
@@ -90,7 +90,7 @@ def _search_stack_for_vars_of_type(
     while len(current_stack) > 0:
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
-        if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or (
+        if any(issubclass(item_class, subclass) for subclass in subclass_exceptions) or (
             (id(item) in found_ids) and not allow_repeats
         ):
             continue
@@ -98,7 +98,7 @@ def _search_stack_for_vars_of_type(
             found_items.append(item)
             found_addresses.append(address)
             found_addresses_full.append(address_full)
-            found_ids.append(id(item))
+            found_ids.add(id(item))
             continue
         if item_class in [str, int, float, bool, np.ndarray, torch.Tensor]:
             continue

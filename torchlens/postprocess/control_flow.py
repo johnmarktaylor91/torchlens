@@ -67,13 +67,11 @@ def _fix_modules_for_internal_tensors(self) -> None:
         # And for any internally generated child nodes:
         for child_label in node.child_layers:
             child_node = self[child_label]
-            if any(
-                [
-                    node.has_input_ancestor,
-                    child_node.has_input_ancestor,
-                    child_label in nodes_seen,
-                    child_node.is_output_layer,
-                ]
+            if (
+                node.has_input_ancestor
+                or child_node.has_input_ancestor
+                or child_label in nodes_seen
+                or child_node.is_output_layer
             ):
                 continue
             _fix_modules_for_single_internal_tensor(
@@ -179,8 +177,8 @@ def _fix_buffer_layers(self) -> None:
         buffers = buffers_orig[1:]
         unique_buffers = buffers_orig[:1]
         for b, buffer_label in enumerate(buffers):
+            buffer = self[buffer_label]
             for unique_buffer_label in unique_buffers:
-                buffer = self[buffer_label]
                 unique_buffer = self[unique_buffer_label]
                 if (
                     (buffer.tensor_contents is not None)
@@ -189,6 +187,7 @@ def _fix_buffer_layers(self) -> None:
                 ):
                     _merge_buffer_entries(self, unique_buffer, buffer)
                     break
+            else:
                 unique_buffers.append(buffer_label)
 
     # And relabel the buffer passes.
