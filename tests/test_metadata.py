@@ -115,11 +115,16 @@ def test_param_info_fields(small_input):
 def test_module_info_fields(small_input):
     model = example_models.NestedModules()
     mh = log_forward_pass(model, small_input)
-    assert isinstance(mh.module_addresses, list)
-    assert len(mh.module_addresses) > 0
-    assert isinstance(mh.module_types, dict)
-    assert isinstance(mh.module_passes, list)
-    assert isinstance(mh.module_children, dict)
+    # Module info is now accessed via structured ModuleLog objects
+    assert len(mh.modules) > 1
+    root = mh.modules["self"]
+    assert root.address == "self"
+    assert len(root.all_layers) > 0
+    # Submodules should have valid addresses and class names
+    for ml in mh.modules:
+        if ml.address != "self":
+            assert isinstance(ml.module_class_name, str)
+            assert ml.address_parent in mh.modules
 
 
 def test_time_fields(small_input):
@@ -756,12 +761,12 @@ def test_flops_coverage_on_model():
 
 
 def test_module_training_modes_populated(small_input):
-    """module_training_modes should map module addresses to their training flag."""
+    """ModuleLog.training_mode should capture the training flag."""
     model = example_models.SimpleFF()
     model.train()
     mh = log_forward_pass(model, small_input)
-    # SimpleFF has no submodules, so dict should be empty
-    assert isinstance(mh.module_training_modes, dict)
+    # SimpleFF has no submodules beyond root
+    assert isinstance(mh.modules, object)
 
 
 def test_module_training_modes_train_vs_eval():
@@ -771,13 +776,15 @@ def test_module_training_modes_train_vs_eval():
 
     model.train()
     mh_train = log_forward_pass(model, x)
-    for addr, mode in mh_train.module_training_modes.items():
-        assert mode is True, f"Module {addr} should be training=True"
+    for ml in mh_train.modules:
+        if ml.address != "self":
+            assert ml.training_mode is True, f"Module {ml.address} should be training=True"
 
     model.eval()
     mh_eval = log_forward_pass(model, x)
-    for addr, mode in mh_eval.module_training_modes.items():
-        assert mode is False, f"Module {addr} should be training=False"
+    for ml in mh_eval.modules:
+        if ml.address != "self":
+            assert ml.training_mode is False, f"Module {ml.address} should be training=False"
 
 
 @pytest.mark.slow

@@ -153,7 +153,9 @@ def _prepare_model_session(
         if is_root:
             return
         module.tl_source_model_log = model_log
-        model_log.module_types[module.tl_module_address] = module.tl_module_type
+        model_log._module_build_data["module_types"][module.tl_module_address] = (
+            module.tl_module_type
+        )
         module.tl_module_pass_num = 0
         module.tl_module_pass_labels = []
         module.tl_tensors_entered_labels = []
@@ -399,7 +401,7 @@ def _handle_module_entry(model_log, module, args, kwargs):
         Tuple of (input_tensor_labels, input_tensor_labels_at_entry) needed by the exit handler.
     """
     module_address = module.tl_module_address
-    model_log.module_training_modes[module_address] = module.training
+    model_log._module_build_data["module_training_modes"][module_address] = module.training
     module.tl_module_pass_num += 1
     module_pass_label = (module_address, module.tl_module_pass_num)
     module.tl_module_pass_labels.append(module_pass_label)
@@ -426,7 +428,7 @@ def _handle_module_entry(model_log, module, args, kwargs):
                 tensor_entry.modules_entered_argnames[
                     f"{module_pass_label[0]}:{module_pass_label[1]}"
                 ].append(arg_key)
-                model_log.module_layer_argnames[
+                model_log._module_build_data["module_layer_argnames"][
                     (f"{module_pass_label[0]}:{module_pass_label[1]}")
                 ].append((t.tl_tensor_label_raw, arg_key))
         tensor_entry.module_entry_exit_thread_output.append(

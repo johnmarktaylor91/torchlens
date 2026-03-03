@@ -27,6 +27,32 @@ from ..validation import validate_saved_activations
 from ..visualization.rendering import render_graph
 
 
+def _init_module_build_data() -> dict:
+    """Create the transient dict used to accumulate module hierarchy data during logging.
+
+    Consumed by ``_build_module_logs`` (step 17) and then cleared.
+    """
+    return {
+        "module_addresses": [],
+        "module_types": {},
+        "module_passes": [],
+        "module_num_passes": defaultdict(lambda: 1),
+        "top_level_modules": [],
+        "top_level_module_passes": [],
+        "module_children": defaultdict(list),
+        "module_pass_children": defaultdict(list),
+        "module_nparams": defaultdict(lambda: 0),
+        "module_nparams_trainable": defaultdict(lambda: 0),
+        "module_nparams_frozen": defaultdict(lambda: 0),
+        "module_num_tensors": defaultdict(lambda: 0),
+        "module_pass_num_tensors": defaultdict(lambda: 0),
+        "module_layers": defaultdict(list),
+        "module_pass_layers": defaultdict(list),
+        "module_layer_argnames": defaultdict(list),
+        "module_training_modes": {},
+    }
+
+
 class ModelLog:
     def __init__(
         self,
@@ -134,24 +160,8 @@ class ModelLog:
         self.total_params_fsize: int = 0
         self.total_params_fsize_nice: str = human_readable_size(0)
 
-        # Module info:
-        self.module_addresses: List[str] = []
-        self.module_types: Dict[str, Any] = {}
-        self.module_passes: List = []
-        self.module_num_passes: Dict = defaultdict(lambda: 1)
-        self.top_level_modules: List = []
-        self.top_level_module_passes: List = []
-        self.module_children: Dict = defaultdict(list)
-        self.module_pass_children: Dict = defaultdict(list)
-        self.module_nparams: Dict = defaultdict(lambda: 0)
-        self.module_nparams_trainable: Dict = defaultdict(lambda: 0)
-        self.module_nparams_frozen: Dict = defaultdict(lambda: 0)
-        self.module_num_tensors: Dict = defaultdict(lambda: 0)
-        self.module_pass_num_tensors: Dict = defaultdict(lambda: 0)
-        self.module_layers: Dict = defaultdict(list)
-        self.module_pass_layers: Dict = defaultdict(list)
-        self.module_layer_argnames = defaultdict(list)
-        self.module_training_modes: Dict[str, bool] = {}
+        # Transient module build data (consumed by _build_module_logs, then cleared):
+        self._module_build_data: Dict = _init_module_build_data()
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
