@@ -1,4 +1,5 @@
-# This file is for defining the ModelLog class that stores the representation of the forward pass.
+"""ModelLog: the top-level object that stores the full representation of a logged forward pass."""
+
 import copy
 from collections import OrderedDict, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Tuple
@@ -6,13 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Tupl
 if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
 
-from ..cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup
+from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
-from ..helper_funcs import (
-    human_readable_size,
-)
-from ..interface import (
+from ..utils.display import human_readable_size
+from .interface import (
     _getitem_after_pass,
     _getitem_during_pass,
     _str_after_pass,
@@ -20,12 +19,12 @@ from ..interface import (
     to_pandas,
     print_all_fields,
 )
-from ..logging_funcs import save_new_activations
+from ..capture.trace import save_new_activations
 from ..postprocess import postprocess
 from .tensor_log import RolledTensorLog, TensorLog
-from ..trace_model import run_and_log_inputs_through_model
+from ..capture.trace import run_and_log_inputs_through_model
 from ..validation import validate_saved_activations
-from ..vis import render_graph
+from ..visualization.rendering import render_graph
 
 
 class ModelLog:

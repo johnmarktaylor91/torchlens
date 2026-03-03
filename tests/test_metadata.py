@@ -11,9 +11,10 @@ import torch
 import torch.nn as nn
 
 import example_models
+import torchlens
 from torchlens import log_forward_pass
 from torchlens.data_classes import FuncCallLocation
-from torchlens.flops import (
+from torchlens.capture.flops import (
     BACKWARD_MULTIPLIERS,
     ELEMENTWISE_FLOPS,
     SPECIALTY_HANDLERS,
@@ -848,21 +849,14 @@ def test_forward_frame_present(small_input):
 
 
 def test_no_torchlens_internals_in_stack(small_input):
-    internal_files = (
-        "model_log.py",
-        "torchlens/helper_funcs.py",
-        "torchlens/user_funcs.py",
-        "torchlens/trace_model.py",
-        "torchlens/logging_funcs.py",
-        "torchlens/decorate_torch.py",
-        "torchlens/model_funcs.py",
-    )
+    import os
+
+    torchlens_pkg_dir = os.path.dirname(os.path.abspath(torchlens.__file__))
     stack, _ = _get_func_call_stack(small_input)
     for loc in stack:
-        for suffix in internal_files:
-            assert not loc.file.endswith(suffix), (
-                f"Internal file {suffix} should not appear in stack"
-            )
+        assert not loc.file.startswith(torchlens_pkg_dir), (
+            f"Internal file {loc.file} should not appear in stack"
+        )
 
 
 def test_call_line_is_stripped(small_input):

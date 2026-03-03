@@ -9,7 +9,8 @@ import torch
 from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from ..data_classes.tensor_log import RolledTensorLog
-from ..helper_funcs import get_vars_of_type_from_obj, human_readable_size
+from ..utils.introspection import get_vars_of_type_from_obj
+from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -50,7 +51,8 @@ def _log_time_elapsed(self) -> None:
 
 def _finalize_param_logs(self: "ModelLog") -> None:
     """Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata."""
-    from ..helper_funcs import get_tensor_memory_amount, human_readable_size
+    from ..utils.tensor_utils import get_tensor_memory_amount
+    from ..utils.display import human_readable_size
 
     # Build tensor_log_entries and linked_params from TensorLogEntries
     for tensor_entry in self.layer_list:
@@ -78,25 +80,13 @@ def _finalize_param_logs(self: "ModelLog") -> None:
         tensor_entry.parent_params = []
 
 
-def _build_module_logs(self: "ModelLog") -> None:
-    """Build structured ModuleLog/ModulePassLog objects from raw module_* dicts and _module_metadata.
-
-    Called as Step 17 of postprocess(), after all raw module data has been populated
-    and layer labels have been finalized.
-    """
+def _build_root_module_log(self: "ModelLog", pass_dict: dict) -> "ModuleLog":
+    """Build the root ModuleLog and its ModulePassLog for the model itself."""
     from ..data_classes.param_log import ParamAccessor
 
-    module_dict = {}  # address -> ModuleLog
-    pass_dict = {}  # "addr:pass" -> ModulePassLog
-    module_order = []  # ordered by first appearance
-
-    # --- Build root ModuleLog ("self") ---
     root_meta = self._module_metadata.get("self", {})
-
-    # Collect all layers belonging to root (= all layers in the model)
     root_all_layers = list(self.layer_labels)
 
-    # Build per-module ParamAccessor for root: all params
     root_param_dict = {pl.address: pl for pl in self.param_logs}
     root_params = ParamAccessor(root_param_dict)
     root_num_params = sum(pl.num_params for pl in self.param_logs)
@@ -142,7 +132,6 @@ def _build_module_logs(self: "ModelLog") -> None:
         _source_model_log=self,
     )
 
-    # Build root ModulePassLog
     root_pass = ModulePassLog(
         module_address="self",
         pass_num=1,
@@ -154,8 +143,47 @@ def _build_module_logs(self: "ModelLog") -> None:
         call_children=self.top_level_module_passes[:],
     )
     root_module.passes = {1: root_pass}
-    module_dict["self"] = root_module
     pass_dict["self:1"] = root_pass
+
+    return root_module
+
+
+def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None:
+    """Assign nesting_depth to each ModuleLog via BFS from the root."""
+    visited = {"self": 0}
+    queue = deque()
+    for child_addr in root_module.call_children:
+        if child_addr in module_dict:
+            module_dict[child_addr].nesting_depth = 1
+            visited[child_addr] = 1
+            queue.append(child_addr)
+
+    while queue:
+        addr = queue.popleft()
+        ml = module_dict[addr]
+        for child_addr in ml.call_children:
+            if child_addr not in visited and child_addr in module_dict:
+                depth = visited[addr] + 1
+                module_dict[child_addr].nesting_depth = depth
+                visited[child_addr] = depth
+                queue.append(child_addr)
+
+
+def _build_module_logs(self: "ModelLog") -> None:
+    """Build structured ModuleLog/ModulePassLog objects from raw module_* dicts and _module_metadata.
+
+    Called as Step 17 of postprocess(), after all raw module data has been populated
+    and layer labels have been finalized.
+    """
+    from ..data_classes.param_log import ParamAccessor
+
+    module_dict = {}  # address -> ModuleLog
+    pass_dict = {}  # "addr:pass" -> ModulePassLog
+    module_order = []  # ordered by first appearance
+
+    # --- Build root ModuleLog ("self") ---
+    root_module = _build_root_module_log(self, pass_dict)
+    module_dict["self"] = root_module
     module_order.append(root_module)
 
     # --- Build ModuleLogs for each submodule ---
@@ -310,25 +338,8 @@ def _build_module_logs(self: "ModelLog") -> None:
         module_dict[address] = ml
         module_order.append(ml)
 
-    # --- Compute nesting_depth via BFS from root using call_children ---
-    # Root is depth 0, top-level modules are depth 1, etc.
-    visited = {"self": 0}
-    queue = deque()
-    for child_addr in root_module.call_children:
-        if child_addr in module_dict:
-            module_dict[child_addr].nesting_depth = 1
-            visited[child_addr] = 1
-            queue.append(child_addr)
-
-    while queue:
-        addr = queue.popleft()
-        ml = module_dict[addr]
-        for child_addr in ml.call_children:
-            if child_addr not in visited and child_addr in module_dict:
-                depth = visited[addr] + 1
-                module_dict[child_addr].nesting_depth = depth
-                visited[child_addr] = depth
-                queue.append(child_addr)
+    # --- Compute nesting depths ---
+    _compute_nesting_depths(module_dict, root_module)
 
     # --- Build ModuleAccessor and assign to ModelLog ---
     self._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)

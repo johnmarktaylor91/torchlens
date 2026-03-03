@@ -1,3 +1,5 @@
+"""FuncCallLocation: lightweight record for a single frame in a user-visible call stack."""
+
 import inspect
 import linecache
 from typing import List, Optional, Union

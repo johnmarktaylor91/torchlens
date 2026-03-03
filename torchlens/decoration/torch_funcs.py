@@ -1,3 +1,5 @@
+"""Permanent torch function wrapping: decorates all torch ops at import time with toggle-gated wrappers."""
+
 import inspect
 import sys
 import time
@@ -8,22 +10,18 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple
 
 import torch
 
-from . import _state
-from .constants import ORIG_TORCH_FUNCS
-from .helper_funcs import (
-    get_vars_of_type_from_obj,
-    identity,
-    log_current_autocast_state,
-    log_current_rng_states,
-    make_random_barcode,
-    nested_getattr,
-    print_override,
-    safe_copy,
-)
-from .logging_funcs import log_function_output_tensors, log_source_tensor
+from .. import _state
+from ..constants import ORIG_TORCH_FUNCS
+from ..utils.introspection import get_vars_of_type_from_obj, nested_getattr
+from ..utils.display import identity
+from ..utils.rng import log_current_autocast_state, log_current_rng_states
+from ..utils.hashing import make_random_barcode
+from ..utils.tensor_utils import print_override, safe_copy
+from ..capture.output_tensors import log_function_output_tensors
+from ..capture.source_tensors import log_source_tensor
 
 if TYPE_CHECKING:
-    from .data_classes.model_log import ModelLog
+    from ..data_classes.model_log import ModelLog
 
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 print_funcs = ["__repr__", "__str__", "_str"]

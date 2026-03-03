@@ -1,28 +1,80 @@
+"""Forward-pass orchestration: runs the model, manages logging state, and saves activations."""
+
 import inspect
 import random
 import time
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 from torch import nn
 
-from . import _state
-from .model_funcs import _ensure_model_prepared, _prepare_model_session, _cleanup_model_session
+from .. import _state
+from ..decoration.model_prep import (
+    _ensure_model_prepared,
+    _prepare_model_session,
+    _cleanup_model_session,
+)
 
 if TYPE_CHECKING:
-    from .data_classes.model_log import ModelLog
-from .helper_funcs import (
-    get_vars_of_type_from_obj,
-    set_random_seed,
-    log_current_rng_states,
-    set_rng_from_saved_states,
-    nested_assign,
-    safe_copy_args,
-    safe_copy_kwargs,
-    normalize_input_args,
-)
-from .logging_funcs import log_source_tensor
-from .interface import _give_user_feedback_about_lookup_key
+    from ..data_classes.model_log import ModelLog
+from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
+from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
+from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
+from .source_tensors import log_source_tensor
+from ..data_classes.interface import _give_user_feedback_about_lookup_key
+
+
+def save_new_activations(
+    self: "ModelLog",
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any]],
+    input_kwargs: Dict[Any, Any] = None,
+    layers_to_save: Union[str, List] = "all",
+    random_seed: Optional[int] = None,
+):
+    """Saves activations to a new input to the model, replacing existing saved activations.
+    This will be much faster than the initial call to log_forward_pass (since all the of the metadata has
+    already been saved), so if you wish to save the activations to many different inputs for a given model
+    this is the function you should use. The one caveat is that this function assumes that the computational
+    graph will be the same for the new input; if the model involves a dynamic computational graph that can change
+    across inputs, and this graph changes for the new input, then this function will throw an error. In that case,
+    you'll have to do a new call to log_forward_pass to log the new graph.
+
+    Args:
+        model: Model for which to save activations
+        input_args: Either a single tensor input to the model, or list of input arguments.
+        input_kwargs: Dict of keyword arguments to the model.
+        layers_to_save: List of layers to save, using any valid lookup keys
+        random_seed: Which random seed to use
+    Returns:
+        Nothing, but now the ModelLog object will have saved activations for the new input.
+    """
+    self.logging_mode = "fast"
+
+    # Go through and clear all existing activations.
+    for tensor_log_entry in self:
+        tensor_log_entry.tensor_contents = None
+        tensor_log_entry.has_saved_activations = False
+        tensor_log_entry.has_saved_grad = False
+        tensor_log_entry.grad_contents = None
+        tensor_log_entry.has_child_tensor_variations = False
+        tensor_log_entry.children_tensor_versions = {}
+
+    # Reset relevant fields.
+    self.layers_with_saved_activations = []
+    self.layers_with_saved_gradients = []
+    self.has_saved_gradients = False
+    self.unlogged_layers = []
+    self.num_tensors_saved = 0
+    self.tensor_fsize_saved = 0
+    self._tensor_counter = 0
+    self._raw_layer_type_counter = defaultdict(lambda: 0)
+
+    # Now run and log the new inputs.
+    self._run_and_log_inputs_through_model(
+        model, input_args, input_kwargs, layers_to_save, random_seed
+    )
 
 
 def _get_input_arg_names(model, input_args) -> List[str]:
@@ -131,6 +183,74 @@ def _fetch_label_move_input_tensors(
     return input_tensors, input_tensor_addresses
 
 
+def _setup_inputs_and_device(
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any]],
+    input_kwargs: Optional[Dict[Any, Any]],
+) -> Tuple[List[Any], Dict[Any, Any], List[str], str]:
+    """Normalize inputs, detect model device, copy args, and extract input arg names.
+
+    Returns:
+        (input_args, input_kwargs, input_arg_names, model_device)
+    """
+    if type(model) == nn.DataParallel:
+        model = model.module
+
+    input_args = normalize_input_args(input_args, model)
+
+    if not input_kwargs:
+        input_kwargs = {}
+
+    if len(list(model.parameters())) > 0:
+        model_device = next(iter(model.parameters())).device
+    elif len(list(model.buffers())) > 0:
+        model_device = next(iter(model.buffers())).device
+    else:
+        model_device = "cpu"
+
+    input_args = safe_copy_args(input_args)
+    input_arg_names = _get_input_arg_names(model, input_args)
+    input_kwargs = safe_copy_kwargs(input_kwargs)
+
+    return input_args, input_kwargs, input_arg_names, model_device
+
+
+def _extract_and_mark_outputs(
+    self: "ModelLog",
+    outputs: Any,
+) -> Tuple[List[torch.Tensor], List[str]]:
+    """Extract output tensors from model outputs, deduplicate, and mark in ModelLog.
+
+    Returns:
+        (output_tensors, output_tensor_addresses)
+    """
+    output_tensors_w_addresses_all = get_vars_of_type_from_obj(
+        outputs,
+        torch.Tensor,
+        search_depth=5,
+        return_addresses=True,
+        allow_repeats=True,
+    )
+    # Remove duplicate addresses
+    addresses_used = []
+    output_tensors_w_addresses = []
+    for entry in output_tensors_w_addresses_all:
+        if entry[1] in addresses_used:
+            continue
+        output_tensors_w_addresses.append(entry)
+        addresses_used.append(entry[1])
+
+    output_tensors = [t for t, _, _ in output_tensors_w_addresses]
+    output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
+
+    for t in output_tensors:
+        if self.logging_mode == "exhaustive":
+            self.output_layers.append(t.tl_tensor_label_raw)
+        self._raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
+
+    return output_tensors, output_tensor_addresses
+
+
 def run_and_log_inputs_through_model(
     self: "ModelLog",
     model: nn.Module,
@@ -165,24 +285,11 @@ def run_and_log_inputs_through_model(
             combined = set(self._tensor_nums_to_save) | output_parent_nums
             self._tensor_nums_to_save = sorted(combined)
 
-    if type(model) == nn.DataParallel:
-        model = model.module
-
-    input_args = normalize_input_args(input_args, model)
-
-    if not input_kwargs:
-        input_kwargs = {}
-
-    if len(list(model.parameters())) > 0:
-        model_device = next(iter(model.parameters())).device
-    elif len(list(model.buffers())) > 0:
-        model_device = next(iter(model.buffers())).device
-    else:
-        model_device = "cpu"
-
-    input_args = safe_copy_args(input_args)
-    input_arg_names = _get_input_arg_names(model, input_args)
-    input_kwargs = safe_copy_kwargs(input_kwargs)
+    input_args, input_kwargs, input_arg_names, model_device = _setup_inputs_and_device(
+        model,
+        input_args,
+        input_kwargs,
+    )
 
     self.pass_start_time = time.time()
     input_tensors = []
@@ -218,29 +325,7 @@ def run_and_log_inputs_through_model(
             time.time() - self.pass_start_time - self.elapsed_time_setup
         )
 
-        output_tensors_w_addresses_all = get_vars_of_type_from_obj(
-            outputs,
-            torch.Tensor,
-            search_depth=5,
-            return_addresses=True,
-            allow_repeats=True,
-        )
-        # Remove duplicate addresses
-        addresses_used = []
-        output_tensors_w_addresses = []
-        for entry in output_tensors_w_addresses_all:
-            if entry[1] in addresses_used:
-                continue
-            output_tensors_w_addresses.append(entry)
-            addresses_used.append(entry[1])
-
-        output_tensors = [t for t, _, _ in output_tensors_w_addresses]
-        output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
-
-        for t in output_tensors:
-            if self.logging_mode == "exhaustive":
-                self.output_layers.append(t.tl_tensor_label_raw)
-            self._raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
+        output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
 
         _cleanup_model_session(model, input_tensors)
         self._postprocess(output_tensors, output_tensor_addresses)

@@ -1,3 +1,5 @@
+"""ModelLog query and display methods: __getitem__, __str__, to_pandas, print_all_fields."""
+
 import random
 from typing import TYPE_CHECKING, Union
 
@@ -5,9 +7,9 @@ import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    from .data_classes.model_log import ModelLog
+    from .model_log import ModelLog
 
-from .data_classes.tensor_log import TensorLog
+from .tensor_log import TensorLog
 
 
 def _getitem_during_pass(self: "ModelLog", ix) -> TensorLog:

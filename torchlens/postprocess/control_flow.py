@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict, List, Set, Tuple
 
 import torch
 
-from ..helper_funcs import identity
+from ..utils.display import identity
 from ..data_classes.tensor_log import TensorLog
 
 if TYPE_CHECKING:

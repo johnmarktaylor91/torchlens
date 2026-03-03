@@ -1,3 +1,5 @@
+"""Core data structures for representing a logged forward pass."""
+
 from .buffer_log import BufferAccessor, BufferLog
 from .func_call_location import FuncCallLocation
 from .module_log import ModuleAccessor, ModuleLog, ModulePassLog

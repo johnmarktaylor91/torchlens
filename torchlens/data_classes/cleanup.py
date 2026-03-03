@@ -1,10 +1,12 @@
+"""ModelLog cleanup: removing individual log entries and post-session teardown."""
+
 import warnings
 
 import torch
 
-from .constants import MODEL_LOG_FIELD_ORDER
-from .helper_funcs import remove_entry_from_list
-from .data_classes.tensor_log import TensorLog
+from ..constants import MODEL_LOG_FIELD_ORDER
+from ..utils.collections import remove_entry_from_list
+from .tensor_log import TensorLog
 
 
 def cleanup(self) -> None:

@@ -1,3 +1,5 @@
+"""Public API entry points: log_forward_pass and related user-facing functions."""
+
 import os
 import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -7,14 +9,10 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from .helper_funcs import (
-    get_vars_of_type_from_obj,
-    set_random_seed,
-    warn_parallel,
-    safe_copy_args,
-    safe_copy_kwargs,
-    normalize_input_args,
-)
+from .utils.introspection import get_vars_of_type_from_obj
+from .utils.rng import set_random_seed
+from .utils.display import warn_parallel
+from .utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from .data_classes.model_log import (
     ModelLog,
 )
@@ -367,7 +365,7 @@ def validate_saved_activations(
         return_addresses=True,
         allow_repeats=True,
     )
-    # Deduplicate by address to match trace_model.py output extraction
+    # Deduplicate by address to match capture/trace.py output extraction
     addresses_used = []
     ground_truth_output_tensors = []
     for entry in ground_truth_output_all:
