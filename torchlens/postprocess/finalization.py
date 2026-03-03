@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 
-def _undecorate_all_saved_tensors(self):
+def _undecorate_all_saved_tensors(self) -> None:
     """Utility function to undecorate all saved tensors."""
     tensors_to_undecorate = []
     for layer_label in self.layer_labels:
@@ -35,7 +35,8 @@ def _undecorate_all_saved_tensors(self):
             delattr(t, "tl_tensor_label_raw")
 
 
-def _log_time_elapsed(self):
+def _log_time_elapsed(self) -> None:
+    """Record wall-clock timing for the cleanup phase and overall pass."""
     self.pass_end_time = time.time()
     self.elapsed_time_cleanup = (
         self.pass_end_time
@@ -47,7 +48,7 @@ def _log_time_elapsed(self):
     self.elapsed_time_torchlens_logging = self.elapsed_time_total - self.elapsed_time_function_calls
 
 
-def _finalize_param_logs(self: "ModelLog"):
+def _finalize_param_logs(self: "ModelLog") -> None:
     """Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata."""
     from ..helper_funcs import get_tensor_memory_amount, human_readable_size
 
@@ -77,7 +78,7 @@ def _finalize_param_logs(self: "ModelLog"):
         tensor_entry.parent_params = []
 
 
-def _build_module_logs(self: "ModelLog"):
+def _build_module_logs(self: "ModelLog") -> None:
     """Build structured ModuleLog/ModulePassLog objects from raw module_* dicts and _module_metadata.
 
     Called as Step 17 of postprocess(), after all raw module data has been populated
@@ -180,8 +181,8 @@ def _build_module_logs(self: "ModelLog"):
         # Build ModulePassLogs
         passes = {}
         pass_labels_list = []
-        for pn in range(1, num_passes + 1):
-            pass_label = f"{address}:{pn}"
+        for pass_num in range(1, num_passes + 1):
+            pass_label = f"{address}:{pass_num}"
             pass_labels_list.append(pass_label)
 
             pass_layers = list(self.module_pass_layers.get(pass_label, []))
@@ -198,7 +199,7 @@ def _build_module_logs(self: "ModelLog"):
                         pass_output_layers.append(layer_label)
 
             # Forward args for this pass
-            fwd_args = self._module_forward_args.get((address, pn))
+            fwd_args = self._module_forward_args.get((address, pass_num))
             fwd_positional = fwd_args[0] if fwd_args else None
             fwd_kwargs = fwd_args[1] if fwd_args else None
 
@@ -215,9 +216,9 @@ def _build_module_logs(self: "ModelLog"):
             if call_parent_pass is None and pass_label in self.top_level_module_passes:
                 call_parent_pass = "self:1"
 
-            mpl = ModulePassLog(
+            module_pass_log = ModulePassLog(
                 module_address=address,
-                pass_num=pn,
+                pass_num=pass_num,
                 pass_label=pass_label,
                 layers=pass_layers,
                 input_layers=pass_input_layers,
@@ -227,14 +228,14 @@ def _build_module_logs(self: "ModelLog"):
                 call_parent=call_parent_pass,
                 call_children=call_children_pass,
             )
-            passes[pn] = mpl
-            pass_dict[pass_label] = mpl
+            passes[pass_num] = module_pass_log
+            pass_dict[pass_label] = module_pass_log
 
         # Call children (union across all passes, addresses only)
         call_children_all = []
-        for pn, mpl in passes.items():
-            for cc in mpl.call_children:
-                cc_addr = cc.split(":")[0]
+        for pass_num, module_pass_log in passes.items():
+            for child_pass_label in module_pass_log.call_children:
+                cc_addr = child_pass_label.split(":")[0]
                 if cc_addr not in call_children_all:
                     call_children_all.append(cc_addr)
 
@@ -346,7 +347,7 @@ def _build_module_logs(self: "ModelLog"):
     self._module_forward_args = {}
 
 
-def _set_pass_finished(self):
+def _set_pass_finished(self) -> None:
     """Sets the ModelLog to "pass finished" status, indicating that the pass is done, so
     the "final" rather than "realtime debugging" mode of certain functions should be used.
     """
@@ -356,7 +357,7 @@ def _set_pass_finished(self):
     self._pass_finished = True
 
 
-def _roll_graph(self):
+def _roll_graph(self) -> None:
     """
     Converts the graph to rolled-up format for plotting purposes, such that each node now represents
     all passes of a given layer instead of having separate nodes for each pass.

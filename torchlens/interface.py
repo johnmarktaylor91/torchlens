@@ -195,7 +195,7 @@ def _str_during_pass(self) -> str:
     return s
 
 
-def pretty_print_list_w_line_breaks(lst, indent_chars: str, line_break_every=5):
+def _format_list_with_line_breaks(lst, indent_chars: str, line_break_every=5) -> str:
     """
     Utility function to pretty print a list with line breaks, adding indent_chars every line.
     """
@@ -253,7 +253,7 @@ def _get_lookup_help_str(self, layer_label: Union[int, str], mode: str) -> str:
     return help_str
 
 
-def _module_hierarchy_str(self):
+def _module_hierarchy_str(self) -> str:
     """
     Utility function to print the nested module hierarchy.
     """
@@ -266,25 +266,27 @@ def _module_hierarchy_str(self):
         s += f"\n\t\t{module}"
         if self.modules[module].num_passes > 1:
             s += f":{pass_num}"
-        s += _module_hierarchy_str_helper(self, module_pass, 1)
+        s += _module_hierarchy_str_recursive(self, module_pass, 1)
     return s
 
 
-def _module_hierarchy_str_helper(self, module_pass, level):
+def _module_hierarchy_str_recursive(self, module_pass, level) -> str:
     """
     Helper function for _module_hierarchy_str.
     """
     s = ""
-    mpl = self.modules[module_pass]
-    children = mpl.call_children
-    any_grandchild_modules = any([len(self.modules[sp].call_children) > 0 for sp in children])
+    module_pass_log = self.modules[module_pass]
+    children = module_pass_log.call_children
+    any_grandchild_modules = any(
+        [len(self.modules[child_pass_label].call_children) > 0 for child_pass_label in children]
+    )
     if any_grandchild_modules or len(children) == 0:
         for submodule_pass in children:
             submodule, pass_num = submodule_pass.split(":")
             s += f"\n\t\t{'    ' * level}{submodule}"
             if self.modules[submodule].num_passes > 1:
                 s += f":{pass_num}"
-            s += _module_hierarchy_str_helper(self, submodule_pass, level + 1)
+            s += _module_hierarchy_str_recursive(self, submodule_pass, level + 1)
     else:
         submodule_list = []
         for submodule_pass in children:
@@ -293,13 +295,13 @@ def _module_hierarchy_str_helper(self, module_pass, level):
                 submodule_list.append(submodule)
             else:
                 submodule_list.append(submodule_pass)
-        s += pretty_print_list_w_line_breaks(
+        s += _format_list_with_line_breaks(
             submodule_list, line_break_every=8, indent_chars=f"\t\t{'    ' * level}"
         )
     return s
 
 
-def print_all_fields(self):
+def print_all_fields(self) -> None:
     """Print all data fields for ModelLog."""
     fields_to_exclude = [
         "layer_list",

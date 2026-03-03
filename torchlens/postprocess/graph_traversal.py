@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 def _add_output_layers(
     self: "ModelLog", output_tensors: List[torch.Tensor], output_addresses: List[str]
-):
+) -> None:
     """
     Adds dedicated output nodes to the graph.
     """
@@ -145,7 +145,12 @@ def _add_output_layers(
     self.output_layers = new_output_layers
 
 
-def _find_output_ancestors(self):
+def _find_output_ancestors(self) -> None:
+    """Mark every node that is an ancestor of an output node.
+
+    Walks backward from output nodes through parent_layers, setting
+    is_output_ancestor=True and accumulating output_descendents on each visited node.
+    """
     node_stack = self.output_layers[:]
     nodes_seen = set()
     while len(node_stack) > 0:
@@ -161,7 +166,7 @@ def _find_output_ancestors(self):
                 node_stack.append(parent_node_label)
 
 
-def _remove_orphan_nodes(self):
+def _remove_orphan_nodes(self) -> None:
     """
     Removes nodes that are connected to neither the input nor the output by flooding in both directions
     from the input and output nodes.
@@ -197,7 +202,7 @@ def _remove_orphan_nodes(self):
     self._raw_tensor_dict = new_tensor_dict
 
 
-def _mark_input_output_distances(self):
+def _mark_input_output_distances(self) -> None:
     """
     Traverses the graph forward and backward, marks the minimum and maximum distances of each
     node from the input and output, and removes any orphan nodes.
@@ -206,16 +211,15 @@ def _mark_input_output_distances(self):
     _flood_graph_from_input_or_output_nodes(self, "output")
 
 
-def _flood_graph_from_input_or_output_nodes(self, mode: str):
-    """Floods the graph from either the input or output nodes, tracking nodes that aren't seen,
-    and the min and max distance from the starting nodes of each node. Traversal is unidirectional
-    UNLESS going in the direction of a termin
+def _flood_graph_from_input_or_output_nodes(self, mode: str) -> None:
+    """Flood the graph from input or output nodes, tracking min/max distance.
+
+    Traverses unidirectionally from starting nodes (input or output), recording
+    each node's min and max hop count from the start. Also marks each node's
+    ancestry (input_ancestors or output_descendents).
 
     Args:
-        mode: either 'input' or 'output'
-
-    Returns:
-        Set of nodes seen during the traversal
+        mode: 'input' to flood forward from inputs, 'output' to flood backward from outputs.
     """
     if mode == "input":
         starting_nodes = self.input_layers[:]
@@ -283,7 +287,8 @@ def _update_node_distance_vals(
     min_field: str,
     max_field: str,
     nodes_since_start: int,
-):
+) -> None:
+    """Update a node's min/max distance fields if the current hop count is a new extreme."""
     if getattr(current_node, min_field) is None:
         setattr(current_node, min_field, nodes_since_start)
     else:
@@ -312,7 +317,7 @@ def _check_whether_to_add_node_to_flood_stack(
     max_field: str,
     layer_logging_field: str,
     nodes_seen: set,
-):
+) -> bool:
     """
     Checker function to trim uninformative nodes when tracing input and output distances:
     trims nodes if they don't exceed the min or max, or don't add an informative new ancestor or descendent.
@@ -334,7 +339,8 @@ def _check_whether_to_add_node_to_flood_stack(
     return False
 
 
-def _log_internally_terminated_tensor(self, tensor_label: str):
+def _log_internally_terminated_tensor(self, tensor_label: str) -> None:
+    """Mark a tensor as terminated inside the model (no children reaching an output node)."""
     tensor_entry = self[tensor_label]
     tensor_entry.terminated_inside_model = True
     if tensor_label not in self.internally_terminated_layers:

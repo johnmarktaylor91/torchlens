@@ -196,12 +196,14 @@ class ModelLog:
             return _getitem_during_pass(self, ix)
 
     def __str__(self) -> str:
+        """Human-readable summary; delegates to post-pass or mid-pass formatter."""
         if self._pass_finished:
             return _str_after_pass(self)
         else:
             return _str_during_pass(self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Same as __str__."""
         return self.__str__()
 
     def __iter__(self):
