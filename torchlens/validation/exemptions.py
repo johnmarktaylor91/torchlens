@@ -265,8 +265,8 @@ def posthoc_perturb_check(
     ):
         return True
 
-    # max with multiple args — binary max
-    if func_name == "max" and len(args) > 1:
+    # max/min with multiple args — binary max/min
+    if func_name in ("max", "min") and len(args) > 1:
         return True
 
     # max non-floating-point — discrete

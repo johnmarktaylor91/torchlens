@@ -1013,8 +1013,13 @@ def _set_up_subgraphs(
 
     subgraph_stack = [[subgraph] for subgraph in subgraphs]
     nesting_depth = 0
+    visited_subgraphs = set()
     while len(subgraph_stack) > 0:
         parent_graph_list = subgraph_stack.pop(0)
+        leaf_module = parent_graph_list[-1]
+        if leaf_module in visited_subgraphs:
+            continue
+        visited_subgraphs.add(leaf_module)
         _setup_subgraphs_recurse(
             self,
             graphviz_graph,
@@ -1134,9 +1139,13 @@ def _get_max_nesting_depth(top_modules, module_edge_dict, module_submodule_dict)
     """
     max_nesting_depth = 1
     module_stack = [(graph, 1) for graph in top_modules]
+    visited = set()
 
     while len(module_stack) > 0:
         module, module_depth = module_stack.pop()
+        if module in visited:
+            continue
+        visited.add(module)
         module_edges = module_edge_dict[module]["edges"]
         module_submodules = module_submodule_dict[module]
 
