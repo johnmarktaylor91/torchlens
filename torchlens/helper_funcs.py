@@ -21,13 +21,15 @@ _cuda_available: Optional[bool] = None
 
 
 def _is_cuda_available() -> bool:
+    """Return True if CUDA is available on this machine (cached after first call)."""
     global _cuda_available
     if _cuda_available is None:
         _cuda_available = torch.cuda.is_available()
     return _cuda_available
 
 
-def identity(x):
+def identity(x: Any) -> Any:
+    """Return the input unchanged."""
     return x
 
 
@@ -131,7 +133,7 @@ class AutocastRestore:
             ctx.__exit__(*exc_info)
 
 
-def _safe_copy_arg(arg):
+def _safe_copy_arg(arg: Any) -> Any:
     """Copy a single argument safely, avoiding deepcopy on arbitrary objects.
 
     Clones tensors, recurses into standard containers (list, tuple, dict),
@@ -237,7 +239,7 @@ def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 
     return barcode
 
 
-def _get_func_call_stack(num_context_lines: int = 7):
+def _get_func_call_stack(num_context_lines: int = 7) -> List:
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
@@ -355,24 +357,24 @@ def is_iterable(obj: Any) -> bool:
         return False
 
 
-def make_var_iterable(x):
+def ensure_iterable(obj: Any) -> Any:
     """Utility function to facilitate dealing with outputs:
     - If not a list, tuple, or dict, make it a list of length 1
     - If a dict, make it a list of the values
     - If a list or tuple, keep it.
 
     Args:
-        x: Output of the function
+        obj: Output of the function
 
     Returns:
         Iterable output
     """
-    if any([issubclass(type(x), cls) for cls in [list, tuple, set]]):
-        return x
-    elif issubclass(type(x), dict):
-        return list(x.values())
+    if any([issubclass(type(obj), cls) for cls in [list, tuple, set]]):
+        return obj
+    elif issubclass(type(obj), dict):
+        return list(obj.values())
     else:
-        return [x]
+        return [obj]
 
 
 def index_nested(x: Any, indices: List[int]) -> Any:
@@ -385,7 +387,7 @@ def index_nested(x: Any, indices: List[int]) -> Any:
     Returns:
         Indexed object.
     """
-    indices = make_var_iterable(indices)
+    indices = ensure_iterable(indices)
     for i in indices:
         x = x[i]
     return x
@@ -402,16 +404,16 @@ def remove_entry_from_list(list_: List, entry: Any):
         list_.remove(entry)
 
 
-def tuple_tolerant_assign(obj_: Any, ind: int, new_value: any):
+def assign_to_sequence_or_dict(obj_: Any, ind: int, new_value: Any) -> Any:
     """Utility function to assign an entry of a list, tuple, or dict to a new value.
 
     Args:
-        obj_: Tuple to change.
+        obj_: Sequence or dict to change.
         ind: Index to change.
         new_value: The new value.
 
     Returns:
-        Tuple with the new value swapped out.
+        Sequence or dict with the new value swapped out.
     """
     if type(obj_) == tuple:
         list_ = list(obj_)
@@ -713,64 +715,67 @@ def iter_accessible_attributes(
         yield attr_name, attr
 
 
-def remove_attributes_starting_with_str(obj: Any, s: str):
-    """Given an object removes, any attributes for that object beginning with a given
-    substring.
+def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
+    """Given an object, removes any attributes beginning with a given prefix.
 
     Args:
-        obj: object
-        s: string that marks fields to remove
+        obj: object from which to remove attributes
+        prefix: string prefix that marks fields to remove
     """
     for field in dir(obj):
-        if field.startswith(s):
+        if field.startswith(prefix):
             delattr(obj, field)
 
 
-def tensor_all_nan(t: torch.Tensor) -> bool:
-    """Returns True if  tensor is all nans, False otherwise."""
-    if torch.isnan(t).int().sum() == t.numel():
+def tensor_all_nan(tensor: torch.Tensor) -> bool:
+    """Returns True if tensor is all nans, False otherwise."""
+    if torch.isnan(tensor).int().sum() == tensor.numel():
         return True
     else:
         return False
 
 
-def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -> bool:
+def tensor_nanequal(tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolerance=False) -> bool:
     """Returns True if the two tensors are equal, allowing for nans."""
-    if t1.shape != t2.shape:
+    if tensor_a.shape != tensor_b.shape:
         return False
 
-    if t1.dtype != t2.dtype:
+    if tensor_a.dtype != tensor_b.dtype:
         return False
 
-    if not torch.equal(t1.isinf(), t2.isinf()):
+    if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
         return False
 
-    if t1.is_complex():
-        t1_nonan = torch.view_as_complex(torch.nan_to_num(torch.view_as_real(t1), 0.7234691827346))
-        t2_nonan = torch.view_as_complex(torch.nan_to_num(torch.view_as_real(t2), 0.7234691827346))
+    if tensor_a.is_complex():
+        tensor_a_nonan = torch.view_as_complex(
+            torch.nan_to_num(torch.view_as_real(tensor_a), 0.7234691827346)
+        )
+        tensor_b_nonan = torch.view_as_complex(
+            torch.nan_to_num(torch.view_as_real(tensor_b), 0.7234691827346)
+        )
     else:
-        t1_nonan = torch.nan_to_num(t1, 0.7234691827346)
-        t2_nonan = torch.nan_to_num(t2, 0.7234691827346)
+        tensor_a_nonan = torch.nan_to_num(tensor_a, 0.7234691827346)
+        tensor_b_nonan = torch.nan_to_num(tensor_b, 0.7234691827346)
 
-    if torch.equal(t1_nonan, t2_nonan):
+    if torch.equal(tensor_a_nonan, tensor_b_nonan):
         return True
 
     if (
         allow_tolerance
-        and (t1_nonan.dtype != torch.bool)
-        and (t2_nonan.dtype != torch.bool)
-        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+        and (tensor_a_nonan.dtype != torch.bool)
+        and (tensor_b_nonan.dtype != torch.bool)
+        and ((tensor_a_nonan - tensor_b_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
     ):
         return True
 
     return False
 
 
-def safe_to(x: Any, device: str):
+def safe_to(obj: Any, device: str) -> Any:
     """Moves object to device if it's a tensor, does nothing otherwise.
 
     Args:
-        x: The object.
+        obj: The object.
         device: which device to move to
 
     Returns:
@@ -778,11 +783,11 @@ def safe_to(x: Any, device: str):
     """
     from ._state import pause_logging
 
-    if type(x) == torch.Tensor:
+    if type(obj) == torch.Tensor:
         with pause_logging():
-            return x.to(device)
+            return obj.to(device)
     else:
-        return x
+        return obj
 
 
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
@@ -885,7 +890,8 @@ def safe_copy(x, detach_tensor: bool = False):
         return copy.copy(x)
 
 
-def in_notebook():
+def in_notebook() -> bool:
+    """Return True if the code is running inside a Jupyter notebook, False otherwise."""
     try:
         if "IPKernelApp" not in get_ipython().config:
             return False

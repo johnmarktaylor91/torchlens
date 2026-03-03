@@ -327,7 +327,8 @@ class TensorLog:
         else:
             return self._str_during_pass()
 
-    def _str_during_pass(self):
+    def _str_during_pass(self) -> str:
+        """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
         s = f"Tensor {self.tensor_label_raw} (layer {self.layer_label_raw}) (PASS NOT FINISHED):"
         s += f"\n\tPass: {self.pass_num}"
         s += f"\n\tTensor info: shape {self.tensor_shape}, dtype {self.tensor_dtype}"
@@ -357,7 +358,8 @@ class TensorLog:
             s += f"\n\tTensor contents: \n{print_override(self.tensor_contents, '__str__')}"
         return s
 
-    def _str_after_pass(self):
+    def _str_after_pass(self) -> str:
+        """Return a human-readable summary of this tensor entry after the forward pass has completed."""
         if self.layer_passes_total > 1:
             pass_str = f" (pass {self.pass_num}/{self.layer_passes_total}), "
         else:
@@ -431,6 +433,7 @@ class TensorLog:
         return s
 
     def _tensor_family_str_helper(self) -> str:
+        """Return a formatted string summarising parent, child, sibling, spouse, and ancestor relationships."""
         s = "\n\tRelated Layers:"
         if len(self.parent_layers) > 0:
             s += "\n\t\t- parent layers: " + ", ".join(self.parent_layers)

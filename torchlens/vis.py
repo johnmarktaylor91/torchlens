@@ -175,7 +175,7 @@ def render_graph(
         )
 
     # Finally, set up the subgraphs.
-    _set_up_subgraphs(self, dot, vis_opt, module_cluster_dict, vis_module_overrides)
+    _setup_subgraphs(self, dot, vis_opt, module_cluster_dict, vis_module_overrides)
 
     if in_notebook() and not save_only:
         display(dot)
@@ -197,7 +197,7 @@ def _add_node_to_graphviz(
     vis_collapsed_node_overrides: Dict = None,
     vis_edge_overrides: Dict = None,
     vis_gradient_edge_overrides: Dict = None,
-):
+) -> None:
     """Addes a node and its relevant edges to the graphviz figure.
 
     Args:
@@ -209,10 +209,10 @@ def _add_node_to_graphviz(
         collapsed_modules: Labels of collapsed module nodes that have been made so far.
         show_buffer_layers: Whether to show the buffer layers
     """
-    is_collapsed_module = _check_if_collapsed_module(node, vis_nesting_depth)
+    is_collapsed_module = _is_collapsed_module(node, vis_nesting_depth)
 
     if is_collapsed_module:
-        _construct_collapsed_module_node(
+        _build_collapsed_module_node(
             self,
             node,
             graphviz_graph,
@@ -223,7 +223,7 @@ def _add_node_to_graphviz(
         )
         node_color = "black"
     else:
-        node_color = _construct_layer_node(
+        node_color = _build_layer_node(
             self, node, graphviz_graph, show_buffer_layers, vis_opt, vis_node_overrides
         )
 
@@ -243,7 +243,13 @@ def _add_node_to_graphviz(
     )
 
 
-def _check_if_collapsed_module(node, vis_nesting_depth):
+def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
+    """Returns True if the node is nested deep enough to be rendered as a collapsed module box.
+
+    Args:
+        node: The TensorLog or RolledTensorLog node to check.
+        vis_nesting_depth: Maximum nesting depth before collapsing into a module box.
+    """
     node_nesting_depth = len(node.containing_modules_origin_nested)
     if node.is_bottom_level_submodule_output:
         node_nesting_depth -= 1
@@ -254,9 +260,21 @@ def _check_if_collapsed_module(node, vis_nesting_depth):
         return False
 
 
-def _construct_layer_node(
+def _build_layer_node(
     self: "ModelLog", node, graphviz_graph, show_buffer_layers, vis_opt, vis_node_overrides
-):
+) -> str:
+    """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
+
+    Args:
+        node: The TensorLog or RolledTensorLog node to render.
+        graphviz_graph: The graphviz Digraph object to add the node to.
+        show_buffer_layers: Whether buffer layers are shown.
+        vis_opt: 'unrolled' or 'rolled'.
+        vis_node_overrides: Dict of graphviz attribute overrides for regular nodes.
+
+    Returns:
+        The node color string used for this node.
+    """
     # Get the address, shape, color, and line style:
 
     node_address, node_shape, node_color = _get_node_address_shape_color(
@@ -302,7 +320,7 @@ def _construct_layer_node(
     return node_color
 
 
-def _construct_collapsed_module_node(
+def _build_collapsed_module_node(
     self: "ModelLog",
     node,
     graphviz_graph,
@@ -310,7 +328,17 @@ def _construct_collapsed_module_node(
     vis_opt,
     vis_nesting_depth,
     vis_collapsed_node_overrides,
-):
+) -> None:
+    """Builds and adds a collapsed module box node to the graphviz graph.
+
+    Args:
+        node: The TensorLog or RolledTensorLog node triggering the collapse.
+        graphviz_graph: The graphviz Digraph object to add the node to.
+        collapsed_modules: Set of collapsed module names already added; updated in place.
+        vis_opt: 'unrolled' or 'rolled'.
+        vis_nesting_depth: Maximum nesting depth; nodes at this depth are collapsed.
+        vis_collapsed_node_overrides: Dict of graphviz attribute overrides for collapsed nodes.
+    """
     module_address_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
     module_tuple = module_address_w_pass.split(":")
     module_output_layer = self[module_address_w_pass]
@@ -427,7 +455,7 @@ def _get_node_address_shape_color(
         node_color: color of the node
     """
     if not show_buffer_layers:
-        only_non_buffer_layer = _check_if_only_non_buffer_in_module(self, node)
+        only_non_buffer_layer = _is_only_non_buffer_in_module(self, node)
     else:
         only_non_buffer_layer = False
 
@@ -471,13 +499,17 @@ def _get_node_address_shape_color(
     return node_address, node_shape, node_color
 
 
-def _check_if_only_non_buffer_in_module(
+def _is_only_non_buffer_in_module(
     self: "ModelLog", node: Union["TensorLog", "RolledTensorLog"]
-):
-    """Utility function to check if a layer is the only non-buffer layer in a
-    leaf module (one with no child submodules).  Container modules with
+) -> bool:
+    """Returns True if a layer is the only non-buffer layer in a leaf module.
+
+    Leaf modules are those with no child submodules. Container modules with
     functional ops at the end should NOT match — those ops are rendered as
     ovals, not boxes (issue #48).
+
+    Args:
+        node: The TensorLog or RolledTensorLog node to check.
     """
     # Check whether it leaves its module:
     if not (
@@ -641,7 +673,7 @@ def _add_edges_for_node(
     show_buffer_layers: bool = False,
     vis_edge_overrides: Dict = None,
     vis_gradient_edge_overrides: Dict = None,
-):
+) -> None:
     """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
 
     Args:
@@ -681,7 +713,7 @@ def _add_edges_for_node(
         else:
             tail_name = parent_node.layer_label.replace(":", "pass")
 
-        child_is_collapsed_module = _check_if_collapsed_module(child_node, vis_nesting_depth)
+        child_is_collapsed_module = _is_collapsed_module(child_node, vis_nesting_depth)
 
         if child_is_collapsed_module:
             module_name_w_pass = child_node.containing_modules_origin_nested[vis_nesting_depth - 1]
@@ -788,7 +820,7 @@ def _label_node_arguments_if_needed(
     child_node: Union["TensorLog", "RolledTensorLog"],
     edge_dict: Dict,
     show_buffer_layers: bool = False,
-):
+) -> None:
     """Checks if a node has multiple non-commutative arguments, and if so, adds labels in edge_dict
 
     Args:
@@ -797,7 +829,7 @@ def _label_node_arguments_if_needed(
         edge_dict: dict of information about the edge
         show_buffer_layers: whether to show the buffer layers
     """
-    if not _check_whether_to_mark_arguments_on_edge(self, child_node, show_buffer_layers):
+    if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers):
         return
 
     arg_labels = []
@@ -816,25 +848,35 @@ def _label_node_arguments_if_needed(
         edge_dict["label"] = edge_dict["label"][:-1] + "<br/>" + arg_label[1:]
 
 
-def _check_whether_to_mark_arguments_on_edge(
+def _should_mark_arguments_on_edge(
     self: "ModelLog",
     child_node: Union["TensorLog", "RolledTensorLog"],
     show_buffer_layers: bool = False,
-):
+) -> bool:
+    """Returns True if argument position labels should be shown on the edge to child_node.
+
+    Args:
+        child_node: The child node whose incoming edge is being considered.
+        show_buffer_layers: Whether buffer layers are shown in the graph.
+    """
     if child_node.layer_type in COMMUTE_FUNCS:
         return False
 
     if isinstance(child_node, TensorLog):
-        return _check_whether_to_mark_arguments_on_unrolled_edge(
-            self, child_node, show_buffer_layers
-        )
+        return _should_mark_arguments_on_unrolled_edge(self, child_node, show_buffer_layers)
     elif isinstance(child_node, RolledTensorLog):
-        return _check_whether_to_mark_arguments_on_rolled_edge(self, child_node, show_buffer_layers)
+        return _should_mark_arguments_on_rolled_edge(self, child_node, show_buffer_layers)
 
 
-def _check_whether_to_mark_arguments_on_unrolled_edge(
+def _should_mark_arguments_on_unrolled_edge(
     self, child_node: "TensorLog", show_buffer_layers: bool = False
-):
+) -> bool:
+    """Returns True if argument labels should be shown on an unrolled graph edge.
+
+    Args:
+        child_node: The child TensorLog node whose incoming edge is being considered.
+        show_buffer_layers: Whether buffer layers are shown in the graph.
+    """
     num_parents_shown = len(child_node.parent_layers)
 
     if not show_buffer_layers:
@@ -848,9 +890,15 @@ def _check_whether_to_mark_arguments_on_unrolled_edge(
         return False
 
 
-def _check_whether_to_mark_arguments_on_rolled_edge(
+def _should_mark_arguments_on_rolled_edge(
     self: "ModelLog", child_node: "RolledTensorLog", show_buffer_layers: bool = False
-):
+) -> bool:
+    """Returns True if argument labels should be shown on a rolled graph edge.
+
+    Args:
+        child_node: The child RolledTensorLog node whose incoming edge is being considered.
+        show_buffer_layers: Whether buffer layers are shown in the graph.
+    """
     for pass_num, pass_parents in child_node.parent_layers_per_pass.items():
         num_parents_shown = len(pass_parents)
         if not show_buffer_layers:
@@ -867,7 +915,7 @@ def _label_rolled_pass_nums(
     child_node: "RolledTensorLog",
     parent_node: "RolledTensorLog",
     edge_dict: Dict,
-):
+) -> None:
     """Adds labels for the pass numbers to the edge dict for rolled nodes.
 
     Args:
@@ -890,16 +938,17 @@ def _get_lowest_containing_module_for_two_nodes(
     node2: Union["TensorLog", "RolledTensorLog"],
     both_nodes_collapsed_modules: bool,
     vis_nesting_depth: int,
-):
+) -> Union[str, int]:
     """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
 
     Args:
         node1: The first node.
         node2: The second node.
+        both_nodes_collapsed_modules: Whether both nodes are collapsed module boxes.
         vis_nesting_depth: How many levels deep to visualize.
 
     Returns:
-        Lowest-level module pass containing two nodes.
+        Lowest-level module pass containing two nodes, or -1 if no module contains both.
     """
     node1_modules = node1.containing_modules_origin_nested[:]
     node2_modules = node2.containing_modules_origin_nested[:]
@@ -909,9 +958,9 @@ def _get_lowest_containing_module_for_two_nodes(
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
     if node1.is_bottom_level_submodule_output:
-        node1_nestmodules = node1_modules[:-1]
+        node1_nested_modules = node1_modules[:-1]
     else:
-        node1_nestmodules = node1_modules[:]
+        node1_nested_modules = node1_modules[:]
 
     if (
         (len(node1_modules) == 0)
@@ -930,7 +979,7 @@ def _get_lowest_containing_module_for_two_nodes(
         return containing_module
 
     if both_nodes_collapsed_modules:
-        if (vis_nesting_depth == 1) or (len(node1_nestmodules) == 1):
+        if (vis_nesting_depth == 1) or (len(node1_nested_modules) == 1):
             return -1
         if node1_modules[vis_nesting_depth - 1] == node2_modules[vis_nesting_depth - 1]:
             containing_module = node1_modules[vis_nesting_depth - 2]
@@ -954,8 +1003,18 @@ def _add_gradient_edge(
     module_edge_dict,
     graphviz_graph,
     vis_gradient_edge_overrides,
-):
-    """Adds a backwards edge if both layers have saved gradients, showing the backward pass."""
+) -> None:
+    """Adds a backwards edge if both layers have saved gradients, showing the backward pass.
+
+    Args:
+        parent_layer: The parent TensorLog (gradient flows from child to parent).
+        child_layer: The child TensorLog.
+        edge_style: 'solid' or 'dashed' edge style.
+        containing_module: Module cluster to place the edge in, or -1 for the top-level graph.
+        module_edge_dict: Dict mapping each module cluster to its list of edges.
+        graphviz_graph: The graphviz Digraph object.
+        vis_gradient_edge_overrides: Dict of graphviz attribute overrides for gradient edges.
+    """
     if parent_layer.has_saved_grad and child_layer.has_saved_grad:
         edge_dict = {
             "tail_name": child_layer.layer_label.replace(":", "pass"),
@@ -978,13 +1037,13 @@ def _add_gradient_edge(
             graphviz_graph.edge(**edge_dict)
 
 
-def _set_up_subgraphs(
+def _setup_subgraphs(
     self: "ModelLog",
     graphviz_graph,
     vis_opt: str,
     module_edge_dict: Dict,
     vis_module_overrides: Dict = None,
-):
+) -> None:
     """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
     set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
     recursive logic to set up the nested context managers.
@@ -994,6 +1053,7 @@ def _set_up_subgraphs(
         vis_opt: 'rolled' or 'unrolled'
         module_edge_dict: Dictionary mapping each cluster to the list of edges it contains, with each
             edge specified as a dict with all necessary arguments for creating that edge.
+        vis_module_overrides: Dict of graphviz attribute overrides for module subgraph clusters.
     """
     if vis_opt == "unrolled":
         module_submodule_dict = defaultdict(list)
@@ -1040,7 +1100,7 @@ def _setup_subgraphs_recurse(
     max_nesting_depth,
     vis_opt,
     vis_module_overrides,
-):
+) -> None:
     """Utility function to crawl down several layers deep into nested subgraphs.
 
     Args:
@@ -1052,6 +1112,7 @@ def _setup_subgraphs_recurse(
         nesting_depth: Nesting depth so far.
         max_nesting_depth: The total depth of the subgraphs.
         vis_opt: 'rolled' or 'unrolled'
+        vis_module_overrides: Dict of graphviz attribute overrides for module subgraph clusters.
     """
     subgraph_name_w_pass = parent_graph_list[nesting_depth]
     subgraph_module = subgraph_name_w_pass.split(":")[0]
@@ -1120,7 +1181,7 @@ def _setup_subgraphs_recurse(
                 subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
 
 
-def _get_max_nesting_depth(top_modules, module_edge_dict, module_submodule_dict):
+def _get_max_nesting_depth(top_modules, module_edge_dict, module_submodule_dict) -> int:
     """Utility function to get the max nesting depth of the nested modules in the network; works by
     recursively crawling down the stack of modules till it hits one with no children and at least one edge.
 

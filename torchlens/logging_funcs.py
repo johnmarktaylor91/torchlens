@@ -17,7 +17,7 @@ from .helper_funcs import (
     log_current_rng_states,
     make_random_barcode,
     make_short_barcode_from_input,
-    make_var_iterable,
+    ensure_iterable,
     safe_copy,
     tensor_nanequal,
 )
@@ -450,9 +450,7 @@ def log_function_output_tensors_exhaustive(
     fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(non_tensor_kwargs.values())
 
     # Graph info
-    parent_layer_arg_locs = _get_parent_tensor_function_call_location(
-        self, parent_layer_entries, args, kwargs
-    )
+    parent_layer_arg_locs = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
     (
         input_ancestors,
         internally_initialized_ancestors,
@@ -564,7 +562,7 @@ def log_function_output_tensors_exhaustive(
         [issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]]
     )
     fields_dict["is_part_of_iterable_output"] = is_part_of_iterable_output
-    out_iter = make_var_iterable(out_orig)  # so we can iterate through it
+    out_iter = ensure_iterable(out_orig)  # so we can iterate through it
 
     for i, out in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
@@ -578,7 +576,7 @@ def log_function_output_tensors_exhaustive(
         ]
         for field in fields_to_deepcopy:
             fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
-        _log_info_specific_to_single_function_output_tensor(
+        _log_output_tensor_info(
             self, out, i, args, kwargs, parent_param_passes, fields_dict_onetensor
         )
         _make_tensor_log_entry(
@@ -632,7 +630,7 @@ def log_function_output_tensors_exhaustive(
                     parent.has_child_tensor_variations = True
 
 
-def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs):
+def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs) -> Any:
     """Utility function to get the value of a parent layer from the arguments passed to a function."""
     for pos, label in parent_layer_arg_locs["args"].items():
         if label == parent_label:
@@ -663,7 +661,7 @@ def log_function_output_tensors_fast(
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
 
     arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
-    out_iter = make_var_iterable(out_orig)
+    out_iter = ensure_iterable(out_orig)
 
     for i, out in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
@@ -792,7 +790,7 @@ def _add_backward_hook(self, t: torch.Tensor, tensor_label):
         t.register_hook(log_grad_to_model_history)
 
 
-def _log_info_specific_to_single_function_output_tensor(
+def _log_output_tensor_info(
     self,
     t: torch.Tensor,
     i: int,
@@ -800,9 +798,11 @@ def _log_info_specific_to_single_function_output_tensor(
     kwargs: Dict[str, Any],
     parent_param_passes: Dict[str, int],
     fields_dict: Dict[str, Any],
-):
-    """Function to log handle the logging of info that's specific to a single output tensor
-    (e.g., the shape), and not common to all output tensors.
+) -> None:
+    """Logs info specific to a single output tensor (e.g. shape, equivalence type, FLOPs).
+
+    Handles fields that differ per output tensor in a multi-output function call,
+    as opposed to fields shared by all outputs of the same call.
 
     Args:
         t: tensor to log
@@ -1008,23 +1008,22 @@ def _check_if_tensor_arg(arg: Any) -> bool:
         return False
 
 
-def _get_parent_tensor_function_call_location(
+def _locate_parent_tensors_in_args(
     self,
     parent_log_entries: List[TensorLog],
     args: Tuple[Any],
     kwargs: Dict[Any, Any],
 ) -> Dict:
-    """Utility function that takes in the parent tensors, the args, and kwargs, and returns a dict specifying
-    where in the function call the parent tensors were used.
+    """Returns a dict specifying where in the function call each parent tensor was used.
 
     Args:
-        parent_log_entries: List of parent tensors.
-        args: Tuple of function args
-        kwargs: Dict of function kwargs
+        parent_log_entries: List of parent TensorLog entries.
+        args: Tuple of function positional args.
+        kwargs: Dict of function keyword args.
 
     Returns:
-        Dict that itself contains two dicts, one specifing which args are associated with parent tensors,
-        and another specifing which kwargs are associated with parent tensors.
+        Dict with two sub-dicts: 'args' and 'kwargs', each mapping arg positions to parent
+        tensor labels.
     """
     tensor_all_arg_positions = {"args": {}, "kwargs": {}}
     arg_struct_dict = {"args": args, "kwargs": kwargs}
@@ -1054,20 +1053,20 @@ def _find_arg_positions_for_single_parent(
         arg_struct: args or kwargs
         tensor_all_arg_positions: dict tracking where the tensors are used
     """
-    iterfunc_dict = {
+    iteration_strategies = {
         "args": enumerate,
         "kwargs": lambda x: x.items(),
         list: enumerate,
         tuple: enumerate,
         dict: lambda x: x.items(),
     }
-    iterfunc = iterfunc_dict[arg_type]
+    iterfunc = iteration_strategies[arg_type]
 
     for arg_key, arg in iterfunc(arg_struct):
         if getattr(arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
             tensor_all_arg_positions[arg_type][arg_key] = parent_entry.tensor_label_raw
         elif type(arg) in [list, tuple, dict]:
-            iterfunc2 = iterfunc_dict[type(arg)]
+            iterfunc2 = iteration_strategies[type(arg)]
             for sub_arg_key, sub_arg in iterfunc2(arg):
                 if getattr(sub_arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
                     tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = (
@@ -1189,7 +1188,23 @@ def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: s
 
 def _get_operation_equivalence_type(
     args: Tuple, kwargs: Dict, i: int, layer_type: str, fields_dict: Dict
-):
+) -> str:
+    """Builds a string key that uniquely identifies an operation's structural equivalence class.
+
+    Two invocations of the same function with the same non-tensor arguments, output index,
+    and containing module are considered equivalent (same layer across passes).
+
+    Args:
+        args: Positional arguments to the function call.
+        kwargs: Keyword arguments to the function call.
+        i: Index of this output tensor within a multi-output call (0 for single outputs).
+        layer_type: The operation name (e.g. 'conv2d', 'relu').
+        fields_dict: Partial fields dict for the tensor being logged; must contain
+            'is_part_of_iterable_output' and 'containing_module_origin'.
+
+    Returns:
+        A string key uniquely identifying this operation's equivalence class.
+    """
     arg_hash = _get_hash_from_args(args, kwargs)
     operation_equivalence_type = f"{layer_type}_{arg_hash}"
     if fields_dict["is_part_of_iterable_output"]:
@@ -1200,10 +1215,17 @@ def _get_operation_equivalence_type(
     return operation_equivalence_type
 
 
-def _get_hash_from_args(args, kwargs):
-    """
-    Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
+def _get_hash_from_args(args, kwargs) -> str:
+    """Get a hash from the args and kwargs of a function call, excluding any tracked tensors.
+
     Preserves positional arg indices, kwarg names, and dict keys to avoid collisions.
+
+    Args:
+        args: Positional arguments to hash.
+        kwargs: Keyword arguments to hash.
+
+    Returns:
+        A short hash string, or 'no_args' if no non-tensor arguments are present.
     """
     args_to_hash = []
     for a, arg in enumerate(args):
@@ -1216,8 +1238,15 @@ def _get_hash_from_args(args, kwargs):
     return make_short_barcode_from_input(args_to_hash)
 
 
-def _append_arg_hash(arg, prefix, args_to_hash, _depth=0):
-    """Append hash-relevant info for a single arg, preserving structure."""
+def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> None:
+    """Append hash-relevant info for a single arg, preserving structure.
+
+    Args:
+        arg: The argument value to hash.
+        prefix: String prefix encoding the argument's position/key path.
+        args_to_hash: Accumulator list that hash tokens are appended to.
+        _depth: Recursion depth guard; stops at 10 to prevent infinite recursion.
+    """
     if _depth > 10:
         args_to_hash.append(f"{prefix}_deep")
         return

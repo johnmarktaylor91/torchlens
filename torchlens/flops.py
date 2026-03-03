@@ -602,8 +602,14 @@ ELEMENTWISE_FLOPS: Dict[str, int] = {
 # ============================================================================
 
 
-def _matmul_flops(output_shape, parent_param_shapes, creation_args):
-    """MatMul family: mm, matmul, __matmul__, bmm, addmm, etc."""
+def _matmul_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """MatMul family: mm, matmul, __matmul__, bmm, addmm, etc.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     # Try to get input shapes from creation_args
     if not creation_args:
         return None
@@ -628,8 +634,14 @@ def _matmul_flops(output_shape, parent_param_shapes, creation_args):
     return 2 * batch * m * k * n
 
 
-def _addmm_flops(output_shape, parent_param_shapes, creation_args):
-    """addmm: beta * M + alpha * (A @ B). FLOPs = 2*m*k*n + output_numel."""
+def _addmm_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """addmm: beta * M + alpha * (A @ B). FLOPs = 2*m*k*n + output_numel.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if not creation_args or len(creation_args) < 3:
         return None
     shapes = []
@@ -646,8 +658,14 @@ def _addmm_flops(output_shape, parent_param_shapes, creation_args):
     return 2 * m * k * n + _numel(output_shape)
 
 
-def _linear_flops(output_shape, parent_param_shapes, creation_args):
-    """nn.Linear: 2 * batch * in_features * out_features (+ bias)."""
+def _linear_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """nn.Linear: 2 * batch * in_features * out_features (+ bias).
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if parent_param_shapes:
         # Weight shape is [out_features, in_features]
         weight_shape = parent_param_shapes[0]
@@ -661,8 +679,14 @@ def _linear_flops(output_shape, parent_param_shapes, creation_args):
     return None
 
 
-def _conv_flops(output_shape, parent_param_shapes, creation_args):
-    """Convolution: 2 * output_numel * in_channels_per_group * kernel_size."""
+def _conv_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Convolution: 2 * output_numel * in_channels_per_group * kernel_size.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if not parent_param_shapes:
         return None
     weight_shape = parent_param_shapes[0]
@@ -677,28 +701,58 @@ def _conv_flops(output_shape, parent_param_shapes, creation_args):
     return flops
 
 
-def _batchnorm_flops(output_shape, parent_param_shapes, creation_args):
-    """BatchNorm: ~5 FLOPs per element (mean, var, normalize, scale, shift)."""
+def _batchnorm_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """BatchNorm: ~5 FLOPs per element (mean, var, normalize, scale, shift).
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 5 * _numel(output_shape)
 
 
-def _layernorm_flops(output_shape, parent_param_shapes, creation_args):
-    """LayerNorm: ~5 FLOPs per element."""
+def _layernorm_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """LayerNorm: ~5 FLOPs per element.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 5 * _numel(output_shape)
 
 
-def _groupnorm_flops(output_shape, parent_param_shapes, creation_args):
-    """GroupNorm: ~5 FLOPs per element."""
+def _groupnorm_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """GroupNorm: ~5 FLOPs per element.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 5 * _numel(output_shape)
 
 
-def _instancenorm_flops(output_shape, parent_param_shapes, creation_args):
-    """InstanceNorm: ~5 FLOPs per element."""
+def _instancenorm_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """InstanceNorm: ~5 FLOPs per element.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 5 * _numel(output_shape)
 
 
-def _reduction_flops(output_shape, parent_param_shapes, creation_args):
-    """Reductions (sum, mean, max, min, prod, etc.): ~input_numel FLOPs."""
+def _reduction_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Reductions (sum, mean, max, min, prod, etc.): ~input_numel FLOPs.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
@@ -706,8 +760,14 @@ def _reduction_flops(output_shape, parent_param_shapes, creation_args):
     return None
 
 
-def _var_std_flops(output_shape, parent_param_shapes, creation_args):
-    """Variance/std: ~3 * input_numel (mean, squared diff, sum)."""
+def _var_std_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Variance/std: ~3 * input_numel (mean, squared diff, sum).
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
@@ -715,8 +775,14 @@ def _var_std_flops(output_shape, parent_param_shapes, creation_args):
     return None
 
 
-def _norm_flops(output_shape, parent_param_shapes, creation_args):
-    """Vector/matrix norm: ~2 * input_numel (square + sum, then sqrt)."""
+def _norm_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Vector/matrix norm: ~2 * input_numel (square + sum, then sqrt).
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
@@ -724,24 +790,48 @@ def _norm_flops(output_shape, parent_param_shapes, creation_args):
     return None
 
 
-def _softmax_flops(output_shape, parent_param_shapes, creation_args):
-    """Softmax: ~5 FLOPs per element (max, sub, exp, sum, div)."""
+def _softmax_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Softmax: ~5 FLOPs per element (max, sub, exp, sum, div).
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 5 * _numel(output_shape)
 
 
-def _log_softmax_flops(output_shape, parent_param_shapes, creation_args):
-    """LogSoftmax: ~6 FLOPs per element."""
+def _log_softmax_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """LogSoftmax: ~6 FLOPs per element.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 6 * _numel(output_shape)
 
 
-def _pool_flops(output_shape, parent_param_shapes, creation_args):
+def _pool_flops(output_shape, parent_param_shapes, creation_args) -> int:
     """Pooling: ~kernel_size comparisons/additions per output element.
-    Approximate as output_numel since kernel_size is typically small."""
+    Approximate as output_numel since kernel_size is typically small.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return _numel(output_shape)
 
 
-def _adaptive_pool_flops(output_shape, parent_param_shapes, creation_args):
-    """Adaptive pooling: each output element averages over a region of input."""
+def _adaptive_pool_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Adaptive pooling: each output element averages over a region of input.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
@@ -749,36 +839,72 @@ def _adaptive_pool_flops(output_shape, parent_param_shapes, creation_args):
     return _numel(output_shape)
 
 
-def _embedding_flops(output_shape, parent_param_shapes, creation_args):
-    """Embedding: lookup, no arithmetic."""
+def _embedding_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Embedding: lookup, no arithmetic.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 0
 
 
-def _dropout_flops(output_shape, parent_param_shapes, creation_args):
-    """Dropout: 1 comparison + 1 multiply per element."""
+def _dropout_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Dropout: 1 comparison + 1 multiply per element.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 2 * _numel(output_shape)
 
 
-def _interpolate_flops(output_shape, parent_param_shapes, creation_args):
-    """Interpolation/upsample: ~4 FLOPs per output element (bilinear)."""
+def _interpolate_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Interpolation/upsample: ~4 FLOPs per output element (bilinear).
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return 4 * _numel(output_shape)
 
 
-def _sort_flops(output_shape, parent_param_shapes, creation_args):
-    """Sort: O(n log n) comparisons."""
+def _sort_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Sort: O(n log n) comparisons.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     n = _numel(output_shape)
     if n > 0:
         return int(n * math.log2(max(n, 2)))
     return 0
 
 
-def _cumulative_flops(output_shape, parent_param_shapes, creation_args):
-    """Cumulative ops (cumsum, cumprod): input_numel."""
+def _cumulative_flops(output_shape, parent_param_shapes, creation_args) -> int:
+    """Cumulative ops (cumsum, cumprod): input_numel.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     return _numel(output_shape)
 
 
-def _cross_entropy_flops(output_shape, parent_param_shapes, creation_args):
-    """Cross-entropy: softmax + nll_loss ≈ 6 * input_numel."""
+def _cross_entropy_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Cross-entropy: softmax + nll_loss ≈ 6 * input_numel.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
@@ -786,8 +912,14 @@ def _cross_entropy_flops(output_shape, parent_param_shapes, creation_args):
     return None
 
 
-def _mse_loss_flops(output_shape, parent_param_shapes, creation_args):
-    """MSE loss: sub + square + mean ≈ 3 * input_numel."""
+def _mse_loss_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """MSE loss: sub + square + mean ≈ 3 * input_numel.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
@@ -795,8 +927,14 @@ def _mse_loss_flops(output_shape, parent_param_shapes, creation_args):
     return None
 
 
-def _binary_cross_entropy_flops(output_shape, parent_param_shapes, creation_args):
-    """Binary cross entropy: ~10 FLOPs per element."""
+def _binary_cross_entropy_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Binary cross entropy: ~10 FLOPs per element.
+
+    Args:
+        output_shape: Shape of the output tensor.
+        parent_param_shapes: Shapes of parameter tensors involved.
+        creation_args: Positional args to the function.
+    """
     if creation_args:
         input_shape = _safe_shape(creation_args[0])
         if input_shape:
