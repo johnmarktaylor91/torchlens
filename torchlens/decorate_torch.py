@@ -4,7 +4,7 @@ import time
 import types
 import warnings
 from functools import wraps
-from typing import Callable, Dict, List, TYPE_CHECKING, Tuple
+from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple
 
 import torch
 
@@ -39,7 +39,7 @@ _torch_function_mode_len = None
 _DeviceContext = None
 
 
-def _get_active_device():
+def _get_active_device() -> Optional[str]:
     """Return the device from the innermost active DeviceContext, or None."""
     global _DeviceContext
     if _DeviceContext is None:
@@ -206,8 +206,8 @@ def get_func_argnames(orig_func: Callable, func_name: str):
     if (type(docstring) is not str) or (len(docstring) == 0):
         return
 
-    open_ind, close_ind = docstring.find("("), docstring.find(")")
-    argstring = docstring[open_ind + 1 : close_ind]
+    paren_start, paren_end = docstring.find("("), docstring.find(")")
+    argstring = docstring[paren_start + 1 : paren_end]
     arg_list = argstring.split(",")
     arg_list = [arg.strip(" ") for arg in arg_list]
     argnames = []
@@ -246,8 +246,8 @@ def decorate_all_once():
     getset_class = type(torch.Tensor.real)
 
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
-        namespace_name_notorch = namespace_name.replace("torch.", "")
-        local_func_namespace = nested_getattr(torch, namespace_name_notorch)
+        namespace_key = namespace_name.replace("torch.", "")
+        local_func_namespace = nested_getattr(torch, namespace_key)
         if not hasattr(local_func_namespace, func_name):
             continue
         orig_func = getattr(local_func_namespace, func_name)
@@ -423,7 +423,7 @@ def patch_detached_references():
                 _patch_function_defaults(attr_val, mapping)
 
 
-def _patch_function_defaults(func, mapping):
+def _patch_function_defaults(func, mapping) -> None:
     """Patch __defaults__ and __kwdefaults__ of a function if they contain
     original torch function references."""
     try:

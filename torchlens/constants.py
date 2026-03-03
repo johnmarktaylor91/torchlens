@@ -445,7 +445,16 @@ IGNORED_FUNCS = [
 
 
 @functools.lru_cache(None)
-def my_get_overridable_functions() -> List:
+def _get_torch_overridable_functions() -> List:
+    """Return a list of (namespace_str, func_name) pairs for all torch functions
+    that can be overridden via ``__torch_function__``.
+
+    Crawls the standard torch namespaces (torch, torch.Tensor, torch.nn.functional,
+    etc.) and collects every callable that is not explicitly ignored by PyTorch's
+    override machinery.  The result is cached via ``lru_cache`` so the crawl only
+    runs once per process.  The returned list is used to build ``ORIG_TORCH_FUNCS``,
+    which drives the one-time decoration performed by ``decorate_all_once()``.
+    """
     index = {}
     func_names = []
     tested_namespaces = [
@@ -467,7 +476,9 @@ def my_get_overridable_functions() -> List:
             if namespace is not torch.Tensor:
                 if func_name.startswith("__"):
                     continue
-                elif func_name[0].isupper():
+                elif (
+                    func_name[0].isupper()
+                ):  # Skip class-like exports (e.g. torch.Tensor, torch.Size) — only wrap functions
                     ignore = True
                 elif func_name == "unique_dim":
                     continue
@@ -536,7 +547,7 @@ TORCHVISION_FUNCS = [
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
-    OVERRIDABLE_FUNCS = my_get_overridable_functions()
+    OVERRIDABLE_FUNCS = _get_torch_overridable_functions()
 ORIG_TORCH_FUNCS = OVERRIDABLE_FUNCS + IGNORED_FUNCS
 
 try:

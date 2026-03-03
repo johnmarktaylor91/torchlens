@@ -21,13 +21,15 @@ _cuda_available: Optional[bool] = None
 
 
 def _is_cuda_available() -> bool:
+    """Return True if CUDA is available on this machine (cached after first call)."""
     global _cuda_available
     if _cuda_available is None:
         _cuda_available = torch.cuda.is_available()
     return _cuda_available
 
 
-def identity(x):
+def identity(x: Any) -> Any:
+    """Return the input unchanged."""
     return x
 
 
@@ -131,7 +133,7 @@ class AutocastRestore:
             ctx.__exit__(*exc_info)
 
 
-def _safe_copy_arg(arg):
+def _safe_copy_arg(arg: Any) -> Any:
     """Copy a single argument safely, avoiding deepcopy on arbitrary objects.
 
     Clones tensors, recurses into standard containers (list, tuple, dict),
@@ -205,13 +207,13 @@ def normalize_input_args(input_args, model: nn.Module) -> list:
 
 
 def make_random_barcode(barcode_len: int = 8) -> str:
-    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
+    """Generates a random alphanumeric identifier string for a layer to use as internal label (invisible from user side).
 
     Args:
         barcode_len: Length of the desired barcode
 
     Returns:
-        Random hash.
+        Random alphanumeric string.
     """
     alphabet = string.ascii_letters + string.digits
     barcode = "".join(secrets.choice(alphabet) for _ in range(barcode_len))
@@ -237,7 +239,7 @@ def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 
     return barcode
 
 
-def _get_func_call_stack(num_context_lines: int = 7):
+def _get_func_call_stack(num_context_lines: int = 7) -> List:
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
@@ -355,24 +357,24 @@ def is_iterable(obj: Any) -> bool:
         return False
 
 
-def make_var_iterable(x):
+def ensure_iterable(obj: Any) -> Any:
     """Utility function to facilitate dealing with outputs:
     - If not a list, tuple, or dict, make it a list of length 1
     - If a dict, make it a list of the values
     - If a list or tuple, keep it.
 
     Args:
-        x: Output of the function
+        obj: Output of the function
 
     Returns:
         Iterable output
     """
-    if any([issubclass(type(x), cls) for cls in [list, tuple, set]]):
-        return x
-    elif issubclass(type(x), dict):
-        return list(x.values())
+    if any([issubclass(type(obj), cls) for cls in [list, tuple, set]]):
+        return obj
+    elif issubclass(type(obj), dict):
+        return list(obj.values())
     else:
-        return [x]
+        return [obj]
 
 
 def index_nested(x: Any, indices: List[int]) -> Any:
@@ -385,7 +387,7 @@ def index_nested(x: Any, indices: List[int]) -> Any:
     Returns:
         Indexed object.
     """
-    indices = make_var_iterable(indices)
+    indices = ensure_iterable(indices)
     for i in indices:
         x = x[i]
     return x
@@ -402,16 +404,16 @@ def remove_entry_from_list(list_: List, entry: Any):
         list_.remove(entry)
 
 
-def tuple_tolerant_assign(obj_: Any, ind: int, new_value: any):
+def assign_to_sequence_or_dict(obj_: Any, ind: int, new_value: Any) -> Any:
     """Utility function to assign an entry of a list, tuple, or dict to a new value.
 
     Args:
-        obj_: Tuple to change.
+        obj_: Sequence or dict to change.
         ind: Index to change.
         new_value: The new value.
 
     Returns:
-        Tuple with the new value swapped out.
+        Sequence or dict with the new value swapped out.
     """
     if type(obj_) == tuple:
         list_ = list(obj_)
@@ -484,35 +486,35 @@ def get_vars_of_type_from_obj(
     if subclass_exceptions is None:
         subclass_exceptions = []
     this_stack = [(obj, "", [])]
-    tensors_in_obj = []
-    tensor_addresses = []
-    tensor_addresses_full = []
-    tensor_ids_in_obj = []
+    found_items = []
+    found_addresses = []
+    found_addresses_full = []
+    found_ids = []
     for _ in range(search_depth):
         this_stack = search_stack_for_vars_of_type(
             this_stack,
             which_type,
-            tensors_in_obj,
-            tensor_addresses,
-            tensor_addresses_full,
-            tensor_ids_in_obj,
+            found_items,
+            found_addresses,
+            found_addresses_full,
+            found_ids,
             subclass_exceptions,
             allow_repeats,
         )
 
     if return_addresses:
-        return list(zip(tensors_in_obj, tensor_addresses, tensor_addresses_full))
+        return list(zip(found_items, found_addresses, found_addresses_full))
     else:
-        return tensors_in_obj
+        return found_items
 
 
 def search_stack_for_vars_of_type(
     current_stack: List,
     which_type: Type,
-    tensors_in_obj: List,
-    tensor_addresses: List,
-    tensor_addresses_full: List,
-    tensor_ids_in_obj: List,
+    found_items: List,
+    found_addresses: List,
+    found_addresses_full: List,
+    found_ids: List,
     subclass_exceptions: List,
     allow_repeats: bool,
 ):
@@ -522,12 +524,12 @@ def search_stack_for_vars_of_type(
     Args:
         current_stack: The current stack.
         which_type: Type of variable to pull out
-        tensors_in_obj: List of tensors found in the object so far
-        tensor_addresses: Addresses of the tensors found so far
-        tensor_addresses_full: explicit instructions for indexing the obj
-        tensor_ids_in_obj: List of tensor ids found in the object so far
-        subclass_exceptions: Subclasses of tensors not to use.
-        allow_repeats: whether to allow repeat tensors
+        found_items: List of items of the target type found so far
+        found_addresses: Addresses of the items found so far
+        found_addresses_full: explicit instructions for indexing the obj
+        found_ids: List of ids of found items (used for deduplication)
+        subclass_exceptions: Subclasses of the target type not to collect.
+        allow_repeats: whether to allow repeat items
 
     Returns:
         The next stack.
@@ -539,14 +541,14 @@ def search_stack_for_vars_of_type(
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
         if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or (
-            (id(item) in tensor_ids_in_obj) and not allow_repeats
+            (id(item) in found_ids) and not allow_repeats
         ):
             continue
         if issubclass(item_class, which_type):
-            tensors_in_obj.append(item)
-            tensor_addresses.append(address)
-            tensor_addresses_full.append(address_full)
-            tensor_ids_in_obj.append(id(item))
+            found_items.append(item)
+            found_addresses.append(address)
+            found_addresses_full.append(address_full)
+            found_ids.append(id(item))
             continue
         if item_class in [str, int, float, bool, np.ndarray, torch.Tensor]:
             continue
@@ -559,6 +561,8 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
 
     Args:
         item: The item
+        address: Human-readable dot-separated path string (e.g. "0.weight").
+        address_full: List of (type, key) tuples for programmatic indexing into the nested structure.
         next_stack: Stack to add to
     """
     from . import _state
@@ -674,8 +678,16 @@ def nested_getattr(obj: Any, attr: str) -> Any:
     return obj
 
 
-def nested_assign(obj, addr, val):
-    """Given object and an address in that object, assign value to that address."""
+def nested_assign(obj: Any, addr: List[tuple], val: Any) -> None:
+    """Walk into a nested structure following an address path and assign a value at the final location.
+
+    Args:
+        obj: The root object to traverse.
+        addr: A list of (kind, key) tuples specifying how to traverse the structure.
+            Each tuple is either ("ind", key) for index/dict access (obj[key]) or
+            ("attr", name) for attribute access (getattr(obj, name)).
+        val: The value to assign at the destination.
+    """
     for i, (entry_type, entry_val) in enumerate(addr):
         if i == len(addr) - 1:
             if entry_type == "ind":
@@ -713,64 +725,67 @@ def iter_accessible_attributes(
         yield attr_name, attr
 
 
-def remove_attributes_starting_with_str(obj: Any, s: str):
-    """Given an object removes, any attributes for that object beginning with a given
-    substring.
+def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
+    """Given an object, removes any attributes beginning with a given prefix.
 
     Args:
-        obj: object
-        s: string that marks fields to remove
+        obj: object from which to remove attributes
+        prefix: string prefix that marks fields to remove
     """
     for field in dir(obj):
-        if field.startswith(s):
+        if field.startswith(prefix):
             delattr(obj, field)
 
 
-def tensor_all_nan(t: torch.Tensor) -> bool:
-    """Returns True if  tensor is all nans, False otherwise."""
-    if torch.isnan(t).int().sum() == t.numel():
+def tensor_all_nan(tensor: torch.Tensor) -> bool:
+    """Returns True if tensor is all nans, False otherwise."""
+    if torch.isnan(tensor).int().sum() == tensor.numel():
         return True
     else:
         return False
 
 
-def tensor_nanequal(t1: torch.Tensor, t2: torch.Tensor, allow_tolerance=False) -> bool:
+def tensor_nanequal(tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolerance=False) -> bool:
     """Returns True if the two tensors are equal, allowing for nans."""
-    if t1.shape != t2.shape:
+    if tensor_a.shape != tensor_b.shape:
         return False
 
-    if t1.dtype != t2.dtype:
+    if tensor_a.dtype != tensor_b.dtype:
         return False
 
-    if not torch.equal(t1.isinf(), t2.isinf()):
+    if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
         return False
 
-    if t1.is_complex():
-        t1_nonan = torch.view_as_complex(torch.nan_to_num(torch.view_as_real(t1), 0.7234691827346))
-        t2_nonan = torch.view_as_complex(torch.nan_to_num(torch.view_as_real(t2), 0.7234691827346))
+    if tensor_a.is_complex():
+        tensor_a_nonan = torch.view_as_complex(
+            torch.nan_to_num(torch.view_as_real(tensor_a), 0.7234691827346)
+        )
+        tensor_b_nonan = torch.view_as_complex(
+            torch.nan_to_num(torch.view_as_real(tensor_b), 0.7234691827346)
+        )
     else:
-        t1_nonan = torch.nan_to_num(t1, 0.7234691827346)
-        t2_nonan = torch.nan_to_num(t2, 0.7234691827346)
+        tensor_a_nonan = torch.nan_to_num(tensor_a, 0.7234691827346)
+        tensor_b_nonan = torch.nan_to_num(tensor_b, 0.7234691827346)
 
-    if torch.equal(t1_nonan, t2_nonan):
+    if torch.equal(tensor_a_nonan, tensor_b_nonan):
         return True
 
     if (
         allow_tolerance
-        and (t1_nonan.dtype != torch.bool)
-        and (t2_nonan.dtype != torch.bool)
-        and ((t1_nonan - t2_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+        and (tensor_a_nonan.dtype != torch.bool)
+        and (tensor_b_nonan.dtype != torch.bool)
+        and ((tensor_a_nonan - tensor_b_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
     ):
         return True
 
     return False
 
 
-def safe_to(x: Any, device: str):
+def safe_to(obj: Any, device: str) -> Any:
     """Moves object to device if it's a tensor, does nothing otherwise.
 
     Args:
-        x: The object.
+        obj: The object.
         device: which device to move to
 
     Returns:
@@ -778,11 +793,11 @@ def safe_to(x: Any, device: str):
     """
     from ._state import pause_logging
 
-    if type(x) == torch.Tensor:
+    if type(obj) == torch.Tensor:
         with pause_logging():
-            return x.to(device)
+            return obj.to(device)
     else:
-        return x
+        return obj
 
 
 def get_tensor_memory_amount(t: torch.Tensor) -> int:
@@ -872,6 +887,7 @@ def safe_copy(x, detach_tensor: bool = False):
                 return x.clone()
             vals_cpu = x.data.cpu()
             if vals_cpu.dtype == torch.bfloat16:
+                # numpy doesn't support bfloat16; convert to float16 first, then back after numpy round-trip
                 vals_cpu = vals_cpu.to(torch.float16)
             vals_np = vals_cpu.numpy()
             vals_tensor = torch.from_numpy(vals_np)
@@ -885,7 +901,8 @@ def safe_copy(x, detach_tensor: bool = False):
         return copy.copy(x)
 
 
-def in_notebook():
+def in_notebook() -> bool:
+    """Return True if the code is running inside a Jupyter notebook, False otherwise."""
     try:
         if "IPKernelApp" not in get_ipython().config:
             return False

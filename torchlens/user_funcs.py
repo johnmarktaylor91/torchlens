@@ -20,7 +20,7 @@ from .data_classes.model_log import (
 )
 
 
-def run_model_and_save_specified_activations(
+def _run_model_and_save_specified_activations(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any]],
     input_kwargs: Dict[Any, Any],
@@ -160,7 +160,7 @@ def log_forward_pass(
         layers_to_save = layers_to_save.lower()
 
     if layers_to_save in ["all", "none", None, []]:
-        model_log = run_model_and_save_specified_activations(
+        model_log = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -177,7 +177,7 @@ def log_forward_pass(
             optimizer=optimizer,
         )
     else:
-        model_log = run_model_and_save_specified_activations(
+        model_log = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -296,7 +296,7 @@ def show_model_graph(
     if vis_opt not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    model_log = run_model_and_save_specified_activations(
+    model_log = _run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -376,7 +376,7 @@ def validate_saved_activations(
         ground_truth_output_tensors.append(entry[0])
         addresses_used.append(entry[1])
     model.load_state_dict(state_dict)
-    model_log = run_model_and_save_specified_activations(
+    model_log = _run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -438,8 +438,8 @@ def validate_batch_of_models_and_inputs(
         model_loading_func = model_info["model_loading_func"]
         model = model_loading_func()
         model_sample_inputs = model_info["model_sample_inputs"]
-        for input_name, x in model_sample_inputs.items():
-            validation_success = validate_saved_activations(model, x)
+        for input_name, input_data in model_sample_inputs.items():
+            validation_success = validate_saved_activations(model, input_data)
             current_csv = pd.concat(
                 [
                     current_csv,

@@ -2,8 +2,8 @@ import inspect
 import linecache
 from typing import List, Optional, Union
 
-# Sentinel to distinguish "not yet loaded" from None
-_UNSET = object()
+# Sentinel object to distinguish "not yet loaded" from an actual None value.
+_SENTINEL = object()
 
 
 class FuncCallLocation:
@@ -26,53 +26,55 @@ class FuncCallLocation:
         line_number: int,
         func_name: str,
         # New-path args
-        num_context_lines_requested: int = _UNSET,
-        _frame_func_obj=_UNSET,
+        num_context_lines_requested: int = _SENTINEL,
+        _frame_func_obj=_SENTINEL,
         # Legacy-path args (all default to sentinel)
-        func_signature: Optional[str] = _UNSET,
-        func_docstring: Optional[str] = _UNSET,
-        call_line: str = _UNSET,
-        code_context: Optional[List[str]] = _UNSET,
-        code_context_str: str = _UNSET,
-        code_context_labeled: str = _UNSET,
-        num_context_lines: int = _UNSET,
+        func_signature: Optional[str] = _SENTINEL,
+        func_docstring: Optional[str] = _SENTINEL,
+        call_line: str = _SENTINEL,
+        code_context: Optional[List[str]] = _SENTINEL,
+        code_context_str: str = _SENTINEL,
+        code_context_labeled: str = _SENTINEL,
+        num_context_lines: int = _SENTINEL,
     ):
         self.file = file
         self.line_number = line_number
         self.func_name = func_name
 
         # Detect legacy path: if any legacy kwarg was explicitly passed
-        legacy = func_signature is not _UNSET
+        legacy = func_signature is not _SENTINEL
 
         if legacy:
             # Store all values directly — no lazy loading needed
             self._func_signature = func_signature
-            self._func_docstring = func_docstring if func_docstring is not _UNSET else None
-            self._call_line = call_line if call_line is not _UNSET else ""
-            self._code_context = code_context if code_context is not _UNSET else None
-            self._code_context_str = code_context_str if code_context_str is not _UNSET else "None"
-            self._code_context_labeled = (
-                code_context_labeled if code_context_labeled is not _UNSET else ""
+            self._func_docstring = func_docstring if func_docstring is not _SENTINEL else None
+            self._call_line = call_line if call_line is not _SENTINEL else ""
+            self._code_context = code_context if code_context is not _SENTINEL else None
+            self._code_context_str = (
+                code_context_str if code_context_str is not _SENTINEL else "None"
             )
-            self._num_context_lines = num_context_lines if num_context_lines is not _UNSET else 0
+            self._code_context_labeled = (
+                code_context_labeled if code_context_labeled is not _SENTINEL else ""
+            )
+            self._num_context_lines = num_context_lines if num_context_lines is not _SENTINEL else 0
             self._num_context_lines_requested = 0
             self._frame_func_obj = None
             self._source_loaded = True
         else:
             # New path — defer source loading
             self._num_context_lines_requested = (
-                num_context_lines_requested if num_context_lines_requested is not _UNSET else 7
+                num_context_lines_requested if num_context_lines_requested is not _SENTINEL else 7
             )
-            self._frame_func_obj = _frame_func_obj if _frame_func_obj is not _UNSET else None
+            self._frame_func_obj = _frame_func_obj if _frame_func_obj is not _SENTINEL else None
             self._source_loaded = False
             # Placeholders (set by _load_source)
-            self._code_context = _UNSET
-            self._code_context_str = _UNSET
-            self._code_context_labeled = _UNSET
-            self._call_line = _UNSET
-            self._num_context_lines = _UNSET
-            self._func_signature = _UNSET
-            self._func_docstring = _UNSET
+            self._code_context = _SENTINEL
+            self._code_context_str = _SENTINEL
+            self._code_context_labeled = _SENTINEL
+            self._call_line = _SENTINEL
+            self._num_context_lines = _SENTINEL
+            self._func_signature = _SENTINEL
+            self._func_docstring = _SENTINEL
 
     def _load_source(self):
         """Load source context and function metadata from disk (once)."""
@@ -140,7 +142,7 @@ class FuncCallLocation:
         return self._code_context
 
     @code_context.setter
-    def code_context(self, value):
+    def code_context(self, value: Optional[List[str]]) -> None:
         self._code_context = value
 
     @property
@@ -149,7 +151,7 @@ class FuncCallLocation:
         return self._code_context_str
 
     @code_context_str.setter
-    def code_context_str(self, value):
+    def code_context_str(self, value: str) -> None:
         self._code_context_str = value
 
     @property
@@ -158,7 +160,7 @@ class FuncCallLocation:
         return self._code_context_labeled
 
     @code_context_labeled.setter
-    def code_context_labeled(self, value):
+    def code_context_labeled(self, value: str) -> None:
         self._code_context_labeled = value
 
     @property
@@ -167,7 +169,7 @@ class FuncCallLocation:
         return self._call_line
 
     @call_line.setter
-    def call_line(self, value):
+    def call_line(self, value: str) -> None:
         self._call_line = value
 
     @property
@@ -176,7 +178,7 @@ class FuncCallLocation:
         return self._num_context_lines
 
     @num_context_lines.setter
-    def num_context_lines(self, value):
+    def num_context_lines(self, value: int) -> None:
         self._num_context_lines = value
 
     @property
@@ -185,7 +187,7 @@ class FuncCallLocation:
         return self._func_signature
 
     @func_signature.setter
-    def func_signature(self, value):
+    def func_signature(self, value: Optional[str]) -> None:
         self._func_signature = value
 
     @property
@@ -194,10 +196,11 @@ class FuncCallLocation:
         return self._func_docstring
 
     @func_docstring.setter
-    def func_docstring(self, value):
+    def func_docstring(self, value: Optional[str]) -> None:
         self._func_docstring = value
 
     def __repr__(self) -> str:
+        """Show file, line number, function name, and source context with arrow."""
         lines = [
             "FuncCallLocation:",
             f"  file: {self.file}",
@@ -212,11 +215,13 @@ class FuncCallLocation:
         return "\n".join(lines)
 
     def __getitem__(self, i: Union[int, slice]) -> Union[str, List[str]]:
+        """Index into the source context lines."""
         if self.code_context is None:
             raise IndexError("code_context is None (source unavailable)")
         return self.code_context[i]
 
     def __len__(self) -> int:
+        """Return the number of source context lines."""
         if self.code_context is None:
             return 0
         return len(self.code_context)

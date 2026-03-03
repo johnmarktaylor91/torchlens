@@ -25,7 +25,12 @@ from .logging_funcs import log_source_tensor
 from .interface import _give_user_feedback_about_lookup_key
 
 
-def _get_input_arg_names(model, input_args):
+def _get_input_arg_names(model, input_args) -> List[str]:
+    """Extract parameter names from the model's forward() signature for the given input args.
+
+    Inspects the forward method's argspec, strips 'self', and generates synthetic
+    names for any *args overflow positions.
+    """
     spec = inspect.getfullargspec(model.forward)
     input_arg_names = list(spec.args)
     if "self" in input_arg_names:
@@ -82,43 +87,43 @@ def _fetch_label_move_input_tensors(
         get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
         for kwarg in input_kwargs.values()
     ]
-    for a, arg in enumerate(input_args):
+    for arg_idx, arg in enumerate(input_args):
         was_tuple = isinstance(arg, tuple)
         if was_tuple:
-            input_args[a] = list(arg)
-        for i, (t, addr, addr_full) in enumerate(input_arg_tensors[a]):
-            t_moved = t.to(model_device)
-            input_arg_tensors[a][i] = (t_moved, addr, addr_full)
+            input_args[arg_idx] = list(arg)
+        for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
+            moved_tensor = tensor.to(model_device)
+            input_arg_tensors[arg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
             if not addr_full:
-                input_args[a] = t_moved
+                input_args[arg_idx] = moved_tensor
             else:
-                nested_assign(input_args[a], addr_full, t_moved)
-        if was_tuple and isinstance(input_args[a], list):
-            input_args[a] = tuple(input_args[a])
+                nested_assign(input_args[arg_idx], addr_full, moved_tensor)
+        if was_tuple and isinstance(input_args[arg_idx], list):
+            input_args[arg_idx] = tuple(input_args[arg_idx])
 
-    for k, (key, val) in enumerate(input_kwargs.items()):
-        for i, (t, addr, addr_full) in enumerate(input_kwarg_tensors[k]):
-            t_moved = t.to(model_device)
-            input_kwarg_tensors[k][i] = (t_moved, addr, addr_full)
+    for kwarg_idx, (key, val) in enumerate(input_kwargs.items()):
+        for tensor_idx, (tensor, addr, addr_full) in enumerate(input_kwarg_tensors[kwarg_idx]):
+            moved_tensor = tensor.to(model_device)
+            input_kwarg_tensors[kwarg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
             if not addr_full:
-                input_kwargs[key] = t_moved
+                input_kwargs[key] = moved_tensor
             else:
-                nested_assign(input_kwargs[key], addr_full, t_moved)
+                nested_assign(input_kwargs[key], addr_full, moved_tensor)
 
     input_tensors = []
     input_tensor_addresses = []
-    for a, arg_tensors in enumerate(input_arg_tensors):
-        for t, addr, addr_full in arg_tensors:
-            input_tensors.append(t)
-            tensor_addr = f"input.{input_arg_names[a]}"
+    for arg_idx, arg_tensors in enumerate(input_arg_tensors):
+        for tensor, addr, addr_full in arg_tensors:
+            input_tensors.append(tensor)
+            tensor_addr = f"input.{input_arg_names[arg_idx]}"
             if addr != "":
                 tensor_addr += f".{addr}"
             input_tensor_addresses.append(tensor_addr)
 
-    for a, kwarg_tensors in enumerate(input_kwarg_tensors):
-        for t, addr, addr_full in kwarg_tensors:
-            input_tensors.append(t)
-            tensor_addr = f"input.{list(input_kwargs.keys())[a]}"
+    for arg_idx, kwarg_tensors in enumerate(input_kwarg_tensors):
+        for tensor, addr, addr_full in kwarg_tensors:
+            input_tensors.append(tensor)
+            tensor_addr = f"input.{list(input_kwargs.keys())[arg_idx]}"
             if addr != "":
                 tensor_addr += f".{addr}"
             input_tensor_addresses.append(tensor_addr)
@@ -133,7 +138,7 @@ def run_and_log_inputs_through_model(
     input_kwargs: Dict[Any, Any] = None,
     layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
     random_seed: Optional[int] = None,
-):
+) -> None:
     """Runs input through model and logs it in ModelLog.
 
     Uses toggle-gated decoration: torch functions are already decorated

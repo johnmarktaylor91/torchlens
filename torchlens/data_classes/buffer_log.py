@@ -28,6 +28,7 @@ class BufferLog(TensorLog):
         return addr.rsplit(".", 1)[0] if "." in addr else ""
 
     def __repr__(self) -> str:
+        """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
         lines = [f"BufferLog: {self.buffer_address or self.layer_label}"]
         if self.tensor_shape is not None:
             lines.append(f"  shape: {list(self.tensor_shape)}")
@@ -57,12 +58,13 @@ class BufferAccessor:
         self,
         buffer_dict: Dict[str, "BufferLog"],
         source_model_log=None,
-    ):
+    ) -> None:
         self._dict = buffer_dict
         self._list = list(buffer_dict.values())
         self._source = source_model_log
 
     def __getitem__(self, key: Union[int, str]) -> "BufferLog":
+        """Retrieve a buffer by integer index, full address, or short name."""
         if isinstance(key, int):
             return self._list[key]
         if key in self._dict:
@@ -76,18 +78,22 @@ class BufferAccessor:
         raise KeyError(key)
 
     def __contains__(self, key: str) -> bool:
+        """Check membership by full address or short name."""
         if key in self._dict:
             return True
         # Also check short names
         return any(bl.name == key for bl in self._list)
 
     def __len__(self) -> int:
+        """Return the number of buffers."""
         return len(self._dict)
 
     def __iter__(self):
+        """Iterate over BufferLog objects in insertion order."""
         return iter(self._list)
 
     def __repr__(self) -> str:
+        """Format as a dict-like string of buffer addresses with shapes and dtypes."""
         if len(self) == 0:
             return "{}"
         items = []

@@ -46,9 +46,12 @@ if TYPE_CHECKING:
 
 def postprocess(
     self: "ModelLog", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
-):
-    """
-    After the forward pass, cleans up the log into its final form.
+) -> None:
+    """After the forward pass, cleans up the log into its final form.
+
+    Runs the full 18-step postprocessing pipeline (exhaustive mode) or a
+    shortened fast-mode pipeline. Each step is delegated to a thematic
+    submodule — see the module docstring for the mapping.
     """
     if self.logging_mode == "fast":
         postprocess_fast(self)
@@ -122,7 +125,13 @@ def postprocess(
     _set_pass_finished(self)
 
 
-def postprocess_fast(self: "ModelLog"):
+def postprocess_fast(self: "ModelLog") -> None:
+    """Lightweight postprocessing for fast logging mode.
+
+    Copies activation data from each output's parent tensor into the output
+    node, then trims, renames, undecorates, and marks the pass as finished.
+    Skips graph traversal, loop detection, and module annotation.
+    """
     for output_layer_label in self.output_layers:
         output_layer = self[output_layer_label]
         output_layer.tensor_contents = self[output_layer.parent_layers[0]].tensor_contents

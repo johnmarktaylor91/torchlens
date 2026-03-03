@@ -49,7 +49,7 @@ _SESSION_PARAM_ATTRS = [
 # ---------------------------------------------------------------------------
 
 
-def _prepare_model_once(model: nn.Module):
+def _prepare_model_once(model: nn.Module) -> None:
     """Prepare a model for permanent forward decoration.
 
     Runs once per model instance.  Assigns ``tl_module_address`` and
@@ -108,7 +108,7 @@ def _prepare_model_session(
     model_log: "ModelLog",
     model: nn.Module,
     optimizer=None,
-):
+) -> None:
     """Per-session model preparation.
 
     Sets session-scoped attributes (``tl_source_model_log``, pass counters),
@@ -255,17 +255,20 @@ def _capture_module_metadata(
     module_children: list,
     seen_module_ids: dict,
     is_root: bool = False,
-):
-    """Capture live module metadata during prepare_model(), before cleanup strips tl_* attrs."""
+) -> None:
+    """Capture live module metadata during prepare_model(), while tl_* attrs are still present on modules.
+
+    Must be called before the later cleanup step that removes tl_* session attributes.
+    """
     address = "self" if is_root else parent_address
 
-    mid = id(module)
-    if mid in seen_module_ids:
-        primary = seen_module_ids[mid]
+    module_id = id(module)
+    if module_id in seen_module_ids:
+        primary = seen_module_ids[module_id]
         if primary in model_log._module_metadata:
             model_log._module_metadata[primary]["all_addresses"].append(address)
         return
-    seen_module_ids[mid] = address
+    seen_module_ids[module_id] = address
 
     # Start from cached class-level metadata (shallow copy — lists/dicts are replaced below)
     class_meta = _get_class_metadata(type(module))
@@ -274,12 +277,12 @@ def _capture_module_metadata(
 
     # Per-instance forward override (rare — e.g. user assigned forward on instance before prep)
     if "forward" in module.__dict__:
-        fwd = module.__dict__["forward"]
+        forward_func = module.__dict__["forward"]
         try:
-            meta["forward_signature"] = str(inspect.signature(fwd))
+            meta["forward_signature"] = str(inspect.signature(forward_func))
         except (ValueError, TypeError):
             pass
-        doc = getattr(fwd, "__doc__", None)
+        doc = getattr(forward_func, "__doc__", None)
         if doc is not None:
             meta["forward_docstring"] = doc
 
@@ -464,8 +467,8 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
                 t = torch.identity(t)
             tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
             tensor_entry.is_submodule_output = True
-            tensor_entry.is_bottom_level_submodule_output = (
-                log_whether_exited_submodule_is_bottom_level(model_log, t, module)
+            tensor_entry.is_bottom_level_submodule_output = _is_bottom_level_submodule_exit(
+                model_log, t, module
             )
             tensor_entry.modules_exited.append(module_address)
             tensor_entry.module_passes_exited.append((module_address, module_pass_num))
@@ -495,12 +498,16 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
 
 
 # ---------------------------------------------------------------------------
-# Helper: log_whether_exited_submodule_is_bottom_level (unchanged)
+# Helper: _is_bottom_level_submodule_exit
 # ---------------------------------------------------------------------------
 
 
-def log_whether_exited_submodule_is_bottom_level(model_log, t: torch.Tensor, submodule: nn.Module):
-    """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule."""
+def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Module) -> bool:
+    """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule.
+
+    A "bottom-level" submodule is a leaf submodule that contains no further sub-submodules
+    (i.e., it has no children in the module hierarchy).
+    """
     tensor_entry = model_log._raw_tensor_dict[getattr(t, "tl_tensor_label_raw")]
     submodule_address = submodule.tl_module_address
 
@@ -558,7 +565,7 @@ def clear_hooks(hook_handles: List):
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_model_session(model: nn.Module, input_tensors=None):
+def _cleanup_model_session(model: nn.Module, input_tensors=None) -> None:
     """Clean up session-specific attributes from a model.
 
     Restores ``requires_grad`` on all parameters, removes session-scoped
@@ -601,7 +608,7 @@ def _cleanup_model_session(model: nn.Module, input_tensors=None):
                 delattr(t, "tl_tensor_label_raw")
 
 
-def _undecorate_model_tensors(model: nn.Module):
+def _undecorate_model_tensors(model: nn.Module) -> None:
     """Remove tl_tensor_label_raw and tl_buffer_* from non-parameter tensors in the model."""
     submodules = get_all_submodules(model)
     for submodule in submodules:
@@ -638,7 +645,7 @@ def _undecorate_model_tensors(model: nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _ensure_model_prepared(model: nn.Module):
+def _ensure_model_prepared(model: nn.Module) -> None:
     """One-time torch decoration + model preparation + incremental sys.modules crawl.
 
     On first call, decorates all torch functions permanently via

@@ -51,6 +51,7 @@ class ParamLog:
 
     @property
     def is_quantized(self) -> bool:
+        """Whether this parameter uses a quantized dtype (qint8, quint8, etc.)."""
         _QUANTIZED_DTYPES = {
             torch.qint8,
             torch.quint8,
@@ -72,50 +73,56 @@ class ParamLog:
 
     @property
     def has_grad(self) -> bool:
+        """Whether this parameter currently has a gradient stored."""
         self._check_param_grad()
         return self._has_grad
 
     @has_grad.setter
-    def has_grad(self, value: bool):
+    def has_grad(self, value: bool) -> None:
         self._has_grad = value
 
     @property
     def grad_shape(self) -> Optional[Tuple[int, ...]]:
+        """Shape of the gradient tensor, or None if no gradient exists."""
         self._check_param_grad()
         return self._grad_shape
 
     @grad_shape.setter
-    def grad_shape(self, value):
+    def grad_shape(self, value: Optional[Tuple[int, ...]]) -> None:
         self._grad_shape = value
 
     @property
     def grad_dtype(self) -> Optional[torch.dtype]:
+        """Dtype of the gradient tensor, or None if no gradient exists."""
         self._check_param_grad()
         return self._grad_dtype
 
     @grad_dtype.setter
-    def grad_dtype(self, value):
+    def grad_dtype(self, value: Optional[torch.dtype]) -> None:
         self._grad_dtype = value
 
     @property
     def grad_fsize(self) -> int:
+        """Size of the gradient tensor in bytes."""
         self._check_param_grad()
         return self._grad_fsize
 
     @grad_fsize.setter
-    def grad_fsize(self, value):
+    def grad_fsize(self, value: int) -> None:
         self._grad_fsize = value
 
     @property
     def grad_fsize_nice(self) -> str:
+        """Human-readable size of the gradient tensor (e.g. '4.0 KB')."""
         self._check_param_grad()
         return self._grad_fsize_nice
 
     @grad_fsize_nice.setter
-    def grad_fsize_nice(self, value):
+    def grad_fsize_nice(self, value: str) -> None:
         self._grad_fsize_nice = value
 
     def __repr__(self) -> str:
+        """Multi-line summary showing address, shape, dtype, trainability, and usage."""
         status = "trainable" if self.trainable else "frozen"
         lines = [
             f"ParamLog: {self.address}",
@@ -137,17 +144,19 @@ class ParamLog:
         return "\n".join(lines)
 
     def __len__(self) -> int:
+        """Return the number of scalar elements in this parameter."""
         return self.num_params
 
 
 class ParamAccessor:
     """Dict-like accessor for ParamLog objects. Supports indexing by address, short name, or ordinal position."""
 
-    def __init__(self, param_logs: Dict[str, "ParamLog"]):
+    def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
         self._dict = param_logs
         self._list = list(param_logs.values())
 
     def __getitem__(self, key: Union[int, str]) -> "ParamLog":
+        """Retrieve a parameter by integer index, full address, or short name (e.g. 'weight')."""
         if isinstance(key, int):
             return self._list[key]
         if key in self._dict:
@@ -161,15 +170,19 @@ class ParamAccessor:
         raise KeyError(key)
 
     def __contains__(self, key: str) -> bool:
+        """Check membership by full parameter address."""
         return key in self._dict
 
     def __len__(self) -> int:
+        """Return the number of parameters."""
         return len(self._dict)
 
     def __iter__(self):
+        """Iterate over ParamLog objects in insertion order."""
         return iter(self._list)
 
     def __repr__(self) -> str:
+        """Format as a dict-like string of parameter addresses with shapes and status."""
         if len(self) == 0:
             return "{}"
         items = []

@@ -1,7 +1,7 @@
 """Steps 5-7: Conditional branches, module annotation fixes, buffer layer fixes."""
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, List, Set
+from typing import TYPE_CHECKING, Dict, List, Set, Tuple
 
 import torch
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 
-def _mark_conditional_branches(self):
+def _mark_conditional_branches(self) -> None:
     """Starting from any terminal boolean nodes, backtracks until it finds the beginning of any
     conditional branches.
     """
@@ -41,7 +41,7 @@ def _mark_conditional_branches(self):
         nodes_seen.add(node_label)
 
 
-def _fix_modules_for_internal_tensors(self):
+def _fix_modules_for_internal_tensors(self) -> None:
     """
     Since internally initialized tensors don't automatically know what module they're in,
     this function infers this by tracing back from tensors that came from the input.
@@ -94,7 +94,7 @@ def _fix_modules_for_single_internal_tensor(
     node_type_to_fix: str,
     node_stack: List[str],
     nodes_seen: Set[str],
-):
+) -> None:
     """Helper function to fix the containing modules for a single internally generated tensor.
     The rule is, start from the child node, and apply in reverse any modules that were entered or exited.
 
@@ -141,12 +141,12 @@ def _fix_modules_for_single_internal_tensor(
     nodes_seen.add(node_to_fix_label)
 
 
-def _fix_buffer_layers(self):
+def _fix_buffer_layers(self) -> None:
     """Connect the buffer parents, merge duplicate buffer nodes, and label buffer passes correctly.
     Buffers are duplicates if they happen in the same module, have the same value, and have the same parents.
     """
-    buffer_counter = defaultdict(lambda: 1)
-    buffer_hash_groups = defaultdict(list)
+    buffer_counter: Dict[str, int] = defaultdict(lambda: 1)
+    buffer_hash_groups: Dict[str, List[str]] = defaultdict(list)
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
@@ -201,7 +201,7 @@ def _fix_buffer_layers(self):
         buffer_counter[buffer_address] += 1
 
 
-def _merge_buffer_entries(self, source_buffer: TensorLog, buffer_to_remove: TensorLog):
+def _merge_buffer_entries(self, source_buffer: TensorLog, buffer_to_remove: TensorLog) -> None:
     """Merges two identical buffer layers."""
     for child_layer in buffer_to_remove.child_layers:
         if child_layer not in source_buffer.child_layers:

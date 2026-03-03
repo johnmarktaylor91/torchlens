@@ -37,6 +37,7 @@ class ModulePassLog:
         self.call_children = call_children if call_children is not None else []
 
     def __repr__(self) -> str:
+        """Show pass label, layer count, and children."""
         lines = [
             f"ModulePassLog: {self.pass_label}",
             f"  layers: {self.num_layers}",
@@ -50,6 +51,7 @@ class ModulePassLog:
         return "\n".join(lines)
 
     def __len__(self) -> int:
+        """Return the number of layers in this pass."""
         return self.num_layers
 
 
@@ -156,6 +158,12 @@ class ModuleLog:
     # --- Per-call delegating properties ---
 
     def _single_pass_or_error(self, field_name: str):
+        """Return a field from the single pass, or raise if the module has multiple passes.
+
+        For modules invoked once, transparently delegates to passes[1].
+        For multi-pass modules, raises AttributeError directing the user to
+        access the field on a specific pass.
+        """
         if self.num_passes > 1:
             raise AttributeError(
                 f"Module '{self.address}' has {self.num_passes} passes. "
@@ -210,6 +218,7 @@ class ModuleLog:
         return self._buffer_accessor
 
     def __repr__(self) -> str:
+        """Show address, class, depth, param count, layer count, and pass count."""
         lines = [
             f"ModuleLog: {self.address} ({self.module_class_name})",
             f"  nesting_depth: {self.nesting_depth}, address_depth: {self.address_depth}",
@@ -222,14 +231,17 @@ class ModuleLog:
         return "\n".join(lines)
 
     def __len__(self) -> int:
+        """Return the total number of layers across all passes of this module."""
         return self.num_layers
 
     def __getitem__(self, ix):
+        """Return the TensorLog at position ix within this module's layer list."""
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot index into layers.")
         return self._source_model_log[self.all_layers[ix]]
 
     def __iter__(self):
+        """Iterate over TensorLog entries for all layers in this module."""
         if self._source_model_log is None:
             return iter(self.all_layers)
         return iter(self._source_model_log[label] for label in self.all_layers)
@@ -267,6 +279,7 @@ class ModuleAccessor:
         self._pass_dict = pass_dict if pass_dict is not None else {}
 
     def __getitem__(self, key: Union[int, str]) -> Union["ModuleLog", "ModulePassLog"]:
+        """Return a ModuleLog by address string or ordinal index, or a ModulePassLog by pass label."""
         if isinstance(key, int):
             return self._list[key]
         if key == "":
@@ -280,17 +293,21 @@ class ModuleAccessor:
         )
 
     def __contains__(self, key) -> bool:
+        """Return True if key is a known module address or pass label."""
         if key == "":
             key = "self"
         return key in self._dict or key in self._pass_dict
 
     def __len__(self) -> int:
+        """Return the number of modules in this accessor."""
         return len(self._dict)
 
     def __iter__(self):
+        """Iterate over ModuleLog objects in address order."""
         return iter(self._list)
 
     def __repr__(self) -> str:
+        """Show a table of all modules with class, depth, param, layer, and pass counts."""
         if len(self) == 0:
             return "ModuleAccessor({})"
         items = []

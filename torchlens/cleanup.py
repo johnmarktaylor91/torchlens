@@ -7,8 +7,8 @@ from .helper_funcs import remove_entry_from_list
 from .data_classes.tensor_log import TensorLog
 
 
-def cleanup(self):
-    """Deletes all log entries in the model."""
+def cleanup(self) -> None:
+    """Deletes all log entries in the model and frees GPU memory."""
     for tensor_log_entry in self:
         self._remove_log_entry(tensor_log_entry, remove_references=True)
     for attr in MODEL_LOG_FIELD_ORDER:
@@ -16,7 +16,7 @@ def cleanup(self):
     torch.cuda.empty_cache()
 
 
-def _clear_entry_attributes(log_entry: TensorLog):
+def _clear_entry_attributes(log_entry: TensorLog) -> None:
     """Clear all instance attributes from a TensorLog entry."""
     for attr in dir(log_entry):
         with warnings.catch_warnings():
@@ -29,13 +29,16 @@ def _clear_entry_attributes(log_entry: TensorLog):
                 delattr(log_entry, attr)
 
 
-def _remove_log_entry(self, log_entry: TensorLog, remove_references: bool = True):
+def _remove_log_entry(self, log_entry: TensorLog, remove_references: bool = True) -> None:
     """Given a TensorLog, destroys it and all references to it.
 
     Args:
         log_entry: Tensor log entry to remove.
         remove_references: Whether to also remove references to the log entry
     """
+    # After postprocessing (_pass_finished=True), tensors are keyed by their final
+    # human-readable label (layer_label). During the pass, they use the raw internal
+    # barcode (tensor_label_raw).
     if self._pass_finished:
         tensor_label = log_entry.layer_label
     else:
@@ -60,7 +63,7 @@ _LIST_FIELDS_TO_CLEAN = [
 ]
 
 
-def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool = True):
+def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool = True) -> None:
     """Remove multiple TensorLog entries at once, avoiding O(N*M) list.remove() calls.
 
     Args:
@@ -82,35 +85,45 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
     # Single-pass filter on each list field (replaces N × remove_entry_from_list calls).
     for field in _LIST_FIELDS_TO_CLEAN:
         collection = getattr(self, field)
-        collection[:] = [x for x in collection if x not in labels_to_remove]
+        collection[:] = [label for label in collection if label not in labels_to_remove]
 
     self.conditional_branch_edges = [
-        tup
-        for tup in self.conditional_branch_edges
-        if tup[0] not in labels_to_remove and tup[1] not in labels_to_remove
+        edge
+        for edge in self.conditional_branch_edges
+        if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
     ]
 
     # Single-pass filter on dict fields.
     # layers_computed_with_params values are lists.
-    for group_label, group_tensors in list(self.layers_computed_with_params.items()):
-        self.layers_computed_with_params[group_label] = [
-            t for t in group_tensors if t not in labels_to_remove
+    for param_group, tensor_labels in list(self.layers_computed_with_params.items()):
+        self.layers_computed_with_params[param_group] = [
+            label for label in tensor_labels if label not in labels_to_remove
         ]
     self.layers_computed_with_params = {
-        k: v for k, v in self.layers_computed_with_params.items() if len(v) > 0
+        param_group: tensor_labels
+        for param_group, tensor_labels in self.layers_computed_with_params.items()
+        if len(tensor_labels) > 0
     }
 
     # equivalent_operations values are sets.
-    for group_label, group_tensors in list(self.equivalent_operations.items()):
-        group_tensors -= labels_to_remove
-    self.equivalent_operations = {k: v for k, v in self.equivalent_operations.items() if len(v) > 0}
+    for equiv_group, tensor_labels in list(self.equivalent_operations.items()):
+        tensor_labels -= labels_to_remove
+    self.equivalent_operations = {
+        equiv_group: tensor_labels
+        for equiv_group, tensor_labels in self.equivalent_operations.items()
+        if len(tensor_labels) > 0
+    }
 
 
-def _remove_log_entry_references(self, layer_to_remove: str):
-    """Removes all references to a given TensorLog in the ModelLog object.
+def _remove_log_entry_references(self, layer_to_remove: str) -> None:
+    """Removes all references to a single TensorLog from the ModelLog's list/dict fields.
+
+    This is the single-entry counterpart to the reference-cleaning logic in
+    ``_batch_remove_log_entries``. Both must clean the same set of fields —
+    if you add a new field to one, update the other as well.
 
     Args:
-        layer_to_remove: The log entry to remove.
+        layer_to_remove: The label of the log entry to remove.
     """
     # Clear any fields in ModelLog referring to the entry.
 
@@ -125,19 +138,25 @@ def _remove_log_entry_references(self, layer_to_remove: str):
     remove_entry_from_list(self._layers_where_internal_branches_merge_with_input, layer_to_remove)
 
     self.conditional_branch_edges = [
-        tup for tup in self.conditional_branch_edges if layer_to_remove not in tup
+        edge for edge in self.conditional_branch_edges if layer_to_remove not in edge
     ]
 
     # Now any nested fields.
 
-    for group_label, group_tensors in self.layers_computed_with_params.items():
-        if layer_to_remove in group_tensors:
-            group_tensors.remove(layer_to_remove)
+    for param_group, tensor_labels in self.layers_computed_with_params.items():
+        if layer_to_remove in tensor_labels:
+            tensor_labels.remove(layer_to_remove)
     self.layers_computed_with_params = {
-        k: v for k, v in self.layers_computed_with_params.items() if len(v) > 0
+        param_group: tensor_labels
+        for param_group, tensor_labels in self.layers_computed_with_params.items()
+        if len(tensor_labels) > 0
     }
 
-    for group_label, group_tensors in self.equivalent_operations.items():
-        if layer_to_remove in group_tensors:
-            group_tensors.remove(layer_to_remove)
-    self.equivalent_operations = {k: v for k, v in self.equivalent_operations.items() if len(v) > 0}
+    for equiv_group, tensor_labels in self.equivalent_operations.items():
+        if layer_to_remove in tensor_labels:
+            tensor_labels.remove(layer_to_remove)
+    self.equivalent_operations = {
+        equiv_group: tensor_labels
+        for equiv_group, tensor_labels in self.equivalent_operations.items()
+        if len(tensor_labels) > 0
+    }
