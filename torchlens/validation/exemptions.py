@@ -104,6 +104,12 @@ def _check_setitem_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) 
     ):
         return True
 
+    # Case 3: perturbed layer is the destination (args[0]) and it's all-zeros/all-ones.
+    # __setitem__ overwrites the destination, so perturbing a "blank slate" destination
+    # (e.g. new_zeros used in BART position embeddings) has no effect.
+    if torch.equal(perturbed_tensor, args[0]) and _check_if_arg_is_special_val(args[0]):
+        return True
+
     return False
 
 
