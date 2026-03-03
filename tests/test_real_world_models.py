@@ -1193,7 +1193,6 @@ def test_bert():
     assert validate_saved_activations(model, [], model_inputs)
 
 
-@pytest.mark.slow
 def test_t5_small():
     transformers = pytest.importorskip("transformers")
     tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")

@@ -51,6 +51,7 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "scatter_": {2},  # index tensor
     "masked_fill_": {1},  # mask tensor
     "_pad_packed_sequence": {1},  # lengths tensor
+    "type_as": {1},  # type template tensor (value irrelevant)
 }
 
 
@@ -101,6 +102,12 @@ def _check_setitem_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) 
         and args[1][0].dtype == torch.bool
         and torch.equal(perturbed_tensor, args[1][0])
     ):
+        return True
+
+    # Case 3: perturbed layer is the destination (args[0]) and it's all-zeros/all-ones.
+    # __setitem__ overwrites the destination, so perturbing a "blank slate" destination
+    # (e.g. new_zeros used in BART position embeddings) has no effect.
+    if torch.equal(perturbed_tensor, args[0]) and _check_if_arg_is_special_val(args[0]):
         return True
 
     return False
@@ -209,6 +216,15 @@ def posthoc_perturb_check(
     if layer_to_validate_parents_for.tensor_dtype == torch.bool:
         return True
 
+    # topk/sort indices — discrete output insensitive to value perturbation
+    if func_name in ("topk", "sort") and layer_to_validate_parents_for.tensor_dtype in (
+        torch.int,
+        torch.long,
+        torch.int32,
+        torch.int64,
+    ):
+        return True
+
     # to() with tensor arg — type casting
     if func_name == "to" and len(args) > 1 and isinstance(args[1], torch.Tensor):
         return True
@@ -255,8 +271,8 @@ def posthoc_perturb_check(
     ):
         return True
 
-    # max with multiple args — binary max
-    if func_name == "max" and len(args) > 1:
+    # max/min with multiple args — binary max/min
+    if func_name in ("max", "min") and len(args) > 1:
         return True
 
     # max non-floating-point — discrete

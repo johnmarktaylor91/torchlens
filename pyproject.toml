@@ -38,6 +38,7 @@ test = [
     "pillow",
     "pytest",
     "requests",
+    "soxr",
     "timm",
     "torchaudio",
     "torch_geometric",

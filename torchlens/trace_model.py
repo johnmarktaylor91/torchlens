@@ -26,10 +26,15 @@ from .interface import _give_user_feedback_about_lookup_key
 
 
 def _get_input_arg_names(model, input_args):
-    input_arg_names = list(inspect.getfullargspec(model.forward).args)
+    spec = inspect.getfullargspec(model.forward)
+    input_arg_names = list(spec.args)
     if "self" in input_arg_names:
         input_arg_names.remove("self")
     input_arg_names = input_arg_names[0 : len(input_args)]
+    # Handle *args: generate synthetic names for uncovered positions
+    if len(input_arg_names) < len(input_args) and spec.varargs is not None:
+        for i in range(len(input_arg_names), len(input_args)):
+            input_arg_names.append(f"{spec.varargs}_{i}")
     return input_arg_names
 
 

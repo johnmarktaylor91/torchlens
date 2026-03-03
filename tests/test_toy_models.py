@@ -2012,12 +2012,13 @@ def test_scatter_gather():
     )
 
 
-def test_no_grad_block(small_input):
+def test_no_grad_block():
     model = example_models.NoGradBlockModel()
-    assert validate_saved_activations(model, small_input)
+    x = torch.rand(2, 32)
+    assert validate_saved_activations(model, x)
     show_model_graph(
         model,
-        small_input,
+        x,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "no_grad_block"),
@@ -2148,12 +2149,13 @@ def test_shared_param_branch(input_2d):
     )
 
 
-def test_model_calling_model(small_input):
+def test_model_calling_model():
     model = example_models.ModelCallingModelModel()
-    assert validate_saved_activations(model, small_input)
+    x = torch.rand(2, 32)
+    assert validate_saved_activations(model, x)
     show_model_graph(
         model,
-        small_input,
+        x,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "model_calling_model"),

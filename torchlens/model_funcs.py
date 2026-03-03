@@ -413,6 +413,7 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
             [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
         )
         input_tensor_labels = set()
+        input_tensor_labels_at_entry = []
         for t in input_tensors:
             if (not hasattr(t, "tl_tensor_label_raw")) and hasattr(t, "tl_buffer_address"):
                 log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
@@ -433,6 +434,7 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
             tensor_entry.module_entry_exit_thread_output.append(
                 ("+", module_pass_label[0], module_pass_label[1])
             )
+            input_tensor_labels_at_entry.append(t.tl_tensor_label_raw)
 
         # Check the buffers.
         for buffer_name, buffer_tensor in module.named_buffers():
@@ -472,8 +474,8 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
             )
             module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
-        for t in input_tensors:
-            tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
+        for entry_label in input_tensor_labels_at_entry:
+            tensor_entry = model_log._raw_tensor_dict[entry_label]
             input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
             if (
                 "+",

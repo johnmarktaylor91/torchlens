@@ -166,6 +166,7 @@ TENSOR_LOG_FIELD_ORDER = [
     "flops_forward",
     "flops_backward",
     "func_rng_states",
+    "func_autocast_state",
     "func_argnames",
     "num_func_args_total",
     "num_position_args",
