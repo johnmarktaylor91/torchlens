@@ -540,7 +540,11 @@ class RolledTensorLog:
         }
 
     def update_data(self, source_node: TensorLog):
-        """Updates the data as need be.
+        """Merges data from a new pass into this rolled node.
+
+        For fields like input_output_address, characters that differ between passes
+        are replaced with '*' to indicate variability across passes.
+
         Args:
             source_node: the source node
         """

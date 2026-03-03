@@ -358,9 +358,12 @@ def _set_pass_finished(self) -> None:
 
 
 def _roll_graph(self) -> None:
-    """
-    Converts the graph to rolled-up format for plotting purposes, such that each node now represents
-    all passes of a given layer instead of having separate nodes for each pass.
+    """Converts the graph to rolled-up format for plotting purposes.
+
+    In recurrent models where the same layer executes multiple times (passes), rolling
+    collapses those into a single visual node with pass count annotations, simplifying
+    the graph for display. Each node in the rolled graph represents all passes of a
+    given layer instead of having separate nodes for each pass.
     """
     for layer_label, node in self.layer_dict_main_keys.items():
         layer_label_no_pass = self[layer_label].layer_label_no_pass

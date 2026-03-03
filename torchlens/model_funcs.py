@@ -256,7 +256,10 @@ def _capture_module_metadata(
     seen_module_ids: dict,
     is_root: bool = False,
 ) -> None:
-    """Capture live module metadata during prepare_model(), before cleanup strips tl_* attrs."""
+    """Capture live module metadata during prepare_model(), while tl_* attrs are still present on modules.
+
+    Must be called before the later cleanup step that removes tl_* session attributes.
+    """
     address = "self" if is_root else parent_address
 
     module_id = id(module)
@@ -500,7 +503,11 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
 
 
 def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Module) -> bool:
-    """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule."""
+    """Checks whether the submodule that a tensor is leaving is a "bottom-level" submodule.
+
+    A "bottom-level" submodule is a leaf submodule that contains no further sub-submodules
+    (i.e., it has no children in the module hierarchy).
+    """
     tensor_entry = model_log._raw_tensor_dict[getattr(t, "tl_tensor_label_raw")]
     submodule_address = submodule.tl_module_address
 

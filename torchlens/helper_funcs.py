@@ -207,13 +207,13 @@ def normalize_input_args(input_args, model: nn.Module) -> list:
 
 
 def make_random_barcode(barcode_len: int = 8) -> str:
-    """Generates a random integer hash for a layer to use as internal label (invisible from user side).
+    """Generates a random alphanumeric identifier string for a layer to use as internal label (invisible from user side).
 
     Args:
         barcode_len: Length of the desired barcode
 
     Returns:
-        Random hash.
+        Random alphanumeric string.
     """
     alphabet = string.ascii_letters + string.digits
     barcode = "".join(secrets.choice(alphabet) for _ in range(barcode_len))
@@ -486,35 +486,35 @@ def get_vars_of_type_from_obj(
     if subclass_exceptions is None:
         subclass_exceptions = []
     this_stack = [(obj, "", [])]
-    tensors_in_obj = []
-    tensor_addresses = []
-    tensor_addresses_full = []
-    tensor_ids_in_obj = []
+    found_items = []
+    found_addresses = []
+    found_addresses_full = []
+    found_ids = []
     for _ in range(search_depth):
         this_stack = search_stack_for_vars_of_type(
             this_stack,
             which_type,
-            tensors_in_obj,
-            tensor_addresses,
-            tensor_addresses_full,
-            tensor_ids_in_obj,
+            found_items,
+            found_addresses,
+            found_addresses_full,
+            found_ids,
             subclass_exceptions,
             allow_repeats,
         )
 
     if return_addresses:
-        return list(zip(tensors_in_obj, tensor_addresses, tensor_addresses_full))
+        return list(zip(found_items, found_addresses, found_addresses_full))
     else:
-        return tensors_in_obj
+        return found_items
 
 
 def search_stack_for_vars_of_type(
     current_stack: List,
     which_type: Type,
-    tensors_in_obj: List,
-    tensor_addresses: List,
-    tensor_addresses_full: List,
-    tensor_ids_in_obj: List,
+    found_items: List,
+    found_addresses: List,
+    found_addresses_full: List,
+    found_ids: List,
     subclass_exceptions: List,
     allow_repeats: bool,
 ):
@@ -524,12 +524,12 @@ def search_stack_for_vars_of_type(
     Args:
         current_stack: The current stack.
         which_type: Type of variable to pull out
-        tensors_in_obj: List of tensors found in the object so far
-        tensor_addresses: Addresses of the tensors found so far
-        tensor_addresses_full: explicit instructions for indexing the obj
-        tensor_ids_in_obj: List of tensor ids found in the object so far
-        subclass_exceptions: Subclasses of tensors not to use.
-        allow_repeats: whether to allow repeat tensors
+        found_items: List of items of the target type found so far
+        found_addresses: Addresses of the items found so far
+        found_addresses_full: explicit instructions for indexing the obj
+        found_ids: List of ids of found items (used for deduplication)
+        subclass_exceptions: Subclasses of the target type not to collect.
+        allow_repeats: whether to allow repeat items
 
     Returns:
         The next stack.
@@ -541,14 +541,14 @@ def search_stack_for_vars_of_type(
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
         if any([issubclass(item_class, subclass) for subclass in subclass_exceptions]) or (
-            (id(item) in tensor_ids_in_obj) and not allow_repeats
+            (id(item) in found_ids) and not allow_repeats
         ):
             continue
         if issubclass(item_class, which_type):
-            tensors_in_obj.append(item)
-            tensor_addresses.append(address)
-            tensor_addresses_full.append(address_full)
-            tensor_ids_in_obj.append(id(item))
+            found_items.append(item)
+            found_addresses.append(address)
+            found_addresses_full.append(address_full)
+            found_ids.append(id(item))
             continue
         if item_class in [str, int, float, bool, np.ndarray, torch.Tensor]:
             continue
@@ -561,6 +561,8 @@ def extend_search_stack_from_item(item: Any, address: str, address_full, next_st
 
     Args:
         item: The item
+        address: Human-readable dot-separated path string (e.g. "0.weight").
+        address_full: List of (type, key) tuples for programmatic indexing into the nested structure.
         next_stack: Stack to add to
     """
     from . import _state
@@ -676,8 +678,16 @@ def nested_getattr(obj: Any, attr: str) -> Any:
     return obj
 
 
-def nested_assign(obj, addr, val):
-    """Given object and an address in that object, assign value to that address."""
+def nested_assign(obj: Any, addr: List[tuple], val: Any) -> None:
+    """Walk into a nested structure following an address path and assign a value at the final location.
+
+    Args:
+        obj: The root object to traverse.
+        addr: A list of (kind, key) tuples specifying how to traverse the structure.
+            Each tuple is either ("ind", key) for index/dict access (obj[key]) or
+            ("attr", name) for attribute access (getattr(obj, name)).
+        val: The value to assign at the destination.
+    """
     for i, (entry_type, entry_val) in enumerate(addr):
         if i == len(addr) - 1:
             if entry_type == "ind":
@@ -877,6 +887,7 @@ def safe_copy(x, detach_tensor: bool = False):
                 return x.clone()
             vals_cpu = x.data.cpu()
             if vals_cpu.dtype == torch.bfloat16:
+                # numpy doesn't support bfloat16; convert to float16 first, then back after numpy round-trip
                 vals_cpu = vals_cpu.to(torch.float16)
             vals_np = vals_cpu.numpy()
             vals_tensor = torch.from_numpy(vals_np)

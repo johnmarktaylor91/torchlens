@@ -773,14 +773,12 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
         return False
 
 
-def _add_backward_hook(self, t: torch.Tensor, tensor_label):
+def _add_backward_hook(self, t: torch.Tensor, tensor_label: str) -> None:
     """Adds a backward hook to the tensor that saves the gradients to ModelLog if specified.
 
     Args:
         t: tensor
-
-    Returns:
-        Nothing; it changes the tensor in place.
+        tensor_label: the raw tensor label used to look up the tensor's log entry
     """
 
     def log_grad_to_model_history(grad):
@@ -951,15 +949,12 @@ def _make_tensor_log_entry(
     return new_entry
 
 
-def _log_tensor_grad(self, grad: torch.Tensor, tensor_label_raw: str):
+def _log_tensor_grad(self, grad: torch.Tensor, tensor_label_raw: str) -> None:
     """Logs the gradient for a tensor during a backward pass.
 
     Args:
         grad: the gradient
         tensor_label_raw: the raw tensor label
-
-    Returns:
-
     """
     self.has_saved_gradients = True
     tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
@@ -1043,7 +1038,7 @@ def _find_arg_positions_for_single_parent(
     arg_type: str,
     arg_struct: Union[List, Tuple, Dict],
     tensor_all_arg_positions: Dict,
-):
+) -> None:
     """Helper function that finds where a single parent tensor is used in either the args or kwargs of a function,
     and updates a dict that tracks this information.
 
@@ -1094,7 +1089,7 @@ def _get_ancestors_from_parents(
     return input_ancestors, internally_initialized_ancestors
 
 
-def _update_tensor_family_links(self, entry_to_update: TensorLog):
+def _update_tensor_family_links(self, entry_to_update: TensorLog) -> None:
     """For a given tensor, updates family information for its links to parents, children, siblings, and
     spouses, in both directions (i.e., mutually adding the labels for each family pair).
 
@@ -1128,7 +1123,9 @@ def _update_tensor_family_links(self, entry_to_update: TensorLog):
         _add_sibling_labels_for_new_tensor(self, entry_to_update, self[parent_tensor_label])
 
 
-def _add_sibling_labels_for_new_tensor(self, entry_to_update: TensorLog, parent_tensor: TensorLog):
+def _add_sibling_labels_for_new_tensor(
+    self, entry_to_update: TensorLog, parent_tensor: TensorLog
+) -> None:
     """Given a tensor and specified parent tensor, adds sibling labels to that tensor, and
     adds itself as a sibling to all existing children.
 
@@ -1156,7 +1153,7 @@ def _process_parent_param_passes(
         arg_parameters: List of arg parameters
 
     Returns:
-
+        Dict mapping each parameter's barcode to its current pass number.
     """
     parent_param_passes = {}
     for param in arg_parameters:
@@ -1171,7 +1168,7 @@ def _process_parent_param_passes(
     return parent_param_passes
 
 
-def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: str):
+def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: str) -> str:
     """Given list of param barcodes and layer type, returns the raw barcode for the
     param_group; e.g., conv2d_abcdef_uvwxyz
 
@@ -1239,12 +1236,19 @@ def _get_hash_from_args(args, kwargs) -> str:
 
 
 def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> None:
-    """Append hash-relevant info for a single arg, preserving structure.
+    """Append structural fingerprint tokens for a single argument to the accumulator list.
+
+    Builds an ``operation_equivalence_type`` -- a structural fingerprint of the operation's
+    argument types and shapes (not a content hash). This fingerprint is used by loop
+    detection to identify operations that are structurally identical across passes.
+
+    For tensors, only shape and dtype are recorded (not values). Containers (dicts, lists,
+    tuples, sets) are recursed into with depth-limited traversal. Parameters are excluded.
 
     Args:
-        arg: The argument value to hash.
+        arg: The argument value to fingerprint.
         prefix: String prefix encoding the argument's position/key path.
-        args_to_hash: Accumulator list that hash tokens are appended to.
+        args_to_hash: Accumulator list that fingerprint tokens are appended to.
         _depth: Recursion depth guard; stops at 10 to prevent infinite recursion.
     """
     if _depth > 10:
@@ -1288,14 +1292,14 @@ def _update_tensor_containing_modules(tensor_entry: TensorLog) -> List[str]:
     return containing_modules
 
 
-def _get_input_module_info(self, arg_tensors: List[torch.Tensor]):
+def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:
     """Utility function to extract information about module entry/exit from input tensors.
 
     Args:
         arg_tensors: List of input tensors
 
     Returns:
-        Variables with module entry/exit information
+        List of containing module pass strings from the most deeply nested input tensor.
     """
     max_input_module_nesting = 0
     most_nested_containing_modules = []

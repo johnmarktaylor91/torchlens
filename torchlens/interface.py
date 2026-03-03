@@ -26,9 +26,15 @@ def _getitem_during_pass(self: "ModelLog", ix) -> TensorLog:
 
 
 def _getitem_after_pass(self, ix):
-    """
-    Overloaded such that entries can be fetched either by their position in the tensor log, their layer label,
-    or their module address. It should say so and tell them which labels are valid.
+    """Multi-key lookup for ModelLog entries.
+
+    Supports several lookup modes:
+        - int: ordinal index into the layer list (e.g., 0, -1).
+        - str (exact layer label): matches a layer label directly.
+        - str (module address): matches a module address in _module_logs, returning a ModuleLog.
+        - str (substring): if exactly one layer label contains the given substring, returns that layer.
+
+    Raises KeyError if no match is found.
     """
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
@@ -52,6 +58,8 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
 
     Args:
         key: Lookup key used by the user.
+        mode: Either "get_one_item" (raise error if key not found) or
+            "query_multiple" (return empty list if no matches).
     """
     if (type(key) == int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
         raise ValueError(

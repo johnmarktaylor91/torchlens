@@ -476,7 +476,9 @@ def _get_torch_overridable_functions() -> List:
             if namespace is not torch.Tensor:
                 if func_name.startswith("__"):
                     continue
-                elif func_name[0].isupper():
+                elif (
+                    func_name[0].isupper()
+                ):  # Skip class-like exports (e.g. torch.Tensor, torch.Size) — only wrap functions
                     ignore = True
                 elif func_name == "unique_dim":
                     continue

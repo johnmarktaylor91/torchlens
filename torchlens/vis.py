@@ -543,7 +543,10 @@ def _is_only_non_buffer_in_module(
 
 
 def _get_node_bg_color(self: "ModelLog", node: Union["TensorLog", "RolledTensorLog"]) -> str:
-    """Gets the node background color for the graphviz figure.
+    """Returns the background color hex string for a graph node based on its type.
+
+    Maps node types to colors: input=green, output=red, boolean=orange,
+    parameterized layers=blue (trainable) or gray (frozen), default=white.
 
     Args:
         node: node to add
@@ -581,7 +584,11 @@ def _make_node_label(
     node_address: str,
     vis_opt: str,
 ) -> str:
-    """Gets the text for the graphviz node."""
+    """Builds an HTML-table label string for a graphviz node.
+
+    Assembles rows for the layer name, tensor shape, operation type, and other
+    metadata into an HTML table used as the node label in graphviz rendering.
+    """
     # Pass info:
 
     if (node.layer_passes_total > 1) and (vis_opt == "unrolled"):
@@ -1182,8 +1189,10 @@ def _setup_subgraphs_recurse(
 
 
 def _get_max_nesting_depth(top_modules, module_edge_dict, module_submodule_dict) -> int:
-    """Utility function to get the max nesting depth of the nested modules in the network; works by
-    recursively crawling down the stack of modules till it hits one with no children and at least one edge.
+    """Recursively computes the maximum module nesting depth in the model hierarchy.
+
+    Used to determine subgraph layout depth for graphviz rendering. Works by
+    crawling down the stack of modules till it hits one with no children and at least one edge.
 
     Args:
         top_modules: modules at highest level of nesting

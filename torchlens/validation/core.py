@@ -100,11 +100,13 @@ def validate_parents_of_saved_layer(
     child layer yields values different from the saved activations for that layer.
 
     Args:
-        layer_to_validate_parents_for_label:
-        validated_layers:
-        validated_child_edges_for_each_layer:
-        layers_to_validate_parents_for:
-        verbose: whether to print warning messages
+        layer_to_validate_parents_for_label: Label of the layer whose parent edges are being validated.
+        validated_layers: Set of layer labels already validated; mutated in-place to add newly validated layers.
+        validated_child_edges_for_each_layer: Dict mapping each layer label to the set of its child edges
+            that have been validated so far; mutated in-place as child edges are confirmed.
+        layers_to_validate_parents_for: Work queue of layer labels still needing parent validation;
+            mutated in-place to append newly discovered layers.
+        verbose: Whether to print warning messages on validation failure.
     """
     layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
 
