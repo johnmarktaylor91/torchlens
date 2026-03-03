@@ -371,15 +371,6 @@ class TestModuleLogIntegration:
             entry = ml[0]
             assert entry.layer_label == ml.all_layers[0]
 
-    def test_old_module_dicts_still_exist(self):
-        """Old module_* dicts should still exist for vis.py compatibility."""
-        log = log_forward_pass(_make_simple_model(), _simple_input())
-        assert hasattr(log, "module_types")
-        assert hasattr(log, "module_addresses")
-        assert hasattr(log, "module_layers")
-        assert hasattr(log, "module_pass_layers")
-        assert hasattr(log, "module_pass_children")
-
     def test_nested_modules_model(self, input_2d):
         """Integration test with the NestedModules example model."""
         model = example_models.NestedModules()

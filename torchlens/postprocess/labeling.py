@@ -74,6 +74,7 @@ def _log_final_info_for_all_layers(self) -> None:
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
     operation_num = 1
+    mbd = self._module_build_data
 
     # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
     # Lists are kept as primary storage (insertion order matters for downstream consumers),
@@ -122,9 +123,9 @@ def _log_final_info_for_all_layers(self) -> None:
             self.total_params_fsize += tensor_entry.parent_params_fsize
             # Tally for modules, too.
             for module_name, _ in tensor_entry.containing_modules_origin_nested:
-                self.module_nparams[module_name] += tensor_entry.num_params_total
-                self.module_nparams_trainable[module_name] += tensor_entry.num_params_trainable
-                self.module_nparams_frozen[module_name] += tensor_entry.num_params_frozen
+                mbd["module_nparams"][module_name] += tensor_entry.num_params_total
+                mbd["module_nparams_trainable"][module_name] += tensor_entry.num_params_trainable
+                mbd["module_nparams_frozen"][module_name] += tensor_entry.num_params_frozen
 
         unique_layers_seen.add(tensor_entry.layer_label_no_pass)
 
@@ -157,17 +158,18 @@ def _finalize_output_operation_nums(self) -> None:
 
 def _build_module_hierarchy_dicts(self) -> None:
     """Derive top_level_modules and module_children from their pass-level counterparts."""
-    for module in self.top_level_module_passes:
+    mbd = self._module_build_data
+    for module in mbd["top_level_module_passes"]:
         module_no_pass = module.split(":")[0]
-        if module_no_pass not in self.top_level_modules:
-            self.top_level_modules.append(module_no_pass)
+        if module_no_pass not in mbd["top_level_modules"]:
+            mbd["top_level_modules"].append(module_no_pass)
 
-    for module_parent, module_children in self.module_pass_children.items():
+    for module_parent, module_children in mbd["module_pass_children"].items():
         module_parent_nopass = module_parent.split(":")[0]
         for module_child in module_children:
             module_child_nopass = module_child.split(":")[0]
-            if module_child_nopass not in self.module_children[module_parent_nopass]:
-                self.module_children[module_parent_nopass].append(module_child_nopass)
+            if module_child_nopass not in mbd["module_children"][module_parent_nopass]:
+                mbd["module_children"][module_parent_nopass].append(module_child_nopass)
 
 
 _LIST_FIELDS_TO_RENAME = [
@@ -236,41 +238,42 @@ def _log_module_hierarchy_info_for_layer(self, tensor_entry: TensorLog, _shadow_
     _module_pass_children_seen = _shadow_sets["module_pass_children"]
     _module_addresses_seen = _shadow_sets["module_addresses"]
     _module_passes_seen = _shadow_sets["module_passes"]
+    mbd = self._module_build_data
 
     containing_module_pass_label = None
     layer_label = tensor_entry.layer_label
     for module_index, module_pass_label in enumerate(tensor_entry.containing_modules_origin_nested):
         module_name, module_pass = module_pass_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
-        self.module_num_tensors[module_name] += 1
-        self.module_pass_num_tensors[module_pass_nice_label] += 1
+        mbd["module_num_tensors"][module_name] += 1
+        mbd["module_pass_num_tensors"][module_pass_nice_label] += 1
         if layer_label not in _module_labels_seen[module_name]:
             _module_labels_seen[module_name].add(layer_label)
-            self.module_layers[module_name].append(layer_label)
+            mbd["module_layers"][module_name].append(layer_label)
         if layer_label not in _module_pass_labels_seen[module_pass_nice_label]:
             _module_pass_labels_seen[module_pass_nice_label].add(layer_label)
-            self.module_pass_layers[module_pass_nice_label].append(layer_label)
+            mbd["module_pass_layers"][module_pass_nice_label].append(layer_label)
         if (module_index == 0) and (module_pass_nice_label not in _top_level_module_passes_seen):
             _top_level_module_passes_seen.add(module_pass_nice_label)
-            self.top_level_module_passes.append(module_pass_nice_label)
+            mbd["top_level_module_passes"].append(module_pass_nice_label)
         else:
             if (containing_module_pass_label is not None) and (
                 module_pass_nice_label
                 not in _module_pass_children_seen[containing_module_pass_label]
             ):
                 _module_pass_children_seen[containing_module_pass_label].add(module_pass_nice_label)
-                self.module_pass_children[containing_module_pass_label].append(
+                mbd["module_pass_children"][containing_module_pass_label].append(
                     module_pass_nice_label
                 )
         containing_module_pass_label = module_pass_nice_label
-        if self.module_num_passes[module_name] < module_pass:
-            self.module_num_passes[module_name] = module_pass
+        if mbd["module_num_passes"][module_name] < module_pass:
+            mbd["module_num_passes"][module_name] = module_pass
         if module_name not in _module_addresses_seen:
             _module_addresses_seen.add(module_name)
-            self.module_addresses.append(module_name)
+            mbd["module_addresses"].append(module_name)
         if module_pass_nice_label not in _module_passes_seen:
             _module_passes_seen.add(module_pass_nice_label)
-            self.module_passes.append(module_pass_nice_label)
+            mbd["module_passes"].append(module_pass_nice_label)
     tensor_entry.module_nesting_depth = len(tensor_entry.containing_modules_origin_nested)
 
 
@@ -393,7 +396,7 @@ def _add_lookup_keys_for_tensor_entry(
     for module_pass in tensor_entry.module_passes_exited:
         module_name, _ = module_pass.split(":")
         lookup_keys_for_tensor.append(f"{module_pass}")
-        if self.module_num_passes[module_name] == 1:
+        if self._module_build_data["module_num_passes"][module_name] == 1:
             lookup_keys_for_tensor.append(f"{module_name}")
 
     # Allow using buffer/input/output address as key, too:
@@ -476,20 +479,19 @@ def _rename_model_history_layer_names(self) -> None:
         )
         self.conditional_branch_edges[t] = (new_child, new_parent)
 
-    for module_pass, arglist in self.module_layer_argnames.items():
+    mla = self._module_build_data["module_layer_argnames"]
+    for module_pass, arglist in mla.items():
         inds_to_remove = set()
         for a, arg in enumerate(arglist):
-            raw_name = self.module_layer_argnames[module_pass][a][0]
+            raw_name = mla[module_pass][a][0]
             if raw_name not in self._raw_to_final_layer_labels:
                 inds_to_remove.add(a)
                 continue
             new_name = self._raw_to_final_layer_labels[raw_name]
-            argname = self.module_layer_argnames[module_pass][a][1]
-            self.module_layer_argnames[module_pass][a] = (new_name, argname)
-        self.module_layer_argnames[module_pass] = [
-            self.module_layer_argnames[module_pass][i]
-            for i in range(len(arglist))
-            if i not in inds_to_remove
+            argname = mla[module_pass][a][1]
+            mla[module_pass][a] = (new_name, argname)
+        mla[module_pass] = [
+            mla[module_pass][i] for i in range(len(arglist)) if i not in inds_to_remove
         ]
 
 

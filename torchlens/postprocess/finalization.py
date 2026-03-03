@@ -80,7 +80,7 @@ def _finalize_param_logs(self: "ModelLog") -> None:
         tensor_entry.parent_params = []
 
 
-def _build_root_module_log(self: "ModelLog", pass_dict: dict) -> "ModuleLog":
+def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "ModuleLog":
     """Build the root ModuleLog and its ModulePassLog for the model itself."""
     from ..data_classes.param_log import ParamAccessor
 
@@ -107,10 +107,10 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict) -> "ModuleLog":
         forward_signature=root_meta.get("forward_signature"),
         forward_docstring=root_meta.get("forward_docstring"),
         address_parent=None,
-        address_children=self.top_level_modules[:],
+        address_children=mbd["top_level_modules"][:],
         address_depth=0,
         call_parent=None,
-        call_children=self.top_level_modules[:],
+        call_children=mbd["top_level_modules"][:],
         nesting_depth=0,
         num_passes=1,
         passes={},
@@ -140,7 +140,7 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict) -> "ModuleLog":
         input_layers=list(self.input_layers),
         output_layers=list(self.output_layers),
         call_parent=None,
-        call_children=self.top_level_module_passes[:],
+        call_children=mbd["top_level_module_passes"][:],
     )
     root_module.passes = {1: root_pass}
     pass_dict["self:1"] = root_pass
@@ -174,6 +174,7 @@ def _build_submodule_pass_logs(
     address: str,
     num_passes: int,
     pass_dict: dict,
+    mbd: dict,
     _child_to_parent_pass: dict = None,
 ) -> tuple:
     """Build ModulePassLog objects for all passes of a single submodule.
@@ -187,7 +188,7 @@ def _build_submodule_pass_logs(
         pass_label = f"{address}:{pass_num}"
         pass_labels_list.append(pass_label)
 
-        pass_layers = list(self.module_pass_layers.get(pass_label, []))
+        pass_layers = list(mbd["module_pass_layers"].get(pass_label, []))
 
         # Derive input/output layers per pass from TensorLog fields
         pass_input_layers = []
@@ -206,11 +207,11 @@ def _build_submodule_pass_logs(
         fwd_kwargs = fwd_args[1] if fwd_args else None
 
         # Call children for this pass
-        call_children_pass = list(self.module_pass_children.get(pass_label, []))
+        call_children_pass = list(mbd["module_pass_children"].get(pass_label, []))
 
         # Call parent for this pass: look up from pre-computed reverse mapping
         call_parent_pass = _child_to_parent_pass.get(pass_label) if _child_to_parent_pass else None
-        if call_parent_pass is None and pass_label in self.top_level_module_passes:
+        if call_parent_pass is None and pass_label in mbd["top_level_module_passes"]:
             call_parent_pass = "self:1"
 
         module_pass_log = ModulePassLog(
@@ -266,15 +267,15 @@ class ModuleParamInfo(NamedTuple):
     buffer_layers: list
 
 
-def _build_module_param_info(self: "ModelLog", address: str) -> ModuleParamInfo:
+def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> ModuleParamInfo:
     """Gather parameter and buffer layer info for a single module."""
     from ..data_classes.param_log import ParamAccessor
 
     module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}
     module_params = ParamAccessor(module_param_dict)
-    m_num_params = self.module_nparams.get(address, 0)
-    m_num_trainable = self.module_nparams_trainable.get(address, 0)
-    m_num_frozen = self.module_nparams_frozen.get(address, 0)
+    m_num_params = mbd["module_nparams"].get(address, 0)
+    m_num_trainable = mbd["module_nparams_trainable"].get(address, 0)
+    m_num_frozen = mbd["module_nparams_frozen"].get(address, 0)
     m_fsize = sum(pl.fsize for pl in module_param_dict.values())
 
     module_buffer_layers = [
@@ -292,17 +293,18 @@ def _build_module_param_info(self: "ModelLog", address: str) -> ModuleParamInfo:
 
 
 def _build_module_logs(self: "ModelLog") -> None:
-    """Build structured ModuleLog/ModulePassLog objects from raw module_* dicts and _module_metadata.
+    """Build structured ModuleLog/ModulePassLog objects from _module_build_data and _module_metadata.
 
     Called as Step 17 of postprocess(), after all raw module data has been populated
     and layer labels have been finalized.
     """
+    mbd = self._module_build_data
     module_dict = {}  # address -> ModuleLog
     pass_dict = {}  # "addr:pass" -> ModulePassLog
     module_order = []  # ordered by first appearance
 
     # --- Build root ModuleLog ("self") ---
-    root_module = _build_root_module_log(self, pass_dict)
+    root_module = _build_root_module_log(self, pass_dict, mbd)
     module_dict["self"] = root_module
     module_order.append(root_module)
 
@@ -313,31 +315,31 @@ def _build_module_logs(self: "ModelLog") -> None:
 
     # Pre-compute reverse mapping: child_pass_label -> parent_pass_label
     _child_to_parent_pass = {}
-    for parent_pass_label, children in self.module_pass_children.items():
+    for parent_pass_label, children in mbd["module_pass_children"].items():
         for child_label in children:
             _child_to_parent_pass[child_label] = parent_pass_label
 
     # --- Build ModuleLogs for each submodule ---
-    for address in self.module_addresses:
+    for address in mbd["module_addresses"]:
         meta = self._module_metadata.get(address, {})
-        num_passes = self.module_num_passes.get(address, 1)
+        num_passes = mbd["module_num_passes"].get(address, 1)
 
         name = address.rsplit(".", 1)[-1] if "." in address else address
         address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-        all_layers = list(self.module_layers.get(address, []))
+        all_layers = list(mbd["module_layers"].get(address, []))
 
         passes, pass_labels_list = _build_submodule_pass_logs(
-            self, address, num_passes, pass_dict, _child_to_parent_pass
+            self, address, num_passes, pass_dict, mbd, _child_to_parent_pass
         )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
-        param_info = _build_module_param_info(self, address)
+        param_info = _build_module_param_info(self, address, mbd)
 
         ml = ModuleLog(
             address=address,
             all_addresses=meta.get("all_addresses", [address]),
             name=name,
-            module_class_name=meta.get("module_class_name", self.module_types.get(address, "")),
+            module_class_name=meta.get("module_class_name", mbd["module_types"].get(address, "")),
             source_file=meta.get("source_file"),
             source_line=meta.get("source_line"),
             class_docstring=meta.get("class_docstring"),
@@ -347,7 +349,7 @@ def _build_module_logs(self: "ModelLog") -> None:
             forward_docstring=meta.get("forward_docstring"),
             address_parent=address_parent,
             address_children=meta.get(
-                "address_children", list(self.module_children.get(address, []))
+                "address_children", list(mbd["module_children"].get(address, []))
             ),
             address_depth=address_depth,
             call_parent=call_parent_addr,
@@ -365,7 +367,9 @@ def _build_module_logs(self: "ModelLog") -> None:
             params_fsize_nice=human_readable_size(param_info.fsize),
             requires_grad=param_info.num_trainable > 0,
             buffer_layers=param_info.buffer_layers,
-            training_mode=self.module_training_modes.get(address, meta.get("training_mode", True)),
+            training_mode=mbd["module_training_modes"].get(
+                address, meta.get("training_mode", True)
+            ),
             has_forward_hooks=meta.get("has_forward_hooks", False),
             has_backward_hooks=meta.get("has_backward_hooks", False),
             extra_attributes=meta.get("extra_attributes", {}),
@@ -393,6 +397,9 @@ def _build_module_logs(self: "ModelLog") -> None:
     # --- Clean up temporary state ---
     self._module_metadata = {}
     self._module_forward_args = {}
+    from ..data_classes.model_log import _init_module_build_data
+
+    self._module_build_data = _init_module_build_data()
 
 
 def _set_pass_finished(self) -> None:
