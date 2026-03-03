@@ -128,8 +128,16 @@ def torch_func_decorator(func: Callable, func_name: str):
         if func_name in ["__setitem__", "zero_", "__delitem__"]:
             out_orig = args[0]
 
-        was_inplace = len(args) > 0 and id(out_orig) == id(args[0])
-        if was_inplace:
+        same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])
+        # True in-place ops (add_, mul_, etc.) modify the tensor and return self.
+        # No-op functions (to(same_dtype), contiguous() on contiguous tensor)
+        # also return self but don't modify anything.
+        # Both cases need safe_copy so logging doesn't overwrite the original's
+        # label, but only true in-place ops should propagate the new label back.
+        was_inplace = same_object_returned and (
+            func_name.endswith("_") or func_name.startswith("__i")
+        )
+        if same_object_returned:
             out_orig = safe_copy(out_orig)
 
         # Log all output tensors
