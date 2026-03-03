@@ -27,6 +27,34 @@ if TYPE_CHECKING:
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 print_funcs = ["__repr__", "__str__", "_str"]
 
+# Names of torch factory functions that accept a ``device`` kwarg.
+# When a ``torch.device`` context manager is active (TorchFunctionMode),
+# normal C dispatch injects the device automatically — but our Python
+# wrappers bypass that dispatch, so we must inject it ourselves.
+_DEVICE_CONSTRUCTOR_NAMES: set = set()
+
+# Lazy imports cached at first use.
+_torch_function_mode_len = None
+_DeviceContext = None
+
+
+def _get_active_device():
+    """Return the device from the innermost active DeviceContext, or None."""
+    global _DeviceContext
+    if _DeviceContext is None:
+        from torch.utils._device import DeviceContext
+
+        _DeviceContext = DeviceContext
+    try:
+        from torch.overrides import _get_current_function_mode_stack
+
+        for mode in reversed(_get_current_function_mode_stack()):
+            if isinstance(mode, _DeviceContext):
+                return mode.device
+    except (ImportError, AttributeError):
+        pass
+    return None
+
 
 def torch_func_decorator(func: Callable, func_name: str):
     """Wrap a torch function with toggle-gated logging.
@@ -40,6 +68,23 @@ def torch_func_decorator(func: Callable, func_name: str):
     def wrapped_func(*args, **kwargs):
         # Fast path: if logging is off, pass through immediately.
         if not _state._logging_enabled or _state._active_model_log is None:
+            # Python wrappers bypass PyTorch's C-level TorchFunctionMode
+            # dispatch, so torch.device('meta') context won't inject the
+            # device kwarg automatically.  Handle it here.
+            if (
+                _DEVICE_CONSTRUCTOR_NAMES
+                and func_name in _DEVICE_CONSTRUCTOR_NAMES
+                and "device" not in kwargs
+            ):
+                try:
+                    from torch.overrides import _len_torch_function_stack
+
+                    if _len_torch_function_stack() > 0:
+                        device = _get_active_device()
+                        if device is not None:
+                            kwargs = {**kwargs, "device": device}
+                except (ImportError, AttributeError):
+                    pass
             return func(*args, **kwargs)
 
         model_log = _state._active_model_log
@@ -271,6 +316,20 @@ def decorate_all_once():
                             _jit_builtins._builtin_table[id(accessor)] = builtin_name
     except (ImportError, AttributeError):
         pass  # JIT internals may change across PyTorch versions
+
+    # Build the set of device constructor function names so the fast-path
+    # wrapper can inject the device kwarg when a torch.device context is active.
+    try:
+        from torch.utils._device import _device_constructors
+
+        # Clear the lru_cache so it re-evaluates with wrapped functions.
+        _device_constructors.cache_clear()
+        for ctor in _device_constructors():
+            name = getattr(ctor, "__name__", None)
+            if name:
+                _DEVICE_CONSTRUCTOR_NAMES.add(name)
+    except (ImportError, AttributeError):
+        pass
 
     # Permanently install torch.identity
     new_identity = torch_func_decorator(identity, "identity")

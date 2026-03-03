@@ -1208,16 +1208,22 @@ def _get_hash_from_args(args, kwargs):
     return make_short_barcode_from_input(args_to_hash)
 
 
-def _append_arg_hash(arg, prefix, args_to_hash):
+def _append_arg_hash(arg, prefix, args_to_hash, _depth=0):
     """Append hash-relevant info for a single arg, preserving structure."""
-    if hasattr(arg, "tl_tensor_label_raw"):
+    if _depth > 10:
+        args_to_hash.append(f"{prefix}_deep")
+        return
+    if isinstance(arg, torch.Tensor):
+        # Use shape/dtype only — formatting a tensor can trigger wrapped
+        # methods (item, __format__) which re-enter logging and cause
+        # infinite recursion.
         args_to_hash.append(f"{prefix}_tensor{arg.shape}")
     elif isinstance(arg, dict):
         for k, v in arg.items():
-            _append_arg_hash(v, f"{prefix}_dk{k}", args_to_hash)
+            _append_arg_hash(v, f"{prefix}_dk{k}", args_to_hash, _depth + 1)
     elif isinstance(arg, (list, tuple, set)):
         for i, elem in enumerate(arg):
-            _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash)
+            _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash, _depth + 1)
     elif isinstance(arg, torch.nn.Parameter):
         pass  # exclude parameters from hash (same as before)
     else:

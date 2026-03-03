@@ -325,6 +325,12 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         return True
 
     if perturb:
+        # Empty tensor parents cannot be meaningfully perturbed
+        for p_label in layers_to_perturb:
+            p_entry = self[p_label]
+            if p_entry.tensor_contents is not None and p_entry.tensor_contents.numel() == 0:
+                return True
+
         # SKIP_PERTURBATION_ENTIRELY is checked at the caller level
         # (validate_parents_of_saved_layer), but structural positions and
         # custom checks are per-perturbed-layer:

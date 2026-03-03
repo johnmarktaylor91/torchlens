@@ -51,6 +51,7 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "scatter_": {2},  # index tensor
     "masked_fill_": {1},  # mask tensor
     "_pad_packed_sequence": {1},  # lengths tensor
+    "type_as": {1},  # type template tensor (value irrelevant)
 }
 
 
@@ -207,6 +208,15 @@ def posthoc_perturb_check(
 
     # Bool output — discrete, perturbation may not change it
     if layer_to_validate_parents_for.tensor_dtype == torch.bool:
+        return True
+
+    # topk/sort indices — discrete output insensitive to value perturbation
+    if func_name in ("topk", "sort") and layer_to_validate_parents_for.tensor_dtype in (
+        torch.int,
+        torch.long,
+        torch.int32,
+        torch.int64,
+    ):
         return True
 
     # to() with tensor arg — type casting
