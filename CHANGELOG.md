@@ -1,6 +1,161 @@
 # CHANGELOG
 
 
+## v0.13.1 (2026-03-03)
+
+### Bug Fixes
+
+- **core**: Handle DataParallel, device mismatch, and embedding perturbation
+  ([#91](https://github.com/johnmarktaylor91/torchlens/pull/91),
+  [`1a0f8b8`](https://github.com/johnmarktaylor91/torchlens/commit/1a0f8b802f738a399d74876f39d121336a1fe855))
+
+- Unwrap nn.DataParallel in log_forward_pass, show_model_graph, validate_saved_activations -
+  Auto-move inputs to model device (supports dict, UserDict, BatchEncoding) - Exempt embedding index
+  arg from perturbation (prevents CUDA OOB)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **batch1**: Aesthetic cleanup — names, types, docstrings for small files
+  ([`52efdc1`](https://github.com/johnmarktaylor91/torchlens/commit/52efdc1e8ec55e1b5047589903f3a601523dfe14))
+
+Files: _state.py, buffer_log.py, cleanup.py, postprocess/__init__.py, param_log.py,
+  func_call_location.py
+
+- Add docstrings to dunder methods across BufferAccessor, ParamAccessor, ParamLog, FuncCallLocation
+  - Rename _UNSET -> _SENTINEL in func_call_location.py - Fix single-letter vars in cleanup.py
+  (x->label, tup->edge, k/v->descriptive) - Add return type hints (-> None) to all cleanup functions
+  - Add docstring and return type to postprocess_fast() - Add property docstrings and setter type
+  hints to ParamLog
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **batch2**: Aesthetic cleanup — names, types, docstrings for medium files
+  ([`8610c46`](https://github.com/johnmarktaylor91/torchlens/commit/8610c464a2106d8037198852fb7fa7acba6ed808))
+
+Files: trace_model.py, control_flow.py, model_log.py, module_log.py, graph_traversal.py,
+  finalization.py, interface.py, user_funcs.py
+
+- Add docstrings to _get_input_arg_names, _find_output_ancestors, _update_node_distance_vals,
+  _log_internally_terminated_tensor, _log_time_elapsed, _single_pass_or_error - Fix truncated
+  docstring on _flood_graph_from_input_or_output_nodes - Add return type hints to all private
+  functions - Rename loop vars: a->arg_idx, t->tensor, pn->pass_num, mpl->module_pass_log,
+  cc->child_pass_label, sp->child_pass_label - Rename pretty_print_list_w_line_breaks ->
+  _format_list_with_line_breaks - Rename _module_hierarchy_str_helper ->
+  _module_hierarchy_str_recursive - Mark run_model_and_save_specified_activations as private (_) -
+  Rename x->input_data in validate_batch_of_models_and_inputs - Add docstrings to all dunder methods
+  on ModuleLog, ModulePassLog, ModuleAccessor
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **batch3**: Aesthetic cleanup — names, types, docstrings for medium-large files
+  ([`74c0850`](https://github.com/johnmarktaylor91/torchlens/commit/74c085095276e0361607d6d3226df85ffa8e8187))
+
+Files: decorate_torch.py, labeling.py, constants.py, validation/core.py, loop_detection.py
+
+- Rename open_ind/close_ind -> paren_start/paren_end in decorate_torch.py - Rename
+  namespace_name_notorch -> namespace_key - Rename my_get_overridable_functions ->
+  _get_torch_overridable_functions - Expand shadow set abbrevs: _ml_seen -> _module_labels_seen,
+  etc. - Rename p_label -> perturbed_label in validation/core.py - Parameterize bare Dict type hints
+  in loop_detection.py - Expand single-letter vars: m->module_index, n->pass_index, s->subgraph_key
+  - Add docstrings to _merge_iso_groups_to_layers, _validate_layer_against_arg,
+  _copy_validation_args, _get_torch_overridable_functions - Add return type hints to all private
+  functions
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **batch4**: Aesthetic cleanup — names, types, docstrings for large files
+  ([`ce19825`](https://github.com/johnmarktaylor91/torchlens/commit/ce19825710472895b0b644881d6db3bacea50e84))
+
+tensor_log.py: add docstrings to _str_during_pass, _str_after_pass, _tensor_family_str_helper
+  model_funcs.py: rename log_whether_exited_submodule_is_bottom_level →
+  _is_bottom_level_submodule_exit, fwd → forward_func, mid → module_id helper_funcs.py: rename
+  make_var_iterable → ensure_iterable, tuple_tolerant_assign → assign_to_sequence_or_dict,
+  remove_attributes_starting_with_str → remove_attributes_with_prefix flops.py: add type hints to
+  all 25 private functions, add Args sections vis.py: rename _check_whether_to_mark_* →
+  _should_mark_*, _construct_* → _build_*, fix _setup_subgraphs consistency logging_funcs.py: rename
+  _log_info_specific_to_single_function_output_tensor → _log_output_tensor_info,
+  _get_parent_tensor_function_call_location → _locate_parent_tensors_in_args
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **design**: Algorithmic review pass — efficiency, correctness, robustness
+  ([`78924f8`](https://github.com/johnmarktaylor91/torchlens/commit/78924f825f2b604fe7dcd1df234ce76d23c51ad6))
+
+Efficiency (21 fixes): - Hot path: eliminate all_args allocation via kwargs short-circuit - Barcode
+  gen: secrets.choice → random.choices with pre-computed alphabet - Type scanning: any([...]) →
+  any(...) generator, found_ids list → set - Model prep: recursive get_all_submodules →
+  list(model.modules()) - Source/output tensors: eliminate double get_tensor_memory_amount() calls -
+  Output tensors: copy only mutables instead of full 131-key dict copy - Gradient hooks: O(N²)
+  per-hook rebuild → _saved_gradients_set O(1) dedup - Cleanup: dir() → list(__dict__), skip O(n²)
+  reference removal in full teardown - Labeling: dir(self) → self.__dict__, inds_to_remove list →
+  set - Finalization: pre-computed reverse mappings, _roll_graph idempotency guard - Graph
+  traversal/validation: min([a,b]) → min(a,b), list.pop(0) → deque.popleft() - Visualization:
+  any([...]) → any(...), min([...]) → min(...) - TensorLog: frozenset for FIELD_ORDER,
+  view-then-clone-slice for display - Display: np.round → round(), removed numpy dependency
+
+Correctness (4 FLOPs fixes): - SDPA: new _sdpa_flops handler (Q@K^T + softmax + attn@V) -
+  addbmm/baddbmm: _matmul_flops → _addmm_flops (correct shape extraction) - MHA: return None to
+  avoid double-counting with sub-op FLOPs - scatter/index ops: moved from ZERO_FLOPS to
+  ELEMENTWISE_FLOPS
+
+Robustness (4 fixes): - Buffer dedup: for...else pattern fixes incorrect inner-loop append -
+  Parameter fingerprinting: reorder isinstance checks (Parameter before Tensor) - Duplicate
+  siblings: added not-in guards before sibling append - _roll_graph: early-return guard if already
+  populated
+
+Test coverage: - New tests/test_internals.py: 13 tests for FIELD_ORDER sync and constants
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **design**: Mid-level design pass — dataclasses, decomposition, parameter bundles
+  ([`0849edb`](https://github.com/johnmarktaylor91/torchlens/commit/0849edb605bb63a469831dd1959c1bd8236ce964))
+
+Replace implicit parameter clusters with explicit dataclasses (FuncExecutionContext,
+  VisualizationOverrides, IsomorphicExpansionState, ModuleParamInfo), decompose 100+ line functions
+  into coordinator + helpers, and extract shared patterns (model traversal visitor, buffer tagging).
+
+No public API changes. All 471 non-slow tests pass.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **qa**: Address naive reader findings — docstrings, comments, variable names
+  ([`22724af`](https://github.com/johnmarktaylor91/torchlens/commit/22724afb26e6511365eee5c6ce6bdf97888eeb12))
+
+Fix 14 issues flagged by whole-codebase naive reader review: - make_random_barcode: fix misleading
+  "integer hash" docstring - _getitem_after_pass: replace TODO-like docstring with proper docs -
+  _is_bottom_level_submodule_exit: define "bottom-level" in docstring -
+  search_stack_for_vars_of_type: rename tensor-specific accumulators to generic names -
+  validate_parents_of_saved_layer: fill in empty param docs, note mutation - _append_arg_hash:
+  explain operation_equivalence_type concept - nested_assign: add docstring and type hints -
+  _capture_module_metadata: fix misleading wording - extend_search_stack_from_item: document missing
+  address/address_full params - safe_copy: add bfloat16 round-trip comment - _roll_graph: define
+  "rolled" in docstring - vis.py: add docstrings to _get_node_bg_color, _make_node_label,
+  _get_max_nesting_depth - _give_user_feedback_about_lookup_key: document mode parameter -
+  _get_torch_overridable_functions: comment the ignore flag - RolledTensorLog.update_data: replace
+  vacuous docstring
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **structure**: Reorganize into focused subpackages
+  ([`2cfa90a`](https://github.com/johnmarktaylor91/torchlens/commit/2cfa90ac15e8e325c9e417202b0d884450c43915))
+
+Split grab-bag root modules into focused subpackages without changing any public API, class names,
+  or core algorithmic logic.
+
+- Split helper_funcs.py into 7 utils/ modules (rng, tensor_utils, arg_handling, introspection,
+  collections, hashing, display) - Moved cleanup.py + interface.py into data_classes/ - Created
+  decoration/ from decorate_torch.py + model_funcs.py - Split logging_funcs.py into capture/
+  (source_tensors, output_tensors, tensor_tracking); moved trace_model.py + flops.py into capture/ -
+  Created visualization/ from vis.py - Replaced hardcoded _TORCHLENS_SUFFIXES with directory-based
+  stack filtering - Added module-level docstrings to all 27 files that lacked them - Decomposed 3
+  oversized functions into named helpers - 9 root files deleted, 22 new files created across
+  subpackages
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.13.0 (2026-03-03)
 
 ### Bug Fixes
