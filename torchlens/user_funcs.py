@@ -1,5 +1,6 @@
 """Public API entry points: log_forward_pass and related user-facing functions."""
 
+import collections.abc
 import os
 import random
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -16,6 +17,32 @@ from .utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_inpu
 from .data_classes.model_log import (
     ModelLog,
 )
+
+
+def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
+    """Unwrap nn.DataParallel to get the underlying module."""
+    if isinstance(model, nn.DataParallel):
+        return model.module
+    return model
+
+
+def _move_tensors_to_device(obj, device):
+    """Recursively move tensors in a nested structure to the given device."""
+    if isinstance(obj, torch.Tensor):
+        return obj.to(device)
+    elif isinstance(obj, (list, tuple)):
+        moved = [_move_tensors_to_device(item, device) for item in obj]
+        return type(obj)(moved) if not isinstance(obj, tuple) else tuple(moved)
+    elif isinstance(obj, collections.abc.MutableMapping):
+        # Handles dict, UserDict, BatchEncoding, OrderedDict, etc.
+        moved = {k: _move_tensors_to_device(v, device) for k, v in obj.items()}
+        if type(obj) is dict:
+            return moved
+        try:
+            return type(obj)(moved)
+        except Exception:
+            return moved
+    return obj
 
 
 def _run_model_and_save_specified_activations(
@@ -58,6 +85,13 @@ def _run_model_and_save_specified_activations(
     Returns:
         ModelLog object with full log of the forward pass
     """
+    # Move inputs to model device if needed (e.g. model on CUDA, inputs on CPU)
+    model_device = next((p.device for p in model.parameters()), None)
+    if model_device is not None:
+        input_args = _move_tensors_to_device(input_args, model_device)
+        if input_kwargs is not None:
+            input_kwargs = _move_tensors_to_device(input_kwargs, model_device)
+
     model_name = str(type(model).__name__)
     model_log = ModelLog(
         model_name,
@@ -147,6 +181,7 @@ def log_forward_pass(
         ModelLog object with layer activations and metadata
     """
     warn_parallel()
+    model = _unwrap_data_parallel(model)
 
     if vis_opt not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
@@ -288,6 +323,7 @@ def show_model_graph(
     Returns:
         Nothing.
     """
+    model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
 
@@ -349,6 +385,7 @@ def validate_saved_activations(
         True if the saved activations correctly reproduce the ground truth output, false otherwise.
     """
     warn_parallel()
+    model = _unwrap_data_parallel(model)
     if random_seed is None:  # set random seed
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
@@ -357,6 +394,13 @@ def validate_saved_activations(
         input_kwargs = {}
     input_args_copy = safe_copy_args(input_args)
     input_kwargs_copy = safe_copy_kwargs(input_kwargs)
+
+    # Move inputs to model device if needed (e.g. model on CUDA, inputs on CPU)
+    model_device = next((p.device for p in model.parameters()), None)
+    if model_device is not None:
+        input_args_copy = _move_tensors_to_device(input_args_copy, model_device)
+        input_kwargs_copy = _move_tensors_to_device(input_kwargs_copy, model_device)
+
     state_dict = model.state_dict()
     ground_truth_output_all = get_vars_of_type_from_obj(
         model(*input_args_copy, **input_kwargs_copy),
