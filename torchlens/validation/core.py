@@ -309,6 +309,70 @@ def _check_arglocs_correct_for_arg(
     return True
 
 
+def _check_perturbation_exemptions(
+    self,
+    layer: TensorLog,
+    layers_to_perturb: List[str],
+) -> bool:
+    """Check whether a perturbation check should be skipped for registry-based reasons.
+
+    Returns True if the perturbation is exempt (caller should skip), False otherwise.
+    """
+    for perturbed_label in layers_to_perturb:
+        p_entry = self[perturbed_label]
+        if p_entry.tensor_contents is not None and p_entry.tensor_contents.numel() == 0:
+            return True
+
+    func_name = layer.func_applied_name
+    if func_name in STRUCTURAL_ARG_POSITIONS:
+        if perturbed_layer_at_structural_position(
+            self, layer, layers_to_perturb, STRUCTURAL_ARG_POSITIONS[func_name]
+        ):
+            return True
+    if func_name in CUSTOM_EXEMPTION_CHECKS:
+        if CUSTOM_EXEMPTION_CHECKS[func_name](self, layer, layers_to_perturb):
+            return True
+
+    return False
+
+
+def _execute_func_with_restored_state(
+    layer: TensorLog,
+    input_args: Dict,
+    layers_to_perturb: List[str],
+    layer_label: str,
+    verbose: bool,
+) -> Any:
+    """Execute a layer's function with restored RNG/autocast state.
+
+    Returns the recomputed output tensor, or None if execution raised an
+    exception (which is treated as an exempt perturbation).
+    """
+    layer_func = layer.func_applied
+    current_rng_states = log_current_rng_states()
+    set_rng_from_saved_states(layer.func_rng_states)
+    try:
+        with AutocastRestore(layer.func_autocast_state):
+            recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
+    except Exception as e:
+        if verbose:
+            print(
+                f"Perturbation of {layers_to_perturb} for layer "
+                f"{layer_label} caused {type(e).__name__}: {e}"
+            )
+        set_rng_from_saved_states(current_rng_states)
+        return None
+    set_rng_from_saved_states(current_rng_states)
+
+    if layer_func.__name__ in ("__setitem__", "zero_", "__delitem__"):
+        recomputed_output = input_args["args"][0]
+
+    if isinstance(recomputed_output, (list, tuple)):
+        recomputed_output = recomputed_output[layer.iterable_output_index]
+
+    return recomputed_output
+
+
 def _check_whether_func_on_saved_parents_yields_saved_tensor(
     self,
     layer_to_validate_parents_for_label: str,
@@ -331,75 +395,24 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         layers_to_perturb = []
 
     layer = self[layer_to_validate_parents_for_label]
-    func_name = layer.func_applied_name
 
-    # --- Registry-based exemptions (before any execution) ---
-
-    if func_name in SKIP_VALIDATION_ENTIRELY:
+    if layer.func_applied_name in SKIP_VALIDATION_ENTIRELY:
         return True
 
-    if perturb:
-        # Empty tensor parents cannot be meaningfully perturbed
-        for perturbed_label in layers_to_perturb:
-            p_entry = self[perturbed_label]
-            if p_entry.tensor_contents is not None and p_entry.tensor_contents.numel() == 0:
-                return True
-
-        # SKIP_PERTURBATION_ENTIRELY is checked at the caller level
-        # (validate_parents_of_saved_layer), but structural positions and
-        # custom checks are per-perturbed-layer:
-        if func_name in STRUCTURAL_ARG_POSITIONS:
-            if perturbed_layer_at_structural_position(
-                self, layer, layers_to_perturb, STRUCTURAL_ARG_POSITIONS[func_name]
-            ):
-                return True
-        if func_name in CUSTOM_EXEMPTION_CHECKS:
-            if CUSTOM_EXEMPTION_CHECKS[func_name](self, layer, layers_to_perturb):
-                return True
-
-    # --- Prepare input arguments: keep the ones that should be kept, perturb those that should be perturbed ---
+    if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
+        return True
 
     input_args = _prepare_input_args_for_validating_layer(self, layer, layers_to_perturb)
 
-    # Restore saved rng and autocast state:
-    layer_func = layer.func_applied
-    current_rng_states = log_current_rng_states()
-    set_rng_from_saved_states(layer.func_rng_states)
-    try:
-        with AutocastRestore(layer.func_autocast_state):
-            recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
-    except Exception as e:
-        if verbose:
-            print(
-                f"Perturbation of {layers_to_perturb} for layer "
-                f"{layer_to_validate_parents_for_label} caused {type(e).__name__}: {e}"
-            )
-        set_rng_from_saved_states(current_rng_states)
-        return True
-    set_rng_from_saved_states(current_rng_states)
+    recomputed_output = _execute_func_with_restored_state(
+        layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+    )
+    if recomputed_output is None:
+        return True  # execution raised — treat as exempt perturbation
 
-    if layer_func.__name__ in [
-        "__setitem__",
-        "zero_",
-        "__delitem__",
-    ]:  # TODO: fix this
-        recomputed_output = input_args["args"][0]
+    matches_saved = tensor_nanequal(recomputed_output, layer.tensor_contents, allow_tolerance=True)
 
-    if any([issubclass(type(recomputed_output), which_type) for which_type in [list, tuple]]):
-        recomputed_output = recomputed_output[layer.iterable_output_index]
-
-    if (
-        not (
-            tensor_nanequal(
-                recomputed_output,
-                layer.tensor_contents,
-                allow_tolerance=True,
-            )
-        )
-        and not perturb
-    ):
-        # In-place RNG ops (e.g. bernoulli_) modify tensor after logging, so
-        # parents' saved values are stale when recomputing child output.
+    if not matches_saved and not perturb:
         parent_has_inplace_rng = any(
             self[p].func_applied_name in ["bernoulli_", "full"] for p in layer.parent_layers
         )
@@ -411,14 +424,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         )
         return False
 
-    if (
-        tensor_nanequal(
-            recomputed_output,
-            layer.tensor_contents,
-            allow_tolerance=False,
-        )
-        and perturb
-    ):
+    if perturb and tensor_nanequal(recomputed_output, layer.tensor_contents, allow_tolerance=False):
         return posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
 
     return True

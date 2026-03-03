@@ -6,6 +6,7 @@ from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
 import graphviz
 from IPython.display import display
 
+from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str
 from ..postprocess import _roll_graph
 from ..data_classes.tensor_log import RolledTensorLog, TensorLog
@@ -57,18 +58,14 @@ def render_graph(
         direction: which way the graph should go: either 'bottomup', 'topdown', or 'leftright'
 
     """
-    if vis_graph_overrides is None:
-        vis_graph_overrides = {}
-    if vis_node_overrides is None:
-        vis_node_overrides = {}
-    if vis_nested_node_overrides is None:
-        vis_nested_node_overrides = {}
-    if vis_edge_overrides is None:
-        vis_edge_overrides = {}
-    if vis_gradient_edge_overrides is None:
-        vis_gradient_edge_overrides = {}
-    if vis_module_overrides is None:
-        vis_module_overrides = {}
+    overrides = VisualizationOverrides(
+        graph=vis_graph_overrides or {},
+        node=vis_node_overrides or {},
+        nested_node=vis_nested_node_overrides or {},
+        edge=vis_edge_overrides or {},
+        gradient_edge=vis_gradient_edge_overrides or {},
+        module=vis_module_overrides or {},
+    )
 
     if not self._all_layers_logged:
         raise ValueError(
@@ -143,7 +140,7 @@ def render_graph(
         "ordering": "out",
     }
 
-    for arg_name, arg_val in vis_graph_overrides.items():
+    for arg_name, arg_val in overrides.graph.items():
         if callable(arg_val):
             graph_args[arg_name] = str(arg_val(self))
         else:
@@ -170,14 +167,11 @@ def render_graph(
             collapsed_modules,
             vis_nesting_depth,
             show_buffer_layers,
-            vis_node_overrides,
-            vis_nested_node_overrides,
-            vis_edge_overrides,
-            vis_gradient_edge_overrides,
+            overrides,
         )
 
     # Finally, set up the subgraphs.
-    _setup_subgraphs(self, dot, vis_opt, module_cluster_dict, vis_module_overrides)
+    _setup_subgraphs(self, dot, vis_opt, module_cluster_dict, overrides)
 
     if in_notebook() and not save_only:
         display(dot)
@@ -195,12 +189,9 @@ def _add_node_to_graphviz(
     collapsed_modules: Set,
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
-    vis_node_overrides: Dict = None,
-    vis_collapsed_node_overrides: Dict = None,
-    vis_edge_overrides: Dict = None,
-    vis_gradient_edge_overrides: Dict = None,
+    overrides: VisualizationOverrides = None,
 ) -> None:
-    """Addes a node and its relevant edges to the graphviz figure.
+    """Adds a node and its relevant edges to the graphviz figure.
 
     Args:
         node: node to add
@@ -210,6 +201,7 @@ def _add_node_to_graphviz(
         vis_nesting_depth: How many levels of nested modules to show
         collapsed_modules: Labels of collapsed module nodes that have been made so far.
         show_buffer_layers: Whether to show the buffer layers
+        overrides: Graphviz attribute overrides for nodes, edges, etc.
     """
     is_collapsed_module = _is_collapsed_module(node, vis_nesting_depth)
 
@@ -221,12 +213,12 @@ def _add_node_to_graphviz(
             collapsed_modules,
             vis_opt,
             vis_nesting_depth,
-            vis_collapsed_node_overrides,
+            overrides,
         )
         node_color = "black"
     else:
         node_color = _build_layer_node(
-            self, node, graphviz_graph, show_buffer_layers, vis_opt, vis_node_overrides
+            self, node, graphviz_graph, show_buffer_layers, vis_opt, overrides
         )
 
     _add_edges_for_node(
@@ -240,8 +232,7 @@ def _add_node_to_graphviz(
         graphviz_graph,
         vis_opt,
         show_buffer_layers,
-        vis_edge_overrides,
-        vis_gradient_edge_overrides,
+        overrides,
     )
 
 
@@ -263,7 +254,12 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
 
 
 def _build_layer_node(
-    self: "ModelLog", node, graphviz_graph, show_buffer_layers, vis_opt, vis_node_overrides
+    self: "ModelLog",
+    node,
+    graphviz_graph,
+    show_buffer_layers,
+    vis_opt,
+    overrides: VisualizationOverrides,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
@@ -272,7 +268,7 @@ def _build_layer_node(
         graphviz_graph: The graphviz Digraph object to add the node to.
         show_buffer_layers: Whether buffer layers are shown.
         vis_opt: 'unrolled' or 'rolled'.
-        vis_node_overrides: Dict of graphviz attribute overrides for regular nodes.
+        overrides: Graphviz attribute overrides.
 
     Returns:
         The node color string used for this node.
@@ -306,7 +302,7 @@ def _build_layer_node(
     if ":" in node_bg_color:
         node_args["gradientangle"] = "0"
 
-    for arg_name, arg_val in vis_node_overrides.items():
+    for arg_name, arg_val in overrides.node.items():
         if callable(arg_val):
             node_args[arg_name] = str(arg_val(self, node))
         else:
@@ -329,7 +325,7 @@ def _build_collapsed_module_node(
     collapsed_modules,
     vis_opt,
     vis_nesting_depth,
-    vis_collapsed_node_overrides,
+    overrides: VisualizationOverrides,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -339,7 +335,7 @@ def _build_collapsed_module_node(
         collapsed_modules: Set of collapsed module names already added; updated in place.
         vis_opt: 'unrolled' or 'rolled'.
         vis_nesting_depth: Maximum nesting depth; nodes at this depth are collapsed.
-        vis_collapsed_node_overrides: Dict of graphviz attribute overrides for collapsed nodes.
+        overrides: Graphviz attribute overrides.
     """
     module_address_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
     module_tuple = module_address_w_pass.split(":")
@@ -431,7 +427,7 @@ def _build_collapsed_module_node(
     if ":" in bg_color:
         node_args["gradientangle"] = "0"
 
-    for arg_name, arg_val in vis_collapsed_node_overrides.items():
+    for arg_name, arg_val in overrides.nested_node.items():
         if callable(arg_val):
             node_args[arg_name] = str(arg_val(self, node))
         else:
@@ -680,8 +676,7 @@ def _add_edges_for_node(
     graphviz_graph,
     vis_opt: str = "unrolled",
     show_buffer_layers: bool = False,
-    vis_edge_overrides: Dict = None,
-    vis_gradient_edge_overrides: Dict = None,
+    overrides: VisualizationOverrides = None,
 ) -> None:
     """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
 
@@ -695,6 +690,7 @@ def _add_edges_for_node(
         edges_used: Edges used so far.
         vis_opt: Either 'unrolled' or 'rolled'
         show_buffer_layers: whether to show the buffer layers
+        overrides: Graphviz attribute overrides.
     """
     for child_layer_label in parent_node.child_layers:
         if vis_opt == "unrolled":
@@ -782,7 +778,7 @@ def _add_edges_for_node(
         if vis_opt == "rolled":
             _label_rolled_pass_nums(child_node, parent_node, edge_dict)
 
-        for arg_name, arg_val in vis_edge_overrides.items():
+        for arg_name, arg_val in overrides.edge.items():
             if callable(arg_val):
                 edge_dict[arg_name] = str(arg_val(self, parent_node, child_node))
             else:
@@ -819,7 +815,7 @@ def _add_edges_for_node(
                 containing_module,
                 module_edge_dict,
                 graphviz_graph,
-                vis_gradient_edge_overrides,
+                overrides,
             )
 
 
@@ -1011,7 +1007,7 @@ def _add_gradient_edge(
     containing_module,
     module_edge_dict,
     graphviz_graph,
-    vis_gradient_edge_overrides,
+    overrides: VisualizationOverrides,
 ) -> None:
     """Adds a backwards edge if both layers have saved gradients, showing the backward pass.
 
@@ -1022,7 +1018,7 @@ def _add_gradient_edge(
         containing_module: Module cluster to place the edge in, or -1 for the top-level graph.
         module_edge_dict: Dict mapping each module cluster to its list of edges.
         graphviz_graph: The graphviz Digraph object.
-        vis_gradient_edge_overrides: Dict of graphviz attribute overrides for gradient edges.
+        overrides: Graphviz attribute overrides.
     """
     if parent_layer.has_saved_grad and child_layer.has_saved_grad:
         edge_dict = {
@@ -1034,7 +1030,7 @@ def _add_gradient_edge(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
-        for arg_name, arg_val in vis_gradient_edge_overrides.items():
+        for arg_name, arg_val in overrides.gradient_edge.items():
             if callable(arg_val):
                 edge_dict[arg_name] = str(arg_val(self, parent_layer, child_layer))
             else:
@@ -1051,7 +1047,7 @@ def _setup_subgraphs(
     graphviz_graph,
     vis_opt: str,
     module_edge_dict: Dict,
-    vis_module_overrides: Dict = None,
+    overrides: VisualizationOverrides = None,
 ) -> None:
     """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
     set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
@@ -1062,7 +1058,7 @@ def _setup_subgraphs(
         vis_opt: 'rolled' or 'unrolled'
         module_edge_dict: Dictionary mapping each cluster to the list of edges it contains, with each
             edge specified as a dict with all necessary arguments for creating that edge.
-        vis_module_overrides: Dict of graphviz attribute overrides for module subgraph clusters.
+        overrides: Graphviz attribute overrides.
     """
     if vis_opt == "unrolled":
         module_submodule_dict = defaultdict(list)
@@ -1094,7 +1090,7 @@ def _setup_subgraphs(
             nesting_depth,
             max_nesting_depth,
             vis_opt,
-            vis_module_overrides,
+            overrides,
         )
 
 
@@ -1108,7 +1104,7 @@ def _setup_subgraphs_recurse(
     nesting_depth,
     max_nesting_depth,
     vis_opt,
-    vis_module_overrides,
+    overrides: VisualizationOverrides,
 ) -> None:
     """Utility function to crawl down several layers deep into nested subgraphs.
 
@@ -1121,7 +1117,7 @@ def _setup_subgraphs_recurse(
         nesting_depth: Nesting depth so far.
         max_nesting_depth: The total depth of the subgraphs.
         vis_opt: 'rolled' or 'unrolled'
-        vis_module_overrides: Dict of graphviz attribute overrides for module subgraph clusters.
+        overrides: Graphviz attribute overrides.
     """
     subgraph_name_w_pass = parent_graph_list[nesting_depth]
     subgraph_module = subgraph_name_w_pass.split(":")[0]
@@ -1156,7 +1152,7 @@ def _setup_subgraphs_recurse(
                 nesting_depth + 1,
                 max_nesting_depth,
                 vis_opt,
-                vis_module_overrides,
+                overrides,
             )
 
     else:  # we made it, make the subgraph and add all edges.
@@ -1176,7 +1172,7 @@ def _setup_subgraphs_recurse(
                 "penwidth": str(pen_width),
             }
 
-            for arg_name, arg_val in vis_module_overrides.items():
+            for arg_name, arg_val in overrides.module.items():
                 if callable(arg_val):
                     module_args[arg_name] = str(arg_val(self, subgraph_name))
                 else:

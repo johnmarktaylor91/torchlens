@@ -44,6 +44,31 @@ _SESSION_PARAM_ATTRS = [
 
 
 # ---------------------------------------------------------------------------
+# Shared module traversal
+# ---------------------------------------------------------------------------
+
+
+def _traverse_model_modules(model: nn.Module, visitor_fn) -> None:
+    """DFS over all modules in a model, calling ``visitor_fn`` for each.
+
+    Args:
+        model: Root module.
+        visitor_fn: Called as ``visitor_fn(module, address, named_children, is_root)``
+            for every module. ``named_children`` is ``list(module.named_children())``.
+    """
+    module_stack = [(model, "")]
+    while module_stack:
+        module, address = module_stack.pop()
+        named_children = list(module.named_children())
+        child_entries = []
+        for child_name, child_module in named_children:
+            child_address = f"{address}.{child_name}" if address else child_name
+            child_entries.append((child_module, child_address))
+        module_stack = child_entries + module_stack
+        visitor_fn(module, address, named_children, module is model)
+
+
+# ---------------------------------------------------------------------------
 # One-time model preparation (cached in _state._prepared_models)
 # ---------------------------------------------------------------------------
 
@@ -63,12 +88,7 @@ def _prepare_model_once(model: nn.Module) -> None:
 
     model.tl_module_address = ""
 
-    module_stack = [(model, "")]
-
-    while len(module_stack) > 0:
-        module, parent_address = module_stack.pop()
-        module_children = list(module.named_children())
-
+    def _visit_once(module, address, named_children, is_root):
         # Replace any original torch functions stored in module __dict__
         for func_name, func in list(module.__dict__.items()):
             if func_name.startswith("__") or not callable(func):
@@ -77,14 +97,12 @@ def _prepare_model_once(model: nn.Module) -> None:
                 module.__dict__[func_name] = _state._orig_to_decorated[id(func)]
 
         # Annotate children with full address
-        for c, (child_name, child_module) in enumerate(module_children):
-            child_address = f"{parent_address}.{child_name}" if parent_address != "" else child_name
+        for child_name, child_module in named_children:
+            child_address = f"{address}.{child_name}" if address else child_name
             child_module.tl_module_address = child_address
-            module_children[c] = (child_module, child_address)
-        module_stack = module_children + module_stack
 
-        if module is model:
-            continue
+        if is_root:
+            return
 
         module.tl_module_type = str(type(module).__name__)
 
@@ -95,6 +113,7 @@ def _prepare_model_once(model: nn.Module) -> None:
             module.forward = module_forward_decorator(module.forward, module)
             module.forward.tl_forward_call_is_decorated = True
 
+    _traverse_model_modules(model, _visit_once)
     _state._prepared_models.add(model)
 
 
@@ -119,33 +138,19 @@ def _prepare_model_session(
     model_log.model_name = str(type(model).__name__)
     model.tl_source_model_log = model_log
 
-    module_stack = [(model, "")]
     _seen_module_ids = {}
 
-    while len(module_stack) > 0:
-        module, parent_address = module_stack.pop()
-        module_children = list(module.named_children())
-
-        # Capture module metadata (consumed by _build_module_logs in postprocess)
+    def _visit_session(module, address, named_children, is_root):
         _capture_module_metadata(
             model_log,
             module,
-            parent_address,
-            module_children,
+            address,
+            named_children,
             _seen_module_ids,
-            is_root=(module is model),
+            is_root=is_root,
         )
-
-        # Annotate children with full address (use existing tl_module_address)
-        for c, (child_name, child_module) in enumerate(module_children):
-            child_address = f"{parent_address}.{child_name}" if parent_address != "" else child_name
-            module_children[c] = (child_module, child_address)
-        module_stack = module_children + module_stack
-
-        if module is model:
-            continue
-
-        # Session-scoped attributes
+        if is_root:
+            return
         module.tl_source_model_log = model_log
         model_log.module_types[module.tl_module_address] = module.tl_module_type
         module.tl_module_pass_num = 0
@@ -153,14 +158,19 @@ def _prepare_model_session(
         module.tl_tensors_entered_labels = []
         module.tl_tensors_exited_labels = []
 
-    # Build optimizer lookup if provided
+    _traverse_model_modules(model, _visit_session)
+    _create_session_param_logs(model_log, model, optimizer)
+    prepare_buffer_tensors(model_log, model)
+
+
+def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimizer=None) -> None:
+    """Create ParamLog objects for all parameters and force requires_grad=True."""
     optimized_param_ids = set()
     if optimizer is not None:
         for group in optimizer.param_groups:
             for p in group["params"]:
                 optimized_param_ids.add(id(p))
 
-    # Create ParamLog objects and mark all parameters with requires_grad = True
     param_logs = {}
     for address, param in model.named_parameters():
         param.tl_requires_grad = param.requires_grad
@@ -200,9 +210,6 @@ def _prepare_model_session(
         param_logs[address] = param_log
 
     model_log.param_logs = ParamAccessor(param_logs)
-
-    # Prepare buffer tensors
-    prepare_buffer_tensors(model_log, model)
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +376,106 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
 # ---------------------------------------------------------------------------
 
 
+def _tag_untagged_buffers(module: nn.Module) -> None:
+    """Tag any buffers that lack a ``tl_buffer_address`` attribute."""
+    for buffer_name, buffer_tensor in module.named_buffers():
+        if hasattr(buffer_tensor, "tl_buffer_address"):
+            continue
+        if module.tl_module_address == "":
+            buffer_address = buffer_name
+        else:
+            buffer_address = f"{module.tl_module_address}.{buffer_name}"
+        buffer_tensor.tl_buffer_address = buffer_address
+        if hasattr(buffer_tensor, "tl_tensor_label_raw"):
+            buffer_tensor.tl_buffer_parent = buffer_tensor.tl_tensor_label_raw
+            delattr(buffer_tensor, "tl_tensor_label_raw")
+
+
+def _handle_module_entry(model_log, module, args, kwargs):
+    """Pre-forward: track input tensors, increment pass counters, tag buffers.
+
+    Returns:
+        Tuple of (input_tensor_labels, input_tensor_labels_at_entry) needed by the exit handler.
+    """
+    module_address = module.tl_module_address
+    model_log.module_training_modes[module_address] = module.training
+    module.tl_module_pass_num += 1
+    module_pass_label = (module_address, module.tl_module_pass_num)
+    module.tl_module_pass_labels.append(module_pass_label)
+
+    # Capture forward args/kwargs for this pass (consumed by _build_module_logs)
+    model_log._module_forward_args[(module_address, module.tl_module_pass_num)] = (args, kwargs)
+
+    input_tensors = get_vars_of_type_from_obj(
+        [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
+    )
+    input_tensor_labels = set()
+    input_tensor_labels_at_entry = []
+    for t in input_tensors:
+        if (not hasattr(t, "tl_tensor_label_raw")) and hasattr(t, "tl_buffer_address"):
+            log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
+        tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
+        input_tensor_labels.add(t.tl_tensor_label_raw)
+        module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
+        tensor_entry.modules_entered.append(module_address)
+        tensor_entry.module_passes_entered.append(module_pass_label)
+        tensor_entry.is_submodule_input = True
+        for arg_key, arg_val in list(enumerate(args)) + list(kwargs.items()):
+            if arg_val is t:
+                tensor_entry.modules_entered_argnames[
+                    f"{module_pass_label[0]}:{module_pass_label[1]}"
+                ].append(arg_key)
+                model_log.module_layer_argnames[
+                    (f"{module_pass_label[0]}:{module_pass_label[1]}")
+                ].append((t.tl_tensor_label_raw, arg_key))
+        tensor_entry.module_entry_exit_thread_output.append(
+            ("+", module_pass_label[0], module_pass_label[1])
+        )
+        input_tensor_labels_at_entry.append(t.tl_tensor_label_raw)
+
+    _tag_untagged_buffers(module)
+    return input_tensor_labels, input_tensor_labels_at_entry
+
+
+def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tensor_labels_at_entry):
+    """Post-forward: log output tensors, update module pass labels, trim entry threads."""
+    module_address = module.tl_module_address
+    module_pass_num = module.tl_module_pass_num
+    module_entry_label = module.tl_module_pass_labels.pop()
+    output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
+    for t in output_tensors:
+        if (module.tl_module_type.lower() == "identity") or (
+            t.tl_tensor_label_raw in input_tensor_labels
+        ):
+            t = torch.identity(t)
+        tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
+        tensor_entry.is_submodule_output = True
+        tensor_entry.is_bottom_level_submodule_output = _is_bottom_level_submodule_exit(
+            model_log, t, module
+        )
+        tensor_entry.modules_exited.append(module_address)
+        tensor_entry.module_passes_exited.append((module_address, module_pass_num))
+        tensor_entry.module_entry_exit_thread_output.append(
+            ("-", module_entry_label[0], module_entry_label[1])
+        )
+        module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
+
+    for entry_label in input_tensor_labels_at_entry:
+        tensor_entry = model_log._raw_tensor_dict[entry_label]
+        input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
+        if (
+            "+",
+            module_entry_label[0],
+            module_entry_label[1],
+        ) in input_module_thread:
+            module_entry_ix = input_module_thread.index(
+                ("+", module_entry_label[0], module_entry_label[1])
+            )
+            tensor_entry.module_entry_exit_thread_output = (
+                tensor_entry.module_entry_exit_thread_output[:module_entry_ix]
+            )
+
+
 def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Callable:
     """Toggle-gated forward wrapper.  Closes over ``module`` (stable instance)
     but reads ``model_log`` from ``_state._active_model_log`` (global lookup).
@@ -401,96 +508,14 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
                     t = torch.identity(t)
             return out
 
-        # "Pre-hook" operations:
-        module_address = module.tl_module_address
-        model_log.module_training_modes[module_address] = module.training
-        module.tl_module_pass_num += 1
-        module_pass_label = (module_address, module.tl_module_pass_num)
-        module.tl_module_pass_labels.append(module_pass_label)
-
-        # Capture forward args/kwargs for this pass (consumed by _build_module_logs)
-        model_log._module_forward_args[(module_address, module.tl_module_pass_num)] = (args, kwargs)
-
-        input_tensors = get_vars_of_type_from_obj(
-            [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
+        # Exhaustive mode: entry → forward → exit
+        input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
+            model_log, module, args, kwargs
         )
-        input_tensor_labels = set()
-        input_tensor_labels_at_entry = []
-        for t in input_tensors:
-            if (not hasattr(t, "tl_tensor_label_raw")) and hasattr(t, "tl_buffer_address"):
-                log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
-            tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
-            input_tensor_labels.add(t.tl_tensor_label_raw)
-            module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
-            tensor_entry.modules_entered.append(module_address)
-            tensor_entry.module_passes_entered.append(module_pass_label)
-            tensor_entry.is_submodule_input = True
-            for arg_key, arg_val in list(enumerate(args)) + list(kwargs.items()):
-                if arg_val is t:
-                    tensor_entry.modules_entered_argnames[
-                        f"{module_pass_label[0]}:{module_pass_label[1]}"
-                    ].append(arg_key)
-                    model_log.module_layer_argnames[
-                        (f"{module_pass_label[0]}:{module_pass_label[1]}")
-                    ].append((t.tl_tensor_label_raw, arg_key))
-            tensor_entry.module_entry_exit_thread_output.append(
-                ("+", module_pass_label[0], module_pass_label[1])
-            )
-            input_tensor_labels_at_entry.append(t.tl_tensor_label_raw)
-
-        # Check the buffers.
-        for buffer_name, buffer_tensor in module.named_buffers():
-            if hasattr(buffer_tensor, "tl_buffer_address"):
-                continue
-            if module.tl_module_address == "":
-                buffer_address = buffer_name
-            else:
-                buffer_address = f"{module.tl_module_address}.{buffer_name}"
-            buffer_tensor.tl_buffer_address = buffer_address
-            if hasattr(buffer_tensor, "tl_tensor_label_raw"):
-                buffer_tensor.tl_buffer_parent = buffer_tensor.tl_tensor_label_raw
-                delattr(buffer_tensor, "tl_tensor_label_raw")
-
-        # The function call
         out = orig_forward(*args, **kwargs)
-
-        # "Post-hook" operations:
-        module_address = module.tl_module_address
-        module_pass_num = module.tl_module_pass_num
-        module_entry_label = module.tl_module_pass_labels.pop()
-        output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
-        for t in output_tensors:
-            if (module.tl_module_type.lower() == "identity") or (
-                t.tl_tensor_label_raw in input_tensor_labels
-            ):
-                t = torch.identity(t)
-            tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
-            tensor_entry.is_submodule_output = True
-            tensor_entry.is_bottom_level_submodule_output = _is_bottom_level_submodule_exit(
-                model_log, t, module
-            )
-            tensor_entry.modules_exited.append(module_address)
-            tensor_entry.module_passes_exited.append((module_address, module_pass_num))
-            tensor_entry.module_entry_exit_thread_output.append(
-                ("-", module_entry_label[0], module_entry_label[1])
-            )
-            module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
-
-        for entry_label in input_tensor_labels_at_entry:
-            tensor_entry = model_log._raw_tensor_dict[entry_label]
-            input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
-            if (
-                "+",
-                module_entry_label[0],
-                module_entry_label[1],
-            ) in input_module_thread:
-                module_entry_ix = input_module_thread.index(
-                    ("+", module_entry_label[0], module_entry_label[1])
-                )
-                tensor_entry.module_entry_exit_thread_output = (
-                    tensor_entry.module_entry_exit_thread_output[:module_entry_ix]
-                )
-
+        _handle_module_exit(
+            model_log, module, out, input_tensor_labels, input_tensor_labels_at_entry
+        )
         return out
 
     return decorated_forward

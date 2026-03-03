@@ -12,6 +12,7 @@ import torch
 
 from .. import _state
 from ..constants import ORIG_TORCH_FUNCS
+from ..data_classes.internal_types import FuncExecutionContext
 from ..utils.introspection import get_vars_of_type_from_obj, nested_getattr
 from ..utils.display import identity
 from ..utils.rng import log_current_autocast_state, log_current_rng_states
@@ -55,6 +56,28 @@ def _get_active_device() -> Optional[str]:
     return None
 
 
+def _maybe_inject_device_kwarg(func_name: str, kwargs: dict) -> dict:
+    """Inject ``device`` kwarg for factory functions when a DeviceContext is active.
+
+    Python wrappers bypass PyTorch's C-level TorchFunctionMode dispatch, so
+    ``torch.device('meta')`` context won't inject the device kwarg automatically.
+    """
+    if not (_DEVICE_CONSTRUCTOR_NAMES and func_name in _DEVICE_CONSTRUCTOR_NAMES):
+        return kwargs
+    if "device" in kwargs:
+        return kwargs
+    try:
+        from torch.overrides import _len_torch_function_stack
+
+        if _len_torch_function_stack() > 0:
+            device = _get_active_device()
+            if device is not None:
+                return {**kwargs, "device": device}
+    except (ImportError, AttributeError):
+        pass
+    return kwargs
+
+
 def torch_func_decorator(func: Callable, func_name: str):
     """Wrap a torch function with toggle-gated logging.
 
@@ -67,23 +90,7 @@ def torch_func_decorator(func: Callable, func_name: str):
     def wrapped_func(*args, **kwargs):
         # Fast path: if logging is off, pass through immediately.
         if not _state._logging_enabled or _state._active_model_log is None:
-            # Python wrappers bypass PyTorch's C-level TorchFunctionMode
-            # dispatch, so torch.device('meta') context won't inject the
-            # device kwarg automatically.  Handle it here.
-            if (
-                _DEVICE_CONSTRUCTOR_NAMES
-                and func_name in _DEVICE_CONSTRUCTOR_NAMES
-                and "device" not in kwargs
-            ):
-                try:
-                    from torch.overrides import _len_torch_function_stack
-
-                    if _len_torch_function_stack() > 0:
-                        device = _get_active_device()
-                        if device is not None:
-                            kwargs = {**kwargs, "device": device}
-                except (ImportError, AttributeError):
-                    pass
+            kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             return func(*args, **kwargs)
 
         model_log = _state._active_model_log
@@ -117,10 +124,14 @@ def torch_func_decorator(func: Callable, func_name: str):
         func_call_barcode = make_random_barcode()
         model_log.current_function_call_barcode = func_call_barcode
         start_time = time.time()
-        func_rng_states = log_current_rng_states()
-        func_autocast_state = log_current_autocast_state()
+        rng_states = log_current_rng_states()
+        autocast_state = log_current_autocast_state()
         out_orig = func(*args, **kwargs)
-        func_time_elapsed = time.time() - start_time
+        exec_ctx = FuncExecutionContext(
+            time_elapsed=time.time() - start_time,
+            rng_states=rng_states,
+            autocast_state=autocast_state,
+        )
         is_bottom_level_func = model_log.current_function_call_barcode == func_call_barcode
 
         if func_name in ["__setitem__", "zero_", "__delitem__"]:
@@ -155,9 +166,7 @@ def torch_func_decorator(func: Callable, func_name: str):
                 arg_copies,
                 kwarg_copies,
                 out_orig,
-                func_time_elapsed,
-                func_rng_states,
-                func_autocast_state,
+                exec_ctx,
                 is_bottom_level_func,
             )
 
