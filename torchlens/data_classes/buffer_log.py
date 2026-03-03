@@ -1,7 +1,9 @@
+"""BufferLog and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers."""
+
 from typing import Dict, List, Optional, Union
 
 from .tensor_log import TensorLog
-from ..helper_funcs import human_readable_size
+from ..utils.display import human_readable_size
 
 
 class BufferLog(TensorLog):

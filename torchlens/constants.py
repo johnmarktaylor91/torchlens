@@ -1,3 +1,5 @@
+"""Shared constants: field-order tuples that define the canonical set of TensorLog and ModelLog fields."""
+
 import __future__
 import functools
 import types

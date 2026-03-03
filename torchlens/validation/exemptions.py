@@ -1,3 +1,4 @@
+"""Validation exemption registries: ops that are exempt from perturbation or tolerance checks."""
 # TODO: Audit PyTorch ops more exhaustively for additional exemptions.
 # Current registries cover all cases encountered in the test suite as of 2026-03.
 # When adding new model tests, if perturbation fails for a new function,
@@ -8,7 +9,7 @@ from typing import Any, Dict, List, Set, Union
 import torch
 
 from ..data_classes.tensor_log import TensorLog
-from ..helper_funcs import tensor_all_nan
+from ..utils.tensor_utils import tensor_all_nan
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens
 from torchlens import _state, log_forward_pass
-from torchlens.decorate_torch import (
+from torchlens.decoration.torch_funcs import (
     decorate_all_once,
     patch_detached_references,
     patch_model_instance,
@@ -410,7 +410,7 @@ class TestPermanentModelPrep:
         (known GC issues GC-1 through GC-5). We test that the WeakSet itself
         doesn't add a strong ref by preparing a model WITHOUT logging.
         """
-        from torchlens.model_funcs import _prepare_model_once
+        from torchlens.decoration.model_prep import _prepare_model_once
 
         model = TwoLayerModel()
         ref = weakref.ref(model)

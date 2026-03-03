@@ -1,8 +1,10 @@
+"""ParamLog and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters."""
+
 from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 
-from ..helper_funcs import human_readable_size
+from ..utils.display import human_readable_size
 
 
 class ParamLog:

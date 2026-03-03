@@ -14,14 +14,9 @@ from ..data_classes.tensor_log import TensorLog
 if TYPE_CHECKING:
     pass
 
-from ..helper_funcs import (
-    AutocastRestore,
-    log_current_rng_states,
-    set_rng_from_saved_states,
-    assign_to_sequence_or_dict,
-    tensor_nanequal,
-    tensor_all_nan,
-)
+from ..utils.rng import AutocastRestore, log_current_rng_states, set_rng_from_saved_states
+from ..utils.collections import assign_to_sequence_or_dict
+from ..utils.tensor_utils import tensor_nanequal, tensor_all_nan
 from .exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     SKIP_PERTURBATION_ENTIRELY,

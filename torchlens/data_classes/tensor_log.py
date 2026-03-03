@@ -1,3 +1,5 @@
+"""TensorLog and RolledTensorLog: per-operation metadata entries within a ModelLog."""
+
 import copy
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
@@ -6,13 +8,8 @@ import torch
 
 from ..constants import TENSOR_LOG_FIELD_ORDER
 from .._state import pause_logging
-from ..helper_funcs import (
-    get_tensor_memory_amount,
-    human_readable_size,
-    print_override,
-    safe_copy,
-    safe_to,
-)
+from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
+from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation

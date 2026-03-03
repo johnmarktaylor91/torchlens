@@ -5,7 +5,7 @@ from collections import OrderedDict, defaultdict
 from typing import TYPE_CHECKING
 
 from ..constants import MODEL_LOG_FIELD_ORDER, TENSOR_LOG_FIELD_ORDER
-from ..helper_funcs import human_readable_size
+from ..utils.display import human_readable_size
 from ..data_classes.tensor_log import TensorLog
 
 if TYPE_CHECKING:

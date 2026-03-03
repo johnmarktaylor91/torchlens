@@ -1776,7 +1776,7 @@ def test_functional_after_submodule_not_box():
     A torch.relu after a nn.Linear inside a container module should not get
     box-shaped rendering (which is reserved for module outputs).
     """
-    from torchlens.vis import _get_node_address_shape_color
+    from torchlens.visualization.rendering import _get_node_address_shape_color
 
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)

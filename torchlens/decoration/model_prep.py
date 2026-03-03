@@ -1,3 +1,5 @@
+"""Model preparation: attaches metadata attributes and forward hooks to nn.Modules before logging."""
+
 import inspect
 import warnings
 from functools import wraps
@@ -6,23 +8,20 @@ from typing import Callable, Dict, List, TYPE_CHECKING
 import torch
 from torch import nn
 
-from . import _state
-from .data_classes import ParamAccessor, ParamLog
-from .helper_funcs import (
-    get_tensor_memory_amount,
-    get_vars_of_type_from_obj,
-    human_readable_size,
-    iter_accessible_attributes,
-    make_random_barcode,
-)
-from .logging_funcs import log_source_tensor
+from .. import _state
+from ..data_classes import ParamAccessor, ParamLog
+from ..utils.tensor_utils import get_tensor_memory_amount
+from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
+from ..utils.display import human_readable_size
+from ..utils.hashing import make_random_barcode
+from ..capture.source_tensors import log_source_tensor
 
 # Cache class-level module metadata (shared across instances of the same class).
 # Cleared at the start of each session in _prepare_model_session.
 _module_class_metadata_cache: Dict[type, dict] = {}
 
 if TYPE_CHECKING:
-    from .data_classes.model_log import ModelLog
+    from ..data_classes.model_log import ModelLog
 
 # Session-scoped attributes that are set per-call and removed after.
 # IMPORTANT: Do NOT add tl_module_address or tl_module_type here — those are
@@ -651,7 +650,7 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     On first call, decorates all torch functions permanently via
     ``decorate_all_once()``.  Subsequent calls are no-ops for decoration.
     """
-    from .decorate_torch import decorate_all_once, patch_detached_references, patch_model_instance
+    from .torch_funcs import decorate_all_once, patch_detached_references, patch_model_instance
 
     decorate_all_once()  # idempotent — no-op after first call
     _prepare_model_once(model)

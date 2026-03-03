@@ -1,15 +1,17 @@
+"""Graphviz-based computational graph rendering for ModelLog objects."""
+
 from collections import defaultdict
 from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
 import graphviz
 from IPython.display import display
 
-from .helper_funcs import in_notebook, int_list_to_compact_str
-from .postprocess import _roll_graph
-from .data_classes.tensor_log import RolledTensorLog, TensorLog
+from ..utils.display import in_notebook, int_list_to_compact_str
+from ..postprocess import _roll_graph
+from ..data_classes.tensor_log import RolledTensorLog, TensorLog
 
 if TYPE_CHECKING:
-    from .data_classes.model_log import ModelLog
+    from ..data_classes.model_log import ModelLog
 
 INPUT_COLOR = "#98FB98"
 OUTPUT_COLOR = "#ff9999"
