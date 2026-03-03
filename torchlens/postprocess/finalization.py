@@ -2,7 +2,7 @@
 
 import time
 from collections import deque
-from typing import TYPE_CHECKING
+from typing import NamedTuple, TYPE_CHECKING
 
 import torch
 
@@ -169,14 +169,134 @@ def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None
                 queue.append(child_addr)
 
 
+def _build_submodule_pass_logs(
+    self: "ModelLog", address: str, num_passes: int, pass_dict: dict
+) -> tuple:
+    """Build ModulePassLog objects for all passes of a single submodule.
+
+    Returns:
+        Tuple of (passes dict, pass_labels list).
+    """
+    passes = {}
+    pass_labels_list = []
+    for pass_num in range(1, num_passes + 1):
+        pass_label = f"{address}:{pass_num}"
+        pass_labels_list.append(pass_label)
+
+        pass_layers = list(self.module_pass_layers.get(pass_label, []))
+
+        # Derive input/output layers per pass from TensorLog fields
+        pass_input_layers = []
+        pass_output_layers = []
+        for layer_label in pass_layers:
+            if layer_label in self.layer_dict_all_keys:
+                te = self.layer_dict_all_keys[layer_label]
+                if te.is_submodule_input and pass_label in te.module_passes_entered:
+                    pass_input_layers.append(layer_label)
+                if te.is_submodule_output and pass_label in te.module_passes_exited:
+                    pass_output_layers.append(layer_label)
+
+        # Forward args for this pass
+        fwd_args = self._module_forward_args.get((address, pass_num))
+        fwd_positional = fwd_args[0] if fwd_args else None
+        fwd_kwargs = fwd_args[1] if fwd_args else None
+
+        # Call children for this pass
+        call_children_pass = list(self.module_pass_children.get(pass_label, []))
+
+        # Call parent for this pass: find which module:pass contains this one
+        call_parent_pass = None
+        for parent_pass_label, children in self.module_pass_children.items():
+            if pass_label in children:
+                call_parent_pass = parent_pass_label
+                break
+        if call_parent_pass is None and pass_label in self.top_level_module_passes:
+            call_parent_pass = "self:1"
+
+        module_pass_log = ModulePassLog(
+            module_address=address,
+            pass_num=pass_num,
+            pass_label=pass_label,
+            layers=pass_layers,
+            input_layers=pass_input_layers,
+            output_layers=pass_output_layers,
+            forward_args=fwd_positional,
+            forward_kwargs=fwd_kwargs,
+            call_parent=call_parent_pass,
+            call_children=call_children_pass,
+        )
+        passes[pass_num] = module_pass_log
+        pass_dict[pass_label] = module_pass_log
+
+    return passes, pass_labels_list
+
+
+def _resolve_call_hierarchy(passes: dict) -> tuple:
+    """Derive call_children (union of addresses) and call_parent (address) from pass logs.
+
+    Returns:
+        Tuple of (call_children_all list, call_parent_addr or None).
+    """
+    call_children_all = []
+    for module_pass_log in passes.values():
+        for child_pass_label in module_pass_log.call_children:
+            cc_addr = child_pass_label.split(":")[0]
+            if cc_addr not in call_children_all:
+                call_children_all.append(cc_addr)
+
+    call_parent_addr = None
+    if passes:
+        first_pass = passes[1]
+        if first_pass.call_parent and first_pass.call_parent != "self:1":
+            call_parent_addr = first_pass.call_parent.split(":")[0]
+        elif first_pass.call_parent == "self:1":
+            call_parent_addr = "self"
+
+    return call_children_all, call_parent_addr
+
+
+class ModuleParamInfo(NamedTuple):
+    """Parameter and buffer info for a single module."""
+
+    params: object  # ParamAccessor
+    num_params: int
+    num_trainable: int
+    num_frozen: int
+    fsize: int
+    buffer_layers: list
+
+
+def _build_module_param_info(self: "ModelLog", address: str) -> ModuleParamInfo:
+    """Gather parameter and buffer layer info for a single module."""
+    from ..data_classes.param_log import ParamAccessor
+
+    module_param_dict = {pl.address: pl for pl in self.param_logs if pl.module_address == address}
+    module_params = ParamAccessor(module_param_dict)
+    m_num_params = self.module_nparams.get(address, 0)
+    m_num_trainable = self.module_nparams_trainable.get(address, 0)
+    m_num_frozen = self.module_nparams_frozen.get(address, 0)
+    m_fsize = sum(pl.fsize for pl in module_param_dict.values())
+
+    module_buffer_layers = [
+        bl
+        for bl in self.buffer_layers
+        if bl in self.layer_dict_all_keys
+        and hasattr(self.layer_dict_all_keys[bl], "buffer_address")
+        and self.layer_dict_all_keys[bl].buffer_address is not None
+        and self.layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
+    ]
+
+    return ModuleParamInfo(
+        module_params, m_num_params, m_num_trainable, m_num_frozen, m_fsize, module_buffer_layers
+    )
+
+
 def _build_module_logs(self: "ModelLog") -> None:
     """Build structured ModuleLog/ModulePassLog objects from raw module_* dicts and _module_metadata.
 
     Called as Step 17 of postprocess(), after all raw module data has been populated
     and layer labels have been finalized.
     """
-    from ..data_classes.param_log import ParamAccessor
-
     module_dict = {}  # address -> ModuleLog
     pass_dict = {}  # "addr:pass" -> ModulePassLog
     module_order = []  # ordered by first appearance
@@ -191,110 +311,14 @@ def _build_module_logs(self: "ModelLog") -> None:
         meta = self._module_metadata.get(address, {})
         num_passes = self.module_num_passes.get(address, 1)
 
-        # Name = last segment of address
         name = address.rsplit(".", 1)[-1] if "." in address else address
-
-        # Address parent
-        if "." in address:
-            address_parent = address.rsplit(".", 1)[0]
-        else:
-            address_parent = "self"
-
-        # Address depth: number of dots + 1
+        address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-
-        # All layers across all passes
         all_layers = list(self.module_layers.get(address, []))
 
-        # Build ModulePassLogs
-        passes = {}
-        pass_labels_list = []
-        for pass_num in range(1, num_passes + 1):
-            pass_label = f"{address}:{pass_num}"
-            pass_labels_list.append(pass_label)
-
-            pass_layers = list(self.module_pass_layers.get(pass_label, []))
-
-            # Derive input/output layers per pass from TensorLog fields
-            pass_input_layers = []
-            pass_output_layers = []
-            for layer_label in pass_layers:
-                if layer_label in self.layer_dict_all_keys:
-                    te = self.layer_dict_all_keys[layer_label]
-                    if te.is_submodule_input and pass_label in te.module_passes_entered:
-                        pass_input_layers.append(layer_label)
-                    if te.is_submodule_output and pass_label in te.module_passes_exited:
-                        pass_output_layers.append(layer_label)
-
-            # Forward args for this pass
-            fwd_args = self._module_forward_args.get((address, pass_num))
-            fwd_positional = fwd_args[0] if fwd_args else None
-            fwd_kwargs = fwd_args[1] if fwd_args else None
-
-            # Call children for this pass
-            call_children_pass = list(self.module_pass_children.get(pass_label, []))
-
-            # Call parent for this pass: find which module:pass contains this one
-            call_parent_pass = None
-            for parent_pass_label, children in self.module_pass_children.items():
-                if pass_label in children:
-                    call_parent_pass = parent_pass_label
-                    break
-            # If not found in module_pass_children, check if it's top-level
-            if call_parent_pass is None and pass_label in self.top_level_module_passes:
-                call_parent_pass = "self:1"
-
-            module_pass_log = ModulePassLog(
-                module_address=address,
-                pass_num=pass_num,
-                pass_label=pass_label,
-                layers=pass_layers,
-                input_layers=pass_input_layers,
-                output_layers=pass_output_layers,
-                forward_args=fwd_positional,
-                forward_kwargs=fwd_kwargs,
-                call_parent=call_parent_pass,
-                call_children=call_children_pass,
-            )
-            passes[pass_num] = module_pass_log
-            pass_dict[pass_label] = module_pass_log
-
-        # Call children (union across all passes, addresses only)
-        call_children_all = []
-        for pass_num, module_pass_log in passes.items():
-            for child_pass_label in module_pass_log.call_children:
-                cc_addr = child_pass_label.split(":")[0]
-                if cc_addr not in call_children_all:
-                    call_children_all.append(cc_addr)
-
-        # Call parent (address only, from first pass)
-        call_parent_addr = None
-        if passes:
-            first_pass = passes[1]
-            if first_pass.call_parent and first_pass.call_parent != "self:1":
-                call_parent_addr = first_pass.call_parent.split(":")[0]
-            elif first_pass.call_parent == "self:1":
-                call_parent_addr = "self"
-
-        # Build per-module ParamAccessor
-        module_param_dict = {
-            pl.address: pl for pl in self.param_logs if pl.module_address == address
-        }
-        module_params = ParamAccessor(module_param_dict)
-        m_num_params = self.module_nparams.get(address, 0)
-        m_num_trainable = self.module_nparams_trainable.get(address, 0)
-        m_num_frozen = self.module_nparams_frozen.get(address, 0)
-        m_fsize = sum(pl.fsize for pl in module_param_dict.values())
-
-        # Buffer layers belonging to this module
-        module_buffer_layers = [
-            bl
-            for bl in self.buffer_layers
-            if bl in self.layer_dict_all_keys
-            and hasattr(self.layer_dict_all_keys[bl], "buffer_address")
-            and self.layer_dict_all_keys[bl].buffer_address is not None
-            and self.layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
-        ]
+        passes, pass_labels_list = _build_submodule_pass_logs(self, address, num_passes, pass_dict)
+        call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
+        param_info = _build_module_param_info(self, address)
 
         ml = ModuleLog(
             address=address,
@@ -320,14 +344,14 @@ def _build_module_logs(self: "ModelLog") -> None:
             passes=passes,
             pass_labels=pass_labels_list,
             all_layers=all_layers,
-            params=module_params,
-            num_params=m_num_params,
-            num_params_trainable=m_num_trainable,
-            num_params_frozen=m_num_frozen,
-            params_fsize=m_fsize,
-            params_fsize_nice=human_readable_size(m_fsize),
-            requires_grad=m_num_trainable > 0,
-            buffer_layers=module_buffer_layers,
+            params=param_info.params,
+            num_params=param_info.num_params,
+            num_params_trainable=param_info.num_trainable,
+            num_params_frozen=param_info.num_frozen,
+            params_fsize=param_info.fsize,
+            params_fsize_nice=human_readable_size(param_info.fsize),
+            requires_grad=param_info.num_trainable > 0,
+            buffer_layers=param_info.buffer_layers,
             training_mode=self.module_training_modes.get(address, meta.get("training_mode", True)),
             has_forward_hooks=meta.get("has_forward_hooks", False),
             has_backward_hooks=meta.get("has_backward_hooks", False),

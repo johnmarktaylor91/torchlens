@@ -38,6 +38,7 @@ from .tensor_tracking import (
     _add_sibling_labels_for_new_tensor,
     _update_tensor_containing_modules,
 )
+from ..data_classes.internal_types import FuncExecutionContext
 from .source_tensors import _get_input_module_info
 
 if TYPE_CHECKING:
@@ -53,9 +54,7 @@ def log_function_output_tensors(
     arg_copies: Tuple[Any],
     kwarg_copies: Dict[str, Any],
     out_orig: Any,
-    func_time_elapsed: float,
-    func_rng_states: Dict,
-    func_autocast_state: Dict,
+    exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
 ):
     if self.logging_mode == "exhaustive":
@@ -68,9 +67,7 @@ def log_function_output_tensors(
             arg_copies,
             kwarg_copies,
             out_orig,
-            func_time_elapsed,
-            func_rng_states,
-            func_autocast_state,
+            exec_ctx,
             is_bottom_level_func,
         )
     elif self.logging_mode == "fast":
@@ -82,11 +79,144 @@ def log_function_output_tensors(
             arg_copies,
             kwarg_copies,
             out_orig,
-            func_time_elapsed,
-            func_rng_states,
-            func_autocast_state,
+            exec_ctx,
             is_bottom_level_func,
         )
+
+
+def _build_graph_relationship_fields(
+    self,
+    fields_dict: Dict[str, Any],
+    parent_layer_labels: List[str],
+    parent_layer_entries: List,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    out_orig: Any,
+) -> None:
+    """Populate graph structure fields: parents, children, ancestors, buffer/IO flags."""
+    parent_layer_arg_locs = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
+    input_ancestors, internally_initialized_ancestors = _get_ancestors_from_parents(
+        parent_layer_entries
+    )
+    internal_parent_layer_labels = [
+        label for label in parent_layer_labels if self[label].has_internally_initialized_ancestor
+    ]
+
+    fields_dict["parent_layers"] = parent_layer_labels
+    fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
+    fields_dict["has_parents"] = len(parent_layer_labels) > 0
+    fields_dict["orig_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
+    fields_dict["child_layers"] = []
+    fields_dict["has_children"] = False
+    fields_dict["sibling_layers"] = []
+    fields_dict["has_siblings"] = False
+    fields_dict["spouse_layers"] = []
+    fields_dict["has_spouses"] = False
+    fields_dict["is_input_layer"] = False
+    fields_dict["has_input_ancestor"] = len(input_ancestors) > 0
+    fields_dict["input_ancestors"] = input_ancestors
+    fields_dict["min_distance_from_input"] = None
+    fields_dict["max_distance_from_input"] = None
+    fields_dict["is_output_layer"] = False
+    fields_dict["is_output_parent"] = False
+    fields_dict["is_last_output_layer"] = False
+    fields_dict["is_output_ancestor"] = False
+    fields_dict["output_descendents"] = set()
+    fields_dict["min_distance_from_output"] = None
+    fields_dict["max_distance_from_output"] = None
+    fields_dict["input_output_address"] = None
+    fields_dict["is_buffer_layer"] = False
+    fields_dict["buffer_address"] = None
+    fields_dict["buffer_pass"] = None
+    fields_dict["buffer_parent"] = None
+    fields_dict["initialized_inside_model"] = len(parent_layer_labels) == 0
+    fields_dict["has_internally_initialized_ancestor"] = len(internally_initialized_ancestors) > 0
+    fields_dict["internally_initialized_parents"] = internal_parent_layer_labels
+    fields_dict["internally_initialized_ancestors"] = internally_initialized_ancestors
+    fields_dict["terminated_inside_model"] = False
+    fields_dict["is_terminal_bool_layer"] = False
+    fields_dict["in_cond_branch"] = False
+    fields_dict["cond_branch_start_children"] = []
+
+    is_part_of_iterable_output = any(
+        issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]
+    )
+    fields_dict["is_part_of_iterable_output"] = is_part_of_iterable_output
+
+
+def _build_param_fields(
+    self,
+    fields_dict: Dict[str, Any],
+    all_args: List,
+) -> Dict:
+    """Populate parameter-involvement fields. Returns parent_param_passes dict."""
+    arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
+    parent_param_passes = _process_parent_param_passes(arg_parameters)
+    indiv_param_barcodes = list(parent_param_passes.keys())
+
+    parent_param_logs = []
+    for param in arg_parameters:
+        addr = getattr(param, "tl_param_address", None)
+        if addr is not None and addr in self.param_logs:
+            parent_param_logs.append(self.param_logs[addr])
+
+    fields_dict["computed_with_params"] = len(parent_param_passes) > 0
+    fields_dict["parent_params"] = arg_parameters
+    fields_dict["parent_param_barcodes"] = indiv_param_barcodes
+    fields_dict["parent_param_passes"] = parent_param_passes
+    fields_dict["parent_param_logs"] = parent_param_logs
+    fields_dict["num_param_tensors"] = len(arg_parameters)
+    fields_dict["parent_param_shapes"] = [tuple(param.shape) for param in arg_parameters]
+    fields_dict["num_params_total"] = int(
+        np.sum([np.prod(shape) for shape in fields_dict["parent_param_shapes"]])
+    )
+    fields_dict["num_params_trainable"] = sum(
+        pl.num_params for pl in parent_param_logs if pl.trainable
+    )
+    fields_dict["num_params_frozen"] = sum(
+        pl.num_params for pl in parent_param_logs if not pl.trainable
+    )
+    fields_dict["parent_params_fsize"] = int(
+        np.sum([get_tensor_memory_amount(p) for p in arg_parameters])
+    )
+    fields_dict["parent_params_fsize_nice"] = human_readable_size(
+        fields_dict["parent_params_fsize"]
+    )
+    return parent_param_passes
+
+
+def _build_module_context_fields(
+    self,
+    fields_dict: Dict[str, Any],
+    arg_tensors: List,
+    parent_layer_entries: List,
+) -> None:
+    """Populate module nesting, address, and input/output status fields."""
+    containing_modules_origin_nested = _get_input_module_info(self, arg_tensors)
+    if len(containing_modules_origin_nested) > 0:
+        is_computed_inside_submodule = True
+        containing_module_origin = containing_modules_origin_nested[-1]
+    else:
+        is_computed_inside_submodule = False
+        containing_module_origin = None
+
+    fields_dict["is_computed_inside_submodule"] = is_computed_inside_submodule
+    fields_dict["containing_module_origin"] = containing_module_origin
+    fields_dict["containing_modules_origin_nested"] = containing_modules_origin_nested
+    fields_dict["module_nesting_depth"] = len(containing_modules_origin_nested)
+    fields_dict["modules_entered"] = []
+    fields_dict["modules_entered_argnames"] = defaultdict(list)
+    fields_dict["module_passes_entered"] = []
+    fields_dict["is_submodule_input"] = False
+    fields_dict["modules_exited"] = []
+    fields_dict["module_passes_exited"] = []
+    fields_dict["is_submodule_output"] = False
+    fields_dict["is_bottom_level_submodule_output"] = False
+    fields_dict["bottom_level_submodule_pass_exited"] = None
+    fields_dict["module_entry_exit_threads_inputs"] = {
+        p.tensor_label_raw: p.module_entry_exit_thread_output[:] for p in parent_layer_entries
+    }
+    fields_dict["module_entry_exit_thread_output"] = []
 
 
 def _build_shared_fields_dict(
@@ -96,9 +226,7 @@ def _build_shared_fields_dict(
     args: Tuple[Any],
     kwargs: Dict[str, Any],
     out_orig: Any,
-    func_time_elapsed: float,
-    func_rng_states: Dict,
-    func_autocast_state: Dict,
+    exec_ctx: FuncExecutionContext,
 ) -> Tuple[Dict[str, Any], List, List, Dict]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
@@ -134,9 +262,9 @@ def _build_shared_fields_dict(
     fields_dict["func_applied"] = func
     fields_dict["func_applied_name"] = func_name
     fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)
-    fields_dict["func_time_elapsed"] = func_time_elapsed
-    fields_dict["func_rng_states"] = func_rng_states
-    fields_dict["func_autocast_state"] = func_autocast_state
+    fields_dict["func_time_elapsed"] = exec_ctx.time_elapsed
+    fields_dict["func_rng_states"] = exec_ctx.rng_states
+    fields_dict["func_autocast_state"] = exec_ctx.autocast_state
     fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())
     fields_dict["num_func_args_total"] = len(args) + len(kwargs)
     fields_dict["num_position_args"] = len(args)
@@ -145,117 +273,11 @@ def _build_shared_fields_dict(
     fields_dict["func_keyword_args_non_tensor"] = non_tensor_kwargs
     fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(non_tensor_kwargs.values())
 
-    # Graph info
-    parent_layer_arg_locs = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
-    (
-        input_ancestors,
-        internally_initialized_ancestors,
-    ) = _get_ancestors_from_parents(parent_layer_entries)
-    internal_parent_layer_labels = [
-        label for label in parent_layer_labels if self[label].has_internally_initialized_ancestor
-    ]
-
-    fields_dict["parent_layers"] = parent_layer_labels
-    fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
-    fields_dict["has_parents"] = len(fields_dict["parent_layers"]) > 0
-    fields_dict["orig_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
-    fields_dict["child_layers"] = []
-    fields_dict["has_children"] = False
-    fields_dict["sibling_layers"] = []
-    fields_dict["has_siblings"] = False
-    fields_dict["spouse_layers"] = []
-    fields_dict["has_spouses"] = False
-    fields_dict["is_input_layer"] = False
-    fields_dict["has_input_ancestor"] = len(input_ancestors) > 0
-    fields_dict["input_ancestors"] = input_ancestors
-    fields_dict["min_distance_from_input"] = None
-    fields_dict["max_distance_from_input"] = None
-    fields_dict["is_output_layer"] = False
-    fields_dict["is_output_parent"] = False
-    fields_dict["is_last_output_layer"] = False
-    fields_dict["is_output_ancestor"] = False
-    fields_dict["output_descendents"] = set()
-    fields_dict["min_distance_from_output"] = None
-    fields_dict["max_distance_from_output"] = None
-    fields_dict["input_output_address"] = None
-    fields_dict["is_buffer_layer"] = False
-    fields_dict["buffer_address"] = None
-    fields_dict["buffer_pass"] = None
-    fields_dict["buffer_parent"] = None
-    fields_dict["initialized_inside_model"] = len(parent_layer_labels) == 0
-    fields_dict["has_internally_initialized_ancestor"] = len(internally_initialized_ancestors) > 0
-    fields_dict["internally_initialized_parents"] = internal_parent_layer_labels
-    fields_dict["internally_initialized_ancestors"] = internally_initialized_ancestors
-    fields_dict["terminated_inside_model"] = False
-    fields_dict["is_terminal_bool_layer"] = False
-    fields_dict["in_cond_branch"] = False
-    fields_dict["cond_branch_start_children"] = []
-
-    # Param info
-    arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
-    parent_param_passes = _process_parent_param_passes(arg_parameters)
-    indiv_param_barcodes = list(parent_param_passes.keys())
-
-    parent_param_logs = []
-    for param in arg_parameters:
-        addr = getattr(param, "tl_param_address", None)
-        if addr is not None and addr in self.param_logs:
-            parent_param_logs.append(self.param_logs[addr])
-
-    fields_dict["computed_with_params"] = len(parent_param_passes) > 0
-    fields_dict["parent_params"] = arg_parameters
-    fields_dict["parent_param_barcodes"] = indiv_param_barcodes
-    fields_dict["parent_param_passes"] = parent_param_passes
-    fields_dict["parent_param_logs"] = parent_param_logs
-    fields_dict["num_param_tensors"] = len(arg_parameters)
-    fields_dict["parent_param_shapes"] = [tuple(param.shape) for param in arg_parameters]
-    fields_dict["num_params_total"] = int(
-        np.sum([np.prod(shape) for shape in fields_dict["parent_param_shapes"]])
+    _build_graph_relationship_fields(
+        self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
     )
-    fields_dict["num_params_trainable"] = sum(
-        pl.num_params for pl in parent_param_logs if pl.trainable
-    )
-    fields_dict["num_params_frozen"] = sum(
-        pl.num_params for pl in parent_param_logs if not pl.trainable
-    )
-    fields_dict["parent_params_fsize"] = int(
-        np.sum([get_tensor_memory_amount(p) for p in arg_parameters])
-    )
-    fields_dict["parent_params_fsize_nice"] = human_readable_size(
-        fields_dict["parent_params_fsize"]
-    )
-
-    # Module info
-    containing_modules_origin_nested = _get_input_module_info(self, arg_tensors)
-    if len(containing_modules_origin_nested) > 0:
-        is_computed_inside_submodule = True
-        containing_module_origin = containing_modules_origin_nested[-1]
-    else:
-        is_computed_inside_submodule = False
-        containing_module_origin = None
-
-    fields_dict["is_computed_inside_submodule"] = is_computed_inside_submodule
-    fields_dict["containing_module_origin"] = containing_module_origin
-    fields_dict["containing_modules_origin_nested"] = containing_modules_origin_nested
-    fields_dict["module_nesting_depth"] = len(containing_modules_origin_nested)
-    fields_dict["modules_entered"] = []
-    fields_dict["modules_entered_argnames"] = defaultdict(list)
-    fields_dict["module_passes_entered"] = []
-    fields_dict["is_submodule_input"] = False
-    fields_dict["modules_exited"] = []
-    fields_dict["module_passes_exited"] = []
-    fields_dict["is_submodule_output"] = False
-    fields_dict["is_bottom_level_submodule_output"] = False
-    fields_dict["bottom_level_submodule_pass_exited"] = None
-    fields_dict["module_entry_exit_threads_inputs"] = {
-        p.tensor_label_raw: p.module_entry_exit_thread_output[:] for p in parent_layer_entries
-    }
-    fields_dict["module_entry_exit_thread_output"] = []
-
-    is_part_of_iterable_output = any(
-        [issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]]
-    )
-    fields_dict["is_part_of_iterable_output"] = is_part_of_iterable_output
+    parent_param_passes = _build_param_fields(self, fields_dict, all_args)
+    _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
 
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_passes
 
@@ -317,9 +339,7 @@ def log_function_output_tensors_exhaustive(
     arg_copies: Tuple[Any],
     kwarg_copies: Dict[str, Any],
     out_orig: Any,
-    func_time_elapsed: float,
-    func_rng_states: Dict,
-    func_autocast_state: Dict,
+    exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
 ):
     """Logs tensor or set of tensors that were computed from a function call.
@@ -331,8 +351,7 @@ def log_function_output_tensors_exhaustive(
         arg_copies: copies of positional arguments to function that was called
         kwarg_copies: copies of keyword arguments to function that was called
         out_orig: original output from function
-        func_time_elapsed: time it took for the function to run
-        func_rng_states: states of the random number generator when the function is called
+        exec_ctx: Timing, RNG, and autocast state captured around the function call.
         is_bottom_level_func: whether the function is at the bottom-level of function nesting
     """
     fields_dict, parent_layer_entries, arg_tensors, parent_param_passes = _build_shared_fields_dict(
@@ -342,9 +361,7 @@ def log_function_output_tensors_exhaustive(
         args,
         kwargs,
         out_orig,
-        func_time_elapsed,
-        func_rng_states,
-        func_autocast_state,
+        exec_ctx,
     )
 
     out_iter = ensure_iterable(out_orig)
@@ -408,9 +425,7 @@ def log_function_output_tensors_fast(
     arg_copies: Tuple[Any],
     kwarg_copies: Dict[str, Any],
     out_orig: Any,
-    func_time_elapsed: float,
-    func_rng_states: Dict,
-    func_autocast_state: Dict,
+    exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
 ):
     # Collect information.
@@ -510,9 +525,9 @@ def log_function_output_tensors_fast(
         orig_tensor_entry.tensor_dtype = out.dtype
         orig_tensor_entry.tensor_fsize = get_tensor_memory_amount(out)
         orig_tensor_entry.tensor_fsize_nice = human_readable_size(get_tensor_memory_amount(out))
-        orig_tensor_entry.func_time_elapsed = func_time_elapsed
-        orig_tensor_entry.func_rng_states = func_rng_states
-        orig_tensor_entry.func_autocast_state = func_autocast_state
+        orig_tensor_entry.func_time_elapsed = exec_ctx.time_elapsed
+        orig_tensor_entry.func_rng_states = exec_ctx.rng_states
+        orig_tensor_entry.func_autocast_state = exec_ctx.autocast_state
         orig_tensor_entry.func_position_args_non_tensor = non_tensor_args
         orig_tensor_entry.func_keyword_args_non_tensor = non_tensor_kwargs
 
