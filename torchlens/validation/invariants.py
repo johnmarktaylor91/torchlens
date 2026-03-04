@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
+    from ..data_classes.module_log import ModuleLog
 
 
 class MetadataInvariantError(ValueError):
@@ -567,12 +568,12 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
         # Address hierarchy bidirectional
         if mod_log.address_parent is not None:
             try:
-                parent = mod_accessor[mod_log.address_parent]
+                parent: ModuleLog = mod_accessor[mod_log.address_parent]  # type: ignore[assignment]
             except (KeyError, IndexError):
                 # Parent module may be a container (ModuleList, ModuleDict)
                 # that is never called during the forward pass, so no
                 # ModuleLog exists.  Skip rather than error.
-                parent = None
+                parent = None  # type: ignore[assignment]
             if parent is not None and addr not in parent.address_children:
                 # For shared modules, addr may be an alias that the parent
                 # lists under a different address prefix.  Check if any of the
@@ -586,7 +587,7 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
 
         for child_addr in mod_log.address_children:
             try:
-                child = mod_accessor[child_addr]
+                child: ModuleLog = mod_accessor[child_addr]  # type: ignore[assignment]
             except (KeyError, IndexError):
                 # Static children may not have been invoked during the forward
                 # pass, so no ModuleLog exists.  Skip rather than error.
@@ -1146,7 +1147,7 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
                 )
             visited.add(current)
             try:
-                parent_mod = mod_accessor[current]
+                parent_mod: ModuleLog = mod_accessor[current]  # type: ignore[assignment]
             except (KeyError, IndexError):
                 break
             current = parent_mod.address_parent

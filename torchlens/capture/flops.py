@@ -21,7 +21,7 @@ Maintenance — checking coverage against the full op list:
     # Run scripts/check_flops_coverage.py for a detailed breakdown.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 import math
 
 
@@ -656,7 +656,9 @@ def _addmm_flops(output_shape, parent_param_shapes, creation_args) -> Optional[i
     if len(a_shape) < 2 or len(b_shape) < 2:
         return None
     m, k, n = a_shape[-2], a_shape[-1], b_shape[-1]
-    return 2 * m * k * n + _numel(output_shape)
+    # Account for batch dimension (addbmm/baddbmm have 3D inputs)
+    batch = _prod(a_shape[:-2]) if len(a_shape) > 2 else 1
+    return 2 * batch * m * k * n + _numel(output_shape)
 
 
 def _linear_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
@@ -815,14 +817,21 @@ def _log_softmax_flops(output_shape, parent_param_shapes, creation_args) -> int:
 
 def _pool_flops(output_shape, parent_param_shapes, creation_args) -> int:
     """Pooling: ~kernel_size comparisons/additions per output element.
-    Approximate as output_numel since kernel_size is typically small.
 
     Args:
         output_shape: Shape of the output tensor.
         parent_param_shapes: Shapes of parameter tensors involved.
-        creation_args: Positional args to the function.
+        creation_args: Positional args to the function (input, kernel_size, ...).
     """
-    return _numel(output_shape)
+    out_numel = _numel(output_shape)
+    # Try to extract kernel_size from creation_args[1]
+    if creation_args and len(creation_args) >= 2:
+        ks = creation_args[1]
+        if isinstance(ks, int):
+            return out_numel * ks
+        elif isinstance(ks, (tuple, list)) and all(isinstance(v, int) for v in ks):
+            return out_numel * _prod(ks)
+    return out_numel
 
 
 def _adaptive_pool_flops(output_shape, parent_param_shapes, creation_args) -> int:
@@ -943,6 +952,35 @@ def _binary_cross_entropy_flops(output_shape, parent_param_shapes, creation_args
     return None
 
 
+def _einsum_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
+    """Einsum: extract tensor operands (skip subscript string) and compute matmul-like FLOPs.
+
+    For two-operand einsums that look like matrix multiplication, this gives
+    a reasonable estimate. For more exotic subscripts, returns None.
+    """
+    if not creation_args:
+        return None
+    # Skip the subscript string argument(s) and collect tensor shapes
+    shapes = []
+    for arg in creation_args:
+        s = _safe_shape(arg)
+        if s is not None and len(s) >= 1:
+            shapes.append(s)
+    if len(shapes) != 2:
+        # Multi-operand or no-operand einsum — too complex to estimate
+        return None
+    a_shape, b_shape = shapes[0], shapes[1]
+    if len(a_shape) == 0 or len(b_shape) == 0:
+        return None
+    # Treat as matmul: use shared (contracted) dimension
+    # For 2D x 2D: M x K @ K x N = 2*M*K*N
+    m = a_shape[-2] if len(a_shape) >= 2 else 1
+    k = a_shape[-1]
+    n = b_shape[-1]
+    batch = _prod(output_shape[:-2]) if output_shape and len(output_shape) > 2 else 1
+    return 2 * batch * m * k * n
+
+
 def _sdpa_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
     """Scaled dot-product attention: Q@K^T + scale + softmax + attn@V.
 
@@ -971,8 +1009,11 @@ def _sdpa_flops(output_shape, parent_param_shapes, creation_args) -> Optional[in
     return qk_flops + softmax_flops + av_flops
 
 
+# Type alias for FLOPs handler functions
+_FlopsHandler = Callable[[Optional[Tuple[int, ...]], list, tuple], Optional[int]]
+
 # Registry mapping func_applied_name to handler
-SPECIALTY_HANDLERS = {
+SPECIALTY_HANDLERS: Dict[str, _FlopsHandler] = {
     # MatMul family
     "mm": _matmul_flops,
     "matmul": _matmul_flops,
@@ -1138,7 +1179,7 @@ SPECIALTY_HANDLERS = {
     "kl_div": _reduction_flops,
     "ctc_loss": _reduction_flops,
     # Einsum
-    "einsum": _matmul_flops,
+    "einsum": _einsum_flops,
     # Cosine similarity / distance
     "cosine_similarity": _norm_flops,
     "pairwise_distance": _norm_flops,

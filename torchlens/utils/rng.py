@@ -1,7 +1,7 @@
 """RNG and autocast state capture/restore for reproducible forward-pass replay."""
 
 import random
-from typing import Dict
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
@@ -89,7 +89,7 @@ class AutocastRestore:
 
     def __init__(self, autocast_state: Dict):
         self._autocast_state = autocast_state
-        self._contexts = []
+        self._contexts: List[Any] = []
 
     def __enter__(self):
         for device, state in self._autocast_state.items():

@@ -513,6 +513,8 @@ def _get_torch_overridable_functions() -> List:
     runs once per process.  The returned list is used to build ``ORIG_TORCH_FUNCS``,
     which drives the one-time decoration performed by ``decorate_all_once()``.
     """
+    ignored_funcs_set = get_ignored_functions()
+    testing_overrides_set = get_testing_overrides()
     func_names = []
     tested_namespaces = [
         ("torch", torch, torch.__all__ + dir(torch._C._VariableFunctions)),
@@ -556,12 +558,12 @@ def _get_torch_overridable_functions() -> List:
             if not callable(func) and hasattr(func, "__get__"):
                 if ignore:
                     continue
-                if func.__get__ in get_ignored_functions():
+                if func.__get__ in ignored_funcs_set:
                     msg = (
                         "{}.{} is in the tuple returned by torch._overrides.get_ignored_functions "
                         "but still has an explicit override"
                     )
-                    assert func.__get__ not in get_testing_overrides(), msg.format(
+                    assert func.__get__ not in testing_overrides_set, msg.format(
                         namespace, func.__name__
                     )
                     continue
@@ -576,12 +578,12 @@ def _get_torch_overridable_functions() -> List:
                 continue
 
             # cannot be overridden by __torch_function__
-            if func in get_ignored_functions():
+            if func in ignored_funcs_set:
                 msg = (
                     "{}.{} is in the tuple returned by torch._overrides.get_ignored_functions "
                     "but still has an explicit override"
                 )
-                assert func not in get_testing_overrides(), msg.format(namespace, func.__name__)
+                assert func not in testing_overrides_set, msg.format(namespace, func.__name__)
                 continue
             func_names.append((f"{namespace_str}", func_name))
     return func_names
