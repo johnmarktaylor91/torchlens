@@ -193,27 +193,27 @@ class _SharedBufferModel(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# safe_copy tests (bugs #103, #137, #128, #139)
+# safe_copy tests
 # ---------------------------------------------------------------------------
 
 
 class TestSafeCopy:
     def test_safe_copy_parameter(self):
-        """#103: safe_copy must handle nn.Parameter subclass correctly."""
+        """safe_copy must handle nn.Parameter subclass correctly."""
         p = nn.Parameter(torch.randn(3, 3))
         copied = safe_copy(p)
         assert isinstance(copied, torch.Tensor)
         assert torch.equal(p.data, copied.data)
 
     def test_safe_copy_parameter_detached(self):
-        """#103: safe_copy(detach_tensor=True) should return Parameter for Parameter input."""
+        """safe_copy(detach_tensor=True) should return Parameter for Parameter input."""
         p = nn.Parameter(torch.randn(3, 3))
         copied = safe_copy(p, detach_tensor=True)
         assert isinstance(copied, nn.Parameter)
         assert torch.equal(p.data, copied.data)
 
     def test_safe_copy_subclass(self):
-        """#103: safe_copy must handle tensor subclasses via isinstance."""
+        """safe_copy must handle tensor subclasses via isinstance."""
 
         class MyTensor(torch.Tensor):
             pass
@@ -223,13 +223,13 @@ class TestSafeCopy:
         assert isinstance(copied, torch.Tensor)
 
     def test_safe_copy_bfloat16_preserves_range(self):
-        """#137: bfloat16 values > 65504 must not overflow (use float32, not float16)."""
+        """bfloat16 values > 65504 must not overflow (use float32, not float16)."""
         t = torch.tensor([70000.0, 100000.0], dtype=torch.bfloat16)
         copied = safe_copy(t, detach_tensor=True)
         assert copied.max().item() > 65504
 
     def test_safe_copy_detach_no_numpy(self):
-        """#128/#139: detach path should use pure torch, no numpy round-trip."""
+        """detach path should use pure torch, no numpy round-trip."""
         t = torch.randn(3, 3)
         copied = safe_copy(t, detach_tensor=True)
         assert isinstance(copied, torch.Tensor)
@@ -252,7 +252,7 @@ class TestSafeCopy:
         assert copied is not d
 
     def test_safe_copy_meta_tensor(self):
-        """#128: safe_copy should handle meta tensors without crash."""
+        """safe_copy should handle meta tensors without crash."""
         t = torch.randn(3, 3, device="meta")
         copied = safe_copy(t, detach_tensor=True)
         assert isinstance(copied, torch.Tensor)
@@ -267,13 +267,13 @@ class TestSafeTo:
 
 
 # ---------------------------------------------------------------------------
-# print_override tests (bug #140)
+# print_override tests
 # ---------------------------------------------------------------------------
 
 
 class TestPrintOverride:
     def test_print_override_bfloat16(self):
-        """#140: bfloat16 should not crash."""
+        """bfloat16 should not crash."""
         t = torch.tensor([70000.0], dtype=torch.bfloat16)
         result = print_override(t, "__repr__")
         assert "tensor" in result
@@ -285,13 +285,13 @@ class TestPrintOverride:
 
 
 # ---------------------------------------------------------------------------
-# get_tensor_memory_amount tests (bug #24)
+# get_tensor_memory_amount tests
 # ---------------------------------------------------------------------------
 
 
 class TestGetTensorMemory:
     def test_meta_tensor_returns_zero(self):
-        """#24: meta tensors should return 0 bytes."""
+        """meta tensors should return 0 bytes."""
         t = torch.randn(100, 100, device="meta")
         assert get_tensor_memory_amount(t) == 0
 
@@ -301,13 +301,13 @@ class TestGetTensorMemory:
 
 
 # ---------------------------------------------------------------------------
-# _safe_copy_arg tests (bug #127)
+# _safe_copy_arg tests
 # ---------------------------------------------------------------------------
 
 
 class TestSafeCopyArg:
     def test_defaultdict_preserved(self):
-        """#127: defaultdict should preserve its default_factory."""
+        """defaultdict should preserve its default_factory."""
         dd = defaultdict(list, {"a": [1, 2], "b": [3]})
         copied = _safe_copy_arg(dd)
         assert isinstance(copied, defaultdict)
@@ -324,20 +324,20 @@ class TestSafeCopyArg:
 
 
 # ---------------------------------------------------------------------------
-# Exception safety tests (bugs #122, #153, #117)
+# Exception safety tests
 # ---------------------------------------------------------------------------
 
 
 class TestModuleExceptionCleanup:
     def test_failing_model_raises(self):
-        """#122: Model that raises should propagate exception."""
+        """Model that raises should propagate exception."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
         with pytest.raises(RuntimeError, match="Intentional test error"):
             log_forward_pass(model, x)
 
     def test_failing_model_cleanup(self):
-        """#122: After a failed forward pass, subsequent calls should work."""
+        """After a failed forward pass, subsequent calls should work."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
         with pytest.raises(RuntimeError):
@@ -349,7 +349,7 @@ class TestModuleExceptionCleanup:
 
 class TestEmptyModelGraph:
     def test_constant_output_model(self):
-        """#153: Model returning input unchanged should not crash."""
+        """Model returning input unchanged should not crash."""
         model = _ConstantOutputModel()
         x = torch.randn(2, 10)
         try:
@@ -360,7 +360,7 @@ class TestEmptyModelGraph:
 
 class TestIdentityModel:
     def test_identity_model_basic(self):
-        """#117: Identity model should log correctly."""
+        """Identity model should log correctly."""
         model = _IdentityModel()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x)
@@ -368,20 +368,20 @@ class TestIdentityModel:
 
 
 # ---------------------------------------------------------------------------
-# Buffer duplicate tests (bug #116)
+# Buffer duplicate tests
 # ---------------------------------------------------------------------------
 
 
 class TestBufferDuplicate:
     def test_shared_buffer_no_crash(self):
-        """#116: Model with buffer used in multiple ops should not crash."""
+        """Model with buffer used in multiple ops should not crash."""
         model = _SharedBufferModel()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x)
         assert log is not None
 
     def test_shared_buffer_fast_path(self):
-        """#116: save_new_activations with shared buffer should not crash."""
+        """save_new_activations with shared buffer should not crash."""
         model = _SharedBufferModel()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x)
@@ -390,7 +390,7 @@ class TestBufferDuplicate:
 
 class TestBufferMerge:
     def test_buffer_model_no_crash(self):
-        """#2: BatchNorm model with buffers should log correctly."""
+        """BatchNorm model with buffers should log correctly."""
 
         class BNModel(nn.Module):
             def __init__(self):
@@ -408,11 +408,11 @@ class TestBufferMerge:
 
 
 # ---------------------------------------------------------------------------
-# Dead type check (bug #28)
+# Dead type check
 # ---------------------------------------------------------------------------
 
 
-class TestBug28DeadTypeCheck:
+class TestDeadTypeCheck:
     def test_nested_tensor_found(self):
         """Tensors nested in custom objects should be findable."""
         from torchlens.utils.introspection import get_vars_of_type_from_obj
@@ -428,13 +428,13 @@ class TestBug28DeadTypeCheck:
 
 
 # ---------------------------------------------------------------------------
-# IPython lazy import (bug #72)
+# IPython lazy import
 # ---------------------------------------------------------------------------
 
 
 class TestIPythonNotRequired:
     def test_display_module_loads(self):
-        """#72: display module should load without IPython."""
+        """display module should load without IPython."""
         from torchlens.utils.display import in_notebook
 
         assert in_notebook() is False
@@ -455,13 +455,13 @@ class TestCleanupReleasesReferences:
 
 
 # ---------------------------------------------------------------------------
-# Argument handling tests (bugs #44, #73, #45)
+# Argument handling tests
 # ---------------------------------------------------------------------------
 
 
 class TestNestedTupleArgs:
     def test_nested_tuple_independence(self):
-        """#44: Nested tuples/lists in creation_args should be independent copies."""
+        """Nested tuples/lists in creation_args should be independent copies."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x, save_function_args=True)
@@ -476,7 +476,7 @@ class TestNestedTupleArgs:
 
 class TestDisplayLargeTensor:
     def test_display_no_oom(self):
-        """#73: Displaying a large tensor should not clone the whole thing."""
+        """Displaying a large tensor should not clone the whole thing."""
         model = nn.Linear(100, 100)
         x = torch.randn(10, 100)
         log = log_forward_pass(model, x, layers_to_save="all")
@@ -487,7 +487,7 @@ class TestDisplayLargeTensor:
 
 class TestDisplayUsesLoggedShape:
     def test_shape_matches_capture_time(self):
-        """#45: tensor_shape should reflect capture-time shape."""
+        """tensor_shape should reflect capture-time shape."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x, layers_to_save="all")

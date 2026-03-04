@@ -677,7 +677,7 @@ class TestIntegration:
 
 
 class TestParamContains:
-    """Bug #84: ParamAccessor.__contains__ should support int."""
+    """ParamAccessor.__contains__ should support int."""
 
     def test_int_contains(self):
         model = _SimpleLinear()

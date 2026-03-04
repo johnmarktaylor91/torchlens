@@ -2,7 +2,7 @@
 
 Covers: successful re-extraction on simple models, multiple sequential calls,
 activation value correctness, and the known failure mode on models with
-identity-propagated operations (Bug #39).
+identity-propagated operations.
 """
 
 import warnings
@@ -153,7 +153,7 @@ def test_save_new_activations_layers_to_save():
 
 
 # =============================================================================
-# Known failure: torchvision models with identity-propagated ops (Bug #39)
+# Known failure: torchvision models with identity-propagated ops
 # =============================================================================
 
 
@@ -161,7 +161,7 @@ def test_save_new_activations_layers_to_save():
 def test_save_new_activations_alexnet_fails():
     """AlexNet save_new_activations fails due to identity op counter misalignment.
 
-    Bug #39: Identity operations (where output tensor has same barcode as input)
+    Identity operations (where output tensor has same barcode as input)
     are detected and dropped in the exhaustive pass via label propagation
     (decorate_torch.py:98-100). The fast pass counter diverges because identity
     detection may not fire identically, producing raw labels not in the original
@@ -223,10 +223,10 @@ class _SharedBufferModel(nn.Module):
 
 
 class TestSaveNewActivationsRegression:
-    """Bug #75: Zombie LayerPassLogs on repeated calls."""
+    """Zombie LayerPassLogs on repeated calls."""
 
     def test_save_new_activations_3x(self):
-        """#75: 3+ sequential save_new_activations calls should not crash."""
+        """3+ sequential save_new_activations calls should not crash."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x)
@@ -246,17 +246,17 @@ class TestSaveNewActivationsRegression:
 
 
 class TestSaveNewActivationsStateReset:
-    """Bugs #87, #92, #97, #98, #106: Stale state in save_new_activations."""
+    """Stale state in save_new_activations."""
 
     def test_timing_reset(self):
-        """#87: elapsed_time_function_calls should be fresh."""
+        """elapsed_time_function_calls should be fresh."""
         model = _SimpleLinear()
         log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
         log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
         assert log.elapsed_time_function_calls >= 0
 
     def test_lookup_keys_clean(self):
-        """#97, #98: Lookup caches should not have stale entries."""
+        """Lookup caches should not have stale entries."""
         model = _SimpleLinear()
         log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
         labels_pass1 = set(log.layer_labels)
@@ -273,7 +273,7 @@ class TestSaveNewActivationsStateReset:
             assert log.num_tensors_saved > 0
 
     def test_different_values(self):
-        """#92: Each pass should reflect new input values."""
+        """Each pass should reflect new input values."""
         model = _SimpleLinear()
         log = log_forward_pass(model, torch.ones(2, 10), layers_to_save="all")
         input_val_1 = log["input_1"].tensor_contents.clone()
@@ -283,7 +283,7 @@ class TestSaveNewActivationsStateReset:
 
 
 class TestOutputTensorIndependence:
-    """Bug #8: Fast-mode tensor_contents shared reference."""
+    """Fast-mode tensor_contents shared reference."""
 
     def test_output_independent_of_parent(self):
         model = _SimpleLinear()
@@ -302,8 +302,8 @@ class TestOutputTensorIndependence:
                     break
 
 
-class TestBug108FastPathModuleLogs:
-    """#108: postprocess_fast should preserve module logs from exhaustive pass."""
+class TestFastPathModuleLogs:
+    """postprocess_fast should preserve module logs from exhaustive pass."""
 
     def test_fast_path_preserves_module_logs(self):
         model = _SimpleLinear()
@@ -317,8 +317,8 @@ class TestBug108FastPathModuleLogs:
         assert [m.address for m in log.modules] == original_addresses
 
 
-class TestBug147DescriptiveValueError:
-    """#147: log_source_tensor_fast should give descriptive error on graph change."""
+class TestDescriptiveValueError:
+    """log_source_tensor_fast should give descriptive error on graph change."""
 
     def test_dynamic_graph_descriptive_error(self):
         class DynamicModel(nn.Module):
@@ -343,8 +343,8 @@ class TestBug147DescriptiveValueError:
             log.save_new_activations(model, torch.randn(2, 10))
 
 
-class TestBug19FastPassBufferOrphan:
-    """#19: Fast-pass should not KeyError on models with shared buffers."""
+class TestFastPassBufferOrphan:
+    """Fast-pass should not KeyError on models with shared buffers."""
 
     def test_shared_buffer_fast_path(self):
         model = _SharedBufferModel()
@@ -363,8 +363,8 @@ class TestBug19FastPassBufferOrphan:
         log.cleanup()
 
 
-class TestBug99GraphConsistencyValidation:
-    """#99: log_source_tensor_fast warns on shape mismatch."""
+class TestGraphConsistencyValidation:
+    """log_source_tensor_fast warns on shape mismatch."""
 
     def test_shape_mismatch_warns(self):
         model = _SimpleLinear()

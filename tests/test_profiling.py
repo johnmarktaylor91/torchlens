@@ -17,7 +17,7 @@ from os.path import join as opj
 import torch
 import torch.nn as nn
 
-from conftest import TEST_OUTPUTS_DIR
+from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR
 
 import example_models
 from torchlens import log_forward_pass, validate_forward_pass
@@ -32,7 +32,7 @@ class _ValidationTimeout(Exception):
 # Config
 # ---------------------------------------------------------------------------
 
-REPORT_PATH = opj(TEST_OUTPUTS_DIR, "profiling_report.txt")
+REPORT_PATH = opj(REPORTS_DIR, "profiling_report.txt")
 
 # Illustrative sampling across architecture families: toy models first,
 # then real-world torchvision models for realistic overhead measurement.
@@ -171,7 +171,7 @@ def _profile_model(name, model, input_tensor, description):
         sna_time = None
 
     # validate_forward_pass may fail for models that trigger known bugs
-    # (e.g. Bug #79: loop detection param-sharing fragmentation) or hang
+    # (e.g. loop detection param-sharing fragmentation) or hang
     # on large tensor comparisons.  Use a 60s signal-based timeout.
     def _alarm_handler(signum, frame):
         raise _ValidationTimeout()
@@ -311,7 +311,7 @@ def test_profiling_report():
 
     report = _generate_report(results)
 
-    os.makedirs(TEST_OUTPUTS_DIR, exist_ok=True)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
     with open(REPORT_PATH, "w") as f:
         f.write(report)
 
