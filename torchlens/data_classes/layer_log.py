@@ -1,8 +1,10 @@
-"""LayerLog: aggregate per-layer metadata grouping one or more LayerPassLog entries."""
+"""LayerLog and LayerAccessor: aggregate per-layer metadata and dict-like accessor."""
 
-from typing import Dict, List, TYPE_CHECKING
+from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .layer_pass_log import LayerPassLog
     from .model_log import ModelLog
     from .param_log import ParamLog
@@ -483,3 +485,84 @@ class LayerLog:
 
     def __len__(self):
         return self.num_passes
+
+
+class LayerAccessor:
+    """Dict-like accessor for LayerLog objects.
+
+    Supports indexing by layer label, ordinal index, or pass notation
+    (e.g. ``"conv2d_1_1:2"`` returns the LayerPassLog for pass 2).
+    """
+
+    def __init__(
+        self,
+        layer_logs: Dict[str, "LayerLog"],
+        source_model_log: Optional["ModelLog"] = None,
+    ):
+        self._dict = layer_logs
+        self._list = list(layer_logs.values())
+        self._source = source_model_log
+
+    def __getitem__(self, key: Union[int, str]) -> Union["LayerLog", "LayerPassLog"]:
+        """Return a LayerLog by label or index, or a LayerPassLog by pass label."""
+        if isinstance(key, int):
+            return self._list[key]
+        if key in self._dict:
+            return self._dict[key]
+        # Try pass notation: "conv2d_1_1:2" → LayerLog.passes[2]
+        if ":" in key and self._source is not None:
+            base, _, pass_str = key.rpartition(":")
+            if base in self._dict:
+                try:
+                    pass_num = int(pass_str)
+                    return self._dict[base].passes[pass_num]
+                except (ValueError, KeyError):
+                    pass
+        raise KeyError(f"Layer '{key}' not found. Valid labels: {list(self._dict.keys())[:10]}...")
+
+    def __contains__(self, key) -> bool:
+        return key in self._dict
+
+    def __len__(self) -> int:
+        return len(self._dict)
+
+    def __iter__(self):
+        """Iterate over LayerLog objects in execution order."""
+        return iter(self._list)
+
+    def __repr__(self) -> str:
+        if len(self) == 0:
+            return "LayerAccessor({})"
+        items = []
+        for ll in self._list:
+            items.append(
+                f"  '{ll.layer_label}': {ll.func_applied_name or 'input'} "
+                f"(shape={list(ll.tensor_shape) if ll.tensor_shape else '?'}, "
+                f"passes={ll.num_passes})"
+            )
+        inner = "\n".join(items)
+        return f"LayerAccessor({len(self)} layers):\n{inner}"
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """One row per unique layer (aggregate view)."""
+        import pandas as pd
+
+        rows = []
+        for ll in self._list:
+            rows.append(
+                {
+                    "layer_label": ll.layer_label,
+                    "layer_type": ll.layer_type,
+                    "func_applied_name": ll.func_applied_name,
+                    "tensor_shape": ll.tensor_shape,
+                    "tensor_dtype": ll.tensor_dtype,
+                    "tensor_fsize_nice": ll.tensor_fsize_nice,
+                    "num_passes": ll.num_passes,
+                    "num_params_total": ll.num_params_total,
+                    "containing_module_origin": ll.containing_module_origin,
+                    "is_input_layer": ll.is_input_layer,
+                    "is_output_layer": ll.is_output_layer,
+                    "is_buffer_layer": ll.is_buffer_layer,
+                }
+            )
+        return pd.DataFrame(rows)

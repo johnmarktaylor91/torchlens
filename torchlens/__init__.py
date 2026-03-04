@@ -10,7 +10,7 @@ from .user_funcs import (
     validate_batch_of_models_and_inputs,
 )
 from .data_classes.model_log import ModelLog
-from .data_classes.layer_log import LayerLog
+from .data_classes.layer_log import LayerLog, LayerAccessor
 from .data_classes.layer_pass_log import LayerPassLog, TensorLog
 from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog
 

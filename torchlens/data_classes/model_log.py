@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Tupl
 
 if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
+    from .layer_log import LayerAccessor
 
 from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup
 from .module_log import ModuleAccessor
@@ -272,6 +273,13 @@ class ModelLog:
     def params(self) -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
         return self.param_logs
+
+    @property
+    def layers(self) -> "LayerAccessor":
+        """Access aggregate per-layer metadata by label, index, or pass notation."""
+        from .layer_log import LayerAccessor
+
+        return LayerAccessor(self.layer_logs, source_model_log=self)
 
     @property
     def modules(self) -> "ModuleAccessor":
