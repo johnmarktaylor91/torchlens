@@ -709,3 +709,106 @@ class TestParamRefCleared:
             assert pl._param_ref is not None
         log.cleanup()
         # After cleanup, everything should be cleared
+
+
+# ---------------------------------------------------------------------------
+# Wave extras: remaining low-risk fixes
+# ---------------------------------------------------------------------------
+
+
+class TestBug108FastPathModuleLogs:
+    """#108: postprocess_fast should preserve module logs from exhaustive pass."""
+
+    def test_fast_path_preserves_module_logs(self):
+        """After save_new_activations, module logs should be preserved from exhaustive pass."""
+        model = SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        original_module_count = len(log.modules)
+        original_addresses = [m.address for m in log.modules]
+        assert original_module_count > 0
+
+        x2 = torch.randn(2, 10)
+        log.save_new_activations(model, x2)
+        assert len(log.modules) == original_module_count
+        assert [m.address for m in log.modules] == original_addresses
+
+
+class TestBug147DescriptiveValueError:
+    """#147: log_source_tensor_fast should give descriptive error on graph change."""
+
+    def test_dynamic_graph_descriptive_error(self):
+        """If graph changes between passes, error message should be descriptive."""
+
+        class DynamicModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = nn.Linear(10, 10)
+                self.linear2 = nn.Linear(10, 10)
+                self.call_count = 0
+
+            def forward(self, x):
+                self.call_count += 1
+                x = self.linear1(x)
+                if self.call_count > 1:
+                    # Add extra ops on second call to change graph
+                    x = self.linear2(x)
+                    x = torch.relu(x)
+                    x = self.linear2(x)
+                return x
+
+        model = DynamicModel()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+
+        x2 = torch.randn(2, 10)
+        with pytest.raises(ValueError, match="computational graph changed"):
+            log.save_new_activations(model, x2)
+
+
+class TestBug28DeadTypeCheck:
+    """#28: torch.Tensor should not be in the dead type check list."""
+
+    def test_nested_tensor_found(self):
+        """Tensors nested in custom objects should be findable."""
+        from torchlens.utils.introspection import get_vars_of_type_from_obj
+
+        class Container:
+            def __init__(self, t):
+                self.tensor = t
+
+        t = torch.randn(3)
+        container = Container(t)
+        results = get_vars_of_type_from_obj(container, torch.Tensor, search_depth=2)
+        assert len(results) >= 1
+
+
+class TestBug107TupleStringNormalization:
+    """#107: containing_modules_origin_nested should handle both tuple and string formats."""
+
+    def test_module_hierarchy_with_nested_model(self):
+        """Module hierarchy processing should work regardless of tuple/string format."""
+
+        class Inner(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(10, 10)
+
+            def forward(self, x):
+                return self.linear(x)
+
+        class Outer(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.inner = Inner()
+
+            def forward(self, x):
+                return self.inner(x)
+
+        model = Outer()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        # Should complete without error — module hierarchy correctly processed
+        assert len(log.modules) > 0
+        # Inner module should be accessible
+        assert "inner" in log.modules

@@ -262,7 +262,13 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     t.tl_tensor_label_raw = tensor_label_raw
     if tensor_label_raw in self.orphan_layers:
         return
-    orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
+    orig_tensor_label = self._raw_to_final_layer_labels.get(tensor_label_raw)
+    if orig_tensor_label is None:
+        raise ValueError(
+            f"Fast-path label '{tensor_label_raw}' has no mapping in _raw_to_final_layer_labels. "
+            f"This usually means the computational graph changed between the exhaustive pass "
+            f"and this fast pass (e.g., dynamic control flow). Use log_forward_pass() instead."
+        )
     if orig_tensor_label in self.unlogged_layers:
         return
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]

@@ -100,7 +100,7 @@ def _search_stack_for_vars_of_type(
             found_addresses_full.append(address_full)
             found_ids.add(id(item))
             continue
-        if item_class in [str, int, float, bool, np.ndarray, torch.Tensor]:
+        if item_class in [str, int, float, bool, np.ndarray]:
             continue
         _extend_search_stack_from_item(item, address, address_full, next_stack)
     return next_stack

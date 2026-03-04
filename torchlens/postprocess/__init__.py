@@ -169,4 +169,7 @@ def postprocess_fast(self: "ModelLog") -> None:
     torch.cuda.empty_cache()
     _log_time_elapsed(self)
     _build_layer_logs(self)
+    # Note: _build_module_logs is NOT called here because module structure
+    # doesn't change between passes and _module_build_data isn't repopulated
+    # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
     _set_pass_finished(self)

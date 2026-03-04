@@ -245,7 +245,11 @@ def _log_module_hierarchy_info_for_layer(
     containing_module_pass_label = None
     layer_label = layer_entry.layer_label
     for module_index, module_pass_label in enumerate(layer_entry.containing_modules_origin_nested):
-        module_name, module_pass = module_pass_label
+        if isinstance(module_pass_label, str):
+            module_name, module_pass = module_pass_label.rsplit(":", 1)
+            module_pass = int(module_pass)
+        else:
+            module_name, module_pass = module_pass_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
         mbd["module_num_tensors"][module_name] += 1
         mbd["module_pass_num_tensors"][module_pass_nice_label] += 1
