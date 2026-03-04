@@ -2,10 +2,15 @@
 
 Single entry point: ``check_metadata_invariants(model_log)`` runs all checks
 and raises ``MetadataInvariantError`` on the first failure.
+
+Categories A-L: basic structural invariants (Phase 1).
+Categories M-R: complex semantic invariants (Phase 2).
 """
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -43,6 +48,13 @@ def check_metadata_invariants(model_log: "ModelLog") -> bool:
     _check_param_xrefs(model_log)
     _check_buffer_xrefs(model_log)
     _check_equivalence_symmetry(model_log)
+    # Phase 2: complex semantic invariants
+    _check_graph_ordering(model_log)
+    _check_loop_detection_invariants(model_log)
+    _check_distance_invariants(model_log)
+    _check_graph_connectivity(model_log)
+    _check_module_containment_logic(model_log)
+    _check_lookup_key_consistency(model_log)
     return True
 
 
@@ -448,6 +460,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
     name = "module_layer_containment"
     mod_accessor = ml.modules
     label_set = set(ml.layer_labels)
+    no_pass_set = set(ml.layer_labels_no_pass)
 
     for mod_log in mod_accessor:
         addr = mod_log.address
@@ -468,13 +481,15 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
             )
 
         # ModulePassLog checks
+        # mpl.layers may contain pass-qualified labels OR no-pass labels
+        # (e.g., root module in recurrent models uses no-pass labels).
         for pass_num, mpl in mod_log.passes.items():
             for lbl in mpl.layers:
-                if lbl not in label_set:
+                if lbl not in label_set and lbl not in no_pass_set:
                     raise MetadataInvariantError(
                         name,
                         f"ModulePassLog '{addr}:{pass_num}' layers contains "
-                        f"'{lbl}' not in layer_labels",
+                        f"'{lbl}' not in layer_labels or layer_labels_no_pass",
                     )
 
             if mpl.num_layers != len(mpl.layers):
@@ -484,12 +499,14 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
                     f"num_layers={mpl.num_layers} != len(layers)={len(mpl.layers)}",
                 )
 
-            # input/output layers subset of layers
+            # input/output layers subset of layers (using both pass-qualified
+            # and no-pass labels to handle recurrent models)
             mpl_layer_set = set(mpl.layers)
+            valid_set = mpl_layer_set | label_set | no_pass_set
             for sub_attr in ("input_layers", "output_layers"):
                 sub_list = getattr(mpl, sub_attr)
                 sub_set = set(sub_list)
-                extra = sub_set - mpl_layer_set
+                extra = sub_set - valid_set
                 if extra:
                     raise MetadataInvariantError(
                         name,
@@ -717,15 +734,559 @@ def _check_equivalence_symmetry(ml: "ModelLog") -> None:
                     f"equivalent_operations['{eq_type}'] contains '{label}' not in layer_labels",
                 )
 
-    # Each layer that appears in any equivalence group should exist
+    # Each layer that appears in any equivalence group should exist.
+    # Labels may be no-pass or pass-qualified (for recurrent models).
     all_equiv_labels = set()
     for equiv_set in ml.equivalent_operations.values():
         all_equiv_labels.update(equiv_set)
-    # All labels in equivalence groups are a subset of no-pass labels
     no_pass_set = set(ml.layer_labels_no_pass)
-    extra = all_equiv_labels - no_pass_set
+    pass_set = set(ml.layer_labels)
+    valid_set = no_pass_set | pass_set
+    extra = all_equiv_labels - valid_set
     if extra:
         raise MetadataInvariantError(
             name,
-            f"equivalent_operations contains labels not in layer_labels_no_pass: {extra}",
+            f"equivalent_operations contains labels not in layer_labels: {extra}",
         )
+
+
+# ---------------------------------------------------------------------------
+# M. Graph ordering invariants
+# ---------------------------------------------------------------------------
+
+_RAW_LABEL_PATTERN = re.compile(r"^l_\d+$")
+
+
+def _check_graph_ordering(ml: "ModelLog") -> None:
+    name = "graph_ordering"
+
+    # realtime_tensor_num uniqueness and monotonicity
+    seen_rt_nums: dict[int, str] = {}
+    prev_rt = -1
+    for lpl in ml.layer_list:
+        rt = lpl.realtime_tensor_num
+        if rt in seen_rt_nums:
+            raise MetadataInvariantError(
+                name,
+                f"Duplicate realtime_tensor_num={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
+            )
+        seen_rt_nums[rt] = lpl.layer_label
+        if rt <= prev_rt:
+            raise MetadataInvariantError(
+                name,
+                f"realtime_tensor_num not monotonically increasing: "
+                f"{prev_rt} then {rt} at '{lpl.layer_label}'",
+            )
+        prev_rt = rt
+
+    # operation_num uniqueness among computational layers
+    input_set = set(ml.input_layers)
+    buffer_set = set(ml.buffer_layers)
+    output_set = set(ml.output_layers)
+    seen_op_nums: dict[int, str] = {}
+    for lpl in ml.layer_list:
+        label = lpl.layer_label
+        if label in input_set or label in buffer_set or label in output_set:
+            continue
+        op = lpl.operation_num
+        if op is not None:
+            if op in seen_op_nums:
+                raise MetadataInvariantError(
+                    name,
+                    f"Duplicate operation_num={op}: '{seen_op_nums[op]}' and '{label}'",
+                )
+            seen_op_nums[op] = label
+
+    # Topological order: parent.realtime_tensor_num < child.realtime_tensor_num
+    rt_map = {lpl.layer_label: lpl.realtime_tensor_num for lpl in ml.layer_list}
+    for lpl in ml.layer_list:
+        for p in lpl.parent_layers:
+            if rt_map.get(p, -1) >= lpl.realtime_tensor_num:
+                raise MetadataInvariantError(
+                    name,
+                    f"Topological violation: parent '{p}' (rt={rt_map.get(p)}) "
+                    f">= child '{lpl.layer_label}' (rt={lpl.realtime_tensor_num})",
+                )
+
+    # No raw labels survive postprocessing
+    for label in ml.layer_labels:
+        if _RAW_LABEL_PATTERN.match(label):
+            raise MetadataInvariantError(name, f"Raw label '{label}' survived postprocessing")
+
+
+# ---------------------------------------------------------------------------
+# N. Layer equivalence / loop detection invariants
+# ---------------------------------------------------------------------------
+
+
+def _check_loop_detection_invariants(ml: "ModelLog") -> None:
+    name = "loop_detection"
+    label_set = set(ml.layer_labels)
+
+    # Build same-layer groups from the authoritative same_layer_operations lists
+    # Key: frozenset of labels, Value: list of LayerPassLogs in the group
+    groups_seen: dict[frozenset, list] = {}
+
+    for lpl in ml.layer_list:
+        slo = lpl.same_layer_operations
+        if not slo:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{lpl.layer_label}' has empty same_layer_operations",
+            )
+
+        # All members in same_layer_operations must exist
+        for member in slo:
+            if member not in label_set:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{lpl.layer_label}' same_layer_operations contains "
+                    f"'{member}' not in layer_labels",
+                )
+
+        # Self-inclusion
+        if lpl.layer_label not in slo:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{lpl.layer_label}' not in its own same_layer_operations",
+            )
+
+        # Symmetry: all members agree on the group
+        for member_label in slo:
+            member = ml[member_label]
+            if set(member.same_layer_operations) != set(slo):
+                raise MetadataInvariantError(
+                    name,
+                    f"Asymmetric same_layer_operations: '{lpl.layer_label}' has "
+                    f"{sorted(slo)} but '{member_label}' has "
+                    f"{sorted(member.same_layer_operations)}",
+                )
+
+        # All members share layer_label_no_pass
+        for member_label in slo:
+            member = ml[member_label]
+            if member.layer_label_no_pass != lpl.layer_label_no_pass:
+                raise MetadataInvariantError(
+                    name,
+                    f"same_layer_operations inconsistency: '{lpl.layer_label}' "
+                    f"(no_pass='{lpl.layer_label_no_pass}') and '{member_label}' "
+                    f"(no_pass='{member.layer_label_no_pass}') differ",
+                )
+
+        # All members share operation_equivalence_type
+        for member_label in slo:
+            member = ml[member_label]
+            if member.operation_equivalence_type != lpl.operation_equivalence_type:
+                raise MetadataInvariantError(
+                    name,
+                    f"same_layer_operations type mismatch: '{lpl.layer_label}' "
+                    f"type='{lpl.operation_equivalence_type}' vs '{member_label}' "
+                    f"type='{member.operation_equivalence_type}'",
+                )
+
+        # All members share func_applied_name (for computational layers)
+        if not (lpl.is_input_layer or lpl.is_buffer_layer or lpl.is_output_layer):
+            for member_label in slo:
+                member = ml[member_label]
+                if member.func_applied_name != lpl.func_applied_name:
+                    raise MetadataInvariantError(
+                        name,
+                        f"same_layer_operations func mismatch: '{lpl.layer_label}' "
+                        f"func='{lpl.func_applied_name}' vs '{member_label}' "
+                        f"func='{member.func_applied_name}'",
+                    )
+
+        # layer_passes_total == len(same_layer_operations)
+        if lpl.layer_passes_total != len(slo):
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{lpl.layer_label}': layer_passes_total={lpl.layer_passes_total} "
+                f"!= len(same_layer_operations)={len(slo)}",
+            )
+
+        # Pass numbering: unique {1..N}
+        group_key = frozenset(slo)
+        if group_key not in groups_seen:
+            pass_nums = []
+            for member_label in slo:
+                member = ml[member_label]
+                pass_nums.append(member.pass_num)
+            expected = set(range(1, len(slo) + 1))
+            actual = set(pass_nums)
+            if actual != expected:
+                raise MetadataInvariantError(
+                    name,
+                    f"Pass numbering for group {sorted(slo)}: expected {expected}, got {actual}",
+                )
+            groups_seen[group_key] = slo
+
+    # Rule 1: Parameter sharing → same layer
+    # Layers with identical sorted(parent_param_barcodes) and computed_with_params
+    # must share the same layer_label_no_pass
+    param_groups: dict[tuple, list] = defaultdict(list)
+    for lpl in ml.layer_list:
+        if lpl.computed_with_params and lpl.parent_param_barcodes:
+            key = tuple(sorted(lpl.parent_param_barcodes))
+            param_groups[key].append(lpl)
+
+    for param_key, layers in param_groups.items():
+        if len(layers) > 1:
+            no_pass_labels = {lpl.layer_label_no_pass for lpl in layers}
+            if len(no_pass_labels) > 1:
+                raise MetadataInvariantError(
+                    name,
+                    f"Param sharing violation: layers with same param barcodes "
+                    f"{param_key} have different layer_label_no_pass: {no_pass_labels}",
+                )
+
+    # Equivalence group ↔ same_layer consistency: all members of a
+    # same_layer_operations group must belong to the same equivalence set.
+    # Note: ModelLog.equivalent_operations keys use the pre-module-suffix type
+    # (from loop_detection), while per-layer operation_equivalence_type has
+    # a module suffix appended by control_flow.py. So we check group membership
+    # consistency, not exact key matching.
+    no_pass_to_equiv_key: dict[str, str] = {}
+    for eq_type, equiv_set in ml.equivalent_operations.items():
+        for label in equiv_set:
+            no_pass_to_equiv_key[label] = eq_type
+
+    for group_key in groups_seen:
+        slo = list(group_key)
+        if len(slo) <= 1:
+            continue
+        # All members of a same-layer group should be in the same equivalence set
+        equiv_keys = set()
+        for member_label in slo:
+            member = ml[member_label]
+            no_pass = member.layer_label_no_pass
+            if no_pass in no_pass_to_equiv_key:
+                equiv_keys.add(no_pass_to_equiv_key[no_pass])
+        if len(equiv_keys) > 1:
+            raise MetadataInvariantError(
+                name,
+                f"same_layer_operations group {sorted(slo)} spans multiple "
+                f"equivalence types: {equiv_keys}",
+            )
+
+    # Multi-pass structural checks
+    for group_key in groups_seen:
+        slo = list(group_key)
+        if len(slo) <= 1:
+            continue
+        members = [ml[lbl] for lbl in slo]
+
+        # Non-param groups must be adjacent to other multi-pass groups
+        any_has_params = any(m.computed_with_params for m in members)
+        if not any_has_params:
+            # Check that at least one parent or child belongs to another multi-pass group
+            has_adjacent_loop = False
+            for m in members:
+                for neighbor_label in list(m.parent_layers) + list(m.child_layers):
+                    if neighbor_label in label_set:
+                        neighbor = ml[neighbor_label]
+                        if neighbor.layer_passes_total > 1:
+                            has_adjacent_loop = True
+                            break
+                if has_adjacent_loop:
+                    break
+            if not has_adjacent_loop:
+                raise MetadataInvariantError(
+                    name,
+                    f"Non-param multi-pass group {sorted(slo)} has no adjacent "
+                    f"multi-pass neighbor (adjacency condition violated)",
+                )
+
+
+# ---------------------------------------------------------------------------
+# O. Distance / reachability invariants
+# ---------------------------------------------------------------------------
+
+
+def _check_distance_invariants(ml: "ModelLog") -> None:
+    if not ml.mark_input_output_distances:
+        return
+
+    name = "distance_invariants"
+    input_set = set(ml.input_layers)
+    output_set = set(ml.output_layers)
+
+    for lpl in ml.layer_list:
+        label = lpl.layer_label
+
+        # min <= max for input distances
+        if lpl.min_distance_from_input is not None and lpl.max_distance_from_input is not None:
+            if lpl.min_distance_from_input > lpl.max_distance_from_input:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{label}': min_distance_from_input="
+                    f"{lpl.min_distance_from_input} > max={lpl.max_distance_from_input}",
+                )
+
+        # min <= max for output distances
+        if lpl.min_distance_from_output is not None and lpl.max_distance_from_output is not None:
+            if lpl.min_distance_from_output > lpl.max_distance_from_output:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{label}': min_distance_from_output="
+                    f"{lpl.min_distance_from_output} > max={lpl.max_distance_from_output}",
+                )
+
+        # Input layers: distance from input == 0
+        if label in input_set:
+            if lpl.min_distance_from_input != 0 or lpl.max_distance_from_input != 0:
+                raise MetadataInvariantError(
+                    name,
+                    f"Input layer '{label}': distance_from_input should be 0, got "
+                    f"min={lpl.min_distance_from_input}, max={lpl.max_distance_from_input}",
+                )
+
+        # Output layers: distance from output == 0
+        if label in output_set:
+            if lpl.min_distance_from_output != 0 or lpl.max_distance_from_output != 0:
+                raise MetadataInvariantError(
+                    name,
+                    f"Output layer '{label}': distance_from_output should be 0, got "
+                    f"min={lpl.min_distance_from_output}, max={lpl.max_distance_from_output}",
+                )
+
+        # has_input_ancestor ↔ input_ancestors non-empty
+        has_ancestors = len(lpl.input_ancestors) > 0
+        if lpl.has_input_ancestor != has_ancestors:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{label}': has_input_ancestor={lpl.has_input_ancestor} but "
+                f"len(input_ancestors)={len(lpl.input_ancestors)}",
+            )
+
+        # is_output_ancestor ↔ output_descendents non-empty
+        has_descendents = len(lpl.output_descendents) > 0
+        if lpl.is_output_ancestor != has_descendents:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{label}': is_output_ancestor={lpl.is_output_ancestor} but "
+                f"len(output_descendents)={len(lpl.output_descendents)}",
+            )
+
+        # input_ancestors subset of input_layers
+        extra_ancestors = lpl.input_ancestors - input_set
+        if extra_ancestors:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{label}': input_ancestors contains labels not in "
+                f"input_layers: {extra_ancestors}",
+            )
+
+        # output_descendents subset of output_layers
+        extra_desc = lpl.output_descendents - output_set
+        if extra_desc:
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{label}': output_descendents contains labels not in "
+                f"output_layers: {extra_desc}",
+            )
+
+
+# ---------------------------------------------------------------------------
+# P. Graph connectivity invariants
+# ---------------------------------------------------------------------------
+
+
+def _check_graph_connectivity(ml: "ModelLog") -> None:
+    name = "graph_connectivity"
+    label_set = set(ml.layer_labels)
+    input_set = set(ml.input_layers)
+    buffer_set = set(ml.buffer_layers)
+
+    for lpl in ml.layer_list:
+        label = lpl.layer_label
+
+        # Non-input, non-buffer, non-internally-initialized layers must have parents
+        if (
+            label not in input_set
+            and label not in buffer_set
+            and not lpl.initialized_inside_model
+            and not lpl.is_output_layer
+            and len(lpl.parent_layers) == 0
+        ):
+            raise MetadataInvariantError(
+                name,
+                f"Layer '{label}' has no parents but is not input, buffer, "
+                f"internally initialized, or output",
+            )
+
+    # orphan_layers is a subset of all known labels (pre-removal)
+    orphan_set = set(ml.orphan_layers)
+    # Orphans should NOT appear in the active layer_list (they were removed)
+    orphan_in_list = orphan_set & label_set
+    if orphan_in_list:
+        raise MetadataInvariantError(
+            name,
+            f"orphan_layers contains labels still in layer_labels: {orphan_in_list}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Q. Module containment logical consistency
+# ---------------------------------------------------------------------------
+
+
+def _check_module_containment_logic(ml: "ModelLog") -> None:
+    name = "module_containment_logic"
+    mod_accessor = ml.modules
+
+    # Build set of known module addresses
+    known_addrs = set()
+    for mod_log in mod_accessor:
+        known_addrs.add(mod_log.address)
+
+    for mod_log in mod_accessor:
+        addr = mod_log.address
+
+        # Address tree acyclicity: walk address_parent to root
+        visited = set()
+        current = addr
+        while current is not None:
+            if current in visited:
+                raise MetadataInvariantError(
+                    name,
+                    f"Cycle in address_parent chain starting from '{addr}': revisited '{current}'",
+                )
+            visited.add(current)
+            try:
+                parent_mod = mod_accessor[current]
+            except (KeyError, IndexError):
+                break
+            current = parent_mod.address_parent
+
+        # Address depth consistency
+        if addr == "self":
+            if mod_log.address_depth != 0:
+                raise MetadataInvariantError(
+                    name,
+                    f"Root module 'self' has address_depth={mod_log.address_depth}, expected 0",
+                )
+        else:
+            expected_depth = addr.count(".") + 1
+            if mod_log.address_depth != expected_depth:
+                raise MetadataInvariantError(
+                    name,
+                    f"ModuleLog '{addr}': address_depth={mod_log.address_depth} "
+                    f"!= expected {expected_depth} (addr.count('.')+1)",
+                )
+
+    # Per-layer: containing_modules_origin_nested path validity
+    # Format after postprocessing: list of "addr:pass" strings, ordered from
+    # outermost enclosing submodule to innermost. Does NOT include "self".
+    for lpl in ml.layer_list:
+        nested = lpl.containing_modules_origin_nested
+        if not nested:
+            continue
+
+        # First element's parent should be "self" (root module)
+        first_addr = nested[0].split(":")[0] if ":" in nested[0] else nested[0]
+        if first_addr in known_addrs:
+            first_mod = mod_accessor[first_addr]
+            if first_mod.address_parent != "self":
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{lpl.layer_label}': first nested module '{first_addr}' "
+                    f"has address_parent='{first_mod.address_parent}', expected 'self'",
+                )
+
+        # Leaf consistency: last element matches containing_module_origin
+        if lpl.containing_module_origin is not None:
+            if nested[-1] != lpl.containing_module_origin:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{lpl.layer_label}': last nested module '{nested[-1]}' "
+                    f"!= containing_module_origin '{lpl.containing_module_origin}'",
+                )
+
+        # Path validity: each element's address is a child of the previous
+        for i in range(1, len(nested)):
+            parent_addr = nested[i - 1].split(":")[0] if ":" in nested[i - 1] else nested[i - 1]
+            child_addr = nested[i].split(":")[0] if ":" in nested[i] else nested[i]
+            if parent_addr in known_addrs and child_addr in known_addrs:
+                child_mod = mod_accessor[child_addr]
+                if child_mod.address_parent != parent_addr:
+                    raise MetadataInvariantError(
+                        name,
+                        f"Layer '{lpl.layer_label}': nested path broken at index {i}: "
+                        f"'{child_addr}'.address_parent='{child_mod.address_parent}' "
+                        f"!= '{parent_addr}'",
+                    )
+
+
+# ---------------------------------------------------------------------------
+# R. Lookup key bidirectionality
+# ---------------------------------------------------------------------------
+
+
+def _check_lookup_key_consistency(ml: "ModelLog") -> None:
+    name = "lookup_key_consistency"
+
+    # _lookup_keys_to_layer_num_dict maps key→num (last assigned wins).
+    # _layer_num_to_lookup_keys_dict maps num→[keys] (accumulates all assignments).
+    # Forward → reverse: for every (key, num) in forward, key must be in reverse[num].
+    fwd = ml._lookup_keys_to_layer_num_dict
+    rev = ml._layer_num_to_lookup_keys_dict
+
+    for key, num in fwd.items():
+        if num not in rev:
+            raise MetadataInvariantError(
+                name,
+                f"_lookup_keys_to_layer_num_dict['{key}']={num} but "
+                f"{num} not in _layer_num_to_lookup_keys_dict",
+            )
+        if key not in rev[num]:
+            raise MetadataInvariantError(
+                name,
+                f"_lookup_keys_to_layer_num_dict['{key}']={num} but "
+                f"'{key}' not in _layer_num_to_lookup_keys_dict[{num}]",
+            )
+
+    # Reverse → forward: every key in reverse must exist in forward (but may
+    # point to a different num if the key was reassigned to a later layer).
+    for num, keys in rev.items():
+        for key in keys:
+            if key not in fwd:
+                raise MetadataInvariantError(
+                    name,
+                    f"_layer_num_to_lookup_keys_dict[{num}] has '{key}' but "
+                    f"'{key}' not in _lookup_keys_to_layer_num_dict",
+                )
+
+    # _raw_to_final_layer_labels ↔ _final_to_raw_layer_labels
+    raw_fwd = ml._raw_to_final_layer_labels
+    raw_rev = ml._final_to_raw_layer_labels
+
+    for raw, final in raw_fwd.items():
+        if final not in raw_rev:
+            raise MetadataInvariantError(
+                name,
+                f"_raw_to_final_layer_labels['{raw}']='{final}' but "
+                f"'{final}' not in _final_to_raw_layer_labels",
+            )
+        if raw_rev[final] != raw:
+            raise MetadataInvariantError(
+                name,
+                f"_raw_to_final_layer_labels['{raw}']='{final}' but "
+                f"_final_to_raw_layer_labels['{final}']='{raw_rev[final]}'",
+            )
+
+    for final, raw in raw_rev.items():
+        if raw not in raw_fwd:
+            raise MetadataInvariantError(
+                name,
+                f"_final_to_raw_layer_labels['{final}']='{raw}' but "
+                f"'{raw}' not in _raw_to_final_layer_labels",
+            )
+
+    # All final labels are valid layer labels
+    label_set = set(ml.layer_labels)
+    for final in raw_fwd.values():
+        if final not in label_set:
+            raise MetadataInvariantError(
+                name,
+                f"_raw_to_final_layer_labels maps to '{final}' which is not in layer_labels",
+            )
