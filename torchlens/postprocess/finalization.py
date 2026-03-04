@@ -402,6 +402,36 @@ def _build_module_logs(self: "ModelLog") -> None:
     self._module_build_data = _init_module_build_data()
 
 
+def _build_layer_logs(self: "ModelLog") -> None:
+    """Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+
+    Groups layer_list entries by layer_label_no_pass, creates a LayerLog
+    for each unique layer, and populates ModelLog.layer_logs.  Also adds
+    no-pass labels to layer_dict_all_keys so ``log["conv2d_1_1"]`` returns
+    the LayerLog (even for multi-pass layers, which previously errored).
+    """
+    from collections import OrderedDict
+
+    from ..data_classes.layer_log import LayerLog
+
+    layer_logs = OrderedDict()
+
+    for pass_log in self.layer_list:
+        no_pass_label = pass_log.layer_label_no_pass
+
+        if no_pass_label not in layer_logs:
+            layer_log = LayerLog(pass_log)
+            layer_logs[no_pass_label] = layer_log
+        else:
+            layer_log = layer_logs[no_pass_label]
+
+        layer_log.passes[pass_log.pass_num] = pass_log
+        layer_log.pass_labels.append(pass_log.layer_label)
+        pass_log.parent_layer_log = layer_log
+
+    self.layer_logs = layer_logs
+
+
 def _set_pass_finished(self) -> None:
     """Sets the ModelLog to "pass finished" status, indicating that the pass is done, so
     the "final" rather than "realtime debugging" mode of certain functions should be used.

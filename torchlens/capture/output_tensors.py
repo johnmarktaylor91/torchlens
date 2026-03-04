@@ -471,7 +471,7 @@ def log_function_output_tensors_fast(
         orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
         if orig_tensor_label in self.unlogged_layers:
             continue
-        orig_layer_entry = self[orig_tensor_label]
+        orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
 
         if self.save_gradients:
             _add_backward_hook(self, out, orig_tensor_label)

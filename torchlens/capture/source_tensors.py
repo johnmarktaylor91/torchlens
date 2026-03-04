@@ -265,7 +265,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
     if orig_tensor_label in self.unlogged_layers:
         return
-    orig_layer_entry = self.layer_dict_all_keys[orig_tensor_label]
+    orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
     if (self._layer_nums_to_save == "all") or (
         orig_layer_entry.realtime_tensor_num in self._layer_nums_to_save
     ):

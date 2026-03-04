@@ -18,6 +18,7 @@ from .control_flow import (
     _mark_conditional_branches,
 )
 from .finalization import (
+    _build_layer_logs,
     _build_module_logs,
     _finalize_param_logs,
     _log_time_elapsed,
@@ -117,6 +118,9 @@ def postprocess(
     # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
     _finalize_param_logs(self)
 
+    # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+    _build_layer_logs(self)
+
     # Step 17: Build structured ModuleLog objects from raw module_* dicts.
     _build_module_logs(self)
 
@@ -150,4 +154,5 @@ def postprocess_fast(self: "ModelLog") -> None:
 
     torch.cuda.empty_cache()
     _log_time_elapsed(self)
+    _build_layer_logs(self)
     _set_pass_finished(self)

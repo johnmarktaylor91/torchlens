@@ -192,6 +192,9 @@ class LayerPassLog:
         self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
         self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
+        # Back-reference to parent LayerLog (set during postprocessing by _build_layer_logs)
+        self.parent_layer_log = None
+
     # ********************************************
     # *********** User-Facing Functions **********
     # ********************************************

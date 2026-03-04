@@ -37,6 +37,7 @@ MODEL_LOG_FIELD_ORDER = [
     "layer_list_rolled",
     "layer_dict_main_keys",
     "layer_dict_all_keys",
+    "layer_logs",
     "layer_dict_rolled",
     "layer_labels",
     "layer_labels_no_pass",
@@ -238,6 +239,75 @@ LAYER_PASS_LOG_FIELD_ORDER = [
 
 # Backward-compatible alias (will be removed in a future version)
 TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
+
+LAYER_LOG_FIELD_ORDER = [
+    # Identity & labeling
+    "layer_label",
+    "layer_label_short",
+    "layer_type",
+    "layer_type_num",
+    "layer_total_num",
+    "num_passes",
+    "source_model_log",
+    # Function identity
+    "func_applied",
+    "func_applied_name",
+    "function_is_inplace",
+    "gradfunc",
+    "func_argnames",
+    "num_func_args_total",
+    "num_position_args",
+    "num_keyword_args",
+    "is_part_of_iterable_output",
+    "iterable_output_index",
+    # Tensor type (representative from first pass)
+    "tensor_shape",
+    "tensor_dtype",
+    "tensor_fsize",
+    "tensor_fsize_nice",
+    # Config
+    "output_device",
+    "activation_postfunc",
+    "detach_saved_tensor",
+    "save_gradients",
+    # FLOPs
+    "flops_forward",
+    "flops_backward",
+    # Param identity
+    "computed_with_params",
+    "parent_param_barcodes",
+    "parent_param_logs",
+    "num_param_tensors",
+    "parent_param_shapes",
+    "num_params_total",
+    "num_params_trainable",
+    "num_params_frozen",
+    "parent_params_fsize",
+    "parent_params_fsize_nice",
+    # Equivalence
+    "operation_equivalence_type",
+    "equivalent_operations",
+    # Special flags
+    "is_input_layer",
+    "is_output_layer",
+    "is_last_output_layer",
+    "is_buffer_layer",
+    "buffer_address",
+    "buffer_parent",
+    "initialized_inside_model",
+    "terminated_inside_model",
+    "is_terminal_bool_layer",
+    "is_atomic_bool_layer",
+    "atomic_bool_val",
+    # Module (static containment)
+    "is_computed_inside_submodule",
+    "containing_module_origin",
+    "containing_modules_origin_nested",
+    "module_nesting_depth",
+    # Pass management
+    "passes",
+    "pass_labels",
+]
 
 FUNC_CALL_LOCATION_FIELD_ORDER = [
     "file",

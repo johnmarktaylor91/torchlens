@@ -33,6 +33,7 @@ def _getitem_after_pass(self, ix):
     Supports several lookup modes:
         - int: ordinal index into the layer list (e.g., 0, -1).
         - str (exact layer label): matches a layer label directly.
+        - str (no-pass layer label): returns LayerLog for multi-pass layers.
         - str (module address): matches a module address in _module_logs, returning a ModuleLog.
         - str (substring): if exactly one layer label contains the given substring, returns that layer.
 
@@ -40,6 +41,10 @@ def _getitem_after_pass(self, ix):
     """
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
+
+    # Check if it's a no-pass layer label → return LayerLog
+    if isinstance(ix, str) and hasattr(self, "layer_logs") and ix in self.layer_logs:
+        return self.layer_logs[ix]
 
     # Check if it's a module address or pass notation → return ModuleLog/ModulePassLog
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
