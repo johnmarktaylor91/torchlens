@@ -14,7 +14,6 @@ jobs:
   type-check:
     name: Type check (mypy)
     runs-on: ubuntu-latest
-    continue-on-error: true  # Advisory — report but don't block
     steps:
       - uses: actions/checkout@v4
 
