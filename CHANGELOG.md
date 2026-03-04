@@ -1,6 +1,111 @@
 # CHANGELOG
 
 
+## v0.14.0 (2026-03-04)
+
+### Features
+
+- **core**: Add buffer name/module_address properties to LayerLog
+  ([#92](https://github.com/johnmarktaylor91/torchlens/pull/92),
+  [`e3a1ce2`](https://github.com/johnmarktaylor91/torchlens/commit/e3a1ce21927af0459f1388ed559b0a28a7646bb6))
+
+Ensures buffer_address, name, and module_address are accessible on both buffer LayerPassLogs (via
+  BufferLog subclass) and buffer LayerLogs (via computed properties derived from buffer_address).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Add LayerAccessor and log.layers property
+  ([#92](https://github.com/johnmarktaylor91/torchlens/pull/92),
+  [`b639e50`](https://github.com/johnmarktaylor91/torchlens/commit/b639e50d793d319d83fc51ecd86c3ac367ad3161))
+
+Adds LayerAccessor (dict-like accessor for LayerLog objects) with support for
+  label/index/pass-notation lookup and to_pandas(). Accessible via log.layers, mirroring log.modules
+  for modules.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Add LayerLog aggregate class with per-layer metadata
+  ([#92](https://github.com/johnmarktaylor91/torchlens/pull/92),
+  [`9c6472d`](https://github.com/johnmarktaylor91/torchlens/commit/9c6472db6c71c10dbed02428844972f23ebb96b3))
+
+Introduces LayerLog as the aggregate per-layer object grouping one or more LayerPassLog entries (one
+  per invocation). For non-recurrent models every LayerLog has exactly one pass; for recurrent
+  models, multiple passes are grouped under a single LayerLog with union-based aggregate graph
+  properties.
+
+Key changes: - New LayerLog class with ~52 aggregate fields, single-pass delegation via @property
+  and __getattr__, aggregate graph properties (child_layers, parent_layers unions) -
+  _build_layer_logs() postprocessing step wired into both exhaustive and fast pipelines -
+  ModelLog.layer_logs OrderedDict populated after postprocessing - __getitem__ routing: log["label"]
+  returns LayerLog for multi-pass layers - parent_layer_log back-reference on LayerPassLog - 27 new
+  tests covering construction, delegation, multi-pass behavior, display, and integration
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **core**: Modulelog.all_layers now stores unique no-pass labels
+  ([#92](https://github.com/johnmarktaylor91/torchlens/pull/92),
+  [`214e161`](https://github.com/johnmarktaylor91/torchlens/commit/214e1616e87ab89a9f7e6a44de8d7e6453bdf430))
+
+Establishes aggregate↔aggregate symmetry: - ModuleLog.all_layers → no-pass labels → resolve to
+  LayerLog - ModulePassLog.layers → pass-qualified labels → resolve to LayerPassLog
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Remove buffer name/module_address from LayerLog
+  ([#92](https://github.com/johnmarktaylor91/torchlens/pull/92),
+  [`f896dd4`](https://github.com/johnmarktaylor91/torchlens/commit/f896dd41c24f4174b70395db0fb174c8b70f1e44))
+
+These properties are too generic on LayerLog (name returns "" for non-buffers). Keep them only on
+  BufferLog(LayerPassLog); single-pass buffer LayerLogs still access them via __getattr__
+  delegation.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Remove RolledTensorLog, use LayerLog for rolled visualization
+  ([#92](https://github.com/johnmarktaylor91/torchlens/pull/92),
+  [`118b3ec`](https://github.com/johnmarktaylor91/torchlens/commit/118b3ec67be88274d80634a79f38e87f1c70e27e))
+
+RolledTensorLog was a visualization-only aggregate that duplicated ~30 fields from LayerPassLog with
+  its own merge logic. Now that LayerLog provides a proper aggregate abstraction, RolledTensorLog is
+  unnecessary.
+
+Key changes: - Delete RolledTensorLog class (~175 lines) and _roll_graph() function - Remove
+  layer_list_rolled and layer_dict_rolled from ModelLog - Visualization "rolled" mode now uses
+  self.layer_logs (LayerLog objects) - Add vis-specific computed properties to LayerLog:
+  child_layers_per_pass, parent_layers_per_pass, child_passes_per_layer, parent_passes_per_layer,
+  edges_vary_across_passes, bottom_level_submodule_passes_exited, parent_layer_arg_locs -
+  LayerLog.child_layers/parent_layers always return no-pass labels - Merge multi-pass aggregate
+  fields (has_input_ancestor, input_output_address, is_bottom_level_submodule_output) in
+  _build_layer_logs - Update tests and aesthetic report to use LayerLog
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Rename TensorLog → LayerPassLog + nomenclature sweep
+  ([`d328476`](https://github.com/johnmarktaylor91/torchlens/commit/d32847669bc0d2410d6f1070865f53c81de84b98))
+
+Phase 1 of LayerLog hierarchy redesign. Mechanical rename of the class, file (tensor_log.py →
+  layer_pass_log.py), constant (TENSOR_LOG_FIELD_ORDER → LAYER_PASS_LOG_FIELD_ORDER), and all
+  imports. Also sweeps internal nomenclature: field names (_raw_tensor_dict → _raw_layer_dict,
+  etc.), function names (_make_tensor_log_entry → _make_layer_log_entry, etc.), and local variables
+  (tensor_entry → layer_entry, etc.) that referred to log entries rather than actual tensors.
+  Backward-compat aliases preserved.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Replace 17 flat module_* dicts on ModelLog with transient _module_build_data
+  ([`ef3f20e`](https://github.com/johnmarktaylor91/torchlens/commit/ef3f20ef16422a4c997a2727cf9c9df941e56030))
+
+These intermediate fields (module_addresses, module_types, module_passes, etc.) were only used
+  during postprocessing to build structured ModuleLog objects, but persisted on the public API. Now
+  consolidated into a single _module_build_data dict that is populated during logging, consumed by
+  _build_module_logs (step 17), and then re-initialized. Reduces ModelLog from ~143 to ~127 public
+  fields.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.13.1 (2026-03-03)
 
 ### Bug Fixes
