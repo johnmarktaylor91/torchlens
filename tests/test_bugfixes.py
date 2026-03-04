@@ -812,3 +812,110 @@ class TestBug107TupleStringNormalization:
         assert len(log.modules) > 0
         # Inner module should be accessible
         assert "inner" in log.modules
+
+
+# ---------------------------------------------------------------------------
+# Final remaining fixes
+# ---------------------------------------------------------------------------
+
+
+class TestBug95VisModuleListFormat:
+    """#95: _get_lowest_containing_module should handle mixed LayerLog/LayerPassLog nodes."""
+
+    def test_vis_with_nested_modules(self):
+        """Visualization with nested modules should not crash from format mismatch."""
+
+        class Inner(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(10, 10)
+
+            def forward(self, x):
+                return torch.relu(self.linear(x))
+
+        class Outer(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.inner = Inner()
+
+            def forward(self, x):
+                return self.inner(x)
+
+        model = Outer()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        # Rendering should work without format mismatch errors
+        log.render_graph(save_only=True, vis_outpath="test_outputs/test_bug95")
+
+
+class TestBug85PosthocPerturbCheck:
+    """#85: posthoc_perturb_check correctly exempts layers with special-value args.
+
+    Note: The original "return on first special arg" behavior is CORRECT —
+    any single all-zeros/all-ones arg can explain output invariance
+    (e.g., multiplication by zero). This is NOT a false positive.
+    """
+
+    def test_batchnorm_validation_with_buffers(self):
+        """BatchNorm has all-zeros/all-ones buffers; validation should still pass."""
+        model = BatchNormModel()
+        x = torch.randn(4, 10)
+        result = validate_forward_pass(model, x)
+        assert result is True
+
+
+class TestBug99GraphConsistencyValidation:
+    """#99: log_source_tensor_fast warns on shape mismatch."""
+
+    def test_shape_mismatch_warns(self):
+        """If input shape changes between passes, a warning should be raised."""
+        model = SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+
+        # Different batch size — shape changes but graph structure stays same
+        x2 = torch.randn(4, 10)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            log.save_new_activations(model, x2)
+            shape_warnings = [x for x in w if "shape changed" in str(x.message)]
+            assert len(shape_warnings) > 0
+
+
+class TestBug83ParentLayerArgLocs:
+    """#83: LayerLog.parent_layer_arg_locs should return strings, not sets."""
+
+    def test_arg_locs_are_strings(self):
+        """parent_layer_arg_locs values should be strings (layer labels), not sets."""
+        model = SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        for layer in log:
+            arg_locs = layer.parent_layer_arg_locs
+            for arg_type in ["args", "kwargs"]:
+                for key, val in arg_locs[arg_type].items():
+                    assert isinstance(val, str), (
+                        f"Expected string for arg_locs['{arg_type}'][{key}], got {type(val)}"
+                    )
+
+
+class TestBug23CaseInsensitiveLookup:
+    """#23: Case-insensitive lookup for layer/module names."""
+
+    def test_case_insensitive_exact_match(self):
+        """Looking up 'Linear_1_1' should match 'linear_1_1' (exact, case-insensitive)."""
+        model = SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        # Should find the layer regardless of case
+        result = log["Linear_1_1"]
+        assert result is not None
+        assert result.layer_label == "linear_1_1"
+
+    def test_case_insensitive_module_lookup(self):
+        """Looking up 'FC' should match module 'fc' (case-insensitive)."""
+        model = SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        result = log["FC"]
+        assert result is not None

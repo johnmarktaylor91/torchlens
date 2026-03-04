@@ -280,7 +280,17 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
             t, [], {}, self.save_function_args, self.activation_postfunc
         )
 
-    orig_layer_entry.tensor_shape = tuple(t.shape)
+    # Minimal graph consistency validation (#99)
+    new_shape = tuple(t.shape)
+    if orig_layer_entry.tensor_shape is not None and new_shape != orig_layer_entry.tensor_shape:
+        import warnings
+
+        warnings.warn(
+            f"Tensor shape changed for '{orig_tensor_label}': "
+            f"expected {orig_layer_entry.tensor_shape}, got {new_shape}. "
+            f"The computational graph may have changed between passes."
+        )
+    orig_layer_entry.tensor_shape = new_shape
     orig_layer_entry.tensor_dtype = t.dtype
     fsize = get_tensor_memory_amount(t)
     orig_layer_entry.tensor_fsize = fsize

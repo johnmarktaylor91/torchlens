@@ -54,8 +54,25 @@ def _getitem_after_pass(self, ix):
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
         return self._module_logs[ix]
 
+    # Case-insensitive exact match (#23)
+    if isinstance(ix, str):
+        lower_ix = ix.lower()
+        for key in self.layer_dict_all_keys:
+            if str(key).lower() == lower_ix:
+                return self.layer_dict_all_keys[key]
+        if hasattr(self, "layer_logs"):
+            for key in self.layer_logs:
+                if str(key).lower() == lower_ix:
+                    return self.layer_logs[key]
+        if hasattr(self, "_module_logs"):
+            for key in self._module_logs._dict:
+                if key.lower() == lower_ix:
+                    return self._module_logs[key]
+
     if not isinstance(ix, int):
-        keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
+        keys_with_substr = [
+            key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
+        ]
         if len(keys_with_substr) == 1:
             return self.layer_dict_all_keys[keys_with_substr[0]]
         elif len(keys_with_substr) > 1:

@@ -960,7 +960,7 @@ def _get_lowest_containing_module_for_two_nodes(
     node1_modules = node1.containing_modules_origin_nested[:]
     node2_modules = node2.containing_modules_origin_nested[:]
 
-    if isinstance(node1, LayerLog):
+    if isinstance(node1, LayerLog) or isinstance(node2, LayerLog):
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
