@@ -12,7 +12,8 @@ torch.use_deterministic_algorithms(True)
 # Output directories — anchored to tests/ so they don't pollute project root
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_OUTPUTS_DIR = opj(TESTS_DIR, "test_outputs")
-VIS_OUTPUT_DIR = TEST_OUTPUTS_DIR
+REPORTS_DIR = opj(TEST_OUTPUTS_DIR, "reports")
+VIS_OUTPUT_DIR = opj(TEST_OUTPUTS_DIR, "graphs")
 
 sub_dirs = [
     "cornet",
@@ -37,7 +38,7 @@ sub_dirs = [
     "super-resolution",
 ]
 
-os.makedirs(TEST_OUTPUTS_DIR, exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
 for sub_dir in sub_dirs:
     os.makedirs(opj(VIS_OUTPUT_DIR, sub_dir), exist_ok=True)
 
@@ -54,7 +55,7 @@ def pytest_sessionfinish(session, exitstatus):
 
         cov = Coverage()
         cov.load()
-        report_path = opj(TEST_OUTPUTS_DIR, "coverage_report.txt")
+        report_path = opj(REPORTS_DIR, "coverage_report.txt")
         with open(report_path, "w") as f:
             cov.report(file=f, show_missing=True, skip_empty=True)
     except Exception:

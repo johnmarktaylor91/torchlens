@@ -287,7 +287,7 @@ class _SimpleLinear(nn.Module):
 
 
 class TestLayerNumPasses:
-    """Bug #53: layer_num_passes should be keyed correctly."""
+    """layer_num_passes should be keyed correctly."""
 
     def test_returns_integer(self):
         model = _SimpleLinear()
@@ -299,7 +299,7 @@ class TestLayerNumPasses:
 
 
 class TestSliceIndexing:
-    """Bug #78: Slice indexing should return list."""
+    """Slice indexing should return list."""
 
     def test_slice_returns_list(self):
         model = _SimpleLinear()
@@ -310,7 +310,7 @@ class TestSliceIndexing:
 
 
 class TestToPandasGuard:
-    """Bug #124: to_pandas() should guard against unfinished pass."""
+    """to_pandas() should guard against unfinished pass."""
 
     def test_works_after_pass(self):
         model = _SimpleLinear()
@@ -325,7 +325,7 @@ class TestToPandasGuard:
 
 
 class TestAmbiguousSubstring:
-    """Bug #125: Ambiguous substring should list matching layers."""
+    """Ambiguous substring should list matching layers."""
 
     def test_lists_matches(self):
         class TwoLinears(nn.Module):
@@ -343,8 +343,8 @@ class TestAmbiguousSubstring:
             log["linear"]
 
 
-class TestBug23CaseInsensitiveLookup:
-    """#23: Case-insensitive lookup for layer/module names."""
+class TestCaseInsensitiveLookup:
+    """Case-insensitive lookup for layer/module names."""
 
     def test_case_insensitive_exact_match(self):
         model = _SimpleLinear()
@@ -360,8 +360,8 @@ class TestBug23CaseInsensitiveLookup:
         assert result is not None
 
 
-class TestBug83ParentLayerArgLocs:
-    """#83: LayerLog.parent_layer_arg_locs should return strings, not sets."""
+class TestParentLayerArgLocs:
+    """LayerLog.parent_layer_arg_locs should return strings, not sets."""
 
     def test_arg_locs_are_strings(self):
         model = _SimpleLinear()

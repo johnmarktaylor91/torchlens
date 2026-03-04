@@ -729,7 +729,7 @@ class _BatchNormModel(nn.Module):
 
 
 class TestValidationBugfixes:
-    """Bugs #150, #151, #131, #36: Validation correctness."""
+    """Validation correctness."""
 
     def test_validation_basic(self):
         model = _SimpleLinear()
@@ -743,7 +743,7 @@ class TestValidationBugfixes:
         assert validate_forward_pass(model, x)
 
     def test_validation_unsaved_parent_no_crash(self):
-        """#150: Validation with layers_to_save subset should not crash on None parents."""
+        """Validation with layers_to_save subset should not crash on None parents."""
         from torchlens import log_forward_pass
 
         model = _SimpleLinear()
@@ -753,10 +753,10 @@ class TestValidationBugfixes:
 
 
 class TestValidationNoSavedArgs:
-    """Bug #131: Validation with save_function_args=False."""
+    """Validation with save_function_args=False."""
 
     def test_validation_no_args(self):
-        """#131: validate with save_function_args=False should not crash."""
+        """validate with save_function_args=False should not crash."""
         from torchlens import log_forward_pass
 
         model = _SimpleLinear()
@@ -765,8 +765,8 @@ class TestValidationNoSavedArgs:
         assert log is not None
 
 
-class TestBug85PosthocPerturbCheck:
-    """#85: posthoc_perturb_check correctly exempts layers with special-value args.
+class TestPosthocPerturbCheck:
+    """posthoc_perturb_check correctly exempts layers with special-value args.
 
     Note: The original "return on first special arg" behavior is CORRECT —
     any single all-zeros/all-ones arg can explain output invariance.

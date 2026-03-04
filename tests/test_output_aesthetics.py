@@ -25,7 +25,7 @@ from os.path import join as opj
 import pytest
 import torch
 
-from conftest import TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
+from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
 
 import torch.nn as nn
 
@@ -36,7 +36,7 @@ from torchlens import log_forward_pass, show_model_graph
 # Report helpers
 # ---------------------------------------------------------------------------
 
-REPORT_PATH = opj(TEST_OUTPUTS_DIR, "aesthetic_report.txt")
+REPORT_PATH = opj(REPORTS_DIR, "aesthetic_report.txt")
 VIS_DIR = opj(VIS_OUTPUT_DIR, "aesthetic_test_models")
 
 
@@ -599,8 +599,8 @@ def test_generate_aesthetic_report():
 # LaTeX PDF report
 # ---------------------------------------------------------------------------
 
-TEX_PATH = opj(TEST_OUTPUTS_DIR, "aesthetic_report.tex")
-PDF_PATH = opj(TEST_OUTPUTS_DIR, "aesthetic_report.pdf")
+TEX_PATH = opj(REPORTS_DIR, "aesthetic_report.tex")
+PDF_PATH = opj(REPORTS_DIR, "aesthetic_report.pdf")
 
 # Visualization configurations for the gallery section
 VIS_GALLERY = [
@@ -1317,7 +1317,7 @@ def test_generate_pdf_report():
                 "pdflatex",
                 "-interaction=nonstopmode",
                 "-output-directory",
-                TEST_OUTPUTS_DIR,
+                REPORTS_DIR,
                 TEX_PATH,
             ],
             capture_output=True,
@@ -1331,7 +1331,7 @@ def test_generate_pdf_report():
 
     # Clean up LaTeX auxiliary files
     for ext in [".aux", ".log", ".out", ".toc"]:
-        aux_path = opj(TEST_OUTPUTS_DIR, f"aesthetic_report{ext}")
+        aux_path = opj(REPORTS_DIR, f"aesthetic_report{ext}")
         if os.path.exists(aux_path):
             os.remove(aux_path)
 
@@ -1500,7 +1500,7 @@ class _SimpleLinear(nn.Module):
 
 class TestVisualizationBugfixes:
     def test_vis_nesting_depth_0(self):
-        """#94: vis_nesting_depth=0 should not crash."""
+        """vis_nesting_depth=0 should not crash."""
         model = _SimpleLinear()
         log = log_forward_pass(model, torch.randn(2, 10))
         try:
@@ -1511,7 +1511,7 @@ class TestVisualizationBugfixes:
             pytest.skip("graphviz not available")
 
     def test_vis_keep_unsaved_false(self):
-        """#118: keep_unsaved_layers=False should not crash visualization."""
+        """keep_unsaved_layers=False should not crash visualization."""
         model = _SimpleLinear()
         log = log_forward_pass(
             model, torch.randn(2, 10), layers_to_save="all", keep_unsaved_layers=False
@@ -1524,8 +1524,8 @@ class TestVisualizationBugfixes:
             pytest.skip("graphviz not available")
 
 
-class TestBug95VisModuleListFormat:
-    """#95: _get_lowest_containing_module should handle mixed LayerLog/LayerPassLog nodes."""
+class TestVisModuleListFormat:
+    """_get_lowest_containing_module should handle mixed LayerLog/LayerPassLog nodes."""
 
     def test_vis_with_nested_modules(self):
         class Inner(nn.Module):
@@ -1546,4 +1546,4 @@ class TestBug95VisModuleListFormat:
 
         model = Outer()
         log = log_forward_pass(model, torch.randn(2, 10))
-        log.render_graph(save_only=True, vis_outpath="test_outputs/test_bug95")
+        log.render_graph(save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))

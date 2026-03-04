@@ -398,7 +398,7 @@ class _SimpleLinear(nn.Module):
 
 
 class TestModuleLogStringIndexing:
-    """Bug #120: ModuleLog should support string label lookup."""
+    """ModuleLog should support string label lookup."""
 
     def test_module_string_lookup(self):
         model = _SimpleLinear()
@@ -409,8 +409,8 @@ class TestModuleLogStringIndexing:
             assert mod is not None
 
 
-class TestBug107TupleStringNormalization:
-    """#107: containing_modules_origin_nested should handle both tuple and string formats."""
+class TestTupleStringNormalization:
+    """containing_modules_origin_nested should handle both tuple and string formats."""
 
     def test_module_hierarchy_with_nested_model(self):
         class Inner(nn.Module):
