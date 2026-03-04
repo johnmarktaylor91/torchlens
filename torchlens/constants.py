@@ -1,4 +1,4 @@
-"""Shared constants: field-order tuples that define the canonical set of TensorLog and ModelLog fields."""
+"""Shared constants: field-order tuples that define the canonical set of LayerPassLog and ModelLog fields."""
 
 import __future__
 import functools
@@ -32,7 +32,7 @@ MODEL_LOG_FIELD_ORDER = [
     "model_max_recurrent_loops",
     "model_is_branching",
     "model_has_conditional_branching",
-    # Tensor tracking logs
+    # Layer tracking logs
     "layer_list",
     "layer_list_rolled",
     "layer_dict_main_keys",
@@ -42,18 +42,18 @@ MODEL_LOG_FIELD_ORDER = [
     "layer_labels_no_pass",
     "layer_labels_w_pass",
     "layer_num_passes",
-    "_raw_tensor_dict",
-    "_raw_tensor_labels_list",
-    "_tensor_nums_to_save",
-    "_tensor_counter",
+    "_raw_layer_dict",
+    "_raw_layer_labels_list",
+    "_layer_nums_to_save",
+    "_layer_counter",
     "num_operations",
     "_raw_layer_type_counter",
     "_unsaved_layers_lookup_keys",
     # Mapping from raw to final layer labels:
     "_raw_to_final_layer_labels",
     "_final_to_raw_layer_labels",
-    "_lookup_keys_to_tensor_num_dict",
-    "_tensor_num_to_lookup_keys_dict",
+    "_lookup_keys_to_layer_num_dict",
+    "_layer_num_to_lookup_keys_dict",
     # Special layers
     "input_layers",
     "output_layers",
@@ -97,7 +97,7 @@ MODEL_LOG_FIELD_ORDER = [
     "elapsed_time_torchlens_logging",
 ]
 
-TENSOR_LOG_FIELD_ORDER = [
+LAYER_PASS_LOG_FIELD_ORDER = [
     # General info
     "layer_label",
     "tensor_label_raw",
@@ -236,6 +236,9 @@ TENSOR_LOG_FIELD_ORDER = [
     "module_entry_exit_thread_output",
 ]
 
+# Backward-compatible alias (will be removed in a future version)
+TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
+
 FUNC_CALL_LOCATION_FIELD_ORDER = [
     "file",
     "line_number",
@@ -264,7 +267,7 @@ PARAM_LOG_FIELD_ORDER = [
     "module_type",
     "barcode",
     "num_passes",
-    "tensor_log_entries",
+    "layer_log_entries",
     "linked_params",
     "has_grad",
     "grad_shape",

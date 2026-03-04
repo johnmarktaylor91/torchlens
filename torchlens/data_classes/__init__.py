@@ -6,7 +6,7 @@ from .internal_types import FuncExecutionContext, VisualizationOverrides
 from .module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from .param_log import ParamAccessor, ParamLog
 
-# ModelLog, TensorLog, and RolledTensorLog are intentionally NOT
+# ModelLog, LayerPassLog, TensorLog, and RolledTensorLog are intentionally NOT
 # re-exported here to avoid circular imports. Import them directly:
 #   from .data_classes.model_log import ModelLog
-#   from .data_classes.tensor_log import TensorLog, RolledTensorLog
+#   from .data_classes.layer_pass_log import LayerPassLog, TensorLog, RolledTensorLog

@@ -53,13 +53,13 @@ def save_new_activations(
     self.logging_mode = "fast"
 
     # Go through and clear all existing activations.
-    for tensor_log_entry in self:
-        tensor_log_entry.tensor_contents = None
-        tensor_log_entry.has_saved_activations = False
-        tensor_log_entry.has_saved_grad = False
-        tensor_log_entry.grad_contents = None
-        tensor_log_entry.has_child_tensor_variations = False
-        tensor_log_entry.children_tensor_versions = {}
+    for layer_log_entry in self:
+        layer_log_entry.tensor_contents = None
+        layer_log_entry.has_saved_activations = False
+        layer_log_entry.has_saved_grad = False
+        layer_log_entry.grad_contents = None
+        layer_log_entry.has_child_tensor_variations = False
+        layer_log_entry.children_tensor_versions = {}
 
     # Reset relevant fields.
     self.layers_with_saved_activations = []
@@ -69,7 +69,7 @@ def save_new_activations(
     self.unlogged_layers = []
     self.num_tensors_saved = 0
     self.tensor_fsize_saved = 0
-    self._tensor_counter = 0
+    self._layer_counter = 0
     self._raw_layer_type_counter = defaultdict(lambda: 0)
 
     # Now run and log the new inputs.
@@ -107,22 +107,22 @@ def _get_op_nums_from_user_labels(
 
     if type(which_layers) != list:
         which_layers = [which_layers]
-    raw_tensor_nums_to_save = set()
+    raw_layer_nums_to_save = set()
     for layer_key in which_layers:
-        if layer_key in self._lookup_keys_to_tensor_num_dict:
-            raw_tensor_nums_to_save.add(self._lookup_keys_to_tensor_num_dict[layer_key])
+        if layer_key in self._lookup_keys_to_layer_num_dict:
+            raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])
             continue
 
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_tensor_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
+                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
 
-    raw_tensor_nums_to_save = sorted(list(raw_tensor_nums_to_save))
-    return raw_tensor_nums_to_save
+    raw_layer_nums_to_save = sorted(list(raw_layer_nums_to_save))
+    return raw_layer_nums_to_save
 
 
 def _fetch_label_move_input_tensors(
@@ -249,7 +249,7 @@ def _extract_and_mark_outputs(
     for t in output_tensors:
         if self.logging_mode == "exhaustive":
             self.output_layers.append(t.tl_tensor_label_raw)
-        self._raw_tensor_dict[t.tl_tensor_label_raw].is_output_parent = True
+        self._raw_layer_dict[t.tl_tensor_label_raw].is_output_parent = True
 
     return output_tensors, output_tensor_addresses
 
@@ -273,11 +273,11 @@ def run_and_log_inputs_through_model(
     self.random_seed_used = random_seed
     set_random_seed(random_seed)
 
-    self._tensor_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
+    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
 
     # In fast mode, also save parents of output layers so output tensor_contents
     # can be populated in postprocess_fast (issue #46).
-    if self._tensor_nums_to_save != "all" and self._pass_finished:
+    if self._layer_nums_to_save != "all" and self._pass_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
             output_entry = self[output_label]
@@ -285,8 +285,8 @@ def run_and_log_inputs_through_model(
                 parent_entry = self[parent_label]
                 output_parent_nums.add(parent_entry.realtime_tensor_num)
         if output_parent_nums:
-            combined = set(self._tensor_nums_to_save) | output_parent_nums
-            self._tensor_nums_to_save = sorted(combined)
+            combined = set(self._layer_nums_to_save) | output_parent_nums
+            self._layer_nums_to_save = sorted(combined)
 
     input_args, input_kwargs, input_arg_names, model_device = _setup_inputs_and_device(
         model,

@@ -1,4 +1,4 @@
-"""TensorLog and RolledTensorLog: per-operation metadata entries within a ModelLog."""
+"""LayerPassLog and RolledTensorLog: per-operation metadata entries within a ModelLog."""
 
 import copy
 from collections import defaultdict
@@ -6,12 +6,12 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
-from ..constants import TENSOR_LOG_FIELD_ORDER
+from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
 from ..utils.display import human_readable_size
 
-_TENSOR_LOG_FIELD_ORDER_SET = frozenset(TENSOR_LOG_FIELD_ORDER)
+_LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
 
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
@@ -19,24 +19,24 @@ if TYPE_CHECKING:
     from .model_log import ModelLog
 
 
-class TensorLog:
+class LayerPassLog:
     def __init__(self, fields_dict: Dict):
         """Object that stores information about a single tensor operation in the forward pass,
         including metadata and the tensor itself (if specified). Initialized by passing in a dictionary with
         values for all fields.
         Args:
-            fields_dict: Dict with values for all fields in TensorLog.
+            fields_dict: Dict with values for all fields in LayerPassLog.
         """
         # Note: this all has to be tediously initialized instead of a for-loop in order for
         # autocomplete features to work well. But, this also serves as a reference for all attributes
         # of a tensor log entry.
 
-        # Check that fields_dict contains all fields for TensorLog:
+        # Check that fields_dict contains all fields for LayerPassLog:
         fields_dict_key_set = set(fields_dict.keys())
-        if fields_dict_key_set != _TENSOR_LOG_FIELD_ORDER_SET:
-            error_str = "Error initializing TensorLog:"
-            missing_fields = _TENSOR_LOG_FIELD_ORDER_SET - fields_dict_key_set
-            extra_fields = fields_dict_key_set - _TENSOR_LOG_FIELD_ORDER_SET
+        if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
+            error_str = "Error initializing LayerPassLog:"
+            missing_fields = _LAYER_PASS_LOG_FIELD_ORDER_SET - fields_dict_key_set
+            extra_fields = fields_dict_key_set - _LAYER_PASS_LOG_FIELD_ORDER_SET
             if len(missing_fields) > 0:
                 error_str += f"\n\t- Missing fields {', '.join(missing_fields)}"
             if len(extra_fields) > 0:
@@ -227,7 +227,7 @@ class TensorLog:
             "tensor_contents",
             "children_tensor_versions",
         ]
-        for field in TENSOR_LOG_FIELD_ORDER:
+        for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
                 fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
@@ -470,13 +470,17 @@ class TensorLog:
         return self.__str__()
 
 
+# Backward-compatible alias (will be removed in a future version)
+TensorLog = LayerPassLog
+
+
 class RolledTensorLog:
-    def __init__(self, source_entry: TensorLog):
-        """Stripped-down version TensorLog that only encodes the information needed to plot the model
+    def __init__(self, source_entry: "LayerPassLog"):
+        """Stripped-down version of LayerPassLog that only encodes the information needed to plot the model
         in its rolled-up form.
 
         Args:
-            source_entry: The source TensorLog from which the rolled node is constructed
+            source_entry: The source LayerPassLog from which the rolled node is constructed
         """
         # Label & general info
         self.layer_label = source_entry.layer_label_no_pass
@@ -538,7 +542,7 @@ class RolledTensorLog:
             "kwargs": defaultdict(set),
         }
 
-    def update_data(self, source_node: TensorLog):
+    def update_data(self, source_node: "LayerPassLog"):
         """Merges data from a new pass into this rolled node.
 
         For fields like input_output_address, characters that differ between passes
@@ -566,7 +570,7 @@ class RolledTensorLog:
             if self.input_output_address[-1] == "*":
                 self.input_output_address = self.input_output_address.rstrip("*") + "*"
 
-    def add_pass_info(self, source_node: TensorLog):
+    def add_pass_info(self, source_node: "LayerPassLog"):
         """Adds information about another pass of the same layer: namely, mark information about what the
         child and parent layers are for each pass.
 

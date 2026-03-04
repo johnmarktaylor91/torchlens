@@ -13,7 +13,7 @@ import pytest
 
 from torchlens.constants import (
     MODEL_LOG_FIELD_ORDER,
-    TENSOR_LOG_FIELD_ORDER,
+    LAYER_PASS_LOG_FIELD_ORDER,
     MODULE_LOG_FIELD_ORDER,
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
@@ -42,7 +42,7 @@ class TestFieldOrderSync:
     @pytest.mark.parametrize(
         "field_order,name",
         [
-            (TENSOR_LOG_FIELD_ORDER, "TENSOR_LOG_FIELD_ORDER"),
+            (LAYER_PASS_LOG_FIELD_ORDER, "LAYER_PASS_LOG_FIELD_ORDER"),
             (MODEL_LOG_FIELD_ORDER, "MODEL_LOG_FIELD_ORDER"),
             (MODULE_LOG_FIELD_ORDER, "MODULE_LOG_FIELD_ORDER"),
             (MODULE_PASS_LOG_FIELD_ORDER, "MODULE_PASS_LOG_FIELD_ORDER"),
@@ -54,17 +54,17 @@ class TestFieldOrderSync:
         dupes = [f for f in field_order if field_order.count(f) > 1]
         assert not dupes, f"Duplicates in {name}: {set(dupes)}"
 
-    def test_tensor_log_field_order_covers_init(self):
-        """TENSOR_LOG_FIELD_ORDER should cover all self.X assignments in TensorLog.__init__."""
-        from torchlens.data_classes.tensor_log import TensorLog
+    def test_layer_pass_log_field_order_covers_init(self):
+        """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in LayerPassLog.__init__."""
+        from torchlens.data_classes.layer_pass_log import LayerPassLog
 
-        init_attrs = self._init_assigned_attrs(TensorLog)
+        init_attrs = self._init_assigned_attrs(LayerPassLog)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
         # but some _ fields ARE in FIELD_ORDER (e.g. _pass_finished). Check both directions:
         # 1. Every FIELD_ORDER entry should be an init attr or a property
-        for field in TENSOR_LOG_FIELD_ORDER:
-            assert field in init_attrs or hasattr(TensorLog, field), (
-                f"{field!r} in TENSOR_LOG_FIELD_ORDER but not in TensorLog"
+        for field in LAYER_PASS_LOG_FIELD_ORDER:
+            assert field in init_attrs or hasattr(LayerPassLog, field), (
+                f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in LayerPassLog"
             )
 
     def test_model_log_field_order_covers_init(self):

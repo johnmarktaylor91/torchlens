@@ -8,7 +8,7 @@ import torch
 
 from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
-from ..data_classes.tensor_log import RolledTensorLog
+from ..data_classes.layer_pass_log import RolledTensorLog
 from ..utils.introspection import get_vars_of_type_from_obj
 from ..utils.display import human_readable_size
 
@@ -20,15 +20,15 @@ def _undecorate_all_saved_tensors(self) -> None:
     """Utility function to undecorate all saved tensors."""
     tensors_to_undecorate = []
     for layer_label in self.layer_labels:
-        tensor_entry = self.layer_dict_main_keys[layer_label]
-        if tensor_entry.tensor_contents is not None:
-            tensors_to_undecorate.append(tensor_entry.tensor_contents)
+        layer_entry = self.layer_dict_main_keys[layer_label]
+        if layer_entry.tensor_contents is not None:
+            tensors_to_undecorate.append(layer_entry.tensor_contents)
 
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(tensor_entry.creation_args, torch.Tensor, search_depth=2)
+            get_vars_of_type_from_obj(layer_entry.creation_args, torch.Tensor, search_depth=2)
         )
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(tensor_entry.creation_kwargs, torch.Tensor, search_depth=2)
+            get_vars_of_type_from_obj(layer_entry.creation_kwargs, torch.Tensor, search_depth=2)
         )
 
     for t in tensors_to_undecorate:
@@ -54,14 +54,14 @@ def _finalize_param_logs(self: "ModelLog") -> None:
     from ..utils.tensor_utils import get_tensor_memory_amount
     from ..utils.display import human_readable_size
 
-    # Build tensor_log_entries and linked_params from TensorLogEntries
-    for tensor_entry in self.layer_list:
-        if not tensor_entry.parent_param_logs:
+    # Build layer_log_entries and linked_params from LayerPassLog entries
+    for layer_entry in self.layer_list:
+        if not layer_entry.parent_param_logs:
             continue
-        addresses_in_op = [pl.address for pl in tensor_entry.parent_param_logs]
-        for pl in tensor_entry.parent_param_logs:
-            if tensor_entry.layer_label not in pl.tensor_log_entries:
-                pl.tensor_log_entries.append(tensor_entry.layer_label)
+        addresses_in_op = [pl.address for pl in layer_entry.parent_param_logs]
+        for pl in layer_entry.parent_param_logs:
+            if layer_entry.layer_label not in pl.layer_log_entries:
+                pl.layer_log_entries.append(layer_entry.layer_label)
             # Link to other params in the same operation
             for other_addr in addresses_in_op:
                 if other_addr != pl.address and other_addr not in pl.linked_params:
@@ -69,15 +69,15 @@ def _finalize_param_logs(self: "ModelLog") -> None:
 
     # Populate num_passes: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
-        pl.num_passes = max(1, len(pl.tensor_log_entries))
+        pl.num_passes = max(1, len(pl.layer_log_entries))
 
     # ParamLog gradient metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
     # reads param.grad after backward is called.
 
-    # Clear actual Parameter tensor references from TensorLogEntries to save memory
-    for tensor_entry in self.layer_list:
-        tensor_entry.parent_params = []
+    # Clear actual Parameter tensor references from LayerPassLog entries to save memory
+    for layer_entry in self.layer_list:
+        layer_entry.parent_params = []
 
 
 def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "ModuleLog":
@@ -190,7 +190,7 @@ def _build_submodule_pass_logs(
 
         pass_layers = list(mbd["module_pass_layers"].get(pass_label, []))
 
-        # Derive input/output layers per pass from TensorLog fields
+        # Derive input/output layers per pass from LayerPassLog fields
         pass_input_layers = []
         pass_output_layers = []
         for layer_label in pass_layers:

@@ -33,7 +33,7 @@ from .graph_traversal import (
 )
 from .labeling import (
     _log_final_info_for_all_layers,
-    _map_raw_tensor_labels_to_final_tensor_labels,
+    _map_raw_labels_to_final_labels,
     _remove_unwanted_entries_and_log_remaining,
     _rename_model_history_layer_names,
     _trim_and_reorder_model_history_fields,
@@ -93,7 +93,7 @@ def postprocess(
 
     # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 
-    _map_raw_tensor_labels_to_final_tensor_labels(self)
+    _map_raw_labels_to_final_labels(self)
 
     # Step 10: Go through and log information pertaining to all layers:
     _log_final_info_for_all_layers(self)

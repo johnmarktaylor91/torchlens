@@ -1,4 +1,4 @@
-"""Comprehensive metadata field testing for ModelLog and TensorLog.
+"""Comprehensive metadata field testing for ModelLog and LayerPassLog.
 
 Uses small/fast models from example_models.py to verify that all key metadata
 fields are populated correctly across different model types.
@@ -170,7 +170,7 @@ def test_equivalent_operations(input_2d):
 
 
 # =============================================================================
-# TensorLog fields
+# LayerPassLog fields
 # =============================================================================
 
 

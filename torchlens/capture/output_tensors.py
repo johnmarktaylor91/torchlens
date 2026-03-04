@@ -1,6 +1,6 @@
 """Functions for logging output tensors produced by decorated torch operations.
 
-This module handles the creation and population of TensorLog entries for every
+This module handles the creation and population of LayerPassLog entries for every
 tensor produced during a forward pass.  It covers both *exhaustive* mode (full
 metadata collection) and *fast* mode (re-use of a previously logged graph with
 new activations).
@@ -24,7 +24,7 @@ from ..utils.display import human_readable_size
 from ..utils.collections import index_nested, ensure_iterable
 from .flops import compute_backward_flops, compute_forward_flops
 from ..data_classes.buffer_log import BufferLog
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 from .tensor_tracking import (
     _update_tensor_family_links,
@@ -302,7 +302,7 @@ def _classify_new_tensor_in_model_log(
 def _tag_tensor_and_track_variations(
     self,
     out: torch.Tensor,
-    new_tensor_entry,
+    new_layer_entry,
     fields_dict_onetensor: Dict[str, Any],
     arg_copies: Tuple[Any],
     kwarg_copies: Dict[str, Any],
@@ -312,17 +312,17 @@ def _tag_tensor_and_track_variations(
     if self.save_gradients:
         _add_backward_hook(self, out, out.tl_tensor_label_raw)
 
-    for parent_label in new_tensor_entry.parent_layers:
+    for parent_label in new_layer_entry.parent_layers:
         parent = self[parent_label]
         if parent.has_saved_activations and self.save_function_args:
             parent_tensor_contents = _get_parent_contents(
                 parent_label,
                 arg_copies,
                 kwarg_copies,
-                new_tensor_entry.parent_layer_arg_locs,
+                new_layer_entry.parent_layer_arg_locs,
             )
             if not tensor_nanequal(parent_tensor_contents, parent.tensor_contents):
-                parent.children_tensor_versions[new_tensor_entry.tensor_label_raw] = (
+                parent.children_tensor_versions[new_layer_entry.tensor_label_raw] = (
                     parent_tensor_contents
                 )
                 parent.has_child_tensor_variations = True
@@ -386,7 +386,7 @@ def log_function_output_tensors_exhaustive(
         _log_output_tensor_info(
             self, out, i, args, kwargs, parent_param_passes, fields_dict_onetensor
         )
-        _make_tensor_log_entry(
+        _make_layer_log_entry(
             self,
             out,
             fields_dict=fields_dict_onetensor,
@@ -394,9 +394,9 @@ def log_function_output_tensors_exhaustive(
             t_kwargs=kwarg_copies,
             activation_postfunc=self.activation_postfunc,
         )
-        new_tensor_entry = self[fields_dict_onetensor["tensor_label_raw"]]
-        new_tensor_label = new_tensor_entry.tensor_label_raw
-        _update_tensor_family_links(self, new_tensor_entry)
+        new_layer_entry = self[fields_dict_onetensor["tensor_label_raw"]]
+        new_tensor_label = new_layer_entry.tensor_label_raw
+        _update_tensor_family_links(self, new_layer_entry)
 
         _classify_new_tensor_in_model_log(
             self, fields_dict, fields_dict_onetensor, new_tensor_label
@@ -404,7 +404,7 @@ def log_function_output_tensors_exhaustive(
         _tag_tensor_and_track_variations(
             self,
             out,
-            new_tensor_entry,
+            new_layer_entry,
             fields_dict_onetensor,
             arg_copies,
             kwarg_copies,
@@ -445,9 +445,9 @@ def log_function_output_tensors_fast(
     for i, out in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
-        self._tensor_counter += 1
+        self._layer_counter += 1
         self._raw_layer_type_counter[layer_type] += 1
-        realtime_tensor_num = self._tensor_counter
+        realtime_tensor_num = self._layer_counter
         layer_type_num = self._raw_layer_type_counter[layer_type]
         tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
         if tensor_label_raw in self.orphan_layers:
@@ -471,17 +471,17 @@ def log_function_output_tensors_fast(
         orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
         if orig_tensor_label in self.unlogged_layers:
             continue
-        orig_tensor_entry = self[orig_tensor_label]
+        orig_layer_entry = self[orig_tensor_label]
 
         if self.save_gradients:
             _add_backward_hook(self, out, orig_tensor_label)
 
         # Check to make sure the graph didn't change.
         if (
-            orig_tensor_entry.realtime_tensor_num != self._tensor_counter
-            or orig_tensor_entry.layer_type != layer_type
-            or orig_tensor_entry.tensor_label_raw != tensor_label_raw
-            or set(orig_tensor_entry.parent_layers) != set(parent_layer_labels_orig)
+            orig_layer_entry.realtime_tensor_num != self._layer_counter
+            or orig_layer_entry.layer_type != layer_type
+            or orig_layer_entry.tensor_label_raw != tensor_label_raw
+            or set(orig_layer_entry.parent_layers) != set(parent_layer_labels_orig)
         ):
             raise ValueError(
                 "The computational graph changed for this forward pass compared to the original "
@@ -491,26 +491,26 @@ def log_function_output_tensors_fast(
             )
 
         # Update any relevant fields.
-        if (self._tensor_nums_to_save == "all") or (
-            orig_tensor_entry.realtime_tensor_num in self._tensor_nums_to_save
+        if (self._layer_nums_to_save == "all") or (
+            orig_layer_entry.realtime_tensor_num in self._layer_nums_to_save
         ):
-            self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
-            orig_tensor_entry.save_tensor_data(
+            self.layers_with_saved_activations.append(orig_layer_entry.layer_label)
+            orig_layer_entry.save_tensor_data(
                 out,
                 arg_copies,
                 kwarg_copies,
                 self.save_function_args,
                 self.activation_postfunc,
             )
-            for child_layer in orig_tensor_entry.child_layers:
+            for child_layer in orig_layer_entry.child_layers:
                 if child_layer in self.output_layers:
                     child_output = self.layer_dict_main_keys[child_layer]
                     if (
-                        orig_tensor_entry.has_child_tensor_variations
-                        and child_layer in orig_tensor_entry.children_tensor_versions
+                        orig_layer_entry.has_child_tensor_variations
+                        and child_layer in orig_layer_entry.children_tensor_versions
                     ):
                         # children_tensor_versions already has transforms applied
-                        tensor_to_save = orig_tensor_entry.children_tensor_versions[child_layer]
+                        tensor_to_save = orig_layer_entry.children_tensor_versions[child_layer]
                         child_output.tensor_contents = safe_copy(tensor_to_save)
                     else:
                         child_output.tensor_contents = safe_copy(out)
@@ -524,16 +524,16 @@ def log_function_output_tensors_fast(
                     )
                     child_output.tensor_fsize_nice = human_readable_size(child_output.tensor_fsize)
 
-        orig_tensor_entry.tensor_shape = tuple(out.shape)
-        orig_tensor_entry.tensor_dtype = out.dtype
+        orig_layer_entry.tensor_shape = tuple(out.shape)
+        orig_layer_entry.tensor_dtype = out.dtype
         fsize = get_tensor_memory_amount(out)
-        orig_tensor_entry.tensor_fsize = fsize
-        orig_tensor_entry.tensor_fsize_nice = human_readable_size(fsize)
-        orig_tensor_entry.func_time_elapsed = exec_ctx.time_elapsed
-        orig_tensor_entry.func_rng_states = exec_ctx.rng_states
-        orig_tensor_entry.func_autocast_state = exec_ctx.autocast_state
-        orig_tensor_entry.func_position_args_non_tensor = non_tensor_args
-        orig_tensor_entry.func_keyword_args_non_tensor = non_tensor_kwargs
+        orig_layer_entry.tensor_fsize = fsize
+        orig_layer_entry.tensor_fsize_nice = human_readable_size(fsize)
+        orig_layer_entry.func_time_elapsed = exec_ctx.time_elapsed
+        orig_layer_entry.func_rng_states = exec_ctx.rng_states
+        orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
+        orig_layer_entry.func_position_args_non_tensor = non_tensor_args
+        orig_layer_entry.func_keyword_args_non_tensor = non_tensor_kwargs
 
 
 def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
@@ -596,13 +596,13 @@ def _log_output_tensor_info(
         args: positional args to the function that created the tensor
         kwargs: keyword args to the function that created the tensor
         parent_param_passes: Dict mapping barcodes of parent params to how many passes they've seen
-        fields_dict: dictionary of fields with which to initialize the new TensorLog
+        fields_dict: dictionary of fields with which to initialize the new LayerPassLog
     """
     layer_type = fields_dict["layer_type"]
     indiv_param_barcodes = list(parent_param_passes.keys())
-    self._tensor_counter += 1
+    self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    realtime_tensor_num = self._tensor_counter
+    realtime_tensor_num = self._layer_counter
     layer_type_num = self._raw_layer_type_counter[layer_type]
     tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
 
@@ -695,7 +695,7 @@ def _log_output_tensor_info(
         fields_dict["internally_initialized_ancestors"] = {tensor_label_raw}
 
 
-def _make_tensor_log_entry(
+def _make_layer_log_entry(
     self,
     t: torch.Tensor,
     fields_dict: Dict,
@@ -710,7 +710,7 @@ def _make_tensor_log_entry(
 
     Args:
         t: tensor to log
-        fields_dict: dictionary of fields to log in TensorLog
+        fields_dict: dictionary of fields to log in LayerPassLog
         t_args: Positional arguments to the function that created the tensor
         t_kwargs: Keyword arguments to the function that created the tensor
         activation_postfunc: Function to apply to activations before saving them.
@@ -723,15 +723,15 @@ def _make_tensor_log_entry(
     if fields_dict.get("is_buffer_layer"):
         new_entry = BufferLog(fields_dict)
     else:
-        new_entry = TensorLog(fields_dict)
-    if (self._tensor_nums_to_save == "all") or (
-        new_entry.realtime_tensor_num in self._tensor_nums_to_save
+        new_entry = LayerPassLog(fields_dict)
+    if (self._layer_nums_to_save == "all") or (
+        new_entry.realtime_tensor_num in self._layer_nums_to_save
     ):
         new_entry.save_tensor_data(
             t, t_args, t_kwargs, self.save_function_args, activation_postfunc
         )
         self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
-    self._raw_tensor_dict[new_entry.tensor_label_raw] = new_entry
-    self._raw_tensor_labels_list.append(new_entry.tensor_label_raw)
+    self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry
+    self._raw_layer_labels_list.append(new_entry.tensor_label_raw)
 
     return new_entry

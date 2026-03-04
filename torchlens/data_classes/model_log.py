@@ -21,7 +21,7 @@ from .interface import (
 )
 from ..capture.trace import save_new_activations
 from ..postprocess import postprocess
-from .tensor_log import RolledTensorLog, TensorLog
+from .layer_pass_log import LayerPassLog, RolledTensorLog, TensorLog
 from ..capture.trace import run_and_log_inputs_through_model
 from ..validation import validate_saved_activations
 from ..visualization.rendering import render_graph
@@ -100,19 +100,19 @@ class ModelLog:
         self.model_is_branching = False
 
         # Tensor Tracking:
-        self.layer_list: List[TensorLog] = []
+        self.layer_list: List[LayerPassLog] = []
         self.layer_list_rolled: List[RolledTensorLog] = []
-        self.layer_dict_main_keys: Dict[str, TensorLog] = OrderedDict()
-        self.layer_dict_all_keys: Dict[str, TensorLog] = OrderedDict()
+        self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()
+        self.layer_dict_all_keys: Dict[str, LayerPassLog] = OrderedDict()
         self.layer_dict_rolled: Dict[str, RolledTensorLog] = OrderedDict()
         self.layer_labels: List[str] = []
         self.layer_labels_w_pass: List[str] = []
         self.layer_labels_no_pass: List[str] = []
         self.layer_num_passes: Dict[str, int] = OrderedDict()
-        self._raw_tensor_dict: Dict[str, TensorLog] = OrderedDict()
-        self._raw_tensor_labels_list: List[str] = []
-        self._tensor_nums_to_save: List[int] = []
-        self._tensor_counter: int = 0
+        self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()
+        self._raw_layer_labels_list: List[str] = []
+        self._layer_nums_to_save: List[int] = []
+        self._layer_counter: int = 0
         self.num_operations: int = 0
         self._raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
         self._unsaved_layers_lookup_keys: Set[str] = set()
@@ -120,8 +120,8 @@ class ModelLog:
         # Mapping from raw to final layer labels:
         self._raw_to_final_layer_labels: Dict[str, str] = {}
         self._final_to_raw_layer_labels: Dict[str, str] = {}
-        self._lookup_keys_to_tensor_num_dict: Dict[str, int] = {}
-        self._tensor_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
+        self._lookup_keys_to_layer_num_dict: Dict[str, int] = {}
+        self._layer_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
 
         # Special Layers:
         self.input_layers: List[str] = []
@@ -188,9 +188,9 @@ class ModelLog:
         if self._pass_finished:
             return len(self.layer_list)
         else:
-            return len(self._raw_tensor_dict)
+            return len(self._raw_layer_dict)
 
-    def __getitem__(self, ix) -> TensorLog:
+    def __getitem__(self, ix) -> LayerPassLog:
         """Returns an object logging a model layer given an index. If the pass is finished,
         it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
 
@@ -221,7 +221,7 @@ class ModelLog:
         if self._pass_finished:
             return iter(self.layer_list)
         else:
-            return iter(list(self._raw_tensor_dict.values()))
+            return iter(list(self._raw_layer_dict.values()))
 
     # ********************************************
     # ************* FLOPs Properties *************

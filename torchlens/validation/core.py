@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
     pass
@@ -243,8 +243,8 @@ def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key,
 
 def _check_arglocs_correct_for_arg(
     self,
-    target_layer: TensorLog,
-    parent_layer: TensorLog,
+    target_layer: LayerPassLog,
+    parent_layer: LayerPassLog,
     arg_type: str,
     argloc_key: Union[str, tuple],
     saved_arg_val: Any,
@@ -311,7 +311,7 @@ def _check_arglocs_correct_for_arg(
 
 def _check_perturbation_exemptions(
     self,
-    layer: TensorLog,
+    layer: LayerPassLog,
     layers_to_perturb: List[str],
 ) -> bool:
     """Check whether a perturbation check should be skipped for registry-based reasons.
@@ -337,7 +337,7 @@ def _check_perturbation_exemptions(
 
 
 def _execute_func_with_restored_state(
-    layer: TensorLog,
+    layer: LayerPassLog,
     input_args: Dict,
     layers_to_perturb: List[str],
     layer_label: str,
@@ -432,7 +432,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
 def _prepare_input_args_for_validating_layer(
     self,
-    layer_to_validate_parents_for: TensorLog,
+    layer_to_validate_parents_for: LayerPassLog,
     layers_to_perturb: List[str],
 ) -> Dict:
     """Prepares the input arguments for validating the saved activations of a layer.

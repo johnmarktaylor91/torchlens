@@ -6,7 +6,7 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -70,7 +70,7 @@ def _detect_and_label_loops(self) -> None:
     if not, it runs the procedure again to check if more equivalent operations can be found.
     """
     # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
-    _sort_keys = {label: self[label].realtime_tensor_num for label in self._raw_tensor_labels_list}
+    _sort_keys = {label: self[label].realtime_tensor_num for label in self._raw_layer_labels_list}
 
     initial_labels = self.input_layers + self.internally_initialized_layers
     node_heap = [(_sort_keys[label], label) for label in initial_labels]
@@ -136,7 +136,7 @@ def _rebuild_pass_assignments(self) -> None:
             member.layer_passes_total = len(members_sorted)
 
 
-def _expand_isomorphic_subgraphs(self, node: TensorLog) -> None:
+def _expand_isomorphic_subgraphs(self, node: LayerPassLog) -> None:
     """Starting from a given node in the graph, starts from all equivalent operations (e.g., cos, add 5, etc.),
     and crawls forward, finding and marking corresponding operations until there are none left.
     At the end of this, nodes that have the same position with respect to the original node

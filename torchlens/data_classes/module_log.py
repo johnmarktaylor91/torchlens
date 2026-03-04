@@ -235,13 +235,13 @@ class ModuleLog:
         return self.num_layers
 
     def __getitem__(self, ix):
-        """Return the TensorLog at position ix within this module's layer list."""
+        """Return the LayerPassLog at position ix within this module's layer list."""
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot index into layers.")
         return self._source_model_log[self.all_layers[ix]]
 
     def __iter__(self):
-        """Iterate over TensorLog entries for all layers in this module."""
+        """Iterate over LayerPassLog entries for all layers in this module."""
         if self._source_model_log is None:
             return iter(self.all_layers)
         return iter(self._source_model_log[label] for label in self.all_layers)
