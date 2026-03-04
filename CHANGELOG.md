@@ -1,6 +1,39 @@
 # CHANGELOG
 
 
+## v0.15.2 (2026-03-04)
+
+### Bug Fixes
+
+- **core**: Resolve remaining open bugs — FLOPs accuracy, PERF-21, mypy types (#19, #154-161)
+  ([`da02dc5`](https://github.com/johnmarktaylor91/torchlens/commit/da02dc56b4940cf32c5e319dc4310ffa7e15c0e3))
+
+Bug #19: Verified fast-pass buffer orphan resolved by Bug #116 guard; added regression tests FLOPs:
+  Fix addbmm/baddbmm batch dimension, add einsum handler, fix pool kernel_size extraction
+
+PERF-21: Cache get_ignored_functions()/get_testing_overrides() in _get_torch_overridable_functions
+
+Bug #154: Type _SENTINEL as Any in func_call_location.py Bug #155: Eliminate reused variable across
+  str/bytes types in hashing.py Bug #156: Accept float in human_readable_size signature Bug #157:
+  Use setattr/getattr for dynamic tl_tensor_label_raw in safe_copy Bug #158: Add List[Any]
+  annotation to AutocastRestore._contexts Bug #160: Add _FlopsHandler type alias and typed
+  SPECIALTY_HANDLERS dict Bug #161: Add ModuleLog TYPE_CHECKING import and type annotations in
+  invariants.py
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **ci**: Switch CI from pip to uv for faster installs
+  ([`d619ef2`](https://github.com/johnmarktaylor91/torchlens/commit/d619ef212e43c397336a5e0479aa52a47e82569a))
+
+Replace pip with uv pip in quality and lint workflows. uv resolves and installs packages 10-20x
+  faster. Also adds explicit torch CPU index-url to dep-audit job (was missing, pulling full CUDA
+  bundle).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.1 (2026-03-04)
 
 ### Bug Fixes
