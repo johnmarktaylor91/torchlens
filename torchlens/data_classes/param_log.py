@@ -171,9 +171,16 @@ class ParamAccessor:
             raise KeyError(f"Ambiguous short name '{key}' — use full address")
         raise KeyError(key)
 
-    def __contains__(self, key: str) -> bool:
-        """Check membership by full parameter address."""
-        return key in self._dict
+    def __contains__(self, key) -> bool:
+        """Check membership by full address, short name, or integer index (#84)."""
+        if isinstance(key, int):
+            return 0 <= key < len(self._list)
+        if isinstance(key, str):
+            if key in self._dict:
+                return True
+            # Also check short name match
+            return any(pl.name == key for pl in self._list)
+        return False
 
     def __len__(self) -> int:
         """Return the number of parameters."""

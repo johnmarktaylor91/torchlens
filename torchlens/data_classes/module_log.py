@@ -243,9 +243,26 @@ class ModuleLog:
         return self.num_layers
 
     def __getitem__(self, ix):
-        """Return the LayerPassLog at position ix within this module's layer list."""
+        """Return the LayerPassLog at position ix within this module's layer list.
+
+        Supports int indexing and string label lookup (#120).
+        """
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot index into layers.")
+        if isinstance(ix, str):
+            # String label lookup within this module's layers
+            if ix in self.all_layers:
+                return self._source_model_log[ix]
+            # Try substring match within module layers
+            matches = [lbl for lbl in self.all_layers if ix in lbl]
+            if len(matches) == 1:
+                return self._source_model_log[matches[0]]
+            elif len(matches) > 1:
+                raise ValueError(
+                    f"Ambiguous lookup: '{ix}' matches {len(matches)} layers in module "
+                    f"'{self.address}': {', '.join(matches[:5])}"
+                )
+            raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
         return self._source_model_log[self.all_layers[ix]]
 
     def __iter__(self):

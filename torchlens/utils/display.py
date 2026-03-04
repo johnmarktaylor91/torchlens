@@ -3,8 +3,6 @@
 import multiprocessing as mp
 from typing import Any, List
 
-from IPython import get_ipython
-
 
 def identity(x: Any) -> Any:
     """Return the input unchanged."""
@@ -71,11 +69,12 @@ def human_readable_size(size: int, decimal_places: int = 1) -> str:
 def in_notebook() -> bool:
     """Return True if the code is running inside a Jupyter notebook, False otherwise."""
     try:
-        if "IPKernelApp" not in get_ipython().config:
+        from IPython import get_ipython
+
+        ipython = get_ipython()
+        if ipython is None or "IPKernelApp" not in ipython.config:
             return False
-    except ImportError:
-        return False
-    except AttributeError:
+    except (ImportError, AttributeError):
         return False
     return True
 

@@ -319,6 +319,7 @@ def _collect_frontier_and_detect_adjacency(
         node_subgraph = state.node_to_subgraph[node_label]
         node_subgraph_label = node_subgraph.starting_node
         subgraph_successor_nodes = {"children": [], "parents": []}
+        added_neighbors = set()  # #148: prevent shared neighbor double-add
         for node_type in node_types_to_use:
             node_type_field = node_type_fields[node_type]
             for neighbor_label in getattr(node, node_type_field):
@@ -326,8 +327,9 @@ def _collect_frontier_and_detect_adjacency(
                     continue
                 elif neighbor_label in state.node_to_subgraph:
                     _record_subgraph_adjacency(node_label, neighbor_label, state)
-                else:
+                elif neighbor_label not in added_neighbors:
                     subgraph_successor_nodes[node_type].append(neighbor_label)
+                    added_neighbors.add(neighbor_label)
         frontier_nodes[node_subgraph_label] = subgraph_successor_nodes
 
     return frontier_nodes

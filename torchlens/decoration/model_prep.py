@@ -371,7 +371,10 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
                     buffer_address = attribute_name
                 else:
                     buffer_address = submodule.tl_module_address + "." + attribute_name
-                setattr(attribute, "tl_buffer_address", buffer_address)
+                try:
+                    setattr(attribute, "tl_buffer_address", buffer_address)
+                except Exception:
+                    pass  # Skip buffers that can't be tagged (#40)
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +420,8 @@ def _handle_module_entry(model_log, module, args, kwargs):
     for t in input_tensors:
         if (not hasattr(t, "tl_tensor_label_raw")) and hasattr(t, "tl_buffer_address"):
             log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
+        if not hasattr(t, "tl_tensor_label_raw"):
+            continue  # Skip untracked tensors (#117)
         layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
         input_tensor_labels.add(t.tl_tensor_label_raw)
         module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
@@ -448,7 +453,7 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
     output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
     for t in output_tensors:
         if (module.tl_module_type.lower() == "identity") or (
-            t.tl_tensor_label_raw in input_tensor_labels
+            hasattr(t, "tl_tensor_label_raw") and t.tl_tensor_label_raw in input_tensor_labels
         ):
             t = torch.identity(t)
         layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
@@ -515,7 +520,13 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
         input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
             model_log, module, args, kwargs
         )
-        out = orig_forward(*args, **kwargs)
+        try:
+            out = orig_forward(*args, **kwargs)
+        except Exception:
+            # Pop module pass label to prevent state corruption (#122)
+            if module.tl_module_pass_labels:
+                module.tl_module_pass_labels.pop()
+            raise
         _handle_module_exit(
             model_log, module, out, input_tensor_labels, input_tensor_labels_at_entry
         )

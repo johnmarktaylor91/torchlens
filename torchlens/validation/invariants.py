@@ -379,15 +379,14 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
                 f"max(layer_num_passes)={expected_max}",
             )
 
-    # Per-layer pass consistency: layer_num_passes keys may be pass-qualified
-    # (e.g. 'linear_1_1:1') for nested loops, or plain no-pass labels.
-    # Validate that each key exists in layer_dict_main_keys.
-    main_keys = set(ml.layer_dict_main_keys.keys())
+    # Per-layer pass consistency: layer_num_passes is keyed by no-pass labels.
+    # Validate that each key exists in layer_labels_no_pass.
+    no_pass_labels = set(ml.layer_labels_no_pass)
     for label_key, num_passes in ml.layer_num_passes.items():
-        if label_key not in main_keys:
+        if label_key not in no_pass_labels:
             raise MetadataInvariantError(
                 name,
-                f"layer_num_passes key '{label_key}' not in layer_dict_main_keys",
+                f"layer_num_passes key '{label_key}' not in layer_labels_no_pass",
             )
 
     # For top-level (no-pass) layer_logs, verify pass dict consistency

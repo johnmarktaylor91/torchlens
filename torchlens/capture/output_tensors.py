@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Un
 import torch
 
 from .. import _state as _st
+from .._state import pause_logging
 from ..utils.introspection import (
     _get_func_call_stack,
     get_attr_values_from_tensor_list,
@@ -455,11 +456,15 @@ def log_function_output_tensors_fast(
         parent_layer_labels_raw = get_attr_values_from_tensor_list(
             arg_tensors, "tl_tensor_label_raw"
         )
-        parent_layer_labels_orig = [
-            self._raw_to_final_layer_labels[raw_label]
-            for raw_label in parent_layer_labels_raw
-            if raw_label in self._raw_to_final_layer_labels
-        ]
+        parent_layer_labels_orig = []
+        for raw_label in parent_layer_labels_raw:
+            if raw_label in self._raw_to_final_layer_labels:
+                parent_layer_labels_orig.append(self._raw_to_final_layer_labels[raw_label])
+            elif raw_label not in self.orphan_layers:
+                raise ValueError(
+                    f"Fast-path parent {raw_label} not found in raw→final label map "
+                    f"and not in orphan_layers. The computational graph may have changed."
+                )
         out.tl_tensor_label_raw = tensor_label_raw
         if tensor_label_raw not in self._raw_to_final_layer_labels:
             raise ValueError(
@@ -474,7 +479,7 @@ def log_function_output_tensors_fast(
         orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
 
         if self.save_gradients:
-            _add_backward_hook(self, out, orig_tensor_label)
+            _add_backward_hook(self, out, tensor_label_raw)  # Must pass raw label (#86)
 
         # Check to make sure the graph didn't change.
         if (
@@ -515,9 +520,10 @@ def log_function_output_tensors_fast(
                     else:
                         child_output.tensor_contents = safe_copy(out)
                         if self.activation_postfunc is not None:
-                            child_output.tensor_contents = self.activation_postfunc(
-                                child_output.tensor_contents
-                            )
+                            with pause_logging():
+                                child_output.tensor_contents = self.activation_postfunc(
+                                    child_output.tensor_contents
+                                )
                     child_output.has_saved_activations = True
                     child_output.tensor_fsize = get_tensor_memory_amount(
                         child_output.tensor_contents

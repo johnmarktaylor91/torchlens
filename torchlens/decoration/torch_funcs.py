@@ -103,9 +103,9 @@ def torch_func_decorator(func: Callable, func_name: str):
         all_args = args if not kwargs else (*args, *kwargs.values())
         arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
 
-        # Register any buffer tensors in the arguments.
+        # Register any buffer tensors in the arguments (only on first encounter).
         for t in arg_tensorlike:
-            if hasattr(t, "tl_buffer_address"):
+            if hasattr(t, "tl_buffer_address") and not hasattr(t, "tl_tensor_label_raw"):
                 log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
 
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
@@ -197,14 +197,30 @@ def torch_func_decorator(func: Callable, func_name: str):
 
 def get_func_argnames(orig_func: Callable, func_name: str):
     """Attempts to get the argument names for a function, first by checking the signature, then
-    by checking the documentation. Adds these names to ``_state._func_argnames``."""
+    by checking the documentation. Adds these names to ``_state._func_argnames``.
+
+    Stores under the stripped name (no leading/trailing underscores) so lookups
+    via ``func_name.strip("_")`` are consistent (#82).
+    """
     if func_name in ["real", "imag", "T", "mT", "data", "H"]:
         return
 
+    storage_key = func_name.strip("_")
+
     try:
-        argnames = list(inspect.signature(orig_func).parameters.keys())
-        argnames = tuple([arg.replace("*", "") for arg in argnames if arg not in ["cls", "self"]])
-        _state._func_argnames[func_name] = argnames
+        params = inspect.signature(orig_func).parameters
+        argnames = []
+        for name, param in params.items():
+            if name in ("cls", "self"):
+                continue
+            # #123: Use Parameter.kind instead of naive asterisk stripping
+            if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                argnames.append(f"*{name}")
+            elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                argnames.append(f"**{name}")
+            else:
+                argnames.append(name)
+        _state._func_argnames[storage_key] = tuple(argnames)
         return
     except ValueError:
         pass
@@ -225,7 +241,7 @@ def get_func_argnames(orig_func: Callable, func_name: str):
         argname = argname.replace("*", "")
         argnames.append(argname)
     argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])
-    _state._func_argnames[func_name] = argnames
+    _state._func_argnames[storage_key] = argnames
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +280,7 @@ def decorate_all_once():
             continue
 
         # Pre-compute argnames
-        if func_name not in _state._func_argnames:
+        if func_name.strip("_") not in _state._func_argnames:
             get_func_argnames(orig_func, func_name)
 
         if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
@@ -311,12 +327,13 @@ def decorate_all_once():
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     setattr(local_func_namespace, func_name, new_property)
+                # #31: Only add mapper entries if setattr succeeded
+                _state._orig_to_decorated[id(orig_func)] = new_property
+                _state._decorated_to_orig[id(new_property)] = orig_func
+                _state._decorated_func_mapper[new_property] = orig_func
+                _state._decorated_func_mapper[orig_func] = new_property
             except (AttributeError, TypeError):
                 pass
-            _state._orig_to_decorated[id(orig_func)] = new_property
-            _state._decorated_to_orig[id(new_property)] = orig_func
-            _state._decorated_func_mapper[new_property] = orig_func
-            _state._decorated_func_mapper[orig_func] = new_property
 
     # Register wrappers with JIT builtin table so torch.jit.script
     # recognizes them as known ATen ops (prevents JIT compilation errors).

@@ -245,10 +245,7 @@ def _merge_buffer_entries(
             self[spouse_layer].spouse_layers.remove(buffer_to_remove.tensor_label_raw)
             self[spouse_layer].spouse_layers.append(source_buffer.tensor_label_raw)
 
-    for sibling_layer in buffer_to_remove.sibling_layers:
-        if buffer_to_remove.tensor_label_raw in self[sibling_layer].sibling_layers:
-            self[sibling_layer].sibling_layers.remove(buffer_to_remove.tensor_label_raw)
-            self[sibling_layer].sibling_layers.append(source_buffer.tensor_label_raw)
+    # Note: sibling_layers iteration removed — buffers always have empty sibling_layers (#2)
 
     self._raw_layer_labels_list.remove(buffer_to_remove.tensor_label_raw)
     self._raw_layer_dict.pop(buffer_to_remove.tensor_label_raw)

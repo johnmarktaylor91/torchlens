@@ -32,6 +32,7 @@ def _getitem_after_pass(self, ix):
 
     Supports several lookup modes:
         - int: ordinal index into the layer list (e.g., 0, -1).
+        - slice: returns a list of layers from the layer_list.
         - str (exact layer label): matches a layer label directly.
         - str (no-pass layer label): returns LayerLog for multi-pass layers.
         - str (module address): matches a module address in _module_logs, returning a ModuleLog.
@@ -39,6 +40,9 @@ def _getitem_after_pass(self, ix):
 
     Raises KeyError if no match is found.
     """
+    if isinstance(ix, slice):
+        return self.layer_list[ix]  # #78: slice indexing support
+
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
 
@@ -54,6 +58,15 @@ def _getitem_after_pass(self, ix):
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(ix) in str(key)]
         if len(keys_with_substr) == 1:
             return self.layer_dict_all_keys[keys_with_substr[0]]
+        elif len(keys_with_substr) > 1:
+            matches_str = ", ".join(str(k) for k in keys_with_substr[:10])
+            suffix = (
+                f" (and {len(keys_with_substr) - 10} more)" if len(keys_with_substr) > 10 else ""
+            )
+            raise ValueError(
+                f"Ambiguous lookup: '{ix}' matches {len(keys_with_substr)} layers: "
+                f"{matches_str}{suffix}. Please use a more specific key."
+            )
 
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
@@ -78,8 +91,8 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
     if type(key) != str:
         raise ValueError(_get_lookup_help_str(self, key, mode))
 
-    if hasattr(self, "_module_logs") and key.split(":")[0] in self._module_logs:
-        module, pass_num = key.split(":", 1)
+    if hasattr(self, "_module_logs") and key.rsplit(":", 1)[0] in self._module_logs:
+        module, pass_num = key.rsplit(":", 1)
         module_num_passes = self._module_logs[module].num_passes
         raise ValueError(
             f"You specified module {module} pass {pass_num}, but {module} only has "
@@ -87,14 +100,15 @@ def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
         )
 
     if key in self.layer_labels_no_pass:
-        layer_num_passes = self.layer_num_passes.get(key, "unknown")
-        raise ValueError(
-            f"You specified output of layer {key}, but it has {layer_num_passes} passes; "
-            f"please specify e.g. {key}:2 for the second pass of {key}."
-        )
+        layer_num_passes = self.layer_num_passes.get(key, 1)
+        if layer_num_passes > 1:
+            raise ValueError(
+                f"You specified output of layer {key}, but it has {layer_num_passes} passes; "
+                f"please specify e.g. {key}:2 for the second pass of {key}."
+            )
 
-    if key.split(":")[0] in self.layer_labels_no_pass:
-        layer_label, pass_num = key.split(":", 1)
+    if key.rsplit(":", 1)[0] in self.layer_labels_no_pass:
+        layer_label, pass_num = key.rsplit(":", 1)
         layer_num_passes = self.layer_num_passes.get(layer_label, "unknown")
         raise ValueError(
             f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
@@ -337,7 +351,15 @@ def to_pandas(self) -> pd.DataFrame:
 
     Returns:
         Pandas dataframe with info about each layer.
+
+    Raises:
+        RuntimeError: If called before the forward pass is complete.
     """
+    if not self._pass_finished:
+        raise RuntimeError(
+            "to_pandas() cannot be called before the forward pass is complete. "
+            "Please wait until log_forward_pass has returned."
+        )
     fields_for_df = [
         "layer_label",
         "layer_label_w_pass",

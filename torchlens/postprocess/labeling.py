@@ -315,7 +315,7 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
             self.layer_labels.append(layer_entry.layer_label)
             self.layer_labels_no_pass.append(layer_entry.layer_label_no_pass)
             self.layer_labels_w_pass.append(layer_entry.layer_label_w_pass)
-            self.layer_num_passes[layer_entry.layer_label] = layer_entry.layer_passes_total
+            self.layer_num_passes[layer_entry.layer_label_no_pass] = layer_entry.layer_passes_total
             if layer_entry.has_saved_activations:
                 self.tensor_fsize_saved += layer_entry.tensor_fsize
             _trim_and_reorder_layer_entry_fields(layer_entry)  # Final reformatting of fields
@@ -429,7 +429,7 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
         if field in old_dict:
             new_dir_dict[field] = old_dict[field]
     for field, value in old_dict.items():
-        if field not in new_dir_dict:
+        if field not in new_dir_dict and not callable(value):
             new_dir_dict[field] = value
     layer_entry.__dict__ = new_dir_dict
 
