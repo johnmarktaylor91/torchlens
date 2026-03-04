@@ -178,7 +178,7 @@ def render_graph(
 
         display(dot)
 
-    dot.render(vis_outpath, view=(not save_only))
+    dot.render(vis_outpath, view=(not save_only), cleanup=True)
 
 
 def _add_node_to_graphviz(
