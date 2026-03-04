@@ -13,7 +13,7 @@ torch.use_deterministic_algorithms(True)
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_OUTPUTS_DIR = opj(TESTS_DIR, "test_outputs")
 REPORTS_DIR = opj(TEST_OUTPUTS_DIR, "reports")
-VIS_OUTPUT_DIR = opj(TEST_OUTPUTS_DIR, "graphs")
+VIS_OUTPUT_DIR = opj(TEST_OUTPUTS_DIR, "visualizations")
 
 sub_dirs = [
     "cornet",
