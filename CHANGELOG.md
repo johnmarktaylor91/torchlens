@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v0.15.7 (2026-03-04)
+
+### Bug Fixes
+
+- **vis**: Clean up intermediate .gv source files after rendering
+  ([`147c7b7`](https://github.com/johnmarktaylor91/torchlens/commit/147c7b7329ae3e86ee1c65dbe61e30a849dd719f))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **tests**: Add @pytest.mark.smoke to 18 critical-path tests
+  ([`d26f4ec`](https://github.com/johnmarktaylor91/torchlens/commit/d26f4ec86fbe64f26deb4c40880da4fb5882718c))
+
+18 fast tests across 9 files marked as smoke tests for quick validation during development. Run with
+  `pytest tests/ -m smoke` (~6s).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.6 (2026-03-04)
 
 ### Bug Fixes
