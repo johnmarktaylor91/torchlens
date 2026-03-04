@@ -1,6 +1,6 @@
 """Top level package: make the user-facing functions top-level, rest accessed as submodules."""
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 
 from .user_funcs import (
     log_forward_pass,

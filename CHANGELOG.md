@@ -1,6 +1,138 @@
 # CHANGELOG
 
 
+## v0.15.0 (2026-03-04)
+
+### Bug Fixes
+
+- **validation**: Resolve 8 test failures and Bug #79 in metadata invariants
+  ([`14b2e5b`](https://github.com/johnmarktaylor91/torchlens/commit/14b2e5bbb8ac96d0dc45d8f8108db948dbb20097))
+
+Three root-cause fixes for failures exposed by the full test suite:
+
+1. Module hierarchy aliasing (finalization.py): shared nn.Module instances (same Conv2d registered
+  as both self.proj1 and self.conv_list[0]) had metadata lookup fail because _prepare_model_once
+  overwrites tl_module_address to the last-visited alias while _capture_module_metadata stores under
+  the first-visited alias. Built alias→meta map and address_children prefix rewriting so all aliases
+  resolve correctly.
+
+2. Loop detection Bug #79 (loop_detection.py): _merge_iso_groups_to_layers only compared pairs
+  within iso-groups, missing Rule 1 (param sharing → same layer) across iso-groups. Rewrote with
+  union-find + path compression and added cross-iso-group param barcode merge pass. Also unify
+  operation_equivalence_type for merged nodes whose module path suffixes differ.
+
+3. Adjacency invariant (invariants.py): removed incorrect operation-level neighbor check —
+  subgraph-level adjacency is verified during BFS in loop_detection.py, not reconstructable
+  post-hoc. Non-param multi-pass groups can be the only multi-pass group (param-free loops).
+  Upgraded param sharing violation back from warning to error now that Bug #79 is fixed.
+
+Also: boolean flag fixes in control_flow.py and graph_traversal.py for buffer/output layers;
+  @pytest.mark.slow on vit and beit tests; profiling test streamlined.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **ci**: Add mypy type checking and pip-audit dependency auditing
+  ([`2a0e0e7`](https://github.com/johnmarktaylor91/torchlens/commit/2a0e0e725f3551db15221d2bea326018423df880))
+
+Add quality.yml workflow with two jobs: - mypy (advisory, continue-on-error) — 199 existing errors
+  to fix later - pip-audit (blocking) — fails on known CVEs in dependencies
+
+Mypy configured leniently in pyproject.toml; both tools added to dev deps.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **ci**: Add pip caching to quality workflow
+  ([`d7573b1`](https://github.com/johnmarktaylor91/torchlens/commit/d7573b18d57bc3e9d20c4c524875ffdb07e4de1f))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **coverage**: Add pytest-cov with HTML and text report generation
+  ([`c1ac2c9`](https://github.com/johnmarktaylor91/torchlens/commit/c1ac2c900d334e0ba8e0cff2e6f248e506d15686))
+
+Configure branch coverage for torchlens/ source. HTML report writes to
+  tests/test_outputs/coverage_html/, text summary to coverage_report.txt. Reports auto-generate when
+  running pytest --cov via a sessionfinish hook.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dev**: Add UI sandbox notebook and nbstripout for clean diffs
+  ([`5247361`](https://github.com/johnmarktaylor91/torchlens/commit/524736119646202be37bb8fb30b18d584d0a5a26))
+
+Add tests/ui_sandbox.ipynb — interactive workbench for tinkering with torchlens during development:
+  logging, accessors, reprs, visualization, validation. Set up nbstripout via .gitattributes to
+  auto-strip cell outputs on commit.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **profiling**: Expand profiling report to 12 models across architecture families
+  ([`60e983a`](https://github.com/johnmarktaylor91/torchlens/commit/60e983a4d47c05141bbe6f47929708018b3f5727))
+
+Added 9 models to the profiling test for illustrative coverage: - SimpleBranching (diverging/merging
+  flow) - ResidualBlock (conv-BN-relu skip connection) - MultiheadAttention (nn.MultiheadAttention)
+  - LSTM (recurrent + classifier) - ResNet18, MobileNetV2, EfficientNet_B0 (real CNNs) - Swin_T
+  (shifted-window vision transformer, 671 layers) - VGG16 (deep sequential CNN, 138M params)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **modules**: Add shared module alias lookup and explicit alias fields
+  ([`c2fb14e`](https://github.com/johnmarktaylor91/torchlens/commit/c2fb14ef15fd27bdd352b2e27b99c4866c5706bd))
+
+Shared nn.Module instances (same object registered under multiple addresses) can now be looked up by
+  any alias:
+
+ml.modules["shared_conv"] # primary address ml.modules["alias_list.0"] # alias — returns same
+  ModuleLog
+
+New fields: - ModuleLog.is_shared: bool, True when len(all_addresses) > 1 -
+  ModulePassLog.all_module_addresses: list of all addresses for the module -
+  ModulePassLog.is_shared_module: bool, same as ModuleLog.is_shared - ModuleAccessor builds
+  alias→ModuleLog map for __getitem__/__contains__ - ModuleLog.__repr__ shows aliases when
+  is_shared=True
+
+Invariant checks (module_hierarchy) now account for shared modules where address_parent refers to
+  the primary alias's parent path.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Add complex semantic invariants M-R to check_metadata_invariants
+  ([`b745db8`](https://github.com/johnmarktaylor91/torchlens/commit/b745db826135e0470df75d70eaa6dcce48feae42))
+
+Add 6 new invariant categories verifying loop detection, graph ordering, distance/reachability,
+  connectivity, module containment, and lookup key consistency. Fix existing checks H and L for
+  recurrent model compatibility. 17 new corruption tests (50 total in test_validation.py).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Add validate_forward_pass with metadata invariant checks
+  ([`8a25ede`](https://github.com/johnmarktaylor91/torchlens/commit/8a25ede7f90b4e924f06e55ad15bb46d148f7384))
+
+Rename validate_saved_activations → validate_forward_pass (old name kept as deprecated alias). Add
+  comprehensive metadata invariant checker (check_metadata_invariants) covering 12 categories:
+  ModelLog self-consistency, special layer lists, graph topology, LayerPassLog fields, recurrence,
+  branching, LayerLog cross-refs, module-layer containment, module hierarchy, param cross-refs,
+  buffer cross-refs, and equivalence symmetry.
+
+validate_metadata=True by default, so every existing validation call now exercises the full
+  invariant suite automatically.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **profiling**: Add automated profiling report for overhead measurement
+  ([`a483011`](https://github.com/johnmarktaylor91/torchlens/commit/a483011785da9ee4f5dd5957c083d9e67f9f7e82))
+
+Profiles raw forward pass, log_forward_pass, save_new_activations, and validate_saved_activations
+  across toy and real-world models. Generates tests/test_outputs/profiling_report.txt with absolute
+  times and overhead ratios.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.14.0 (2026-03-04)
 
 ### Features
