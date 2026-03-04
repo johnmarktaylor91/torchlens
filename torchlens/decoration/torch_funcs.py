@@ -50,7 +50,7 @@ def _get_active_device() -> Optional[str]:
 
         for mode in reversed(_get_current_function_mode_stack()):
             if isinstance(mode, _DeviceContext):
-                return mode.device
+                return mode.device  # type: ignore[return-value]
     except (ImportError, AttributeError):
         pass
     return None
@@ -240,8 +240,8 @@ def get_func_argnames(orig_func: Callable, func_name: str):
             continue
         argname = argname.replace("*", "")
         argnames.append(argname)
-    argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])
-    _state._func_argnames[storage_key] = argnames
+    argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])  # type: ignore[assignment]
+    _state._func_argnames[storage_key] = argnames  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------

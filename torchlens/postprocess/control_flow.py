@@ -18,7 +18,7 @@ def _mark_conditional_branches(self) -> None:
     """
     terminal_bool_nodes = self.internally_terminated_bool_layers[:]
 
-    nodes_seen = set()
+    nodes_seen: Set[str] = set()
     node_stack = terminal_bool_nodes.copy()
     while len(node_stack) > 0:
         node_label = node_stack.pop()
@@ -52,7 +52,7 @@ def _fix_modules_for_internal_tensors(self) -> None:
     # Now go through the stack and work backwards up the internally initialized branch, fixing the
     # module containment labels as we go.
 
-    nodes_seen = set()
+    nodes_seen: Set[str] = set()
     while len(node_stack) > 0:
         node_label = node_stack.pop()
         node = self[node_label]

@@ -87,7 +87,7 @@ def _prepare_model_once(model: nn.Module) -> None:
     if model in _state._prepared_models:
         return
 
-    model.tl_module_address = ""
+    model.tl_module_address = ""  # type: ignore[assignment]
 
     def _visit_once(module, address, named_children, is_root):
         # Replace any original torch functions stored in module __dict__
@@ -137,9 +137,9 @@ def _prepare_model_session(
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
     model_log.model_name = str(type(model).__name__)
-    model.tl_source_model_log = model_log
+    model.tl_source_model_log = model_log  # type: ignore[assignment]
 
-    _seen_module_ids = {}
+    _seen_module_ids: Dict[int, str] = {}
 
     def _visit_session(module, address, named_children, is_root):
         _capture_module_metadata(
@@ -176,13 +176,13 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
 
     param_logs = {}
     for address, param in model.named_parameters():
-        param.tl_requires_grad = param.requires_grad
+        param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]
         param.requires_grad = True
 
         barcode = make_random_barcode()
-        param.tl_param_barcode = barcode
-        param.tl_param_address = address
-        param.tl_pass_num = 0
+        param.tl_param_barcode = barcode  # type: ignore[attr-defined]
+        param.tl_param_address = address  # type: ignore[attr-defined]
+        param.tl_pass_num = 0  # type: ignore[attr-defined]
 
         parts = address.rsplit(".", 1)
         module_address = parts[0] if len(parts) > 1 else ""
@@ -203,7 +203,7 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
             num_params=param.numel(),
             fsize=param_fsize,
             fsize_nice=human_readable_size(param_fsize),
-            trainable=param.tl_requires_grad,
+            trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
             module_address=module_address,
             module_type=module_type,
             barcode=barcode,
@@ -232,26 +232,26 @@ def _get_class_metadata(module_class: type) -> dict:
     try:
         meta["source_file"] = inspect.getfile(module_class)
     except (TypeError, OSError):
-        meta["source_file"] = None
+        meta["source_file"] = None  # type: ignore[assignment]
     try:
         _, line = inspect.getsourcelines(module_class)
-        meta["source_line"] = line
+        meta["source_line"] = line  # type: ignore[assignment]
     except (TypeError, OSError):
-        meta["source_line"] = None
+        meta["source_line"] = None  # type: ignore[assignment]
 
-    meta["class_docstring"] = module_class.__doc__
-
-    try:
-        meta["init_signature"] = str(inspect.signature(module_class.__init__))
-    except (ValueError, TypeError):
-        meta["init_signature"] = None
-    meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)
+    meta["class_docstring"] = module_class.__doc__  # type: ignore[assignment]
 
     try:
-        meta["forward_signature"] = str(inspect.signature(module_class.forward))
+        meta["init_signature"] = str(inspect.signature(module_class.__init__))  # type: ignore[misc]
     except (ValueError, TypeError):
-        meta["forward_signature"] = None
-    meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)
+        meta["init_signature"] = None  # type: ignore[assignment]
+    meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)  # type: ignore[assignment, misc]
+
+    try:
+        meta["forward_signature"] = str(inspect.signature(module_class.forward))  # type: ignore[attr-defined]
+    except (ValueError, TypeError):
+        meta["forward_signature"] = None  # type: ignore[assignment]
+    meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)  # type: ignore[assignment, attr-defined]
 
     _module_class_metadata_cache[module_class] = meta
     return meta
@@ -370,7 +370,7 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
                 if submodule.tl_module_address == "":
                     buffer_address = attribute_name
                 else:
-                    buffer_address = submodule.tl_module_address + "." + attribute_name
+                    buffer_address = submodule.tl_module_address + "." + attribute_name  # type: ignore[operator]
                 try:
                     setattr(attribute, "tl_buffer_address", buffer_address)
                 except Exception:
@@ -391,9 +391,9 @@ def _tag_untagged_buffers(module: nn.Module) -> None:
             buffer_address = buffer_name
         else:
             buffer_address = f"{module.tl_module_address}.{buffer_name}"
-        buffer_tensor.tl_buffer_address = buffer_address
+        buffer_tensor.tl_buffer_address = buffer_address  # type: ignore[attr-defined]
         if hasattr(buffer_tensor, "tl_tensor_label_raw"):
-            buffer_tensor.tl_buffer_parent = buffer_tensor.tl_tensor_label_raw
+            buffer_tensor.tl_buffer_parent = buffer_tensor.tl_tensor_label_raw  # type: ignore[attr-defined]
             delattr(buffer_tensor, "tl_tensor_label_raw")
 
 
@@ -552,7 +552,7 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
     if layer_entry.is_bottom_level_submodule_output:
         return True
 
-    if layer_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
+    if layer_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:  # type: ignore[arg-type]
         layer_entry.is_bottom_level_submodule_output = True
         layer_entry.bottom_level_submodule_pass_exited = (
             submodule_address,

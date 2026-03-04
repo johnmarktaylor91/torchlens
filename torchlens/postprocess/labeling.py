@@ -18,7 +18,7 @@ def _map_raw_labels_to_final_labels(self) -> None:
     """
     raw_to_final_layer_labels = {}
     final_to_raw_layer_labels = {}
-    layer_type_counter = defaultdict(lambda: 1)
+    layer_type_counter: defaultdict[str, int] = defaultdict(lambda: 1)
     layer_total_counter = 1
     for tensor_log_entry in self:
         layer_type = tensor_log_entry.layer_type
@@ -79,7 +79,7 @@ def _log_final_info_for_all_layers(self) -> None:
     # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
     # Lists are kept as primary storage (insertion order matters for downstream consumers),
     # but linear `in` checks on lists are expensive for large models.
-    _shadow_sets = {
+    _shadow_sets: dict = {
         "module_layers": defaultdict(set),
         "module_pass_layers": defaultdict(set),
         "top_level_module_passes": set(),
@@ -247,7 +247,7 @@ def _log_module_hierarchy_info_for_layer(
     for module_index, module_pass_label in enumerate(layer_entry.containing_modules_origin_nested):
         if isinstance(module_pass_label, str):
             module_name, module_pass = module_pass_label.rsplit(":", 1)
-            module_pass = int(module_pass)
+            module_pass = int(module_pass)  # type: ignore[assignment]
         else:
             module_name, module_pass = module_pass_label
         module_pass_nice_label = f"{module_name}:{module_pass}"

@@ -2,7 +2,7 @@
 
 import time
 from collections import defaultdict, deque
-from typing import Dict, NamedTuple, TYPE_CHECKING
+from typing import Optional, Dict, NamedTuple, TYPE_CHECKING
 
 import torch
 
@@ -159,7 +159,7 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
 def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None:
     """Assign nesting_depth to each ModuleLog via BFS from the root."""
     visited = {"self": 0}
-    queue = deque()
+    queue: deque = deque()
     for child_addr in root_module.call_children:
         if child_addr in module_dict:
             module_dict[child_addr].nesting_depth = 1
@@ -183,8 +183,8 @@ def _build_submodule_pass_logs(
     num_passes: int,
     pass_dict: dict,
     mbd: dict,
-    _child_to_parent_pass: dict = None,
-    all_module_addresses: list = None,
+    _child_to_parent_pass: Optional[dict] = None,
+    all_module_addresses: Optional[list] = None,
 ) -> tuple:
     """Build ModulePassLog objects for all passes of a single submodule.
 
@@ -281,7 +281,7 @@ def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> Modul
     """Gather parameter and buffer layer info for a single module."""
     from ..data_classes.param_log import ParamAccessor
 
-    module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}
+    module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}  # type: ignore[attr-defined]
     module_params = ParamAccessor(module_param_dict)
     m_num_params = mbd["module_nparams"].get(address, 0)
     m_num_trainable = mbd["module_nparams_trainable"].get(address, 0)
@@ -310,7 +310,7 @@ def _build_module_logs(self: "ModelLog") -> None:
     """
     mbd = self._module_build_data
     module_dict = {}  # address -> ModuleLog
-    pass_dict = {}  # "addr:pass" -> ModulePassLog
+    pass_dict: Dict[str, ModulePassLog] = {}  # "addr:pass" -> ModulePassLog
     module_order = []  # ordered by first appearance
 
     # --- Build root ModuleLog ("self") ---
@@ -319,9 +319,9 @@ def _build_module_logs(self: "ModelLog") -> None:
     module_order.append(root_module)
 
     # Pre-compute param_logs grouped by module address
-    self._param_logs_by_module = defaultdict(list)
+    self._param_logs_by_module = defaultdict(list)  # type: ignore[attr-defined]
     for pl in self.param_logs:
-        self._param_logs_by_module[pl.module_address].append(pl)
+        self._param_logs_by_module[pl.module_address].append(pl)  # type: ignore[attr-defined]
 
     # Pre-compute reverse mapping: child_pass_label -> parent_pass_label
     _child_to_parent_pass = {}
@@ -417,7 +417,7 @@ def _build_module_logs(self: "ModelLog") -> None:
             passes=passes,
             pass_labels=pass_labels_list,
             all_layers=all_layers,
-            params=param_info.params,
+            params=param_info.params,  # type: ignore[arg-type]
             num_params=param_info.num_params,
             num_params_trainable=param_info.num_trainable,
             num_params_frozen=param_info.num_frozen,
@@ -450,7 +450,7 @@ def _build_module_logs(self: "ModelLog") -> None:
             entry = self.layer_dict_all_keys[label]
             if entry.buffer_address is not None:
                 buffer_dict[entry.buffer_address] = entry
-    self._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=self)
+    self._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=self)  # type: ignore[assignment, arg-type]
 
     # --- Clean up temporary state ---
     self._module_metadata = {}
@@ -513,7 +513,7 @@ def _build_layer_logs(self: "ModelLog") -> None:
 
         layer_log.passes[pass_log.pass_num] = pass_log
         layer_log.pass_labels.append(pass_log.layer_label)
-        pass_log.parent_layer_log = layer_log
+        pass_log.parent_layer_log = layer_log  # type: ignore[assignment]
 
     self.layer_logs = layer_logs
 

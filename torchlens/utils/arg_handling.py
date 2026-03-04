@@ -31,7 +31,7 @@ def _safe_copy_arg(arg: Any) -> Any:
     elif isinstance(arg, dict):
         return type(arg)({k: _safe_copy_arg(v) for k, v in arg.items()})
     elif isinstance(arg, (list, tuple)):
-        copied = [_safe_copy_arg(item) for item in arg]
+        copied = [_safe_copy_arg(item) for item in arg]  # type: ignore[assignment]
         return type(arg)(*copied) if hasattr(type(arg), "_fields") else type(arg)(copied)
     else:
         return arg

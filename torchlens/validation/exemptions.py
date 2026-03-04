@@ -4,7 +4,7 @@
 # When adding new model tests, if perturbation fails for a new function,
 # add the exemption here (not in core.py).
 
-from typing import Any, Dict, List, Set, Union
+from typing import Any, Callable, Dict, List, Set, Union
 
 import torch
 
@@ -160,7 +160,7 @@ def _check_interpolate_exempt(self, layer: LayerPassLog, layers_to_perturb: List
 # ---------------------------------------------------------------------------
 # Registry 4: Custom exemption checks keyed by func name.
 # ---------------------------------------------------------------------------
-CUSTOM_EXEMPTION_CHECKS: Dict[str, callable] = {
+CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[..., bool]] = {
     "__getitem__": _check_getitem_exempt,
     "__setitem__": _check_setitem_exempt,
     "lstm": _check_lstm_exempt,
@@ -296,7 +296,7 @@ def posthoc_perturb_check(
 
     for arg_type in ["args", "kwargs"]:
         iterfunc, fieldname = arg_type_dict[arg_type]
-        for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):
+        for key, val in iterfunc(getattr(layer_to_validate_parents_for, fieldname)):  # type: ignore[operator]
             # Skip if it's the argument being perturbed
             if (
                 key in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type]

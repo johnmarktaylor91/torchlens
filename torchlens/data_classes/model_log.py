@@ -295,7 +295,7 @@ class ModelLog:
     @property
     def buffers(self) -> "BufferAccessor":
         """Access buffer metadata by address, short name, or index."""
-        return self._buffer_accessor
+        return self._buffer_accessor  # type: ignore[return-value]
 
     # ********************************************
     # ******** Assign Imported Methods ***********
