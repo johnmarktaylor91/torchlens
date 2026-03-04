@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pytest", "pre-commit"]
+dev = ["ruff", "pytest", "pytest-cov", "pre-commit"]
 test = [
     "lightning",
     "pillow",
@@ -58,6 +58,20 @@ include = ["torchlens*"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+
+[tool.coverage.run]
+source = ["torchlens"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.coverage.html]
+directory = "tests/test_outputs/coverage_html"
+
+[tool.coverage.lcov]
+output = "tests/test_outputs/coverage.lcov"
 
 [tool.ruff]
 line-length = 100
