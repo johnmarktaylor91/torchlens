@@ -34,14 +34,21 @@ class _ValidationTimeout(Exception):
 
 REPORT_PATH = opj(TEST_OUTPUTS_DIR, "profiling_report.txt")
 
-# Illustrative sampling: one minimal, one hierarchical, one recurrent.
-# Kept small to avoid slowing down the non-slow test suite.
+# Illustrative sampling across architecture families: toy models first,
+# then real-world torchvision models for realistic overhead measurement.
 PROFILING_MODELS = [
+    # --- Toy models (fast, cover core patterns) ---
     (
         "SimpleFF",
         lambda: example_models.SimpleFF(),
         lambda: torch.rand(5, 5),
         "Minimal functional model (no modules)",
+    ),
+    (
+        "SimpleBranching",
+        lambda: example_models.SimpleBranching(),
+        lambda: torch.rand(5, 5),
+        "Diverging / merging data flow",
     ),
     (
         "NestedModules",
@@ -50,10 +57,59 @@ PROFILING_MODELS = [
         "Deep module hierarchy",
     ),
     (
+        "ResidualBlock",
+        lambda: example_models.ResidualBlockModel(),
+        lambda: torch.rand(1, 16, 8, 8),
+        "Conv-BN-ReLU residual skip connection",
+    ),
+    (
+        "MultiheadAttention",
+        lambda: example_models.MultiheadAttentionModel(),
+        lambda: torch.rand(10, 2, 16),
+        "nn.MultiheadAttention (seq=10, batch=2, dim=16)",
+    ),
+    (
+        "LSTM",
+        lambda: example_models.LSTMModel(),
+        lambda: torch.rand(5, 5, 5),
+        "LSTM + linear classifier",
+    ),
+    (
         "RecurrentParamsSimple",
         lambda: example_models.RecurrentParamsSimple(),
         lambda: torch.rand(5, 5),
         "Recurrent / looping parameters",
+    ),
+    # --- Real-world models (torchvision, larger graphs) ---
+    (
+        "ResNet18",
+        lambda: __import__("torchvision").models.resnet18(),
+        lambda: torch.rand(1, 3, 224, 224),
+        "Classic residual CNN (11.7M params)",
+    ),
+    (
+        "MobileNetV2",
+        lambda: __import__("torchvision").models.mobilenet_v2(),
+        lambda: torch.rand(1, 3, 224, 224),
+        "Inverted residual + depthwise separable convs (3.4M params)",
+    ),
+    (
+        "EfficientNet_B0",
+        lambda: __import__("torchvision").models.efficientnet_b0(),
+        lambda: torch.rand(1, 3, 224, 224),
+        "Compound-scaled efficient CNN (5.3M params)",
+    ),
+    (
+        "Swin_T",
+        lambda: __import__("torchvision").models.swin_t(),
+        lambda: torch.rand(1, 3, 224, 224),
+        "Shifted-window vision transformer (28.3M params)",
+    ),
+    (
+        "VGG16",
+        lambda: __import__("torchvision").models.vgg16(),
+        lambda: torch.rand(1, 3, 224, 224),
+        "Deep sequential CNN (138M params)",
     ),
 ]
 
