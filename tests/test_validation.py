@@ -682,6 +682,33 @@ def test_clean_nested_log_passes_all_invariants():
 # =============================================================================
 
 
+class _UnusedInputModel(nn.Module):
+    """Model that ignores one of its keyword arguments."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x, unused_mask=None):
+        return self.fc(x)
+
+
+class _SharedParamDifferentOps(nn.Module):
+    """Model where different operations consume the same parameter.
+
+    The weight is used both in linear and also explicitly via torch.sum.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        out = self.fc(x)
+        weight_sum = torch.sum(self.fc.weight)
+        return out + weight_sum
+
+
 class _SimpleLinear(nn.Module):
     def __init__(self):
         super().__init__()
@@ -750,3 +777,51 @@ class TestBug85PosthocPerturbCheck:
         x = torch.randn(4, 10)
         result = validate_forward_pass(model, x)
         assert result is True
+
+
+class TestUnusedInputValidation:
+    """Regression: unused input kwargs should not crash validation.
+
+    When a model ignores a kwarg (e.g. token_type_ids in DistilBert), the
+    corresponding input layer has func_applied=None and no children. Validation
+    must skip replay for such layers instead of crashing on None().
+    """
+
+    def test_unused_kwarg_input_passes_validation(self):
+        model = _UnusedInputModel()
+        x = torch.randn(2, 10)
+        mask = torch.ones(2, 10)
+        assert validate_forward_pass(model, x, input_kwargs={"unused_mask": mask})
+
+    def test_unused_kwarg_input_metadata_passes(self):
+        """Metadata invariants pass even with unused input layers."""
+        from torchlens import log_forward_pass
+
+        model = _UnusedInputModel()
+        x = torch.randn(2, 10)
+        mask = torch.ones(2, 10)
+        log = log_forward_pass(model, x, input_kwargs={"unused_mask": mask})
+        check_metadata_invariants(log)
+
+
+class TestSharedParamDifferentOps:
+    """Regression: different operations consuming the same parameter should not
+    violate loop_detection invariants.
+
+    The param sharing invariant must group by (func_applied_name, param_barcodes),
+    not just param_barcodes alone. Otherwise, e.g. isinf(weight) and expand(weight)
+    would be falsely flagged as needing the same layer_label_no_pass.
+    """
+
+    def test_shared_param_different_ops_passes_validation(self):
+        model = _SharedParamDifferentOps()
+        x = torch.randn(2, 10)
+        assert validate_forward_pass(model, x)
+
+    def test_shared_param_different_ops_metadata_passes(self):
+        from torchlens import log_forward_pass
+
+        model = _SharedParamDifferentOps()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        check_metadata_invariants(log)

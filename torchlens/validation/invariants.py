@@ -936,12 +936,13 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
             groups_seen[group_key] = slo
 
     # Rule 1: Parameter sharing → same layer
-    # Layers with identical sorted(parent_param_barcodes) and computed_with_params
-    # must share the same layer_label_no_pass.
+    # Layers with the same func_applied_name and identical sorted(parent_param_barcodes)
+    # must share the same layer_label_no_pass. Different operations (e.g. isinf, expand,
+    # nantonum) can legitimately consume the same param without being the same "layer."
     param_groups: dict[tuple, list] = defaultdict(list)
     for lpl in ml.layer_list:
         if lpl.computed_with_params and lpl.parent_param_barcodes:
-            key = tuple(sorted(lpl.parent_param_barcodes))
+            key = (lpl.func_applied_name, tuple(sorted(lpl.parent_param_barcodes)))
             param_groups[key].append(lpl)
 
     for param_key, layers in param_groups.items():

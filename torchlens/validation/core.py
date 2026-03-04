@@ -410,6 +410,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
     layer = self[layer_to_validate_parents_for_label]
 
+    # Input layers and buffer layers without parents have no function to replay
+    if layer.func_applied is None:
+        return True
+
     if layer.func_applied_name in SKIP_VALIDATION_ENTIRELY:
         return True
 
