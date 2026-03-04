@@ -68,6 +68,7 @@ class TestFieldOrderSync:
         dupes = [f for f in field_order if field_order.count(f) > 1]
         assert not dupes, f"Duplicates in {name}: {set(dupes)}"
 
+    @pytest.mark.smoke
     def test_layer_pass_log_field_order_covers_init(self):
         """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in LayerPassLog.__init__."""
         from torchlens.data_classes.layer_pass_log import LayerPassLog
@@ -198,6 +199,7 @@ class _SharedBufferModel(nn.Module):
 
 
 class TestSafeCopy:
+    @pytest.mark.smoke
     def test_safe_copy_parameter(self):
         """safe_copy must handle nn.Parameter subclass correctly."""
         p = nn.Parameter(torch.randn(3, 3))

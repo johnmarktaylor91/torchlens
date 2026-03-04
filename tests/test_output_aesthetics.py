@@ -567,6 +567,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_generate_aesthetic_report():
     """Generate the comprehensive text report."""
     report = io.StringIO()

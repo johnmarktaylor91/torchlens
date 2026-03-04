@@ -50,6 +50,7 @@ def recurrent_log():
 
 
 class TestLayerLogConstruction:
+    @pytest.mark.smoke
     def test_layer_logs_populated(self, simple_log):
         """layer_logs dict is populated after postprocessing."""
         assert len(simple_log.layer_logs) > 0
@@ -80,6 +81,7 @@ class TestLayerLogConstruction:
 
 
 class TestSinglePassDelegation:
+    @pytest.mark.smoke
     def test_tensor_contents_delegation(self, simple_log):
         """tensor_contents delegates to passes[1] for single-pass."""
         for layer_log in simple_log.layer_logs.values():
@@ -138,6 +140,7 @@ class TestAggregateFields:
 
 
 class TestMultiPassLayerLog:
+    @pytest.mark.smoke
     def test_recurrent_layer_has_multiple_passes(self, recurrent_log):
         """The repeated fc layer should have 2 passes."""
         multi_pass_found = False

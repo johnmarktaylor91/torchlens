@@ -25,6 +25,7 @@ from torchlens import (
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_model_simple_ff(default_input1):
     model = example_models.SimpleFF()
     assert validate_forward_pass(model, default_input1)

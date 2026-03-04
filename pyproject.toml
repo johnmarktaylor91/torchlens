@@ -57,6 +57,7 @@ include = ["torchlens*"]
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "smoke: marks tests as smoke tests for quick critical-path validation (select with '-m smoke')",
 ]
 filterwarnings = [
     # External: torchvision model init deprecations

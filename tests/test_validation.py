@@ -35,6 +35,7 @@ def test_validation_import_path():
     assert callable(validate_from_subpkg)
 
 
+@pytest.mark.smoke
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
     assert callable(validate_forward_pass)
@@ -94,6 +95,7 @@ def test_custom_exemption_checks_are_callable():
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_perturbation_changes_float_tensor():
     parent = torch.randn(10, 10)
     output = torch.randn(10, 10)
