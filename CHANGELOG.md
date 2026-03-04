@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v0.15.4 (2026-03-04)
+
+### Bug Fixes
+
+- **validation**: Resolve 14 test failures across validation, labeling, and warnings
+  ([`ffc51a5`](https://github.com/johnmarktaylor91/torchlens/commit/ffc51a5be57033ffc1b0506af5a330bd97a343b0))
+
+- Fix param sharing invariant: include func_applied_name in grouping key so different operations
+  consuming the same parameter aren't incorrectly required to share labels (12 model failures: vit,
+  beit, cait, coat, convit, poolformer, xcit, t5, clip, blip, etc.) - Fix unused input validation:
+  guard against func_applied=None for unused model inputs like DistilBert's token_type_ids (1
+  failure) - Fix pass labeling consistency: inherit layer_type from first pass for pass>1 entries,
+  preventing label mismatches within same_layer_operations groups (SSD300 train failure) - Fix numpy
+  2.0 deprecation: use cpu_data.detach().numpy() instead of np.array(cpu_data) - Suppress 6 external
+  third-party warnings in pyproject.toml filterwarnings - Add 4 regression tests with 2 helper model
+  classes
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.3 (2026-03-04)
 
 ### Bug Fixes
