@@ -34,11 +34,9 @@ MODEL_LOG_FIELD_ORDER = [
     "model_has_conditional_branching",
     # Layer tracking logs
     "layer_list",
-    "layer_list_rolled",
     "layer_dict_main_keys",
     "layer_dict_all_keys",
     "layer_logs",
-    "layer_dict_rolled",
     "layer_labels",
     "layer_labels_no_pass",
     "layer_labels_w_pass",

@@ -8,8 +8,8 @@ from IPython.display import display
 
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str
-from ..postprocess import _roll_graph
-from ..data_classes.layer_pass_log import LayerPassLog, RolledTensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.layer_log import LayerLog
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -91,8 +91,7 @@ def render_graph(
     if vis_opt == "unrolled":
         entries_to_plot = self.layer_dict_main_keys
     elif vis_opt == "rolled":
-        _roll_graph(self)
-        entries_to_plot = self.layer_dict_rolled
+        entries_to_plot = self.layer_logs
     else:
         raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
 
@@ -181,7 +180,7 @@ def render_graph(
 
 def _add_node_to_graphviz(
     self: "ModelLog",
-    node: Union["LayerPassLog", "RolledTensorLog"],
+    node: Union["LayerPassLog", "LayerLog"],
     graphviz_graph,
     module_edge_dict: Dict,
     edges_used: Set,
@@ -240,7 +239,7 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
     """Returns True if the node is nested deep enough to be rendered as a collapsed module box.
 
     Args:
-        node: The LayerPassLog or RolledTensorLog node to check.
+        node: The LayerPassLog or LayerLog node to check.
         vis_nesting_depth: Maximum nesting depth before collapsing into a module box.
     """
     node_nesting_depth = len(node.containing_modules_origin_nested)
@@ -264,7 +263,7 @@ def _build_layer_node(
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
     Args:
-        node: The LayerPassLog or RolledTensorLog node to render.
+        node: The LayerPassLog or LayerLog node to render.
         graphviz_graph: The graphviz Digraph object to add the node to.
         show_buffer_layers: Whether buffer layers are shown.
         vis_opt: 'unrolled' or 'rolled'.
@@ -330,7 +329,7 @@ def _build_collapsed_module_node(
     """Builds and adds a collapsed module box node to the graphviz graph.
 
     Args:
-        node: The LayerPassLog or RolledTensorLog node triggering the collapse.
+        node: The LayerPassLog or LayerLog node triggering the collapse.
         graphviz_graph: The graphviz Digraph object to add the node to.
         collapsed_modules: Set of collapsed module names already added; updated in place.
         vis_opt: 'unrolled' or 'rolled'.
@@ -439,7 +438,7 @@ def _build_collapsed_module_node(
 
 def _get_node_address_shape_color(
     self: "ModelLog",
-    node: Union["LayerPassLog", "RolledTensorLog"],
+    node: Union["LayerPassLog", "LayerLog"],
     show_buffer_layers: bool,
 ) -> Tuple[str, str, str]:
     """Gets the node shape, address, and color for the graphviz figure.
@@ -460,7 +459,7 @@ def _get_node_address_shape_color(
     if (node.is_bottom_level_submodule_output or only_non_buffer_layer) and (
         len(node.containing_modules_origin_nested) > 0
     ):
-        if isinstance(node, LayerPassLog) and not isinstance(node, RolledTensorLog):
+        if isinstance(node, LayerPassLog):
             module_pass_exited = node.containing_modules_origin_nested[-1]
             module, _ = module_pass_exited.split(":")
             if self.modules[module].num_passes == 1:
@@ -477,7 +476,7 @@ def _get_node_address_shape_color(
         node_color = "black"
     elif node.is_buffer_layer:
         if (self.buffer_num_passes[node.buffer_address] == 1) or (
-            isinstance(node, RolledTensorLog) and node.layer_passes_total > 1
+            isinstance(node, LayerLog) and node.layer_passes_total > 1
         ):
             buffer_address = node.buffer_address
         else:
@@ -498,7 +497,7 @@ def _get_node_address_shape_color(
 
 
 def _is_only_non_buffer_in_module(
-    self: "ModelLog", node: Union["LayerPassLog", "RolledTensorLog"]
+    self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]
 ) -> bool:
     """Returns True if a layer is the only non-buffer layer in a leaf module.
 
@@ -507,7 +506,7 @@ def _is_only_non_buffer_in_module(
     ovals, not boxes (issue #48).
 
     Args:
-        node: The LayerPassLog or RolledTensorLog node to check.
+        node: The LayerPassLog or LayerLog node to check.
     """
     # Check whether it leaves its module:
     if not (
@@ -526,10 +525,10 @@ def _is_only_non_buffer_in_module(
     # If any aren't, return False.
 
     for parent_layer_label in node.parent_layers:
-        if isinstance(node, LayerPassLog) and not isinstance(node, RolledTensorLog):
+        if isinstance(node, LayerPassLog):
             parent_layer = self[parent_layer_label]
         else:
-            parent_layer = self.layer_dict_rolled[parent_layer_label]
+            parent_layer = self.layer_logs[parent_layer_label]
         if (not parent_layer.is_buffer_layer) and (
             (len(parent_layer.containing_modules_origin_nested) > 0)
             and parent_layer.containing_modules_origin_nested[-1]
@@ -540,7 +539,7 @@ def _is_only_non_buffer_in_module(
     return True
 
 
-def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "RolledTensorLog"]) -> str:
+def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
     Maps node types to colors: input=green, output=red, boolean=orange,
@@ -578,7 +577,7 @@ def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "RolledTens
 
 
 def _make_node_label(
-    node: Union["LayerPassLog", "RolledTensorLog"],
+    node: Union["LayerPassLog", "LayerLog"],
     node_address: str,
     vis_opt: str,
 ) -> str:
@@ -640,7 +639,7 @@ def _format_shape_str(shape: tuple) -> str:
     return "x1"
 
 
-def _make_param_label(node: Union["LayerPassLog", "RolledTensorLog"]) -> str:
+def _make_param_label(node: Union["LayerPassLog", "LayerLog"]) -> str:
     """Makes the label for parameters of a node.
 
     Uses param names and bracket convention when ParamLog objects are available:
@@ -667,7 +666,7 @@ def _make_param_label(node: Union["LayerPassLog", "RolledTensorLog"]) -> str:
 
 def _add_edges_for_node(
     self: "ModelLog",
-    parent_node: Union["LayerPassLog", "RolledTensorLog"],
+    parent_node: Union["LayerPassLog", "LayerLog"],
     parent_is_collapsed_module: bool,
     vis_nesting_depth: int,
     node_color: str,
@@ -696,7 +695,7 @@ def _add_edges_for_node(
         if vis_opt == "unrolled":
             child_node = self.layer_dict_main_keys[child_layer_label]
         elif vis_opt == "rolled":
-            child_node = self.layer_dict_rolled[child_layer_label]
+            child_node = self.layer_logs[child_layer_label]
         else:
             raise ValueError(f"vis_opt must be 'unrolled' or 'rolled', not {vis_opt}")
 
@@ -821,8 +820,8 @@ def _add_edges_for_node(
 
 def _label_node_arguments_if_needed(
     self: "ModelLog",
-    parent_node: Union["LayerPassLog", "RolledTensorLog"],
-    child_node: Union["LayerPassLog", "RolledTensorLog"],
+    parent_node: Union["LayerPassLog", "LayerLog"],
+    child_node: Union["LayerPassLog", "LayerLog"],
     edge_dict: Dict,
     show_buffer_layers: bool = False,
 ) -> None:
@@ -855,7 +854,7 @@ def _label_node_arguments_if_needed(
 
 def _should_mark_arguments_on_edge(
     self: "ModelLog",
-    child_node: Union["LayerPassLog", "RolledTensorLog"],
+    child_node: Union["LayerPassLog", "LayerLog"],
     show_buffer_layers: bool = False,
 ) -> bool:
     """Returns True if argument position labels should be shown on the edge to child_node.
@@ -869,7 +868,7 @@ def _should_mark_arguments_on_edge(
 
     if isinstance(child_node, LayerPassLog):
         return _should_mark_arguments_on_unrolled_edge(self, child_node, show_buffer_layers)
-    elif isinstance(child_node, RolledTensorLog):
+    elif isinstance(child_node, LayerLog):
         return _should_mark_arguments_on_rolled_edge(self, child_node, show_buffer_layers)
 
 
@@ -896,19 +895,19 @@ def _should_mark_arguments_on_unrolled_edge(
 
 
 def _should_mark_arguments_on_rolled_edge(
-    self: "ModelLog", child_node: "RolledTensorLog", show_buffer_layers: bool = False
+    self: "ModelLog", child_node: "LayerLog", show_buffer_layers: bool = False
 ) -> bool:
     """Returns True if argument labels should be shown on a rolled graph edge.
 
     Args:
-        child_node: The child RolledTensorLog node whose incoming edge is being considered.
+        child_node: The child LayerLog node whose incoming edge is being considered.
         show_buffer_layers: Whether buffer layers are shown in the graph.
     """
     for pass_num, pass_parents in child_node.parent_layers_per_pass.items():
         num_parents_shown = len(pass_parents)
         if not show_buffer_layers:
             num_parents_shown -= sum(
-                [int(self.layer_dict_rolled[parent].is_buffer_layer) for parent in pass_parents]
+                [int(self.layer_logs[parent].is_buffer_layer) for parent in pass_parents]
             )
         if num_parents_shown > 1:
             return True
@@ -917,8 +916,8 @@ def _should_mark_arguments_on_rolled_edge(
 
 
 def _label_rolled_pass_nums(
-    child_node: "RolledTensorLog",
-    parent_node: "RolledTensorLog",
+    child_node: "LayerLog",
+    parent_node: "LayerLog",
     edge_dict: Dict,
 ) -> None:
     """Adds labels for the pass numbers to the edge dict for rolled nodes.
@@ -939,8 +938,8 @@ def _label_rolled_pass_nums(
 
 
 def _get_lowest_containing_module_for_two_nodes(
-    node1: Union["LayerPassLog", "RolledTensorLog"],
-    node2: Union["LayerPassLog", "RolledTensorLog"],
+    node1: Union["LayerPassLog", "LayerLog"],
+    node2: Union["LayerPassLog", "LayerLog"],
     both_nodes_collapsed_modules: bool,
     vis_nesting_depth: int,
 ) -> Union[str, int]:
@@ -958,7 +957,7 @@ def _get_lowest_containing_module_for_two_nodes(
     node1_modules = node1.containing_modules_origin_nested[:]
     node2_modules = node2.containing_modules_origin_nested[:]
 
-    if isinstance(node1, RolledTensorLog):
+    if isinstance(node1, LayerLog):
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 

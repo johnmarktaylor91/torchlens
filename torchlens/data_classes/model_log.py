@@ -22,7 +22,7 @@ from .interface import (
 from ..capture.trace import save_new_activations
 from ..postprocess import postprocess
 from .layer_log import LayerLog
-from .layer_pass_log import LayerPassLog, RolledTensorLog, TensorLog
+from .layer_pass_log import LayerPassLog, TensorLog
 from ..capture.trace import run_and_log_inputs_through_model
 from ..validation import validate_saved_activations
 from ..visualization.rendering import render_graph
@@ -102,11 +102,9 @@ class ModelLog:
 
         # Tensor Tracking:
         self.layer_list: List[LayerPassLog] = []
-        self.layer_list_rolled: List[RolledTensorLog] = []
         self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()
         self.layer_dict_all_keys: Dict[str, LayerPassLog] = OrderedDict()
         self.layer_logs: Dict[str, LayerLog] = OrderedDict()
-        self.layer_dict_rolled: Dict[str, RolledTensorLog] = OrderedDict()
         self.layer_labels: List[str] = []
         self.layer_labels_w_pass: List[str] = []
         self.layer_labels_no_pass: List[str] = []

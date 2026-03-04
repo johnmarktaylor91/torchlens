@@ -1,4 +1,4 @@
-"""Steps 13-18: Tensor undecoration, timing, param logs, module logs, pass finish, graph rolling."""
+"""Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish."""
 
 import time
 from collections import defaultdict, deque
@@ -8,7 +8,6 @@ import torch
 
 from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
-from ..data_classes.layer_pass_log import RolledTensorLog
 from ..utils.introspection import get_vars_of_type_from_obj
 from ..utils.display import human_readable_size
 
@@ -406,9 +405,9 @@ def _build_layer_logs(self: "ModelLog") -> None:
     """Build aggregate LayerLog objects from per-pass LayerPassLog entries.
 
     Groups layer_list entries by layer_label_no_pass, creates a LayerLog
-    for each unique layer, and populates ModelLog.layer_logs.  Also adds
-    no-pass labels to layer_dict_all_keys so ``log["conv2d_1_1"]`` returns
-    the LayerLog (even for multi-pass layers, which previously errored).
+    for each unique layer, and populates ModelLog.layer_logs.  Also merges
+    per-pass fields that need aggregation for multi-pass layers (e.g.,
+    has_input_ancestor, input_output_address, is_bottom_level_submodule_output).
     """
     from collections import OrderedDict
 
@@ -424,6 +423,29 @@ def _build_layer_logs(self: "ModelLog") -> None:
             layer_logs[no_pass_label] = layer_log
         else:
             layer_log = layer_logs[no_pass_label]
+            # Merge per-pass aggregate fields
+            if pass_log.has_input_ancestor:
+                layer_log.has_input_ancestor = True
+            # Merge input_output_address with '*' for differing chars
+            if (
+                layer_log.input_output_address is not None
+                and pass_log.input_output_address is not None
+            ):
+                merged = "".join(
+                    c if c == s else "*"
+                    for c, s in zip(
+                        layer_log.input_output_address,
+                        pass_log.input_output_address,
+                    )
+                )
+                if merged.endswith("."):
+                    merged = merged[:-1]
+                if merged.endswith("*"):
+                    merged = merged.rstrip("*") + "*"
+                layer_log.input_output_address = merged
+            # Merge bottom-level submodule output flag
+            if pass_log.is_bottom_level_submodule_output:
+                layer_log.is_bottom_level_submodule_output = True
 
         layer_log.passes[pass_log.pass_num] = pass_log
         layer_log.pass_labels.append(pass_log.layer_label)
@@ -440,27 +462,3 @@ def _set_pass_finished(self) -> None:
         tensor = self.layer_dict_main_keys[layer_label]
         tensor._pass_finished = True
     self._pass_finished = True
-
-
-def _roll_graph(self) -> None:
-    """Converts the graph to rolled-up format for plotting purposes.
-
-    In recurrent models where the same layer executes multiple times (passes), rolling
-    collapses those into a single visual node with pass count annotations, simplifying
-    the graph for display. Each node in the rolled graph represents all passes of a
-    given layer instead of having separate nodes for each pass.
-    """
-    if self.layer_dict_rolled:
-        return
-    for layer_label, node in self.layer_dict_main_keys.items():
-        layer_label_no_pass = node.layer_label_no_pass
-        if (
-            layer_label_no_pass in self.layer_dict_rolled
-        ):  # If rolled-up layer has already been added, fetch it:
-            rolled_node = self.layer_dict_rolled[layer_label_no_pass]
-        else:  # If it hasn't been added, make it:
-            rolled_node = RolledTensorLog(node)
-            self.layer_dict_rolled[node.layer_label_no_pass] = rolled_node
-            self.layer_list_rolled.append(rolled_node)
-        rolled_node.update_data(node)
-        rolled_node.add_pass_info(node)

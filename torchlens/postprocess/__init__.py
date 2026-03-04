@@ -5,7 +5,7 @@ Split into thematic modules:
 - control_flow: Steps 5-7 (conditional branches, module fixes, buffer fixes)
 - loop_detection: Step 8 (loop detection, isomorphic subgraph expansion)
 - labeling: Steps 9-12 (label mapping, final info, renaming, cleanup)
-- finalization: Steps 13-18 (undecoration, timing, params, modules, finish, rolling)
+- finalization: Steps 13-18 (undecoration, timing, params, layer logs, modules, finish)
 """
 
 from typing import TYPE_CHECKING, List
@@ -22,7 +22,6 @@ from .finalization import (
     _build_module_logs,
     _finalize_param_logs,
     _log_time_elapsed,
-    _roll_graph,
     _set_pass_finished,
     _undecorate_all_saved_tensors,
 )

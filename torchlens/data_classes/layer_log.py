@@ -101,6 +101,16 @@ class LayerLog:
         self.containing_modules_origin_nested = first_pass.containing_modules_origin_nested
         self.module_nesting_depth = first_pass.module_nesting_depth
 
+        # Fields stored as aggregate for vis compatibility
+        # (initialized from first pass, may be updated in _build_layer_logs for multi-pass)
+        self.modules_exited = first_pass.modules_exited
+        self.module_passes_exited = first_pass.module_passes_exited
+        self.cond_branch_start_children = first_pass.cond_branch_start_children
+        self.has_input_ancestor = first_pass.has_input_ancestor
+        self.input_output_address = first_pass.input_output_address
+        self.buffer_pass = first_pass.buffer_pass
+        self.is_bottom_level_submodule_output = first_pass.is_bottom_level_submodule_output
+
         # Pass management
         self.passes: Dict[int, "LayerPassLog"] = {}
         self.pass_labels: List[str] = []
@@ -177,18 +187,13 @@ class LayerLog:
     def lookup_keys(self):
         return self._single_pass_or_error("lookup_keys")
 
-    @property
-    def input_output_address(self):
-        return self._single_pass_or_error("input_output_address")
-
     # ********************************************
     # ***** Aggregate graph properties ***********
     # ********************************************
 
     @property
     def child_layers(self):
-        if self.num_passes == 1:
-            return self.passes[1].child_layers
+        """Union of child layers (no-pass labels) across all passes."""
         result = []
         seen = set()
         for pass_log in self.passes.values():
@@ -201,8 +206,7 @@ class LayerLog:
 
     @property
     def parent_layers(self):
-        if self.num_passes == 1:
-            return self.passes[1].parent_layers
+        """Union of parent layers (no-pass labels) across all passes."""
         result = []
         seen = set()
         for pass_log in self.passes.values():
@@ -223,8 +227,7 @@ class LayerLog:
 
     @property
     def sibling_layers(self):
-        if self.num_passes == 1:
-            return self.passes[1].sibling_layers
+        """Union of sibling layers (no-pass labels) across all passes."""
         result = []
         seen = set()
         for pass_log in self.passes.values():
@@ -241,8 +244,7 @@ class LayerLog:
 
     @property
     def spouse_layers(self):
-        if self.num_passes == 1:
-            return self.passes[1].spouse_layers
+        """Union of spouse layers (no-pass labels) across all passes."""
         result = []
         seen = set()
         for pass_log in self.passes.values():
@@ -297,6 +299,102 @@ class LayerLog:
 
         param_dict = {pl.address: pl for pl in self.parent_param_logs}
         return ParamAccessor(param_dict)
+
+    # ********************************************
+    # **** Rolled-vis computed properties ********
+    # ********************************************
+    # These provide per-pass edge tracking for visualization.
+    # They are computed on-the-fly from the passes dict.
+
+    @property
+    def child_layers_per_pass(self):
+        """Dict[int, List[str]]: child layer labels (no-pass) for each pass."""
+        result = {}
+        for pass_num, pass_log in self.passes.items():
+            children = []
+            for label in pass_log.child_layers:
+                no_pass = self.source_model_log[label].layer_label_no_pass
+                if no_pass not in children:
+                    children.append(no_pass)
+            result[pass_num] = children
+        return result
+
+    @property
+    def parent_layers_per_pass(self):
+        """Dict[int, List[str]]: parent layer labels (no-pass) for each pass."""
+        result = {}
+        for pass_num, pass_log in self.passes.items():
+            parents = []
+            for label in pass_log.parent_layers:
+                no_pass = self.source_model_log[label].layer_label_no_pass
+                if no_pass not in parents:
+                    parents.append(no_pass)
+            result[pass_num] = parents
+        return result
+
+    @property
+    def child_passes_per_layer(self):
+        """Dict[str, List[int]]: for each child layer, which passes connect to it."""
+        from collections import defaultdict
+
+        result = defaultdict(list)
+        for pass_num, pass_log in self.passes.items():
+            for label in pass_log.child_layers:
+                no_pass = self.source_model_log[label].layer_label_no_pass
+                if pass_num not in result[no_pass]:
+                    result[no_pass].append(pass_num)
+        return dict(result)
+
+    @property
+    def parent_passes_per_layer(self):
+        """Dict[str, List[int]]: for each parent layer, which passes connect from it."""
+        from collections import defaultdict
+
+        result = defaultdict(list)
+        for pass_num, pass_log in self.passes.items():
+            for label in pass_log.parent_layers:
+                no_pass = self.source_model_log[label].layer_label_no_pass
+                if pass_num not in result[no_pass]:
+                    result[no_pass].append(pass_num)
+        return dict(result)
+
+    @property
+    def edges_vary_across_passes(self):
+        """Whether graph edges differ across passes."""
+        if self.num_passes <= 1:
+            return False
+        all_pass_lists = list(self.child_passes_per_layer.values()) + list(
+            self.parent_passes_per_layer.values()
+        )
+        return any(len(passes) < self.num_passes for passes in all_pass_lists)
+
+    @property
+    def bottom_level_submodule_passes_exited(self):
+        """Set of module passes exited across all passes."""
+        result = set()
+        for pass_log in self.passes.values():
+            if pass_log.is_bottom_level_submodule_output:
+                result.add(pass_log.bottom_level_submodule_pass_exited)
+        return result
+
+    @property
+    def parent_layer_arg_locs(self):
+        """Merged parent_layer_arg_locs across passes (set-union).
+
+        For single-pass layers, delegates to passes[1].
+        For multi-pass, merges arg locs using set-union of no-pass labels.
+        """
+        if self.num_passes == 1:
+            return self.passes[1].parent_layer_arg_locs
+        from collections import defaultdict
+
+        result = {"args": defaultdict(set), "kwargs": defaultdict(set)}
+        for pass_log in self.passes.values():
+            for arg_type in ["args", "kwargs"]:
+                for arg_key, layer_label in pass_log.parent_layer_arg_locs[arg_type].items():
+                    no_pass = self.source_model_log[layer_label].layer_label_no_pass
+                    result[arg_type][arg_key].add(no_pass)
+        return result
 
     # ********************************************
     # ******* Fallback __getattr__ ***************
