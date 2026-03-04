@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v0.15.6 (2026-03-04)
+
+### Bug Fixes
+
+- **tests**: Add explicit vis_outpath to render_graph calls
+  ([`7d7926b`](https://github.com/johnmarktaylor91/torchlens/commit/7d7926b22781e3e78ca9cde166efc9ead7b0ec57))
+
+Two tests in TestVisualizationBugfixes called render_graph() without vis_outpath, causing stray
+  modelgraph/modelgraph.pdf files in whatever directory tests were run from.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **tests**: Rename test_outputs/graphs to test_outputs/visualizations
+  ([`fbf1fe6`](https://github.com/johnmarktaylor91/torchlens/commit/fbf1fe66786cf829ed4a26e76a9a934708e92a75))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.5 (2026-03-04)
 
 ### Bug Fixes
