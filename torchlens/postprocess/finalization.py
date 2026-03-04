@@ -84,7 +84,7 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
     from ..data_classes.param_log import ParamAccessor
 
     root_meta = self._module_metadata.get("self", {})
-    root_all_layers = list(self.layer_labels)
+    root_all_layers = list(self.layer_logs.keys())
 
     root_param_dict = {pl.address: pl for pl in self.param_logs}
     root_params = ParamAccessor(root_param_dict)
@@ -326,7 +326,16 @@ def _build_module_logs(self: "ModelLog") -> None:
         name = address.rsplit(".", 1)[-1] if "." in address else address
         address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-        all_layers = list(mbd["module_layers"].get(address, []))
+        all_layers_raw = list(mbd["module_layers"].get(address, []))
+        seen = set()
+        all_layers = []
+        for label in all_layers_raw:
+            entry = self.layer_dict_all_keys.get(label)
+            if entry is not None:
+                no_pass = entry.layer_label_no_pass
+                if no_pass not in seen:
+                    seen.add(no_pass)
+                    all_layers.append(no_pass)
 
         passes, pass_labels_list = _build_submodule_pass_logs(
             self, address, num_passes, pass_dict, mbd, _child_to_parent_pass
