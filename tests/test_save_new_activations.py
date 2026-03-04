@@ -5,6 +5,8 @@ activation value correctness, and the known failure mode on models with
 identity-propagated operations (Bug #39).
 """
 
+import warnings
+
 import pytest
 import torch
 import torch.nn as nn
@@ -191,3 +193,164 @@ def test_save_new_activations_resnet_fails():
     with pytest.raises(ValueError, match="computational graph changed"):
         log.save_new_activations(model, torch.randn(1, 3, 224, 224), random_seed=42)
     log.cleanup()
+
+
+# =============================================================================
+# Bugfix regression tests
+# =============================================================================
+
+
+class _SimpleLinear(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class _SharedBufferModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("scale", torch.tensor([2.0]))
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        x = x * self.scale
+        x = self.fc(x)
+        x = x * self.scale
+        return x
+
+
+class TestSaveNewActivationsRegression:
+    """Bug #75: Zombie LayerPassLogs on repeated calls."""
+
+    def test_save_new_activations_3x(self):
+        """#75: 3+ sequential save_new_activations calls should not crash."""
+        model = _SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        for _ in range(3):
+            log.save_new_activations(model, torch.randn(2, 10))
+
+    def test_save_new_activations_different_values(self):
+        """Activations should change with new inputs."""
+        model = _SimpleLinear()
+        x1 = torch.randn(2, 10)
+        log = log_forward_pass(model, x1)
+        first_output = log[log.output_layers[0]].tensor_contents.clone()
+        x2 = torch.randn(2, 10) + 10
+        log.save_new_activations(model, x2)
+        second_output = log[log.output_layers[0]].tensor_contents
+        assert not torch.equal(first_output, second_output)
+
+
+class TestSaveNewActivationsStateReset:
+    """Bugs #87, #92, #97, #98, #106: Stale state in save_new_activations."""
+
+    def test_timing_reset(self):
+        """#87: elapsed_time_function_calls should be fresh."""
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
+        log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
+        assert log.elapsed_time_function_calls >= 0
+
+    def test_lookup_keys_clean(self):
+        """#97, #98: Lookup caches should not have stale entries."""
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
+        labels_pass1 = set(log.layer_labels)
+        log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
+        labels_pass2 = set(log.layer_labels)
+        assert labels_pass1 == labels_pass2
+
+    def test_5x_stress(self):
+        """Stress test: 5 sequential save_new_activations calls."""
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
+        for i in range(5):
+            log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
+            assert log.num_tensors_saved > 0
+
+    def test_different_values(self):
+        """#92: Each pass should reflect new input values."""
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.ones(2, 10), layers_to_save="all")
+        input_val_1 = log["input_1"].tensor_contents.clone()
+        log.save_new_activations(model, torch.zeros(2, 10), layers_to_save="all")
+        input_val_2 = log["input_1"].tensor_contents
+        assert not torch.equal(input_val_1, input_val_2)
+
+
+class TestOutputTensorIndependence:
+    """Bug #8: Fast-mode tensor_contents shared reference."""
+
+    def test_output_independent_of_parent(self):
+        model = _SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        log.save_new_activations(model, torch.randn(2, 10))
+        for label in log.output_layers:
+            output_entry = log[label]
+            if output_entry.parent_layers and output_entry.tensor_contents is not None:
+                parent_label = output_entry.parent_layers[0]
+                parent_entry = log[parent_label]
+                if parent_entry.tensor_contents is not None:
+                    original_parent = parent_entry.tensor_contents.clone()
+                    output_entry.tensor_contents.fill_(999)
+                    assert torch.equal(parent_entry.tensor_contents, original_parent)
+                    break
+
+
+class TestBug108FastPathModuleLogs:
+    """#108: postprocess_fast should preserve module logs from exhaustive pass."""
+
+    def test_fast_path_preserves_module_logs(self):
+        model = _SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x)
+        original_module_count = len(log.modules)
+        original_addresses = [m.address for m in log.modules]
+        assert original_module_count > 0
+        log.save_new_activations(model, torch.randn(2, 10))
+        assert len(log.modules) == original_module_count
+        assert [m.address for m in log.modules] == original_addresses
+
+
+class TestBug147DescriptiveValueError:
+    """#147: log_source_tensor_fast should give descriptive error on graph change."""
+
+    def test_dynamic_graph_descriptive_error(self):
+        class DynamicModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = nn.Linear(10, 10)
+                self.linear2 = nn.Linear(10, 10)
+                self.call_count = 0
+
+            def forward(self, x):
+                self.call_count += 1
+                x = self.linear1(x)
+                if self.call_count > 1:
+                    x = self.linear2(x)
+                    x = torch.relu(x)
+                    x = self.linear2(x)
+                return x
+
+        model = DynamicModel()
+        log = log_forward_pass(model, torch.randn(2, 10))
+        with pytest.raises(ValueError, match="computational graph changed"):
+            log.save_new_activations(model, torch.randn(2, 10))
+
+
+class TestBug99GraphConsistencyValidation:
+    """#99: log_source_tensor_fast warns on shape mismatch."""
+
+    def test_shape_mismatch_warns(self):
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.randn(2, 10))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            log.save_new_activations(model, torch.randn(4, 10))
+            shape_warnings = [x for x in w if "shape changed" in str(x.message)]
+            assert len(shape_warnings) > 0

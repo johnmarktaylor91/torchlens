@@ -27,6 +27,8 @@ import torch
 
 from conftest import TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
 
+import torch.nn as nn
+
 import example_models
 from torchlens import log_forward_pass, show_model_graph
 
@@ -1480,3 +1482,68 @@ def test_aesthetic_gradient_visualizations():
     x = torch.rand(1, 8)
     _vis_gradient(model, x, "gradient_kitchen_sink")
     _vis_gradient(model, x, "gradient_kitchen_sink_depth1", depth=1)
+
+
+# =============================================================================
+# Bugfix regression: visualization smoke tests
+# =============================================================================
+
+
+class _SimpleLinear(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class TestVisualizationBugfixes:
+    def test_vis_nesting_depth_0(self):
+        """#94: vis_nesting_depth=0 should not crash."""
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.randn(2, 10))
+        try:
+            from torchlens.visualization.rendering import render_graph
+
+            render_graph(log, vis_nesting_depth=0, save_only=True)
+        except ImportError:
+            pytest.skip("graphviz not available")
+
+    def test_vis_keep_unsaved_false(self):
+        """#118: keep_unsaved_layers=False should not crash visualization."""
+        model = _SimpleLinear()
+        log = log_forward_pass(
+            model, torch.randn(2, 10), layers_to_save="all", keep_unsaved_layers=False
+        )
+        try:
+            from torchlens.visualization.rendering import render_graph
+
+            render_graph(log, save_only=True)
+        except ImportError:
+            pytest.skip("graphviz not available")
+
+
+class TestBug95VisModuleListFormat:
+    """#95: _get_lowest_containing_module should handle mixed LayerLog/LayerPassLog nodes."""
+
+    def test_vis_with_nested_modules(self):
+        class Inner(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(10, 10)
+
+            def forward(self, x):
+                return torch.relu(self.linear(x))
+
+        class Outer(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.inner = Inner()
+
+            def forward(self, x):
+                return self.inner(x)
+
+        model = Outer()
+        log = log_forward_pass(model, torch.randn(2, 10))
+        log.render_graph(save_only=True, vis_outpath="test_outputs/test_bug95")

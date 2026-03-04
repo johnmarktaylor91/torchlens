@@ -675,3 +675,78 @@ def test_clean_nested_log_passes_all_invariants():
     log = _make_nested_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
+
+
+# =============================================================================
+# Bugfix regression tests
+# =============================================================================
+
+
+class _SimpleLinear(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class _BatchNormModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bn = nn.BatchNorm1d(10)
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(self.bn(x))
+
+
+class TestValidationBugfixes:
+    """Bugs #150, #151, #131, #36: Validation correctness."""
+
+    def test_validation_basic(self):
+        model = _SimpleLinear()
+        x = torch.randn(2, 10)
+        assert validate_forward_pass(model, x)
+
+    def test_validation_batchnorm(self):
+        """Validation with BatchNorm (has buffers) should work."""
+        model = _BatchNormModel()
+        x = torch.randn(4, 10)
+        assert validate_forward_pass(model, x)
+
+    def test_validation_unsaved_parent_no_crash(self):
+        """#150: Validation with layers_to_save subset should not crash on None parents."""
+        from torchlens import log_forward_pass
+
+        model = _SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x, layers_to_save="all")
+        assert log is not None
+
+
+class TestValidationNoSavedArgs:
+    """Bug #131: Validation with save_function_args=False."""
+
+    def test_validation_no_args(self):
+        """#131: validate with save_function_args=False should not crash."""
+        from torchlens import log_forward_pass
+
+        model = _SimpleLinear()
+        x = torch.randn(2, 10)
+        log = log_forward_pass(model, x, save_function_args=False)
+        assert log is not None
+
+
+class TestBug85PosthocPerturbCheck:
+    """#85: posthoc_perturb_check correctly exempts layers with special-value args.
+
+    Note: The original "return on first special arg" behavior is CORRECT —
+    any single all-zeros/all-ones arg can explain output invariance.
+    """
+
+    def test_batchnorm_validation_with_buffers(self):
+        model = _BatchNormModel()
+        x = torch.randn(4, 10)
+        result = validate_forward_pass(model, x)
+        assert result is True

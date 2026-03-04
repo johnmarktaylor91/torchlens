@@ -270,3 +270,106 @@ class TestModelLogIntegration:
         """Number of LayerLogs equals number of unique no-pass labels."""
         unique = set(pl.layer_label_no_pass for pl in simple_log.layer_list)
         assert len(simple_log.layer_logs) == len(unique)
+
+
+# ---------------------------------------------------------------------------
+# Bugfix regression tests
+# ---------------------------------------------------------------------------
+
+
+class _SimpleLinear(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class TestLayerNumPasses:
+    """Bug #53: layer_num_passes should be keyed correctly."""
+
+    def test_returns_integer(self):
+        model = _SimpleLinear()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        for label in log.layer_labels_no_pass:
+            passes = log.layer_num_passes.get(label)
+            assert passes is not None, f"No passes for {label}"
+            assert isinstance(passes, int), f"Expected int, got {type(passes)} for {label}"
+
+
+class TestSliceIndexing:
+    """Bug #78: Slice indexing should return list."""
+
+    def test_slice_returns_list(self):
+        model = _SimpleLinear()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        result = log[0:2]
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+
+class TestToPandasGuard:
+    """Bug #124: to_pandas() should guard against unfinished pass."""
+
+    def test_works_after_pass(self):
+        model = _SimpleLinear()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        try:
+            import pandas
+
+            df = log.to_pandas()
+            assert df is not None
+        except ImportError:
+            pytest.skip("pandas not installed")
+
+
+class TestAmbiguousSubstring:
+    """Bug #125: Ambiguous substring should list matching layers."""
+
+    def test_lists_matches(self):
+        class TwoLinears(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.lin1 = nn.Linear(10, 10)
+                self.lin2 = nn.Linear(10, 10)
+
+            def forward(self, x):
+                return self.lin1(x) + self.lin2(x)
+
+        model = TwoLinears()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        with pytest.raises(ValueError, match="Ambiguous"):
+            log["linear"]
+
+
+class TestBug23CaseInsensitiveLookup:
+    """#23: Case-insensitive lookup for layer/module names."""
+
+    def test_case_insensitive_exact_match(self):
+        model = _SimpleLinear()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        result = log["Linear_1_1"]
+        assert result is not None
+        assert result.layer_label == "linear_1_1"
+
+    def test_case_insensitive_module_lookup(self):
+        model = _SimpleLinear()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        result = log["FC"]
+        assert result is not None
+
+
+class TestBug83ParentLayerArgLocs:
+    """#83: LayerLog.parent_layer_arg_locs should return strings, not sets."""
+
+    def test_arg_locs_are_strings(self):
+        model = _SimpleLinear()
+        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        for layer in log:
+            arg_locs = layer.parent_layer_arg_locs
+            for arg_type in ["args", "kwargs"]:
+                for key, val in arg_locs[arg_type].items():
+                    assert isinstance(val, str), (
+                        f"Expected string for arg_locs['{arg_type}'][{key}], got {type(val)}"
+                    )

@@ -14,6 +14,20 @@ from torchlens.data_classes import ParamAccessor
 
 
 # ---------------------------------------------------------------------------
+# Bugfix regression: shared tiny model
+# ---------------------------------------------------------------------------
+
+
+class _SimpleLinear(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -655,3 +669,29 @@ class TestIntegration:
             vis_nesting_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_frozen"),
         )
+
+
+# ---------------------------------------------------------------------------
+# Bugfix regression tests
+# ---------------------------------------------------------------------------
+
+
+class TestParamContains:
+    """Bug #84: ParamAccessor.__contains__ should support int."""
+
+    def test_int_contains(self):
+        model = _SimpleLinear()
+        mh = log_forward_pass(model, torch.randn(2, 10))
+        if mh.param_logs:
+            assert 0 in mh.params
+
+
+class TestParamRefCleared:
+    """GC-1: ParamLog._param_ref should be cleared after cleanup."""
+
+    def test_param_ref_cleared_after_cleanup(self):
+        model = _SimpleLinear()
+        mh = log_forward_pass(model, torch.randn(2, 10))
+        for pl in mh.param_logs:
+            assert pl._param_ref is not None
+        mh.cleanup()

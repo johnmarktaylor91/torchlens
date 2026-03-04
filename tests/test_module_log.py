@@ -381,3 +381,55 @@ class TestModuleLogIntegration:
         # Should have nested hierarchy
         max_depth = max(ml.nesting_depth for ml in log.modules)
         assert max_depth >= 2  # At least 3 levels of nesting
+
+
+# ---------------------------------------------------------------------------
+# Bugfix regression tests
+# ---------------------------------------------------------------------------
+
+
+class _SimpleLinear(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class TestModuleLogStringIndexing:
+    """Bug #120: ModuleLog should support string label lookup."""
+
+    def test_module_string_lookup(self):
+        model = _SimpleLinear()
+        log = log_forward_pass(model, torch.randn(2, 10))
+        if hasattr(log, "_module_logs") and log._module_logs:
+            first_key = list(log._module_logs._dict.keys())[0]
+            mod = log._module_logs[first_key]
+            assert mod is not None
+
+
+class TestBug107TupleStringNormalization:
+    """#107: containing_modules_origin_nested should handle both tuple and string formats."""
+
+    def test_module_hierarchy_with_nested_model(self):
+        class Inner(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(10, 10)
+
+            def forward(self, x):
+                return self.linear(x)
+
+        class Outer(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.inner = Inner()
+
+            def forward(self, x):
+                return self.inner(x)
+
+        model = Outer()
+        log = log_forward_pass(model, torch.randn(2, 10))
+        assert len(log.modules) > 0
+        assert "inner" in log.modules
