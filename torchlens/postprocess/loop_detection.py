@@ -50,7 +50,9 @@ def _detect_and_label_loops(self) -> None:
     """
     Post-processing function that yokes together operations corresponding to the same layer, based on
     the following rule:
-    1) Operations invoking the same parameters are always assigned to the same layer.
+    1) Operations applying the same function to the same parameters (i.e., matching
+        ``func_applied_name`` AND ``sorted(parent_param_barcodes)``) are always assigned
+        to the same layer.
     2) Any contiguous operations surrounding repeated parameters are assigned to the same layer
         (e.g., if a ReLU always follows every pass of an FC layer, then all instances of that ReLU
         operation are considered part of the same layer; continue for all such contiguous
@@ -522,8 +524,9 @@ def _merge_iso_groups_to_layers(
     1. **Within iso-groups** (Rules 2+3): For each pair of isomorphic nodes, merge when
        their subgraphs share param operation equivalence types or are topologically adjacent.
     2. **Cross iso-groups** (Rule 1): Unconditionally merge ALL nodes that share identical
-       ``parent_param_barcodes``, regardless of iso-group membership.  This ensures the
-       fundamental invariant that param-sharing operations are always the same layer.
+       ``(func_applied_name, sorted(parent_param_barcodes))``, regardless of iso-group
+       membership.  This ensures the fundamental invariant that operations applying the
+       same function to the same parameters are always the same layer.
 
     Args:
         iso_node_groups: Dict mapping each iso-group leader label to the list of node labels in the group.
@@ -580,14 +583,15 @@ def _merge_iso_groups_to_layers(
             if (len(overlapping_param_types) > 0) or subgraphs_are_adjacent:
                 _union(node1_label, node2_label)
 
-    # Pass 2: Merge across iso-groups by identical param barcodes (Rule 1 — unconditional)
-    # If two nodes anywhere in the model share the same sorted(parent_param_barcodes),
+    # Pass 2: Merge across iso-groups by identical (func_applied_name, param barcodes)
+    # If two nodes anywhere in the model share the same func AND sorted(parent_param_barcodes),
     # they MUST be the same layer regardless of iso-group membership.
+    # Different ops on the same params (e.g. __getitem__ vs __add__) are NOT the same layer.
     param_barcode_groups: Dict[tuple, list] = defaultdict(list)
     for node_label in all_iso_nodes:
         node = self[node_label]
         if node.computed_with_params and node.parent_param_barcodes:
-            barcode_key = tuple(sorted(node.parent_param_barcodes))
+            barcode_key = (node.func_applied_name, tuple(sorted(node.parent_param_barcodes)))
             param_barcode_groups[barcode_key].append(node_label)
 
     for barcode_key, nodes_with_same_params in param_barcode_groups.items():
