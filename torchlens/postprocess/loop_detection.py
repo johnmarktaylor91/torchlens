@@ -17,8 +17,8 @@ class SubgraphInfo:
     """Info about one isomorphic subgraph rooted at a starting node."""
 
     starting_node: str
-    param_nodes: Set[str] = None
-    node_set: Set[str] = None
+    param_nodes: Set[str] = None  # type: ignore[assignment]
+    node_set: Set[str] = None  # type: ignore[assignment]
 
     def __post_init__(self):
         if self.param_nodes is None:
@@ -286,8 +286,8 @@ def _advance_bfs_frontier(
         new_equivalent_nodes = _find_isomorphic_matches(
             self,
             candidate_node_label,
-            candidate_node_neighbor_type,
-            candidate_node_subgraph,
+            candidate_node_neighbor_type,  # type: ignore[arg-type]
+            candidate_node_subgraph,  # type: ignore[arg-type]
             frontier_nodes,
         )
 
@@ -318,7 +318,7 @@ def _collect_frontier_and_detect_adjacency(
         node = self[node_label]
         node_subgraph = state.node_to_subgraph[node_label]
         node_subgraph_label = node_subgraph.starting_node
-        subgraph_successor_nodes = {"children": [], "parents": []}
+        subgraph_successor_nodes: Dict[str, List[str]] = {"children": [], "parents": []}
         added_neighbors = set()  # #148: prevent shared neighbor double-add
         for node_type in node_types_to_use:
             node_type_field = node_type_fields[node_type]
@@ -493,12 +493,12 @@ def _finalize_layer_assignments(
         ):
             continue
         # convert to list and sort
-        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)
+        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)  # type: ignore[assignment]
         # Unify operation_equivalence_type: when param-sharing merges nodes
         # from different iso groups (e.g., shared module called from different
         # parent blocks), their equivalence types may differ due to module path
         # suffixes.  Use the first node's type as canonical.
-        canonical_equiv_type = self[layer_nodes[0]].operation_equivalence_type
+        canonical_equiv_type = self[layer_nodes[0]].operation_equivalence_type  # type: ignore[index]
         for pass_index, node_label in enumerate(layer_nodes):
             node = self[node_label]
             node.layer_label_raw = layer_label

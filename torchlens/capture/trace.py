@@ -29,7 +29,7 @@ def save_new_activations(
     self: "ModelLog",
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Union[str, List] = "all",
     random_seed: Optional[int] = None,
 ):
@@ -125,16 +125,16 @@ def _get_op_nums_from_user_labels(
 ) -> Union[List[int], str]:
     """Given list of user layer labels, returns the original tensor numbers for those labels."""
     if which_layers == "all":
-        return which_layers
+        return which_layers  # type: ignore[return-value]
     elif which_layers in [None, "none", "None", "NONE", []]:
         return []
 
     if type(which_layers) != list:
-        which_layers = [which_layers]
+        which_layers = [which_layers]  # type: ignore[list-item]
     raw_layer_nums_to_save = set()
     for layer_key in which_layers:
         if layer_key in self._lookup_keys_to_layer_num_dict:
-            raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])
+            raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])  # type: ignore[index]
             continue
 
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
@@ -145,8 +145,8 @@ def _get_op_nums_from_user_labels(
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
 
-    raw_layer_nums_to_save = sorted(list(raw_layer_nums_to_save))
-    return raw_layer_nums_to_save
+    raw_layer_nums_to_save = sorted(list(raw_layer_nums_to_save))  # type: ignore[assignment]
+    return raw_layer_nums_to_save  # type: ignore[return-value]
 
 
 def _fetch_label_move_input_tensors(
@@ -233,13 +233,13 @@ def _setup_inputs_and_device(
     elif first_buffer is not None:
         model_device = first_buffer.device
     else:
-        model_device = "cpu"
+        model_device = "cpu"  # type: ignore[assignment]
 
     input_args = safe_copy_args(input_args)
     input_arg_names = _get_input_arg_names(model, input_args)
     input_kwargs = safe_copy_kwargs(input_kwargs)
 
-    return input_args, input_kwargs, input_arg_names, model_device
+    return input_args, input_kwargs, input_arg_names, model_device  # type: ignore[return-value]
 
 
 def _extract_and_mark_outputs(
@@ -282,7 +282,7 @@ def run_and_log_inputs_through_model(
     self: "ModelLog",
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
     random_seed: Optional[int] = None,
 ) -> None:
@@ -294,10 +294,10 @@ def run_and_log_inputs_through_model(
     """
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
-    self.random_seed_used = random_seed
+    self.random_seed_used = random_seed  # type: ignore[assignment]
     set_random_seed(random_seed)
 
-    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
+    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment, arg-type]
 
     # In fast mode, also save parents of output layers so output tensor_contents
     # can be populated in postprocess_fast (issue #46).
@@ -319,7 +319,7 @@ def run_and_log_inputs_through_model(
     )
 
     self.pass_start_time = time.time()
-    input_tensors = []
+    input_tensors: List[torch.Tensor] = []
 
     try:
         (
@@ -330,7 +330,7 @@ def run_and_log_inputs_through_model(
         # Capture/restore RNG state so the fast pass reproduces the same
         # stochastic graph as the exhaustive pass (issue #58).
         if self.logging_mode == "exhaustive":
-            self._pre_forward_rng_states = log_current_rng_states()
+            self._pre_forward_rng_states = log_current_rng_states()  # type: ignore[attr-defined]
         elif self.logging_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
             set_rng_from_saved_states(self._pre_forward_rng_states)
 
@@ -380,5 +380,5 @@ def run_and_log_inputs_through_model(
         raise e
 
     finally:
-        input_tensors = None
+        input_tensors = None  # type: ignore[assignment]
         torch.cuda.empty_cache()

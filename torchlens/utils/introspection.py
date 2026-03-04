@@ -1,7 +1,7 @@
 """Object introspection: recursive type search, nested attribute access, and call-stack filtering."""
 
 import warnings
-from typing import Any, Callable, List, Optional, Type
+from typing import Any, Callable, List, Optional, Set, Type
 
 import numpy as np
 import torch
@@ -35,11 +35,11 @@ def get_vars_of_type_from_obj(
     """
     if subclass_exceptions is None:
         subclass_exceptions = []
-    this_stack = [(obj, "", [])]
-    found_items = []
-    found_addresses = []
-    found_addresses_full = []
-    found_ids = set()
+    this_stack: List[Any] = [(obj, "", [])]
+    found_items: List[Any] = []
+    found_addresses: List[Any] = []
+    found_addresses_full: List[Any] = []
+    found_ids: Set[Any] = set()
     for _ in range(search_depth):
         this_stack = _search_stack_for_vars_of_type(
             this_stack,
@@ -64,7 +64,7 @@ def _search_stack_for_vars_of_type(
     found_items: List,
     found_addresses: List,
     found_addresses_full: List,
-    found_ids: List,
+    found_ids: Set,
     subclass_exceptions: List,
     allow_repeats: bool,
 ):
@@ -84,7 +84,7 @@ def _search_stack_for_vars_of_type(
     Returns:
         The next stack.
     """
-    next_stack = []
+    next_stack: List[Any] = []
     if len(current_stack) == 0:
         return current_stack
     while len(current_stack) > 0:
@@ -331,7 +331,7 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
                 frame,  # keep reference for phase 2 func_obj lookup
             )
         )
-        frame = frame.f_back
+        frame = frame.f_back  # type: ignore[assignment]
 
     # Walk bottom-up (deepest caller last → first in output) and collect
     # non-internal frames.  Start tracking once we hit a ``forward`` frame,

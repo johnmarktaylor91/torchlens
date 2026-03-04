@@ -78,14 +78,17 @@ def _locate_parent_tensors_in_args(
         Dict with two sub-dicts: 'args' and 'kwargs', each mapping arg positions to parent
         tensor labels.
     """
-    tensor_all_arg_positions = {"args": {}, "kwargs": {}}
+    tensor_all_arg_positions: Dict[str, Dict] = {"args": {}, "kwargs": {}}
     arg_struct_dict = {"args": args, "kwargs": kwargs}
 
     for parent_entry in parent_log_entries:
         for arg_type in ["args", "kwargs"]:
             arg_struct = arg_struct_dict[arg_type]
             _find_arg_positions_for_single_parent(
-                parent_entry, arg_type, arg_struct, tensor_all_arg_positions
+                parent_entry,
+                arg_type,
+                arg_struct,
+                tensor_all_arg_positions,  # type: ignore[arg-type]
             )
 
     return tensor_all_arg_positions
@@ -115,12 +118,12 @@ def _find_arg_positions_for_single_parent(
     }
     iterfunc = iteration_strategies[arg_type]
 
-    for arg_key, arg in iterfunc(arg_struct):
+    for arg_key, arg in iterfunc(arg_struct):  # type: ignore[operator]
         if getattr(arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
             tensor_all_arg_positions[arg_type][arg_key] = parent_entry.tensor_label_raw
         elif type(arg) in [list, tuple, dict]:
             iterfunc2 = iteration_strategies[type(arg)]
-            for sub_arg_key, sub_arg in iterfunc2(arg):
+            for sub_arg_key, sub_arg in iterfunc2(arg):  # type: ignore[operator]
                 if getattr(sub_arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
                     tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = (
                         parent_entry.tensor_label_raw
@@ -219,12 +222,12 @@ def _process_parent_param_passes(
     for param in arg_parameters:
         if not hasattr(param, "tl_param_barcode"):
             param_barcode = make_random_barcode()
-            param.tl_param_barcode = param_barcode
-            param.tl_pass_num = 1
+            param.tl_param_barcode = param_barcode  # type: ignore[attr-defined]
+            param.tl_pass_num = 1  # type: ignore[attr-defined]
         else:
-            param_barcode = param.tl_param_barcode
-            param.tl_pass_num += 1
-        parent_param_passes[param_barcode] = param.tl_pass_num
+            param_barcode = param.tl_param_barcode  # type: ignore[attr-defined]
+            param.tl_pass_num += 1  # type: ignore[attr-defined]
+        parent_param_passes[param_barcode] = param.tl_pass_num  # type: ignore[attr-defined]
     return parent_param_passes
 
 
@@ -284,7 +287,7 @@ def _get_hash_from_args(args, kwargs) -> str:
     Returns:
         A short hash string, or 'no_args' if no non-tensor arguments are present.
     """
-    args_to_hash = []
+    args_to_hash: List[Any] = []
     for a, arg in enumerate(args):
         _append_arg_hash(arg, f"pos{a}", args_to_hash)
     for key, arg in kwargs.items():

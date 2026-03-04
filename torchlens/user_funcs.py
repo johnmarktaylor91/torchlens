@@ -114,7 +114,7 @@ def _run_model_and_save_specified_activations(
 def log_forward_pass(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Optional[Union[str, List]] = "all",
     keep_unsaved_layers: bool = True,
     output_device: str = "same",
@@ -130,12 +130,12 @@ def log_forward_pass(
     vis_fileformat: str = "pdf",
     vis_buffer_layers: bool = False,
     vis_direction: str = "bottomup",
-    vis_graph_overrides: Dict = None,
-    vis_node_overrides: Dict = None,
-    vis_nested_node_overrides: Dict = None,
-    vis_edge_overrides: Dict = None,
-    vis_gradient_edge_overrides: Dict = None,
-    vis_module_overrides: Dict = None,
+    vis_graph_overrides: Optional[Dict] = None,
+    vis_node_overrides: Optional[Dict] = None,
+    vis_nested_node_overrides: Optional[Dict] = None,
+    vis_edge_overrides: Optional[Dict] = None,
+    vis_gradient_edge_overrides: Optional[Dict] = None,
+    vis_module_overrides: Optional[Dict] = None,
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
@@ -195,8 +195,8 @@ def log_forward_pass(
     if layers_to_save in ["all", "none", None, []]:
         model_log = _run_model_and_save_specified_activations(
             model=model,
-            input_args=input_args,
-            input_kwargs=input_kwargs,
+            input_args=input_args,  # type: ignore[arg-type]
+            input_kwargs=input_kwargs,  # type: ignore[arg-type]
             layers_to_save=layers_to_save,
             keep_unsaved_layers=keep_unsaved_layers,
             output_device=output_device,
@@ -212,8 +212,8 @@ def log_forward_pass(
     else:
         model_log = _run_model_and_save_specified_activations(
             model=model,
-            input_args=input_args,
-            input_kwargs=input_kwargs,
+            input_args=input_args,  # type: ignore[arg-type]
+            input_kwargs=input_kwargs,  # type: ignore[arg-type]
             layers_to_save=None,
             keep_unsaved_layers=True,
             output_device=output_device,
@@ -229,9 +229,9 @@ def log_forward_pass(
         model_log.keep_unsaved_layers = keep_unsaved_layers
         model_log.save_new_activations(
             model=model,
-            input_args=input_args,
+            input_args=input_args,  # type: ignore[arg-type]
             input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
+            layers_to_save=layers_to_save,  # type: ignore[arg-type]
             random_seed=random_seed,
         )
 
@@ -259,7 +259,7 @@ def log_forward_pass(
 def get_model_metadata(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
 ) -> ModelLog:
     """Logs all metadata for a given model and inputs without saving any activations. NOTE: this function
     will be removed in a future version of TorchLens, since calling it is identical to calling
@@ -285,16 +285,16 @@ def get_model_metadata(
 def show_model_graph(
     model: nn.Module,
     input_args: Union[torch.Tensor, List, Tuple],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
     vis_opt: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "graph.gv",
-    vis_graph_overrides: Dict = None,
-    vis_node_overrides: Dict = None,
-    vis_nested_node_overrides: Dict = None,
-    vis_edge_overrides: Dict = None,
-    vis_gradient_edge_overrides: Dict = None,
-    vis_module_overrides: Dict = None,
+    vis_graph_overrides: Optional[Dict] = None,
+    vis_node_overrides: Optional[Dict] = None,
+    vis_nested_node_overrides: Optional[Dict] = None,
+    vis_edge_overrides: Optional[Dict] = None,
+    vis_gradient_edge_overrides: Optional[Dict] = None,
+    vis_module_overrides: Optional[Dict] = None,
     save_only: bool = False,
     vis_fileformat: str = "pdf",
     vis_buffer_layers: bool = False,
@@ -332,7 +332,7 @@ def show_model_graph(
 
     model_log = _run_model_and_save_specified_activations(
         model=model,
-        input_args=input_args,
+        input_args=input_args,  # type: ignore[arg-type]
         input_kwargs=input_kwargs,
         layers_to_save=None,
         activation_postfunc=None,
@@ -364,7 +364,7 @@ def show_model_graph(
 def validate_forward_pass(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
     random_seed: Union[int, None] = None,
     verbose: bool = False,
     validate_metadata: bool = True,
@@ -448,7 +448,7 @@ def validate_forward_pass(
 def validate_saved_activations(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Dict[Any, Any] = None,
+    input_kwargs: Optional[Dict[Any, Any]] = None,
     random_seed: Union[int, None] = None,
     verbose: bool = False,
 ) -> bool:

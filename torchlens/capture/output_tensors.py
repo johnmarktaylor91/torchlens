@@ -249,28 +249,28 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self.output_device
 
     # Grad info
-    fields_dict["grad_contents"] = None
+    fields_dict["grad_contents"] = None  # type: ignore[assignment]
     fields_dict["save_gradients"] = self.save_gradients
-    fields_dict["has_saved_grad"] = False
-    fields_dict["grad_shape"] = None
-    fields_dict["grad_dtype"] = None
-    fields_dict["grad_fsize"] = 0
+    fields_dict["has_saved_grad"] = False  # type: ignore[assignment]
+    fields_dict["grad_shape"] = None  # type: ignore[assignment]
+    fields_dict["grad_dtype"] = None  # type: ignore[assignment]
+    fields_dict["grad_fsize"] = 0  # type: ignore[assignment]
     fields_dict["grad_fsize_nice"] = human_readable_size(0)
 
     # Function call info
-    fields_dict["func_applied"] = func
+    fields_dict["func_applied"] = func  # type: ignore[assignment]
     fields_dict["func_applied_name"] = func_name
-    fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)
-    fields_dict["func_time_elapsed"] = exec_ctx.time_elapsed
-    fields_dict["func_rng_states"] = exec_ctx.rng_states
-    fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-    fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())
-    fields_dict["num_func_args_total"] = len(args) + len(kwargs)
-    fields_dict["num_position_args"] = len(args)
-    fields_dict["num_keyword_args"] = len(kwargs)
-    fields_dict["func_position_args_non_tensor"] = non_tensor_args
-    fields_dict["func_keyword_args_non_tensor"] = non_tensor_kwargs
-    fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(non_tensor_kwargs.values())
+    fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)  # type: ignore[assignment]
+    fields_dict["func_time_elapsed"] = exec_ctx.time_elapsed  # type: ignore[assignment]
+    fields_dict["func_rng_states"] = exec_ctx.rng_states  # type: ignore[assignment]
+    fields_dict["func_autocast_state"] = exec_ctx.autocast_state  # type: ignore[assignment]
+    fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())  # type: ignore[assignment]
+    fields_dict["num_func_args_total"] = len(args) + len(kwargs)  # type: ignore[assignment]
+    fields_dict["num_position_args"] = len(args)  # type: ignore[assignment]
+    fields_dict["num_keyword_args"] = len(kwargs)  # type: ignore[assignment]
+    fields_dict["func_position_args_non_tensor"] = non_tensor_args  # type: ignore[assignment]
+    fields_dict["func_keyword_args_non_tensor"] = non_tensor_kwargs  # type: ignore[assignment]
+    fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(non_tensor_kwargs.values())  # type: ignore[assignment]
 
     _build_graph_relationship_fields(
         self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
@@ -309,9 +309,9 @@ def _tag_tensor_and_track_variations(
     kwarg_copies: Dict[str, Any],
 ) -> None:
     """Tag the output tensor with its label, add backward hook, and track parent content variations."""
-    out.tl_tensor_label_raw = fields_dict_onetensor["tensor_label_raw"]
+    out.tl_tensor_label_raw = fields_dict_onetensor["tensor_label_raw"]  # type: ignore[attr-defined]
     if self.save_gradients:
-        _add_backward_hook(self, out, out.tl_tensor_label_raw)
+        _add_backward_hook(self, out, out.tl_tensor_label_raw)  # type: ignore[attr-defined]
 
     for parent_label in new_layer_entry.parent_layers:
         parent = self[parent_label]
@@ -678,14 +678,14 @@ def _log_output_tensor_info(
 
     # FLOPs computation
     fields_dict["flops_forward"] = compute_forward_flops(
-        fields_dict.get("func_applied_name"),
+        fields_dict.get("func_applied_name"),  # type: ignore[arg-type]
         fields_dict["tensor_shape"],
         fields_dict.get("parent_param_shapes", []),
         args,
         kwargs,
     )
     fields_dict["flops_backward"] = compute_backward_flops(
-        fields_dict.get("func_applied_name"),
+        fields_dict.get("func_applied_name"),  # type: ignore[arg-type]
         fields_dict["flops_forward"],
     )
 
@@ -722,19 +722,23 @@ def _make_layer_log_entry(
         activation_postfunc: Function to apply to activations before saving them.
     """
     if t_args is None:
-        t_args = []
+        t_args = []  # type: ignore[assignment]
     if t_kwargs is None:
         t_kwargs = {}
 
     if fields_dict.get("is_buffer_layer"):
         new_entry = BufferLog(fields_dict)
     else:
-        new_entry = LayerPassLog(fields_dict)
+        new_entry = LayerPassLog(fields_dict)  # type: ignore[assignment]
     if (self._layer_nums_to_save == "all") or (
         new_entry.realtime_tensor_num in self._layer_nums_to_save
     ):
         new_entry.save_tensor_data(
-            t, t_args, t_kwargs, self.save_function_args, activation_postfunc
+            t,
+            t_args,
+            t_kwargs,
+            self.save_function_args,
+            activation_postfunc,  # type: ignore[arg-type]
         )
         self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
     self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry

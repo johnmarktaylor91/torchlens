@@ -5,7 +5,7 @@ decisions to the registries and helpers in exemptions.py.
 """
 
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Set, TYPE_CHECKING, Union
+from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
@@ -61,7 +61,7 @@ def validate_saved_activations(
             return False
 
     # Validate the parents of each validated layer.
-    validated_child_edges_for_each_layer = defaultdict(set)
+    validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
     validated_layers = set(self.output_layers + self.internally_terminated_layers)
     layers_to_validate_parents_for = deque(validated_layers)
 
@@ -72,7 +72,7 @@ def validate_saved_activations(
             layer_to_validate_parents_for,
             validated_layers,
             validated_child_edges_for_each_layer,
-            layers_to_validate_parents_for,
+            layers_to_validate_parents_for,  # type: ignore[arg-type]
             verbose,
         )
         if not parent_layers_valid:
@@ -201,7 +201,7 @@ def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bo
         parent_layer = self[parent_layer_label]
         for arg_type in ["args", "kwargs"]:
             iterfunc, argtype_field = argtype_dict[arg_type]
-            for key, val in iterfunc(getattr(target_layer, argtype_field)):
+            for key, val in iterfunc(getattr(target_layer, argtype_field)):  # type: ignore[operator]
                 validation_correct_for_arg_and_layer = _validate_layer_against_arg(
                     self, target_layer, parent_layer, arg_type, key, val
                 )
@@ -344,7 +344,7 @@ def _check_perturbation_exemptions(
         ):
             return True
     if func_name in CUSTOM_EXEMPTION_CHECKS:
-        if CUSTOM_EXEMPTION_CHECKS[func_name](self, layer, layers_to_perturb):
+        if CUSTOM_EXEMPTION_CHECKS[func_name](self, layer, layers_to_perturb):  # type: ignore[misc]
             return True
 
     return False
@@ -391,7 +391,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     self,
     layer_to_validate_parents_for_label: str,
     perturb: bool = False,
-    layers_to_perturb: List[str] = None,
+    layers_to_perturb: Optional[List[str]] = None,
     verbose: bool = False,
 ) -> bool:
     """Checks whether executing the saved function for a layer on the saved value of its parent layers
@@ -469,7 +469,7 @@ def _prepare_input_args_for_validating_layer(
         Dict of input arguments.
     """
     if layer_to_validate_parents_for.creation_args is None:
-        return None  # Can't validate without saved args (#131)
+        return None  # type: ignore[return-value]  # Can't validate without saved args (#131)
     input_args = {
         "args": list(layer_to_validate_parents_for.creation_args[:]),
         "kwargs": layer_to_validate_parents_for.creation_kwargs.copy(),
@@ -571,7 +571,7 @@ def _perturb_layer_activations(
             perturbed_activations = parent_activations.detach().clone()
             for _ in range(MAX_PERTURB_ATTEMPTS):
                 perturbed_activations = torch.randint(
-                    parent_activations.min(),
+                    parent_activations.min(),  # type: ignore[call-overload]
                     parent_activations.max() + 1,
                     size=parent_activations.shape,
                     device=device,

@@ -1,7 +1,7 @@
 """Graphviz-based computational graph rendering for ModelLog objects."""
 
 from collections import defaultdict
-from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
+from typing import Any, Optional, Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
 import graphviz
 
@@ -33,12 +33,12 @@ def render_graph(
     vis_opt: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
-    vis_graph_overrides: Dict = None,
-    vis_node_overrides: Dict = None,
-    vis_nested_node_overrides: Dict = None,
-    vis_edge_overrides: Dict = None,
-    vis_gradient_edge_overrides: Dict = None,
-    vis_module_overrides: Dict = None,
+    vis_graph_overrides: Optional[Dict] = None,
+    vis_node_overrides: Optional[Dict] = None,
+    vis_nested_node_overrides: Optional[Dict] = None,
+    vis_edge_overrides: Optional[Dict] = None,
+    vis_gradient_edge_overrides: Optional[Dict] = None,
+    vis_module_overrides: Optional[Dict] = None,
     save_only: bool = False,
     vis_fileformat: str = "pdf",
     show_buffer_layers: bool = False,
@@ -90,7 +90,7 @@ def render_graph(
     if vis_opt == "unrolled":
         entries_to_plot = self.layer_dict_main_keys
     elif vis_opt == "rolled":
-        entries_to_plot = self.layer_logs
+        entries_to_plot = self.layer_logs  # type: ignore[assignment]
     else:
         raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
 
@@ -138,7 +138,7 @@ def render_graph(
         "ordering": "out",
     }
 
-    for arg_name, arg_val in overrides.graph.items():
+    for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
         if callable(arg_val):
             graph_args[arg_name] = str(arg_val(self))
         else:
@@ -148,9 +148,11 @@ def render_graph(
     dot.node_attr.update({"ordering": "out"})
 
     # list of edges for each subgraph; subgraphs will be created at the end.
-    module_cluster_dict = defaultdict(lambda: {"edges": [], "has_input_ancestor": False})
-    collapsed_modules = set()
-    edges_used = set()
+    module_cluster_dict: Dict[str, Any] = defaultdict(
+        lambda: {"edges": [], "has_input_ancestor": False}
+    )
+    collapsed_modules: Set[str] = set()
+    edges_used: Set[str] = set()
 
     for node_barcode, node in entries_to_plot.items():
         if node.is_buffer_layer and not show_buffer_layers:
@@ -189,7 +191,7 @@ def _add_node_to_graphviz(
     collapsed_modules: Set,
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
-    overrides: VisualizationOverrides = None,
+    overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -213,12 +215,17 @@ def _add_node_to_graphviz(
             collapsed_modules,
             vis_opt,
             vis_nesting_depth,
-            overrides,
+            overrides,  # type: ignore[arg-type]
         )
         node_color = "black"
     else:
         node_color = _build_layer_node(
-            self, node, graphviz_graph, show_buffer_layers, vis_opt, overrides
+            self,
+            node,
+            graphviz_graph,
+            show_buffer_layers,
+            vis_opt,
+            overrides,  # type: ignore[arg-type]
         )
 
     _add_edges_for_node(
@@ -304,7 +311,7 @@ def _build_layer_node(
     if ":" in node_bg_color:
         node_args["gradientangle"] = "0"
 
-    for arg_name, arg_val in overrides.node.items():
+    for arg_name, arg_val in overrides.node.items():  # type: ignore[union-attr]
         if callable(arg_val):
             node_args[arg_name] = str(arg_val(self, node))
         else:
@@ -346,9 +353,9 @@ def _build_collapsed_module_node(
     module_output_fsize = module_output_layer.tensor_fsize_nice
     module_address, pass_num = module_tuple
     ml = self.modules[module_address]
-    module_type = ml.module_class_name
-    module_num_passes = ml.num_passes
-    module_nparams = ml.num_params
+    module_type = ml.module_class_name  # type: ignore[union-attr]
+    module_num_passes = ml.num_passes  # type: ignore[union-attr]
+    module_nparams = ml.num_params  # type: ignore[union-attr]
 
     if vis_opt == "unrolled":
         node_name = "pass".join(module_tuple)
@@ -358,7 +365,7 @@ def _build_collapsed_module_node(
     else:
         node_name = module_tuple[0]
         module_num_tensors = ml.num_layers
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.all_layers)
+        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.all_layers)  # type: ignore[union-attr]
 
     if node_name in collapsed_modules:
         return  # collapsed node already added
@@ -373,12 +380,12 @@ def _build_collapsed_module_node(
     if len(module_output_shape) > 1:
         tensor_shape_str = "x".join([str(x) for x in module_output_shape])
     elif len(module_output_shape) == 1:  # #100: use module_output_shape, not node.tensor_shape
-        tensor_shape_str = f"x{module_output_shape[0]}"
+        tensor_shape_str = f"x{module_output_shape[0]}"  # type: ignore[misc]
     else:
         tensor_shape_str = "x1"
 
-    module_nparams_trainable = ml.num_params_trainable
-    module_nparams_frozen = ml.num_params_frozen
+    module_nparams_trainable = ml.num_params_trainable  # type: ignore[union-attr]
+    module_nparams_frozen = ml.num_params_frozen  # type: ignore[union-attr]
 
     if module_nparams > 0:
         if module_nparams_frozen == 0:
@@ -429,7 +436,7 @@ def _build_collapsed_module_node(
     if ":" in bg_color:
         node_args["gradientangle"] = "0"
 
-    for arg_name, arg_val in overrides.nested_node.items():
+    for arg_name, arg_val in overrides.nested_node.items():  # type: ignore[union-attr]
         if callable(arg_val):
             node_args[arg_name] = str(arg_val(self, node))
         else:
@@ -465,7 +472,7 @@ def _get_node_address_shape_color(
         if isinstance(node, LayerPassLog):
             module_pass_exited = node.containing_modules_origin_nested[-1]
             module, _ = module_pass_exited.split(":")
-            if self.modules[module].num_passes == 1:
+            if self.modules[module].num_passes == 1:  # type: ignore[union-attr]
                 node_address = module
             else:
                 node_address = module_pass_exited
@@ -531,7 +538,7 @@ def _is_only_non_buffer_in_module(
         if isinstance(node, LayerPassLog):
             parent_layer = self[parent_layer_label]
         else:
-            parent_layer = self.layer_logs[parent_layer_label]
+            parent_layer = self.layer_logs[parent_layer_label]  # type: ignore[assignment]
         if (not parent_layer.is_buffer_layer) and (
             (len(parent_layer.containing_modules_origin_nested) > 0)
             and parent_layer.containing_modules_origin_nested[-1]
@@ -678,7 +685,7 @@ def _add_edges_for_node(
     graphviz_graph,
     vis_opt: str = "unrolled",
     show_buffer_layers: bool = False,
-    overrides: VisualizationOverrides = None,
+    overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
     """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
 
@@ -698,7 +705,7 @@ def _add_edges_for_node(
         if vis_opt == "unrolled":
             child_node = self.layer_dict_main_keys[child_layer_label]
         elif vis_opt == "rolled":
-            child_node = self.layer_logs[child_layer_label]
+            child_node = self.layer_logs[child_layer_label]  # type: ignore[assignment]
         else:
             raise ValueError(f"vis_opt must be 'unrolled' or 'rolled', not {vis_opt}")
 
@@ -778,9 +785,9 @@ def _add_edges_for_node(
 
         # Annotate passes for rolled node edge if it varies across passes
         if vis_opt == "rolled":
-            _label_rolled_pass_nums(child_node, parent_node, edge_dict)
+            _label_rolled_pass_nums(child_node, parent_node, edge_dict)  # type: ignore[arg-type]
 
-        for arg_name, arg_val in overrides.edge.items():
+        for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
             if callable(arg_val):
                 edge_dict[arg_name] = str(arg_val(self, parent_node, child_node))
             else:
@@ -817,7 +824,7 @@ def _add_edges_for_node(
                 containing_module,
                 module_edge_dict,
                 graphviz_graph,
-                overrides,
+                overrides,  # type: ignore[arg-type]
             )
 
 
@@ -845,7 +852,7 @@ def _label_node_arguments_if_needed(
             if parent_node.layer_label == arg_label:
                 arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
-    arg_labels = "<br/>".join(arg_labels)
+    arg_labels = "<br/>".join(arg_labels)  # type: ignore[assignment]
     if not arg_labels:
         return
     arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_labels}</b></FONT>>"
@@ -1032,7 +1039,7 @@ def _add_gradient_edge(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
-        for arg_name, arg_val in overrides.gradient_edge.items():
+        for arg_name, arg_val in overrides.gradient_edge.items():  # type: ignore[union-attr]
             if callable(arg_val):
                 edge_dict[arg_name] = str(arg_val(self, parent_layer, child_layer))
             else:
@@ -1049,7 +1056,7 @@ def _setup_subgraphs(
     graphviz_graph,
     vis_opt: str,
     module_edge_dict: Dict,
-    overrides: VisualizationOverrides = None,
+    overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
     """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
     set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
@@ -1066,7 +1073,7 @@ def _setup_subgraphs(
         module_submodule_dict = defaultdict(list)
         for pass_label, mpl in self.modules._pass_dict.items():
             module_submodule_dict[pass_label] = list(mpl.call_children)
-        subgraphs = list(self.modules["self"].passes[1].call_children)
+        subgraphs = list(self.modules["self"].passes[1].call_children)  # type: ignore[union-attr]
     else:
         module_submodule_dict = defaultdict(list)
         for ml in self.modules:
@@ -1092,7 +1099,7 @@ def _setup_subgraphs(
             nesting_depth,
             max_nesting_depth,
             vis_opt,
-            overrides,
+            overrides,  # type: ignore[arg-type]
         )
 
 
@@ -1132,11 +1139,11 @@ def _setup_subgraphs_recurse(
     else:
         raise ValueError("vis_opt must be 'rolled' or 'unrolled'")
     sg_ml = self.modules[subgraph_module]
-    module_type = sg_ml.module_class_name
-    if (sg_ml.num_passes > 1) and (vis_opt == "unrolled"):
+    module_type = sg_ml.module_class_name  # type: ignore[union-attr]
+    if (sg_ml.num_passes > 1) and (vis_opt == "unrolled"):  # type: ignore[union-attr]
         subgraph_title = subgraph_name_w_pass
-    elif (sg_ml.num_passes > 1) and (vis_opt == "rolled"):
-        subgraph_title = f"{subgraph_module} (x{sg_ml.num_passes})"
+    elif (sg_ml.num_passes > 1) and (vis_opt == "rolled"):  # type: ignore[union-attr]
+        subgraph_title = f"{subgraph_module} (x{sg_ml.num_passes})"  # type: ignore[union-attr]
     else:
         subgraph_title = subgraph_module
 
@@ -1174,7 +1181,7 @@ def _setup_subgraphs_recurse(
                 "penwidth": str(pen_width),
             }
 
-            for arg_name, arg_val in overrides.module.items():
+            for arg_name, arg_val in overrides.module.items():  # type: ignore[union-attr]
                 if callable(arg_val):
                     module_args[arg_name] = str(arg_val(self, subgraph_name))
                 else:

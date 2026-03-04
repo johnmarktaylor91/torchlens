@@ -539,7 +539,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
                     f"Layer '{lpl.layer_label}' containing_module_origin='{cmo}' "
                     f"(addr='{cmo_addr}') not found in module accessor",
                 )
-            if lpl.layer_label_no_pass not in mod.all_layers:
+            if lpl.layer_label_no_pass not in mod.all_layers:  # type: ignore[union-attr]
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{lpl.layer_label}' (no_pass='{lpl.layer_label_no_pass}') "

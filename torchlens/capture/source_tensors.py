@@ -229,10 +229,10 @@ def log_source_tensor_exhaustive(
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_postfunc)
 
     # Tag the tensor itself with its label, and with a reference to the model history log.
-    t.tl_tensor_label_raw = tensor_label
+    t.tl_tensor_label_raw = tensor_label  # type: ignore[attr-defined]
 
     # Log info to ModelLog
-    self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)
+    self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)  # type: ignore[attr-defined]
     if source == "input":
         self.input_layers.append(tensor_label)
     if source == "buffer":
@@ -242,7 +242,7 @@ def log_source_tensor_exhaustive(
     # Make it track gradients if relevant
 
     if self.save_gradients:
-        _add_backward_hook(self, t, t.tl_tensor_label_raw)
+        _add_backward_hook(self, t, t.tl_tensor_label_raw)  # type: ignore[attr-defined]
 
 
 def log_source_tensor_fast(self, t: torch.Tensor, source: str):
@@ -259,7 +259,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     layer_type_num = self._raw_layer_type_counter[layer_type]
 
     tensor_label_raw = f"{layer_type}_{layer_type_num}_raw"
-    t.tl_tensor_label_raw = tensor_label_raw
+    t.tl_tensor_label_raw = tensor_label_raw  # type: ignore[attr-defined]
     if tensor_label_raw in self.orphan_layers:
         return
     orig_tensor_label = self._raw_to_final_layer_labels.get(tensor_label_raw)
