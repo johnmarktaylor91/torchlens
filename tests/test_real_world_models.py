@@ -84,6 +84,7 @@ def test_vgg16(default_input1):
     )
 
 
+@pytest.mark.slow
 def test_vit(default_input1):
     model = torchvision.models.vit_l_16()
     assert validate_forward_pass(model, default_input1)
@@ -699,6 +700,7 @@ def test_cornet_rt():
 # =============================================================================
 
 
+@pytest.mark.slow
 def test_timm_beit_base_patch16_224(default_input1):
     timm = pytest.importorskip("timm")
     model = timm.models.beit_base_patch16_224()

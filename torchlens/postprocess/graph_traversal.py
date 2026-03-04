@@ -28,6 +28,8 @@ def _add_output_layers(
         new_output_node = output_node.copy()
         new_output_node.layer_type = "output"
         new_output_node.is_output_layer = True
+        new_output_node.is_input_layer = False
+        new_output_node.is_buffer_layer = False
         if i == len(self.output_layers) - 1:
             new_output_node.is_last_output_layer = True
         self._layer_counter += 1
@@ -94,7 +96,9 @@ def _add_output_layers(
         new_output_node.is_output_ancestor = True
         new_output_node.output_descendents = {new_output_node.tensor_label_raw}
         new_output_node.child_layers = []
+        new_output_node.has_children = False
         new_output_node.parent_layers = [output_node.tensor_label_raw]
+        new_output_node.has_parents = True
         new_output_node.sibling_layers = []
         new_output_node.has_siblings = False
         new_output_node.parent_layer_arg_locs = {

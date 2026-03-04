@@ -2,7 +2,7 @@
 
 import time
 from collections import defaultdict, deque
-from typing import NamedTuple, TYPE_CHECKING
+from typing import Dict, NamedTuple, TYPE_CHECKING
 
 import torch
 
@@ -106,7 +106,11 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
         forward_signature=root_meta.get("forward_signature"),
         forward_docstring=root_meta.get("forward_docstring"),
         address_parent=None,
-        address_children=mbd["top_level_modules"][:],
+        # address_children: only direct children (no dots in address).
+        # top_level_modules may include grandchildren called directly
+        # (e.g., self.level21.level12(x)), which belong in call_children
+        # but not in the static address hierarchy.
+        address_children=[m for m in mbd["top_level_modules"] if "." not in m],
         address_depth=0,
         call_parent=None,
         call_children=mbd["top_level_modules"][:],
@@ -318,9 +322,22 @@ def _build_module_logs(self: "ModelLog") -> None:
         for child_label in children:
             _child_to_parent_pass[child_label] = parent_pass_label
 
+    # Build alias→meta map so shared modules (same nn.Module instance
+    # registered under multiple addresses) can be found regardless of which
+    # alias tl_module_address was last set to.  _module_metadata stores
+    # metadata under the FIRST address visited by _capture_module_metadata,
+    # while tl_module_address may be overwritten to a LATER address by
+    # _prepare_model_once.  Without this map, shared modules get empty meta
+    # and address_children falls back to call-graph children, causing
+    # address_parent / address_children inconsistency.
+    _metadata_by_alias: Dict[str, dict] = {}
+    for _primary_addr, _meta in self._module_metadata.items():
+        for _alias in _meta.get("all_addresses", [_primary_addr]):
+            _metadata_by_alias[_alias] = _meta
+
     # --- Build ModuleLogs for each submodule ---
     for address in mbd["module_addresses"]:
-        meta = self._module_metadata.get(address, {})
+        meta = _metadata_by_alias.get(address, {})
         num_passes = mbd["module_num_passes"].get(address, 1)
 
         name = address.rsplit(".", 1)[-1] if "." in address else address
@@ -343,6 +360,27 @@ def _build_module_logs(self: "ModelLog") -> None:
         call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
         param_info = _build_module_param_info(self, address, mbd)
 
+        # address_children from metadata may have a different address prefix
+        # when the metadata was captured for a shared module under a different
+        # alias.  Extract child names and reconstruct with current address.
+        meta_children = meta.get("address_children")
+        if meta_children is not None:
+            meta_primary = meta.get("all_addresses", [address])[0]
+            if meta_primary == address:
+                address_children = meta_children
+            else:
+                # Rewrite: strip old prefix, prepend current address
+                prefix = meta_primary + "."
+                address_children = []
+                for child_addr in meta_children:
+                    if child_addr.startswith(prefix):
+                        child_name = child_addr[len(prefix) :]
+                        address_children.append(f"{address}.{child_name}")
+                    else:
+                        address_children.append(child_addr)
+        else:
+            address_children = list(mbd["module_children"].get(address, []))
+
         ml = ModuleLog(
             address=address,
             all_addresses=meta.get("all_addresses", [address]),
@@ -356,9 +394,7 @@ def _build_module_logs(self: "ModelLog") -> None:
             forward_signature=meta.get("forward_signature"),
             forward_docstring=meta.get("forward_docstring"),
             address_parent=address_parent,
-            address_children=meta.get(
-                "address_children", list(mbd["module_children"].get(address, []))
-            ),
+            address_children=address_children,
             address_depth=address_depth,
             call_parent=call_parent_addr,
             call_children=call_children_all,

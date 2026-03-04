@@ -492,12 +492,18 @@ def _finalize_layer_assignments(
             continue
         # convert to list and sort
         layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)
+        # Unify operation_equivalence_type: when param-sharing merges nodes
+        # from different iso groups (e.g., shared module called from different
+        # parent blocks), their equivalence types may differ due to module path
+        # suffixes.  Use the first node's type as canonical.
+        canonical_equiv_type = self[layer_nodes[0]].operation_equivalence_type
         for pass_index, node_label in enumerate(layer_nodes):
             node = self[node_label]
             node.layer_label_raw = layer_label
             node.same_layer_operations = layer_nodes
             node.pass_num = pass_index + 1
             node.layer_passes_total = len(layer_nodes)
+            node.operation_equivalence_type = canonical_equiv_type
 
 
 def _merge_iso_groups_to_layers(
@@ -508,9 +514,14 @@ def _merge_iso_groups_to_layers(
 ) -> Dict[str, Set[str]]:
     """Merge isomorphic node groups into same-layer groups based on shared params or subgraph adjacency.
 
-    Iterates over all iso-group pairs. For each pair of isomorphic nodes (one from each subgraph),
-    merges them into the same layer group when either (a) their respective subgraphs share at least
-    one parameter operation equivalence type, or (b) the subgraphs are topologically adjacent.
+    Uses union-find with path compression to correctly handle transitive merging.
+    Two merge passes:
+
+    1. **Within iso-groups** (Rules 2+3): For each pair of isomorphic nodes, merge when
+       their subgraphs share param operation equivalence types or are topologically adjacent.
+    2. **Cross iso-groups** (Rule 1): Unconditionally merge ALL nodes that share identical
+       ``parent_param_barcodes``, regardless of iso-group membership.  This ensures the
+       fundamental invariant that param-sharing operations are always the same layer.
 
     Args:
         iso_node_groups: Dict mapping each iso-group leader label to the list of node labels in the group.
@@ -521,9 +532,31 @@ def _merge_iso_groups_to_layers(
     Returns:
         Dict mapping each merged-layer leader label to the set of node labels assigned to that layer.
     """
-    merged_layer_groups = defaultdict(set)  # dict of nodes assigned to the same layer
-    node_to_layer_leader = {}  # reverse mapping: each node to its equivalent layer group
+    # -- Union-find with path compression --
+    uf_parent: Dict[str, str] = {}
 
+    def _find(x: str) -> str:
+        if x not in uf_parent:
+            uf_parent[x] = x
+        while uf_parent[x] != x:
+            uf_parent[x] = uf_parent[uf_parent[x]]  # path compression
+            x = uf_parent[x]
+        return x
+
+    def _union(x: str, y: str) -> None:
+        rx, ry = _find(x), _find(y)
+        if rx != ry:
+            # Use lexicographic order so the earliest node is always the root
+            if rx > ry:
+                rx, ry = ry, rx
+            uf_parent[ry] = rx
+
+    # Collect all iso-group node labels
+    all_iso_nodes = set()
+    for iso_nodes_orig in iso_node_groups.values():
+        all_iso_nodes.update(iso_nodes_orig)
+
+    # Pass 1: Merge within iso-groups (Rules 2+3 — subgraph adjacency / param type overlap)
     for iso_group_label, iso_nodes_orig in iso_node_groups.items():
         iso_nodes = sorted(iso_nodes_orig)
         for node1_label, node2_label in it.combinations(iso_nodes, 2):
@@ -543,15 +576,29 @@ def _merge_iso_groups_to_layers(
                 and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
             )
             if (len(overlapping_param_types) > 0) or subgraphs_are_adjacent:
-                earlier_node_label = sorted([node1_label, node2_label])[
-                    0
-                ]  # layer label always the first node
-                if earlier_node_label in node_to_layer_leader:
-                    layer_group = node_to_layer_leader[earlier_node_label]
-                else:
-                    layer_group = earlier_node_label
-                merged_layer_groups[layer_group].update({node1_label, node2_label})
-                node_to_layer_leader[node1_label] = layer_group
-                node_to_layer_leader[node2_label] = layer_group
+                _union(node1_label, node2_label)
 
-    return merged_layer_groups
+    # Pass 2: Merge across iso-groups by identical param barcodes (Rule 1 — unconditional)
+    # If two nodes anywhere in the model share the same sorted(parent_param_barcodes),
+    # they MUST be the same layer regardless of iso-group membership.
+    param_barcode_groups: Dict[tuple, list] = defaultdict(list)
+    for node_label in all_iso_nodes:
+        node = self[node_label]
+        if node.computed_with_params and node.parent_param_barcodes:
+            barcode_key = tuple(sorted(node.parent_param_barcodes))
+            param_barcode_groups[barcode_key].append(node_label)
+
+    for barcode_key, nodes_with_same_params in param_barcode_groups.items():
+        if len(nodes_with_same_params) > 1:
+            first = nodes_with_same_params[0]
+            for other in nodes_with_same_params[1:]:
+                _union(first, other)
+
+    # Collect final groups from union-find
+    merged_layer_groups: Dict[str, Set[str]] = defaultdict(set)
+    for node_label in all_iso_nodes:
+        root = _find(node_label)
+        merged_layer_groups[root].add(node_label)
+
+    # Only return groups with 2+ members (single nodes aren't merged layers)
+    return {leader: nodes for leader, nodes in merged_layer_groups.items() if len(nodes) > 1}

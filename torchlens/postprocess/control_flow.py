@@ -150,7 +150,9 @@ def _fix_buffer_layers(self) -> None:
         layer = self[layer_label]
         if layer.buffer_parent is not None:
             layer.parent_layers.append(layer.buffer_parent)
+            layer.has_parents = True
             self[layer.buffer_parent].child_layers.append(layer_label)
+            self[layer.buffer_parent].has_children = True
             layer.func_applied = identity
             layer.func_applied_name = "identity"
             layer.has_input_ancestor = True
