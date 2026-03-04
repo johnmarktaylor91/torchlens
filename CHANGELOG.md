@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.15.5 (2026-03-04)
+
+### Bug Fixes
+
+- **loop-detection**: Group param-sharing ops by func_applied_name + param_barcodes
+  ([`f1e795b`](https://github.com/johnmarktaylor91/torchlens/commit/f1e795b05365b6929fbf3a7b3a30446d93073674))
+
+Previously _merge_iso_groups_to_layers Pass 2 grouped operations by parent_param_barcodes alone,
+  causing different ops on the same params (e.g. __getitem__ vs __add__) to be incorrectly merged
+  into one layer. Now groups by (func_applied_name, sorted(parent_param_barcodes)). Also updates
+  docstrings to reflect the correct grouping rule.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **tests**: Tidy test_outputs structure and remove private bug numbers
+  ([`03817a2`](https://github.com/johnmarktaylor91/torchlens/commit/03817a25f1091f4cb0bf16b9f547cab08ecc515d))
+
+- Restructure test_outputs/ into reports/ and graphs/ subdirectories - Update all path references in
+  conftest, test_output_aesthetics, test_profiling, and ui_sandbox notebook - Strip private bug
+  number references (Bug #N, #N:) from comments, docstrings, and class names across 7 test files -
+  Rename TestBug* classes to descriptive names
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.4 (2026-03-04)
 
 ### Bug Fixes
