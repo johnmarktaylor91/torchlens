@@ -41,6 +41,7 @@ def _nested_input():
 
 
 class TestModuleLogBasic:
+    @pytest.mark.smoke
     def test_modules_accessor_exists(self):
         log = log_forward_pass(_make_simple_model(), _simple_input())
         assert isinstance(log.modules, ModuleAccessor)
@@ -64,6 +65,7 @@ class TestModuleLogBasic:
         # Sequential has 3 children: Linear, ReLU, Linear → 3 submodules + root = 4
         assert len(log.modules) >= 4
 
+    @pytest.mark.smoke
     def test_access_by_address(self):
         log = log_forward_pass(_make_simple_model(), _simple_input())
         ml = log.modules["0"]

@@ -110,11 +110,13 @@ class IdentityModuleModel(nn.Module):
 
 
 class TestToggleState:
+    @pytest.mark.smoke
     def test_toggle_off_by_default(self):
         """After import, logging toggle should be off."""
         assert _state._logging_enabled is False
         assert _state._active_model_log is None
 
+    @pytest.mark.smoke
     def test_toggle_on_during_logging(self):
         """Inside log_forward_pass, toggle should be True."""
         observed = {}
@@ -130,6 +132,7 @@ class TestToggleState:
         assert observed["enabled"] is True
         assert observed["model_log"] is not None
 
+    @pytest.mark.smoke
     def test_toggle_off_after_logging(self):
         """After log_forward_pass completes, toggle should be off."""
         model = SimpleModel()

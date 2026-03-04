@@ -58,6 +58,7 @@ class _BranchingModel(nn.Module):
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_save_new_activations_basic():
     """save_new_activations replaces activations on a simple model."""
     model = _SimpleFF()
