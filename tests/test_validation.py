@@ -8,7 +8,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import validate_saved_activations, ModelLog
+from torchlens import validate_forward_pass, validate_saved_activations, ModelLog
+from torchlens import check_metadata_invariants, MetadataInvariantError
 from torchlens.validation import validate_saved_activations as validate_from_subpkg
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
@@ -34,10 +35,27 @@ def test_validation_import_path():
     assert callable(validate_from_subpkg)
 
 
+def test_validate_forward_pass_importable():
+    """validate_forward_pass is importable from torchlens top-level."""
+    assert callable(validate_forward_pass)
+
+
+def test_check_metadata_invariants_importable():
+    """check_metadata_invariants and MetadataInvariantError importable from top-level."""
+    assert callable(check_metadata_invariants)
+    assert issubclass(MetadataInvariantError, ValueError)
+
+
 def test_model_log_validate_method_bound():
     """ModelLog.validate_saved_activations is callable."""
     assert hasattr(ModelLog, "validate_saved_activations")
     assert callable(ModelLog.validate_saved_activations)
+
+
+def test_model_log_check_metadata_method_bound():
+    """ModelLog.check_metadata_invariants is callable."""
+    assert hasattr(ModelLog, "check_metadata_invariants")
+    assert callable(ModelLog.check_metadata_invariants)
 
 
 # =============================================================================
@@ -248,28 +266,128 @@ class _EmptyLikeModel(nn.Module):
 def test_validation_with_getitem_tensor_index():
     model = _GetItemTensorIndex()
     x = torch.randn(5, 3)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
 
 
 def test_validation_with_scatter():
     model = _ScatterModel()
     x = torch.randn(3, 5)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
 
 
 def test_validation_with_masked_fill():
     model = _MaskedFillModel()
     x = torch.randn(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
 
 
 def test_validation_with_zeros_like():
     model = _ZerosLikeModel()
     x = torch.randn(3, 3)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
 
 
 def test_validation_with_empty_like():
     model = _EmptyLikeModel()
     x = torch.randn(3, 3)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
+
+
+# =============================================================================
+# Metadata invariant tests — standalone + corruption
+# =============================================================================
+
+
+class _SimpleFF(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(5, 3)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+def _make_clean_log():
+    """Return a ModelLog with all activations and metadata for a simple FF model."""
+    from torchlens import log_forward_pass
+
+    model = _SimpleFF()
+    return log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+
+
+def test_clean_log_passes_all_invariants():
+    """An uncorrupted ModelLog passes all invariant checks."""
+    log = _make_clean_log()
+    assert check_metadata_invariants(log) is True
+    log.cleanup()
+
+
+def test_clean_log_passes_as_method():
+    """check_metadata_invariants works as a bound method on ModelLog."""
+    log = _make_clean_log()
+    assert log.check_metadata_invariants() is True
+    log.cleanup()
+
+
+def test_corruption_parent_child_link():
+    """Breaking a parent→child link raises MetadataInvariantError."""
+    log = _make_clean_log()
+    # Find a layer with children and corrupt
+    for lpl in log.layer_list:
+        if lpl.child_layers:
+            child_label = lpl.child_layers[0]
+            child = log[child_label]
+            # Remove the parent from the child's parent_layers
+            child.parent_layers = [p for p in child.parent_layers if p != lpl.layer_label]
+            break
+    with pytest.raises(MetadataInvariantError, match="graph_topology"):
+        check_metadata_invariants(log)
+    log.cleanup()
+
+
+def test_corruption_num_operations():
+    """Mismatched num_operations raises MetadataInvariantError."""
+    log = _make_clean_log()
+    log.num_operations = 9999
+    with pytest.raises(MetadataInvariantError, match="model_log_self_consistency"):
+        check_metadata_invariants(log)
+    log.cleanup()
+
+
+def test_corruption_module_back_reference():
+    """Removing a layer from its module's all_layers raises MetadataInvariantError."""
+    log = _make_clean_log()
+    # Find a layer with a containing module and corrupt the ModuleLog
+    for lpl in log.layer_list:
+        cmo = lpl.containing_module_origin
+        if cmo:
+            # containing_module_origin may include pass (e.g. 'fc:1'), strip it
+            cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
+            mod_log = log.modules._dict[cmo_addr]
+            if lpl.layer_label_no_pass in mod_log.all_layers:
+                mod_log.all_layers = [x for x in mod_log.all_layers if x != lpl.layer_label_no_pass]
+                mod_log.num_layers = len(mod_log.all_layers)
+                break
+    with pytest.raises(MetadataInvariantError, match="module_layer_containment"):
+        check_metadata_invariants(log)
+    log.cleanup()
+
+
+def test_corruption_layer_num_passes():
+    """Wrong layer_num_passes raises MetadataInvariantError."""
+    log = _make_clean_log()
+    # Corrupt one entry
+    first_key = list(log.layer_num_passes.keys())[0]
+    log.layer_num_passes[first_key] = 999
+    with pytest.raises(MetadataInvariantError, match="recurrence_invariants"):
+        check_metadata_invariants(log)
+    log.cleanup()
+
+
+def test_corruption_output_layers_empty():
+    """Emptying output_layers raises MetadataInvariantError."""
+    log = _make_clean_log()
+    log.output_layers = []
+    with pytest.raises(MetadataInvariantError, match="model_log_self_consistency"):
+        check_metadata_invariants(log)
+    log.cleanup()

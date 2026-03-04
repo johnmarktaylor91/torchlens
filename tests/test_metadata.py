@@ -1011,7 +1011,7 @@ def valid_mh_and_ground_truth():
 def test_uncorrupted_passes(valid_mh_and_ground_truth):
     """Sanity check: validation passes when nothing is corrupted."""
     mh, ground_truth = valid_mh_and_ground_truth
-    assert mh.validate_saved_activations(ground_truth) is True
+    assert mh.validate_forward_pass(ground_truth) is True
 
 
 def test_corrupt_output_activations(valid_mh_and_ground_truth):
@@ -1020,7 +1020,7 @@ def test_corrupt_output_activations(valid_mh_and_ground_truth):
     output_label = mh.output_layers[0]
     original = mh[output_label].tensor_contents
     mh[output_label].tensor_contents = torch.randn_like(original)
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_corrupt_intermediate_activations(valid_mh_and_ground_truth):
@@ -1036,7 +1036,7 @@ def test_corrupt_intermediate_activations(valid_mh_and_ground_truth):
     target = intermediate[0]
     original = mh[target].tensor_contents
     mh[target].tensor_contents = torch.randn_like(original)
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_swap_two_layers_activations(valid_mh_and_ground_truth):
@@ -1052,7 +1052,7 @@ def test_swap_two_layers_activations(valid_mh_and_ground_truth):
         pytest.skip("Layers have identical tensors; swap is invisible")
     mh[a].tensor_contents = tb
     mh[b].tensor_contents = ta
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_zero_out_activations(valid_mh_and_ground_truth):
@@ -1062,7 +1062,7 @@ def test_zero_out_activations(valid_mh_and_ground_truth):
     assert len(non_output) > 0
     target = non_output[0]
     mh[target].tensor_contents = torch.zeros_like(mh[target].tensor_contents)
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_add_noise_to_activations(valid_mh_and_ground_truth):
@@ -1073,7 +1073,7 @@ def test_add_noise_to_activations(valid_mh_and_ground_truth):
     target = non_output[0]
     original = mh[target].tensor_contents
     mh[target].tensor_contents = original + torch.randn_like(original) * 0.1
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_scale_activations(valid_mh_and_ground_truth):
@@ -1083,7 +1083,7 @@ def test_scale_activations(valid_mh_and_ground_truth):
     assert len(non_output) > 0
     target = non_output[0]
     mh[target].tensor_contents = mh[target].tensor_contents * 100.0
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_wrong_shape_activations(valid_mh_and_ground_truth):
@@ -1091,7 +1091,7 @@ def test_wrong_shape_activations(valid_mh_and_ground_truth):
     mh, ground_truth = valid_mh_and_ground_truth
     output_label = mh.output_layers[0]
     mh[output_label].tensor_contents = torch.randn(1, 1)
-    assert mh.validate_saved_activations(ground_truth) is False
+    assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_corrupt_creation_args(valid_mh_and_ground_truth):
@@ -1108,6 +1108,6 @@ def test_corrupt_creation_args(valid_mh_and_ground_truth):
                     corrupted_args = list(entry.creation_args)
                     corrupted_args[i] = torch.randn_like(arg)
                     entry.creation_args = tuple(corrupted_args)
-                    assert mh.validate_saved_activations(ground_truth) is False
+                    assert mh.validate_forward_pass(ground_truth) is False
                     return
     pytest.skip("No layer with tensor creation_args found")

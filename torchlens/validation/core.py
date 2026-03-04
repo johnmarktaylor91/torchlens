@@ -30,11 +30,19 @@ MAX_PERTURB_ATTEMPTS = 100
 
 
 def validate_saved_activations(
-    self, ground_truth_output_tensors: List[torch.Tensor], verbose: bool = False
+    self,
+    ground_truth_output_tensors: List[torch.Tensor],
+    verbose: bool = False,
+    validate_metadata: bool = True,
 ) -> bool:
     """Starting from outputs and internally terminated tensors, checks whether computing their values from the saved
     values of their input tensors yields their actually saved values, and whether computing their values from
-    their parent tensors yields their saved values.
+    their parent tensors yields their saved values. Optionally validates all metadata invariants.
+
+    Args:
+        ground_truth_output_tensors: Ground truth output tensors from a fresh forward pass.
+        verbose: Whether to print warning messages on validation failure.
+        validate_metadata: Whether to run metadata invariant checks (default True).
 
     Returns:
         True if it passes the tests, False otherwise.
@@ -77,6 +85,12 @@ def validate_saved_activations(
             f"child args logged accurately): {unreached}"
         )
         return False
+
+    # Metadata invariant checks (after activation validation passes)
+    if validate_metadata:
+        from .invariants import check_metadata_invariants
+
+        check_metadata_invariants(self)
 
     return True
 

@@ -6,9 +6,11 @@ from .user_funcs import (
     log_forward_pass,
     show_model_graph,
     get_model_metadata,
+    validate_forward_pass,
     validate_saved_activations,
     validate_batch_of_models_and_inputs,
 )
+from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from .data_classes.model_log import ModelLog
 from .data_classes.layer_log import LayerLog, LayerAccessor
 from .data_classes.layer_pass_log import LayerPassLog, TensorLog

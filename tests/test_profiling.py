@@ -4,7 +4,7 @@ Generates tests/test_outputs/profiling_report.txt with timing data for:
   - Raw forward pass (baseline)
   - log_forward_pass (initial logging)
   - save_new_activations (fast re-logging with new input)
-  - validate_saved_activations (perturbation validation)
+  - validate_forward_pass (perturbation validation)
 
 Run:  pytest tests/test_profiling.py -v -s
 """
@@ -19,7 +19,7 @@ import torch.nn as nn
 from conftest import TEST_OUTPUTS_DIR
 
 import example_models
-from torchlens import log_forward_pass, validate_saved_activations
+from torchlens import log_forward_pass, validate_forward_pass
 
 # ---------------------------------------------------------------------------
 # Config
@@ -141,7 +141,7 @@ def _profile_model(name, model, input_tensor, description):
     except ValueError:
         sna_time = None
 
-    _, val_time = _time_fn(validate_saved_activations, model, input_tensor, random_seed=42)
+    _, val_time = _time_fn(validate_forward_pass, model, input_tensor, random_seed=42)
 
     safe_raw = raw_time if raw_time > 0 else 1e-9
     return {
@@ -243,7 +243,7 @@ def _generate_report(results):
             f"({_fmt_ratio(r['sna_ratio'])} overhead)"
         )
         lines.append(
-            f"  validate_saved_activations : {_fmt_time(r['val_time']):>10}  "
+            f"  validate_forward_pass : {_fmt_time(r['val_time']):>10}  "
             f"({_fmt_ratio(r['val_ratio'])} overhead)"
         )
         lines.append("")
