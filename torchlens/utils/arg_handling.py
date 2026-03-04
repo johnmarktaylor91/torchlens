@@ -1,6 +1,7 @@
 """Argument copying, normalization, and input validation for model forward calls."""
 
 import inspect
+from collections import defaultdict
 from typing import Any, Optional
 
 import torch
@@ -23,6 +24,10 @@ def _safe_copy_arg(arg: Any) -> Any:
     """
     if isinstance(arg, torch.Tensor):
         return arg.clone()
+    elif isinstance(arg, defaultdict):
+        # defaultdict(factory, {k: v, ...}) — preserve the default_factory (#127)
+        copied = defaultdict(arg.default_factory, {k: _safe_copy_arg(v) for k, v in arg.items()})
+        return copied
     elif isinstance(arg, dict):
         return type(arg)({k: _safe_copy_arg(v) for k, v in arg.items()})
     elif isinstance(arg, (list, tuple)):

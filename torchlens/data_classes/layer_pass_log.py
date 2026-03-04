@@ -12,6 +12,18 @@ from ..utils.display import human_readable_size
 
 _LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
 
+
+def _recursive_safe_copy(val):
+    """Deep-copy nested structures, cloning tensors instead of using copy.deepcopy (#44)."""
+    if isinstance(val, torch.Tensor):
+        return safe_copy(val)
+    elif isinstance(val, (list, tuple)):
+        return type(val)(_recursive_safe_copy(v) for v in val)
+    elif isinstance(val, dict):
+        return {k: _recursive_safe_copy(v) for k, v in val.items()}
+    return safe_copy(val)
+
+
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
     from .param_log import ParamLog
@@ -267,21 +279,8 @@ class LayerPassLog:
         # Tensor args and kwargs:
         if save_function_args:
             self.function_args_saved = True
-            creation_args = []
-            for arg in t_args:
-                if type(arg) in [list, tuple]:
-                    creation_args.append(type(arg)(safe_copy(a) for a in arg))
-                else:
-                    creation_args.append(safe_copy(arg))
-
-            creation_kwargs = {}
-            for key, value in t_kwargs.items():
-                if type(value) in [list, tuple]:
-                    creation_kwargs[key] = type(value)(safe_copy(v) for v in value)
-                else:
-                    creation_kwargs[key] = safe_copy(value)
-            self.creation_args = creation_args
-            self.creation_kwargs = creation_kwargs
+            self.creation_args = [_recursive_safe_copy(arg) for arg in t_args]
+            self.creation_kwargs = {k: _recursive_safe_copy(v) for k, v in t_kwargs.items()}
         else:
             self.creation_args = None
             self.creation_kwargs = None
@@ -411,22 +410,25 @@ class LayerPassLog:
         else:
             s = ""
             tensor_size_shown = 8
-            saved_shape = self.tensor_contents.shape
+            # Use logged shape, not live tensor shape (#45)
+            saved_shape = (
+                self.tensor_shape if self.tensor_shape is not None else self.tensor_contents.shape
+            )
+            # Slice first, then clone only the small slice (#73)
             if len(saved_shape) == 0:
-                tensor_slice = self.tensor_contents
+                tensor_slice = self.tensor_contents.detach().clone()
             elif len(saved_shape) == 1:
                 num_dims = min(tensor_size_shown, saved_shape[0])
-                tensor_slice = self.tensor_contents[0:num_dims]
+                tensor_slice = self.tensor_contents[0:num_dims].detach().clone()
             elif len(saved_shape) == 2:
                 num_dims = min(tensor_size_shown, saved_shape[-2], saved_shape[-1])
-                tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims]
+                tensor_slice = self.tensor_contents[0:num_dims, 0:num_dims].detach().clone()
             else:
                 num_dims = min(tensor_size_shown, saved_shape[-2], saved_shape[-1])
                 tensor_slice = self.tensor_contents.data
                 for _ in range(len(saved_shape) - 2):
                     tensor_slice = tensor_slice[0]
-                tensor_slice = tensor_slice[0:num_dims, 0:num_dims].clone()
-            tensor_slice = tensor_slice.detach()
+                tensor_slice = tensor_slice[0:num_dims, 0:num_dims].detach().clone()
             tensor_slice.requires_grad = False
             s += f"\n\t\t{str(tensor_slice)}"
             if (len(saved_shape) > 0) and (max(saved_shape) > tensor_size_shown):

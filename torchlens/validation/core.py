@@ -417,12 +417,22 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         return True
 
     input_args = _prepare_input_args_for_validating_layer(self, layer, layers_to_perturb)
+    if input_args is None:
+        return True  # Can't validate without saved function args (#131)
 
     recomputed_output = _execute_func_with_restored_state(
         layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
     )
     if recomputed_output is None:
-        return True  # execution raised — treat as exempt perturbation
+        if not perturb:
+            import warnings
+
+            warnings.warn(
+                f"Validation replay raised an exception for layer "
+                f"{layer_to_validate_parents_for_label}; treating as failed validation."
+            )
+            return False
+        return True  # perturbed execution raised — treat as exempt perturbation
 
     matches_saved = tensor_nanequal(recomputed_output, layer.tensor_contents, allow_tolerance=True)
 
@@ -458,6 +468,8 @@ def _prepare_input_args_for_validating_layer(
     Returns:
         Dict of input arguments.
     """
+    if layer_to_validate_parents_for.creation_args is None:
+        return None  # Can't validate without saved args (#131)
     input_args = {
         "args": list(layer_to_validate_parents_for.creation_args[:]),
         "kwargs": layer_to_validate_parents_for.creation_kwargs.copy(),
@@ -478,6 +490,8 @@ def _prepare_input_args_for_validating_layer(
                 ]
             else:
                 parent_values = parent_layer.tensor_contents
+            if parent_values is None:
+                continue  # Skip validation for unsaved parents (#150)
             parent_values = parent_values.detach().clone()
 
             if parent_layer_arg in layers_to_perturb:
@@ -588,8 +602,8 @@ def _perturb_layer_activations(
                 break
     else:
         output_std = output_activations.detach().float().abs().mean()
-        output_std += torch.rand(output_std.shape, device=output_std.device) * 100
-        output_std *= torch.rand(output_std.shape, device=output_std.device)
+        output_std += torch.rand(output_std.shape, device=device) * 100
+        output_std *= torch.rand(output_std.shape, device=device)
         output_std.requires_grad = False
         scale = output_std.to(device)
         if parent_activations.is_complex():

@@ -74,7 +74,11 @@ def _finalize_param_logs(self: "ModelLog") -> None:
     # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
     # reads param.grad after backward is called.
 
-    # Clear actual Parameter tensor references from LayerPassLog entries to save memory
+    # Note: _param_ref (GC-1) is NOT cleared here because the user may call backward()
+    # after postprocessing to populate gradients. It's cleared in cleanup() instead.
+    # Same for parent_param_logs (GC-9) and func_applied (GC-10) — needed by validation.
+
+    # Clear actual Parameter tensor references from LayerPassLog entries to save memory.
     for layer_entry in self.layer_list:
         layer_entry.parent_params = []
 
@@ -454,6 +458,11 @@ def _build_module_logs(self: "ModelLog") -> None:
     from ..data_classes.model_log import _init_module_build_data
 
     self._module_build_data = _init_module_build_data()
+
+    # GC-11: Clear forward_args/kwargs from ModulePassLogs to release tensor references
+    for pass_log in pass_dict.values():
+        pass_log.forward_args = None
+        pass_log.forward_kwargs = None
 
 
 def _build_layer_logs(self: "ModelLog") -> None:

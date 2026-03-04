@@ -262,7 +262,13 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     t.tl_tensor_label_raw = tensor_label_raw
     if tensor_label_raw in self.orphan_layers:
         return
-    orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
+    orig_tensor_label = self._raw_to_final_layer_labels.get(tensor_label_raw)
+    if orig_tensor_label is None:
+        raise ValueError(
+            f"Fast-path label '{tensor_label_raw}' has no mapping in _raw_to_final_layer_labels. "
+            f"This usually means the computational graph changed between the exhaustive pass "
+            f"and this fast pass (e.g., dynamic control flow). Use log_forward_pass() instead."
+        )
     if orig_tensor_label in self.unlogged_layers:
         return
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
@@ -274,7 +280,17 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
             t, [], {}, self.save_function_args, self.activation_postfunc
         )
 
-    orig_layer_entry.tensor_shape = tuple(t.shape)
+    # Minimal graph consistency validation (#99)
+    new_shape = tuple(t.shape)
+    if orig_layer_entry.tensor_shape is not None and new_shape != orig_layer_entry.tensor_shape:
+        import warnings
+
+        warnings.warn(
+            f"Tensor shape changed for '{orig_tensor_label}': "
+            f"expected {orig_layer_entry.tensor_shape}, got {new_shape}. "
+            f"The computational graph may have changed between passes."
+        )
+    orig_layer_entry.tensor_shape = new_shape
     orig_layer_entry.tensor_dtype = t.dtype
     fsize = get_tensor_memory_amount(t)
     orig_layer_entry.tensor_fsize = fsize

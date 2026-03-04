@@ -4,7 +4,6 @@ from collections import defaultdict
 from typing import Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
 import graphviz
-from IPython.display import display
 
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str
@@ -173,6 +172,8 @@ def render_graph(
     _setup_subgraphs(self, dot, vis_opt, module_cluster_dict, overrides)
 
     if in_notebook() and not save_only:
+        from IPython.display import display  # #72: lazy import
+
         display(dot)
 
     dot.render(vis_outpath, view=(not save_only))
@@ -242,8 +243,10 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
         node: The LayerPassLog or LayerLog node to check.
         vis_nesting_depth: Maximum nesting depth before collapsing into a module box.
     """
+    if vis_nesting_depth == 0:
+        return False  # #94: depth 0 means show all layers, never collapse
     node_nesting_depth = len(node.containing_modules_origin_nested)
-    if node.is_bottom_level_submodule_output:
+    if getattr(node, "is_bottom_level_submodule_output", False):
         node_nesting_depth -= 1
 
     if node_nesting_depth >= vis_nesting_depth:
@@ -337,9 +340,9 @@ def _build_collapsed_module_node(
         overrides: Graphviz attribute overrides.
     """
     module_address_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
-    module_tuple = module_address_w_pass.split(":")
+    module_tuple = module_address_w_pass.rsplit(":", 1)  # #104: rsplit for colons in names
     module_output_layer = self[module_address_w_pass]
-    module_output_shape = module_output_layer.tensor_shape
+    module_output_shape = module_output_layer.tensor_shape or ()
     module_output_fsize = module_output_layer.tensor_fsize_nice
     module_address, pass_num = module_tuple
     ml = self.modules[module_address]
@@ -369,7 +372,7 @@ def _build_collapsed_module_node(
 
     if len(module_output_shape) > 1:
         tensor_shape_str = "x".join([str(x) for x in module_output_shape])
-    elif len(node.tensor_shape) == 1:
+    elif len(module_output_shape) == 1:  # #100: use module_output_shape, not node.tensor_shape
         tensor_shape_str = f"x{module_output_shape[0]}"
     else:
         tensor_shape_str = "x1"
@@ -839,7 +842,7 @@ def _label_node_arguments_if_needed(
     arg_labels = []
     for arg_type in ["args", "kwargs"]:
         for arg_loc, arg_label in child_node.parent_layer_arg_locs[arg_type].items():
-            if (parent_node.layer_label == arg_label) or (parent_node.layer_label in arg_label):
+            if parent_node.layer_label == arg_label:
                 arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
     arg_labels = "<br/>".join(arg_labels)
@@ -957,7 +960,7 @@ def _get_lowest_containing_module_for_two_nodes(
     node1_modules = node1.containing_modules_origin_nested[:]
     node2_modules = node2.containing_modules_origin_nested[:]
 
-    if isinstance(node1, LayerLog):
+    if isinstance(node1, LayerLog) or isinstance(node2, LayerLog):
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 

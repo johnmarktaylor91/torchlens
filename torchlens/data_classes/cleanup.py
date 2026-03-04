@@ -15,6 +15,24 @@ def cleanup(self) -> None:
     for attr in MODEL_LOG_FIELD_ORDER:
         if hasattr(self, attr):
             delattr(self, attr)
+    # GC-5/GC-12: Clear internal containers not in MODEL_LOG_FIELD_ORDER
+    for attr in [
+        "_raw_layer_dict",
+        "_raw_layer_labels_list",
+        "_saved_gradients_set",
+        "_module_logs",
+        "_buffer_accessor",
+        "_module_metadata",
+        "_module_forward_args",
+        "_module_build_data",
+        "layer_logs",
+        "layer_dict_all_keys",
+        "layer_dict_main_keys",
+        "orphan_layers",
+        "unlogged_layers",
+    ]:
+        if hasattr(self, attr):
+            delattr(self, attr)
     torch.cuda.empty_cache()
 
 

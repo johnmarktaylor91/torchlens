@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, List
 
 import torch
 
+from ..utils.tensor_utils import safe_copy
+
 from .control_flow import (
     _fix_buffer_layers,
     _fix_modules_for_internal_tensors,
@@ -55,6 +57,14 @@ def postprocess(
     """
     if self.logging_mode == "fast":
         postprocess_fast(self)
+        return
+
+    # Guard: if the model produced no logged layers, skip postprocessing (#153)
+    if len(self._raw_layer_labels_list) == 0:
+        import warnings
+
+        warnings.warn("No layers were logged during the forward pass; skipping postprocessing.")
+        _set_pass_finished(self)
         return
 
     # Step 1: Add dedicated output nodes
@@ -135,16 +145,21 @@ def postprocess_fast(self: "ModelLog") -> None:
     node, then trims, renames, undecorates, and marks the pass as finished.
     Skips graph traversal, loop detection, and module annotation.
     """
+    # Use layer_dict_main_keys to get LayerPassLog directly (not LayerLog)
     for output_layer_label in self.output_layers:
-        output_layer = self[output_layer_label]
-        output_layer.tensor_contents = self[output_layer.parent_layers[0]].tensor_contents
-        output_layer.tensor_fsize = self[output_layer.parent_layers[0]].tensor_fsize
-        output_layer.tensor_fsize_nice = self[output_layer.parent_layers[0]].tensor_fsize_nice
-        output_layer.has_saved_activations = self[
-            output_layer.parent_layers[0]
-        ].has_saved_activations
-        output_layer.has_saved_grad = self[output_layer.parent_layers[0]].has_saved_grad
-        output_layer.grad_contents = self[output_layer.parent_layers[0]].grad_contents
+        output_layer = self.layer_dict_main_keys[output_layer_label]
+        if not output_layer.parent_layers:
+            continue  # Guard for parentless output layers (#152)
+        parent_layer = self.layer_dict_main_keys[output_layer.parent_layers[0]]
+        parent_contents = parent_layer.tensor_contents
+        output_layer.tensor_contents = (
+            safe_copy(parent_contents, detach_tensor=True) if parent_contents is not None else None
+        )
+        output_layer.tensor_fsize = parent_layer.tensor_fsize
+        output_layer.tensor_fsize_nice = parent_layer.tensor_fsize_nice
+        output_layer.has_saved_activations = parent_layer.has_saved_activations
+        output_layer.has_saved_grad = parent_layer.has_saved_grad
+        output_layer.grad_contents = parent_layer.grad_contents
         if output_layer.has_saved_activations:
             self.layers_with_saved_activations.append(output_layer_label)
     _trim_and_reorder_model_history_fields(self)
@@ -154,4 +169,7 @@ def postprocess_fast(self: "ModelLog") -> None:
     torch.cuda.empty_cache()
     _log_time_elapsed(self)
     _build_layer_logs(self)
+    # Note: _build_module_logs is NOT called here because module structure
+    # doesn't change between passes and _module_build_data isn't repopulated
+    # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
     _set_pass_finished(self)

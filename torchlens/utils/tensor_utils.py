@@ -75,7 +75,7 @@ def safe_to(obj: Any, device: str) -> Any:
     """
     from .._state import pause_logging
 
-    if type(obj) == torch.Tensor:
+    if isinstance(obj, torch.Tensor):
         with pause_logging():
             return obj.to(device)
     else:
@@ -95,6 +95,10 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
 
     try:
         with pause_logging():
+            if t.device.type == "meta":
+                return 0
+            if t.is_sparse:
+                return t._values().nelement() * t._values().element_size()
             return t.nelement() * t.element_size()
     except Exception:
         return 0
@@ -114,22 +118,26 @@ def safe_copy(x, detach_tensor: bool = False):
     """
     from .._state import pause_logging
 
-    if issubclass(type(x), (torch.Tensor, torch.nn.Parameter)):
+    if isinstance(x, (torch.Tensor, torch.nn.Parameter)):
         with pause_logging():
             if not detach_tensor:
                 return x.clone()
-            vals_cpu = x.data.cpu()
-            if vals_cpu.dtype == torch.bfloat16:
-                # numpy doesn't support bfloat16; convert to float16 first, then back after numpy round-trip
-                vals_cpu = vals_cpu.to(torch.float16)
-            vals_np = vals_cpu.numpy()
-            vals_tensor = torch.from_numpy(vals_np)
+            # Detach path: use pure-torch ops — no numpy round-trip.
+            # This avoids crashes on sparse, quantized, complex32, meta, float8, etc.
+            try:
+                vals_tensor = x.detach().clone()
+            except Exception:
+                # Fallback for exotic dtypes that can't clone directly
+                try:
+                    vals_tensor = x.data.cpu().clone()
+                except Exception:
+                    # Last resort: return shape-preserving zero tensor
+                    vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
             if hasattr(x, "tl_tensor_label_raw"):
                 vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
-            if type(x) == torch.Tensor:
-                return vals_tensor
-            elif type(x) == torch.nn.Parameter:
+            if isinstance(x, torch.nn.Parameter):
                 return torch.nn.Parameter(vals_tensor)
+            return vals_tensor
     else:
         return copy.copy(x)
 
@@ -146,14 +154,18 @@ def print_override(t: torch.Tensor, func_name: str):
     """
     from .._state import pause_logging
 
-    with pause_logging():
-        cpu_data = t.data.cpu()
-        if cpu_data.dtype == torch.bfloat16:
-            cpu_data = cpu_data.to(torch.float16)
-    n = np.array(cpu_data)
-    np_str = getattr(n, func_name)()
-    np_str = np_str.replace("array", "tensor")
-    np_str = np_str.replace("\n", "\n ")
+    try:
+        with pause_logging():
+            cpu_data = t.data.cpu()
+            if cpu_data.dtype == torch.bfloat16:
+                cpu_data = cpu_data.to(torch.float32)
+        n = np.array(cpu_data)
+        np_str = getattr(n, func_name)()
+        np_str = np_str.replace("array", "tensor")
+        np_str = np_str.replace("\n", "\n ")
+    except Exception:
+        # Fallback for sparse, quantized, meta, float8, etc.
+        np_str = f"tensor(shape={list(t.shape)}, dtype={t.dtype})"
     if t.grad_fn is not None:
         grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
         np_str = np_str[0:-1] + grad_fn_str

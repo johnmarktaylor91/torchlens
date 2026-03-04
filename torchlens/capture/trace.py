@@ -59,6 +59,9 @@ def save_new_activations(
         layer_log_entry.has_saved_grad = False
         layer_log_entry.grad_contents = None
         layer_log_entry.has_child_tensor_variations = False
+        # Note: children_tensor_versions is cleared and NOT rebuilt in fast pass.
+        # This is a known limitation (#93): validation should not be run after
+        # save_new_activations since child tensor variations aren't recaptured.
         layer_log_entry.children_tensor_versions = {}
 
     # Reset relevant fields.
@@ -69,8 +72,29 @@ def save_new_activations(
     self.unlogged_layers = []
     self.num_tensors_saved = 0
     self.tensor_fsize_saved = 0
+    self.elapsed_time_function_calls = 0  # #87: reset timing
+    # Note: tensor_fsize_total and num_tensors_total are NOT reset here —
+    # they represent total graph size which doesn't change between fast passes.
     self._layer_counter = 0
     self._raw_layer_type_counter = defaultdict(lambda: 0)
+    # #97: clear stale lookup caches (only internal caches, NOT user-facing dicts)
+    # Note: layer_dict_all_keys and _lookup_keys_to_layer_num_dict are NOT cleared
+    # here because _get_op_nums_from_user_labels needs them for layers_to_save lookup
+    # before the new forward pass populates them. They're rebuilt in postprocessing.
+    if hasattr(self, "_tensor_num_to_lookup_keys_dict"):
+        self._tensor_num_to_lookup_keys_dict.clear()
+    if hasattr(self, "_unsaved_layers_lookup_keys"):
+        self._unsaved_layers_lookup_keys.clear()
+
+    # Remove zombie entries: raw labels that weren't mapped to final labels (#75)
+    zombie_labels = [
+        lbl
+        for lbl in list(self._raw_layer_labels_list)
+        if lbl not in self._raw_to_final_layer_labels
+    ]
+    for label in zombie_labels:
+        self._raw_layer_labels_list.remove(label)
+        self._raw_layer_dict.pop(label, None)
 
     # Now run and log the new inputs.
     self._run_and_log_inputs_through_model(
@@ -335,8 +359,21 @@ def run_and_log_inputs_through_model(
 
     except Exception as e:
         # active_logging's finally already turned off the toggle.
-        # Just clean up model state.
+        # Clean up model state and any decorated output tensors (#110).
         _cleanup_model_session(model, input_tensors)
+        for label in list(self._raw_layer_dict.keys()):
+            entry = self._raw_layer_dict.get(label)
+            if (
+                entry is not None
+                and hasattr(entry, "tensor_contents")
+                and entry.tensor_contents is not None
+            ):
+                for attr in ("tl_tensor_label_raw",):
+                    if hasattr(entry.tensor_contents, attr):
+                        try:
+                            delattr(entry.tensor_contents, attr)
+                        except Exception:
+                            pass
         print(
             "************\nFeature extraction failed; returning model and environment to normal\n*************"
         )

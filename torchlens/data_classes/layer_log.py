@@ -390,12 +390,13 @@ class LayerLog:
             return self.passes[1].parent_layer_arg_locs
         from collections import defaultdict
 
-        result = {"args": defaultdict(set), "kwargs": defaultdict(set)}
+        result = {"args": {}, "kwargs": {}}
         for pass_log in self.passes.values():
             for arg_type in ["args", "kwargs"]:
                 for arg_key, layer_label in pass_log.parent_layer_arg_locs[arg_type].items():
                     no_pass = self.source_model_log[layer_label].layer_label_no_pass
-                    result[arg_type][arg_key].add(no_pass)
+                    if arg_key not in result[arg_type]:
+                        result[arg_type][arg_key] = no_pass
         return result
 
     # ********************************************

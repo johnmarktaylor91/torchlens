@@ -5,6 +5,7 @@ parameter pass tracking, and structural fingerprinting of operations for loop de
 """
 
 import itertools as it
+import weakref
 from typing import Any, Dict, List, Set, Tuple, TYPE_CHECKING, Union
 
 import torch
@@ -24,8 +25,13 @@ def _add_backward_hook(self: "ModelLog", t: torch.Tensor, tensor_label: str) -> 
         tensor_label: the raw tensor label used to look up the tensor's log entry
     """
 
+    # GC-8: Use weakref to avoid preventing ModelLog garbage collection
+    self_ref = weakref.ref(self)
+
     def log_grad_to_model_history(grad):
-        _log_tensor_grad(self, grad, tensor_label)
+        model_log = self_ref()
+        if model_log is not None:
+            _log_tensor_grad(model_log, grad, tensor_label)
 
     if (t.grad_fn is not None) or t.requires_grad:
         t.register_hook(log_grad_to_model_history)
