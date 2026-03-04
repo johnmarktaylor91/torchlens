@@ -735,10 +735,10 @@ def _make_layer_log_entry(
     ):
         new_entry.save_tensor_data(
             t,
-            t_args,
+            t_args,  # type: ignore[arg-type]
             t_kwargs,
             self.save_function_args,
-            activation_postfunc,  # type: ignore[arg-type]
+            activation_postfunc,
         )
         self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
     self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry

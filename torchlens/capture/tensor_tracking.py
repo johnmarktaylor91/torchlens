@@ -87,8 +87,8 @@ def _locate_parent_tensors_in_args(
             _find_arg_positions_for_single_parent(
                 parent_entry,
                 arg_type,
-                arg_struct,
-                tensor_all_arg_positions,  # type: ignore[arg-type]
+                arg_struct,  # type: ignore[arg-type]
+                tensor_all_arg_positions,
             )
 
     return tensor_all_arg_positions
