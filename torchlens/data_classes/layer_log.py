@@ -295,22 +295,6 @@ class LayerLog:
         return self._single_pass_or_error("layer_label_w_pass_short")
 
     @property
-    def name(self) -> str:
-        """Buffer name (last segment of buffer_address), e.g. 'running_mean'."""
-        addr = self.buffer_address
-        if addr is None:
-            return ""
-        return addr.rsplit(".", 1)[-1]
-
-    @property
-    def module_address(self) -> str:
-        """Module address (everything before last dot of buffer_address), e.g. 'features.0'."""
-        addr = self.buffer_address
-        if addr is None:
-            return ""
-        return addr.rsplit(".", 1)[0] if "." in addr else ""
-
-    @property
     def params(self):
         """Access parameter metadata by address, short name, or index."""
         from .param_log import ParamAccessor
