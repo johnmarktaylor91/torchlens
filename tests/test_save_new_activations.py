@@ -343,6 +343,26 @@ class TestBug147DescriptiveValueError:
             log.save_new_activations(model, torch.randn(2, 10))
 
 
+class TestBug19FastPassBufferOrphan:
+    """#19: Fast-pass should not KeyError on models with shared buffers."""
+
+    def test_shared_buffer_fast_path(self):
+        model = _SharedBufferModel()
+        log = log_forward_pass(model, torch.randn(2, 10), random_seed=42)
+        # Should not raise KeyError on fast pass
+        log.save_new_activations(model, torch.randn(2, 10), random_seed=42)
+        assert log[log.output_layers[0]].has_saved_activations
+        log.cleanup()
+
+    def test_shared_buffer_fast_path_3x(self):
+        model = _SharedBufferModel()
+        log = log_forward_pass(model, torch.randn(2, 10), random_seed=42)
+        for _ in range(3):
+            log.save_new_activations(model, torch.randn(2, 10), random_seed=42)
+        assert log[log.output_layers[0]].has_saved_activations
+        log.cleanup()
+
+
 class TestBug99GraphConsistencyValidation:
     """#99: log_source_tensor_fast warns on shape mismatch."""
 

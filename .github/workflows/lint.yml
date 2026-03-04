@@ -33,7 +33,9 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: pip install ruff
+      - uses: astral-sh/setup-uv@v5
+
+      - run: uv pip install --system ruff
 
       - name: Ruff format
         run: ruff format .

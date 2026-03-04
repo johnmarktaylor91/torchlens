@@ -799,6 +799,62 @@ def test_flops_resnet18_range():
     assert 1.0 < gflops < 5.0, f"ResNet-18 FLOPs = {gflops:.2f}G, expected ~1.8G"
 
 
+def test_flops_addbmm_batch():
+    """addbmm should account for batch dimension."""
+    bias = torch.randn(3, 5)
+    batch1 = torch.randn(2, 3, 4)
+    batch2 = torch.randn(2, 4, 5)
+    output_shape = (3, 5)
+    result = compute_forward_flops("addbmm", output_shape, [], (bias, batch1, batch2), {})
+    # 2 * batch * m * k * n + output_numel = 2*2*3*4*5 + 15 = 255
+    assert result == 2 * 2 * 3 * 4 * 5 + 15
+
+
+def test_flops_baddbmm_batch():
+    """baddbmm should account for batch dimension."""
+    bias = torch.randn(2, 3, 5)
+    batch1 = torch.randn(2, 3, 4)
+    batch2 = torch.randn(2, 4, 5)
+    output_shape = (2, 3, 5)
+    result = compute_forward_flops("baddbmm", output_shape, [], (bias, batch1, batch2), {})
+    # 2 * batch * m * k * n + output_numel = 2*2*3*4*5 + 30 = 270
+    assert result == 2 * 2 * 3 * 4 * 5 + 30
+
+
+def test_flops_einsum_matmul():
+    """einsum with matmul-like subscripts should compute FLOPs."""
+    a = torch.randn(3, 4)
+    b = torch.randn(4, 5)
+    output_shape = (3, 5)
+    result = compute_forward_flops("einsum", output_shape, [], ("ij,jk->ik", a, b), {})
+    assert result == 2 * 3 * 4 * 5  # 120
+
+
+def test_flops_pool_with_kernel():
+    """Pooling should account for kernel_size."""
+    input_tensor = torch.randn(1, 16, 32, 32)
+    output_shape = (1, 16, 16, 16)
+    out_numel = 1 * 16 * 16 * 16  # 4096
+    # kernel_size=2 means 2*2=4 comparisons per output element
+    result = compute_forward_flops("max_pool2d", output_shape, [], (input_tensor, (2, 2)), {})
+    assert result == out_numel * 4
+
+    # kernel_size as int
+    result_int = compute_forward_flops("max_pool2d", output_shape, [], (input_tensor, 3), {})
+    assert result_int == out_numel * 3
+
+
+def test_flops_sdpa():
+    """scaled_dot_product_attention has its own correct handler."""
+    q = torch.randn(2, 8, 10, 64)
+    k = torch.randn(2, 8, 10, 64)
+    v = torch.randn(2, 8, 10, 64)
+    output_shape = (2, 8, 10, 64)
+    result = compute_forward_flops("scaled_dot_product_attention", output_shape, [], (q, k, v), {})
+    assert result is not None
+    assert result > 0
+
+
 # =============================================================================
 # FuncCallLocation tests
 # =============================================================================

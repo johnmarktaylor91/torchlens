@@ -30,10 +30,8 @@ def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 
     Returns:
         Short hash of the input.
     """
-    barcode = "\x00".join([str(x) for x in things_to_hash])
-    barcode = str(hash(barcode))
-    barcode = barcode.encode("utf-8")
-    barcode = base64.urlsafe_b64encode(barcode)
-    barcode = barcode.decode("utf-8")
-    barcode = barcode[0:barcode_len]
-    return barcode
+    joined = "\x00".join([str(x) for x in things_to_hash])
+    hash_str = str(hash(joined))
+    encoded: bytes = hash_str.encode("utf-8")
+    b64: bytes = base64.urlsafe_b64encode(encoded)
+    return b64.decode("utf-8")[:barcode_len]

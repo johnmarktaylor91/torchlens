@@ -2,10 +2,10 @@
 
 import inspect
 import linecache
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
-_SENTINEL = object()
+_SENTINEL: Any = object()
 
 
 class FuncCallLocation:

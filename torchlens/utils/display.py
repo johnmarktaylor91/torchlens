@@ -45,7 +45,7 @@ def int_list_to_compact_str(int_list: List[int]) -> str:
     return ",".join(ranges)
 
 
-def human_readable_size(size: int, decimal_places: int = 1) -> str:
+def human_readable_size(size: float, decimal_places: int = 1) -> str:
     """Utility function to convert a size in bytes to a human-readable format.
 
     Args:

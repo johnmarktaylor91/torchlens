@@ -134,7 +134,7 @@ def safe_copy(x, detach_tensor: bool = False):
                     # Last resort: return shape-preserving zero tensor
                     vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
             if hasattr(x, "tl_tensor_label_raw"):
-                vals_tensor.tl_tensor_label_raw = x.tl_tensor_label_raw
+                setattr(vals_tensor, "tl_tensor_label_raw", getattr(x, "tl_tensor_label_raw"))
             if isinstance(x, torch.nn.Parameter):
                 return torch.nn.Parameter(vals_tensor)
             return vals_tensor
