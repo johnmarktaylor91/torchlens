@@ -159,7 +159,7 @@ def print_override(t: torch.Tensor, func_name: str):
             cpu_data = t.data.cpu()
             if cpu_data.dtype == torch.bfloat16:
                 cpu_data = cpu_data.to(torch.float32)
-        n = np.array(cpu_data)
+        n = cpu_data.detach().numpy()
         np_str = getattr(n, func_name)()
         np_str = np_str.replace("array", "tensor")
         np_str = np_str.replace("\n", "\n ")

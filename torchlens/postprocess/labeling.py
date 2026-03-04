@@ -32,8 +32,11 @@ def _map_raw_labels_to_final_labels(self) -> None:
                 layer_total_num = layer_total_counter
                 layer_total_counter += 1
 
-        else:  # inherit layer numbers from first pass of the layer
+        else:  # inherit layer type AND numbers from first pass of the layer
             first_pass_tensor = self[tensor_log_entry.same_layer_operations[0]]
+            # Use first pass's layer_type to guarantee label consistency within
+            # same_layer_operations groups (all members must share layer_label_no_pass).
+            layer_type = first_pass_tensor.layer_type
             layer_type_num = first_pass_tensor.layer_type_num
             if layer_type in ["input", "buffer"]:
                 layer_total_num = 0

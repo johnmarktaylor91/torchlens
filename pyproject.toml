@@ -58,6 +58,20 @@ include = ["torchlens*"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+filterwarnings = [
+    # External: torchvision model init deprecations
+    "ignore:The default weight initialization of.*:FutureWarning",
+    # External: torch.meshgrid indexing argument
+    "ignore:torch.meshgrid.*:UserWarning",
+    # External: timm deprecated model name mappings
+    "ignore:Mapping deprecated model name.*:UserWarning",
+    # External: torch.nn.utils.weight_norm deprecation
+    "ignore:`torch.nn.utils.weight_norm` is deprecated.*:FutureWarning",
+    # External: complex-to-real casting warning
+    "ignore:Casting complex values to real.*:UserWarning",
+    # External: transformer nested_tensor batch_first warning
+    "ignore:enable_nested_tensor is True.*:UserWarning",
+]
 
 [tool.coverage.run]
 source = ["torchlens"]
