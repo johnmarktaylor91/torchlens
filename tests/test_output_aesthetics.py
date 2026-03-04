@@ -1506,7 +1506,12 @@ class TestVisualizationBugfixes:
         try:
             from torchlens.visualization.rendering import render_graph
 
-            render_graph(log, vis_nesting_depth=0, save_only=True)
+            render_graph(
+                log,
+                vis_nesting_depth=0,
+                save_only=True,
+                vis_outpath=opj(VIS_DIR, "test_nesting_depth_0"),
+            )
         except ImportError:
             pytest.skip("graphviz not available")
 
@@ -1519,7 +1524,7 @@ class TestVisualizationBugfixes:
         try:
             from torchlens.visualization.rendering import render_graph
 
-            render_graph(log, save_only=True)
+            render_graph(log, save_only=True, vis_outpath=opj(VIS_DIR, "test_keep_unsaved_false"))
         except ImportError:
             pytest.skip("graphviz not available")
 
