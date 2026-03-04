@@ -43,7 +43,7 @@ class ParamLog:
 
         # Populated during postprocessing
         self.num_passes: int = 1
-        self.tensor_log_entries: List[str] = []
+        self.layer_log_entries: List[str] = []
         self.linked_params: List[str] = []
         self._has_grad: bool = False
         self._grad_shape: Optional[Tuple[int, ...]] = None
@@ -135,8 +135,8 @@ class ParamLog:
             f"  has_grad: {self.has_grad}",
             f"  module: {self.module_address} ({self.module_type})",
         ]
-        if self.tensor_log_entries:
-            lines.append(f"  used by: {', '.join(self.tensor_log_entries)}")
+        if self.layer_log_entries:
+            lines.append(f"  used by: {', '.join(self.layer_log_entries)}")
         if self.linked_params:
             lines.append(f"  linked: {', '.join(self.linked_params)}")
         if self.has_optimizer is not None:

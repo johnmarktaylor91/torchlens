@@ -10,7 +10,7 @@ from ..utils.display import human_readable_size, identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
 from ..utils.introspection import _get_func_call_stack
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -30,10 +30,10 @@ def _add_output_layers(
         new_output_node.is_output_layer = True
         if i == len(self.output_layers) - 1:
             new_output_node.is_last_output_layer = True
-        self._tensor_counter += 1
+        self._layer_counter += 1
         new_output_node.tensor_label_raw = f"output_{i + 1}_raw"
         new_output_node.layer_label_raw = new_output_node.tensor_label_raw
-        new_output_node.realtime_tensor_num = self._tensor_counter
+        new_output_node.realtime_tensor_num = self._layer_counter
         output_address = "output"
         if output_addresses[i] != "":
             output_address += f".{output_addresses[i]}"
@@ -132,8 +132,8 @@ def _add_output_layers(
 
         output_node.child_layers.append(new_output_node.tensor_label_raw)
 
-        self._raw_tensor_dict[new_output_node.tensor_label_raw] = new_output_node
-        self._raw_tensor_labels_list.append(new_output_node.tensor_label_raw)
+        self._raw_layer_dict[new_output_node.tensor_label_raw] = new_output_node
+        self._raw_layer_labels_list.append(new_output_node.tensor_label_raw)
 
         new_output_layers.append(new_output_node.tensor_label_raw)
 
@@ -166,16 +166,16 @@ def _remove_orphan_nodes(self) -> None:
     Removes nodes that are connected to neither the input nor the output by flooding in both directions
     from the input and output nodes.
     """
-    orig_nodes = set(self._raw_tensor_labels_list)
+    orig_nodes = set(self._raw_layer_labels_list)
     nodes_seen = set()
     node_stack = self.input_layers + self.output_layers
     while len(node_stack) > 0:
         tensor_label = node_stack.pop()
         nodes_seen.add(tensor_label)
-        tensor_entry = self._raw_tensor_dict[tensor_label]
-        if (len(tensor_entry.child_layers) == 0) and (not tensor_entry.is_output_layer):
+        layer_entry = self._raw_layer_dict[tensor_label]
+        if (len(layer_entry.child_layers) == 0) and (not layer_entry.is_output_layer):
             _log_internally_terminated_tensor(self, tensor_label)
-        for next_label in tensor_entry.child_layers + tensor_entry.parent_layers:
+        for next_label in layer_entry.child_layers + layer_entry.parent_layers:
             if next_label not in nodes_seen:
                 node_stack.append(next_label)
 
@@ -184,17 +184,17 @@ def _remove_orphan_nodes(self) -> None:
 
     # Now remove all orphaned nodes using batch removal.
 
-    orphan_entries = [self._raw_tensor_dict[label] for label in orphan_nodes]
+    orphan_entries = [self._raw_layer_dict[label] for label in orphan_nodes]
     self._batch_remove_log_entries(orphan_entries, remove_references=True)
 
-    new_tensor_dict = OrderedDict()
-    new_tensor_list = []
-    for tensor_label in self._raw_tensor_labels_list:
+    new_layer_dict = OrderedDict()
+    new_layer_list = []
+    for tensor_label in self._raw_layer_labels_list:
         if tensor_label not in orphan_nodes:
-            new_tensor_dict[tensor_label] = self._raw_tensor_dict[tensor_label]
-            new_tensor_list.append(tensor_label)
-    self._raw_tensor_labels_list = new_tensor_list
-    self._raw_tensor_dict = new_tensor_dict
+            new_layer_dict[tensor_label] = self._raw_layer_dict[tensor_label]
+            new_layer_list.append(tensor_label)
+    self._raw_layer_labels_list = new_layer_list
+    self._raw_layer_dict = new_layer_dict
 
 
 def _mark_input_output_distances(self) -> None:
@@ -278,7 +278,7 @@ def _flood_graph_from_input_or_output_nodes(self, mode: str) -> None:
 
 
 def _update_node_distance_vals(
-    current_node: TensorLog,
+    current_node: LayerPassLog,
     min_field: str,
     max_field: str,
     nodes_since_start: int,
@@ -336,12 +336,12 @@ def _check_whether_to_add_node_to_flood_stack(
 
 def _log_internally_terminated_tensor(self, tensor_label: str) -> None:
     """Mark a tensor as terminated inside the model (no children reaching an output node)."""
-    tensor_entry = self[tensor_label]
-    tensor_entry.terminated_inside_model = True
+    layer_entry = self[tensor_label]
+    layer_entry.terminated_inside_model = True
     if tensor_label not in self.internally_terminated_layers:
         self.internally_terminated_layers.append(tensor_label)
-        if tensor_entry.is_atomic_bool_layer and (
+        if layer_entry.is_atomic_bool_layer and (
             tensor_label not in self.internally_terminated_bool_layers
         ):
             self.internally_terminated_bool_layers.append(tensor_label)
-            tensor_entry.is_terminal_bool_layer = True
+            layer_entry.is_terminal_bool_layer = True

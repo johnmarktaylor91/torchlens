@@ -1,17 +1,16 @@
-"""TensorLog and RolledTensorLog: per-operation metadata entries within a ModelLog."""
+"""LayerPassLog: per-operation metadata entries within a ModelLog."""
 
 import copy
-from collections import defaultdict
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
-from ..constants import TENSOR_LOG_FIELD_ORDER
+from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
 from ..utils.display import human_readable_size
 
-_TENSOR_LOG_FIELD_ORDER_SET = frozenset(TENSOR_LOG_FIELD_ORDER)
+_LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
 
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
@@ -19,24 +18,24 @@ if TYPE_CHECKING:
     from .model_log import ModelLog
 
 
-class TensorLog:
+class LayerPassLog:
     def __init__(self, fields_dict: Dict):
         """Object that stores information about a single tensor operation in the forward pass,
         including metadata and the tensor itself (if specified). Initialized by passing in a dictionary with
         values for all fields.
         Args:
-            fields_dict: Dict with values for all fields in TensorLog.
+            fields_dict: Dict with values for all fields in LayerPassLog.
         """
         # Note: this all has to be tediously initialized instead of a for-loop in order for
         # autocomplete features to work well. But, this also serves as a reference for all attributes
         # of a tensor log entry.
 
-        # Check that fields_dict contains all fields for TensorLog:
+        # Check that fields_dict contains all fields for LayerPassLog:
         fields_dict_key_set = set(fields_dict.keys())
-        if fields_dict_key_set != _TENSOR_LOG_FIELD_ORDER_SET:
-            error_str = "Error initializing TensorLog:"
-            missing_fields = _TENSOR_LOG_FIELD_ORDER_SET - fields_dict_key_set
-            extra_fields = fields_dict_key_set - _TENSOR_LOG_FIELD_ORDER_SET
+        if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
+            error_str = "Error initializing LayerPassLog:"
+            missing_fields = _LAYER_PASS_LOG_FIELD_ORDER_SET - fields_dict_key_set
+            extra_fields = fields_dict_key_set - _LAYER_PASS_LOG_FIELD_ORDER_SET
             if len(missing_fields) > 0:
                 error_str += f"\n\t- Missing fields {', '.join(missing_fields)}"
             if len(extra_fields) > 0:
@@ -192,6 +191,9 @@ class TensorLog:
         self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
         self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
+        # Back-reference to parent LayerLog (set during postprocessing by _build_layer_logs)
+        self.parent_layer_log = None
+
     # ********************************************
     # *********** User-Facing Functions **********
     # ********************************************
@@ -227,7 +229,7 @@ class TensorLog:
             "tensor_contents",
             "children_tensor_versions",
         ]
-        for field in TENSOR_LOG_FIELD_ORDER:
+        for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
                 fields_dict[field] = copy.deepcopy(getattr(self, field, None))
             else:
@@ -470,178 +472,5 @@ class TensorLog:
         return self.__str__()
 
 
-class RolledTensorLog:
-    def __init__(self, source_entry: TensorLog):
-        """Stripped-down version TensorLog that only encodes the information needed to plot the model
-        in its rolled-up form.
-
-        Args:
-            source_entry: The source TensorLog from which the rolled node is constructed
-        """
-        # Label & general info
-        self.layer_label = source_entry.layer_label_no_pass
-        self.layer_type = source_entry.layer_type
-        self.layer_type_num = source_entry.layer_type_num
-        self.layer_total_num = source_entry.layer_total_num
-        self.layer_passes_total = source_entry.layer_passes_total
-        self.source_model_log = source_entry.source_model_log
-
-        # Saved tensor info
-        self.tensor_shape = source_entry.tensor_shape
-        self.tensor_fsize_nice = source_entry.tensor_fsize_nice
-
-        # FLOPs info (from first pass; same per pass for identical ops)
-        self.flops_forward = source_entry.flops_forward
-        self.flops_backward = source_entry.flops_backward
-
-        # Param info:
-        self.computed_with_params = source_entry.computed_with_params
-        self.parent_param_shapes = source_entry.parent_param_shapes
-        self.num_param_tensors = source_entry.num_param_tensors
-        self.num_params_trainable = source_entry.num_params_trainable
-        self.num_params_frozen = source_entry.num_params_frozen
-        self.parent_param_logs = source_entry.parent_param_logs
-
-        # Graph info
-        self.is_input_layer = source_entry.is_input_layer
-        self.has_input_ancestor = source_entry.has_input_ancestor
-        self.is_output_layer = source_entry.is_output_layer
-        self.is_last_output_layer = source_entry.is_last_output_layer
-        self.is_buffer_layer = source_entry.is_buffer_layer
-        self.buffer_address = source_entry.buffer_address
-        self.buffer_pass = source_entry.buffer_pass
-        self.input_output_address = source_entry.input_output_address
-        self.cond_branch_start_children = source_entry.cond_branch_start_children
-        self.is_terminal_bool_layer = source_entry.is_terminal_bool_layer
-        self.atomic_bool_val = source_entry.atomic_bool_val
-        self.child_layers = []
-        self.parent_layers = []
-        self.orphan_layers = []
-
-        # Module info:
-        self.containing_modules_origin_nested = source_entry.containing_modules_origin_nested
-        self.modules_exited = source_entry.modules_exited
-        self.module_passes_exited = source_entry.module_passes_exited
-        self.is_bottom_level_submodule_output = False
-        self.bottom_level_submodule_passes_exited = set()
-
-        # Fields specific to rolled node to fill in:
-        self.edges_vary_across_passes = False
-        self.child_layers_per_pass = defaultdict(list)
-        self.child_passes_per_layer = defaultdict(list)
-        self.parent_layers_per_pass = defaultdict(list)
-        self.parent_passes_per_layer = defaultdict(list)
-
-        # Each one will now be a list of layers, since they can vary across passes.
-        self.parent_layer_arg_locs = {
-            "args": defaultdict(set),
-            "kwargs": defaultdict(set),
-        }
-
-    def update_data(self, source_node: TensorLog):
-        """Merges data from a new pass into this rolled node.
-
-        For fields like input_output_address, characters that differ between passes
-        are replaced with '*' to indicate variability across passes.
-
-        Args:
-            source_node: the source node
-        """
-        if source_node.has_input_ancestor:
-            self.has_input_ancestor = True
-        if not any(
-            [
-                self.input_output_address is None,
-                source_node.input_output_address is None,
-            ]
-        ):
-            self.input_output_address = "".join(
-                char if (src_char == char) else "*"
-                for char, src_char in zip(
-                    self.input_output_address, source_node.input_output_address
-                )
-            )
-            if self.input_output_address[-1] == ".":
-                self.input_output_address = self.input_output_address[:-1]
-            if self.input_output_address[-1] == "*":
-                self.input_output_address = self.input_output_address.rstrip("*") + "*"
-
-    def add_pass_info(self, source_node: TensorLog):
-        """Adds information about another pass of the same layer: namely, mark information about what the
-        child and parent layers are for each pass.
-
-        Args:
-            source_node: Information for the source pass
-        """
-        # Label the layers for each pass
-        child_layer_labels = [
-            self.source_model_log[child].layer_label_no_pass for child in source_node.child_layers
-        ]
-        for child_layer in child_layer_labels:
-            if child_layer not in self.child_layers:
-                self.child_layers.append(child_layer)
-            if child_layer not in self.child_layers_per_pass[source_node.pass_num]:
-                self.child_layers_per_pass[source_node.pass_num].append(child_layer)
-
-        parent_layer_labels = [
-            self.source_model_log[parent].layer_label_no_pass
-            for parent in source_node.parent_layers
-        ]
-        for parent_layer in parent_layer_labels:
-            if parent_layer not in self.parent_layers:
-                self.parent_layers.append(parent_layer)
-            if parent_layer not in self.parent_layers_per_pass[source_node.pass_num]:
-                self.parent_layers_per_pass[source_node.pass_num].append(parent_layer)
-
-        # Label the passes for each layer, and indicate if any layers vary based on the pass.
-        for child_layer in source_node.child_layers:
-            child_layer_label = self.source_model_log[child_layer].layer_label_no_pass
-            if source_node.pass_num not in self.child_passes_per_layer[child_layer_label]:
-                self.child_passes_per_layer[child_layer_label].append(source_node.pass_num)
-
-        for parent_layer in source_node.parent_layers:
-            parent_layer_label = self.source_model_log[parent_layer].layer_label_no_pass
-            if source_node.pass_num not in self.parent_passes_per_layer[parent_layer_label]:
-                self.parent_passes_per_layer[parent_layer_label].append(source_node.pass_num)
-
-        # Check if any edges vary across passes.
-        if source_node.pass_num == source_node.layer_passes_total:
-            pass_lists = list(self.parent_passes_per_layer.values()) + list(
-                self.child_passes_per_layer.values()
-            )
-            pass_lens = [len(passes) for passes in pass_lists]
-            if any([pass_len < source_node.layer_passes_total for pass_len in pass_lens]):
-                self.edges_vary_across_passes = True
-            else:
-                self.edges_vary_across_passes = False
-
-        # Add submodule info:
-        if source_node.is_bottom_level_submodule_output:
-            self.is_bottom_level_submodule_output = True
-            self.bottom_level_submodule_passes_exited.add(
-                source_node.bottom_level_submodule_pass_exited
-            )
-
-        # For the parent arg locations, have a list of layers rather than single layer, since they can
-        # vary across passes.
-
-        for arg_type in ["args", "kwargs"]:
-            for arg_key, layer_label in source_node.parent_layer_arg_locs[arg_type].items():
-                layer_label_no_pass = self.source_model_log[layer_label].layer_label_no_pass
-                self.parent_layer_arg_locs[arg_type][arg_key].add(layer_label_no_pass)
-
-    def __str__(self) -> str:
-        fields_not_to_print = ["source_model_log"]
-        s = ""
-        for field in dir(self):
-            attr = getattr(self, field)
-            if (
-                not field.startswith("_")
-                and field not in fields_not_to_print
-                and not (callable(attr))
-            ):
-                s += f"{field}: {attr}\n"
-        return s
-
-    def __repr__(self):
-        return self.__str__()
+# Backward-compatible alias (will be removed in a future version)
+TensorLog = LayerPassLog

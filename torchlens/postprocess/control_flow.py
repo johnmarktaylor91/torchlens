@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, List, Set, Tuple
 import torch
 
 from ..utils.display import identity
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -87,8 +87,8 @@ def _fix_modules_for_internal_tensors(self) -> None:
 
 
 def _fix_modules_for_single_internal_tensor(
-    starting_node: TensorLog,
-    node_to_fix: TensorLog,
+    starting_node: LayerPassLog,
+    node_to_fix: LayerPassLog,
     node_type_to_fix: str,
     node_stack: List[str],
     nodes_seen: Set[str],
@@ -200,7 +200,9 @@ def _fix_buffer_layers(self) -> None:
         buffer_counter[buffer_address] += 1
 
 
-def _merge_buffer_entries(self, source_buffer: TensorLog, buffer_to_remove: TensorLog) -> None:
+def _merge_buffer_entries(
+    self, source_buffer: LayerPassLog, buffer_to_remove: LayerPassLog
+) -> None:
     """Merges two identical buffer layers."""
     for child_layer in buffer_to_remove.child_layers:
         if child_layer not in source_buffer.child_layers:
@@ -246,8 +248,8 @@ def _merge_buffer_entries(self, source_buffer: TensorLog, buffer_to_remove: Tens
             self[sibling_layer].sibling_layers.remove(buffer_to_remove.tensor_label_raw)
             self[sibling_layer].sibling_layers.append(source_buffer.tensor_label_raw)
 
-    self._raw_tensor_labels_list.remove(buffer_to_remove.tensor_label_raw)
-    self._raw_tensor_dict.pop(buffer_to_remove.tensor_label_raw)
+    self._raw_layer_labels_list.remove(buffer_to_remove.tensor_label_raw)
+    self._raw_layer_dict.pop(buffer_to_remove.tensor_label_raw)
 
     for layer in self:
         if buffer_to_remove.tensor_label_raw in layer.orig_ancestors:

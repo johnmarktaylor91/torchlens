@@ -417,21 +417,21 @@ def _handle_module_entry(model_log, module, args, kwargs):
     for t in input_tensors:
         if (not hasattr(t, "tl_tensor_label_raw")) and hasattr(t, "tl_buffer_address"):
             log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
-        tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
+        layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
         input_tensor_labels.add(t.tl_tensor_label_raw)
         module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
-        tensor_entry.modules_entered.append(module_address)
-        tensor_entry.module_passes_entered.append(module_pass_label)
-        tensor_entry.is_submodule_input = True
+        layer_entry.modules_entered.append(module_address)
+        layer_entry.module_passes_entered.append(module_pass_label)
+        layer_entry.is_submodule_input = True
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
-                tensor_entry.modules_entered_argnames[
+                layer_entry.modules_entered_argnames[
                     f"{module_pass_label[0]}:{module_pass_label[1]}"
                 ].append(arg_key)
                 model_log._module_build_data["module_layer_argnames"][
                     (f"{module_pass_label[0]}:{module_pass_label[1]}")
                 ].append((t.tl_tensor_label_raw, arg_key))
-        tensor_entry.module_entry_exit_thread_output.append(
+        layer_entry.module_entry_exit_thread_output.append(
             ("+", module_pass_label[0], module_pass_label[1])
         )
         input_tensor_labels_at_entry.append(t.tl_tensor_label_raw)
@@ -451,21 +451,21 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
             t.tl_tensor_label_raw in input_tensor_labels
         ):
             t = torch.identity(t)
-        tensor_entry = model_log._raw_tensor_dict[t.tl_tensor_label_raw]
-        tensor_entry.is_submodule_output = True
-        tensor_entry.is_bottom_level_submodule_output = _is_bottom_level_submodule_exit(
+        layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
+        layer_entry.is_submodule_output = True
+        layer_entry.is_bottom_level_submodule_output = _is_bottom_level_submodule_exit(
             model_log, t, module
         )
-        tensor_entry.modules_exited.append(module_address)
-        tensor_entry.module_passes_exited.append((module_address, module_pass_num))
-        tensor_entry.module_entry_exit_thread_output.append(
+        layer_entry.modules_exited.append(module_address)
+        layer_entry.module_passes_exited.append((module_address, module_pass_num))
+        layer_entry.module_entry_exit_thread_output.append(
             ("-", module_entry_label[0], module_entry_label[1])
         )
         module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
 
     for entry_label in input_tensor_labels_at_entry:
-        tensor_entry = model_log._raw_tensor_dict[entry_label]
-        input_module_thread = tensor_entry.module_entry_exit_thread_output[:]
+        layer_entry = model_log._raw_layer_dict[entry_label]
+        input_module_thread = layer_entry.module_entry_exit_thread_output[:]
         if (
             "+",
             module_entry_label[0],
@@ -474,8 +474,8 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
             module_entry_ix = input_module_thread.index(
                 ("+", module_entry_label[0], module_entry_label[1])
             )
-            tensor_entry.module_entry_exit_thread_output = (
-                tensor_entry.module_entry_exit_thread_output[:module_entry_ix]
+            layer_entry.module_entry_exit_thread_output = (
+                layer_entry.module_entry_exit_thread_output[:module_entry_ix]
             )
 
 
@@ -535,29 +535,29 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
     A "bottom-level" submodule is a leaf submodule that contains no further sub-submodules
     (i.e., it has no children in the module hierarchy).
     """
-    tensor_entry = model_log._raw_tensor_dict[getattr(t, "tl_tensor_label_raw")]
+    layer_entry = model_log._raw_layer_dict[getattr(t, "tl_tensor_label_raw")]
     submodule_address = submodule.tl_module_address
 
-    if tensor_entry.is_bottom_level_submodule_output:
+    if layer_entry.is_bottom_level_submodule_output:
         return True
 
-    if tensor_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
-        tensor_entry.is_bottom_level_submodule_output = True
-        tensor_entry.bottom_level_submodule_pass_exited = (
+    if layer_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:
+        layer_entry.is_bottom_level_submodule_output = True
+        layer_entry.bottom_level_submodule_pass_exited = (
             submodule_address,
             submodule.tl_module_pass_num,
         )
         return True
 
-    for parent_label in tensor_entry.parent_layers:
+    for parent_label in layer_entry.parent_layers:
         parent_tensor = model_log[parent_label]
         parent_modules_entered = parent_tensor.modules_entered
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):
-            tensor_entry.is_bottom_level_submodule_output = False
+            layer_entry.is_bottom_level_submodule_output = False
             return False
 
-    tensor_entry.is_bottom_level_submodule_output = True
-    tensor_entry.bottom_level_submodule_pass_exited = (
+    layer_entry.is_bottom_level_submodule_output = True
+    layer_entry.bottom_level_submodule_pass_exited = (
         submodule_address,
         submodule.tl_module_pass_num,
     )

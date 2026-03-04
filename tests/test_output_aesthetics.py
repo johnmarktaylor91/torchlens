@@ -29,7 +29,6 @@ from conftest import TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
 
 import example_models
 from torchlens import log_forward_pass, show_model_graph
-from torchlens.postprocess import _roll_graph
 
 # ---------------------------------------------------------------------------
 # Report helpers
@@ -150,10 +149,6 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
     # Log the forward pass
     log = log_forward_pass(model, x, random_seed=42)
-
-    # Build rolled graph data for models with recurrence
-    if log.model_is_recurrent:
-        _roll_graph(log)
 
     # ===== A. ModelLog Overview =====
     out.write(_section("A. ModelLog Overview", level=2))
@@ -324,14 +319,16 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
         # Show that buffer is also accessible as a layer (isinstance check)
         from torchlens.data_classes.buffer_log import BufferLog
-        from torchlens.data_classes.tensor_log import TensorLog
+        from torchlens.data_classes.layer_pass_log import LayerPassLog
 
         out.write(f"  isinstance(log.buffers[0], BufferLog): {isinstance(first_buf, BufferLog)}\n")
-        out.write(f"  isinstance(log.buffers[0], TensorLog): {isinstance(first_buf, TensorLog)}\n")
+        out.write(
+            f"  isinstance(log.buffers[0], LayerPassLog): {isinstance(first_buf, LayerPassLog)}\n"
+        )
         out.write("\n")
 
-    # ===== D. TensorLog / Layer Access =====
-    out.write(_section("D. TensorLog / Layer Access", level=2))
+    # ===== D. LayerPassLog / Layer Access =====
+    out.write(_section("D. LayerPassLog / Layer Access", level=2))
 
     out.write(_capture("repr(log[0]) — first layer", repr(log[0])))
     out.write(_capture("repr(log[-1]) — last layer", repr(log[-1])))
@@ -378,22 +375,18 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 )
                 break
 
-    # ===== D.1 RolledTensorLog =====
-    if log.model_is_recurrent and len(log.layer_list_rolled) > 0:
-        out.write(_section("D.1 RolledTensorLog", level=3))
-        # Find a rolled tensor log with multiple passes
-        for rtl in log.layer_list_rolled:
-            if rtl.layer_passes_total > 1:
+    # ===== D.1 LayerLog =====
+    if log.model_is_recurrent and len(log.layer_logs) > 0:
+        out.write(_section("D.1 LayerLog (multi-pass)", level=3))
+        for ll in log.layer_logs.values():
+            if ll.num_passes > 1:
                 out.write(
                     _capture(
-                        f"repr(rolled_tensor_log) — {rtl.layer_label} ({rtl.layer_passes_total} passes)",
-                        repr(rtl),
+                        f"repr(layer_log) — {ll.layer_label} ({ll.num_passes} passes)",
+                        repr(ll),
                     )
                 )
                 break
-        else:
-            # Just show the first one
-            out.write(_capture("repr(log.layer_list_rolled[0])", repr(log.layer_list_rolled[0])))
 
     # ===== E. Convenience Error Messages =====
     out.write(_section("E. Convenience Error Messages", level=2))
@@ -436,8 +429,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_code(f"Model: {name}, input: {list(x.shape)}"))
     out.write(_field_dump(log, "ModelLog"))
 
-    # F.2 TensorLog — pick a layer with params if possible
-    out.write(_section("F.2 TensorLog field dump", level=3))
+    # F.2 LayerPassLog — pick a layer with params if possible
+    out.write(_section("F.2 LayerPassLog field dump", level=3))
     tensor_for_dump = None
     for entry in log.layer_list:
         if entry.computed_with_params:
@@ -446,20 +439,20 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if tensor_for_dump is None:
         tensor_for_dump = log[len(log) // 2]
     out.write(_code(f"Layer: {tensor_for_dump.layer_label}"))
-    out.write(_field_dump(tensor_for_dump, f"TensorLog: {tensor_for_dump.layer_label}"))
+    out.write(_field_dump(tensor_for_dump, f"LayerPassLog: {tensor_for_dump.layer_label}"))
 
-    # F.3 RolledTensorLog
-    if log.model_is_recurrent and len(log.layer_list_rolled) > 0:
-        out.write(_section("F.3 RolledTensorLog field dump", level=3))
-        rtl_for_dump = None
-        for rtl in log.layer_list_rolled:
-            if rtl.layer_passes_total > 1:
-                rtl_for_dump = rtl
+    # F.3 LayerLog (multi-pass)
+    if log.model_is_recurrent and len(log.layer_logs) > 0:
+        out.write(_section("F.3 LayerLog field dump (multi-pass)", level=3))
+        ll_for_dump = None
+        for ll in log.layer_logs.values():
+            if ll.num_passes > 1:
+                ll_for_dump = ll
                 break
-        if rtl_for_dump is None:
-            rtl_for_dump = log.layer_list_rolled[0]
-        out.write(_code(f"Rolled layer: {rtl_for_dump.layer_label}"))
-        out.write(_field_dump(rtl_for_dump, f"RolledTensorLog: {rtl_for_dump.layer_label}"))
+        if ll_for_dump is None:
+            ll_for_dump = next(iter(log.layer_logs.values()))
+        out.write(_code(f"Layer: {ll_for_dump.layer_label}"))
+        out.write(_field_dump(ll_for_dump, f"LayerLog: {ll_for_dump.layer_label}"))
 
     # F.4 ModuleLog
     out.write(_section("F.4 ModuleLog field dump", level=3))
@@ -507,12 +500,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 )
             )
 
-            # Show gradient fields on a TensorLog that has saved grad
+            # Show gradient fields on a LayerPassLog that has saved grad
             for entry in grad_log.layer_list:
                 if entry.has_saved_grad:
                     out.write(
                         _section(
-                            f"G.1 TensorLog gradient fields — {entry.layer_label}",
+                            f"G.1 LayerPassLog gradient fields — {entry.layer_label}",
                             level=3,
                         )
                     )
@@ -524,12 +517,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("grad_fsize_nice", entry.grad_fsize_nice))
                     break
 
-            # Show a TensorLog WITHOUT grad for contrast
+            # Show a LayerPassLog WITHOUT grad for contrast
             for entry in grad_log.layer_list:
                 if not entry.has_saved_grad:
                     out.write(
                         _section(
-                            f"G.2 TensorLog without grad — {entry.layer_label}",
+                            f"G.2 LayerPassLog without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
@@ -596,7 +589,7 @@ def test_generate_aesthetic_report():
         content = f.read()
     assert len(content) > 5000, f"Report too short ({len(content)} chars)"
     assert "ModelLog" in content
-    assert "TensorLog" in content
+    assert "LayerPassLog" in content
     assert "ParamLog" in content
 
 
@@ -1029,9 +1022,6 @@ def _build_latex_report() -> str:
     for name, model_cls, x, description in AESTHETIC_TEXT_MODELS:
         model = model_cls()
         log = log_forward_pass(model, x, random_seed=42)
-        if log.model_is_recurrent:
-            _roll_graph(log)
-
         doc.write(f"\\subsection{{{_tex_escape(name)} --- {_tex_escape(description)}}}\n\n")
 
         # A. Model Summary
@@ -1073,14 +1063,14 @@ def _build_latex_report() -> str:
         doc.write(_verbatim_box("D. First Layer — repr(log[0])", repr(log[0])))
         doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
 
-        # D.1 Rolled TensorLog
-        if log.model_is_recurrent and len(log.layer_list_rolled) > 0:
-            for rtl in log.layer_list_rolled:
-                if rtl.layer_passes_total > 1:
+        # D.1 LayerLog (multi-pass)
+        if log.model_is_recurrent and len(log.layer_logs) > 0:
+            for ll in log.layer_logs.values():
+                if ll.num_passes > 1:
                     doc.write(
                         _verbatim_box(
-                            f"D.1 RolledTensorLog — {rtl.layer_label} ({rtl.layer_passes_total} passes)",
-                            repr(rtl),
+                            f"D.1 LayerLog — {ll.layer_label} ({ll.num_passes} passes)",
+                            repr(ll),
                         )
                     )
                     break
@@ -1120,7 +1110,7 @@ def _build_latex_report() -> str:
         if error_text:
             doc.write(_verbatim_box("E. Convenience Error Messages", error_text))
 
-        # F. Field Dumps (just ModelLog headline fields + one TensorLog)
+        # F. Field Dumps (just ModelLog headline fields + one LayerPassLog)
         # ModelLog field dump
         model_fields = ""
         for field in sorted(dir(log)):
@@ -1143,7 +1133,7 @@ def _build_latex_report() -> str:
             model_fields += f"{field}: {attr}\n"
         doc.write(_verbatim_box("F.1 ModelLog — All Fields", model_fields))
 
-        # TensorLog field dump — pick a layer with params
+        # LayerPassLog field dump — pick a layer with params
         tensor_for_dump = None
         for entry in log.layer_list:
             if entry.computed_with_params:
@@ -1164,7 +1154,7 @@ def _build_latex_report() -> str:
             if field in {"source_model_log", "func_rng_states"}:
                 continue
             tensor_fields += f"{field}: {attr}\n"
-        doc.write(_verbatim_box(f"F.2 TensorLog — {tensor_for_dump.layer_label}", tensor_fields))
+        doc.write(_verbatim_box(f"F.2 LayerPassLog — {tensor_for_dump.layer_label}", tensor_fields))
 
         # ModuleLog field dump
         param_module_addr = None

@@ -2,14 +2,14 @@
 
 from typing import Dict, List, Optional, Union
 
-from .tensor_log import TensorLog
+from .layer_pass_log import LayerPassLog
 from ..utils.display import human_readable_size
 
 
-class BufferLog(TensorLog):
-    """A TensorLog entry representing a buffer tensor.
+class BufferLog(LayerPassLog):
+    """A LayerPassLog entry representing a buffer tensor.
 
-    Subclasses TensorLog -- participates in the computation graph identically.
+    Subclasses LayerPassLog -- participates in the computation graph identically.
     Adds a focused __repr__ and convenience properties.
     """
 

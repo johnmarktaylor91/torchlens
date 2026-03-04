@@ -1,7 +1,7 @@
 """Functions for logging source tensors (inputs and buffers) during model tracing.
 
 Source tensors are the starting points of the computational graph: model inputs
-and module buffers. This module handles creating TensorLog entries for these
+and module buffers. This module handles creating LayerPassLog entries for these
 tensors in both exhaustive and fast logging modes.
 """
 
@@ -16,7 +16,7 @@ from ..utils.tensor_utils import get_tensor_memory_amount
 from ..utils.display import human_readable_size
 from ..utils.rng import log_current_rng_states
 from ..data_classes.buffer_log import BufferLog
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 from .tensor_tracking import _add_backward_hook, _update_tensor_containing_modules
 
@@ -44,9 +44,9 @@ def log_source_tensor_exhaustive(
     """
     layer_type = source
     # Fetch counters and increment to be ready for next tensor to be logged
-    self._tensor_counter += 1
+    self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    realtime_tensor_num = self._tensor_counter
+    realtime_tensor_num = self._layer_counter
     layer_type_num = self._raw_layer_type_counter[layer_type]
 
     tensor_label = f"{layer_type}_{layer_type_num}_raw"
@@ -224,9 +224,9 @@ def log_source_tensor_exhaustive(
         "module_entry_exit_thread_output": [],
     }
 
-    from .output_tensors import _make_tensor_log_entry
+    from .output_tensors import _make_layer_log_entry
 
-    _make_tensor_log_entry(self, t, fields_dict, (), {}, self.activation_postfunc)
+    _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_postfunc)
 
     # Tag the tensor itself with its label, and with a reference to the model history log.
     t.tl_tensor_label_raw = tensor_label
@@ -254,7 +254,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     """
     layer_type = source
     # Fetch counters and increment to be ready for next tensor to be logged
-    self._tensor_counter += 1
+    self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
     layer_type_num = self._raw_layer_type_counter[layer_type]
 
@@ -265,20 +265,20 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
     if orig_tensor_label in self.unlogged_layers:
         return
-    orig_tensor_entry = self.layer_dict_all_keys[orig_tensor_label]
-    if (self._tensor_nums_to_save == "all") or (
-        orig_tensor_entry.realtime_tensor_num in self._tensor_nums_to_save
+    orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
+    if (self._layer_nums_to_save == "all") or (
+        orig_layer_entry.realtime_tensor_num in self._layer_nums_to_save
     ):
-        self.layers_with_saved_activations.append(orig_tensor_entry.layer_label)
-        orig_tensor_entry.save_tensor_data(
+        self.layers_with_saved_activations.append(orig_layer_entry.layer_label)
+        orig_layer_entry.save_tensor_data(
             t, [], {}, self.save_function_args, self.activation_postfunc
         )
 
-    orig_tensor_entry.tensor_shape = tuple(t.shape)
-    orig_tensor_entry.tensor_dtype = t.dtype
+    orig_layer_entry.tensor_shape = tuple(t.shape)
+    orig_layer_entry.tensor_dtype = t.dtype
     fsize = get_tensor_memory_amount(t)
-    orig_tensor_entry.tensor_fsize = fsize
-    orig_tensor_entry.tensor_fsize_nice = human_readable_size(fsize)
+    orig_layer_entry.tensor_fsize = fsize
+    orig_layer_entry.tensor_fsize_nice = human_readable_size(fsize)
 
 
 def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:
@@ -296,8 +296,8 @@ def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:
         tensor_label = getattr(t, "tl_tensor_label_raw", -1)
         if tensor_label == -1:
             continue
-        tensor_entry = self[tensor_label]
-        containing_modules = _update_tensor_containing_modules(tensor_entry)
+        layer_entry = self[tensor_label]
+        containing_modules = _update_tensor_containing_modules(layer_entry)
         if len(containing_modules) > max_input_module_nesting:
             max_input_module_nesting = len(containing_modules)
             most_nested_containing_modules = containing_modules[:]

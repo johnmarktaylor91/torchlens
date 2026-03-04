@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Set, Union
 
 import torch
 
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 from ..utils.tensor_utils import tensor_all_nan
 
 
@@ -61,12 +61,12 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
 # Custom exemption check functions
 # Signature: callable(self, layer, layers_to_perturb) -> bool
 #   self = ModelLog instance
-#   layer = TensorLog being validated
+#   layer = LayerPassLog being validated
 #   layers_to_perturb = list of layer labels being perturbed
 # ---------------------------------------------------------------------------
 
 
-def _check_getitem_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) -> bool:
+def _check_getitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt __getitem__ when the perturbed layer is a structural arg (index tensor,
     or any non-data arg)."""
     perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
@@ -84,7 +84,7 @@ def _check_getitem_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) 
     return False
 
 
-def _check_setitem_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) -> bool:
+def _check_setitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt __setitem__ when the perturbed layer is a bool mask arg."""
     perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
     args = layer.creation_args
@@ -115,7 +115,7 @@ def _check_setitem_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) 
     return False
 
 
-def _check_lstm_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) -> bool:
+def _check_lstm_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt lstm when the perturbed layer is a hidden/cell state arg."""
     perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
     args = layer.creation_args
@@ -132,7 +132,7 @@ def _check_lstm_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) -> 
     )
 
 
-def _check_interpolate_exempt(self, layer: TensorLog, layers_to_perturb: List[str]) -> bool:
+def _check_interpolate_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt interpolate when the perturbed layer is the scale_factor arg."""
     perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
     kwargs = layer.creation_kwargs
@@ -175,7 +175,7 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, callable] = {
 
 def perturbed_layer_at_structural_position(
     self,
-    layer: TensorLog,
+    layer: LayerPassLog,
     layers_to_perturb: List[str],
     exempt_positions: Set[int],
 ) -> bool:
@@ -201,7 +201,7 @@ def perturbed_layer_at_structural_position(
 
 def posthoc_perturb_check(
     self,
-    layer_to_validate_parents_for: TensorLog,
+    layer_to_validate_parents_for: LayerPassLog,
     layers_to_perturb: List[str],
     verbose: bool = False,
 ) -> bool:

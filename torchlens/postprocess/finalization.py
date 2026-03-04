@@ -1,4 +1,4 @@
-"""Steps 13-18: Tensor undecoration, timing, param logs, module logs, pass finish, graph rolling."""
+"""Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish."""
 
 import time
 from collections import defaultdict, deque
@@ -8,7 +8,6 @@ import torch
 
 from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
-from ..data_classes.tensor_log import RolledTensorLog
 from ..utils.introspection import get_vars_of_type_from_obj
 from ..utils.display import human_readable_size
 
@@ -20,15 +19,15 @@ def _undecorate_all_saved_tensors(self) -> None:
     """Utility function to undecorate all saved tensors."""
     tensors_to_undecorate = []
     for layer_label in self.layer_labels:
-        tensor_entry = self.layer_dict_main_keys[layer_label]
-        if tensor_entry.tensor_contents is not None:
-            tensors_to_undecorate.append(tensor_entry.tensor_contents)
+        layer_entry = self.layer_dict_main_keys[layer_label]
+        if layer_entry.tensor_contents is not None:
+            tensors_to_undecorate.append(layer_entry.tensor_contents)
 
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(tensor_entry.creation_args, torch.Tensor, search_depth=2)
+            get_vars_of_type_from_obj(layer_entry.creation_args, torch.Tensor, search_depth=2)
         )
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(tensor_entry.creation_kwargs, torch.Tensor, search_depth=2)
+            get_vars_of_type_from_obj(layer_entry.creation_kwargs, torch.Tensor, search_depth=2)
         )
 
     for t in tensors_to_undecorate:
@@ -54,14 +53,14 @@ def _finalize_param_logs(self: "ModelLog") -> None:
     from ..utils.tensor_utils import get_tensor_memory_amount
     from ..utils.display import human_readable_size
 
-    # Build tensor_log_entries and linked_params from TensorLogEntries
-    for tensor_entry in self.layer_list:
-        if not tensor_entry.parent_param_logs:
+    # Build layer_log_entries and linked_params from LayerPassLog entries
+    for layer_entry in self.layer_list:
+        if not layer_entry.parent_param_logs:
             continue
-        addresses_in_op = [pl.address for pl in tensor_entry.parent_param_logs]
-        for pl in tensor_entry.parent_param_logs:
-            if tensor_entry.layer_label not in pl.tensor_log_entries:
-                pl.tensor_log_entries.append(tensor_entry.layer_label)
+        addresses_in_op = [pl.address for pl in layer_entry.parent_param_logs]
+        for pl in layer_entry.parent_param_logs:
+            if layer_entry.layer_label not in pl.layer_log_entries:
+                pl.layer_log_entries.append(layer_entry.layer_label)
             # Link to other params in the same operation
             for other_addr in addresses_in_op:
                 if other_addr != pl.address and other_addr not in pl.linked_params:
@@ -69,15 +68,15 @@ def _finalize_param_logs(self: "ModelLog") -> None:
 
     # Populate num_passes: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
-        pl.num_passes = max(1, len(pl.tensor_log_entries))
+        pl.num_passes = max(1, len(pl.layer_log_entries))
 
     # ParamLog gradient metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
     # reads param.grad after backward is called.
 
-    # Clear actual Parameter tensor references from TensorLogEntries to save memory
-    for tensor_entry in self.layer_list:
-        tensor_entry.parent_params = []
+    # Clear actual Parameter tensor references from LayerPassLog entries to save memory
+    for layer_entry in self.layer_list:
+        layer_entry.parent_params = []
 
 
 def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "ModuleLog":
@@ -85,7 +84,7 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
     from ..data_classes.param_log import ParamAccessor
 
     root_meta = self._module_metadata.get("self", {})
-    root_all_layers = list(self.layer_labels)
+    root_all_layers = list(self.layer_logs.keys())
 
     root_param_dict = {pl.address: pl for pl in self.param_logs}
     root_params = ParamAccessor(root_param_dict)
@@ -190,7 +189,7 @@ def _build_submodule_pass_logs(
 
         pass_layers = list(mbd["module_pass_layers"].get(pass_label, []))
 
-        # Derive input/output layers per pass from TensorLog fields
+        # Derive input/output layers per pass from LayerPassLog fields
         pass_input_layers = []
         pass_output_layers = []
         for layer_label in pass_layers:
@@ -327,7 +326,16 @@ def _build_module_logs(self: "ModelLog") -> None:
         name = address.rsplit(".", 1)[-1] if "." in address else address
         address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-        all_layers = list(mbd["module_layers"].get(address, []))
+        all_layers_raw = list(mbd["module_layers"].get(address, []))
+        seen = set()
+        all_layers = []
+        for label in all_layers_raw:
+            entry = self.layer_dict_all_keys.get(label)
+            if entry is not None:
+                no_pass = entry.layer_label_no_pass
+                if no_pass not in seen:
+                    seen.add(no_pass)
+                    all_layers.append(no_pass)
 
         passes, pass_labels_list = _build_submodule_pass_logs(
             self, address, num_passes, pass_dict, mbd, _child_to_parent_pass
@@ -402,6 +410,59 @@ def _build_module_logs(self: "ModelLog") -> None:
     self._module_build_data = _init_module_build_data()
 
 
+def _build_layer_logs(self: "ModelLog") -> None:
+    """Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+
+    Groups layer_list entries by layer_label_no_pass, creates a LayerLog
+    for each unique layer, and populates ModelLog.layer_logs.  Also merges
+    per-pass fields that need aggregation for multi-pass layers (e.g.,
+    has_input_ancestor, input_output_address, is_bottom_level_submodule_output).
+    """
+    from collections import OrderedDict
+
+    from ..data_classes.layer_log import LayerLog
+
+    layer_logs = OrderedDict()
+
+    for pass_log in self.layer_list:
+        no_pass_label = pass_log.layer_label_no_pass
+
+        if no_pass_label not in layer_logs:
+            layer_log = LayerLog(pass_log)
+            layer_logs[no_pass_label] = layer_log
+        else:
+            layer_log = layer_logs[no_pass_label]
+            # Merge per-pass aggregate fields
+            if pass_log.has_input_ancestor:
+                layer_log.has_input_ancestor = True
+            # Merge input_output_address with '*' for differing chars
+            if (
+                layer_log.input_output_address is not None
+                and pass_log.input_output_address is not None
+            ):
+                merged = "".join(
+                    c if c == s else "*"
+                    for c, s in zip(
+                        layer_log.input_output_address,
+                        pass_log.input_output_address,
+                    )
+                )
+                if merged.endswith("."):
+                    merged = merged[:-1]
+                if merged.endswith("*"):
+                    merged = merged.rstrip("*") + "*"
+                layer_log.input_output_address = merged
+            # Merge bottom-level submodule output flag
+            if pass_log.is_bottom_level_submodule_output:
+                layer_log.is_bottom_level_submodule_output = True
+
+        layer_log.passes[pass_log.pass_num] = pass_log
+        layer_log.pass_labels.append(pass_log.layer_label)
+        pass_log.parent_layer_log = layer_log
+
+    self.layer_logs = layer_logs
+
+
 def _set_pass_finished(self) -> None:
     """Sets the ModelLog to "pass finished" status, indicating that the pass is done, so
     the "final" rather than "realtime debugging" mode of certain functions should be used.
@@ -410,27 +471,3 @@ def _set_pass_finished(self) -> None:
         tensor = self.layer_dict_main_keys[layer_label]
         tensor._pass_finished = True
     self._pass_finished = True
-
-
-def _roll_graph(self) -> None:
-    """Converts the graph to rolled-up format for plotting purposes.
-
-    In recurrent models where the same layer executes multiple times (passes), rolling
-    collapses those into a single visual node with pass count annotations, simplifying
-    the graph for display. Each node in the rolled graph represents all passes of a
-    given layer instead of having separate nodes for each pass.
-    """
-    if self.layer_dict_rolled:
-        return
-    for layer_label, node in self.layer_dict_main_keys.items():
-        layer_label_no_pass = node.layer_label_no_pass
-        if (
-            layer_label_no_pass in self.layer_dict_rolled
-        ):  # If rolled-up layer has already been added, fetch it:
-            rolled_node = self.layer_dict_rolled[layer_label_no_pass]
-        else:  # If it hasn't been added, make it:
-            rolled_node = RolledTensorLog(node)
-            self.layer_dict_rolled[node.layer_label_no_pass] = rolled_node
-            self.layer_list_rolled.append(rolled_node)
-        rolled_node.update_data(node)
-        rolled_node.add_pass_info(node)

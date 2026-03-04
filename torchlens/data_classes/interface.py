@@ -9,10 +9,10 @@ import pandas as pd
 if TYPE_CHECKING:
     from .model_log import ModelLog
 
-from .tensor_log import TensorLog
+from .layer_pass_log import LayerPassLog
 
 
-def _getitem_during_pass(self: "ModelLog", ix) -> TensorLog:
+def _getitem_during_pass(self: "ModelLog", ix) -> LayerPassLog:
     """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
     Args:
@@ -21,8 +21,8 @@ def _getitem_during_pass(self: "ModelLog", ix) -> TensorLog:
     Returns:
         Tensor log entry object with info about specified layer.
     """
-    if ix in self._raw_tensor_dict:
-        return self._raw_tensor_dict[ix]
+    if ix in self._raw_layer_dict:
+        return self._raw_layer_dict[ix]
     else:
         raise ValueError(f"{ix} not found in the ModelLog object.")
 
@@ -33,6 +33,7 @@ def _getitem_after_pass(self, ix):
     Supports several lookup modes:
         - int: ordinal index into the layer list (e.g., 0, -1).
         - str (exact layer label): matches a layer label directly.
+        - str (no-pass layer label): returns LayerLog for multi-pass layers.
         - str (module address): matches a module address in _module_logs, returning a ModuleLog.
         - str (substring): if exactly one layer label contains the given substring, returns that layer.
 
@@ -40,6 +41,10 @@ def _getitem_after_pass(self, ix):
     """
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
+
+    # Check if it's a no-pass layer label → return LayerLog
+    if isinstance(ix, str) and hasattr(self, "layer_logs") and ix in self.layer_logs:
+        return self.layer_logs[ix]
 
     # Check if it's a module address or pass notation → return ModuleLog/ModulePassLog
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
@@ -200,7 +205,7 @@ def _str_during_pass(self) -> str:
     s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_layers}"
     s += f"\n\tBuffer tensors: {self.buffer_layers}"
     s += "\n\tRaw layer labels:"
-    for layer in self._raw_tensor_labels_list:
+    for layer in self._raw_layer_labels_list:
         s += f"\n\t\t{layer}"
     return s
 
@@ -317,7 +322,7 @@ def print_all_fields(self) -> None:
         "layer_list",
         "layer_dict_main_keys",
         "layer_dict_all_keys",
-        "raw_tensor_dict",
+        "raw_layer_dict",
         "decorated_to_orig_funcs_dict",
     ]
 
@@ -411,11 +416,11 @@ def to_pandas(self) -> pd.DataFrame:
     }
 
     model_df_dictlist = []
-    for tensor_entry in self.layer_list:
-        tensor_dict = {}
+    for layer_entry in self.layer_list:
+        layer_dict = {}
         for field_name in fields_for_df:
-            tensor_dict[field_name] = getattr(tensor_entry, field_name)
-        model_df_dictlist.append(tensor_dict)
+            layer_dict[field_name] = getattr(layer_entry, field_name)
+        model_df_dictlist.append(layer_dict)
     model_df = pd.DataFrame(model_df_dictlist)
 
     for field in fields_to_change_type:

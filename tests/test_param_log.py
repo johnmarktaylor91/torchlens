@@ -62,7 +62,7 @@ class TestParamLogFields:
         assert isinstance(pl.module_type, str)
         assert isinstance(pl.barcode, str)
         assert isinstance(pl.num_passes, int)
-        assert isinstance(pl.tensor_log_entries, list)
+        assert isinstance(pl.layer_log_entries, list)
         assert isinstance(pl.linked_params, list)
 
     def test_repr_contains_key_info(self):
@@ -133,7 +133,7 @@ class TestParamAccessorMH:
 
 
 # ---------------------------------------------------------------------------
-# ParamAccessor on TensorLog
+# ParamAccessor on LayerPassLog
 # ---------------------------------------------------------------------------
 
 
@@ -290,7 +290,7 @@ class TestLinkedParams:
 
 
 # ---------------------------------------------------------------------------
-# tensor_log_entries reverse mapping
+# layer_log_entries reverse mapping
 # ---------------------------------------------------------------------------
 
 
@@ -298,12 +298,12 @@ class TestTensorLogEntries:
     def test_populated(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert len(pl.tensor_log_entries) > 0
+            assert len(pl.layer_log_entries) > 0
 
     def test_points_to_correct_layers(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            for label in pl.tensor_log_entries:
+            for label in pl.layer_log_entries:
                 entry = mh[label]
                 assert any(p.address == pl.address for p in entry.parent_param_logs)
 
@@ -325,14 +325,14 @@ class TestRecurrentParams:
         # fc1 is used 4 times
         pl = mh.params["fc1.weight"]
         assert pl.num_passes >= 2  # should be 4
-        assert len(pl.tensor_log_entries) >= 2
+        assert len(pl.layer_log_entries) >= 2
 
-    def test_tensor_log_entries_multi_pass(self, input_2d):
+    def test_layer_log_entries_multi_pass(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         mh = log_forward_pass(model, input_2d)
         pl = mh.params["fc1.weight"]
-        # num_passes equals the number of tensor_log_entries
-        assert pl.num_passes == len(pl.tensor_log_entries)
+        # num_passes equals the number of layer_log_entries
+        assert pl.num_passes == len(pl.layer_log_entries)
         assert pl.num_passes >= 2
 
 
@@ -579,12 +579,12 @@ class TestIntegration:
         model = example_models.RecurrentParamsComplex()
         mh = log_forward_pass(model, input_2d)
         assert len(mh.params) == 4  # fc1 weight+bias, fc2 weight+bias
-        # Both fc1 and fc2 are used multiple times (as tensor_log_entries)
+        # Both fc1 and fc2 are used multiple times (as layer_log_entries)
         assert mh.params["fc1.weight"].num_passes >= 2
         assert mh.params["fc2.weight"].num_passes >= 2
         # Verify all entries point to real layers
         for pl in mh.params:
-            for label in pl.tensor_log_entries:
+            for label in pl.layer_log_entries:
                 assert label in mh.layer_dict_all_keys
 
     def test_gradient_tracking_recurrent(self, input_2d):

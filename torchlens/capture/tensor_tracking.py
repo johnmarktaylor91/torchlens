@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Set, Tuple, TYPE_CHECKING, Union
 import torch
 
 from ..utils.hashing import make_random_barcode, make_short_barcode_from_input
-from ..data_classes.tensor_log import TensorLog
+from ..data_classes.layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -40,10 +40,10 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
     """
     self.has_saved_gradients = True
     tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
-    tensor_log_entry = self[tensor_label]
+    layer_log_entry = self[tensor_label]
     layers_to_update = [tensor_label]
-    if tensor_log_entry.is_output_parent:  # also update any linked outputs
-        for child_layer in tensor_log_entry.child_layers:
+    if layer_log_entry.is_output_parent:  # also update any linked outputs
+        for child_layer in layer_log_entry.child_layers:
             if self[child_layer].is_output_layer:
                 layers_to_update.append(child_layer)
 
@@ -57,14 +57,14 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
 
 def _locate_parent_tensors_in_args(
     self: "ModelLog",
-    parent_log_entries: List[TensorLog],
+    parent_log_entries: List[LayerPassLog],
     args: Tuple[Any],
     kwargs: Dict[Any, Any],
 ) -> Dict:
     """Returns a dict specifying where in the function call each parent tensor was used.
 
     Args:
-        parent_log_entries: List of parent TensorLog entries.
+        parent_log_entries: List of parent LayerPassLog entries.
         args: Tuple of function positional args.
         kwargs: Dict of function keyword args.
 
@@ -86,7 +86,7 @@ def _locate_parent_tensors_in_args(
 
 
 def _find_arg_positions_for_single_parent(
-    parent_entry: TensorLog,
+    parent_entry: LayerPassLog,
     arg_type: str,
     arg_struct: Union[List, Tuple, Dict],
     tensor_all_arg_positions: Dict,
@@ -122,7 +122,7 @@ def _find_arg_positions_for_single_parent(
 
 
 def _get_ancestors_from_parents(
-    parent_entries: List[TensorLog],
+    parent_entries: List[LayerPassLog],
 ) -> Tuple[Set[str], Set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
@@ -141,12 +141,12 @@ def _get_ancestors_from_parents(
     return input_ancestors, internally_initialized_ancestors
 
 
-def _update_tensor_family_links(self: "ModelLog", entry_to_update: TensorLog) -> None:
+def _update_tensor_family_links(self: "ModelLog", entry_to_update: LayerPassLog) -> None:
     """For a given tensor, updates family information for its links to parents, children, siblings, and
     spouses, in both directions (i.e., mutually adding the labels for each family pair).
 
     Args:
-        entry_to_update: dict of information about the TensorLog to be created
+        entry_to_update: dict of information about the LayerPassLog to be created
     """
     tensor_label = entry_to_update.tensor_label_raw
     parent_tensor_labels = entry_to_update.parent_layers
@@ -176,7 +176,7 @@ def _update_tensor_family_links(self: "ModelLog", entry_to_update: TensorLog) ->
 
 
 def _add_sibling_labels_for_new_tensor(
-    self: "ModelLog", entry_to_update: TensorLog, parent_tensor: TensorLog
+    self: "ModelLog", entry_to_update: LayerPassLog, parent_tensor: LayerPassLog
 ) -> None:
     """Given a tensor and specified parent tensor, adds sibling labels to that tensor, and
     adds itself as a sibling to all existing children.
@@ -325,19 +325,19 @@ def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> N
         args_to_hash.append(f"{prefix}_{arg}")
 
 
-def _update_tensor_containing_modules(tensor_entry: TensorLog) -> List[str]:
+def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> List[str]:
     """Utility function that updates the containing modules of a Tensor by starting from the containing modules
     as of the last function call, then looks at the sequence of module transitions (in or out of a module) as of
     the last module it saw, and updates accordingly.
 
     Args:
-        tensor_entry: Log entry of tensor to check
+        layer_entry: Log entry of tensor to check
 
     Returns:
         List of the updated containing modules.
     """
-    containing_modules = tensor_entry.containing_modules_origin_nested[:]
-    thread_modules = tensor_entry.module_entry_exit_thread_output[:]
+    containing_modules = layer_entry.containing_modules_origin_nested[:]
+    thread_modules = layer_entry.module_entry_exit_thread_output[:]
     for thread_module in thread_modules:
         if thread_module[0] == "+":
             containing_modules.append(thread_module[1:])

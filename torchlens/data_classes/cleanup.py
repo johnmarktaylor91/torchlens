@@ -4,7 +4,7 @@ import torch
 
 from ..constants import MODEL_LOG_FIELD_ORDER
 from ..utils.collections import remove_entry_from_list
-from .tensor_log import TensorLog
+from .layer_pass_log import LayerPassLog
 
 
 def cleanup(self) -> None:
@@ -18,17 +18,17 @@ def cleanup(self) -> None:
     torch.cuda.empty_cache()
 
 
-def _clear_entry_attributes(log_entry: TensorLog) -> None:
-    """Clear all instance attributes from a TensorLog entry."""
+def _clear_entry_attributes(log_entry: LayerPassLog) -> None:
+    """Clear all instance attributes from a LayerPassLog entry."""
     for attr in list(log_entry.__dict__):
         delattr(log_entry, attr)
 
 
-def _remove_log_entry(self, log_entry: TensorLog, remove_references: bool = True) -> None:
-    """Given a TensorLog, destroys it and all references to it.
+def _remove_log_entry(self, log_entry: LayerPassLog, remove_references: bool = True) -> None:
+    """Given a LayerPassLog, destroys it and all references to it.
 
     Args:
-        log_entry: Tensor log entry to remove.
+        log_entry: Layer pass log entry to remove.
         remove_references: Whether to also remove references to the log entry
     """
     # After postprocessing (_pass_finished=True), tensors are keyed by their final
@@ -58,10 +58,10 @@ _LIST_FIELDS_TO_CLEAN = [
 
 
 def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool = True) -> None:
-    """Remove multiple TensorLog entries at once, avoiding O(N*M) list.remove() calls.
+    """Remove multiple LayerPassLog entries at once, avoiding O(N*M) list.remove() calls.
 
     Args:
-        entries_to_remove: Iterable of TensorLog objects to remove.
+        entries_to_remove: Iterable of LayerPassLog objects to remove.
         remove_references: Whether to also remove references from ModelLog list/dict fields.
     """
     # Collect labels for O(1) lookup, then clear each entry's attributes.
@@ -110,7 +110,7 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
 
 
 def _remove_log_entry_references(self, layer_to_remove: str) -> None:
-    """Removes all references to a single TensorLog from the ModelLog's list/dict fields.
+    """Removes all references to a single LayerPassLog from the ModelLog's list/dict fields.
 
     This is the single-entry counterpart to the reference-cleaning logic in
     ``_batch_remove_log_entries``. Both must clean the same set of fields —

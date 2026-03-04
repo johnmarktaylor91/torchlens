@@ -5,7 +5,7 @@ Split into thematic modules:
 - control_flow: Steps 5-7 (conditional branches, module fixes, buffer fixes)
 - loop_detection: Step 8 (loop detection, isomorphic subgraph expansion)
 - labeling: Steps 9-12 (label mapping, final info, renaming, cleanup)
-- finalization: Steps 13-18 (undecoration, timing, params, modules, finish, rolling)
+- finalization: Steps 13-18 (undecoration, timing, params, layer logs, modules, finish)
 """
 
 from typing import TYPE_CHECKING, List
@@ -18,10 +18,10 @@ from .control_flow import (
     _mark_conditional_branches,
 )
 from .finalization import (
+    _build_layer_logs,
     _build_module_logs,
     _finalize_param_logs,
     _log_time_elapsed,
-    _roll_graph,
     _set_pass_finished,
     _undecorate_all_saved_tensors,
 )
@@ -33,7 +33,7 @@ from .graph_traversal import (
 )
 from .labeling import (
     _log_final_info_for_all_layers,
-    _map_raw_tensor_labels_to_final_tensor_labels,
+    _map_raw_labels_to_final_labels,
     _remove_unwanted_entries_and_log_remaining,
     _rename_model_history_layer_names,
     _trim_and_reorder_model_history_fields,
@@ -93,7 +93,7 @@ def postprocess(
 
     # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 
-    _map_raw_tensor_labels_to_final_tensor_labels(self)
+    _map_raw_labels_to_final_labels(self)
 
     # Step 10: Go through and log information pertaining to all layers:
     _log_final_info_for_all_layers(self)
@@ -116,6 +116,9 @@ def postprocess(
 
     # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
     _finalize_param_logs(self)
+
+    # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+    _build_layer_logs(self)
 
     # Step 17: Build structured ModuleLog objects from raw module_* dicts.
     _build_module_logs(self)
@@ -150,4 +153,5 @@ def postprocess_fast(self: "ModelLog") -> None:
 
     torch.cuda.empty_cache()
     _log_time_elapsed(self)
+    _build_layer_logs(self)
     _set_pass_finished(self)

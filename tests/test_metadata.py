@@ -1,4 +1,4 @@
-"""Comprehensive metadata field testing for ModelLog and TensorLog.
+"""Comprehensive metadata field testing for ModelLog and LayerPassLog.
 
 Uses small/fast models from example_models.py to verify that all key metadata
 fields are populated correctly across different model types.
@@ -170,7 +170,7 @@ def test_equivalent_operations(input_2d):
 
 
 # =============================================================================
-# TensorLog fields
+# LayerPassLog fields
 # =============================================================================
 
 
@@ -407,11 +407,11 @@ def test_recurrent_same_layer_operations(input_2d):
     assert found, "Recurrent model should have same_layer_operations"
 
 
-def test_rolled_layer_list(input_2d):
+def test_layer_logs_fewer_than_layer_list(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = log_forward_pass(model, input_2d)
-    assert isinstance(mh.layer_list_rolled, list)
-    assert len(mh.layer_list_rolled) < len(mh.layer_list)
+    assert isinstance(mh.layer_logs, dict)
+    assert len(mh.layer_logs) < len(mh.layer_list)
 
 
 # =============================================================================
