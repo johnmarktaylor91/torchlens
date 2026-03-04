@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pytest", "pre-commit"]
+dev = ["ruff", "pytest", "pytest-cov", "mypy", "pip-audit", "pre-commit"]
 test = [
     "lightning",
     "pillow",
@@ -58,6 +58,29 @@ include = ["torchlens*"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+
+[tool.coverage.run]
+source = ["torchlens"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.coverage.html]
+directory = "tests/test_outputs/coverage_html"
+
+[tool.coverage.lcov]
+output = "tests/test_outputs/coverage.lcov"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+# Lenient for now — tighten as annotations improve
+check_untyped_defs = false
+disallow_untyped_defs = false
 
 [tool.ruff]
 line-length = 100

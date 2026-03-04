@@ -16,7 +16,7 @@ from torchlens import (
     log_forward_pass,
     get_model_metadata,
     show_model_graph,
-    validate_saved_activations,
+    validate_forward_pass,
 )
 
 
@@ -27,7 +27,7 @@ from torchlens import (
 
 def test_model_simple_ff(default_input1):
     model = example_models.SimpleFF()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -39,7 +39,7 @@ def test_model_simple_ff(default_input1):
 
 def test_model_inplace_funcs(default_input1):
     model = example_models.InPlaceFuncs()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -51,7 +51,7 @@ def test_model_inplace_funcs(default_input1):
 
 def test_model_simple_internally_generated(default_input1):
     model = example_models.SimpleInternallyGenerated()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -63,7 +63,7 @@ def test_model_simple_internally_generated(default_input1):
 
 def test_model_new_tensor_inside(default_input1):
     model = example_models.NewTensorInside()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -75,7 +75,7 @@ def test_model_new_tensor_inside(default_input1):
 
 def test_model_new_tensor_from_numpy(default_input1):
     model = example_models.TensorFromNumpy()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -87,7 +87,7 @@ def test_model_new_tensor_from_numpy(default_input1):
 
 def test_model_simple_random(default_input1):
     model = example_models.SimpleRandom()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -105,7 +105,7 @@ def test_model_simple_random(default_input1):
 def test_dropout_model_real_train(default_input1):
     model = example_models.DropoutModelReal()
     model.train()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -118,7 +118,7 @@ def test_dropout_model_real_train(default_input1):
 def test_dropout_model_real_eval(default_input1):
     model = example_models.DropoutModelReal()
     model.eval()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -131,7 +131,7 @@ def test_dropout_model_real_eval(default_input1):
 def test_dropout_model_dummy_zero_train(default_input1):
     model = example_models.DropoutModelDummyZero()
     model.train()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -144,7 +144,7 @@ def test_dropout_model_dummy_zero_train(default_input1):
 def test_dropout_model_dummy_zero_eval(default_input1):
     model = example_models.DropoutModelDummyZero()
     model.eval()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -162,7 +162,7 @@ def test_dropout_model_dummy_zero_eval(default_input1):
 def test_batchnorm_train(default_input1):
     model = example_models.BatchNormModel()
     model.train()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -184,7 +184,7 @@ def test_batchnorm_train(default_input1):
 def test_batchnorm_eval(default_input1):
     model = example_models.BatchNormModel()
     model.eval()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -201,7 +201,7 @@ def test_batchnorm_eval(default_input1):
 
 def test_concat_tensors(default_input1):
     model = example_models.ConcatTensors()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -213,7 +213,7 @@ def test_concat_tensors(default_input1):
 
 def test_split_tensor(default_input1):
     model = example_models.SplitTensor()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -225,7 +225,7 @@ def test_split_tensor(default_input1):
 
 def test_identity_model(default_input1):
     model = example_models.IdentityModule()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -237,7 +237,7 @@ def test_identity_model(default_input1):
 
 def test_assign_tensor(input_2d):
     model = example_models.AssignTensor()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -249,7 +249,7 @@ def test_assign_tensor(input_2d):
 
 def test_get_and_set_item(default_input1):
     model = example_models.GetAndSetItem()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -261,7 +261,7 @@ def test_get_and_set_item(default_input1):
 
 def test_getitem_tracking(input_2d):
     model = example_models.GetItemTracking()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -273,7 +273,7 @@ def test_getitem_tracking(input_2d):
 
 def test_inplace_zero_tensor(default_input1):
     model = example_models.InPlaceZeroTensor()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -285,7 +285,7 @@ def test_inplace_zero_tensor(default_input1):
 
 def test_slice_operations(default_input1):
     model = example_models.SliceOperations()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -297,7 +297,7 @@ def test_slice_operations(default_input1):
 
 def test_dummy_operations(default_input1):
     model = example_models.DummyOperations()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -309,7 +309,7 @@ def test_dummy_operations(default_input1):
 
 def test_sametensor_arg(default_input1):
     model = example_models.SameTensorArg()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -326,7 +326,7 @@ def test_sametensor_arg(default_input1):
 
 def test_multiple_inputs_arg(default_input1, default_input2, default_input3):
     model = example_models.MultiInputs()
-    assert validate_saved_activations(model, [default_input1, default_input2, default_input3])
+    assert validate_forward_pass(model, [default_input1, default_input2, default_input3])
     show_model_graph(
         model,
         [default_input1, default_input2, default_input3],
@@ -338,7 +338,7 @@ def test_multiple_inputs_arg(default_input1, default_input2, default_input3):
 
 def test_multiple_inputs_kwarg(default_input1, default_input2, default_input3):
     model = example_models.MultiInputs()
-    assert validate_saved_activations(
+    assert validate_forward_pass(
         model, [], {"x": default_input1, "y": default_input2, "z": default_input3}
     )
     show_model_graph(
@@ -353,7 +353,7 @@ def test_multiple_inputs_kwarg(default_input1, default_input2, default_input3):
 
 def test_multiple_inputs_arg_kwarg_mix(default_input1, default_input2, default_input3):
     model = example_models.MultiInputs()
-    assert validate_saved_activations(
+    assert validate_forward_pass(
         model, [default_input1], {"y": default_input2, "z": default_input3}
     )
     show_model_graph(
@@ -368,7 +368,7 @@ def test_multiple_inputs_arg_kwarg_mix(default_input1, default_input2, default_i
 
 def test_list_input(default_input1, default_input2, default_input3):
     model = example_models.ListInput()
-    assert validate_saved_activations(model, [[default_input1, default_input2, default_input3]])
+    assert validate_forward_pass(model, [[default_input1, default_input2, default_input3]])
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
@@ -380,7 +380,7 @@ def test_list_input(default_input1, default_input2, default_input3):
 
 def test_dict_input(default_input1, default_input2, default_input3):
     model = example_models.DictInput()
-    assert validate_saved_activations(
+    assert validate_forward_pass(
         model, [{"x": default_input1, "y": default_input2, "z": default_input3}]
     )
     show_model_graph(
@@ -394,7 +394,7 @@ def test_dict_input(default_input1, default_input2, default_input3):
 
 def test_nested_input(default_input1, default_input2, default_input3, default_input4):
     model = example_models.NestedInput()
-    assert validate_saved_activations(
+    assert validate_forward_pass(
         model,
         [
             {
@@ -419,7 +419,7 @@ def test_nested_input(default_input1, default_input2, default_input3, default_in
 
 def test_multi_outputs(default_input1):
     model = example_models.MultiOutputs()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -431,7 +431,7 @@ def test_multi_outputs(default_input1):
 
 def test_list_output(default_input1):
     model = example_models.ListOutput()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -443,7 +443,7 @@ def test_list_output(default_input1):
 
 def test_dict_output(default_input1):
     model = example_models.DictOutput()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -455,7 +455,7 @@ def test_dict_output(default_input1):
 
 def test_nested_output(default_input1):
     model = example_models.NestedOutput()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -473,7 +473,7 @@ def test_nested_output(default_input1):
 def test_buffer_model():
     model = example_models.BufferModel()
     model_input = torch.rand(12, 12)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -495,7 +495,7 @@ def test_buffer_model():
 def test_buffer_rewrite_model():
     model = example_models.BufferRewriteModel()
     model_input = torch.rand(12, 12)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -605,7 +605,7 @@ def test_buffer_rewrite_model():
 
 def test_simple_branching(default_input1):
     model = example_models.SimpleBranching()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -617,8 +617,8 @@ def test_simple_branching(default_input1):
 
 def test_conditional_branching(zeros_input, ones_input):
     model = example_models.ConditionalBranching()
-    assert validate_saved_activations(model, -ones_input)
-    assert validate_saved_activations(model, ones_input)
+    assert validate_forward_pass(model, -ones_input)
+    assert validate_forward_pass(model, ones_input)
     show_model_graph(
         model,
         -ones_input,
@@ -642,7 +642,7 @@ def test_conditional_branching(zeros_input, ones_input):
 
 def test_repeated_module(default_input1):
     model = example_models.RepeatedModule()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -654,7 +654,7 @@ def test_repeated_module(default_input1):
 
 def test_nested_modules(default_input1):
     model = example_models.NestedModules()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -703,7 +703,7 @@ def test_nested_modules(default_input1):
 
 def test_orphan_tensors(default_input1):
     model = example_models.OrphanTensors()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -715,7 +715,7 @@ def test_orphan_tensors(default_input1):
 
 def test_simple_loop_no_param(default_input1):
     model = example_models.SimpleLoopNoParam()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -734,7 +734,7 @@ def test_simple_loop_no_param(default_input1):
 
 def test_same_op_repeat(vector_input):
     model = example_models.SameOpRepeat()
-    assert validate_saved_activations(model, vector_input)
+    assert validate_forward_pass(model, vector_input)
     show_model_graph(
         model,
         vector_input,
@@ -753,7 +753,7 @@ def test_same_op_repeat(vector_input):
 
 def test_repeated_op_type_in_loop(default_input1):
     model = example_models.RepeatedOpTypeInLoop()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -772,7 +772,7 @@ def test_repeated_op_type_in_loop(default_input1):
 
 def test_varying_loop_noparam1(default_input1):
     model = example_models.VaryingLoopNoParam1()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -791,7 +791,7 @@ def test_varying_loop_noparam1(default_input1):
 
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -810,7 +810,7 @@ def test_varying_loop_noparam2(default_input1):
 
 def test_varying_loop_withparam(vector_input):
     model = example_models.VaryingLoopWithParam()
-    assert validate_saved_activations(model, vector_input)
+    assert validate_forward_pass(model, vector_input)
     show_model_graph(
         model,
         vector_input,
@@ -829,7 +829,7 @@ def test_varying_loop_withparam(vector_input):
 
 def test_looping_internal_funcs(default_input1):
     model = example_models.LoopingInternalFuncs()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -848,7 +848,7 @@ def test_looping_internal_funcs(default_input1):
 
 def test_looping_from_inputs1(default_input1, default_input2, default_input3):
     model = example_models.LoopingFromInputs1()
-    assert validate_saved_activations(model, [default_input1, default_input2, default_input3])
+    assert validate_forward_pass(model, [default_input1, default_input2, default_input3])
     show_model_graph(
         model,
         [default_input1, default_input2, default_input3],
@@ -867,7 +867,7 @@ def test_looping_from_inputs1(default_input1, default_input2, default_input3):
 
 def test_looping_from_inputs2(default_input1, default_input2, default_input3):
     model = example_models.LoopingFromInputs2()
-    assert validate_saved_activations(model, [[default_input1, default_input2, default_input3]])
+    assert validate_forward_pass(model, [[default_input1, default_input2, default_input3]])
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
@@ -886,7 +886,7 @@ def test_looping_from_inputs2(default_input1, default_input2, default_input3):
 
 def test_looping_inputs_and_outputs(default_input1, default_input2, default_input3):
     model = example_models.LoopingInputsAndOutputs()
-    assert validate_saved_activations(model, [[default_input1, default_input2, default_input3]])
+    assert validate_forward_pass(model, [[default_input1, default_input2, default_input3]])
     show_model_graph(
         model,
         [[default_input1, default_input2, default_input3]],
@@ -910,7 +910,7 @@ def test_looping_inputs_and_outputs(default_input1, default_input2, default_inpu
 def test_stochastic_loop():
     model = example_models.StochasticLoop()
     model_input = torch.full((2, 2), 98.0)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -962,7 +962,7 @@ def test_stochastic_loop():
 
 def test_recurrent_params_simple(input_2d):
     model = example_models.RecurrentParamsSimple()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -981,7 +981,7 @@ def test_recurrent_params_simple(input_2d):
 
 def test_recurrent_params_complex(input_2d):
     model = example_models.RecurrentParamsComplex()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1000,7 +1000,7 @@ def test_recurrent_params_complex(input_2d):
 
 def test_looping_params_doublenested(input_2d):
     model = example_models.LoopingParamsDoubleNested()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1032,7 +1032,7 @@ def test_looping_params_doublenested(input_2d):
 
 def test_module_looping_clash1(default_input1):
     model = example_models.ModuleLoopingClash1()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1051,7 +1051,7 @@ def test_module_looping_clash1(default_input1):
 
 def test_module_looping_clash2(default_input1):
     model = example_models.ModuleLoopingClash2()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1070,7 +1070,7 @@ def test_module_looping_clash2(default_input1):
 
 def test_module_looping_clash3(default_input1):
     model = example_models.ModuleLoopingClash3()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1095,7 +1095,7 @@ def test_nested_param_free_loops(default_input1):
     equivalence type. They should be ONE group of 12 passes.
     """
     model = example_models.NestedParamFreeLoops()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     mh = log_forward_pass(model, default_input1)
 
     # All sin ops should be in one layer group with 12 passes
@@ -1126,7 +1126,7 @@ def test_nested_param_free_loops(default_input1):
 
 def test_parallel_loops(default_input1):
     model = example_models.ParallelLoops()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1145,7 +1145,7 @@ def test_parallel_loops(default_input1):
 
 def test_shared_param_loop_external(input_2d):
     model = example_models.SharedParamLoopExternal()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1164,7 +1164,7 @@ def test_shared_param_loop_external(input_2d):
 
 def test_interleaved_shared_param_loops(input_2d):
     model = example_models.InterleavedSharedParamLoops()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1183,7 +1183,7 @@ def test_interleaved_shared_param_loops(input_2d):
 
 def test_nested_loops_independent_params(input_2d):
     model = example_models.NestedLoopsIndependentParams()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1202,7 +1202,7 @@ def test_nested_loops_independent_params(input_2d):
 
 def test_self_feeding_no_param(default_input1):
     model = example_models.SelfFeedingNoParam()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1221,7 +1221,7 @@ def test_self_feeding_no_param(default_input1):
 
 def test_diamond_loop(input_2d):
     model = example_models.DiamondLoop()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1240,7 +1240,7 @@ def test_diamond_loop(input_2d):
 
 def test_accumulator_loop(input_2d):
     model = example_models.AccumulatorLoop()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1259,7 +1259,7 @@ def test_accumulator_loop(input_2d):
 
 def test_single_iteration_loop(input_2d):
     model = example_models.SingleIterationLoop()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1278,7 +1278,7 @@ def test_single_iteration_loop(input_2d):
 
 def test_long_loop(input_2d):
     model = example_models.LongLoop()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1297,7 +1297,7 @@ def test_long_loop(input_2d):
 
 def test_data_dependent_branch_loop(input_2d):
     model = example_models.DataDependentBranchLoop()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1316,7 +1316,7 @@ def test_data_dependent_branch_loop(input_2d):
 
 def test_sequential_param_free_loops(default_input1):
     model = example_models.SequentialParamFreeLoops()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     mh = log_forward_pass(model, default_input1)
     # Verify the two sequential loops produce SEPARATE groups (not merged)
     sin_groups = set()
@@ -1348,7 +1348,7 @@ def test_sequential_param_free_loops(default_input1):
 
 def test_propertymodel(input_complex):
     model = example_models.PropertyModel()
-    assert validate_saved_activations(model, input_complex)
+    assert validate_forward_pass(model, input_complex)
     show_model_graph(
         model,
         input_complex,
@@ -1360,7 +1360,7 @@ def test_propertymodel(input_complex):
 
 def test_ubermodel1(input_2d):
     model = example_models.UberModel1()
-    assert validate_saved_activations(model, [[input_2d, input_2d * 2, input_2d * 3]])
+    assert validate_forward_pass(model, [[input_2d, input_2d * 2, input_2d * 3]])
     show_model_graph(
         model,
         [[input_2d, input_2d * 2, input_2d * 3]],
@@ -1373,7 +1373,7 @@ def test_ubermodel1(input_2d):
 def test_ubermodel2():
     model = example_models.UberModel2()
     model_input = torch.rand(2, 1, 3, 3)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -1385,7 +1385,7 @@ def test_ubermodel2():
 
 def test_ubermodel3(input_2d):
     model = example_models.UberModel3()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1404,7 +1404,7 @@ def test_ubermodel3(input_2d):
 
 def test_ubermodel4(input_2d):
     model = example_models.UberModel4()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1424,7 +1424,7 @@ def test_ubermodel4(input_2d):
 def test_ubermodel5():
     model = example_models.UberModel5()
     model_input = torch.rand(1, 1, 3, 3)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -1436,7 +1436,7 @@ def test_ubermodel5():
 
 def test_ubermodel6(default_input1):
     model = example_models.UberModel6()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1455,7 +1455,7 @@ def test_ubermodel6(default_input1):
 
 def test_ubermodel7(input_2d):
     model = example_models.UberModel7()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1475,7 +1475,7 @@ def test_ubermodel7(input_2d):
 def test_ubermodel8():
     model = example_models.UberModel8()
     model_input = torch.rand(2, 1, 3, 3)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -1488,7 +1488,7 @@ def test_ubermodel8():
 def test_ubermodel9():
     model = example_models.UberModel9()
     model_input = torch.rand(1, 1, 3, 3)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -1505,7 +1505,7 @@ def test_ubermodel9():
 
 def test_gelu_model(default_input1):
     model = example_models.GeluModel()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1664,7 +1664,7 @@ def test_rolled_vs_unrolled_visualization(input_2d):
 def test_view_mutation_unsqueeze(input_2d):
     """Mutation through unsqueeze view should be logged without error."""
     model = example_models.ViewMutationUnsqueeze()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     mh = log_forward_pass(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
@@ -1673,7 +1673,7 @@ def test_view_mutation_unsqueeze(input_2d):
 def test_view_mutation_reshape(input_2d):
     """Mutation through reshape view should be logged without error."""
     model = example_models.ViewMutationReshape()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     mh = log_forward_pass(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
@@ -1682,7 +1682,7 @@ def test_view_mutation_reshape(input_2d):
 def test_view_mutation_transpose(input_2d):
     """Mutation through transpose view should be logged without error."""
     model = example_models.ViewMutationTranspose()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     mh = log_forward_pass(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
@@ -1691,7 +1691,7 @@ def test_view_mutation_transpose(input_2d):
 def test_multiple_view_mutations(input_2d):
     """Multiple views mutated independently should be logged without error."""
     model = example_models.MultipleViewMutations()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     mh = log_forward_pass(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
@@ -1700,7 +1700,7 @@ def test_multiple_view_mutations(input_2d):
 def test_chained_view_mutation(input_2d):
     """Mutation through chained views should be logged without error."""
     model = example_models.ChainedViewMutation()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     mh = log_forward_pass(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
@@ -1709,7 +1709,7 @@ def test_chained_view_mutation(input_2d):
 def test_output_matches_parent_no_false_positive(input_2d):
     """No mutation model: verify no false-positive child tensor variations."""
     model = example_models.OutputMatchesParent()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     mh = log_forward_pass(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
@@ -1762,7 +1762,7 @@ def test_tuple_input_single_arg():
     mh = log_forward_pass(model, input_tuple)
     assert mh is not None
     assert len(mh.layer_labels) > 0
-    assert validate_saved_activations(model, input_tuple)
+    assert validate_forward_pass(model, input_tuple)
 
 
 # =============================================================================
@@ -1839,7 +1839,7 @@ def test_stochastic_depth_layers_to_save():
 
 def test_multihead_attention(seq_input):
     model = example_models.MultiheadAttentionModel()
-    assert validate_saved_activations(model, seq_input)
+    assert validate_forward_pass(model, seq_input)
     show_model_graph(
         model,
         seq_input,
@@ -1852,7 +1852,7 @@ def test_multihead_attention(seq_input):
 def test_scaled_dot_product_attention():
     model = example_models.ScaledDotProductAttentionModel()
     x = torch.rand(2, 4, 10, 8)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -1864,7 +1864,7 @@ def test_scaled_dot_product_attention():
 
 def test_transformer_encoder(seq_input):
     model = example_models.TransformerEncoderModel()
-    assert validate_saved_activations(model, seq_input)
+    assert validate_forward_pass(model, seq_input)
     show_model_graph(
         model,
         seq_input,
@@ -1878,7 +1878,7 @@ def test_transformer_decoder():
     model = example_models.TransformerDecoderModel()
     tgt = torch.rand(5, 2, 16)
     memory = torch.rand(10, 2, 16)
-    assert validate_saved_activations(model, (tgt, memory))
+    assert validate_forward_pass(model, (tgt, memory))
     show_model_graph(
         model,
         (tgt, memory),
@@ -1890,7 +1890,7 @@ def test_transformer_decoder():
 
 def test_embedding_positional(token_input):
     model = example_models.EmbeddingPositionalModel()
-    assert validate_saved_activations(model, token_input)
+    assert validate_forward_pass(model, token_input)
     show_model_graph(
         model,
         token_input,
@@ -1903,7 +1903,7 @@ def test_embedding_positional(token_input):
 def test_einsum():
     model = example_models.EinsumModel()
     x = torch.rand(2, 3, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -1920,7 +1920,7 @@ def test_einsum():
 
 def test_module_list(input_2d):
     model = example_models.ModuleListModel()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1932,7 +1932,7 @@ def test_module_list(input_2d):
 
 def test_module_list_indexed(input_2d):
     model = example_models.ModuleListIndexedModel()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1944,7 +1944,7 @@ def test_module_list_indexed(input_2d):
 
 def test_module_dict(input_2d):
     model = example_models.ModuleDictModel()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1957,7 +1957,7 @@ def test_module_dict(input_2d):
 def test_var_args():
     model = example_models.VarArgsModel()
     inputs = [torch.rand(2, 5), torch.rand(2, 5), torch.rand(2, 5)]
-    assert validate_saved_activations(model, inputs)
+    assert validate_forward_pass(model, inputs)
     show_model_graph(
         model,
         inputs,
@@ -1970,7 +1970,7 @@ def test_var_args():
 def test_kwargs():
     model = example_models.KwargsModel()
     kwargs = {"a": torch.rand(2, 5), "b": torch.rand(2, 5)}
-    assert validate_saved_activations(model, [], kwargs)
+    assert validate_forward_pass(model, [], kwargs)
     show_model_graph(
         model,
         [],
@@ -1989,7 +1989,7 @@ def test_kwargs():
 def test_torch_where():
     model = example_models.TorchWhereModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2002,7 +2002,7 @@ def test_torch_where():
 def test_scatter_gather():
     model = example_models.ScatterGatherModel()
     x = torch.rand(3, 5)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2015,7 +2015,7 @@ def test_scatter_gather():
 def test_no_grad_block():
     model = example_models.NoGradBlockModel()
     x = torch.rand(2, 32)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2028,7 +2028,7 @@ def test_no_grad_block():
 def test_while_loop():
     model = example_models.WhileLoopModel()
     x = torch.rand(5, 5) * 10
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2041,7 +2041,7 @@ def test_while_loop():
 def test_nested_conditional_loop():
     model = example_models.NestedConditionalLoopModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2059,7 +2059,7 @@ def test_nested_conditional_loop():
 def test_layer_norm():
     model = example_models.LayerNormModel()
     x = torch.rand(2, 3, 8)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2072,7 +2072,7 @@ def test_layer_norm():
 def test_group_norm():
     model = example_models.GroupNormModel()
     x = torch.rand(2, 8, 4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2085,7 +2085,7 @@ def test_group_norm():
 def test_instance_norm():
     model = example_models.InstanceNormModel()
     x = torch.rand(2, 3, 8, 8)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2097,7 +2097,7 @@ def test_instance_norm():
 
 def test_conv1d(input_1d_seq):
     model = example_models.Conv1dModel()
-    assert validate_saved_activations(model, input_1d_seq)
+    assert validate_forward_pass(model, input_1d_seq)
     show_model_graph(
         model,
         input_1d_seq,
@@ -2109,7 +2109,7 @@ def test_conv1d(input_1d_seq):
 
 def test_conv3d(input_3d):
     model = example_models.Conv3dModel()
-    assert validate_saved_activations(model, input_3d)
+    assert validate_forward_pass(model, input_3d)
     show_model_graph(
         model,
         input_3d,
@@ -2127,7 +2127,7 @@ def test_conv3d(input_3d):
 def test_residual_block():
     model = example_models.ResidualBlockModel()
     x = torch.rand(2, 16, 8, 8)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2139,7 +2139,7 @@ def test_residual_block():
 
 def test_shared_param_branch(input_2d):
     model = example_models.SharedParamBranchModel()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2152,7 +2152,7 @@ def test_shared_param_branch(input_2d):
 def test_model_calling_model():
     model = example_models.ModelCallingModelModel()
     x = torch.rand(2, 32)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2165,7 +2165,7 @@ def test_model_calling_model():
 def test_bidirectional_gru():
     model = example_models.BidirectionalGRUModel()
     x = torch.rand(5, 2, 8)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2183,7 +2183,7 @@ def test_bidirectional_gru():
 def test_in_place_chain():
     model = example_models.InPlaceChainModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2196,7 +2196,7 @@ def test_in_place_chain():
 def test_type_cast_chain():
     model = example_models.TypeCastChainModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2209,7 +2209,7 @@ def test_type_cast_chain():
 def test_like_ops():
     model = example_models.LikeOpsModel()
     x = torch.rand(3, 3)
-    assert validate_saved_activations(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, random_seed=42)
     show_model_graph(
         model,
         x,
@@ -2223,7 +2223,7 @@ def test_like_ops():
 def test_multi_tensor_return():
     model = example_models.MultiTensorReturnModel()
     x = torch.rand(3, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2236,7 +2236,7 @@ def test_multi_tensor_return():
 def test_mixed_dtype():
     model = example_models.MixedDtypeModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2254,7 +2254,7 @@ def test_mixed_dtype():
 def test_scalar_tensor():
     model = example_models.ScalarTensorModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2267,7 +2267,7 @@ def test_scalar_tensor():
 def test_broadcasting():
     model = example_models.BroadcastingModel()
     x = torch.rand(3, 4, 5)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2280,7 +2280,7 @@ def test_broadcasting():
 def test_packed_sequence():
     model = example_models.PackedSequenceModel()
     x = torch.rand(5, 3, 8)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2293,7 +2293,7 @@ def test_packed_sequence():
 def test_custom_autograd():
     model = example_models.CustomAutogradModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2311,7 +2311,7 @@ def test_custom_autograd():
 def test_cross_entropy():
     model = example_models.CrossEntropyModel()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2324,7 +2324,7 @@ def test_cross_entropy():
 def test_index_select():
     model = example_models.IndexSelectModel()
     x = torch.rand(5, 3)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2337,7 +2337,7 @@ def test_index_select():
 def test_interpolate():
     model = example_models.InterpolateModel()
     x = torch.rand(1, 1, 4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2349,7 +2349,7 @@ def test_interpolate():
 
 def test_forward_hooks(input_2d):
     model = example_models.ForwardHooksModel()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2367,7 +2367,7 @@ def test_forward_hooks(input_2d):
 def test_simple_vae():
     model = example_models.SimpleVAE()
     x = torch.rand(2, 1, 28, 28)
-    assert validate_saved_activations(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, random_seed=42)
     show_model_graph(
         model,
         x,
@@ -2381,7 +2381,7 @@ def test_simple_vae():
 def test_simple_generator():
     model = example_models.SimpleGenerator()
     z = torch.randn(2, 100)
-    assert validate_saved_activations(model, z)
+    assert validate_forward_pass(model, z)
     show_model_graph(
         model,
         z,
@@ -2394,7 +2394,7 @@ def test_simple_generator():
 def test_simple_discriminator():
     model = example_models.SimpleDiscriminator()
     x = torch.rand(2, 1, 28, 28)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2407,7 +2407,7 @@ def test_simple_discriminator():
 def test_small_unet():
     model = example_models.SmallUNet()
     x = torch.rand(1, 1, 32, 32)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2420,7 +2420,7 @@ def test_small_unet():
 def test_temporal_conv_net():
     model = example_models.TemporalConvNet()
     x = torch.rand(2, 3, 32)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2433,7 +2433,7 @@ def test_temporal_conv_net():
 def test_espcn_super_res():
     model = example_models.ESPCNSuperRes()
     x = torch.rand(1, 1, 16, 16)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2446,7 +2446,7 @@ def test_espcn_super_res():
 def test_simple_pointnet():
     model = example_models.SimplePointNet()
     x = torch.rand(2, 3, 128)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2459,7 +2459,7 @@ def test_simple_pointnet():
 def test_actor_critic():
     model = example_models.ActorCritic()
     x = torch.rand(2, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2473,7 +2473,7 @@ def test_two_tower_recommender():
     model = example_models.TwoTowerRecommender()
     user = torch.rand(2, 8)
     item = torch.rand(2, 8)
-    assert validate_saved_activations(model, (user, item))
+    assert validate_forward_pass(model, (user, item))
     show_model_graph(
         model,
         (user, item),
@@ -2486,7 +2486,7 @@ def test_two_tower_recommender():
 def test_simple_depth_estimator():
     model = example_models.SimpleDepthEstimator()
     x = torch.rand(1, 3, 64, 64)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2504,7 +2504,7 @@ def test_simple_depth_estimator():
 def test_same_tensor_all_args():
     model = example_models.SameTensorAllArgs()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2517,7 +2517,7 @@ def test_same_tensor_all_args():
 def test_view_chain_mutate_middle():
     model = example_models.ViewChainMutateMiddle()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2529,7 +2529,7 @@ def test_view_chain_mutate_middle():
 
 def test_self_caching_model(input_2d):
     model = example_models.SelfCachingModel()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2541,7 +2541,7 @@ def test_self_caching_model(input_2d):
 
 def test_delete_tensor_mid_forward(input_2d):
     model = example_models.DeleteTensorMidForward()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2553,7 +2553,7 @@ def test_delete_tensor_mid_forward(input_2d):
 
 def test_dynamic_module_creation(input_2d):
     model = example_models.DynamicModuleCreation()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2565,7 +2565,7 @@ def test_dynamic_module_creation(input_2d):
 
 def test_non_persistent_buffer(input_2d):
     model = example_models.NonPersistentBuffer()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2577,7 +2577,7 @@ def test_non_persistent_buffer(input_2d):
 
 def test_contiguous_no_op(input_2d):
     model = example_models.ContiguousNoOp()
-    assert validate_saved_activations(model, input_2d)
+    assert validate_forward_pass(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -2590,7 +2590,7 @@ def test_contiguous_no_op(input_2d):
 def test_stack_views_of_same_tensor():
     model = example_models.StackViewsOfSameTensor()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2603,7 +2603,7 @@ def test_stack_views_of_same_tensor():
 def test_saturated_softmax():
     model = example_models.SaturatedSoftmax()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2616,7 +2616,7 @@ def test_saturated_softmax():
 def test_duplicate_value_parents():
     model = example_models.DuplicateValueParents()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2629,7 +2629,7 @@ def test_duplicate_value_parents():
 def test_empty_tensor_chain():
     model = example_models.EmptyTensorChain()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2642,7 +2642,7 @@ def test_empty_tensor_chain():
 def test_clamp_narrow_range():
     model = example_models.ClampNarrowRange()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2655,7 +2655,7 @@ def test_clamp_narrow_range():
 def test_round_near_integers():
     model = example_models.RoundNearIntegers()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2668,7 +2668,7 @@ def test_round_near_integers():
 def test_bool_cast_exploit():
     model = example_models.BoolCastExploit()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2681,7 +2681,7 @@ def test_bool_cast_exploit():
 def test_fake_loop_same_op_type():
     model = example_models.FakeLoopSameOpType()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,
@@ -2694,7 +2694,7 @@ def test_fake_loop_same_op_type():
 def test_autocast_mid_forward():
     model = example_models.AutocastMidForward()
     x = torch.rand(4, 4)
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
     show_model_graph(
         model,
         x,

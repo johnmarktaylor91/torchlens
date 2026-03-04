@@ -20,7 +20,7 @@ import torchvision
 from conftest import VIS_OUTPUT_DIR
 
 import example_models
-from torchlens import show_model_graph, validate_saved_activations
+from torchlens import show_model_graph, validate_forward_pass
 
 
 # =============================================================================
@@ -30,7 +30,7 @@ from torchlens import show_model_graph, validate_saved_activations
 
 def test_alexnet(default_input1):
     model = torchvision.models.AlexNet()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -74,7 +74,7 @@ def test_alexnet(default_input1):
 
 def test_vgg16(default_input1):
     model = torchvision.models.vgg16()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -84,9 +84,10 @@ def test_vgg16(default_input1):
     )
 
 
+@pytest.mark.slow
 def test_vit(default_input1):
     model = torchvision.models.vit_l_16()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -99,7 +100,7 @@ def test_vit(default_input1):
 @pytest.mark.slow
 def test_googlenet(default_input1):
     model = torchvision.models.GoogLeNet()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -201,7 +202,7 @@ def test_googlenet(default_input1):
 @pytest.mark.slow
 def test_resnet50(default_input1):
     model = torchvision.models.resnet50()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -214,7 +215,7 @@ def test_resnet50(default_input1):
 @pytest.mark.slow
 def test_convnext_large(default_input1):
     model = torchvision.models.convnext_large()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -227,7 +228,7 @@ def test_convnext_large(default_input1):
 @pytest.mark.slow
 def test_densenet121(default_input1):
     model = torchvision.models.densenet121()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -272,7 +273,7 @@ def test_densenet121(default_input1):
 @pytest.mark.slow
 def test_efficientnet_b6(default_input1):
     model = torchvision.models.efficientnet_b6()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -285,7 +286,7 @@ def test_efficientnet_b6(default_input1):
 @pytest.mark.slow
 def test_squeezenet(default_input1):
     model = torchvision.models.squeezenet1_1()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -298,7 +299,7 @@ def test_squeezenet(default_input1):
 @pytest.mark.slow
 def test_mobilenet(default_input1):
     model = torchvision.models.mobilenet_v3_large()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -311,7 +312,7 @@ def test_mobilenet(default_input1):
 @pytest.mark.slow
 def test_wide_resnet(default_input1):
     model = torchvision.models.wide_resnet101_2()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -324,7 +325,7 @@ def test_wide_resnet(default_input1):
 @pytest.mark.slow
 def test_mnasnet(default_input1):
     model = torchvision.models.mnasnet1_3()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -337,7 +338,7 @@ def test_mnasnet(default_input1):
 @pytest.mark.slow
 def test_shufflenet(default_input1):
     model = torchvision.models.shufflenet_v2_x1_5()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -350,7 +351,7 @@ def test_shufflenet(default_input1):
 @pytest.mark.slow
 def test_resnext(default_input1):
     model = torchvision.models.resnext101_64x4d()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -363,7 +364,7 @@ def test_resnext(default_input1):
 @pytest.mark.slow
 def test_regnet(default_input1):
     model = torchvision.models.regnet_x_32gf()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -376,7 +377,7 @@ def test_regnet(default_input1):
 @pytest.mark.slow
 def test_swin_v2b(default_input1):
     model = torchvision.models.swin_v2_b()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -389,7 +390,7 @@ def test_swin_v2b(default_input1):
 @pytest.mark.slow
 def test_maxvit(default_input1):
     model = torchvision.models.maxvit_t()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -403,7 +404,7 @@ def test_maxvit(default_input1):
 def test_inception_v3():
     model = torchvision.models.inception_v3()
     model_input = torch.randn(2, 3, 299, 299)
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -421,7 +422,7 @@ def test_inception_v3():
 def test_cornet_z(default_input1):
     cornet = pytest.importorskip("cornet")
     model = cornet.cornet_z()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -490,7 +491,7 @@ def test_cornet_z(default_input1):
 def test_cornet_s(default_input1):
     cornet = pytest.importorskip("cornet")
     model = cornet.cornet_s()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -559,7 +560,7 @@ def test_cornet_s(default_input1):
 def test_cornet_r(default_input1):
     cornet = pytest.importorskip("cornet")
     model = cornet.cornet_r()
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -629,7 +630,7 @@ def test_cornet_rt():
     cornet = pytest.importorskip("cornet")
     model = cornet.cornet_rt()
     model_input = torch.rand((6, 3, 224, 224)).to("cuda")
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
     show_model_graph(
         model,
         model_input,
@@ -699,6 +700,7 @@ def test_cornet_rt():
 # =============================================================================
 
 
+@pytest.mark.slow
 def test_timm_beit_base_patch16_224(default_input1):
     timm = pytest.importorskip("timm")
     model = timm.models.beit_base_patch16_224()
@@ -709,7 +711,7 @@ def test_timm_beit_base_patch16_224(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_beit_base_patch16_224"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 def test_timm_gluon_resnext101_32x4d():
@@ -723,7 +725,7 @@ def test_timm_gluon_resnext101_32x4d():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "gluon_resnext101_32x4d"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 def test_timm_ecaresnet101d():
@@ -737,7 +739,7 @@ def test_timm_ecaresnet101d():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "ecaresnet101d"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 def test_mobilevit_xxs():
@@ -751,7 +753,7 @@ def test_mobilevit_xxs():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "mobilevitv2_050"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -765,7 +767,7 @@ def test_timm_adv_inception_v3(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_adv_inception_v3"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -779,7 +781,7 @@ def test_timm_cait_s24_224(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_cait_s24_224"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -793,7 +795,7 @@ def test_timm_coat_mini(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_coat_mini"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -807,7 +809,7 @@ def test_timm_convit_base(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_convit_base"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -822,7 +824,7 @@ def test_timm_darknet21():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_darknet21"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -837,7 +839,7 @@ def test_timm_ghostnet_100():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_ghostnet_100"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -852,7 +854,7 @@ def test_timm_mixnet_m():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_mixnet_m"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -867,7 +869,7 @@ def test_timm_poolformer_s24():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_poolformer_s24"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -882,7 +884,7 @@ def test_timm_resnest14d():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_resnest14d"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -897,7 +899,7 @@ def test_timm_edgenext_small():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_edgenext_small"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -912,7 +914,7 @@ def test_timm_hardcorenas_f():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "hardcorenas_f"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -927,7 +929,7 @@ def test_timm_semnasnet_100():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "semnasnet_100"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -942,7 +944,7 @@ def test_timm_xcit_tiny_24_p8_224():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "xcit_tiny_24_p8_224"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -957,7 +959,7 @@ def test_timm_seresnet152():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "seresnet152"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 # =============================================================================
@@ -976,7 +978,7 @@ def test_audio_conv_tasnet_base():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_conv_tasnet_base"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 def test_audio_wav2letter():
@@ -990,7 +992,7 @@ def test_audio_wav2letter():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wav2letter"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1006,7 +1008,7 @@ def test_audio_hubert_base():
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_hubert_base"),
         random_seed=1,
     )
-    assert validate_saved_activations(model, model_input, random_seed=1)
+    assert validate_forward_pass(model, model_input, random_seed=1)
 
 
 @pytest.mark.slow
@@ -1021,7 +1023,7 @@ def test_audio_wav2vec2_base():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wave2vec2_base"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1036,7 +1038,7 @@ def test_deepspeech():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_deepspeech"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1059,7 +1061,7 @@ def test_conformer():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "conformer"),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)
 
 
 @pytest.mark.slow
@@ -1077,7 +1079,7 @@ def test_whisper_tiny():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "whisper_tiny"),
     )
-    assert validate_saved_activations(model, [], model_kwargs)
+    assert validate_forward_pass(model, [], model_kwargs)
 
 
 # =============================================================================
@@ -1102,7 +1104,7 @@ def test_lstm():
         vis_opt="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "language_lstm_rolled"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 def test_rnn():
@@ -1122,7 +1124,7 @@ def test_rnn():
         vis_opt="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "language_rnn_rolled"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 def test_gpt2():
@@ -1139,7 +1141,7 @@ def test_gpt2():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "gpt2"),
     )
-    assert validate_saved_activations(model, [], model_inputs)
+    assert validate_forward_pass(model, [], model_inputs)
 
 
 def test_distilbert():
@@ -1155,7 +1157,7 @@ def test_distilbert():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "distilbert"),
     )
-    assert validate_saved_activations(model, [], model_inputs)
+    assert validate_forward_pass(model, [], model_inputs)
 
 
 def test_electra_small():
@@ -1171,7 +1173,7 @@ def test_electra_small():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "electra_small"),
     )
-    assert validate_saved_activations(model, [], model_inputs)
+    assert validate_forward_pass(model, [], model_inputs)
 
 
 @pytest.mark.slow
@@ -1190,7 +1192,7 @@ def test_bert():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "bert"),
     )
-    assert validate_saved_activations(model, [], model_inputs)
+    assert validate_forward_pass(model, [], model_inputs)
 
 
 def test_t5_small():
@@ -1208,7 +1210,7 @@ def test_t5_small():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "t5_small"),
     )
-    assert validate_saved_activations(model, [], model_kwargs)
+    assert validate_forward_pass(model, [], model_kwargs)
 
 
 @pytest.mark.slow
@@ -1225,7 +1227,7 @@ def test_bart_base():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "bart_base"),
     )
-    assert validate_saved_activations(model, [], inputs)
+    assert validate_forward_pass(model, [], inputs)
 
 
 @pytest.mark.slow
@@ -1242,7 +1244,7 @@ def test_roberta_base():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "roberta_base"),
     )
-    assert validate_saved_activations(model, [], inputs)
+    assert validate_forward_pass(model, [], inputs)
 
 
 @pytest.mark.slow
@@ -1260,7 +1262,7 @@ def test_sentence_transformer():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "sentence_transformer"),
     )
-    assert validate_saved_activations(transformer_model, [], inputs)
+    assert validate_forward_pass(transformer_model, [], inputs)
 
 
 # =============================================================================
@@ -1284,7 +1286,7 @@ def test_stable_diffusion():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "stable_diffusion"),
     )
-    assert validate_saved_activations(model, model_inputs, random_seed=1)
+    assert validate_forward_pass(model, model_inputs, random_seed=1)
 
 
 def test_styletts():
@@ -1307,7 +1309,7 @@ def test_styletts():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "text-to-speech", "styletts_text_encoder"),
     )
-    assert validate_saved_activations(model, model_inputs, random_seed=1)
+    assert validate_forward_pass(model, model_inputs, random_seed=1)
 
 
 def test_qml():
@@ -1338,7 +1340,7 @@ def test_qml():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "quantum", "qml"),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)
 
 
 def test_lightning():
@@ -1368,7 +1370,7 @@ def test_lightning():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "lightning", "one-hot-autoencoder"),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)
 
 
 @pytest.mark.slow
@@ -1394,7 +1396,7 @@ def test_clip():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "clip"),
     )
-    assert validate_saved_activations(model, [], model_inputs, random_seed=1)
+    assert validate_forward_pass(model, [], model_inputs, random_seed=1)
 
 
 @pytest.mark.slow
@@ -1415,7 +1417,7 @@ def test_blip_base():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip_base"),
     )
-    assert validate_saved_activations(model, [], model_inputs, random_seed=1)
+    assert validate_forward_pass(model, [], model_inputs, random_seed=1)
 
 
 @pytest.mark.slow
@@ -1433,7 +1435,7 @@ def test_vit_mae():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "vit_mae"),
     )
-    assert validate_saved_activations(model, [], model_kwargs, random_seed=1)
+    assert validate_forward_pass(model, [], model_kwargs, random_seed=1)
 
 
 # =============================================================================
@@ -1489,7 +1491,7 @@ def test_simple_moe():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_moe"),
     )
-    assert validate_saved_activations(model, x)
+    assert validate_forward_pass(model, x)
 
 
 # =============================================================================
@@ -1511,7 +1513,7 @@ def test_segment_deeplab_v3_resnet50(default_input1):
             "segment_deeplabv3_resnet50",
         ),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -1528,7 +1530,7 @@ def test_segment_deeplabv3_mobilenet(default_input1):
             "segment_deeplabv3_mobilenet_v3_large",
         ),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -1545,7 +1547,7 @@ def test_segment_lraspp_mobilenet(default_input1):
             "segment_lraspp_mobilenet_v3_large",
         ),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 @pytest.mark.slow
@@ -1558,7 +1560,7 @@ def test_segment_fcn_resnet50(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-segmentation", "segment_fcn_resnet50"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 # =============================================================================
@@ -1592,7 +1594,7 @@ def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
             "detect_fasterrcnn_mobilenet_v3_large_320_fpn_train",
         ),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)
 
 
 @pytest.mark.slow
@@ -1611,7 +1613,7 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
             "detect_fasterrcnn_mobilenet_v3_large_320_fpn_eval",
         ),
     )
-    assert validate_saved_activations(model, [input_tensors])
+    assert validate_forward_pass(model, [input_tensors])
 
 
 @pytest.mark.slow
@@ -1641,7 +1643,7 @@ def test_fcos_resnet50_train(default_input1, default_input2):
         ),
         random_seed=1,
     )
-    assert validate_saved_activations(model, model_inputs, random_seed=1)
+    assert validate_forward_pass(model, model_inputs, random_seed=1)
 
 
 @pytest.mark.slow
@@ -1660,7 +1662,7 @@ def test_fcos_resnet50_eval(default_input1, default_input2):
             "detect_fcos_resnet50_fpn_eval",
         ),
     )
-    assert validate_saved_activations(model, [input_tensors])
+    assert validate_forward_pass(model, [input_tensors])
 
 
 @pytest.mark.slow
@@ -1689,7 +1691,7 @@ def test_retinanet_resnet50_train(default_input1, default_input2):
             "detect_retinanet_resnet50_fpn_train",
         ),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)
 
 
 @pytest.mark.slow
@@ -1708,7 +1710,7 @@ def test_retinanet_resnet50_eval(default_input1, default_input2):
             "detect_retinanet_resnet50_fpn_eval",
         ),
     )
-    assert validate_saved_activations(model, [input_tensors])
+    assert validate_forward_pass(model, [input_tensors])
 
 
 @pytest.mark.slow
@@ -1737,7 +1739,7 @@ def test_ssd300_vgg16_train(default_input1, default_input2):
             "detect_ssd300_vgg16_train",
         ),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)
 
 
 @pytest.mark.slow
@@ -1752,7 +1754,7 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "detect_ssd300_vgg16_eval"),
     )
-    assert validate_saved_activations(model, [input_tensors])
+    assert validate_forward_pass(model, [input_tensors])
 
 
 # =============================================================================
@@ -1770,7 +1772,7 @@ def test_quantize_resnet50(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-quantize", "quantize_resnet50"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 # =============================================================================
@@ -1789,7 +1791,7 @@ def test_video_r2plus1_18():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r2plus1d_18"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1803,7 +1805,7 @@ def test_video_mc3_18():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_mc3_18"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1830,7 +1832,7 @@ def test_video_r3d_18():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r3d_18"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1844,7 +1846,7 @@ def test_video_s3d():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_s3d"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 # =============================================================================
@@ -1863,7 +1865,7 @@ def test_opticflow_raftsmall():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftsmall"),
     )
-    assert validate_saved_activations(model, model_input)
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -1879,7 +1881,7 @@ def test_opticflow_raftlarge():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftlarge"),
     )
-    assert validate_saved_activations(model, model_input, random_seed=1)
+    assert validate_forward_pass(model, model_input, random_seed=1)
 
 
 # =============================================================================
@@ -1898,7 +1900,7 @@ def test_taskonomy(default_input1):
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "taskonomy", "taskonomy"),
     )
-    assert validate_saved_activations(model, default_input1)
+    assert validate_forward_pass(model, default_input1)
 
 
 # =============================================================================
@@ -1930,4 +1932,4 @@ def test_dimenet():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "dimenet"),
     )
-    assert validate_saved_activations(model, model_inputs)
+    assert validate_forward_pass(model, model_inputs)

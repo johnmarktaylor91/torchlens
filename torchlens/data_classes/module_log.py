@@ -23,6 +23,7 @@ class ModulePassLog:
         forward_kwargs: Optional[dict] = None,
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
+        all_module_addresses: Optional[List[str]] = None,
     ):
         self.module_address = module_address
         self.pass_num = pass_num
@@ -35,6 +36,10 @@ class ModulePassLog:
         self.forward_kwargs = forward_kwargs
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
+        self.all_module_addresses = (
+            all_module_addresses if all_module_addresses is not None else [module_address]
+        )
+        self.is_shared_module = len(self.all_module_addresses) > 1
 
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
@@ -108,6 +113,7 @@ class ModuleLog:
     ):
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
+        self.is_shared = len(self.all_addresses) > 1
         self.name = name
         self.module_class_name = module_class_name
 
@@ -226,6 +232,8 @@ class ModuleLog:
             f"  num_layers: {self.num_layers}",
             f"  num_passes: {self.num_passes}",
         ]
+        if self.is_shared:
+            lines.append(f"  aliases: {self.all_addresses}")
         if self.address_children:
             lines.append(f"  children: {self.address_children}")
         return "\n".join(lines)
@@ -277,15 +285,28 @@ class ModuleAccessor:
         self._dict = module_dict
         self._list = module_list if module_list is not None else list(module_dict.values())
         self._pass_dict = pass_dict if pass_dict is not None else {}
+        # Alias map: every address (including non-primary aliases of shared
+        # modules) resolves to the same ModuleLog.
+        self._alias_dict: Dict[str, "ModuleLog"] = {}
+        for ml in self._dict.values():
+            for alias in ml.all_addresses:
+                if alias not in self._dict:
+                    self._alias_dict[alias] = ml
 
     def __getitem__(self, key: Union[int, str]) -> Union["ModuleLog", "ModulePassLog"]:
-        """Return a ModuleLog by address string or ordinal index, or a ModulePassLog by pass label."""
+        """Return a ModuleLog by address string or ordinal index, or a ModulePassLog by pass label.
+
+        Shared modules (same nn.Module registered under multiple addresses) can
+        be looked up by any of their aliases.
+        """
         if isinstance(key, int):
             return self._list[key]
         if key == "":
             key = "self"
         if key in self._dict:
             return self._dict[key]
+        if key in self._alias_dict:
+            return self._alias_dict[key]
         if key in self._pass_dict:
             return self._pass_dict[key]
         raise KeyError(
@@ -293,10 +314,10 @@ class ModuleAccessor:
         )
 
     def __contains__(self, key) -> bool:
-        """Return True if key is a known module address or pass label."""
+        """Return True if key is a known module address, alias, or pass label."""
         if key == "":
             key = "self"
-        return key in self._dict or key in self._pass_dict
+        return key in self._dict or key in self._alias_dict or key in self._pass_dict
 
     def __len__(self) -> int:
         """Return the number of modules in this accessor."""

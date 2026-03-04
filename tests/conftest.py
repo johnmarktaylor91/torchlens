@@ -42,6 +42,25 @@ for sub_dir in sub_dirs:
     os.makedirs(opj(VIS_OUTPUT_DIR, sub_dir), exist_ok=True)
 
 
+# ---------------------------------------------------------------------------
+# Coverage: auto-generate text report when pytest --cov is used
+# ---------------------------------------------------------------------------
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Write a coverage text report to test_outputs/ if coverage data exists."""
+    try:
+        from coverage import Coverage
+
+        cov = Coverage()
+        cov.load()
+        report_path = opj(TEST_OUTPUTS_DIR, "coverage_report.txt")
+        with open(report_path, "w") as f:
+            cov.report(file=f, show_missing=True, skip_empty=True)
+    except Exception:
+        pass  # No coverage data or coverage not installed — skip silently
+
+
 # Fixtures
 
 

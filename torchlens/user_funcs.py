@@ -361,19 +361,22 @@ def show_model_graph(
         model_log.cleanup()
 
 
-def validate_saved_activations(
+def validate_forward_pass(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
     input_kwargs: Dict[Any, Any] = None,
     random_seed: Union[int, None] = None,
     verbose: bool = False,
+    validate_metadata: bool = True,
 ) -> bool:
-    """Validate that the saved model activations correctly reproduce the ground truth output. This function works by
-    running a forward pass through the model, saving all activations, re-running the forward pass starting from
-    the saved activations in each layer, and checking that the resulting output matches the original output.
-    Additionally, it substitutes in random activations and checks whether the output changes accordingly, for
-    at least min_proportion_consequential_layers of the layers (in case some layers do not change the output for some
-    reason). Returns True if a model passes these tests for the given input, and False otherwise.
+    """Validate that the saved model activations correctly reproduce the ground truth output, and
+    optionally check all metadata invariants across the ModelLog data structures.
+
+    Works by running a forward pass through the model, saving all activations, re-running the
+    forward pass starting from the saved activations in each layer, and checking that the resulting
+    output matches the original output. Additionally, it substitutes in random activations and checks
+    whether the output changes accordingly. When ``validate_metadata=True`` (default), also runs
+    comprehensive invariant checks on all metadata cross-references.
 
     Args:
         model: PyTorch model.
@@ -381,6 +384,7 @@ def validate_saved_activations(
         input_kwargs: Keyword arguments for model forward pass
         random_seed: random seed in case model is stochastic
         verbose: whether to show verbose error messages
+        validate_metadata: whether to run metadata invariant checks (default True)
     Returns:
         True if the saved activations correctly reproduce the ground truth output, false otherwise.
     """
@@ -433,12 +437,32 @@ def validate_saved_activations(
     )
     try:
         activations_are_valid = model_log.validate_saved_activations(
-            ground_truth_output_tensors, verbose
+            ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
     finally:
         model_log.cleanup()
         del model_log
     return activations_are_valid
+
+
+def validate_saved_activations(
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+    input_kwargs: Dict[Any, Any] = None,
+    random_seed: Union[int, None] = None,
+    verbose: bool = False,
+) -> bool:
+    """Deprecated: use ``validate_forward_pass`` instead."""
+    import warnings
+
+    warnings.warn(
+        "validate_saved_activations is deprecated, use validate_forward_pass instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return validate_forward_pass(
+        model, input_args, input_kwargs, random_seed=random_seed, verbose=verbose
+    )
 
 
 def validate_batch_of_models_and_inputs(
@@ -481,7 +505,7 @@ def validate_batch_of_models_and_inputs(
         model = model_loading_func()
         model_sample_inputs = model_info["model_sample_inputs"]
         for input_name, input_data in model_sample_inputs.items():
-            validation_success = validate_saved_activations(model, input_data)
+            validation_success = validate_forward_pass(model, input_data)
             current_csv = pd.concat(
                 [
                     current_csv,

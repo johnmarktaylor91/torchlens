@@ -26,6 +26,7 @@ from .layer_log import LayerLog
 from .layer_pass_log import LayerPassLog, TensorLog
 from ..capture.trace import run_and_log_inputs_through_model
 from ..validation import validate_saved_activations
+from ..validation import check_metadata_invariants
 from ..visualization.rendering import render_graph
 
 
@@ -305,6 +306,8 @@ class ModelLog:
     to_pandas = to_pandas
     save_new_activations = save_new_activations
     validate_saved_activations = validate_saved_activations
+    validate_forward_pass = validate_saved_activations  # alias
+    check_metadata_invariants = check_metadata_invariants
     cleanup = cleanup
     _postprocess = postprocess
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
