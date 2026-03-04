@@ -1,6 +1,93 @@
 # CHANGELOG
 
 
+## v0.15.1 (2026-03-04)
+
+### Bug Fixes
+
+- **core**: Resolve 52 bugs across 9 waves of correctness, safety, and polish fixes
+  ([`d4ca75d`](https://github.com/johnmarktaylor91/torchlens/commit/d4ca75d13defe15f558799be05cb4dcd9d217a45))
+
+Wave 1 — Critical Correctness: - Rewrite safe_copy() to eliminate numpy round-trip, fix bfloat16
+  overflow, handle sparse/meta/quantized dtypes (#103, #137, #128, #139) - Guard print_override
+  numpy conversion (#140), meta/sparse tensor memory (#24) - Fix validation crash on None
+  parent_values (#150), silent exception pass (#151) - Add buffer duplicate guard in fast path
+  (#116) - Fix postprocess_fast shared reference and unguarded parent_layers (#8, #152) - Add empty
+  graph guard (#153), zombie label cleanup (#75) - Handle defaultdict in _safe_copy_arg (#127)
+
+Wave 2 — Exception Safety: - Make module_forward_decorator exception-safe (#122) - Guard
+  _handle_module_entry for untracked tensors (#117) - Clean up output tensors on fast-pass exception
+  (#110) - Wrap activation_postfunc in pause_logging (#96) - Guard validation with
+  save_function_args=False (#131) - Fix CUDA perturbation device consistency (#36)
+
+Wave 3 — Fast-Pass State Reset: - Reset timing and stale lookup caches in save_new_activations (#87,
+  #97, #98) - Pass raw label (not final) to gradient hook in fast path (#86) - Raise descriptive
+  error for unexpected missing parents (#111)
+
+Wave 4 — Argument Handling: - Deep-copy nested tuples in creation_args (#44) - Slice before cloning
+  in display helper (#73) - Use logged shape in display (#45)
+
+Wave 5 — Interface Polish: - Key layer_num_passes by no-pass label (#53) - Use rsplit for
+  colon-split safety (#54) - Add slice indexing support (#78) - Guard to_pandas before pass finished
+  (#124) - List candidates for ambiguous substring (#125) - Add ModuleLog string indexing (#120) -
+  Support int/short-name in ParamAccessor.__contains__ (#84)
+
+Wave 6 — Decoration/Model Prep: - Only add mapper entries if setattr succeeded (#31) - Add hasattr
+  guard for identity asymmetry (#39) - Guard buffer setattr (#40) - Store dunder argnames stripped
+  (#82) - Use inspect.Parameter.kind for varargs (#123)
+
+Wave 7 — Visualization: - Fix vis_nesting_depth=0 crash (#94) - Use rsplit for colon-split (#104) -
+  Fix collapsed node variable (#100) - Guard None tensor_shape (#118) - Guard LayerLog nesting depth
+  (#138) - Use exact equality instead of substring match (#129)
+
+Wave 8 — Control Flow/Loop Detection: - Remove dead sibling_layers iteration (#2) - Prevent shared
+  neighbor double-add (#148)
+
+Wave 9 — Cleanup + GC: - Lazy import IPython (#72) - Filter callables from _trim_and_reorder (#134)
+  - Complete cleanup() with internal containers (GC-5, GC-12) - Use weakref in backward hook closure
+  (GC-8) - Clear ModulePassLog forward_args/kwargs after build (GC-11)
+
+585 tests passing across 10 test files, 47 new regression tests.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Resolve final remaining bugs #23, #83, #95, #99
+  ([`6302662`](https://github.com/johnmarktaylor91/torchlens/commit/630266251861ca505fcd0f33b33d3aa3b21f7c66))
+
+- #95: fix mixed LayerLog/LayerPassLog format in vis module containment check - #83:
+  LayerLog.parent_layer_arg_locs returns strings (not sets) for consistency - #99: warn on tensor
+  shape mismatch in fast-path source tensor logging - #23: add case-insensitive exact match and
+  substring lookup for layers/modules - #85: confirmed not-a-bug (any special arg correctly explains
+  output invariance) - #39, #41, #42: confirmed already fixed or correct as-is - Add 6 regression
+  tests for the above fixes
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Resolve remaining low-risk bugs #28, #107, #108, #147
+  ([`d8616a0`](https://github.com/johnmarktaylor91/torchlens/commit/d8616a0b1dfa133cd5aeb6bd92af6cdfb2bc566a))
+
+- #147: descriptive ValueError in log_source_tensor_fast on graph change - #108: document fast-path
+  module log preservation (no rebuild needed) - #107: handle both tuple and string formats in module
+  hierarchy info - #28: remove torch.Tensor from dead type-check list in introspection - Add 4
+  regression tests for the above fixes
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **reorganize**: Redistribute bugfix tests into domain-specific test files
+  ([`e9c64cc`](https://github.com/johnmarktaylor91/torchlens/commit/e9c64cc58a6bbd8f5d1b9942d234af3e0eed94bd))
+
+Move all 57 regression tests from test_bugfixes.py into their natural homes: - test_internals.py:
+  safe_copy, tensor utils, exception safety, cleanup/GC - test_validation.py: validation
+  correctness, posthoc perturb check - test_save_new_activations.py: fast-path state reset, graph
+  consistency - test_layer_log.py: interface polish, case-insensitive lookup, arg locs -
+  test_module_log.py: string indexing, tuple/string normalization - test_param_log.py: ParamAccessor
+  contains, param ref cleanup - test_output_aesthetics.py: visualization smoke tests
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.0 (2026-03-04)
 
 ### Bug Fixes
