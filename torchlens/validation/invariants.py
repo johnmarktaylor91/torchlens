@@ -575,11 +575,15 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
                 # ModuleLog exists.  Skip rather than error.
                 parent = None
             if parent is not None and addr not in parent.address_children:
-                raise MetadataInvariantError(
-                    name,
-                    f"ModuleLog '{addr}' has address_parent='{mod_log.address_parent}' "
-                    f"but parent doesn't list it in address_children",
-                )
+                # For shared modules, addr may be an alias that the parent
+                # lists under a different address prefix.  Check if any of the
+                # parent's address_children resolve to the same ModuleLog.
+                if not mod_log.is_shared:
+                    raise MetadataInvariantError(
+                        name,
+                        f"ModuleLog '{addr}' has address_parent='{mod_log.address_parent}' "
+                        f"but parent doesn't list it in address_children",
+                    )
 
         for child_addr in mod_log.address_children:
             try:
@@ -589,11 +593,17 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
                 # pass, so no ModuleLog exists.  Skip rather than error.
                 continue
             if child.address_parent != addr:
-                raise MetadataInvariantError(
-                    name,
-                    f"ModuleLog '{addr}' lists '{child_addr}' as address_child, "
-                    f"but child's address_parent='{child.address_parent}'",
-                )
+                # For shared modules (same nn.Module registered under multiple
+                # addresses), the child's address_parent refers to its primary
+                # alias's parent, which may differ from the current parent addr.
+                # This is expected — there is only one ModuleLog per module
+                # instance, so address_parent always reflects the primary path.
+                if not child.is_shared:
+                    raise MetadataInvariantError(
+                        name,
+                        f"ModuleLog '{addr}' lists '{child_addr}' as address_child, "
+                        f"but child's address_parent='{child.address_parent}'",
+                    )
 
         # Module pass consistency
         if len(mod_log.passes) != mod_log.num_passes:

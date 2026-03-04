@@ -144,6 +144,7 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
         output_layers=list(self.output_layers),
         call_parent=None,
         call_children=mbd["top_level_module_passes"][:],
+        all_module_addresses=root_meta.get("all_addresses", ["self"]),
     )
     root_module.passes = {1: root_pass}
     pass_dict["self:1"] = root_pass
@@ -179,6 +180,7 @@ def _build_submodule_pass_logs(
     pass_dict: dict,
     mbd: dict,
     _child_to_parent_pass: dict = None,
+    all_module_addresses: list = None,
 ) -> tuple:
     """Build ModulePassLog objects for all passes of a single submodule.
 
@@ -228,6 +230,7 @@ def _build_submodule_pass_logs(
             forward_kwargs=fwd_kwargs,
             call_parent=call_parent_pass,
             call_children=call_children_pass,
+            all_module_addresses=all_module_addresses,
         )
         passes[pass_num] = module_pass_log
         pass_dict[pass_label] = module_pass_log
@@ -354,8 +357,15 @@ def _build_module_logs(self: "ModelLog") -> None:
                     seen.add(no_pass)
                     all_layers.append(no_pass)
 
+        all_addresses = meta.get("all_addresses", [address])
         passes, pass_labels_list = _build_submodule_pass_logs(
-            self, address, num_passes, pass_dict, mbd, _child_to_parent_pass
+            self,
+            address,
+            num_passes,
+            pass_dict,
+            mbd,
+            _child_to_parent_pass,
+            all_module_addresses=all_addresses,
         )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
         param_info = _build_module_param_info(self, address, mbd)

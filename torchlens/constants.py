@@ -346,6 +346,8 @@ PARAM_LOG_FIELD_ORDER = [
 
 MODULE_PASS_LOG_FIELD_ORDER = [
     "module_address",
+    "all_module_addresses",
+    "is_shared_module",
     "pass_num",
     "pass_label",
     "layers",
@@ -362,6 +364,7 @@ MODULE_LOG_FIELD_ORDER = [
     # Identity
     "address",
     "all_addresses",
+    "is_shared",
     "name",
     "module_class_name",
     # Source info
