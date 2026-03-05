@@ -58,6 +58,8 @@ def pytest_sessionfinish(session, exitstatus):
         report_path = opj(REPORTS_DIR, "coverage_report.txt")
         with open(report_path, "w") as f:
             cov.report(file=f, show_missing=True, skip_empty=True)
+        html_dir = opj(TEST_OUTPUTS_DIR, "coverage_html")
+        cov.html_report(directory=html_dir, skip_empty=True)
     except Exception:
         pass  # No coverage data or coverage not installed — skip silently
 
