@@ -43,7 +43,7 @@ def render_graph(
     vis_fileformat: str = "pdf",
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
-) -> None:
+) -> str:
     """Renders the computational graph for the model.
 
     Args:
@@ -179,6 +179,7 @@ def render_graph(
         display(dot)
 
     dot.render(vis_outpath, view=(not save_only), cleanup=True)
+    return dot.source
 
 
 def _add_node_to_graphviz(

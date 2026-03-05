@@ -474,15 +474,13 @@ class TestVisualizationParams:
     def _get_dot_source(self, model, x, vis_opt="unrolled", vis_nesting_depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
         mh = log_forward_pass(model, x)
-        mh.render_graph(
+        dot_source = mh.render_graph(
             vis_opt=vis_opt,
             vis_outpath=outpath,
             save_only=True,
             vis_nesting_depth=vis_nesting_depth,
         )
-        # Graphviz source is saved as the outpath (no extension)
-        with open(outpath, "r") as f:
-            return f.read(), mh
+        return dot_source, mh
 
     def test_param_label_shows_names(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
