@@ -1,6 +1,16 @@
 # CHANGELOG
 
 
+## v0.15.10 (2026-03-05)
+
+### Bug Fixes
+
+- **tests**: Move coverage HTML output to reports directory
+  ([`916b2d1`](https://github.com/johnmarktaylor91/torchlens/commit/916b2d19a0aec297546230a87db1290aea1f9984))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.9 (2026-03-05)
 
 ### Bug Fixes
