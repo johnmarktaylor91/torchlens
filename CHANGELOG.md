@@ -1,6 +1,23 @@
 # CHANGELOG
 
 
+## v0.15.9 (2026-03-05)
+
+### Bug Fixes
+
+- **tests**: Use render_graph return value instead of reading cleaned-up .gv file
+  ([`7998776`](https://github.com/johnmarktaylor91/torchlens/commit/7998776401752eeedb5693b665114c29234c893d))
+
+Commit 147c7b7 added cleanup=True to dot.render(), which deletes the intermediate .gv source file
+  after rendering. The TestVisualizationParams tests were reading that source file and all 15 failed
+  with FileNotFoundError.
+
+render_graph now returns dot.source so tests can inspect the graphviz source without depending on
+  the intermediate file.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.8 (2026-03-05)
 
 ### Bug Fixes
