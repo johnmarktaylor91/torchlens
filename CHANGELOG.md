@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v0.15.8 (2026-03-05)
+
+### Bug Fixes
+
+- **tests**: Generate HTML coverage report in sessionfinish hook
+  ([`29095f9`](https://github.com/johnmarktaylor91/torchlens/commit/29095f91e19bfbfd0a66a855232247679183d85f))
+
+The pyproject.toml configured coverage_html output directory but the pytest_sessionfinish hook only
+  generated the text report. Add cov.html_report() call so HTML reports are written alongside the
+  text summary.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.7 (2026-03-04)
 
 ### Bug Fixes
