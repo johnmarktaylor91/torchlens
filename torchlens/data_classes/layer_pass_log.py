@@ -34,6 +34,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 """
 
 import copy
+import weakref
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
@@ -110,7 +111,9 @@ class LayerPassLog:
         self.layer_label_raw = fields_dict["layer_label_raw"]
         self.operation_num = fields_dict["operation_num"]
         self.realtime_tensor_num = fields_dict["realtime_tensor_num"]
-        self.source_model_log: "ModelLog" = fields_dict["source_model_log"]
+        # Store as weakref to break circular reference (ModelLog -> layer_list -> entry -> ModelLog).
+        _sml = fields_dict["source_model_log"]
+        self._source_model_log_ref = weakref.ref(_sml) if _sml is not None else None
         self._pass_finished = fields_dict["_pass_finished"]
 
         # Label info:
@@ -267,6 +270,21 @@ class LayerPassLog:
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
         self.parent_layer_log = None
+
+    @property
+    def source_model_log(self) -> "ModelLog":
+        """Back-reference to the owning ModelLog (stored as weakref)."""
+        ref = self.__dict__.get("_source_model_log_ref")
+        if ref is None:
+            return None  # type: ignore[return-value]
+        obj = ref()
+        if obj is None:
+            raise RuntimeError("ModelLog has been garbage-collected.")
+        return obj
+
+    @source_model_log.setter
+    def source_model_log(self, value):
+        self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
     # ********************************************
     # *********** User-Facing Functions **********
@@ -454,11 +472,9 @@ class LayerPassLog:
             pass_str = f" (pass {self.pass_num}/{self.layer_passes_total}), "
         else:
             pass_str = ", "
-        s = (
-            f"Layer {self.layer_label_no_pass}"
-            f"{pass_str}operation {self.operation_num}/"
-            f"{self.source_model_log.num_operations}:"
-        )
+        sml = self.source_model_log
+        num_ops = sml.num_operations if sml is not None else "?"
+        s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.operation_num}/{num_ops}:"
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
         if not self.has_saved_activations:
             s += " (not saved)"

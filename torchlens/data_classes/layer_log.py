@@ -25,6 +25,7 @@ All other 78+ fields use the first pass's values only.
 (correct because same-layer grouping requires identical structural position).
 """
 
+import weakref
 from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -63,7 +64,11 @@ class LayerLog:
         self.layer_type_num = first_pass.layer_type_num
         self.layer_total_num = first_pass.layer_total_num
         self.num_passes = first_pass.layer_passes_total
-        self.source_model_log: "ModelLog" = first_pass.source_model_log
+        # Store as weakref to break circular reference (ModelLog -> layer_logs -> LayerLog -> ModelLog).
+        _sml = first_pass.source_model_log
+        self._source_model_log_ref: Optional[weakref.ref] = (
+            weakref.ref(_sml) if _sml is not None else None
+        )
 
         # Function identity
         self.func_applied = first_pass.func_applied
@@ -143,6 +148,21 @@ class LayerLog:
         # Pass management
         self.passes: Dict[int, "LayerPassLog"] = {}
         self.pass_labels: List[str] = []
+
+    @property
+    def source_model_log(self) -> "ModelLog":
+        """Back-reference to the owning ModelLog (stored as weakref)."""
+        ref = self.__dict__.get("_source_model_log_ref")
+        if ref is None:
+            return None  # type: ignore[return-value]
+        obj = ref()
+        if obj is None:
+            raise RuntimeError("ModelLog has been garbage-collected.")
+        return obj
+
+    @source_model_log.setter
+    def source_model_log(self, value):
+        self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
     # ********************************************
     # ******* Single-pass delegation *************
@@ -297,7 +317,10 @@ class LayerLog:
 
     @property
     def _pass_finished(self):
-        return self.source_model_log._pass_finished
+        sml = self.source_model_log
+        if sml is None:
+            return True
+        return sml._pass_finished
 
     # ********************************************
     # ****** Convenience properties **************
@@ -535,7 +558,8 @@ class LayerAccessor:
     ):
         self._dict = layer_logs  # no-pass label -> LayerLog
         self._list = list(layer_logs.values())  # execution-order list
-        self._source = source_model_log  # back-ref for pass notation resolution
+        # Store as weakref to avoid preventing ModelLog GC.
+        self._source_ref = weakref.ref(source_model_log) if source_model_log is not None else None
 
     def __getitem__(self, key: Union[int, str]) -> Union["LayerLog", "LayerPassLog"]:
         """Return a LayerLog by label or index, or a LayerPassLog by pass label.
@@ -548,7 +572,7 @@ class LayerAccessor:
         if key in self._dict:
             return self._dict[key]
         # Try pass notation: "conv2d_1_1:2" -> LayerLog.passes[2]
-        if ":" in key and self._source is not None:
+        if ":" in key and self._source_ref is not None:
             base, _, pass_str = key.rpartition(":")
             if base in self._dict:
                 try:

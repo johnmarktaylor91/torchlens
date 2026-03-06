@@ -12,6 +12,7 @@ meaningful ``buffer_address``.  For single-pass buffers, the parent LayerLog
 can access these fields via ``__getattr__`` delegation.
 """
 
+import weakref
 from typing import Dict, List, Optional, Union
 
 from .layer_pass_log import LayerPassLog
@@ -86,7 +87,8 @@ class BufferAccessor:
     ) -> None:
         self._dict = buffer_dict  # address -> BufferLog
         self._list = list(buffer_dict.values())  # insertion-order list
-        self._source = source_model_log  # back-ref for scoped lookups
+        # Store as weakref to avoid preventing ModelLog GC.
+        self._source_ref = weakref.ref(source_model_log) if source_model_log is not None else None
 
     def __getitem__(self, key: Union[int, str]) -> "BufferLog":
         """Retrieve a buffer by integer index, full address, or short name."""

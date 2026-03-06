@@ -169,7 +169,9 @@ def log_source_tensor_exhaustive(
         # Function call info:
         "func_applied": None,
         "func_applied_name": "none",
-        "func_call_stack": _get_func_call_stack(self.num_context_lines),
+        "func_call_stack": _get_func_call_stack(self.num_context_lines)
+        if self.save_call_stacks
+        else [],
         "func_time_elapsed": 0,
         "flops_forward": 0,
         "flops_backward": 0,
