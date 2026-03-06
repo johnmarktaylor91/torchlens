@@ -4,6 +4,8 @@ from os.path import join as opj
 import pytest
 import torch
 
+from torchlens import _state
+
 # Deterministic seeding
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
@@ -48,8 +50,28 @@ for sub_dir in sub_dirs:
 # ---------------------------------------------------------------------------
 
 
+def pytest_configure(config):
+    """Enable usage stats collection for ArgSpec coverage analysis."""
+    _state._collect_usage_stats = True
+    _state._function_call_counts.clear()
+    _state._function_call_models.clear()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Move ArgSpec coverage test to run last so it sees all accumulated stats."""
+    coverage_tests = []
+    other_tests = []
+    for item in items:
+        if "test_arg_positions" in item.nodeid:
+            coverage_tests.append(item)
+        else:
+            other_tests.append(item)
+    items[:] = other_tests + coverage_tests
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Write a coverage text report to test_outputs/ if coverage data exists."""
+    _state._collect_usage_stats = False
     try:
         from coverage import Coverage
 
