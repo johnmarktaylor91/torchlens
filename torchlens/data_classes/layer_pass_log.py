@@ -1,4 +1,37 @@
-"""LayerPassLog: per-operation metadata entries within a ModelLog."""
+"""LayerPassLog: per-operation metadata for a single invocation of a layer.
+
+Each LayerPassLog records everything about one tensor operation in the
+forward pass: the output tensor itself, the function that produced it,
+its parents/children in the computation graph, module containment,
+parameter usage, timing, RNG state, and more.
+
+For recurrent models, the same "layer" may execute multiple times; each
+execution is a separate LayerPassLog with a distinct ``pass_num``.  The
+aggregate view across passes is provided by :class:`LayerLog`.
+
+Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
+
+1. **General info** — raw/final labels, operation numbering, back-reference
+   to the owning ModelLog.
+2. **Label info** — human-readable labels in various formats (with/without
+   pass qualifier, short form, etc.).
+3. **Saved tensor info** — the tensor contents, shape, dtype, size, device
+   transfer settings, activation postfunc, and function arguments.
+4. **Child tensor variations** — tracks per-child input values for
+   validation replay (``children_tensor_versions`` stores RAW values
+   because validation compares against ``creation_args``).
+5. **Gradient info** — gradient tensor and metadata (stored as a bare
+   reference via ``log_tensor_grad``, not deep-copied).
+6. **Function call info** — the applied function, call stack, timing,
+   FLOPs, RNG state, arg metadata, grad_fn, inplace flag.
+7. **Param info** — which parameters were used, their shapes and sizes.
+8. **Equivalence info** — loop-detection equivalence type and groups.
+9. **Graph info** — parent/child/sibling/spouse edges, input/output
+   ancestry, distances, buffer/internal-init status.
+10. **Conditional info** — boolean branching metadata.
+11. **Module info** — module entry/exit tracking, nesting depth,
+    bottom-level submodule output status.
+"""
 
 import copy
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
@@ -31,18 +64,36 @@ if TYPE_CHECKING:
 
 
 class LayerPassLog:
-    def __init__(self, fields_dict: Dict):
-        """Object that stores information about a single tensor operation in the forward pass,
-        including metadata and the tensor itself (if specified). Initialized by passing in a dictionary with
-        values for all fields.
-        Args:
-            fields_dict: Dict with values for all fields in LayerPassLog.
-        """
-        # Note: this all has to be tediously initialized instead of a for-loop in order for
-        # autocomplete features to work well. But, this also serves as a reference for all attributes
-        # of a tensor log entry.
+    """Metadata for a single tensor operation (one pass of one layer).
 
-        # Check that fields_dict contains all fields for LayerPassLog:
+    Constructed from a dict whose keys must exactly match
+    ``LAYER_PASS_LOG_FIELD_ORDER`` (enforced at init time).  Every
+    attribute is set explicitly (not via a loop) so that IDE
+    autocompletion works.
+
+    Notable design points:
+
+    * ``_pass_finished`` mirrors the owning ModelLog's flag. Methods like
+      ``__str__`` branch on it to show raw vs final labels.
+    * ``source_model_log`` is a direct reference to the owning ModelLog.
+      This creates a circular reference (ModelLog -> layer_list -> entry ->
+      source_model_log -> ModelLog) that is broken by ``cleanup()``.
+    * ``parent_layer_log`` is a back-reference to the aggregate LayerLog
+      that owns this pass.  It is set *outside* fields_dict during
+      ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
+    """
+
+    def __init__(self, fields_dict: Dict):
+        """Initialise from a complete fields dictionary.
+
+        Args:
+            fields_dict: Dict with values for all fields defined in
+                ``LAYER_PASS_LOG_FIELD_ORDER``.  Missing or extra keys
+                raise ``ValueError``.
+        """
+        # Attributes are set explicitly (not via loop) for IDE autocompletion.
+
+        # Validate that fields_dict has exactly the expected keys:
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing LayerPassLog:"
@@ -90,11 +141,14 @@ class LayerPassLog:
         self.tensor_fsize = fields_dict["tensor_fsize"]
         self.tensor_fsize_nice = fields_dict["tensor_fsize_nice"]
 
-        # Child tensor variation tracking
+        # Child tensor variation tracking — stores the raw tensor values that
+        # each child operation received as input.  Must store RAW values (not
+        # postprocessed) because validation compares these against creation_args.
         self.has_child_tensor_variations = fields_dict["has_child_tensor_variations"]
         self.children_tensor_versions = fields_dict["children_tensor_versions"]
 
-        # Saved gradient info
+        # Saved gradient info — gradient is stored as a bare clone (not deep-copied)
+        # via log_tensor_grad().  grad_contents is populated by a backward hook.
         self.grad_contents = fields_dict["grad_contents"]
         self.save_gradients = fields_dict["save_gradients"]
         self.has_saved_grad = fields_dict["has_saved_grad"]
@@ -138,7 +192,12 @@ class LayerPassLog:
         self.parent_params_fsize = fields_dict["parent_params_fsize"]
         self.parent_params_fsize_nice = fields_dict["parent_params_fsize_nice"]
 
-        # Corresponding layer info:
+        # Loop-detection equivalence info:
+        # operation_equivalence_type groups structurally identical operations
+        # (same func + same param barcodes).  equivalent_operations holds a
+        # DIRECT reference to the ModelLog-level set for this type.
+        # same_layer_operations is populated by loop_detection.py for layers
+        # that are different passes of the same recurrent layer.
         self.operation_equivalence_type = fields_dict["operation_equivalence_type"]
         self.equivalent_operations = fields_dict["equivalent_operations"]
         self.same_layer_operations = fields_dict["same_layer_operations"]
@@ -203,7 +262,10 @@ class LayerPassLog:
         self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
         self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
-        # Back-reference to parent LayerLog (set during postprocessing by _build_layer_logs)
+        # Back-reference to the aggregate LayerLog that groups all passes of
+        # this layer.  Set during postprocessing by _build_layer_logs — NOT
+        # part of fields_dict or FIELD_ORDER (it's a structural link, not
+        # captured data).
         self.parent_layer_log = None
 
     # ********************************************
@@ -224,10 +286,22 @@ class LayerPassLog:
     # ********************************************
 
     def copy(self):
-        """Return a copy of itself.
+        """Return a selective-depth copy of this entry.
+
+        Most fields are ``copy.deepcopy``'d so the clone is fully independent.
+        However, certain fields are shallow-copied (shared by reference) because:
+
+        * ``func_applied``, ``gradfunc`` — function objects, immutable/shared.
+        * ``source_model_log`` — must point to the same ModelLog instance.
+        * ``func_rng_states`` — large state dicts, not mutated after capture.
+        * ``creation_args``, ``creation_kwargs`` — may contain large tensors;
+          deep-copying them is expensive and unnecessary.
+        * ``parent_params`` — references to nn.Parameters, must stay shared.
+        * ``tensor_contents``, ``children_tensor_versions`` — large tensors;
+          shared references are safe since they're replaced (not mutated).
 
         Returns:
-            Copy of itself.
+            A new LayerPassLog (or subclass) with the same field values.
         """
         fields_dict = {}
         fields_not_to_deepcopy = [
@@ -257,19 +331,31 @@ class LayerPassLog:
         save_function_args: bool,
         activation_postfunc: Optional[Callable] = None,
     ):
-        """Saves the tensor data for a given tensor operation.
+        """Save the output tensor (and optionally args) for this operation.
+
+        Flow:
+        1. Clone the tensor via ``safe_copy`` (strips tl_ attributes to avoid
+           logging the copy operation).
+        2. Move to ``output_device`` if different from the tensor's current device.
+        3. Apply ``activation_postfunc`` inside ``pause_logging()`` to prevent
+           the postfunc's own tensor ops from being logged.
+        4. Optionally deep-copy function args/kwargs via ``_recursive_safe_copy``.
 
         Args:
-            t: the tensor.
-            t_args: tensor positional arguments for the operation
-            t_kwargs: tensor keyword arguments for the operation
-            save_function_args: whether to save the arguments to the function
-            activation_postfunc: function to apply to activations before saving them
+            t: The output tensor of the operation.
+            t_args: Positional arguments passed to the operation.
+            t_kwargs: Keyword arguments passed to the operation.
+            save_function_args: Whether to deep-copy and store args/kwargs.
+            activation_postfunc: Optional transform applied to the tensor
+                before storing (e.g. detach, to-numpy, normalize).
         """
-        # The tensor itself:
+        # Clone the tensor, optionally detaching from autograd graph.
         self.tensor_contents = safe_copy(t, self.detach_saved_tensor)
+        # Move to the user-requested output device if needed.
         if self.output_device not in [str(self.tensor_contents.device), "same"]:
             self.tensor_contents = safe_to(self.tensor_contents, self.output_device)
+        # Apply user's postfunc with logging paused so postfunc's own ops
+        # (e.g. .mean(), .float()) don't get logged as model operations.
         if activation_postfunc is not None:
             with pause_logging():
                 self.tensor_contents = activation_postfunc(self.tensor_contents)
@@ -286,10 +372,14 @@ class LayerPassLog:
             self.creation_kwargs = None
 
     def log_tensor_grad(self, grad: torch.Tensor):
-        """Logs the gradient for a tensor to the log entry
+        """Save the gradient tensor for this layer's output.
+
+        Called by the backward hook registered during the forward pass.
+        The gradient is ``detach().clone()``'d — a bare copy, not deep-copied —
+        so it's independent of the autograd graph but cheap to store.
 
         Args:
-            grad: The gradient to save.
+            grad: The gradient tensor flowing back through this operation.
         """
         self.grad_contents = grad.detach().clone()
         self.has_saved_grad = True
@@ -474,5 +564,6 @@ class LayerPassLog:
         return self.__str__()
 
 
-# Backward-compatible alias (will be removed in a future version)
+# Backward-compatible alias: TensorLog was the original name for
+# LayerPassLog before the LayerLog aggregate class was introduced in PR #92.
 TensorLog = LayerPassLog

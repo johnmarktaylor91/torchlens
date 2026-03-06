@@ -1,4 +1,29 @@
-"""LayerLog and LayerAccessor: aggregate per-layer metadata and dict-like accessor."""
+"""LayerLog and LayerAccessor: aggregate per-layer metadata and dict-like accessor.
+
+LayerLog groups one or more LayerPassLog entries that represent the same
+logical layer across recurrent passes.  For non-recurrent models (the
+common case), every LayerLog wraps exactly one LayerPassLog.
+
+**Delegation pattern**: For single-pass layers, per-pass fields (tensor_contents,
+grad_contents, operation_num, etc.) are accessible directly on the LayerLog
+via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``passes[1]``.
+For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
+``AttributeError``) directing the user to ``layer_log.passes[N].field``.
+
+Why ValueError instead of AttributeError: Python's property protocol treats
+``AttributeError`` from a ``@property`` as "attribute doesn't exist" and falls
+through to ``__getattr__``.  Using ``ValueError`` avoids this trap and gives
+the user a clear error message.
+
+**_build_layer_logs merge rules** (in postprocess/layer_log.py):
+When merging multiple passes into one LayerLog, only 3 fields are merged:
+  - ``has_input_ancestor``: OR across passes
+  - ``input_output_address``: character-level merge of "I", "O", "IO" strings
+  - ``is_bottom_level_submodule_output``: OR across passes
+All other 78+ fields use the first pass's values only.
+``modules_exited`` / ``module_passes_exited`` are NOT updated across passes
+(correct because same-layer grouping requires identical structural position).
+"""
 
 from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
@@ -103,8 +128,10 @@ class LayerLog:
         self.containing_modules_origin_nested = first_pass.containing_modules_origin_nested
         self.module_nesting_depth = first_pass.module_nesting_depth
 
-        # Fields stored as aggregate for vis compatibility
-        # (initialized from first pass, may be updated in _build_layer_logs for multi-pass)
+        # Fields stored as aggregate for vis compatibility.
+        # Initialized from first pass.  For multi-pass layers, _build_layer_logs
+        # merges only has_input_ancestor (OR), input_output_address (char-merge),
+        # and is_bottom_level_submodule_output (OR).  All others keep first-pass values.
         self.modules_exited = first_pass.modules_exited
         self.module_passes_exited = first_pass.module_passes_exited
         self.cond_branch_start_children = first_pass.cond_branch_start_children
@@ -120,6 +147,9 @@ class LayerLog:
     # ********************************************
     # ******* Single-pass delegation *************
     # ********************************************
+    # For single-pass layers, per-pass fields are transparently accessible
+    # on the LayerLog itself.  For multi-pass layers, attempting to access
+    # these fields raises ValueError directing the user to a specific pass.
 
     def _single_pass_or_error(self, field_name):
         """Access a per-pass field, requiring exactly one pass.
@@ -192,6 +222,10 @@ class LayerLog:
     # ********************************************
     # ***** Aggregate graph properties ***********
     # ********************************************
+    # Graph-edge properties compute the union across all passes, returning
+    # no-pass labels (i.e. LayerLog-level identifiers).  This gives a
+    # complete picture of which layers are connected across all recurrent
+    # iterations.  Order is preserved (first-seen insertion order).
 
     @property
     def child_layers(self):
@@ -305,8 +339,9 @@ class LayerLog:
     # ********************************************
     # **** Rolled-vis computed properties ********
     # ********************************************
-    # These provide per-pass edge tracking for visualization.
-    # They are computed on-the-fly from the passes dict.
+    # These provide per-pass edge tracking for rolled (recurrence-aware)
+    # graph visualization.  Computed on-the-fly from the passes dict.
+    # Used by the visualization renderer to draw pass-annotated edges.
 
     @property
     def child_layers_per_pass(self):
@@ -404,8 +439,17 @@ class LayerLog:
     # ********************************************
 
     def __getattr__(self, name):
-        # Only called when normal attribute lookup fails.
-        # For single-pass layers, delegate to passes[1].
+        """Fallback attribute lookup: delegates to passes[1] for single-pass layers.
+
+        Only called when normal attribute lookup has already failed (Python's
+        ``__getattr__`` protocol).  For single-pass layers, transparently
+        forwards to the underlying LayerPassLog, enabling code like
+        ``layer_log.func_rng_states`` without needing an explicit property.
+
+        Private attributes (starting with '_') are never delegated — they
+        raise AttributeError immediately to avoid infinite recursion with
+        ``self.__dict__`` access.
+        """
         if name.startswith("_"):
             raise AttributeError(name)
         passes = self.__dict__.get("passes")
@@ -475,8 +519,13 @@ class LayerLog:
 class LayerAccessor:
     """Dict-like accessor for LayerLog objects.
 
-    Supports indexing by layer label, ordinal index, or pass notation
-    (e.g. ``"conv2d_1_1:2"`` returns the LayerPassLog for pass 2).
+    Supports indexing by:
+    * **layer label** (str) -- exact match against no-pass label.
+    * **ordinal index** (int) -- position in execution order.
+    * **pass notation** (str ``"conv2d_1_1:2"``) -- returns the LayerPassLog
+      for a specific pass of a multi-pass layer.
+
+    Available as ``model_log.layers``.
     """
 
     def __init__(
@@ -484,17 +533,21 @@ class LayerAccessor:
         layer_logs: Dict[str, "LayerLog"],
         source_model_log: Optional["ModelLog"] = None,
     ):
-        self._dict = layer_logs
-        self._list = list(layer_logs.values())
-        self._source = source_model_log
+        self._dict = layer_logs  # no-pass label -> LayerLog
+        self._list = list(layer_logs.values())  # execution-order list
+        self._source = source_model_log  # back-ref for pass notation resolution
 
     def __getitem__(self, key: Union[int, str]) -> Union["LayerLog", "LayerPassLog"]:
-        """Return a LayerLog by label or index, or a LayerPassLog by pass label."""
+        """Return a LayerLog by label or index, or a LayerPassLog by pass label.
+
+        Pass notation ``"conv2d_1_1:2"`` splits on the last colon, looks up
+        the base LayerLog, and returns ``layer_log.passes[2]``.
+        """
         if isinstance(key, int):
             return self._list[key]
         if key in self._dict:
             return self._dict[key]
-        # Try pass notation: "conv2d_1_1:2" → LayerLog.passes[2]
+        # Try pass notation: "conv2d_1_1:2" -> LayerLog.passes[2]
         if ":" in key and self._source is not None:
             base, _, pass_str = key.rpartition(":")
             if base in self._dict:

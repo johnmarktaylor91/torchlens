@@ -1,4 +1,19 @@
-"""Shared constants: field-order tuples that define the canonical set of LayerPassLog and ModelLog fields."""
+"""Shared constants: field-order tuples and function discovery for TorchLens.
+
+**FIELD_ORDER lists** define the *canonical* set of fields for each data class
+(ModelLog, LayerPassLog, LayerLog, etc.).  They serve two purposes:
+
+1. **Canonical ordering** — __repr__, iteration, and serialization use these lists
+   to present fields in a consistent, human-readable order.
+2. **Completeness contract** — every attribute a data class exposes must appear in
+   its FIELD_ORDER.  When adding a new field to a class, you MUST also add it here
+   (and vice versa).  These lists are NOT used for filtering; they define the full
+   set of fields.
+
+**Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the
+master list of ``(namespace_str, func_name)`` pairs that ``decorate_all_once()``
+uses to permanently wrap every torch function at import time.
+"""
 
 import __future__
 import functools
@@ -8,6 +23,12 @@ import warnings
 
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
+
+# ---------------------------------------------------------------------------
+# Field-order definitions
+# ---------------------------------------------------------------------------
+# Each list defines the complete, ordered set of fields for its data class.
+# The order here controls display order in __repr__ and similar outputs.
 
 MODEL_LOG_FIELD_ORDER = [
     # General info
@@ -97,6 +118,10 @@ MODEL_LOG_FIELD_ORDER = [
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [
+    # Per-pass data for a single layer execution.  One LayerPassLog exists for
+    # each (layer, pass_num) pair.  Fields capture the tensor produced, the
+    # function that created it, graph connectivity, module context, and more.
+    #
     # General info
     "layer_label",
     "tensor_label_raw",
@@ -235,10 +260,13 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "module_entry_exit_thread_output",
 ]
 
-# Backward-compatible alias (will be removed in a future version)
+# Backward-compatible alias — LayerPassLog was formerly called TensorLog.
 TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
 
 LAYER_LOG_FIELD_ORDER = [
+    # Aggregate view of a layer across all its passes.  One LayerLog per
+    # unique layer; it delegates per-pass queries to its child LayerPassLogs.
+    #
     # Identity & labeling
     "layer_label",
     "layer_label_short",
@@ -307,6 +335,8 @@ LAYER_LOG_FIELD_ORDER = [
     "pass_labels",
 ]
 
+# Metadata about where in user code a function was called (file, line, context).
+# FuncCallLocation has lazy properties — source loaded on first access via linecache.
 FUNC_CALL_LOCATION_FIELD_ORDER = [
     "file",
     "line_number",
@@ -320,6 +350,7 @@ FUNC_CALL_LOCATION_FIELD_ORDER = [
     "num_context_lines",
 ]
 
+# Per-parameter metadata (one ParamLog per nn.Parameter in the model).
 PARAM_LOG_FIELD_ORDER = [
     "address",
     "name",
@@ -344,6 +375,7 @@ PARAM_LOG_FIELD_ORDER = [
     "grad_fsize_nice",
 ]
 
+# Per-pass module execution data (one ModulePassLog per forward call to a module).
 MODULE_PASS_LOG_FIELD_ORDER = [
     "module_address",
     "all_module_addresses",
@@ -360,6 +392,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "call_children",
 ]
 
+# Aggregate module metadata (one ModuleLog per unique nn.Module in the model).
 MODULE_LOG_FIELD_ORDER = [
     # Identity
     "address",
@@ -408,7 +441,17 @@ MODULE_LOG_FIELD_ORDER = [
     "methods",
 ]
 
-# Taken from https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
+# ---------------------------------------------------------------------------
+# Function discovery for decoration
+# ---------------------------------------------------------------------------
+# IMPORTANT: The name "IGNORED_FUNCS" is a historical misnomer.  These are
+# functions that PyTorch's __torch_function__ override mechanism *ignores*
+# (i.e., they cannot be intercepted via __torch_function__), but TorchLens
+# still decorates most of them.  They are listed separately because
+# _get_torch_overridable_functions() intentionally skips them, so we must
+# add them back into ORIG_TORCH_FUNCS explicitly.
+#
+# Source: https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
 IGNORED_FUNCS = [
     ("torch", "load"),
     ("torch", "as_tensor"),
@@ -515,7 +558,10 @@ def _get_torch_overridable_functions() -> List:
     """
     ignored_funcs_set = get_ignored_functions()
     testing_overrides_set = get_testing_overrides()
-    func_names = []
+    func_names = []  # accumulates (namespace_str, func_name) pairs
+    # Each entry: (dotted namespace string, namespace object, list of attr names to inspect).
+    # torch._VF mirrors torch._C._VariableFunctions — both are crawled so decoration
+    # can patch both the public and internal references to the same underlying C++ functions.
     tested_namespaces = [
         ("torch", torch, torch.__all__ + dir(torch._C._VariableFunctions)),
         ("torch._VF", torch._VF, dir(torch._C._VariableFunctions)),
@@ -555,6 +601,8 @@ def _get_torch_overridable_functions() -> List:
             if isinstance(func, getattr(__future__, "_Feature")):
                 continue
 
+            # Descriptors (properties, slots) — not directly callable but have __get__.
+            # These are wrapped via their __get__ method so attribute access is intercepted.
             if not callable(func) and hasattr(func, "__get__"):
                 if ignore:
                     continue
@@ -589,6 +637,7 @@ def _get_torch_overridable_functions() -> List:
     return func_names
 
 
+# Torchvision ops accessed via torch.ops — decorated only if torchvision is installed.
 TORCHVISION_FUNCS = [
     ("torch.ops.torchvision.nms", "_op"),
     ("torch.ops.torchvision.deform_conv2d", "_op"),
@@ -598,6 +647,11 @@ TORCHVISION_FUNCS = [
     ("torch.ops.torchvision.roi_pool", "_op"),
 ]
 
+# Build the master function list at module load time.  Warnings are suppressed
+# because some torch namespaces emit deprecation warnings during introspection.
+# ORIG_TORCH_FUNCS = overridable functions + "ignored" functions (which we still
+# decorate) + optional torchvision ops.  This is the complete list fed to
+# decorate_all_once() in decoration/torch_funcs.py.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     OVERRIDABLE_FUNCS = _get_torch_overridable_functions()

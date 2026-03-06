@@ -1,4 +1,25 @@
-"""Steps 9-12: Label mapping, final info logging, renaming, cleanup, and lookup keys."""
+"""Steps 9-12: Label mapping, final info logging, renaming, cleanup, and lookup keys.
+
+Step 9 (_map_raw_labels_to_final_labels): Assigns human-readable labels to each
+    tensor. Label format: ``{layer_type}_{type_num}_{total_num}:{pass_num}`` for
+    regular layers, or ``{layer_type}_{type_num}:{pass_num}`` for input/output/buffer.
+    The ``:pass_num`` suffix is omitted when layer_passes_total == 1. For multi-pass
+    layers (pass > 1), layer_type and layer_type_num are INHERITED from the first
+    pass to guarantee label consistency within same_layer_operations groups.
+
+Step 10 (_log_final_info_for_all_layers): Logs operation numbers, module hierarchy,
+    param/size tallies, and structural flags. Populates _module_build_data dicts
+    that Step 12 and Step 17 depend on. MUST run before Step 12 because
+    _add_lookup_keys_for_layer_entry needs module_num_passes data.
+
+Step 11 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
+    Renames all raw labels (e.g., "cos_3_raw") to final labels in both ModelLog-level
+    fields and LayerPassLog fields, then reorders ModelLog fields into canonical order.
+
+Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (unless
+    keep_unsaved_layers=True), builds lookup key mappings (integer index, label,
+    module path, buffer/input/output address), and logs remaining layer metadata.
+"""
 
 from collections import OrderedDict, defaultdict
 from typing import TYPE_CHECKING
@@ -12,30 +33,47 @@ if TYPE_CHECKING:
 
 
 def _map_raw_labels_to_final_labels(self) -> None:
-    """
-    Determines the final label for each tensor, and stores this mapping as a dictionary
-    in order to then go through and rename everything in the next preprocessing step.
+    """Step 9: Build the raw-to-final label mapping for all tensors.
+
+    Iterates through all tensors in order and assigns each a human-readable label.
+    Label format conventions:
+    - Regular layers: ``{layer_type}_{type_num}_{total_num}:{pass_num}``
+      e.g., ``conv2d_3_12:2`` (3rd conv2d overall, 12th layer total, pass 2)
+    - Input/output/buffer: ``{layer_type}_{type_num}:{pass_num}``
+      e.g., ``input_1:1`` (total_num is always 0 for these types)
+    - When layer_passes_total == 1, the ``:pass_num`` suffix is omitted in
+      the default ``layer_label`` (but ``layer_label_w_pass`` always includes it).
+
+    For multi-pass layers (pass_num > 1), ``layer_type`` AND ``layer_type_num``
+    are INHERITED from the first pass's tensor to guarantee that all members of
+    a same_layer_operations group share the same ``layer_label_no_pass``. Using
+    the entry's own layer_type would cause label mismatches when passes have
+    different layer types (e.g., SSD300 train with getitem passes {1,3} gap).
+
+    Stores the bidirectional mapping in ``self._raw_to_final_layer_labels`` and
+    ``self._final_to_raw_layer_labels``.
     """
     raw_to_final_layer_labels = {}
     final_to_raw_layer_labels = {}
     layer_type_counter: defaultdict[str, int] = defaultdict(lambda: 1)
-    layer_total_counter = 1
+    layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
     for tensor_log_entry in self:
         layer_type = tensor_log_entry.layer_type
         pass_num = tensor_log_entry.pass_num
         if pass_num == 1:
+            # First pass: assign new type_num and total_num.
             layer_type_num = layer_type_counter[layer_type]
             layer_type_counter[layer_type] += 1
             if layer_type in ["input", "buffer"]:
-                layer_total_num = 0
+                layer_total_num = 0  # Input/buffer don't get a total order number.
             else:
                 layer_total_num = layer_total_counter
                 layer_total_counter += 1
 
-        else:  # inherit layer type AND numbers from first pass of the layer
+        else:
+            # Pass > 1: INHERIT layer_type and numbers from the first pass.
+            # This ensures all passes of the same layer share layer_label_no_pass.
             first_pass_tensor = self[tensor_log_entry.same_layer_operations[0]]
-            # Use first pass's layer_type to guarantee label consistency within
-            # same_layer_operations groups (all members must share layer_label_no_pass).
             layer_type = first_pass_tensor.layer_type
             layer_type_num = first_pass_tensor.layer_type_num
             if layer_type in ["input", "buffer"]:
@@ -71,9 +109,21 @@ def _map_raw_labels_to_final_labels(self) -> None:
 
 
 def _log_final_info_for_all_layers(self) -> None:
-    """
-    Goes through all layers (before discarding unsaved ones), and logs final info about the model
-    and the layers that pertains to all layers (not just saved ones).
+    """Step 10: Log final metadata for all layers and build module hierarchy.
+
+    Iterates through all layers (before unsaved ones are discarded in Step 12)
+    and computes:
+    - Operation numbers (sequential, excluding input/buffer/output).
+    - Replaces raw labels with final labels in each LayerPassLog's fields.
+    - Module hierarchy information (_module_build_data dicts).
+    - Cumulative tallies: tensor sizes, param counts, elapsed time.
+    - Structural flags: branching, recurrence, conditional branching.
+
+    MUST run before Step 12 because ``_add_lookup_keys_for_layer_entry``
+    (called in Step 12) needs module_num_passes data populated here.
+
+    Uses shadow sets for O(1) membership checks to avoid expensive linear
+    ``in`` checks on lists for large models.
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
     operation_num = 1
@@ -175,6 +225,8 @@ def _build_module_hierarchy_dicts(self) -> None:
                 mbd["module_children"][module_parent_nopass].append(module_child_nopass)
 
 
+# Fields in LayerPassLog that contain raw labels needing rename.
+# These may be lists or sets — the rename logic handles both via type(orig).
 _LIST_FIELDS_TO_RENAME = [
     "parent_layers",
     "orig_ancestors",
@@ -192,12 +244,16 @@ _LIST_FIELDS_TO_RENAME = [
 
 
 def _replace_layer_names_for_layer_entry(self, layer_entry: LayerPassLog) -> None:
-    """
-    Replaces all layer names in the fields of a LayerPassLog with their final
-    layer names.
+    """Replace all raw labels in a LayerPassLog's fields with final labels.
+
+    Handles three categories of fields:
+    1. List/set fields (parent_layers, child_layers, etc.): creates NEW objects
+       via type(orig)([comprehension]) — no shared-set corruption possible.
+    2. parent_layer_arg_locs dict: renames values in-place.
+    3. children_tensor_versions dict: renames keys.
 
     Args:
-        layer_entry: LayerPassLog to replace layer names for.
+        layer_entry: LayerPassLog to rename labels for.
     """
     mapping = self._raw_to_final_layer_labels
     d = layer_entry.__dict__
@@ -230,12 +286,20 @@ def _replace_layer_names_for_layer_entry(self, layer_entry: LayerPassLog) -> Non
 def _log_module_hierarchy_info_for_layer(
     self, layer_entry: LayerPassLog, _shadow_sets: dict
 ) -> None:
-    """
-    Logs the module hierarchy information for a single layer.
+    """Populate module hierarchy data for a single layer in _module_build_data.
+
+    For each module in the layer's containing_modules_origin_nested, records:
+    - Module tensor counts (per-module and per-pass).
+    - Module-to-layer mappings.
+    - Top-level module passes and parent-child relationships.
+    - Module addresses and pass labels.
+
+    Uses shadow sets for O(1) dedup checks (the primary lists maintain insertion
+    order for downstream consumers, but linear ``in`` checks on lists are O(n)).
 
     Args:
-        layer_entry: Log entry to mark the module hierarchy info for.
-        _shadow_sets: Shadow sets for O(1) membership checks.
+        layer_entry: Log entry to process.
+        _shadow_sets: Dict of shadow sets mirroring _module_build_data lists.
     """
     _module_labels_seen = _shadow_sets["module_layers"]
     _module_pass_labels_seen = _shadow_sets["module_pass_layers"]
@@ -287,8 +351,16 @@ def _log_module_hierarchy_info_for_layer(
 
 
 def _remove_unwanted_entries_and_log_remaining(self) -> None:
-    """Removes entries from ModelLog that we don't want in the final saved output,
-    and logs information about the remaining entries.
+    """Step 12: Remove unsaved layers, build lookup keys, finalize layer lists.
+
+    Unless ``keep_unsaved_layers=True``, removes LayerPassLog entries that don't
+    have saved activations. For each retained entry:
+    - Builds lookup keys (integer index, label, module path, address).
+    - Adds to layer_list, layer_dict_main_keys, and label lists.
+    - Reorders fields via _trim_and_reorder_layer_entry_fields.
+
+    Sets _all_layers_logged and _all_layers_saved flags for downstream
+    consumers (e.g., visualization guards for keep_unsaved_layers=False).
     """
     layers_to_remove = []
     # Quick loop to count how many tensors are saved:
@@ -353,14 +425,21 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
 def _add_lookup_keys_for_layer_entry(
     self, layer_entry: LayerPassLog, tensor_index: int, num_tensors_to_keep: int
 ) -> None:
-    """Adds the user-facing lookup keys for a LayerPassLog, both to itself
-    and to the ModelLog top-level record.
+    """Build user-facing lookup keys for a LayerPassLog and register them.
+
+    Keys allow users to access layers via ModelLog[key]. Multiple key types:
+    - String labels: layer_label, layer_label_short, with/without pass suffix.
+    - Integer indices: positive (0-based) and negative (Python-style).
+    - Module paths: module_pass labels for modules exited by this layer.
+    - Addresses: buffer_address, input/output address.
+
+    Also reformats module_passes_exited/entered and containing_modules_origin_nested
+    from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
 
     Args:
-        layer_entry: LayerPassLog to get the lookup keys for.
-        tensor_index: Zero-based position of this tensor in the final ordered layer list.
-        num_tensors_to_keep: Total number of tensors that will be kept, used to compute
-            negative-index lookup keys.
+        layer_entry: LayerPassLog to build lookup keys for.
+        tensor_index: Zero-based position in the final ordered layer list.
+        num_tensors_to_keep: Total number of retained tensors (for negative indices).
     """
     # The "default" keys: including the pass if multiple passes, excluding if one pass.
     lookup_keys_for_tensor = [
@@ -426,15 +505,20 @@ def _add_lookup_keys_for_layer_entry(
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
-    """
-    Sorts the fields in LayerPassLog into their desired order, and trims any
-    fields that aren't useful after the pass.
+    """Reorder LayerPassLog fields into canonical display order.
+
+    PRESERVES all fields — this function only reorders, it does NOT strip
+    any data. Fields listed in LAYER_PASS_LOG_FIELD_ORDER come first (in that
+    order), followed by any remaining non-callable fields not in the order list.
+    Callable attributes (methods) are excluded from the reordered dict.
     """
     old_dict = layer_entry.__dict__
     new_dir_dict = OrderedDict()
+    # First: fields in canonical order.
     for field in LAYER_PASS_LOG_FIELD_ORDER:
         if field in old_dict:
             new_dir_dict[field] = old_dict[field]
+    # Second: any remaining fields not in the order list (preserves all data).
     for field, value in old_dict.items():
         if field not in new_dir_dict and not callable(value):
             new_dir_dict[field] = value
@@ -442,8 +526,13 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
 
 
 def _rename_model_history_layer_names(self) -> None:
-    """Renames all the metadata fields in ModelLog with the final layer names, replacing the
-    realtime debugging names.
+    """Step 11: Rename raw labels to final labels in all ModelLog-level fields.
+
+    Updates list fields (input_layers, output_layers, etc.), dict fields
+    (layers_computed_with_params, equivalent_operations), conditional branch
+    edges, and module layer argument names. Creates NEW container objects
+    (no shared-set corruption) — see set() constructor in equivalent_operations
+    rename.
     """
     list_fields_to_rename = [
         "input_layers",
@@ -503,13 +592,16 @@ def _rename_model_history_layer_names(self) -> None:
 
 
 def _trim_and_reorder_model_history_fields(self) -> None:
-    """
-    Sorts the fields in ModelLog into their desired order, and trims any
-    fields that aren't useful after the pass.
+    """Reorder ModelLog fields into canonical display order.
+
+    Like ``_trim_and_reorder_layer_entry_fields``, this PRESERVES all fields.
+    Public fields listed in MODEL_LOG_FIELD_ORDER come first, followed by any
+    private fields (starting with ``_``) not already in the order list.
     """
     new_dir_dict = OrderedDict()
     for field in MODEL_LOG_FIELD_ORDER:
         new_dir_dict[field] = getattr(self, field)
+    # Preserve private/internal fields not in the canonical order.
     for field, value in self.__dict__.items():
         if field.startswith("_") and field not in new_dir_dict:
             new_dir_dict[field] = value

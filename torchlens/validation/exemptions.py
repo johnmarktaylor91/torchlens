@@ -1,4 +1,29 @@
-"""Validation exemption registries: ops that are exempt from perturbation or tolerance checks."""
+"""Validation exemption registries for perturbation and forward-replay checks.
+
+Four registries control which operations are exempt from validation, and why:
+
+1. ``SKIP_VALIDATION_ENTIRELY`` -- ops whose output is nondeterministic even
+   with identical inputs and RNG state (e.g., ``empty_like`` returns
+   uninitialized memory).  Both forward replay AND perturbation are skipped.
+
+2. ``SKIP_PERTURBATION_ENTIRELY`` -- ops where ALL args are structural (shape,
+   type template) so perturbation can never change the output.  Forward
+   replay still runs to verify correctness.
+
+3. ``STRUCTURAL_ARG_POSITIONS`` -- ops where SPECIFIC arg positions are
+   structural (e.g., the index tensor in ``embedding``).  If the perturbed
+   layer's tensor matches one of these positions, perturbation is skipped
+   for that parent only.
+
+4. ``CUSTOM_EXEMPTION_CHECKS`` -- ops requiring per-case logic that doesn't
+   fit a simple position mapping (e.g., ``__getitem__`` tensor indexing,
+   ``lstm`` hidden/cell states).
+
+Additionally, ``posthoc_perturb_check`` handles dynamic exemptions that can
+only be determined AFTER executing the function -- cases where perturbation
+genuinely doesn't change the output for valid reasons (bool output, type
+casting, special-value args like all-zeros making perturbation irrelevant).
+"""
 # TODO: Audit PyTorch ops more exhaustively for additional exemptions.
 # Current registries cover all cases encountered in the test suite as of 2026-03.
 # When adding new model tests, if perturbation fails for a new function,
@@ -179,7 +204,17 @@ def perturbed_layer_at_structural_position(
     layers_to_perturb: List[str],
     exempt_positions: Set[int],
 ) -> bool:
-    """Check if the perturbed layer's tensor matches any exempt arg position."""
+    """Check if the perturbed layer's tensor occupies a structural arg position.
+
+    Compares the perturbed layer's tensor_contents to creation_args at each
+    exempt position using ``torch.equal``.  If there is a match, the perturbed
+    layer controls structure (e.g., indices, masks) rather than values, so
+    perturbation is meaningless.
+
+    Note: uses ``torch.equal`` (exact elementwise match) which could
+    theoretically false-positive if two different parents have identical
+    tensor values, but this is exceedingly rare in practice.
+    """
     perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
     for pos in exempt_positions:
         if pos >= len(layer.creation_args):
@@ -205,10 +240,26 @@ def posthoc_perturb_check(
     layers_to_perturb: List[str],
     verbose: bool = False,
 ) -> bool:
-    """If perturbation didn't change the output, check whether there's a valid
-    excuse (bool output, type casting, special-value args, etc.).
+    """Post-hoc exemption check: called when perturbation did NOT change the output.
 
-    Returns True if there's an excuse, False otherwise.
+    This function runs AFTER execution, handling dynamic cases that cannot be
+    determined pre-execution.  It checks a cascade of valid excuses:
+
+    1. **Bool output** -- discrete output, perturbation may not flip it.
+    2. **Discrete index outputs** (topk, sort) -- indices are order-dependent,
+       not value-dependent.
+    3. **Type casting** (``to()``) -- value irrelevant when casting type.
+    4. **Full overwrite** (__setitem__ with same-shape replacement).
+    5. **Small tensor coincidence** (__getitem__/unbind with numel < 20).
+    6. **Redundant safety net** for *_like/meshgrid/broadcast_tensors.
+    7. **All-inf/all-NaN output** -- extreme values.
+    8. **Special-value arg loop** -- if ANY non-perturbed arg is all-zeros or
+       all-ones, that single arg can explain output invariance (e.g.,
+       multiplication by zero annihilates the other operand).  This correctly
+       returns True on the first such special arg found.
+
+    Returns True if there's a valid excuse (validation passes), False otherwise
+    (validation fails with a printed message).
     """
     func_name = layer_to_validate_parents_for.func_applied_name
     layer_label = layer_to_validate_parents_for.layer_label
@@ -325,7 +376,16 @@ def posthoc_perturb_check(
 
 
 def _check_if_arg_is_special_val(val: Union[torch.Tensor, Any]) -> bool:
-    """Check if a value is all zeros, all ones, or empty."""
+    """Check if a value is all-zeros, all-ones, or empty (numel==0).
+
+    These "special" values can make perturbation of OTHER args irrelevant:
+    - All-zeros: multiplication by zero annihilates the other operand.
+    - All-ones: identity element for multiplication, no-op for many ops.
+    - Empty: no elements to be affected.
+
+    Non-tensor values (scalars, etc.) are converted to tensors for the check.
+    Returns False for values that can't be converted (strings, None, etc.).
+    """
     if not isinstance(val, torch.Tensor):
         try:
             val = torch.tensor(val)

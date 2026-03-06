@@ -1,4 +1,35 @@
-"""Graphviz-based computational graph rendering for ModelLog objects."""
+"""Graphviz-based computational graph rendering for ModelLog objects.
+
+Renders the computational graph captured by TorchLens as a Graphviz Digraph,
+supporting two visualization modes:
+
+- **unrolled** (default): every pass of every layer is a separate node.
+  Uses ``layer_dict_main_keys`` as the node source.
+- **rolled**: layers with multiple passes are collapsed into a single node
+  with edge labels showing which passes an edge applies to.  Uses
+  ``layer_logs`` (LayerLog objects) as the node source.
+
+Key mechanisms:
+
+- **Collapsed modules**: when ``vis_nesting_depth`` is set, layers nested
+  deeper than the threshold are collapsed into ``box3d`` module summary
+  nodes.  ``_is_collapsed_module`` is the gatekeeper; ``_build_collapsed_module_node``
+  renders the summary.  Intra-module edges between layers in the same
+  collapsed module are skipped to avoid clutter.
+
+- **Edge deduplication**: ``edges_used`` (set of (tail, head) tuples) prevents
+  duplicate edges when multiple layers map to the same collapsed module node.
+
+- **Override system**: six override dicts (graph, node, nested_node, edge,
+  gradient_edge, module) allow callers to customize any Graphviz attribute.
+  Values can be static strings or callables receiving ``(model_log, node)``
+  for dynamic computation.
+
+- **_all_layers_logged guard**: rendering requires all layers to be present
+  in the ModelLog (either saved or kept-unsaved).  This check prevents
+  IndexError crashes when ``keep_unsaved_layers=False`` was used and nodes
+  reference absent layers.
+"""
 
 from collections import defaultdict
 from typing import Any, Optional, Dict, List, Set, TYPE_CHECKING, Tuple, Union
@@ -13,18 +44,24 @@ from ..data_classes.layer_log import LayerLog
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
-INPUT_COLOR = "#98FB98"
-OUTPUT_COLOR = "#ff9999"
-PARAMS_NODE_BG_COLOR = "#E6E6E6"
-TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"
-FROZEN_PARAMS_BG_COLOR = "#B0B0B0"
-BUFFER_NODE_COLOR = "#888888"
-GRADIENT_ARROW_COLOR = "#9197F6"
+# -- Color palette for node types --
+INPUT_COLOR = "#98FB98"  # Light green
+OUTPUT_COLOR = "#ff9999"  # Light red/salmon
+PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no ParamLog available)
+TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
+FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
+BUFFER_NODE_COLOR = "#888888"  # Medium gray for buffer nodes
+GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
 DEFAULT_BG_COLOR = "white"
-BOOL_NODE_COLOR = "#F7D460"
+BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
+
+# -- Module subgraph border widths --
 MAX_MODULE_PENWIDTH = 5
 MIN_MODULE_PENWIDTH = 2
 PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
+
+# Commutative functions: argument order doesn't matter, so we skip arg-position
+# labels on their incoming edges to reduce visual clutter.
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
 
@@ -44,18 +81,38 @@ def render_graph(
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
 ) -> str:
-    """Renders the computational graph for the model.
+    """Render the computational graph as a Graphviz Digraph.
+
+    Orchestrates the full rendering pipeline:
+    1. Validates that all layers are logged (``_all_layers_logged`` guard).
+    2. Iterates over entries_to_plot, building nodes and edges.
+    3. Groups edges into module subgraph clusters.
+    4. Renders to file and optionally displays.
 
     Args:
-        vis_opt: either 'rolled' or 'unrolled'
-        vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
-            levels, etc.
-        vis_outpath: where to store the rendered graph
-        save_only: whether to only save the graph without immediately showing it
-        vis_fileformat: file format to use for the rendered graph
-        show_buffer_layers: whether to show the buffer layers
-        direction: which way the graph should go: either 'bottomup', 'topdown', or 'leftright'
+        vis_opt: ``'unrolled'`` (each pass is a separate node) or ``'rolled'``
+            (multi-pass layers collapsed into one node with pass annotations).
+        vis_nesting_depth: Maximum module nesting levels to show before
+            collapsing deeper layers into ``box3d`` module summary nodes.
+            Use 0 to show all layers without collapsing.
+        vis_outpath: Output file path (extension auto-stripped).
+        vis_graph_overrides: Graphviz graph-level attribute overrides.
+        vis_node_overrides: Overrides for standard (non-collapsed) nodes.
+        vis_nested_node_overrides: Overrides for collapsed module nodes.
+        vis_edge_overrides: Overrides for forward edges.
+        vis_gradient_edge_overrides: Overrides for backward (gradient) edges.
+        vis_module_overrides: Overrides for module subgraph boxes.
+        save_only: If True, save without opening a viewer.
+        vis_fileformat: Output format (pdf, png, svg, etc.).
+        show_buffer_layers: Whether to include buffer layers in the graph.
+        direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
 
+    Returns:
+        The Graphviz DOT source string.
+
+    Raises:
+        ValueError: If ``_all_layers_logged`` is False (layers were discarded
+            by ``keep_unsaved_layers=False``).
     """
     overrides = VisualizationOverrides(
         graph=vis_graph_overrides or {},
@@ -66,6 +123,10 @@ def render_graph(
         module=vis_module_overrides or {},
     )
 
+    # THE _all_layers_logged guard: prevents IndexError crashes that would
+    # occur when edges reference layers that were discarded by
+    # keep_unsaved_layers=False.  This is the single chokepoint that
+    # protects all downstream rendering code from missing-layer lookups.
     if not self._all_layers_logged:
         raise ValueError(
             "Must have all layers logged in order to render the graph; either save all layers,"
@@ -87,6 +148,9 @@ def render_graph(
     ]:
         vis_outpath = ".".join(split_outpath[:-1])
 
+    # Unrolled: iterate LayerPassLog objects (one node per pass).
+    # Rolled: iterate LayerLog objects (one node per logical layer, multi-pass
+    # collapsed into a single node with edge annotations).
     if vis_opt == "unrolled":
         entries_to_plot = self.layer_dict_main_keys
     elif vis_opt == "rolled":
@@ -138,6 +202,9 @@ def render_graph(
         "ordering": "out",
     }
 
+    # Override system: callers can pass dicts of Graphviz attributes to
+    # customize rendering.  Values can be static (str) or dynamic (callable
+    # receiving the ModelLog, evaluated at render time).
     for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
         if callable(arg_val):
             graph_args[arg_name] = str(arg_val(self))
@@ -147,11 +214,18 @@ def render_graph(
     dot.graph_attr.update(graph_args)
     dot.node_attr.update({"ordering": "out"})
 
-    # list of edges for each subgraph; subgraphs will be created at the end.
+    # Accumulate edges per module cluster; actual Graphviz subgraphs are
+    # created at the end in _setup_subgraphs to ensure proper nesting.
     module_cluster_dict: Dict[str, Any] = defaultdict(
         lambda: {"edges": [], "has_input_ancestor": False}
     )
+    # Track which collapsed module nodes have been added to avoid duplicates
+    # (multiple layers in the same collapsed module would otherwise each try
+    # to create the same box3d node).
     collapsed_modules: Set[str] = set()
+    # Edge deduplication: (tail_name, head_name) pairs already added.
+    # Critical when collapsed modules cause many layers to map to the same
+    # node name -- without this, we'd get duplicate edges.
     edges_used: Set[str] = set()
 
     for node_barcode, node in entries_to_plot.items():
@@ -245,7 +319,21 @@ def _add_node_to_graphviz(
 
 
 def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
-    """Returns True if the node is nested deep enough to be rendered as a collapsed module box.
+    """THE IndexError guard for collapsed module rendering.
+
+    Returns True if the node is nested deep enough to be rendered as a
+    collapsed ``box3d`` module summary node instead of an individual layer.
+
+    This function is the single decision point that determines whether a node
+    gets its own graphviz node or is absorbed into a module box.  Getting this
+    wrong causes IndexError when ``_build_collapsed_module_node`` tries to
+    access ``containing_modules_origin_nested[vis_nesting_depth - 1]``.
+
+    Special cases:
+    - ``vis_nesting_depth == 0``: show all layers, never collapse (#94).
+    - ``is_bottom_level_submodule_output``: the node represents the output of
+      its innermost module, so its effective nesting depth is one less (it
+      visually "belongs" to the parent scope).
 
     Args:
         node: The LayerPassLog or LayerLog node to check.
@@ -253,7 +341,10 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
     """
     if vis_nesting_depth == 0:
         return False  # #94: depth 0 means show all layers, never collapse
+
     node_nesting_depth = len(node.containing_modules_origin_nested)
+    # Bottom-level submodule outputs are rendered at the parent nesting level,
+    # not their own, so subtract 1 from their effective depth.
     if getattr(node, "is_bottom_level_submodule_output", False):
         node_nesting_depth -= 1
 
@@ -299,6 +390,8 @@ def _build_layer_node(
 
     node_label = _make_node_label(node, node_address, vis_opt)
 
+    # Graphviz node names can't contain colons (used for port syntax), so
+    # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
     node_args = {
         "name": node.layer_label.replace(":", "pass"),
         "label": node_label,
@@ -309,6 +402,9 @@ def _build_layer_node(
         "shape": node_shape,
         "ordering": "out",
     }
+    # Colon in bg_color means it's a gradient fill (e.g.,
+    # "#D9D9D9:#B0B0B0" for mixed trainable/frozen params).
+    # Graphviz requires gradientangle to render gradients.
     if ":" in node_bg_color:
         node_args["gradientangle"] = "0"
 
@@ -347,8 +443,11 @@ def _build_collapsed_module_node(
         vis_nesting_depth: Maximum nesting depth; nodes at this depth are collapsed.
         overrides: Graphviz attribute overrides.
     """
+    # Access the module at the collapse threshold depth.  This index is safe
+    # because _is_collapsed_module already verified the node is deep enough.
     module_address_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
-    module_tuple = module_address_w_pass.rsplit(":", 1)  # #104: rsplit for colons in names
+    # rsplit with maxsplit=1 handles module names containing colons (#104).
+    module_tuple = module_address_w_pass.rsplit(":", 1)
     module_output_layer = self[module_address_w_pass]
     module_output_shape = module_output_layer.tensor_shape or ()
     module_output_fsize = module_output_layer.tensor_fsize_nice
@@ -358,6 +457,9 @@ def _build_collapsed_module_node(
     module_num_passes = ml.num_passes  # type: ignore[union-attr]
     module_nparams = ml.num_params  # type: ignore[union-attr]
 
+    # In unrolled mode, each pass of a module is a separate collapsed node
+    # (e.g., "encoder.layer.0pass1").  In rolled mode, all passes share one
+    # node (e.g., "encoder.layer.0").
     if vis_opt == "unrolled":
         node_name = "pass".join(module_tuple)
         mpl = self.modules[module_address_w_pass]
@@ -368,8 +470,10 @@ def _build_collapsed_module_node(
         module_num_tensors = ml.num_layers
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.all_layers)  # type: ignore[union-attr]
 
+    # Deduplicate: multiple layers in the same collapsed module will each
+    # trigger this function, but the node should only be added once.
     if node_name in collapsed_modules:
-        return  # collapsed node already added
+        return
 
     if module_num_passes == 1:
         node_title = f"<b>@{module_address}</b>"
@@ -688,18 +792,36 @@ def _add_edges_for_node(
     show_buffer_layers: bool = False,
     overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
-    """Add the rolled-up edges for a node, marking for the edge which passes it happened for.
+    """Add forward (and optionally gradient) edges from a parent node to all its children.
+
+    Handles several complex cases:
+
+    - **Collapsed module nodes**: when parent or child is collapsed, the edge
+      endpoint is the module box name, not the individual layer name.
+    - **Intra-module edge skip**: when both parent and child map to the SAME
+      collapsed module box AND share the same module nesting prefix up to
+      ``vis_nesting_depth``, the edge is internal to the collapsed module
+      and should not be drawn.
+    - **Edge deduplication**: ``edges_used`` prevents duplicate edges that
+      arise when multiple layers map to the same collapsed module node.
+    - **Argument labels**: for non-commutative ops with multiple parents,
+      edge labels show which argument position each parent occupies.
+      Note: uses substring matching on layer_label for arg_label lookup,
+      which has a theoretical false-positive risk if one label is a
+      substring of another (extremely rare in practice).
+    - **Pass annotations** (rolled mode): ``_label_rolled_pass_nums`` adds
+      tail/head labels showing which passes an edge applies to.
 
     Args:
         parent_node: The node to add edges for.
         parent_is_collapsed_module: Whether the node is a collapsed module node.
         vis_nesting_depth: How many levels of module nesting to show.
-        node_color: Color of the node
+        node_color: Color of the node.
+        module_edge_dict: Dict mapping each cluster to its edges.
+        edges_used: Set of (tail, head) pairs already added.
         graphviz_graph: The graphviz graph object.
-        module_edge_dict: Dictionary mapping each cluster to the edges it contains.
-        edges_used: Edges used so far.
-        vis_opt: Either 'unrolled' or 'rolled'
-        show_buffer_layers: whether to show the buffer layers
+        vis_opt: ``'unrolled'`` or ``'rolled'``.
+        show_buffer_layers: Whether buffer layers are shown.
         overrides: Graphviz attribute overrides.
     """
     for child_layer_label in parent_node.child_layers:
@@ -742,10 +864,15 @@ def _add_edges_for_node(
 
         both_nodes_collapsed_modules = parent_is_collapsed_module and child_is_collapsed_module
 
-        # If both child and parent are in a collapsed module of the same pass, skip the edge:
+        # Collapsed module intra-edge skip: if both nodes are collapsed AND
+        # they share the same module path up to vis_nesting_depth, the edge
+        # is internal to the collapsed module box and should not be drawn.
+        # The tail_name != head_name check handles the case where they map to
+        # different collapsed modules (cross-module edge, should be drawn).
         if both_nodes_collapsed_modules and (tail_name != head_name):
             child_containing_modules = child_node.containing_modules_origin_nested[:]
             parent_containing_modules = parent_node.containing_modules_origin_nested[:]
+            # Adjust for bottom-level submodule outputs (they belong to parent scope).
             if child_node.is_bottom_level_submodule_output:
                 child_containing_modules = child_containing_modules[:-1]
             if parent_node.is_bottom_level_submodule_output:
@@ -756,7 +883,8 @@ def _add_edges_for_node(
             ):
                 continue
 
-        # Skip repeated edges:
+        # Edge deduplication: multiple layers mapping to the same collapsed
+        # module node would produce duplicate edges without this check.
         if (tail_name, head_name) in edges_used:
             continue
         edges_used.add((tail_name, head_name))
@@ -836,13 +964,23 @@ def _label_node_arguments_if_needed(
     edge_dict: Dict,
     show_buffer_layers: bool = False,
 ) -> None:
-    """Checks if a node has multiple non-commutative arguments, and if so, adds labels in edge_dict
+    """Add argument position labels to an edge when the child has multiple non-commutative parents.
+
+    For nodes like ``sub(a, b)`` where argument order matters, labels like
+    ``"arg 0"`` / ``"arg 1"`` are added to distinguish which parent feeds
+    which argument.
+
+    Note on substring false-positive risk: the lookup ``parent_node.layer_label == arg_label``
+    uses exact equality, so substring matching is not an issue here.  However, the
+    ``parent_layer_arg_locs`` keys are positional and the check iterates all of them,
+    so a parent appearing in multiple arg positions will get multiple labels joined
+    with ``<br/>``.
 
     Args:
-        parent_node: parent node
-        child_node: child node
-        edge_dict: dict of information about the edge
-        show_buffer_layers: whether to show the buffer layers
+        parent_node: The parent node whose edge is being labeled.
+        child_node: The child node receiving the edge.
+        edge_dict: Mutable dict of edge attributes; ``"label"`` may be added/appended.
+        show_buffer_layers: Whether buffer layers are visible (affects parent count).
     """
     if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers):
         return
@@ -870,10 +1008,16 @@ def _should_mark_arguments_on_edge(
 ) -> bool:
     """Returns True if argument position labels should be shown on the edge to child_node.
 
+    Skips commutative functions (add, mul, cat, eq, ne) where arg order is
+    interchangeable -- showing "arg 0" vs "arg 1" would be misleading.
+    For non-commutative ops, labels are shown when the child has multiple
+    visible parents.
+
     Args:
         child_node: The child node whose incoming edge is being considered.
         show_buffer_layers: Whether buffer layers are shown in the graph.
     """
+    # Commutative ops: argument order doesn't matter, skip labels.
     if child_node.layer_type in COMMUTE_FUNCS:
         return False
 
@@ -931,12 +1075,18 @@ def _label_rolled_pass_nums(
     parent_node: "LayerLog",
     edge_dict: Dict,
 ) -> None:
-    """Adds labels for the pass numbers to the edge dict for rolled nodes.
+    """Add pass-number annotations to edges in rolled mode.
+
+    In rolled mode, a single edge may represent connections from different
+    passes.  When edges vary across passes (``edges_vary_across_passes``),
+    tail and head labels show which passes the edge applies to, e.g.,
+    ``"Out 1,3"`` / ``"In 2,4"``.  Uses ``int_list_to_compact_str`` for
+    concise range notation (e.g., ``"1-3"`` instead of ``"1,2,3"``).
 
     Args:
-        child_node: child node
-        parent_node: parent node
-        edge_dict: dictionary of edge information
+        child_node: The child LayerLog node.
+        parent_node: The parent LayerLog node.
+        edge_dict: Mutable dict of edge attributes; taillabel/headlabel may be added.
     """
     parent_pass_nums = parent_node.child_passes_per_layer[child_node.layer_label]
     child_pass_nums = child_node.parent_passes_per_layer[parent_node.layer_label]
@@ -954,7 +1104,23 @@ def _get_lowest_containing_module_for_two_nodes(
     both_nodes_collapsed_modules: bool,
     vis_nesting_depth: int,
 ) -> Union[str, int]:
-    """Utility function to get the lowest-level module that contains two nodes, to know where to put the edge.
+    """Find the deepest module subgraph that contains both nodes.
+
+    Used to place an edge into the correct Graphviz cluster (subgraph).
+    Edges between nodes in the same module cluster are drawn inside that
+    cluster; edges crossing module boundaries are drawn at the level of
+    the lowest common ancestor module.
+
+    Returns -1 when no module contains both nodes (the edge belongs to the
+    top-level graph, not any subgraph).
+
+    Special handling:
+    - ``is_bottom_level_submodule_output`` nodes are adjusted to their parent
+      scope (they represent the module's output, rendered one level up).
+    - Rolled mode: pass suffixes are stripped from module names so that all
+      passes share the same cluster.
+    - Both-collapsed case: when both nodes are collapsed module boxes, the
+      containing module must be at least one level above the collapse depth.
 
     Args:
         node1: The first node.
@@ -963,7 +1129,7 @@ def _get_lowest_containing_module_for_two_nodes(
         vis_nesting_depth: How many levels deep to visualize.
 
     Returns:
-        Lowest-level module pass containing two nodes, or -1 if no module contains both.
+        Module name (str) for the containing cluster, or -1 for top-level.
     """
     node1_modules = node1.containing_modules_origin_nested[:]
     node2_modules = node2.containing_modules_origin_nested[:]
@@ -1019,16 +1185,20 @@ def _add_gradient_edge(
     graphviz_graph,
     overrides: VisualizationOverrides,
 ) -> None:
-    """Adds a backwards edge if both layers have saved gradients, showing the backward pass.
+    """Add a backward (gradient) edge if both layers have saved gradients.
+
+    Gradient edges flow child -> parent (opposite of data flow), drawn in
+    ``GRADIENT_ARROW_COLOR`` to distinguish from forward edges.  Only added
+    in unrolled mode (rolled mode doesn't show gradients).
 
     Args:
-        parent_layer: The parent LayerPassLog (gradient flows from child to parent).
-        child_layer: The child LayerPassLog.
-        edge_style: 'solid' or 'dashed' edge style.
-        containing_module: Module cluster to place the edge in, or -1 for the top-level graph.
-        module_edge_dict: Dict mapping each module cluster to its list of edges.
+        parent_layer: The parent LayerPassLog (gradient destination).
+        child_layer: The child LayerPassLog (gradient source).
+        edge_style: ``'solid'`` or ``'dashed'`` (matches the forward edge style).
+        containing_module: Module cluster name, or -1 for top-level.
+        module_edge_dict: Dict mapping each module cluster to its edges.
         graphviz_graph: The graphviz Digraph object.
-        overrides: Graphviz attribute overrides.
+        overrides: Graphviz attribute overrides for gradient edges.
     """
     if parent_layer.has_saved_grad and child_layer.has_saved_grad:
         edge_dict = {
@@ -1059,16 +1229,26 @@ def _setup_subgraphs(
     module_edge_dict: Dict,
     overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
-    """Given a dictionary specifying the edges in each cluster and the graphviz graph object,
-    set up the nested subgraphs and the nodes that should go inside each of them. There will be some tricky
-    recursive logic to set up the nested context managers.
+    """Build nested Graphviz subgraphs for module clusters.
+
+    Creates the module hierarchy as nested Graphviz subgraphs (clusters),
+    placing edges into the appropriate depth level.  Uses a BFS-like
+    approach: starts from top-level modules, builds each subgraph via
+    ``_setup_subgraphs_recurse``, and pushes child modules onto a stack.
+
+    In **unrolled** mode, each module pass is a separate subgraph (keyed by
+    ``"module_addr:pass_num"``).  In **rolled** mode, all passes share one
+    subgraph (keyed by ``"module_addr"``).
+
+    Subgraph names are prefixed with ``"cluster_"`` (Graphviz convention to
+    draw a border box around them).
 
     Args:
-        graphviz_graph: Graphviz graph object.
-        vis_opt: 'rolled' or 'unrolled'
-        module_edge_dict: Dictionary mapping each cluster to the list of edges it contains, with each
-            edge specified as a dict with all necessary arguments for creating that edge.
-        overrides: Graphviz attribute overrides.
+        graphviz_graph: The top-level Graphviz Digraph.
+        vis_opt: ``'rolled'`` or ``'unrolled'``.
+        module_edge_dict: Dict mapping each module cluster name to
+            ``{"edges": [...], "has_input_ancestor": bool}``.
+        overrides: Graphviz attribute overrides for module subgraphs.
     """
     if vis_opt == "unrolled":
         module_submodule_dict = defaultdict(list)
@@ -1116,17 +1296,25 @@ def _setup_subgraphs_recurse(
     vis_opt,
     overrides: VisualizationOverrides,
 ) -> None:
-    """Utility function to crawl down several layers deep into nested subgraphs.
+    """Recursively build a single branch of the module subgraph hierarchy.
+
+    Walks down ``parent_graph_list`` (a path from root to leaf module),
+    creating nested Graphviz context managers at each level.  When the
+    leaf is reached, adds all accumulated edges and pushes child modules
+    onto ``subgraph_stack`` for later processing.
+
+    Module border width scales inversely with nesting depth (deeper modules
+    get thinner borders) to provide visual hierarchy.
 
     Args:
-        starting_subgraph: The subgraph we're starting from.
-        parent_graph_list: List of parent graphs.
+        starting_subgraph: The parent Graphviz subgraph to nest into.
+        parent_graph_list: Path of module names from root to current target.
         module_edge_dict: Dict mapping each cluster to its edges.
         module_submodule_dict: Dict mapping each cluster to its subclusters.
-        subgraph_stack: Stack of subgraphs to look at.
-        nesting_depth: Nesting depth so far.
-        max_nesting_depth: The total depth of the subgraphs.
-        vis_opt: 'rolled' or 'unrolled'
+        subgraph_stack: BFS work queue for remaining branches.
+        nesting_depth: Current position in ``parent_graph_list``.
+        max_nesting_depth: Maximum depth across all branches (for penwidth scaling).
+        vis_opt: ``'rolled'`` or ``'unrolled'``.
         overrides: Graphviz attribute overrides.
     """
     subgraph_name_w_pass = parent_graph_list[nesting_depth]
@@ -1165,8 +1353,10 @@ def _setup_subgraphs_recurse(
                 overrides,
             )
 
-    else:  # we made it, make the subgraph and add all edges.
+    else:  # Leaf of this branch: create the subgraph and add all edges.
         with starting_subgraph.subgraph(name=cluster_name) as s:
+            # Penwidth scales with depth: outermost modules get thickest
+            # borders, deepest modules get thinnest.  Provides visual hierarchy.
             nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
             pen_width = MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
             if module_edge_dict[subgraph_name]["has_input_ancestor"]:

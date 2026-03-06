@@ -1,11 +1,35 @@
 """Postprocessing pipeline for cleaning up the model log after the forward pass.
 
-Split into thematic modules:
-- graph_traversal: Steps 1-4 (output nodes, ancestry, orphans, distances)
-- control_flow: Steps 5-7 (conditional branches, module fixes, buffer fixes)
-- loop_detection: Step 8 (loop detection, isomorphic subgraph expansion)
-- labeling: Steps 9-12 (label mapping, final info, renaming, cleanup)
-- finalization: Steps 13-18 (undecoration, timing, params, layer logs, modules, finish)
+After the forward pass captures raw tensor metadata into a ModelLog, this pipeline
+transforms the raw graph into its user-facing form. The full pipeline has 18 steps,
+split into thematic submodules:
+
+- graph_traversal (Steps 1-4): Add output nodes, trace ancestry, remove orphans,
+  compute input/output distances.
+- control_flow (Steps 5-7): Mark conditional branches, fix module containment for
+  internally-generated tensors, deduplicate/merge buffer layers.
+- loop_detection (Step 8): Identify repeated operations (loops/recurrence), assign
+  same-layer groupings via BFS isomorphic subgraph expansion.
+- labeling (Steps 9-12): Generate final human-readable labels, rename all internal
+  references, trim/reorder fields, build lookup keys.
+- finalization (Steps 13-18): Undecorate saved tensors, log timing, finalize
+  ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished.
+
+Step ordering invariants:
+- Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
+- Step 6 (module suffix appending) MUST precede Step 8 (loop detection uses
+  operation_equivalence_type which includes module suffixes).
+- Step 8 MUST precede Step 9 (label generation needs same_layer_operations).
+- Step 9 MUST precede Step 10 (final info logging uses finalized labels).
+- Step 10 MUST precede Step 12 (lookup key generation needs module hierarchy data
+  populated in Step 10).
+- Step 11 (rename) MUST precede Step 12 (cleanup uses renamed labels).
+- Step 16.5 (_build_layer_logs) MUST precede Step 17 (_build_module_logs) because
+  ModuleLog.all_layers references LayerLog keys.
+
+Fast mode skips Steps 1-10 and Step 17, reusing the exhaustive pass's metadata.
+It only copies activations from parent to output nodes, trims, renames, builds
+LayerLogs, and marks the pass as finished. See postprocess_fast() below.
 """
 
 from typing import TYPE_CHECKING, List
@@ -49,11 +73,17 @@ if TYPE_CHECKING:
 def postprocess(
     self: "ModelLog", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
 ) -> None:
-    """After the forward pass, cleans up the log into its final form.
+    """Run the full 18-step postprocessing pipeline (exhaustive mode).
 
-    Runs the full 18-step postprocessing pipeline (exhaustive mode) or a
-    shortened fast-mode pipeline. Each step is delegated to a thematic
-    submodule — see the module docstring for the mapping.
+    Transforms the raw ModelLog captured during the forward pass into its
+    final user-facing form. In fast mode, delegates to ``postprocess_fast``
+    which skips most steps (graph traversal, loop detection, module annotation)
+    and only copies activations, trims fields, and builds LayerLogs.
+
+    Args:
+        output_tensors: The actual output tensors returned by the model's forward().
+        output_tensor_addresses: Hierarchical address strings for each output
+            (e.g., "0.1" for nested tuple outputs).
     """
     if self.logging_mode == "fast":
         postprocess_fast(self)
@@ -79,7 +109,8 @@ def postprocess(
 
     _remove_orphan_nodes(self)
 
-    # Step 4: Find mix/max distance from input and output nodes
+    # Step 4: Find min/max distance from input and output nodes.
+    # Conditional: only runs when the user requested distance metadata.
 
     if self.mark_input_output_distances:
         _mark_input_output_distances(self)
@@ -88,12 +119,17 @@ def postprocess(
 
     _mark_conditional_branches(self)
 
-    # Step 6: Annotate the containing modules for all internally-generated tensors (they don't know where
-    # they are when they're made; have to trace breadcrumbs from tensors that came from input).
+    # Step 6: Annotate the containing modules for all internally-generated tensors.
+    # Internally-initialized tensors (e.g., constants, arange results) don't know
+    # what module they belong to. This traces backward from input-descendant tensors
+    # to infer module containment. IMPORTANT: also appends module path suffixes to
+    # operation_equivalence_type, which affects Step 8 loop detection grouping.
 
     _fix_modules_for_internal_tensors(self)
 
-    # Step 7: Fix the buffer passes and parent infomration.
+    # Step 7: Fix the buffer passes and parent information.
+    # Connects buffer parents, merges duplicate buffer nodes (same module, same
+    # value, same parents), and assigns buffer pass numbers.
 
     _fix_buffer_layers(self)
 
@@ -105,14 +141,19 @@ def postprocess(
 
     _map_raw_labels_to_final_labels(self)
 
-    # Step 10: Go through and log information pertaining to all layers:
+    # Step 10: Log final info for all layers (operation numbers, module hierarchy,
+    # param tallies, structural flags). MUST run before Step 12 because lookup key
+    # generation in Step 12 needs module hierarchy data populated here.
     _log_final_info_for_all_layers(self)
 
-    # Step 11: Rename the raw tensor entries in the fields of ModelLog:
+    # Step 11: Rename all raw labels (e.g., "cos_3_raw") to final labels
+    # (e.g., "cos_1_3:2") in both ModelLog-level fields and LayerPassLog fields.
+    # Then reorder ModelLog fields into the canonical display order.
     _rename_model_history_layer_names(self)
     _trim_and_reorder_model_history_fields(self)
 
-    # Step 12: And one more pass to delete unused layers from the record and do final tidying up:
+    # Step 12: Remove unsaved layers (unless keep_unsaved_layers=True), build
+    # lookup key mappings, and log remaining layer metadata.
     _remove_unwanted_entries_and_log_remaining(self)
 
     # Step 13: Undecorate all saved tensors and remove saved grad_fns.
@@ -139,11 +180,24 @@ def postprocess(
 
 
 def postprocess_fast(self: "ModelLog") -> None:
-    """Lightweight postprocessing for fast logging mode.
+    """Lightweight postprocessing for fast (second-pass) logging mode.
 
-    Copies activation data from each output's parent tensor into the output
-    node, then trims, renames, undecorates, and marks the pass as finished.
-    Skips graph traversal, loop detection, and module annotation.
+    The fast pass reuses the exhaustive pass's graph structure, loop groupings,
+    and labels. It only needs to:
+    1. Copy activation data from each output's parent tensor into the output node.
+    2. Trim and reorder fields.
+    3. Remove unsaved layers and build lookup keys.
+    4. Undecorate saved tensors.
+    5. Build LayerLog aggregates.
+    6. Mark the pass as finished.
+
+    Skipped steps (already computed by the exhaustive pass):
+    - Steps 1-4: Graph structure (output nodes, ancestry, orphans, distances)
+    - Steps 5-7: Conditional branches, module fixing, buffer fixing
+    - Step 8: Loop detection
+    - Steps 9-10: Label mapping and final info logging
+    - Step 17: _build_module_logs — module structure doesn't change between
+      passes and _module_build_data isn't repopulated in fast mode (#108).
     """
     # Use layer_dict_main_keys to get LayerPassLog directly (not LayerLog)
     for output_layer_label in self.output_layers:

@@ -1,4 +1,22 @@
-"""Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish."""
+"""Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish.
+
+Step 13 (_undecorate_all_saved_tensors): Removes tl_tensor_label_raw attribute from
+    all saved tensors and their creation args/kwargs.
+Step 14: torch.cuda.empty_cache() — handled inline in __init__.py.
+Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
+Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (layer_log_entries,
+    linked_params), num_passes, and clears Parameter tensor references.
+Step 16.5 (_build_layer_logs): Groups LayerPassLog entries by layer_label_no_pass to
+    create aggregate LayerLog objects. Only 3 fields are merged across passes
+    (has_input_ancestor, input_output_address, is_bottom_level_submodule_output);
+    all other 78+ fields use first-pass values only.
+Step 17 (_build_module_logs): Builds structured ModuleLog/ModulePassLog objects from
+    _module_build_data and _module_metadata. MUST NOT run in fast mode — _module_build_data
+    isn't repopulated in fast mode (Step 10 is skipped). Existing module logs from the
+    exhaustive pass remain valid.
+Step 18 (_set_pass_finished): Marks ModelLog and all LayerPassLogs as finished, switching
+    to user-facing mode for display and access methods.
+"""
 
 import time
 from collections import defaultdict, deque
@@ -16,7 +34,13 @@ if TYPE_CHECKING:
 
 
 def _undecorate_all_saved_tensors(self) -> None:
-    """Utility function to undecorate all saved tensors."""
+    """Step 13: Remove tl_tensor_label_raw from all saved tensors.
+
+    During logging, tensors are "decorated" with a tl_tensor_label_raw attribute
+    for tracking. This function strips that attribute from saved activations and
+    any tensors embedded in creation_args/creation_kwargs, so that tensors
+    returned to the user are clean.
+    """
     tensors_to_undecorate = []
     for layer_label in self.layer_labels:
         layer_entry = self.layer_dict_main_keys[layer_label]
@@ -36,7 +60,12 @@ def _undecorate_all_saved_tensors(self) -> None:
 
 
 def _log_time_elapsed(self) -> None:
-    """Record wall-clock timing for the cleanup phase and overall pass."""
+    """Step 15: Record wall-clock timing for the cleanup phase and overall pass.
+
+    Computes cleanup time as the residual after subtracting setup and forward
+    pass times from total elapsed time. Also computes torchlens_logging overhead
+    as total time minus actual function call time.
+    """
     self.pass_end_time = time.time()
     self.elapsed_time_cleanup = (
         self.pass_end_time
@@ -49,7 +78,17 @@ def _log_time_elapsed(self) -> None:
 
 
 def _finalize_param_logs(self: "ModelLog") -> None:
-    """Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata."""
+    """Step 16: Populate ParamLog reverse mappings, linked params, and num_passes.
+
+    For each LayerPassLog with parent_param_logs:
+    - Adds the layer's label to each ParamLog's layer_log_entries list.
+    - Links params that co-occur in the same operation (linked_params).
+    - Sets num_passes = max(1, len(layer_log_entries)).
+
+    Then clears actual Parameter tensor references (parent_params) from
+    LayerPassLog entries to reduce memory, while preserving ParamLog._param_ref
+    for potential backward() calls by the user.
+    """
     from ..utils.tensor_utils import get_tensor_memory_amount
     from ..utils.display import human_readable_size
 
@@ -84,7 +123,12 @@ def _finalize_param_logs(self: "ModelLog") -> None:
 
 
 def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "ModuleLog":
-    """Build the root ModuleLog and its ModulePassLog for the model itself."""
+    """Build the root ModuleLog ("self") representing the model itself.
+
+    The root module encompasses all layers and params. Its address_children are
+    only direct children (no dots in address), while call_children may include
+    grandchildren called directly (e.g., self.level21.level12(x)).
+    """
     from ..data_classes.param_log import ParamAccessor
 
     root_meta = self._module_metadata.get("self", {})
@@ -157,7 +201,10 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
 
 
 def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None:
-    """Assign nesting_depth to each ModuleLog via BFS from the root."""
+    """Assign nesting_depth to each ModuleLog via BFS from the root.
+
+    Root ("self") has depth 0. Each level of call_children nesting adds 1.
+    """
     visited = {"self": 0}
     queue: deque = deque()
     for child_addr in root_module.call_children:
@@ -188,8 +235,11 @@ def _build_submodule_pass_logs(
 ) -> tuple:
     """Build ModulePassLog objects for all passes of a single submodule.
 
+    For each pass, derives input/output layers from LayerPassLog fields,
+    retrieves forward args, and resolves call parent/children relationships.
+
     Returns:
-        Tuple of (passes dict, pass_labels list).
+        Tuple of (passes dict {pass_num: ModulePassLog}, pass_labels list).
     """
     passes = {}
     pass_labels_list = []
@@ -243,10 +293,14 @@ def _build_submodule_pass_logs(
 
 
 def _resolve_call_hierarchy(passes: dict) -> tuple:
-    """Derive call_children (union of addresses) and call_parent (address) from pass logs.
+    """Derive module-level call_children and call_parent from per-pass data.
+
+    Unions call_children across all passes (stripping pass suffixes to get
+    addresses). call_parent is taken from the first pass and converted from
+    pass-label to address.
 
     Returns:
-        Tuple of (call_children_all list, call_parent_addr or None).
+        Tuple of (call_children_all: list of addresses, call_parent_addr or None).
     """
     call_children_all = []
     for module_pass_log in passes.values():
@@ -278,7 +332,7 @@ class ModuleParamInfo(NamedTuple):
 
 
 def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> ModuleParamInfo:
-    """Gather parameter and buffer layer info for a single module."""
+    """Gather parameter counts, sizes, and buffer layers for a single module."""
     from ..data_classes.param_log import ParamAccessor
 
     module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}  # type: ignore[attr-defined]
@@ -303,10 +357,22 @@ def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> Modul
 
 
 def _build_module_logs(self: "ModelLog") -> None:
-    """Build structured ModuleLog/ModulePassLog objects from _module_build_data and _module_metadata.
+    """Step 17: Build structured ModuleLog/ModulePassLog objects.
 
-    Called as Step 17 of postprocess(), after all raw module data has been populated
-    and layer labels have been finalized.
+    Constructs the module hierarchy from _module_build_data (populated in Step 10)
+    and _module_metadata (captured during model preparation). Creates:
+    - A root ModuleLog for "self" (the model itself).
+    - ModuleLogs for each submodule with ModulePassLogs for each pass.
+    - ModuleAccessor and BufferAccessor for user-facing access.
+
+    MUST NOT be called in fast mode (postprocess_fast) because _module_build_data
+    is not repopulated when Step 10 is skipped. Existing module logs from the
+    exhaustive pass remain valid (#108).
+
+    Handles shared modules (same nn.Module registered under multiple addresses)
+    via an alias-to-metadata map. Computes nesting depths via BFS from root.
+    Clears temporary state (_module_metadata, _module_forward_args, _module_build_data)
+    after building.
     """
     mbd = self._module_build_data
     module_dict = {}  # address -> ModuleLog
@@ -329,14 +395,11 @@ def _build_module_logs(self: "ModelLog") -> None:
         for child_label in children:
             _child_to_parent_pass[child_label] = parent_pass_label
 
-    # Build alias→meta map so shared modules (same nn.Module instance
-    # registered under multiple addresses) can be found regardless of which
-    # alias tl_module_address was last set to.  _module_metadata stores
-    # metadata under the FIRST address visited by _capture_module_metadata,
-    # while tl_module_address may be overwritten to a LATER address by
-    # _prepare_model_once.  Without this map, shared modules get empty meta
-    # and address_children falls back to call-graph children, causing
-    # address_parent / address_children inconsistency.
+    # Build alias-to-metadata map for shared modules (same nn.Module instance
+    # registered under multiple addresses). _module_metadata stores metadata
+    # under the FIRST address visited by _capture_module_metadata, but
+    # tl_module_address may be overwritten to a LATER address by
+    # _prepare_model_once. This map ensures all aliases resolve to the same meta.
     _metadata_by_alias: Dict[str, dict] = {}
     for _primary_addr, _meta in self._module_metadata.items():
         for _alias in _meta.get("all_addresses", [_primary_addr]):
@@ -440,10 +503,10 @@ def _build_module_logs(self: "ModelLog") -> None:
     # --- Compute nesting depths ---
     _compute_nesting_depths(module_dict, root_module)
 
-    # --- Build ModuleAccessor and assign to ModelLog ---
+    # Build the user-facing ModuleAccessor (supports log.modules[address] access).
     self._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
 
-    # --- Build BufferAccessor ---
+    # Build BufferAccessor for log.buffers[address] access.
     buffer_dict = {}
     for label in self.buffer_layers:
         if label in self.layer_dict_all_keys:
@@ -452,26 +515,41 @@ def _build_module_logs(self: "ModelLog") -> None:
                 buffer_dict[entry.buffer_address] = entry
     self._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=self)  # type: ignore[assignment, arg-type]
 
-    # --- Clean up temporary state ---
+    # Clean up temporary build state to free memory. These dicts are only
+    # needed during construction and are not part of the user-facing API.
     self._module_metadata = {}
     self._module_forward_args = {}
     from ..data_classes.model_log import _init_module_build_data
 
     self._module_build_data = _init_module_build_data()
 
-    # GC-11: Clear forward_args/kwargs from ModulePassLogs to release tensor references
+    # GC-11: Clear forward_args/kwargs from ModulePassLogs to release tensor references.
+    # These can hold large tensors from the model's forward() call args.
     for pass_log in pass_dict.values():
         pass_log.forward_args = None
         pass_log.forward_kwargs = None
 
 
 def _build_layer_logs(self: "ModelLog") -> None:
-    """Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+    """Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
 
-    Groups layer_list entries by layer_label_no_pass, creates a LayerLog
-    for each unique layer, and populates ModelLog.layer_logs.  Also merges
-    per-pass fields that need aggregation for multi-pass layers (e.g.,
-    has_input_ancestor, input_output_address, is_bottom_level_submodule_output).
+    Groups layer_list entries by layer_label_no_pass and creates a LayerLog for
+    each unique layer. For single-pass layers, the LayerLog is a thin wrapper
+    delegating attribute access to the sole LayerPassLog.
+
+    MERGE RULES for multi-pass layers (only 3 fields are merged):
+    1. has_input_ancestor: OR across passes (True if ANY pass has an input ancestor).
+    2. input_output_address: Character-wise merge with '*' for differing characters
+       (e.g., "output.0" + "output.1" -> "output.*").
+    3. is_bottom_level_submodule_output: OR across passes.
+
+    All other 78+ fields use first-pass values only. This is correct because
+    same-layer grouping requires same structural position, so module containment,
+    function info, param info, etc. are identical across passes.
+
+    Note: modules_exited/module_passes_exited are NOT updated during merge
+    (same structural position implies same modules). The comment in layer_log.py:107
+    ("may be updated") is misleading — no such update occurs.
     """
     from collections import OrderedDict
 
@@ -483,14 +561,16 @@ def _build_layer_logs(self: "ModelLog") -> None:
         no_pass_label = pass_log.layer_label_no_pass
 
         if no_pass_label not in layer_logs:
+            # First pass: create LayerLog from this pass's data.
             layer_log = LayerLog(pass_log)
             layer_logs[no_pass_label] = layer_log
         else:
+            # Subsequent pass: merge only the 3 aggregate fields.
             layer_log = layer_logs[no_pass_label]
-            # Merge per-pass aggregate fields
+            # Merge field 1/3: has_input_ancestor (OR across passes).
             if pass_log.has_input_ancestor:
                 layer_log.has_input_ancestor = True
-            # Merge input_output_address with '*' for differing chars
+            # Merge field 2/3: input_output_address (char-merge with '*').
             if (
                 layer_log.input_output_address is not None
                 and pass_log.input_output_address is not None
@@ -507,7 +587,7 @@ def _build_layer_logs(self: "ModelLog") -> None:
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
                 layer_log.input_output_address = merged
-            # Merge bottom-level submodule output flag
+            # Merge field 3/3: is_bottom_level_submodule_output (OR across passes).
             if pass_log.is_bottom_level_submodule_output:
                 layer_log.is_bottom_level_submodule_output = True
 
@@ -519,8 +599,16 @@ def _build_layer_logs(self: "ModelLog") -> None:
 
 
 def _set_pass_finished(self) -> None:
-    """Sets the ModelLog to "pass finished" status, indicating that the pass is done, so
-    the "final" rather than "realtime debugging" mode of certain functions should be used.
+    """Step 18: Mark the ModelLog and all LayerPassLogs as pass-finished.
+
+    Sets ``_pass_finished = True`` on the ModelLog and every retained
+    LayerPassLog entry. This flag switches various methods (e.g., __str__,
+    __getitem__) from their "realtime debugging" behavior to their
+    "user-facing" behavior.
+
+    Note: _pass_finished is NOT reset between exhaustive and fast passes.
+    This is intentional — it enables fast-path postprocessing to use
+    fully-populated lookup dicts from the exhaustive pass.
     """
     for layer_label in self.layer_dict_main_keys:
         tensor = self.layer_dict_main_keys[layer_label]

@@ -1,4 +1,24 @@
-"""RNG and autocast state capture/restore for reproducible forward-pass replay."""
+"""RNG and autocast state capture/restore for reproducible forward-pass replay.
+
+During the exhaustive logging pass, RNG states are captured *before* each
+logged operation so that the validation replay can restore the exact same
+random state and reproduce the operation's output.  This is critical for
+ops like ``dropout`` or ``torch.randn`` that consume RNG.
+
+**Ordering invariant**: RNG states must be captured *before*
+``active_logging()`` is entered, because entering the logging context
+itself may call decorated functions (e.g. tensor allocations for internal
+bookkeeping) that would advance the RNG.
+
+Three independent RNG engines are captured:
+  - Python's ``random`` module
+  - NumPy's ``np.random``
+  - PyTorch's CPU generator (``torch.random``)
+  - PyTorch's CUDA generator (if CUDA is available)
+
+Autocast state (``torch.amp.autocast``) is captured similarly so that
+mixed-precision ops can be replayed under the same dtype context.
+"""
 
 import random
 from typing import Any, Dict, List
@@ -12,13 +32,13 @@ _AUTOCAST_DEVICES = ("cpu", "cuda")
 
 
 def set_random_seed(seed: int):
-    """Sets the random seed for all random number generators.
+    """Set the random seed for all RNG engines simultaneously.
+
+    Ensures deterministic behavior across Python, NumPy, and PyTorch
+    (CPU + all CUDA devices).
 
     Args:
-        seed: Seed to set.
-
-    Returns:
-        Nothing.
+        seed: Seed value to set.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -27,10 +47,15 @@ def set_random_seed(seed: int):
 
 
 def log_current_rng_states() -> Dict:
-    """Utility function to fetch sufficient information from all RNG states to recover the same state later.
+    """Snapshot the current state of all RNG engines.
+
+    The returned dict can be passed to :func:`set_rng_from_saved_states`
+    to restore the exact same RNG position later (e.g. during validation
+    replay).
 
     Returns:
-        Dict with sufficient information to recover all RNG states.
+        Dict with keys ``"random"``, ``"np"``, ``"torch"``, and optionally
+        ``"torch_cuda"``, each holding the opaque state object for that engine.
     """
     rng_dict = {
         "random": random.getstate(),
@@ -43,13 +68,10 @@ def log_current_rng_states() -> Dict:
 
 
 def set_rng_from_saved_states(rng_states: Dict):
-    """Utility function to set the state of random seeds to a cached value.
+    """Restore RNG engines to a previously captured state.
 
     Args:
-        rng_states: Dict of rng_states saved by get_random_seed_states
-
-    Returns:
-        Nothing, but correctly sets all random seed states.
+        rng_states: Dict produced by :func:`log_current_rng_states`.
     """
     random.setstate(rng_states["random"])
     np.random.set_state(rng_states["np"])
@@ -59,10 +81,13 @@ def set_rng_from_saved_states(rng_states: Dict):
 
 
 def log_current_autocast_state() -> Dict:
-    """Capture the current autocast enabled/dtype state for all supported devices.
+    """Capture the current ``torch.amp.autocast`` enabled/dtype state.
+
+    Checked for each device in :data:`_AUTOCAST_DEVICES`.  If a device
+    doesn't support autocast queries, it is silently skipped.
 
     Returns:
-        Dict mapping device name to {enabled: bool, dtype: torch.dtype}.
+        Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
     """
     state = {}
     for device in _AUTOCAST_DEVICES:
@@ -72,12 +97,16 @@ def log_current_autocast_state() -> Dict:
                 "dtype": torch.get_autocast_dtype(device),
             }
         except (RuntimeError, TypeError):
+            # Device doesn't support autocast queries (e.g. no CUDA).
             pass
     return state
 
 
 class AutocastRestore:
-    """Context manager that restores saved autocast states.
+    """Context manager that re-enters saved autocast contexts during replay.
+
+    Only devices that were *enabled* at capture time get an autocast
+    context opened.  Contexts are exited in reverse order on ``__exit__``.
 
     Usage::
 
@@ -100,5 +129,6 @@ class AutocastRestore:
         return self
 
     def __exit__(self, *exc_info):
+        # Exit in reverse order to mirror the nesting order of __enter__.
         for ctx in reversed(self._contexts):
             ctx.__exit__(*exc_info)

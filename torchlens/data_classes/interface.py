@@ -1,4 +1,26 @@
-"""ModelLog query and display methods: __getitem__, __str__, to_pandas, print_all_fields."""
+"""ModelLog query and display methods: __getitem__, __str__, to_pandas, print_all_fields.
+
+These functions are defined here to keep ModelLog's class body small. They
+are bound to ModelLog as class attributes via assignment at the bottom of
+model_log.py (the "method importation" pattern).
+
+**__getitem__ lookup logic** (``_getitem_after_pass``):
+
+The lookup cascade for string keys after the pass is finished:
+
+1. Exact match in ``layer_dict_all_keys`` (all lookup keys for every
+   LayerPassLog, including pass-qualified labels like ``"conv2d_1_1:1"``).
+2. Exact match in ``layer_logs`` (no-pass labels -> LayerLog aggregate).
+3. Exact match in ``_module_logs`` (module address or pass label ->
+   ModuleLog or ModulePassLog).
+4. Case-insensitive exact match against all of the above.
+5. Substring match: if exactly one layer label contains the given string,
+   return it.  If multiple match, raise ValueError listing them.
+6. If nothing matches, raise KeyError with a help message.
+
+For integer keys: direct index into ``layer_list`` (supports negative indexing).
+For slice keys: returns a list slice of ``layer_list``.
+"""
 
 import random
 from typing import TYPE_CHECKING, Union
@@ -28,33 +50,43 @@ def _getitem_during_pass(self: "ModelLog", ix) -> LayerPassLog:
 
 
 def _getitem_after_pass(self, ix):
-    """Multi-key lookup for ModelLog entries.
+    """Multi-key lookup for ModelLog entries after postprocessing.
 
-    Supports several lookup modes:
-        - int: ordinal index into the layer list (e.g., 0, -1).
-        - slice: returns a list of layers from the layer_list.
-        - str (exact layer label): matches a layer label directly.
-        - str (no-pass layer label): returns LayerLog for multi-pass layers.
-        - str (module address): matches a module address in _module_logs, returning a ModuleLog.
-        - str (substring): if exactly one layer label contains the given substring, returns that layer.
+    Lookup cascade:
+    1. slice -> list slice of layer_list
+    2. exact match in layer_dict_all_keys (LayerPassLog by any lookup key)
+    3. exact match in layer_logs (LayerLog by no-pass label)
+    4. exact match in _module_logs (ModuleLog/ModulePassLog by address)
+    5. case-insensitive exact match against all of the above
+    6. substring match: unique match returns the layer; ambiguous raises ValueError
+    7. fallback: KeyError with contextual help message
 
-    Raises KeyError if no match is found.
+    Args:
+        ix: int (ordinal), slice, or str (label/address/substring).
+
+    Returns:
+        LayerPassLog, LayerLog, ModuleLog, or ModulePassLog.
+
+    Raises:
+        KeyError: No match found.
+        ValueError: Ambiguous substring match or invalid index.
     """
     if isinstance(ix, slice):
         return self.layer_list[ix]  # #78: slice indexing support
 
+    # Step 2: exact match against all lookup keys (pass-qualified, short forms, etc.)
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
 
-    # Check if it's a no-pass layer label → return LayerLog
+    # Step 3: no-pass label -> aggregate LayerLog
     if isinstance(ix, str) and hasattr(self, "layer_logs") and ix in self.layer_logs:
         return self.layer_logs[ix]
 
-    # Check if it's a module address or pass notation → return ModuleLog/ModulePassLog
+    # Step 4: module address or pass label -> ModuleLog/ModulePassLog
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
         return self._module_logs[ix]
 
-    # Case-insensitive exact match (#23)
+    # Step 5: case-insensitive exact match (#23)
     if isinstance(ix, str):
         lower_ix = ix.lower()
         for key in self.layer_dict_all_keys:
@@ -69,6 +101,7 @@ def _getitem_after_pass(self, ix):
                 if key.lower() == lower_ix:
                     return self._module_logs[key]
 
+    # Step 6: substring match (case-insensitive)
     if not isinstance(ix, int):
         keys_with_substr = [
             key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
@@ -85,6 +118,7 @@ def _getitem_after_pass(self, ix):
                 f"{matches_str}{suffix}. Please use a more specific key."
             )
 
+    # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
 
@@ -300,8 +334,11 @@ def _get_lookup_help_str(self, layer_label: Union[int, str], mode: str) -> str:
 
 
 def _module_hierarchy_str(self) -> str:
-    """
-    Utility function to print the nested module hierarchy.
+    """Build a tree-formatted string of the module call hierarchy.
+
+    Starts from the root module ("self") pass 1 and recursively descends
+    through call_children.  Leaf-heavy subtrees (where no child has
+    grandchildren) are printed on a single line for compactness.
     """
     s = ""
     root_pass = self.modules["self"].passes.get(1)
@@ -317,8 +354,11 @@ def _module_hierarchy_str(self) -> str:
 
 
 def _module_hierarchy_str_recursive(self, module_pass, level) -> str:
-    """
-    Helper function for _module_hierarchy_str.
+    """Recursively format child modules at the given indentation level.
+
+    If any child has grandchildren (deeper nesting), each child gets its
+    own line with recursive expansion.  Otherwise, all children are
+    printed compactly on one line with ``_format_list_with_line_breaks``.
     """
     s = ""
     module_pass_log = self.modules[module_pass]

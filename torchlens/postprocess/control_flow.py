@@ -1,4 +1,16 @@
-"""Steps 5-7: Conditional branches, module annotation fixes, buffer layer fixes."""
+"""Steps 5-7: Conditional branches, module annotation fixes, buffer layer fixes.
+
+Step 5 (_mark_conditional_branches): Starting from terminal boolean tensors,
+    backtracks to find where conditional branches diverge from the main graph.
+Step 6 (_fix_modules_for_internal_tensors): Internally-generated tensors
+    (constants, arange, etc.) don't know their containing module. This infers
+    module containment by tracing backward from known input-descendant tensors.
+    Also appends module path suffixes to operation_equivalence_type — this is
+    INTENTIONAL and affects loop detection (Step 8), ensuring operations in
+    different modules are never grouped as the same layer.
+Step 7 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
+    buffers (same module, same value, same parent), and assigns buffer pass numbers.
+"""
 
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, List, Set, Tuple
@@ -13,8 +25,19 @@ if TYPE_CHECKING:
 
 
 def _mark_conditional_branches(self) -> None:
-    """Starting from any terminal boolean nodes, backtracks until it finds the beginning of any
-    conditional branches.
+    """Step 5: Detect conditional branches by backtracking from terminal booleans.
+
+    Conditional branches in PyTorch models (e.g., ``if x > 0:``) produce boolean
+    tensors that are consumed by Python control flow but never reach an output.
+    These boolean tensors are identified as "internally terminated bool layers"
+    during Step 3 (orphan removal).
+
+    Starting from these terminal booleans, this function floods backward and
+    forward through parent_layers and child_layers. When it encounters a node
+    that IS an output ancestor (is_output_ancestor=True), that node is the
+    "branch start" — the point where the conditional branch diverges from the
+    main computation graph. All non-output-ancestor nodes traversed are marked
+    as ``in_cond_branch=True``.
     """
     terminal_bool_nodes = self.internally_terminated_bool_layers[:]
 
@@ -42,21 +65,31 @@ def _mark_conditional_branches(self) -> None:
 
 
 def _fix_modules_for_internal_tensors(self) -> None:
-    """
-    Since internally initialized tensors don't automatically know what module they're in,
-    this function infers this by tracing back from tensors that came from the input.
-    """
-    # Fetch nodes where internally initialized branches first meet a tensor computed from the input:
-    node_stack = self._layers_where_internal_branches_merge_with_input[:]
+    """Step 6: Infer module containment for internally-generated tensors.
 
-    # Now go through the stack and work backwards up the internally initialized branch, fixing the
-    # module containment labels as we go.
+    Internally-initialized tensors (constants, torch.arange results, etc.) are
+    created without any module context. This function starts from nodes where
+    internal branches merge with input-descendant tensors and propagates module
+    containment backward (to parents) and forward (to non-input-descendant
+    children) using the module entry/exit thread metadata recorded during the
+    forward pass.
+
+    After fixing module containment, appends the module path as a suffix to
+    each tensor's ``operation_equivalence_type``. This is INTENTIONAL and
+    critical for Step 8 (loop detection): it ensures that operations with
+    identical function signatures but in different modules (e.g., relu in
+    linear1 vs relu in linear2) are never grouped as the same layer.
+    """
+    # Start from nodes where internally-initialized branches first merge with
+    # an input-descendant tensor — these nodes have known module containment
+    # that can be propagated backward to their internal ancestors.
+    node_stack = self._layers_where_internal_branches_merge_with_input[:]
 
     nodes_seen: Set[str] = set()
     while len(node_stack) > 0:
         node_label = node_stack.pop()
         node = self[node_label]
-        # Propagate modules for any parent nodes:
+        # Propagate modules backward to internal-only parent nodes:
         for parent_label in node.parent_layers:
             parent_node = self[parent_label]
             if (not parent_node.has_input_ancestor) and (parent_label not in nodes_seen):
@@ -64,7 +97,7 @@ def _fix_modules_for_internal_tensors(self) -> None:
                     node, parent_node, "parent", node_stack, nodes_seen
                 )
 
-        # And for any internally generated child nodes:
+        # Propagate forward to internally-generated child nodes:
         for child_label in node.child_layers:
             child_node = self[child_label]
             if (
@@ -78,7 +111,9 @@ def _fix_modules_for_internal_tensors(self) -> None:
                 node, child_node, "child", node_stack, nodes_seen
             )
 
-    # Now that the module containment is fixed, add this to the operation equivalence types.
+    # Append module path suffix to operation_equivalence_type for ALL tensors.
+    # This ensures loop detection (Step 8) treats same-function operations in
+    # different modules as distinct equivalence types.
     for layer in self:
         module_str = "_".join(
             [module_pass[0] for module_pass in layer.containing_modules_origin_nested]
@@ -93,15 +128,21 @@ def _fix_modules_for_single_internal_tensor(
     node_stack: List[str],
     nodes_seen: Set[str],
 ) -> None:
-    """Helper function to fix the containing modules for a single internally generated tensor.
-    The rule is, start from the child node, and apply in reverse any modules that were entered or exited.
+    """Fix the containing modules for a single internally-generated tensor.
+
+    Copies the module containment from ``starting_node`` (which has known module
+    info) to ``node_to_fix``, then adjusts by replaying the module entry/exit
+    thread in reverse. For a parent, module entries (+) on the child mean we
+    should REMOVE that module from the parent's containment (going backward
+    undoes the entry); module exits (-) mean we should ADD it. For a child,
+    the logic is direct (entries add, exits remove).
 
     Args:
-        starting_node: Source node that has the correct module information
-        node_to_fix: Parent of the source node
-        node_type_to_fix: either 'child' or 'parent'
-        node_stack: Stack of nodes to consider
-        nodes_seen: Nodes seen so far
+        starting_node: Source node with correct module containment.
+        node_to_fix: The internally-generated tensor to fix.
+        node_type_to_fix: 'parent' (fix going backward) or 'child' (fix going forward).
+        node_stack: Stack to push node_to_fix onto for further propagation.
+        nodes_seen: Set of already-processed nodes.
     """
     node_to_fix_label = node_to_fix.tensor_label_raw
     node_to_fix.containing_modules_origin_nested = (
@@ -140,8 +181,20 @@ def _fix_modules_for_single_internal_tensor(
 
 
 def _fix_buffer_layers(self) -> None:
-    """Connect the buffer parents, merge duplicate buffer nodes, and label buffer passes correctly.
-    Buffers are duplicates if they happen in the same module, have the same value, and have the same parents.
+    """Step 7: Connect buffer parents, merge duplicates, and assign pass numbers.
+
+    Buffer tensors (nn.Module registered buffers) are logged as source tensors
+    during the forward pass but may lack proper parent connections. This function:
+
+    1. Connects each buffer to its buffer_parent (the tensor that produced the
+       buffer's value), updating parent/child links and ancestry.
+    2. Deduplicates buffers: buffers with the same containing module, same parent,
+       same buffer_address, AND same tensor value are merged into a single node.
+       The dedup hash is (containing_modules + buffer_parent + buffer_address).
+    3. Assigns sequential buffer_pass numbers per buffer_address.
+
+    Note: Buffer sibling_layers are always empty — the sibling iteration in
+    _merge_buffer_entries is effectively dead code for buffers (#2).
     """
     buffer_counter: Dict[str, int] = defaultdict(lambda: 1)
     buffer_hash_groups: Dict[str, List[str]] = defaultdict(list)
@@ -174,7 +227,9 @@ def _fix_buffer_layers(self) -> None:
         )
         buffer_hash_groups[buffer_hash].append(layer_label)
 
-    # Now go through and merge any layers with the same hash and the same value.
+    # Merge buffers with the same hash AND the same tensor value.
+    # Buffers sharing the same hash but different values are kept as separate
+    # unique buffers (the for/else clause appends unmatched buffers to unique_buffers).
     for _, buffers_orig in buffer_hash_groups.items():
         buffers = buffers_orig[1:]
         unique_buffers = buffers_orig[:1]
@@ -205,7 +260,13 @@ def _fix_buffer_layers(self) -> None:
 def _merge_buffer_entries(
     self, source_buffer: LayerPassLog, buffer_to_remove: LayerPassLog
 ) -> None:
-    """Merges two identical buffer layers."""
+    """Merge a duplicate buffer into a source buffer, rewiring all edges.
+
+    Transfers all child and parent connections from ``buffer_to_remove`` to
+    ``source_buffer``, updates parent_layer_arg_locs in children to point to
+    the source buffer, fixes internally_initialized_parents/ancestors references
+    across the graph, and removes the duplicate from the layer dict.
+    """
     for child_layer in buffer_to_remove.child_layers:
         if child_layer not in source_buffer.child_layers:
             source_buffer.child_layers.append(child_layer)

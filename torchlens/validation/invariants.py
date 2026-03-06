@@ -3,8 +3,27 @@
 Single entry point: ``check_metadata_invariants(model_log)`` runs all checks
 and raises ``MetadataInvariantError`` on the first failure.
 
-Categories A-L: basic structural invariants (Phase 1).
-Categories M-R: complex semantic invariants (Phase 2).
+**Phase 1 -- Structural invariants (checks A-L):**
+  A. ModelLog self-consistency (counts, timing, label uniqueness)
+  B. Special layer lists match per-layer boolean flags
+  C. Graph topology (parent-child bidirectionality, boolean flag consistency)
+  D. LayerPassLog field consistency (shape, dtype, pass numbering, nesting)
+  E. Recurrence / loop invariants (model_is_recurrent, pass dicts)
+  F. Branching invariants (model_is_branching)
+  G. LayerPassLog <-> LayerLog cross-references (pass numbering, back-pointers)
+  H. Module <-> Layer containment (all_layers, module pass layers, reverse check)
+  I. Module hierarchy (address parent-child bidirectionality, pass consistency)
+  J. Param cross-references (ParamLog -> layer, computed_with_params flag)
+  K. Buffer cross-references (buffer_layers list, BufferLog module references)
+  L. Equivalence group symmetry (equivalent_operations labels are valid)
+
+**Phase 2 -- Semantic invariants (checks M-R):**
+  M. Graph ordering (realtime_tensor_num uniqueness/monotonicity, topological order, no raw labels)
+  N. Loop detection invariants (same_layer_operations symmetry, func identity, param sharing, pass numbering)
+  O. Distance / reachability (min <= max, input/output layer distances == 0, ancestor/descendent consistency)
+  P. Graph connectivity (non-input non-buffer layers have parents, orphans removed)
+  Q. Module containment logic (address acyclicity, depth consistency, nested path ordering)
+  R. Lookup key bidirectionality (forward/reverse dicts, raw/final label maps)
 """
 
 from __future__ import annotations
@@ -19,7 +38,11 @@ if TYPE_CHECKING:
 
 
 class MetadataInvariantError(ValueError):
-    """Raised when a metadata invariant check fails."""
+    """Raised when a metadata invariant check fails.
+
+    Embeds the check name (e.g., ``"graph_topology"``) in the message prefix
+    and stores it as an attribute for programmatic inspection in tests.
+    """
 
     def __init__(self, check_name: str, message: str):
         super().__init__(f"[{check_name}] {message}")
@@ -32,30 +55,35 @@ class MetadataInvariantError(ValueError):
 
 
 def check_metadata_invariants(model_log: "ModelLog") -> bool:
-    """Run all metadata invariant checks on a completed ModelLog.
+    """Run all 18 metadata invariant checks (A-R) on a completed ModelLog.
 
-    Raises MetadataInvariantError on the first failure.
+    Checks run in dependency order: Phase 1 structural checks first (A-L),
+    then Phase 2 semantic checks (M-R).  Raises ``MetadataInvariantError``
+    on the first failure, so later checks can assume earlier ones passed.
+
     Returns True if all checks pass.
     """
-    _check_model_log_self_consistency(model_log)
-    _check_special_layer_lists(model_log)
-    _check_graph_topology(model_log)
-    _check_layer_pass_log_fields(model_log)
-    _check_recurrence_invariants(model_log)
-    _check_branching_invariants(model_log)
-    _check_layer_pass_to_layer_log_xrefs(model_log)
-    _check_module_layer_containment(model_log)
-    _check_module_hierarchy(model_log)
-    _check_param_xrefs(model_log)
-    _check_buffer_xrefs(model_log)
-    _check_equivalence_symmetry(model_log)
-    # Phase 2: complex semantic invariants
-    _check_graph_ordering(model_log)
-    _check_loop_detection_invariants(model_log)
-    _check_distance_invariants(model_log)
-    _check_graph_connectivity(model_log)
-    _check_module_containment_logic(model_log)
-    _check_lookup_key_consistency(model_log)
+    # --- Phase 1: structural invariants (A-L) ---
+    _check_model_log_self_consistency(model_log)  # A
+    _check_special_layer_lists(model_log)  # B
+    _check_graph_topology(model_log)  # C
+    _check_layer_pass_log_fields(model_log)  # D
+    _check_recurrence_invariants(model_log)  # E
+    _check_branching_invariants(model_log)  # F
+    _check_layer_pass_to_layer_log_xrefs(model_log)  # G
+    _check_module_layer_containment(model_log)  # H
+    _check_module_hierarchy(model_log)  # I
+    _check_param_xrefs(model_log)  # J
+    _check_buffer_xrefs(model_log)  # K
+    _check_equivalence_symmetry(model_log)  # L
+
+    # --- Phase 2: semantic invariants (M-R) ---
+    _check_graph_ordering(model_log)  # M
+    _check_loop_detection_invariants(model_log)  # N
+    _check_distance_invariants(model_log)  # O
+    _check_graph_connectivity(model_log)  # P
+    _check_module_containment_logic(model_log)  # Q
+    _check_lookup_key_consistency(model_log)  # R
     return True
 
 
@@ -65,6 +93,18 @@ def check_metadata_invariants(model_log: "ModelLog") -> bool:
 
 
 def _check_model_log_self_consistency(ml: "ModelLog") -> None:
+    """Check A: ModelLog aggregate counts and metadata are internally consistent.
+
+    Validates:
+    - layer_labels length matches layer_list length, no duplicates.
+    - num_operations == count of computational (non-input, non-output,
+      non-buffer) layers.
+    - Param counts (total, trainable, frozen) are consistent and sum correctly.
+      Uses deduplication by layer_label_no_pass to match labeling.py logic.
+    - At least one output layer exists.
+    - Timing values are non-negative and ordered.
+    - Tensor counts: total >= saved.
+    """
     name = "model_log_self_consistency"
 
     # layer_labels vs layer_list length
@@ -79,9 +119,10 @@ def _check_model_log_self_consistency(ml: "ModelLog") -> None:
         dupes = [lbl for lbl in ml.layer_labels if ml.layer_labels.count(lbl) > 1]
         raise MetadataInvariantError(name, f"Duplicate layer_labels: {set(dupes)}")
 
-    # num_operations counts computational layers (excludes input, output, buffer).
-    # Use per-layer flags rather than label sets because buffer_layers stores
-    # pass-qualified labels while layer_labels_no_pass strips the pass suffix.
+    # num_operations counts computational layers only (excludes input, output,
+    # buffer).  We check per-layer flags instead of comparing against label
+    # sets because buffer_layers stores pass-qualified labels while
+    # layer_labels_no_pass strips the pass suffix -- they use different formats.
     expected_ops = sum(
         1
         for lpl in ml.layer_list
@@ -93,8 +134,9 @@ def _check_model_log_self_consistency(ml: "ModelLog") -> None:
             f"num_operations={ml.num_operations} != expected computational layers={expected_ops}",
         )
 
-    # Param counts: total_param_tensors sums num_param_tensors across unique
-    # layers (deduplicated by layer_label_no_pass, matching labeling.py:116-122).
+    # Param counts must be deduplicated by layer_label_no_pass because
+    # multi-pass layers share the same params -- counting each pass would
+    # double-count.  This matches the summation logic in labeling.py:116-122.
     seen_no_pass: set[str] = set()
     expected_param_sum = 0
     expected_total_params = 0
@@ -158,6 +200,12 @@ _SPECIAL_LIST_FLAG_PAIRS = [
 
 
 def _check_special_layer_lists(ml: "ModelLog") -> None:
+    """Check B: special layer lists (input, output, buffer, etc.) match per-layer boolean flags.
+
+    For each (list_attr, flag_attr) pair, verifies bidirectional consistency:
+    - Forward: every label in the list has the flag set on its LayerPassLog.
+    - Reverse: every LayerPassLog with the flag set appears in the list.
+    """
     name = "special_layer_lists"
     label_set = set(ml.layer_labels)
 
@@ -196,6 +244,16 @@ def _check_special_layer_lists(ml: "ModelLog") -> None:
 
 
 def _check_graph_topology(ml: "ModelLog") -> None:
+    """Check C: parent-child edge bidirectionality and boolean flag consistency.
+
+    Validates:
+    - Every parent edge has a corresponding child edge (and vice versa).
+    - has_children/has_parents/has_siblings/has_spouses flags match actual counts.
+      Note: has_children excludes output layers (added during postprocessing,
+      not during capture when the flag was set).
+    - Input layers have no parents.
+    - children_tensor_versions keys are a subset of child_layers.
+    """
     name = "graph_topology"
     label_set = set(ml.layer_labels)
     output_set = set(ml.output_layers)
@@ -282,6 +340,16 @@ def _check_graph_topology(ml: "ModelLog") -> None:
 
 
 def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
+    """Check D: per-layer field consistency (shape, dtype, pass numbering, func, nesting).
+
+    Validates:
+    - Saved tensor shape/dtype match actual tensor_contents (when saved).
+    - Pass numbering: pass_num >= 1, layer_passes_total >= pass_num.
+    - Computational layers have callable func_applied and non-empty func_applied_name.
+    - operation_num >= 1 for non-input/non-buffer layers.
+    - module_nesting_depth matches len(containing_modules_origin_nested).
+    - Label format: pass-qualified label has ':' iff multi-pass; no-pass label never has ':'.
+    """
     name = "layer_pass_log_fields"
 
     for lpl in ml.layer_list:
@@ -361,6 +429,14 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
 
 
 def _check_recurrence_invariants(ml: "ModelLog") -> None:
+    """Check E: recurrence / loop invariants.
+
+    Validates:
+    - model_is_recurrent == True iff any layer has >1 pass.
+    - model_max_recurrent_loops matches the maximum pass count.
+    - layer_num_passes keys are valid no-pass labels.
+    - LayerLog.passes dict keys are contiguous {1..N}.
+    """
     name = "recurrence_invariants"
 
     any_recurrent = any(v > 1 for v in ml.layer_num_passes.values())
@@ -407,6 +483,7 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
 
 
 def _check_branching_invariants(ml: "ModelLog") -> None:
+    """Check F: model_is_branching matches whether any layer has >1 child."""
     name = "branching_invariants"
     any_branching = any(len(lpl.child_layers) > 1 for lpl in ml.layer_list)
     if ml.model_is_branching != any_branching:
@@ -423,6 +500,15 @@ def _check_branching_invariants(ml: "ModelLog") -> None:
 
 
 def _check_layer_pass_to_layer_log_xrefs(ml: "ModelLog") -> None:
+    """Check G: LayerPassLog <-> LayerLog cross-references.
+
+    Validates:
+    - LayerLog key matches its layer_label.
+    - passes dict keys are contiguous {1..N}.
+    - Each LayerPassLog's pass_num matches its dict key.
+    - Each LayerPassLog's layer_label_no_pass matches the parent LayerLog's label.
+    - parent_layer_log back-pointer is identity-equal to the LayerLog.
+    """
     name = "layer_pass_layer_log_xrefs"
 
     for ll_label, ll in ml.layer_logs.items():
@@ -468,6 +554,14 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "ModelLog") -> None:
 
 
 def _check_module_layer_containment(ml: "ModelLog") -> None:
+    """Check H: Module <-> Layer containment consistency.
+
+    Validates forward and reverse directions:
+    - Forward: ModuleLog.all_layers labels exist in layer_logs; num_layers matches.
+      ModulePassLog.layers labels exist; input/output_layers subset of layers.
+    - Reverse: each layer's containing_module_origin points to a valid module
+      that lists the layer in its all_layers.
+    """
     name = "module_layer_containment"
     mod_accessor = ml.modules
     label_set = set(ml.layer_labels)
@@ -553,6 +647,17 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
 
 
 def _check_module_hierarchy(ml: "ModelLog") -> None:
+    """Check I: module address tree consistency and pass structure.
+
+    Validates:
+    - Root module 'self' exists.
+    - Address parent-child bidirectionality (with exemptions for shared
+      modules, where aliases may diverge from the primary path).
+    - Container modules (ModuleList) that were never called may not have
+      ModuleLogs -- skip rather than error.
+    - Pass dict keys are contiguous {1..N} and match num_passes.
+    - call_parent and call_children reference valid modules.
+    """
     name = "module_hierarchy"
     mod_accessor = ml.modules
 
@@ -649,6 +754,13 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
 
 
 def _check_param_xrefs(ml: "ModelLog") -> None:
+    """Check J: Param <-> Layer <-> Module cross-references.
+
+    Validates:
+    - ParamLog.layer_log_entries labels are valid layer labels.
+    - computed_with_params == True implies parent_param_logs is non-empty.
+    - layers_computed_with_params values are valid layer labels.
+    """
     name = "param_xrefs"
     label_set = set(ml.layer_labels)
     mod_accessor = ml.modules
@@ -697,6 +809,12 @@ def _check_param_xrefs(ml: "ModelLog") -> None:
 
 
 def _check_buffer_xrefs(ml: "ModelLog") -> None:
+    """Check K: buffer layer and BufferLog cross-references.
+
+    Validates:
+    - buffer_layers list entries are valid layer labels.
+    - BufferLog objects have non-empty buffer_address and valid module_address.
+    """
     name = "buffer_xrefs"
     label_set = set(ml.layer_labels)
 
@@ -731,6 +849,13 @@ def _check_buffer_xrefs(ml: "ModelLog") -> None:
 
 
 def _check_equivalence_symmetry(ml: "ModelLog") -> None:
+    """Check L: equivalent_operations groups reference valid layer labels.
+
+    Validates:
+    - Each equivalence set value is actually a set.
+    - All labels in equivalence sets exist in layer_labels (pass-qualified
+      or no-pass, since recurrent models may use either form).
+    """
     name = "equivalence_symmetry"
     label_set = set(ml.layer_labels)
 
@@ -769,10 +894,22 @@ def _check_equivalence_symmetry(ml: "ModelLog") -> None:
 # M. Graph ordering invariants
 # ---------------------------------------------------------------------------
 
+# Raw labels (e.g., "l_42") are internal identifiers assigned during capture
+# and must be replaced by human-readable labels during postprocessing.
 _RAW_LABEL_PATTERN = re.compile(r"^l_\d+$")
 
 
 def _check_graph_ordering(ml: "ModelLog") -> None:
+    """Check M: graph ordering invariants.
+
+    Validates:
+    - realtime_tensor_num is unique across all layers and monotonically
+      increasing in layer_list order.
+    - operation_num is unique among computational layers (non-input, non-buffer,
+      non-output).
+    - Topological order: every parent's realtime_tensor_num < child's.
+    - No raw labels (``l_\\d+``) survive postprocessing.
+    """
     name = "graph_ordering"
 
     # realtime_tensor_num uniqueness and monotonicity
@@ -835,6 +972,25 @@ def _check_graph_ordering(ml: "ModelLog") -> None:
 
 
 def _check_loop_detection_invariants(ml: "ModelLog") -> None:
+    """Check N: loop detection / same_layer_operations invariants.
+
+    Validates per-layer:
+    - same_layer_operations is non-empty and includes self.
+    - Symmetry: all members agree on the same group.
+    - All members share: layer_label_no_pass, operation_equivalence_type,
+      func_applied_name (for computational layers).
+    - layer_passes_total == len(same_layer_operations).
+    - Pass numbering within group is contiguous {1..N}.
+
+    Validates cross-layer:
+    - Parameter sharing rule: layers with same (func_applied_name,
+      sorted(parent_param_barcodes)) must share layer_label_no_pass.
+    - Equivalence group consistency: all members of a same_layer_operations
+      group belong to the same ModelLog.equivalent_operations set.
+
+    Note: subgraph-level adjacency (Rule 3 from loop_detection.py) cannot
+    be verified post-hoc from metadata alone.
+    """
     name = "loop_detection"
     label_set = set(ml.layer_labels)
 
@@ -935,10 +1091,12 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
                 )
             groups_seen[group_key] = slo
 
-    # Rule 1: Parameter sharing → same layer
-    # Layers with the same func_applied_name and identical sorted(parent_param_barcodes)
-    # must share the same layer_label_no_pass. Different operations (e.g. isinf, expand,
-    # nantonum) can legitimately consume the same param without being the same "layer."
+    # Rule 1: Parameter sharing invariant.
+    # Layers with the same func_applied_name AND identical sorted(parent_param_barcodes)
+    # must share the same layer_label_no_pass (they are the same "layer" across
+    # different passes).  The func_applied_name is included in the grouping key
+    # because different operations (e.g., isinf, expand, nantonum) can consume
+    # the same parameter tensor without being the same logical layer.
     param_groups: dict[tuple, list] = defaultdict(list)
     for lpl in ml.layer_list:
         if lpl.computed_with_params and lpl.parent_param_barcodes:
@@ -998,6 +1156,19 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
 
 
 def _check_distance_invariants(ml: "ModelLog") -> None:
+    """Check O: distance and reachability invariants.
+
+    Only runs when ``mark_input_output_distances`` was enabled during logging.
+
+    Validates:
+    - min_distance <= max_distance for both input and output distances.
+    - Input layers have distance_from_input == 0.
+    - Output layers have distance_from_output == 0.
+    - has_input_ancestor <-> input_ancestors is non-empty.
+    - is_output_ancestor <-> output_descendents is non-empty.
+    - input_ancestors subset of input_layers; output_descendents subset of
+      output_layers.
+    """
     if not ml.mark_input_output_distances:
         return
 
@@ -1087,6 +1258,14 @@ def _check_distance_invariants(ml: "ModelLog") -> None:
 
 
 def _check_graph_connectivity(ml: "ModelLog") -> None:
+    """Check P: graph connectivity invariants.
+
+    Validates:
+    - Every non-input, non-buffer, non-internally-initialized, non-output
+      layer has at least one parent (no dangling computational nodes).
+    - orphan_layers (removed during postprocessing) do NOT appear in the
+      active layer_labels (they were pruned from the graph).
+    """
     name = "graph_connectivity"
     label_set = set(ml.layer_labels)
     input_set = set(ml.input_layers)
@@ -1126,6 +1305,17 @@ def _check_graph_connectivity(ml: "ModelLog") -> None:
 
 
 def _check_module_containment_logic(ml: "ModelLog") -> None:
+    """Check Q: module containment logical consistency.
+
+    Validates:
+    - Address tree is acyclic (walking address_parent chain reaches None
+      without revisiting a node).
+    - Root module 'self' has address_depth == 0; others have
+      address_depth == addr.count('.') + 1.
+    - Per-layer containing_modules_origin_nested:
+      - Last element matches containing_module_origin.
+      - Nesting depth is monotonically increasing through the path.
+    """
     name = "module_containment_logic"
     mod_accessor = ml.modules
 
@@ -1209,6 +1399,16 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
 
 
 def _check_lookup_key_consistency(ml: "ModelLog") -> None:
+    """Check R: lookup key bidirectional consistency.
+
+    Validates:
+    - _lookup_keys_to_layer_num_dict (forward: key->num) and
+      _layer_num_to_lookup_keys_dict (reverse: num->[keys]) are consistent:
+      forward[key]=num implies key in reverse[num], and vice versa.
+    - _raw_to_final_layer_labels and _final_to_raw_layer_labels are inverse
+      bijections.
+    - All final labels in the raw->final map exist in layer_labels.
+    """
     name = "lookup_key_consistency"
 
     # _lookup_keys_to_layer_num_dict maps key→num (last assigned wins).

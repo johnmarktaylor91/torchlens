@@ -1,4 +1,33 @@
-"""ModelLog: the top-level object that stores the full representation of a logged forward pass."""
+"""ModelLog: the top-level container for a fully logged forward pass.
+
+ModelLog is the root data structure returned by ``log_forward_pass()``.
+It owns every LayerPassLog (per-operation entry), every LayerLog (per-layer
+aggregate), the module hierarchy, parameter metadata, and graph-level
+bookkeeping.
+
+Key design patterns:
+
+* **_pass_finished behavioural switch** — Many methods (``__len__``, ``__getitem__``,
+  ``__str__``, ``__iter__``) behave differently during logging vs after
+  postprocessing.  While logging is active (``_pass_finished=False``), the
+  model's tensors are keyed by their raw internal barcodes in
+  ``_raw_layer_dict``.  After postprocessing flips ``_pass_finished=True``,
+  the friendly ``layer_list`` / ``layer_dict_all_keys`` / ``layer_logs``
+  structures are populated and used instead.  ``_pass_finished`` also
+  persists across the fast pass on purpose: fast-path postprocessing
+  relies on the fully-populated lookup dicts from the exhaustive pass.
+
+* **Method importation** — Several heavy methods (``render_graph``,
+  ``save_new_activations``, ``validate_saved_activations``, etc.) are
+  defined in other modules and bound to ModelLog as class attributes at
+  the bottom of this file.  This keeps the class body small while giving
+  users ``model_log.render_graph(...)`` syntax.
+
+* **_module_build_data** — A transient dict that accumulates module hierarchy
+  information during the forward pass.  Consumed by ``_build_module_logs``
+  (postprocessing step 17) and then cleared.  Initialised via
+  ``_init_module_build_data()``.
+"""
 
 import copy
 from collections import OrderedDict, defaultdict
@@ -57,6 +86,17 @@ def _init_module_build_data() -> dict:
 
 
 class ModelLog:
+    """Top-level container for a logged forward pass.
+
+    Serves double duty: during the forward pass it accumulates raw tensor
+    metadata in ``_raw_layer_dict``; after postprocessing (``_pass_finished=True``)
+    it presents a clean, user-facing view via ``layer_list``, ``layer_dict_all_keys``,
+    ``layer_logs``, ``modules``, ``params``, and ``buffers``.
+
+    Supports ``len()``, iteration, and flexible ``__getitem__`` lookup by
+    integer index, layer label, module address, or substring.
+    """
+
     def __init__(
         self,
         model_name: str,
@@ -70,18 +110,39 @@ class ModelLog:
         num_context_lines: int = 7,
         optimizer=None,
     ):
-        """Object that stores the history of a model's forward pass.
-        Both logs the history in real time, and stores a nice
-        representation of the full history for the user afterward.
+        """Initialise a fresh ModelLog for a new logging session.
+
+        Args:
+            model_name: Human-readable name of the model being logged.
+            output_device: Device to move saved activations to ("same" keeps original device).
+            activation_postfunc: Optional function applied to each tensor before saving.
+            keep_unsaved_layers: If False, layers without saved activations are removed
+                from the final log (but still logged during the pass).
+            save_function_args: Whether to deep-copy each operation's input arguments.
+            save_gradients: Whether to register gradient hooks for backward pass.
+            detach_saved_tensors: Whether to detach saved tensors from the autograd graph.
+            mark_input_output_distances: Whether to compute BFS distances from
+                inputs/outputs for each layer.
+            num_context_lines: Number of source-code context lines to capture
+                around each function call (used by FuncCallLocation).
+            optimizer: Optional torch optimizer, used to annotate which params
+                have optimizers attached.
         """
-        # Setup:
+        # Deep-copy the postfunc so mutations by the caller don't affect us.
         activation_postfunc = copy.deepcopy(activation_postfunc)
 
         # General info
         self.model_name = model_name
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
+        # _pass_finished is the master behavioural switch: False during logging,
+        # True after postprocessing.  Many methods (len, getitem, str, iter)
+        # branch on this flag to choose raw-barcode vs final-label access.
+        # It intentionally persists across the fast pass so fast-path
+        # postprocessing can use the exhaustive pass's lookup dicts.
         self._pass_finished = False
+        # "exhaustive" captures all metadata; "fast" reuses exhaustive-pass
+        # structure, only re-capturing tensor contents.
         self.logging_mode = "exhaustive"
         self._all_layers_logged = False
         self._all_layers_saved = False
@@ -102,24 +163,30 @@ class ModelLog:
         self.model_has_conditional_branching = False
         self.model_is_branching = False
 
-        # Tensor Tracking:
-        self.layer_list: List[LayerPassLog] = []
-        self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()
-        self.layer_dict_all_keys: Dict[str, LayerPassLog] = OrderedDict()
-        self.layer_logs: Dict[str, LayerLog] = OrderedDict()
-        self.layer_labels: List[str] = []
-        self.layer_labels_w_pass: List[str] = []
-        self.layer_labels_no_pass: List[str] = []
-        self.layer_num_passes: Dict[str, int] = OrderedDict()
-        self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()
+        # Tensor Tracking — post-processed (populated after _pass_finished=True):
+        self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
+        self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()  # primary label -> entry
+        self.layer_dict_all_keys: Dict[str, LayerPassLog] = (
+            OrderedDict()
+        )  # all lookup keys -> entry
+        self.layer_logs: Dict[str, LayerLog] = OrderedDict()  # no-pass label -> aggregate LayerLog
+        self.layer_labels: List[str] = []  # primary labels in execution order
+        self.layer_labels_w_pass: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
+        self.layer_labels_no_pass: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
+        self.layer_num_passes: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
+        # Tensor Tracking — raw (populated during the forward pass, before postprocessing):
+        self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()  # raw barcode -> entry
         self._raw_layer_labels_list: List[str] = []
-        self._layer_nums_to_save: List[int] = []
-        self._layer_counter: int = 0
-        self.num_operations: int = 0
+        self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
+        self._layer_counter: int = 0  # monotonic counter for operation numbering
+        self.num_operations: int = 0  # total operations after postprocessing
         self._raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
-        self._unsaved_layers_lookup_keys: Set[str] = set()
+        self._unsaved_layers_lookup_keys: Set[str] = (
+            set()
+        )  # populated but never consulted (known unused)
 
-        # Mapping from raw to final layer labels:
+        # Mapping between raw barcodes and final human-readable labels
+        # (populated during postprocessing's label-assignment step):
         self._raw_to_final_layer_labels: Dict[str, str] = {}
         self._final_to_raw_layer_labels: Dict[str, str] = {}
         self._lookup_keys_to_layer_num_dict: Dict[str, int] = {}
@@ -142,13 +209,15 @@ class ModelLog:
         self.layers_with_saved_gradients: List[str] = []
         self._saved_gradients_set: set = set()
         self.layers_computed_with_params: Dict[str, List] = defaultdict(list)
+        # Maps operation_equivalence_type -> set of layer labels that share
+        # that equivalence type (populated by loop_detection.py).
         self.equivalent_operations: Dict[str, set] = defaultdict(set)
 
-        # Tensor info:
+        # Aggregate tensor statistics (computed during postprocessing):
         self.num_tensors_total: int = 0
         self.tensor_fsize_total: int = 0
         self.tensor_fsize_total_nice: str = human_readable_size(0)
-        self.num_tensors_saved: int = 0
+        self.num_tensors_saved: int = 0  # layers with has_saved_activations=True
         self.tensor_fsize_saved: int = 0
         self.tensor_fsize_saved_nice: str = human_readable_size(0)
 
@@ -187,6 +256,7 @@ class ModelLog:
     # ********************************************
 
     def __len__(self):
+        """Number of layer-pass entries. Uses final list after postprocessing, raw dict during logging."""
         if self._pass_finished:
             return len(self.layer_list)
         else:
@@ -228,6 +298,10 @@ class ModelLog:
     # ********************************************
     # ************* FLOPs Properties *************
     # ********************************************
+    # FLOPs are estimated per-operation during logging (flops_forward,
+    # flops_backward on each LayerPassLog).  These properties aggregate
+    # across the entire model.  Layers with None FLOPs (unknown ops) are
+    # skipped, so the totals may undercount.
 
     @property
     def total_flops_forward(self) -> int:
@@ -300,13 +374,18 @@ class ModelLog:
     # ********************************************
     # ******** Assign Imported Methods ***********
     # ********************************************
+    # These are functions defined in other modules, bound here as class
+    # attributes so they can be called as instance methods
+    # (e.g. ``model_log.render_graph(...)``).  This pattern keeps the
+    # ModelLog class body small while co-locating heavy logic in its
+    # own module (visualization, validation, capture, etc.).
 
     render_graph = render_graph
     print_all_fields = print_all_fields
     to_pandas = to_pandas
     save_new_activations = save_new_activations
     validate_saved_activations = validate_saved_activations
-    validate_forward_pass = validate_saved_activations  # alias
+    validate_forward_pass = validate_saved_activations  # user-facing alias
     check_metadata_invariants = check_metadata_invariants
     cleanup = cleanup
     _postprocess = postprocess

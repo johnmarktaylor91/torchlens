@@ -1,16 +1,40 @@
-"""
-FLOPs (Floating Point Operations) computation module for TorchLens.
+"""FLOPs (Floating Point Operations) computation module for TorchLens.
 
 Computes per-layer forward and backward FLOPs based on operation type and
 tensor shapes. Based on whisperLiang's contribution in PR #53.
 
-Conventions:
-- Multiply-accumulate (MAC) = 2 FLOPs (1 mul + 1 add)
-- Transcendental functions counted at empirical cost (exp=8, sigmoid=4, etc.)
-- Memory-only operations (view, reshape, transpose) = 0 FLOPs
-- Unknown operations return None (not counted, not guessed)
+Architecture — 3-tier dispatch system:
+    ``compute_forward_flops`` checks operations in this order:
 
-Maintenance — checking coverage against the full op list:
+    1. **ZERO_FLOPS_OPS** (set): Memory-only operations that move/reshape data
+       without arithmetic (view, reshape, transpose, clone, indexing, type casts).
+       Returns 0.
+
+    2. **ELEMENTWISE_FLOPS** (dict → int): Operations that perform a fixed number
+       of FLOPs per output element.  The dict value is the per-element cost.
+       Returns ``cost * numel(output)``.
+
+    3. **SPECIALTY_HANDLERS** (dict → callable): Operations needing shape-specific
+       formulas (matmul, conv, normalization, attention, etc.).  Each handler
+       receives ``(output_shape, parent_param_shapes, creation_args)`` and returns
+       an int or None.
+
+    Unknown operations (not in any tier) return ``None`` — they are not counted
+    and not guessed, to avoid silently incorrect totals.
+
+Conventions:
+    - **MAC = 2 FLOPs**: One multiply-accumulate counts as 2 floating-point
+      operations (1 multiplication + 1 addition).  This is the standard
+      convention used by most FLOPs-counting tools.
+    - **Transcendental costs are empirical estimates**: exp=8, sigmoid=4, etc.
+      These approximate the number of primitive FLOPs in a typical hardware
+      implementation (Taylor series, lookup tables, etc.).
+    - **Backward FLOPs** are estimated as a multiplier on forward FLOPs, stored
+      in ``BACKWARD_MULTIPLIERS``.  Typical values: 2x for matmul/conv (dL/dX +
+      dL/dW), 1x for simple activations, 2.5x for normalization.
+
+Maintenance — checking coverage against the full op list::
+
     from torchlens.constants import ORIG_TORCH_FUNCS
     from torchlens.flops import ZERO_FLOPS_OPS, ELEMENTWISE_FLOPS, SPECIALTY_HANDLERS
     all_names = {name for _, name in ORIG_TORCH_FUNCS}
@@ -604,14 +628,15 @@ ELEMENTWISE_FLOPS: Dict[str, int] = {
 
 
 def _matmul_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
-    """MatMul family: mm, matmul, __matmul__, bmm, addmm, etc.
+    """MatMul family: mm, matmul, __matmul__, bmm, multi_dot, etc.
 
-    Args:
-        output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        creation_args: Positional args to the function.
+    For A[..., M, K] @ B[..., K, N]:  FLOPs = 2 * batch * M * K * N.
+    The factor of 2 comes from the MAC convention (1 mul + 1 add per element
+    of the inner product).
+
+    For 1D dot product A[K] @ B[K]:  FLOPs = 2 * K (K multiplies + K-1 adds,
+    rounded to 2K for simplicity).
     """
-    # Try to get input shapes from creation_args
     if not creation_args:
         return None
     shapes = []
@@ -624,10 +649,10 @@ def _matmul_flops(output_shape, parent_param_shapes, creation_args) -> Optional[
     a_shape, b_shape = shapes[0], shapes[1]
     if len(a_shape) == 0 or len(b_shape) == 0:
         return None
-    # For 1D x 1D (dot product)
+    # 1D x 1D: dot product
     if len(a_shape) == 1 and len(b_shape) == 1:
         return 2 * a_shape[0]
-    # For 2D x 2D: M x K @ K x N = 2*M*K*N
+    # General case: M x K @ K x N (with optional batch dims)
     m = a_shape[-2] if len(a_shape) >= 2 else 1
     k = a_shape[-1]
     n = b_shape[-1]
@@ -636,17 +661,15 @@ def _matmul_flops(output_shape, parent_param_shapes, creation_args) -> Optional[
 
 
 def _addmm_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
-    """addmm: beta * M + alpha * (A @ B). FLOPs = 2*m*k*n + output_numel.
+    """addmm / addbmm / baddbmm: beta * M + alpha * (A @ B).
 
-    Args:
-        output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        creation_args: Positional args to the function.
+    FLOPs = 2*batch*M*K*N (matmul) + output_numel (bias addition).
+    creation_args[0] is the bias matrix M; creation_args[1:3] are A and B.
     """
     if not creation_args or len(creation_args) < 3:
         return None
     shapes = []
-    for arg in creation_args[1:3]:
+    for arg in creation_args[1:3]:  # Skip bias (index 0), take A and B.
         s = _safe_shape(arg)
         if s is not None:
             shapes.append(s)
@@ -656,7 +679,6 @@ def _addmm_flops(output_shape, parent_param_shapes, creation_args) -> Optional[i
     if len(a_shape) < 2 or len(b_shape) < 2:
         return None
     m, k, n = a_shape[-2], a_shape[-1], b_shape[-1]
-    # Account for batch dimension (addbmm/baddbmm have 3D inputs)
     batch = _prod(a_shape[:-2]) if len(a_shape) > 2 else 1
     return 2 * batch * m * k * n + _numel(output_shape)
 
@@ -683,12 +705,11 @@ def _linear_flops(output_shape, parent_param_shapes, creation_args) -> Optional[
 
 
 def _conv_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
-    """Convolution: 2 * output_numel * in_channels_per_group * kernel_size.
+    """Convolution: 2 * output_numel * in_channels_per_group * kernel_size (+ bias).
 
-    Args:
-        output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        creation_args: Positional args to the function.
+    Weight shape is [out_channels, in_channels/groups, *kernel_dims].
+    Each output element requires a dot product of size
+    ``in_channels_per_group * kernel_size``, hence ``2 * ...`` (MAC convention).
     """
     if not parent_param_shapes:
         return None
@@ -696,10 +717,10 @@ def _conv_flops(output_shape, parent_param_shapes, creation_args) -> Optional[in
     if len(weight_shape) < 3:
         return None
     out_numel = _numel(output_shape)
-    channels_per_group = weight_shape[1]
-    kernel_size = _prod(weight_shape[2:])
+    channels_per_group = weight_shape[1]  # in_channels / groups
+    kernel_size = _prod(weight_shape[2:])  # product of spatial kernel dims
     flops = 2 * out_numel * channels_per_group * kernel_size
-    if len(parent_param_shapes) > 1:  # bias
+    if len(parent_param_shapes) > 1:  # bias adds 1 FLOP per output element
         flops += _numel(output_shape)
     return flops
 
@@ -984,8 +1005,10 @@ def _einsum_flops(output_shape, parent_param_shapes, creation_args) -> Optional[
 def _sdpa_flops(output_shape, parent_param_shapes, creation_args) -> Optional[int]:
     """Scaled dot-product attention: Q@K^T + scale + softmax + attn@V.
 
-    FLOPs = 2*B*H*S_q*S_k*D + B*H*S_q*S_k + 5*B*H*S_q*S_k + 2*B*H*S_q*D*S_k
-    where Q=(B,H,S_q,D), K=(B,H,S_k,D), V=(B,H,S_k,D_v).
+    Breakdown for Q=(B,H,S_q,D), K=(B,H,S_k,D), V=(B,H,S_k,D_v):
+      - Q@K^T: 2*B*H*S_q*S_k*D  (matmul, MAC convention)
+      - Scale + softmax: 6*B*H*S_q*S_k  (1 scale + 5 softmax per element)
+      - attn@V: 2*B*H*S_q*D_v*S_k  (matmul, MAC convention)
     """
     if not creation_args or len(creation_args) < 3:
         return None
@@ -1009,10 +1032,13 @@ def _sdpa_flops(output_shape, parent_param_shapes, creation_args) -> Optional[in
     return qk_flops + softmax_flops + av_flops
 
 
-# Type alias for FLOPs handler functions
+# Type alias for specialty FLOPs handler functions.
+# Signature: (output_shape, parent_param_shapes, creation_args) -> Optional[int]
 _FlopsHandler = Callable[[Optional[Tuple[int, ...]], list, tuple], Optional[int]]
 
-# Registry mapping func_applied_name to handler
+# Registry mapping func_applied_name to its specialty handler.
+# These are operations whose FLOPs depend on input shapes in non-trivial ways
+# (unlike elementwise ops which are simply cost * numel).
 SPECIALTY_HANDLERS: Dict[str, _FlopsHandler] = {
     # MatMul family
     "mm": _matmul_flops,
@@ -1196,6 +1222,11 @@ SPECIALTY_HANDLERS: Dict[str, _FlopsHandler] = {
 # ============================================================================
 # Backward FLOPs multipliers
 # ============================================================================
+# Backward FLOPs are estimated as (forward_flops * multiplier).
+# Rationale: backward pass computes gradients w.r.t. inputs AND parameters.
+# For matmul/conv, this is roughly 2x forward (one matmul for dL/dX, one for dL/dW).
+# For simple activations, it's ~1x (element-wise derivative * upstream gradient).
+# Operations not in this dict use _DEFAULT_BACKWARD_MULTIPLIER (1.0).
 
 BACKWARD_MULTIPLIERS: Dict[str, float] = {
     # Convolution / linear: dL/dX + dL/dW ≈ 2x forward
@@ -1299,37 +1330,43 @@ def compute_forward_flops(
     creation_args: tuple,
     creation_kwargs: dict,
 ) -> Optional[int]:
-    """Compute forward FLOPs for a single operation.
+    """Compute forward FLOPs for a single operation via 3-tier dispatch.
+
+    Dispatch order (first match wins):
+      1. ZERO_FLOPS_OPS → return 0
+      2. ELEMENTWISE_FLOPS → return per_element_cost * numel(output)
+      3. SPECIALTY_HANDLERS → delegate to shape-specific handler
+      4. Unknown → return None (not counted)
 
     Args:
         func_applied_name: Name of the function that was applied.
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        creation_args: Positional args to the function.
-        creation_kwargs: Keyword args to the function.
+        parent_param_shapes: Shapes of parameter tensors involved (from log entry).
+        creation_args: Positional args to the function (live tensors for shape extraction).
+        creation_kwargs: Keyword args (currently unused but available for future handlers).
 
     Returns:
-        FLOPs count, 0 for zero-cost ops, or None if unknown.
+        FLOPs count (int), 0 for zero-cost ops, or None if the operation is unknown.
     """
     if func_applied_name is None:
         return None
 
-    # Check zero-cost ops first
+    # Tier 1: zero-cost memory/layout ops
     if func_applied_name in ZERO_FLOPS_OPS:
         return 0
 
-    # Check element-wise ops
+    # Tier 2: element-wise ops with fixed per-element cost
     if func_applied_name in ELEMENTWISE_FLOPS:
         if output_shape is None:
             return None
         return ELEMENTWISE_FLOPS[func_applied_name] * _numel(output_shape)
 
-    # Check specialty handlers
+    # Tier 3: shape-dependent specialty handlers
     if func_applied_name in SPECIALTY_HANDLERS:
         handler = SPECIALTY_HANDLERS[func_applied_name]
         return handler(output_shape, parent_param_shapes, creation_args)
 
-    # Unknown operation
+    # Unknown operation — return None rather than guessing to avoid silent errors.
     return None
 
 
@@ -1337,14 +1374,18 @@ def compute_backward_flops(
     func_applied_name: str,
     forward_flops: Optional[int],
 ) -> Optional[int]:
-    """Estimate backward FLOPs based on forward FLOPs and operation type.
+    """Estimate backward FLOPs as a multiplier on forward FLOPs.
+
+    Uses operation-specific multipliers from BACKWARD_MULTIPLIERS when available,
+    otherwise falls back to _DEFAULT_BACKWARD_MULTIPLIER (1.0).  Returns None if
+    forward FLOPs are unknown (propagating the "don't guess" principle).
 
     Args:
         func_applied_name: Name of the function.
         forward_flops: Forward FLOPs count (from compute_forward_flops).
 
     Returns:
-        Estimated backward FLOPs, or None if forward_flops is None.
+        Estimated backward FLOPs (int), or None if forward_flops is None.
     """
     if forward_flops is None or func_applied_name is None:
         return None

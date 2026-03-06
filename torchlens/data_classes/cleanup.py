@@ -1,4 +1,23 @@
-"""ModelLog cleanup: removing individual log entries and post-session teardown."""
+"""ModelLog cleanup: removing individual log entries and post-session teardown.
+
+This module provides three levels of cleanup:
+
+1. **cleanup()** — full teardown: deletes all LayerPassLog attributes, then
+   deletes all ModelLog attributes (both FIELD_ORDER and internal containers).
+   Breaks circular references (ModelLog <-> LayerPassLog.source_model_log,
+   LayerLog <-> LayerPassLog.parent_layer_log, ModuleLog <-> _source_model_log).
+   Also frees GPU memory via ``torch.cuda.empty_cache()``.
+
+2. **_remove_log_entry()** — removes a single LayerPassLog and all references
+   to it from ModelLog's list/dict fields (used by orphan removal).
+
+3. **_batch_remove_log_entries()** — removes multiple entries at once using
+   set-based filtering (O(N+M) instead of O(N*M) for N entries in M lists).
+
+Both _remove_log_entry and _batch_remove_log_entries must clean the same
+set of fields — if you add a new list/dict field to ModelLog that holds
+layer labels, add it to both.
+"""
 
 import torch
 
@@ -8,14 +27,24 @@ from .layer_pass_log import LayerPassLog
 
 
 def cleanup(self) -> None:
-    """Deletes all log entries in the model and frees GPU memory."""
-    # Skip reference removal since all data structures are about to be deleted.
+    """Delete all log entries, break circular references, and free GPU memory.
+
+    Called explicitly by the user or automatically at the end of a logging
+    session.  After cleanup, the ModelLog is effectively empty and should
+    not be used further.
+    """
+    # First, clear all attributes from each LayerPassLog entry.
+    # This breaks the LayerPassLog -> ModelLog circular reference
+    # (via source_model_log) without needing per-entry reference removal.
     for tensor_log_entry in self:
         _clear_entry_attributes(tensor_log_entry)
+    # Then delete all ModelLog attributes listed in the canonical FIELD_ORDER.
     for attr in MODEL_LOG_FIELD_ORDER:
         if hasattr(self, attr):
             delattr(self, attr)
-    # GC-5/GC-12: Clear internal containers not in MODEL_LOG_FIELD_ORDER
+    # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
+    # These hold back-references (e.g. _module_logs -> ModuleLog -> _source_model_log)
+    # and large data structures (layer_logs, layer_dict_all_keys).
     for attr in [
         "_raw_layer_dict",
         "_raw_layer_labels_list",
@@ -43,15 +72,18 @@ def _clear_entry_attributes(log_entry: LayerPassLog) -> None:
 
 
 def _remove_log_entry(self, log_entry: LayerPassLog, remove_references: bool = True) -> None:
-    """Given a LayerPassLog, destroys it and all references to it.
+    """Remove a single LayerPassLog and scrub all references to it.
+
+    Used by orphan removal and other graph-pruning operations.
 
     Args:
-        log_entry: Layer pass log entry to remove.
-        remove_references: Whether to also remove references to the log entry
+        log_entry: The LayerPassLog to destroy.
+        remove_references: If True, also remove the entry's label from
+            every list/dict field on the ModelLog.
     """
-    # After postprocessing (_pass_finished=True), tensors are keyed by their final
-    # human-readable label (layer_label). During the pass, they use the raw internal
-    # barcode (tensor_label_raw).
+    # The label used to find references depends on whether postprocessing
+    # has run: after postprocessing, layers are keyed by their final
+    # human-readable label; during the pass, by the raw internal barcode.
     if self._pass_finished:
         tensor_label = log_entry.layer_label
     else:
@@ -61,7 +93,10 @@ def _remove_log_entry(self, log_entry: LayerPassLog, remove_references: bool = T
         _remove_log_entry_references(self, tensor_label)
 
 
-# List fields on ModelLog that hold tensor labels and need filtering during batch removal.
+# List fields on ModelLog that hold tensor labels and need filtering during
+# entry removal.  Must stay in sync between _batch_remove_log_entries and
+# _remove_log_entry_references — if you add a new label-holding list field
+# to ModelLog, add it here AND to _remove_log_entry_references.
 _LIST_FIELDS_TO_CLEAN = [
     "input_layers",
     "output_layers",
@@ -76,13 +111,17 @@ _LIST_FIELDS_TO_CLEAN = [
 
 
 def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool = True) -> None:
-    """Remove multiple LayerPassLog entries at once, avoiding O(N*M) list.remove() calls.
+    """Remove multiple LayerPassLog entries at once using set-based filtering.
+
+    More efficient than calling ``_remove_log_entry`` in a loop: builds a
+    set of labels to remove, then does a single pass over each list/dict
+    field (O(N+M) instead of O(N*M) where N=entries, M=list length).
 
     Args:
         entries_to_remove: Iterable of LayerPassLog objects to remove.
         remove_references: Whether to also remove references from ModelLog list/dict fields.
     """
-    # Collect labels for O(1) lookup, then clear each entry's attributes.
+    # Build a set of labels for O(1) membership testing, then clear each entry.
     labels_to_remove = set()
     for entry in entries_to_remove:
         if self._pass_finished:
@@ -94,7 +133,7 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
     if not remove_references:
         return
 
-    # Single-pass filter on each list field (replaces N × remove_entry_from_list calls).
+    # Single-pass filter on each list field (replaces N x remove_entry_from_list calls).
     for field in _LIST_FIELDS_TO_CLEAN:
         collection = getattr(self, field)
         collection[:] = [label for label in collection if label not in labels_to_remove]
@@ -105,8 +144,8 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
         if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
     ]
 
-    # Single-pass filter on dict fields.
-    # layers_computed_with_params values are lists.
+    # Single-pass filter on dict fields:
+    # layers_computed_with_params: param_barcode -> [layer_labels]
     for param_group, tensor_labels in list(self.layers_computed_with_params.items()):
         self.layers_computed_with_params[param_group] = [
             label for label in tensor_labels if label not in labels_to_remove
@@ -117,7 +156,7 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
         if len(tensor_labels) > 0
     }
 
-    # equivalent_operations values are sets.
+    # equivalent_operations: equiv_type -> set(layer_labels)
     for equiv_group, tensor_labels in list(self.equivalent_operations.items()):
         tensor_labels -= labels_to_remove
     self.equivalent_operations = {

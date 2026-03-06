@@ -1,10 +1,35 @@
-"""FuncCallLocation: lightweight record for a single frame in a user-visible call stack."""
+"""FuncCallLocation: lightweight record for a single frame in a user-visible call stack.
+
+Each FuncCallLocation captures one stack frame where a torch function was
+invoked, including the source file, line number, function name, surrounding
+source context, and (optionally) the function's signature and docstring.
+
+**Dual construction paths**:
+
+1. **New path** (from ``_get_func_call_stack`` in capture/call_stack.py):
+   Receives ``file``, ``line_number``, ``func_name``,
+   ``num_context_lines_requested``, and ``_frame_func_obj``.  Source context
+   and function metadata are loaded **lazily** on first access via
+   ``_load_source()``, which uses ``linecache`` (cached per-file, no
+   redundant disk reads).  After loading, ``_frame_func_obj`` is released
+   to avoid retaining a reference to the frame's function object.
+
+2. **Legacy path** (direct construction, e.g. from tests): All 10 keyword
+   arguments are passed directly and stored immediately.  No lazy loading
+   occurs (``_source_loaded`` is True from init).
+
+The sentinel object ``_SENTINEL`` distinguishes "not yet loaded" from an
+actual ``None`` value in the lazy-loading placeholders.
+"""
 
 import inspect
 import linecache
 from typing import Any, List, Optional, Union
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
+# Used as the default for lazy-loading placeholders so we can tell the
+# difference between "we haven't loaded this yet" and "we loaded it and
+# the result was None".
 _SENTINEL: Any = object()
 
 
@@ -43,11 +68,13 @@ class FuncCallLocation:
         self.line_number = line_number
         self.func_name = func_name
 
-        # Detect legacy path: if any legacy kwarg was explicitly passed
+        # Detect which construction path: if func_signature was explicitly
+        # passed, we're on the legacy path (direct construction from tests
+        # or serialized data).  Otherwise, we're on the new path with lazy loading.
         legacy = func_signature is not _SENTINEL
 
         if legacy:
-            # Store all values directly — no lazy loading needed
+            # Legacy path: store all values directly, no lazy loading needed.
             self._func_signature = func_signature
             self._func_docstring = func_docstring if func_docstring is not _SENTINEL else None
             self._call_line = call_line if call_line is not _SENTINEL else ""
@@ -63,7 +90,8 @@ class FuncCallLocation:
             self._frame_func_obj = None
             self._source_loaded = True
         else:
-            # New path — defer source loading
+            # New path: defer source loading until a property is accessed.
+            # _source_loaded stays False until _load_source() is called.
             self._num_context_lines_requested = (
                 num_context_lines_requested if num_context_lines_requested is not _SENTINEL else 7
             )
@@ -79,7 +107,13 @@ class FuncCallLocation:
             self._func_docstring = _SENTINEL
 
     def _load_source(self):
-        """Load source context and function metadata from disk (once)."""
+        """Load source context and function metadata from disk (one-shot).
+
+        Uses ``linecache.getlines()`` which caches file contents per-path,
+        so repeated calls for different lines in the same file are free.
+        After loading, releases ``_frame_func_obj`` to avoid retaining
+        a reference to the (potentially large) function object.
+        """
         if self._source_loaded:
             return
         self._source_loaded = True
@@ -137,6 +171,8 @@ class FuncCallLocation:
         self._frame_func_obj = None
 
     # --- Lazy properties ---
+    # Each property calls _load_source() before returning its cached value.
+    # The setters allow direct assignment (used by legacy path and tests).
 
     @property
     def code_context(self) -> Optional[List[str]]:

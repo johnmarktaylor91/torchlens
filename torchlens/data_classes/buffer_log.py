@@ -1,4 +1,16 @@
-"""BufferLog and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers."""
+"""BufferLog and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers.
+
+BufferLog extends LayerPassLog to represent a model buffer (e.g. BatchNorm's
+``running_mean``).  Buffers participate in the computation graph just like
+regular tensors but have additional identity: a ``buffer_address`` (e.g.
+``"features.0.running_mean"``) and an owning module.
+
+**Why name/module_address live on BufferLog, not LayerLog**: These are
+buffer-specific identifiers that don't apply to general layers.  A LayerLog
+is too generic — it could be any operation.  Only BufferLog entries have a
+meaningful ``buffer_address``.  For single-pass buffers, the parent LayerLog
+can access these fields via ``__getattr__`` delegation.
+"""
 
 from typing import Dict, List, Optional, Union
 
@@ -7,10 +19,16 @@ from ..utils.display import human_readable_size
 
 
 class BufferLog(LayerPassLog):
-    """A LayerPassLog entry representing a buffer tensor.
+    """A LayerPassLog entry representing a registered model buffer.
 
-    Subclasses LayerPassLog -- participates in the computation graph identically.
-    Adds a focused __repr__ and convenience properties.
+    Subclasses LayerPassLog and participates in the computation graph
+    identically to regular tensor operations.  Adds ``name`` and
+    ``module_address`` computed properties derived from the
+    ``buffer_address`` field (inherited from LayerPassLog).
+
+    No additional constructor arguments — the buffer identity comes
+    from the ``buffer_address`` field in the fields_dict passed to
+    the parent ``LayerPassLog.__init__``.
     """
 
     @property
@@ -53,7 +71,12 @@ class BufferLog(LayerPassLog):
 class BufferAccessor:
     """Dict-like accessor for BufferLog objects.
 
-    Supports indexing by full buffer address, short name, or ordinal position.
+    Supports indexing by:
+    * **full buffer address** (str) -- e.g. ``"features.0.running_mean"``.
+    * **short name** (str) -- e.g. ``"running_mean"`` (must be unambiguous).
+    * **ordinal position** (int) -- index into insertion-order list.
+
+    Available as ``model_log.buffers`` and ``module_log.buffers``.
     """
 
     def __init__(
@@ -61,9 +84,9 @@ class BufferAccessor:
         buffer_dict: Dict[str, "BufferLog"],
         source_model_log=None,
     ) -> None:
-        self._dict = buffer_dict
-        self._list = list(buffer_dict.values())
-        self._source = source_model_log
+        self._dict = buffer_dict  # address -> BufferLog
+        self._list = list(buffer_dict.values())  # insertion-order list
+        self._source = source_model_log  # back-ref for scoped lookups
 
     def __getitem__(self, key: Union[int, str]) -> "BufferLog":
         """Retrieve a buffer by integer index, full address, or short name."""
