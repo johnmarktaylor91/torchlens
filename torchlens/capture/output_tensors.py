@@ -52,6 +52,13 @@ from ..utils.collections import index_nested, ensure_iterable
 from .flops import compute_backward_flops, compute_forward_flops
 from ..data_classes.buffer_log import BufferLog
 from ..data_classes.layer_pass_log import LayerPassLog
+from .arg_positions import (
+    FUNC_ARG_SPECS,
+    ArgSpec,
+    extract_tensors_and_params,
+    _cache_dynamic_spec,
+    _normalize_func_name,
+)
 
 from .tensor_tracking import (
     _update_tensor_family_links,
@@ -177,13 +184,30 @@ def _build_graph_relationship_fields(
     fields_dict["is_part_of_iterable_output"] = is_part_of_iterable_output
 
 
+def _extract_arg_tensors_and_params(
+    normalized_name: str,
+    args: tuple,
+    kwargs: dict,
+) -> Tuple[List, List]:
+    """O(1) tensor/param extraction via lookup table, with BFS fallback."""
+    spec = FUNC_ARG_SPECS.get(normalized_name) or _st._dynamic_arg_specs.get(normalized_name)
+    if spec is not None:
+        return extract_tensors_and_params(spec, args, kwargs)
+
+    # Tier 3 fallback: BFS crawl once, then cache for subsequent calls
+    all_args = list(args) + list(kwargs.values())
+    arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
+    arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
+    _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
+    return arg_tensors, arg_parameters
+
+
 def _build_param_fields(
     self,
     fields_dict: Dict[str, Any],
-    all_args: List,
+    arg_parameters: List,
 ) -> Dict:
     """Populate parameter-involvement fields. Returns parent_param_passes dict."""
-    arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
     parent_param_passes = _process_parent_param_passes(arg_parameters)
     indiv_param_barcodes = list(parent_param_passes.keys())
 
@@ -272,14 +296,14 @@ def _build_shared_fields_dict(
     """
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = func_name.lower().replace("_", "")
-    all_args = list(args) + list(kwargs.values())
+
+    # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
+    arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
 
     # Separate tensor args (which define graph edges) from non-tensor args
     # (which become metadata and feed into operation_equivalence_type hashing).
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
-    # Retrieve parent tensors (excluding Parameters — they're tracked separately).
-    arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
     parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw")
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
@@ -319,7 +343,7 @@ def _build_shared_fields_dict(
     _build_graph_relationship_fields(
         self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
     )
-    parent_param_passes = _build_param_fields(self, fields_dict, all_args)
+    parent_param_passes = _build_param_fields(self, fields_dict, arg_parameters)
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
 
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_passes
@@ -514,11 +538,11 @@ def log_function_output_tensors_fast(
     """
     # Minimal info collection — only what's needed for counter alignment and saving.
     layer_type = func_name.lower().replace("_", "")
-    all_args = list(args) + list(kwargs.values())
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
 
-    arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
+    # O(1) tensor extraction via lookup table (replaces BFS crawl)
+    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     out_iter = ensure_iterable(out_orig)
 
     for i, out in enumerate(out_iter):

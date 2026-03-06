@@ -172,6 +172,15 @@ def torch_func_decorator(func: Callable, func_name: str):
 
         model_log = _state._active_model_log
 
+        # Usage stats: count every decorated function call during logging.
+        if _state._collect_usage_stats:
+            _state._function_call_counts[func_name] = (
+                _state._function_call_counts.get(func_name, 0) + 1
+            )
+            _state._function_call_models.setdefault(func_name, set()).add(
+                _state._current_model_name
+            )
+
         # Reset barcode; skip metadata-only functions that would cause recursion.
         model_log.current_function_call_barcode = 0
         if func_name in funcs_not_to_log:

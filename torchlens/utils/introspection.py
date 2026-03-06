@@ -63,17 +63,20 @@ def get_vars_of_type_from_obj(
     found_addresses_full: List[Any] = []
     found_ids: Set[Any] = set()
     # BFS: each iteration processes one depth level.
-    for _ in range(search_depth):
-        this_stack = _search_stack_for_vars_of_type(
-            this_stack,
-            which_type,
-            found_items,
-            found_addresses,
-            found_addresses_full,
-            found_ids,
-            subclass_exceptions,
-            allow_repeats,
-        )
+    # Hoist warnings context manager to avoid ~77K per-attribute entries.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for _ in range(search_depth):
+            this_stack = _search_stack_for_vars_of_type(
+                this_stack,
+                which_type,
+                found_items,
+                found_addresses,
+                found_addresses_full,
+                found_ids,
+                subclass_exceptions,
+                allow_repeats,
+            )
 
     if return_addresses:
         return list(zip(found_items, found_addresses, found_addresses_full))
@@ -189,49 +192,44 @@ def _extend_search_stack_from_item(item: Any, address: str, address_full, next_s
     # Same types (e.g. every nn.Conv2d) have identical dir() output.
     obj_type = type(item)
     if obj_type not in _state._dir_cache:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            # Filter rules:
-            #   - Skip dunders (__*) — internal Python machinery
-            #   - Skip _ATTR_SKIP_SET (.T, .mT, .H, .real, .imag) — trigger
-            #     deprecation warnings or create duplicate tensor views
-            #   - Skip anything containing "grad" — gradient tensors tracked separately
-            _state._dir_cache[obj_type] = [
-                a
-                for a in dir(item)
-                if not a.startswith("__") and a not in _ATTR_SKIP_SET and "grad" not in a
-            ]
+        # Filter rules:
+        #   - Skip dunders (__*) — internal Python machinery
+        #   - Skip _ATTR_SKIP_SET (.T, .mT, .H, .real, .imag) — trigger
+        #     deprecation warnings or create duplicate tensor views
+        #   - Skip anything containing "grad" — gradient tensors tracked separately
+        _state._dir_cache[obj_type] = [
+            a
+            for a in dir(item)
+            if not a.startswith("__") and a not in _ATTR_SKIP_SET and "grad" not in a
+        ]
     filtered_attrs = _state._dir_cache[obj_type]
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        for attr_name in filtered_attrs:
-            try:
-                attr = getattr(item, attr_name)
-            except Exception:
-                # getattr can fail for many reasons (missing C-level attr,
-                # property that raises, etc.) — skip gracefully.
-                continue
-            attr_cls = type(attr)
-            # Leaf primitives — can't contain tensors.
-            if attr_cls in [str, int, float, bool, np.ndarray]:
-                continue
-            # Skip callables (methods, functions) UNLESS they're nn.Modules,
-            # which are callable but may hold tensor attributes.
-            if callable(attr) and not issubclass(attr_cls, nn.Module):
-                continue
-            if address == "":
-                next_stack.append(
-                    (attr, attr_name.strip("_"), address_full + [("attr", attr_name)])
+    # warnings.catch_warnings() is hoisted to get_vars_of_type_from_obj
+    for attr_name in filtered_attrs:
+        try:
+            attr = getattr(item, attr_name)
+        except Exception:
+            # getattr can fail for many reasons (missing C-level attr,
+            # property that raises, etc.) — skip gracefully.
+            continue
+        attr_cls = type(attr)
+        # Leaf primitives — can't contain tensors.
+        if attr_cls in [str, int, float, bool, np.ndarray]:
+            continue
+        # Skip callables (methods, functions) UNLESS they're nn.Modules,
+        # which are callable but may hold tensor attributes.
+        if callable(attr) and not issubclass(attr_cls, nn.Module):
+            continue
+        if address == "":
+            next_stack.append((attr, attr_name.strip("_"), address_full + [("attr", attr_name)]))
+        else:
+            next_stack.append(
+                (
+                    attr,
+                    f"{address}.{attr_name.strip('_')}",
+                    address_full + [("attr", attr_name)],
                 )
-            else:
-                next_stack.append(
-                    (
-                        attr,
-                        f"{address}.{attr_name.strip('_')}",
-                        address_full + [("attr", attr_name)],
-                    )
-                )
+            )
 
 
 def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:

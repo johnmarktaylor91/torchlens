@@ -118,6 +118,32 @@ here means the model's forward and submodule hooks are already installed.
 """
 
 # ---------------------------------------------------------------------------
+# Usage stats — opt-in per-function call counting for coverage analysis
+# ---------------------------------------------------------------------------
+
+_collect_usage_stats: bool = False
+"""When True, every decorated wrapper increments call counts in
+``_function_call_counts`` during logged forward passes.  Used by the
+test suite to verify ArgSpec lookup table coverage."""
+
+_function_call_counts: Dict[str, int] = {}
+"""func_name -> total calls across all logged forward passes."""
+
+_function_call_models: Dict[str, Set[str]] = {}
+"""func_name -> set of model names that called this function."""
+
+_current_model_name: str = ""
+"""Set by test fixtures to identify which model is being logged."""
+
+# ---------------------------------------------------------------------------
+# Dynamic ArgSpec cache — Tier 3 of the O(1) extraction strategy
+# ---------------------------------------------------------------------------
+
+_dynamic_arg_specs: Dict[str, object] = {}
+"""Normalized func_name -> ArgSpec, populated by BFS fallback on first
+call to an uncovered function.  Subsequent calls reuse the cached spec."""
+
+# ---------------------------------------------------------------------------
 # Context managers
 # ---------------------------------------------------------------------------
 
