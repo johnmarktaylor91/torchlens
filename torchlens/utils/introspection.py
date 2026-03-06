@@ -1,4 +1,9 @@
-"""Object introspection: recursive type search, nested attribute access, and call-stack filtering."""
+"""Object introspection: recursive type search, nested attribute access, and call-stack filtering.
+
+Provides depth-limited recursive search for extracting all tensors (or any
+type) from arbitrarily nested model inputs/outputs, plus utilities for
+nested attribute traversal and call-stack capture.
+"""
 
 import warnings
 from typing import Any, Callable, List, Optional, Set, Type
@@ -7,6 +12,12 @@ import numpy as np
 import torch
 from torch import nn
 
+# Attributes to skip when crawling an object's namespace looking for tensors.
+# These are all tensor properties that either:
+#   - trigger deprecation warnings (.T, .H, .mT on non-2D tensors), or
+#   - return views that would create duplicate tensor entries (.real, .imag).
+# "grad" is also excluded (via substring check) to avoid pulling in gradient
+# tensors, which are tracked separately.
 _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
 
 
@@ -18,28 +29,40 @@ def get_vars_of_type_from_obj(
     return_addresses=False,
     allow_repeats=False,
 ) -> List:
-    """Recursively finds all tensors in an object, excluding specified subclasses (e.g., parameters)
-    up to the given search depth.
+    """Recursively find all instances of ``which_type`` inside a nested object.
+
+    Uses breadth-first expansion with a fixed depth limit to avoid
+    infinite recursion on cyclic object graphs.  Each "depth level"
+    expands one layer of containers/attributes.
+
+    Primarily used to extract all ``torch.Tensor`` instances from model
+    inputs and outputs, which may be nested in dicts, tuples, dataclasses,
+    or custom objects.
 
     Args:
-        obj: Object to search.
-        which_type: Type of variable to pull out
-        subclass_exceptions: subclasses that you don't want to pull out.
-        search_depth: How many layers deep to search before giving up.
-        return_addresses: if True, then returns list of tuples (object, address), where the
-            address is how you'd index to get the object
-        allow_repeats: whether to allow repeats of the same tensor
+        obj: Root object to search.
+        which_type: The target type to collect (e.g. ``torch.Tensor``).
+        subclass_exceptions: Subclasses of ``which_type`` to exclude
+            (e.g. ``nn.Parameter``).
+        search_depth: Maximum nesting levels to explore before stopping.
+            Default 3 is sufficient for typical model outputs.
+        return_addresses: If True, returns ``(object, human_addr, full_addr)``
+            tuples instead of bare objects.
+        allow_repeats: If False, deduplicates by ``id()`` so the same
+            tensor object is returned at most once.
 
     Returns:
-        List of objects of desired type found in the input object.
+        List of found objects (or tuples if ``return_addresses=True``).
     """
     if subclass_exceptions is None:
         subclass_exceptions = []
+    # Each stack entry is (item, human_readable_address, programmatic_address).
     this_stack: List[Any] = [(obj, "", [])]
     found_items: List[Any] = []
     found_addresses: List[Any] = []
     found_addresses_full: List[Any] = []
     found_ids: Set[Any] = set()
+    # BFS: each iteration processes one depth level.
     for _ in range(search_depth):
         this_stack = _search_stack_for_vars_of_type(
             this_stack,
@@ -68,21 +91,28 @@ def _search_stack_for_vars_of_type(
     subclass_exceptions: List,
     allow_repeats: bool,
 ):
-    """Helper function that searches current stack for vars of a given type, and
-    returns the next stack to search.
+    """Process one BFS depth level: classify items, collect matches, build next level.
+
+    Items in ``current_stack`` are either:
+    * matched (added to ``found_*`` lists),
+    * skipped (excluded subclasses, duplicates, or leaf primitives), or
+    * expanded (their children are added to ``next_stack`` for the next depth).
+
+    All ``found_*`` lists and ``found_ids`` are mutated in-place across calls
+    to accumulate results.
 
     Args:
-        current_stack: The current stack.
-        which_type: Type of variable to pull out
-        found_items: List of items of the target type found so far
-        found_addresses: Addresses of the items found so far
-        found_addresses_full: explicit instructions for indexing the obj
-        found_ids: List of ids of found items (used for deduplication)
-        subclass_exceptions: Subclasses of the target type not to collect.
-        allow_repeats: whether to allow repeat items
+        current_stack: Items at the current depth level.
+        which_type: Target type to collect.
+        found_items: Accumulator for matched objects.
+        found_addresses: Accumulator for human-readable address strings.
+        found_addresses_full: Accumulator for programmatic ``(kind, key)`` paths.
+        found_ids: Set of ``id()`` values for deduplication.
+        subclass_exceptions: Subclasses of ``which_type`` to skip.
+        allow_repeats: If True, skip ``id()``-based deduplication.
 
     Returns:
-        The next stack.
+        ``next_stack`` — items to process in the next depth iteration.
     """
     next_stack: List[Any] = []
     if len(current_stack) == 0:
@@ -90,33 +120,46 @@ def _search_stack_for_vars_of_type(
     while len(current_stack) > 0:
         item, address, address_full = current_stack.pop(0)
         item_class = type(item)
+        # Skip excluded subclasses (e.g. nn.Parameter) and duplicates.
         if any(issubclass(item_class, subclass) for subclass in subclass_exceptions) or (
             (id(item) in found_ids) and not allow_repeats
         ):
             continue
         if issubclass(item_class, which_type):
+            # Found a match — record it and don't recurse into it further.
             found_items.append(item)
             found_addresses.append(address)
             found_addresses_full.append(address_full)
             found_ids.add(id(item))
             continue
+        # Leaf primitives and numpy arrays can't contain tensors — skip.
         if item_class in [str, int, float, bool, np.ndarray]:
             continue
+        # Non-leaf, non-match — expand into next depth level.
         _extend_search_stack_from_item(item, address, address_full, next_stack)
     return next_stack
 
 
 def _extend_search_stack_from_item(item: Any, address: str, address_full, next_stack: List):
-    """Utility function to iterate through a single item to populate the next stack to search for.
+    """Expand a single non-leaf item's children onto ``next_stack``.
+
+    Handles three kinds of containers:
+
+    1. **Sequences** (list, tuple, set) — iterate by index.
+    2. **Dicts** — iterate by key.
+    3. **Arbitrary objects** — iterate over non-dunder, non-callable
+       attributes (except ``nn.Module`` subclasses, which may hold tensors
+       as attributes).
 
     Args:
-        item: The item
-        address: Human-readable dot-separated path string (e.g. "0.weight").
-        address_full: List of (type, key) tuples for programmatic indexing into the nested structure.
-        next_stack: Stack to add to
+        item: The container/object to expand.
+        address: Human-readable dot-separated path string (e.g. ``"0.weight"``).
+        address_full: List of ``(kind, key)`` tuples for programmatic re-indexing.
+        next_stack: List to append children onto.
     """
     from .. import _state
 
+    # --- Sequence containers (list, tuple, set) ---
     if type(item) in [list, tuple, set]:
         if address == "":
             next_stack.extend(
@@ -127,6 +170,7 @@ def _extend_search_stack_from_item(item: Any, address: str, address_full, next_s
                 [(x, f"{address}.{i}", address_full + [("ind", i)]) for i, x in enumerate(item)]
             )
 
+    # --- Dict containers (including OrderedDict, defaultdict, etc.) ---
     if issubclass(type(item), dict):
         if address == "":
             next_stack.extend(
@@ -140,12 +184,18 @@ def _extend_search_stack_from_item(item: Any, address: str, address_full, next_s
                 ]
             )
 
+    # --- Object attribute crawl ---
     # Cache dir() results per type — dir() walks the full MRO and is expensive.
     # Same types (e.g. every nn.Conv2d) have identical dir() output.
     obj_type = type(item)
     if obj_type not in _state._dir_cache:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            # Filter rules:
+            #   - Skip dunders (__*) — internal Python machinery
+            #   - Skip _ATTR_SKIP_SET (.T, .mT, .H, .real, .imag) — trigger
+            #     deprecation warnings or create duplicate tensor views
+            #   - Skip anything containing "grad" — gradient tensors tracked separately
             _state._dir_cache[obj_type] = [
                 a
                 for a in dir(item)
@@ -159,10 +209,15 @@ def _extend_search_stack_from_item(item: Any, address: str, address_full, next_s
             try:
                 attr = getattr(item, attr_name)
             except Exception:
+                # getattr can fail for many reasons (missing C-level attr,
+                # property that raises, etc.) — skip gracefully.
                 continue
             attr_cls = type(attr)
+            # Leaf primitives — can't contain tensors.
             if attr_cls in [str, int, float, bool, np.ndarray]:
                 continue
+            # Skip callables (methods, functions) UNLESS they're nn.Modules,
+            # which are callable but may hold tensor attributes.
             if callable(attr) and not issubclass(attr_cls, nn.Module):
                 continue
             if address == "":
@@ -180,14 +235,17 @@ def _extend_search_stack_from_item(item: Any, address: str, address_full, next_s
 
 
 def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
-    """For a list of tensors, gets the value of a given attribute from each tensor that has that attribute.
+    """Collect a named ``tl_``-prefixed attribute from each tensor that has it.
+
+    Used to extract logging metadata (e.g. ``tl_tensor_label_raw``) from a
+    list of tensors that may or may not have been tagged by the logging pipeline.
 
     Args:
-        tensor_list: List of tensors to search.
-        field_name: Name of the field to check in the tensor.
+        tensor_list: List of tensors to inspect.
+        field_name: Attribute name to look up on each tensor.
 
     Returns:
-        List of marks from the tensors.
+        List of attribute values (tensors without the attribute are skipped).
     """
     marks = []
     for tensor in tensor_list:
@@ -198,28 +256,33 @@ def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name
 
 
 def nested_getattr(obj: Any, attr: str) -> Any:
-    """Helper function that takes in an object, and a string of attributes separated by '.' and recursively
-    returns the attribute.
+    """Resolve a dot-separated attribute path on an object.
+
+    ``nested_getattr(torch, "nn.functional")`` is equivalent to
+    ``torch.nn.functional``.
 
     Args:
-        obj: Any object, e.g. "torch"
-        attr: String specifying the nested attribute, e.g. "nn.functional"
+        obj: Root object to start from.
+        attr: Dot-separated attribute path (e.g. ``"nn.functional"``).
+            Empty string returns ``obj`` unchanged.
 
     Returns:
-        The attribute specified by the string.
+        The attribute at the end of the path.
     """
     if attr == "":
         return obj
 
     attributes = attr.split(".")
     for i, a in enumerate(attributes):
+        # Certain tensor properties emit DeprecationWarnings on access
+        # (e.g. .T on >2D tensors, .volatile). Suppress to avoid noise.
         if a in [
             "volatile",
             "T",
             "H",
             "mH",
             "mT",
-        ]:  # avoid annoying warning; if there's more, make a list
+        ]:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 obj = getattr(obj, a)
@@ -229,22 +292,28 @@ def nested_getattr(obj: Any, attr: str) -> Any:
 
 
 def nested_assign(obj: Any, addr: List[tuple], val: Any) -> None:
-    """Walk into a nested structure following an address path and assign a value at the final location.
+    """Walk into a nested structure following an address path and assign a value.
+
+    The address path is the ``address_full`` format produced by
+    :func:`get_vars_of_type_from_obj`, enabling round-trip
+    extract-then-replace of tensors inside arbitrarily nested outputs.
 
     Args:
         obj: The root object to traverse.
-        addr: A list of (kind, key) tuples specifying how to traverse the structure.
-            Each tuple is either ("ind", key) for index/dict access (obj[key]) or
-            ("attr", name) for attribute access (getattr(obj, name)).
+        addr: A list of ``(kind, key)`` tuples.  Each tuple is either
+            ``("ind", key)`` for index/dict access (``obj[key]``) or
+            ``("attr", name)`` for attribute access (``getattr(obj, name)``).
         val: The value to assign at the destination.
     """
     for i, (entry_type, entry_val) in enumerate(addr):
         if i == len(addr) - 1:
+            # Final step — perform the assignment.
             if entry_type == "ind":
                 obj[entry_val] = val
             elif entry_type == "attr":
                 setattr(obj, entry_val, val)
         else:
+            # Intermediate step — traverse deeper.
             if entry_type == "ind":
                 obj = obj[entry_val]
             elif entry_type == "attr":
@@ -256,6 +325,21 @@ def nested_assign(obj: Any, addr: List[tuple], val: Any) -> None:
 def iter_accessible_attributes(
     obj: Any, *, short_circuit: Optional[Callable[[Any, str], bool]] = None
 ):
+    """Yield ``(attr_name, attr_value)`` for every accessible attribute of ``obj``.
+
+    Gracefully skips attributes that raise on access (common with C-level
+    descriptors, property-based lazy loading, etc.).  Warnings are suppressed
+    during attribute access to avoid noise from deprecated properties.
+
+    Args:
+        obj: Object whose attributes to iterate.
+        short_circuit: Optional predicate ``(obj, attr_name) -> bool``.
+            If it returns True for a given attribute name, that attribute is
+            skipped without attempting ``getattr``.
+
+    Yields:
+        ``(attr_name, attr_value)`` tuples.
+    """
     for attr_name in dir(obj):
         if short_circuit and short_circuit(obj, attr_name):
             continue
@@ -276,11 +360,15 @@ def iter_accessible_attributes(
 
 
 def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
-    """Given an object, removes any attributes beginning with a given prefix.
+    """Remove all attributes from ``obj`` whose names start with ``prefix``.
+
+    Used during session cleanup to strip ``tl_``-prefixed logging metadata
+    from tensors and modules without needing an explicit list of every
+    possible attribute name.
 
     Args:
-        obj: object from which to remove attributes
-        prefix: string prefix that marks fields to remove
+        obj: Object from which to remove attributes.
+        prefix: String prefix that marks fields to remove (e.g. ``"tl_"``).
     """
     for field in dir(obj):
         if field.startswith(prefix):

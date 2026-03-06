@@ -1,4 +1,30 @@
-"""Forward-pass orchestration: runs the model, manages logging state, and saves activations."""
+"""Forward-pass orchestration: runs the model, manages logging state, and saves activations.
+
+This module implements the two-pass architecture that TorchLens uses to extract
+model activations:
+
+1. **Exhaustive pass** (``logging_mode="exhaustive"``): Runs the model once,
+   capturing every tensor operation's full metadata (shapes, dtypes, FLOPs,
+   parent-child relationships, module context, etc.) into LayerPassLog entries.
+   This builds the complete computational graph.
+
+2. **Fast pass** (``logging_mode="fast"``): Re-runs the model using the graph
+   structure from the exhaustive pass, only saving new activation values.
+   Much faster because it skips all metadata collection.  Used by
+   ``save_new_activations()`` to refresh activations for new inputs without
+   rebuilding the entire graph.
+
+Key ordering constraint:
+    RNG state must be captured/restored BEFORE ``active_logging()`` is entered,
+    because the logging context manager itself may trigger decorated operations
+    that consume RNG state.  See ``_pre_forward_rng_states`` handling.
+
+Key functions:
+    - ``normalize_input_args``: resolves tuple-vs-multi-arg ambiguity
+    - ``safe_copy_args``: clones tensors to protect user inputs from in-place mutation
+    - ``run_and_log_inputs_through_model``: the main entry point that orchestrates
+      input setup, logging toggle, forward pass, output marking, and postprocessing
+"""
 
 import inspect
 import random
@@ -33,26 +59,32 @@ def save_new_activations(
     layers_to_save: Union[str, List] = "all",
     random_seed: Optional[int] = None,
 ):
-    """Saves activations to a new input to the model, replacing existing saved activations.
-    This will be much faster than the initial call to log_forward_pass (since all the of the metadata has
-    already been saved), so if you wish to save the activations to many different inputs for a given model
-    this is the function you should use. The one caveat is that this function assumes that the computational
-    graph will be the same for the new input; if the model involves a dynamic computational graph that can change
-    across inputs, and this graph changes for the new input, then this function will throw an error. In that case,
-    you'll have to do a new call to log_forward_pass to log the new graph.
+    """Re-run the model with new inputs, saving only activations (fast pass).
+
+    This is the public API for refreshing activations without rebuilding the
+    computational graph.  Much faster than ``log_forward_pass`` because all
+    metadata (graph structure, labels, module context) was captured in the
+    original exhaustive pass and is reused here.
+
+    The fast pass assumes the computational graph is identical to the exhaustive
+    pass.  If the model has dynamic control flow that changes between inputs,
+    the counter-alignment checks in ``log_function_output_tensors_fast`` will
+    detect the mismatch and raise ``ValueError``.
 
     Args:
-        model: Model for which to save activations
+        model: Model for which to save activations.
         input_args: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
-        layers_to_save: List of layers to save, using any valid lookup keys
-        random_seed: Which random seed to use
+        layers_to_save: List of layers to save, using any valid lookup keys.
+        random_seed: Which random seed to use for deterministic reproduction.
+
     Returns:
-        Nothing, but now the ModelLog object will have saved activations for the new input.
+        Nothing; mutates ``self`` in place with new activation values.
     """
+    # Switch to fast mode: reuse graph structure, only capture new activations.
     self.logging_mode = "fast"
 
-    # Go through and clear all existing activations.
+    # Clear all existing activations from the previous pass.
     for layer_log_entry in self:
         layer_log_entry.tensor_contents = None
         layer_log_entry.has_saved_activations = False
@@ -64,7 +96,8 @@ def save_new_activations(
         # save_new_activations since child tensor variations aren't recaptured.
         layer_log_entry.children_tensor_versions = {}
 
-    # Reset relevant fields.
+    # Reset per-pass bookkeeping fields.  Graph-level totals (tensor_fsize_total,
+    # num_tensors_total) are NOT reset — they describe the static graph structure.
     self.layers_with_saved_activations = []
     self.layers_with_saved_gradients = []
     self._saved_gradients_set = set()
@@ -73,20 +106,23 @@ def save_new_activations(
     self.num_tensors_saved = 0
     self.tensor_fsize_saved = 0
     self.elapsed_time_function_calls = 0  # #87: reset timing
-    # Note: tensor_fsize_total and num_tensors_total are NOT reset here —
-    # they represent total graph size which doesn't change between fast passes.
+    # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
+    # Counter alignment is the mechanism that lets the fast pass verify the graph
+    # hasn't changed: same counter value → same raw label → same operation.
     self._layer_counter = 0
     self._raw_layer_type_counter = defaultdict(lambda: 0)
-    # #97: clear stale lookup caches (only internal caches, NOT user-facing dicts)
-    # Note: layer_dict_all_keys and _lookup_keys_to_layer_num_dict are NOT cleared
-    # here because _get_op_nums_from_user_labels needs them for layers_to_save lookup
-    # before the new forward pass populates them. They're rebuilt in postprocessing.
+    # #97: clear stale internal lookup caches.  User-facing dicts
+    # (layer_dict_all_keys, _lookup_keys_to_layer_num_dict) are NOT cleared
+    # because _get_op_nums_from_user_labels needs them for layers_to_save lookup
+    # before the new forward pass populates them.  They're rebuilt in postprocessing.
     if hasattr(self, "_tensor_num_to_lookup_keys_dict"):
         self._tensor_num_to_lookup_keys_dict.clear()
     if hasattr(self, "_unsaved_layers_lookup_keys"):
         self._unsaved_layers_lookup_keys.clear()
 
-    # Remove zombie entries: raw labels that weren't mapped to final labels (#75)
+    # Remove zombie entries: raw labels that weren't mapped to final labels (#75).
+    # These arise from operations that were later pruned from the graph (e.g.,
+    # orphan removal).  If left, the fast pass would try to look them up and crash.
     zombie_labels = [
         lbl
         for lbl in list(self._raw_layer_labels_list)
@@ -123,7 +159,12 @@ def _get_input_arg_names(model, input_args) -> List[str]:
 def _get_op_nums_from_user_labels(
     self: "ModelLog", which_layers: Union[str, List[Union[str, int]]]
 ) -> Union[List[int], str]:
-    """Given list of user layer labels, returns the original tensor numbers for those labels."""
+    """Resolve user-provided layer identifiers to internal realtime_tensor_num values.
+
+    Supports exact key match, substring match across all lookup keys, and the
+    special sentinel ``"all"`` (which passes through as-is).  Returns sorted
+    unique tensor numbers so the fast pass can check membership efficiently.
+    """
     if which_layers == "all":
         return which_layers  # type: ignore[return-value]
     elif which_layers in [None, "none", "None", "NONE", []]:
@@ -155,7 +196,16 @@ def _fetch_label_move_input_tensors(
     input_kwargs: Dict,
     model_device: str,
 ) -> Tuple[List[torch.Tensor], List[str]]:
-    """Fetches input tensors, gets their addresses, and moves them to the model device."""
+    """Extract all tensors from input args/kwargs, move to model device, and build addresses.
+
+    Handles nested structures (lists, tuples, dicts) up to ``search_depth=5``.
+    Each tensor gets a hierarchical address string like ``"input.x"`` or
+    ``"input.x.0.nested"`` that is stored as its ``input_output_address``.
+
+    Returns:
+        (input_tensors, input_tensor_addresses): flat lists of tensors and
+        their corresponding address strings.
+    """
     input_arg_tensors = [
         get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5, return_addresses=True)
         for arg in input_args
@@ -164,6 +214,8 @@ def _fetch_label_move_input_tensors(
         get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
         for kwarg in input_kwargs.values()
     ]
+    # Move each tensor to model device.  Tuples must be temporarily converted
+    # to lists for item assignment, then converted back to preserve type.
     for arg_idx, arg in enumerate(input_args):
         was_tuple = isinstance(arg, tuple)
         if was_tuple:
@@ -187,6 +239,8 @@ def _fetch_label_move_input_tensors(
             else:
                 nested_assign(input_kwargs[key], addr_full, moved_tensor)
 
+    # Build flat lists of (tensor, address) for both positional and keyword args.
+    # Address format: "input.<argname>" or "input.<argname>.<nested_path>"
     input_tensors = []
     input_tensor_addresses = []
     for arg_idx, arg_tensors in enumerate(input_arg_tensors):
@@ -215,17 +269,29 @@ def _setup_inputs_and_device(
 ) -> Tuple[List[Any], Dict[Any, Any], List[str], str]:
     """Normalize inputs, detect model device, copy args, and extract input arg names.
 
+    This is the single place where user-provided inputs are transformed into
+    the canonical internal form:
+      1. Unwrap DataParallel to get the underlying module.
+      2. ``normalize_input_args``: resolve the tuple-vs-single-arg ambiguity
+         by inspecting the model's forward() signature.
+      3. ``safe_copy_args/kwargs``: clone tensors so in-place device moves
+         (in ``_fetch_label_move_input_tensors``) don't mutate the caller's data.
+      4. Detect model device from first param or buffer (for auto-moving inputs).
+
     Returns:
         (input_args, input_kwargs, input_arg_names, model_device)
     """
     if type(model) == nn.DataParallel:
         model = model.module
 
+    # Resolve ambiguity: is [tensor_a, tensor_b] two args or one list-arg?
+    # normalize_input_args checks the model's forward() signature to decide.
     input_args = normalize_input_args(input_args, model)
 
     if not input_kwargs:
         input_kwargs = {}
 
+    # Detect device from first param or buffer; fall back to CPU for param-free models.
     first_param = next(model.parameters(), None)
     first_buffer = next(model.buffers(), None)
     if first_param is not None:
@@ -235,6 +301,7 @@ def _setup_inputs_and_device(
     else:
         model_device = "cpu"  # type: ignore[assignment]
 
+    # Clone tensors to protect user's originals from in-place device moves.
     input_args = safe_copy_args(input_args)
     input_arg_names = _get_input_arg_names(model, input_args)
     input_kwargs = safe_copy_kwargs(input_kwargs)
@@ -248,6 +315,13 @@ def _extract_and_mark_outputs(
 ) -> Tuple[List[torch.Tensor], List[str]]:
     """Extract output tensors from model outputs, deduplicate, and mark in ModelLog.
 
+    Called AFTER the forward pass completes (outside ``active_logging``), so
+    operations here don't trigger logging.  Marks each output tensor's graph
+    entry as ``is_output_parent=True`` so postprocessing can identify them.
+
+    Deduplication is by address string (not tensor identity) to handle cases
+    where the same tensor appears at multiple output positions.
+
     Returns:
         (output_tensors, output_tensor_addresses)
     """
@@ -258,7 +332,7 @@ def _extract_and_mark_outputs(
         return_addresses=True,
         allow_repeats=True,
     )
-    # Remove duplicate addresses
+    # Remove duplicate addresses (same tensor at multiple output positions).
     addresses_seen = set()
     output_tensors_w_addresses = []
     for entry in output_tensors_w_addresses_all:
@@ -271,6 +345,7 @@ def _extract_and_mark_outputs(
     output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
 
     for t in output_tensors:
+        # Only record output_layers during exhaustive pass; fast pass reuses the list.
         if self.logging_mode == "exhaustive":
             self.output_layers.append(t.tl_tensor_label_raw)
         self._raw_layer_dict[t.tl_tensor_label_raw].is_output_parent = True
@@ -286,11 +361,24 @@ def run_and_log_inputs_through_model(
     layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
     random_seed: Optional[int] = None,
 ) -> None:
-    """Runs input through model and logs it in ModelLog.
+    """Core orchestration: run a forward pass and log everything into ModelLog.
 
-    Uses toggle-gated decoration: torch functions are already decorated
-    at import time.  ``active_logging()`` turns the toggle on for the
-    forward pass, ``_cleanup_model_session()`` cleans up session state.
+    Execution order (ordering matters for correctness):
+      1. Set RNG seed (MUST happen before active_logging — see below).
+      2. Resolve ``layers_to_save`` to internal tensor numbers.
+      3. Normalize/copy inputs, detect device.
+      4. Move inputs to model device.
+      5. Capture/restore RNG state for fast-pass reproducibility.
+      6. Prepare model (one-time decoration + per-session hooks).
+      7. Enter ``active_logging()`` context — toggles ``_state._logging_enabled``.
+      8. Log source tensors (inputs), then run ``model(*args, **kwargs)``.
+      9. Exit logging context, extract/mark outputs, clean up, postprocess.
+
+    RNG ordering constraint: ``set_random_seed`` and ``log_current_rng_states``
+    are called BEFORE ``active_logging()`` because entering the logging context
+    may trigger decorated operations (e.g., module hooks) that consume RNG state.
+    The fast pass restores the same pre-forward RNG state so that stochastic
+    layers (dropout, etc.) produce identical graph structure.
     """
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
@@ -299,8 +387,9 @@ def run_and_log_inputs_through_model(
 
     self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment, arg-type]
 
-    # In fast mode, also save parents of output layers so output tensor_contents
-    # can be populated in postprocess_fast (issue #46).
+    # In fast mode, output layers' tensor_contents are derived from their parents
+    # (see postprocess_fast).  If the user requested a subset of layers, we must
+    # also include output-layer parents so their activations are available (#46).
     if self._layer_nums_to_save != "all" and self._pass_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
@@ -327,8 +416,10 @@ def run_and_log_inputs_through_model(
             input_tensor_addresses,
         ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
 
-        # Capture/restore RNG state so the fast pass reproduces the same
-        # stochastic graph as the exhaustive pass (issue #58).
+        # RNG state snapshot/restore for two-pass consistency (#58).
+        # Exhaustive pass: snapshot state BEFORE forward so fast pass can replay.
+        # Fast pass: restore the snapshot so dropout masks, etc. are identical,
+        # ensuring the same computational graph (counter alignment depends on this).
         if self.logging_mode == "exhaustive":
             self._pre_forward_rng_states = log_current_rng_states()  # type: ignore[attr-defined]
         elif self.logging_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
@@ -341,7 +432,11 @@ def run_and_log_inputs_through_model(
         _prepare_model_session(self, model, self._optimizer)
         self.elapsed_time_setup = time.time() - self.pass_start_time
 
-        # Activate logging toggle and run forward pass
+        # Turn on the logging toggle and run the forward pass.
+        # Inside this context, every decorated torch function will log its
+        # inputs/outputs.  Source tensors (model inputs) are logged explicitly
+        # before invoking the model; all subsequent operations are captured
+        # automatically by the decorated wrappers.
         with _state.active_logging(self):
             for i, t in enumerate(input_tensors):
                 log_source_tensor(self, t, "input", input_tensor_addresses[i])
@@ -358,8 +453,9 @@ def run_and_log_inputs_through_model(
         self._postprocess(output_tensors, output_tensor_addresses)
 
     except Exception as e:
-        # active_logging's finally already turned off the toggle.
-        # Clean up model state and any decorated output tensors (#110).
+        # active_logging's __exit__ already turned off the toggle.
+        # Clean up model session state and strip tl_ attributes from any
+        # partially-constructed tensor entries to avoid stale references (#110).
         _cleanup_model_session(model, input_tensors)
         for label in list(self._raw_layer_dict.keys()):
             entry = self._raw_layer_dict.get(label)
@@ -380,5 +476,6 @@ def run_and_log_inputs_through_model(
         raise e
 
     finally:
+        # Release input tensor references so GC can reclaim CUDA memory.
         input_tensors = None  # type: ignore[assignment]
         torch.cuda.empty_cache()

@@ -1,4 +1,26 @@
-"""Structured per-module metadata: ModulePassLog, ModuleLog, ModuleAccessor."""
+"""Structured per-module metadata: ModulePassLog, ModuleLog, ModuleAccessor.
+
+Three-level hierarchy:
+
+* **ModulePassLog** -- one invocation of one module (lightweight container).
+  Stores ``layers`` as pass-qualified labels (e.g. ``"conv2d_1_1:1"``),
+  pointing to individual LayerPassLog entries.
+
+* **ModuleLog** -- aggregate metadata for one ``nn.Module`` across all its
+  invocations.  Stores ``all_layers`` as no-pass labels (e.g.
+  ``"conv2d_1_1"``), pointing to aggregate LayerLog entries.
+  For single-pass modules, per-pass fields are delegated to ``passes[1]``
+  via ``_single_pass_or_error()``.
+
+* **ModuleAccessor** -- dict-like accessor returned by ``model_log.modules``.
+  Supports lookup by module address, alias (shared modules), pass label,
+  or ordinal index.
+
+ModuleLog vs ModulePassLog label convention:
+  - ModuleLog.all_layers stores **no-pass** labels -> LayerLog
+  - ModulePassLog.layers stores **pass-qualified** labels -> LayerPassLog
+This matches each accessor's natural granularity.
+"""
 
 from typing import Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
@@ -9,7 +31,15 @@ if TYPE_CHECKING:
 
 
 class ModulePassLog:
-    """Per-(module, pass_num) data. Lightweight container for one invocation of a module."""
+    """Per-(module, pass_num) data for one invocation of a module.
+
+    Lightweight container holding the list of layers computed during
+    this particular invocation, the captured forward arguments, and
+    the call-graph edges (parent/children in the module invocation tree).
+
+    ``layers`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
+    that resolve to individual LayerPassLog entries.
+    """
 
     def __init__(
         self,
@@ -27,8 +57,8 @@ class ModulePassLog:
     ):
         self.module_address = module_address
         self.pass_num = pass_num
-        self.pass_label = pass_label
-        self.layers = layers
+        self.pass_label = pass_label  # e.g. "features.0:1"
+        self.layers = layers  # pass-qualified layer labels
         self.num_layers = len(layers)
         self.input_layers = input_layers
         self.output_layers = output_layers
@@ -61,7 +91,20 @@ class ModulePassLog:
 
 
 class ModuleLog:
-    """Per-module-object metadata. The primary user-facing class for module inspection."""
+    """Aggregate metadata for one nn.Module across all its invocations.
+
+    The primary user-facing class for module inspection.  Provides both
+    static metadata (source file, class name, hierarchy) and dynamic
+    data (layers computed, parameter usage, pass-level detail).
+
+    ``all_layers`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
+    pointing to aggregate LayerLog entries.  For per-pass detail, access
+    ``self.passes[pass_num].layers`` which stores pass-qualified labels.
+
+    For single-pass modules, per-pass fields (``layers``, ``input_layers``,
+    ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
+    directly via ``_single_pass_or_error()`` delegation to ``passes[1]``.
+    """
 
     def __init__(
         self,
@@ -137,6 +180,8 @@ class ModuleLog:
         self.passes = passes if passes is not None else {}
         self.pass_labels = pass_labels if pass_labels is not None else []
 
+        # all_layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
+        # Contrast with ModulePassLog.layers which stores pass-qualified labels.
         self.all_layers = all_layers if all_layers is not None else []
         self.num_layers = len(self.all_layers)
 
@@ -162,6 +207,8 @@ class ModuleLog:
         self._source_model_log = _source_model_log
 
     # --- Per-call delegating properties ---
+    # Mirror the LayerLog delegation pattern: single-pass modules transparently
+    # expose per-pass fields; multi-pass modules raise with guidance.
 
     def _single_pass_or_error(self, field_name: str):
         """Return a field from the single pass, or raise if the module has multiple passes.
@@ -291,7 +338,17 @@ class ModuleLog:
 
 
 class ModuleAccessor:
-    """Dict-like accessor for ModuleLog objects. Supports indexing by address, index, or pass notation."""
+    """Dict-like accessor for ModuleLog objects.
+
+    Supports indexing by:
+    * **module address** (str) -- e.g. ``"features.0"``, ``"self"``.
+    * **alias** (str) -- for shared modules (same nn.Module registered at
+      multiple addresses), any alias resolves to the same ModuleLog.
+    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModulePassLog.
+    * **ordinal index** (int) -- position in address order.
+
+    Available as ``model_log.modules``.
+    """
 
     def __init__(
         self,
@@ -299,11 +356,11 @@ class ModuleAccessor:
         module_list: Optional[List["ModuleLog"]] = None,
         pass_dict: Optional[Dict[str, "ModulePassLog"]] = None,
     ):
-        self._dict = module_dict
+        self._dict = module_dict  # primary address -> ModuleLog
         self._list = module_list if module_list is not None else list(module_dict.values())
-        self._pass_dict = pass_dict if pass_dict is not None else {}
-        # Alias map: every address (including non-primary aliases of shared
-        # modules) resolves to the same ModuleLog.
+        self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModulePassLog
+        # Alias map: for shared modules (same nn.Module at multiple addresses),
+        # every non-primary address also resolves to the same ModuleLog.
         self._alias_dict: Dict[str, "ModuleLog"] = {}
         for ml in self._dict.values():
             for alias in ml.all_addresses:

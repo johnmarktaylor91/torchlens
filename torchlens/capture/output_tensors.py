@@ -4,6 +4,32 @@ This module handles the creation and population of LayerPassLog entries for ever
 tensor produced during a forward pass.  It covers both *exhaustive* mode (full
 metadata collection) and *fast* mode (re-use of a previously logged graph with
 new activations).
+
+Architecture overview:
+    Every decorated torch function wrapper calls ``log_function_output_tensors``
+    after executing the original function.  This dispatcher routes to either:
+
+    - ``log_function_output_tensors_exhaustive``: builds a complete
+      ``fields_dict`` of ~80 fields per tensor, creates a LayerPassLog entry,
+      updates family links (parent/child/sibling/spouse), and optionally
+      saves the activation value.
+
+    - ``log_function_output_tensors_fast``: skips metadata collection entirely.
+      Increments counters to maintain alignment with the exhaustive pass,
+      verifies the graph hasn't changed, and saves new activation values into
+      the existing LayerPassLog entries.
+
+Label format convention:
+    Raw labels follow ``{layer_type}_{type_num}_{realtime_num}_raw``, e.g.
+    ``"conv2d_3_47_raw"``.  During postprocessing, these are mapped to final
+    labels like ``"conv2d_3:1"`` (layer 3, pass 1).
+
+pause_logging usage:
+    ``pause_logging()`` temporarily disables the logging toggle so that
+    utility operations (e.g., ``get_tensor_memory_amount``, ``safe_copy``,
+    ``activation_postfunc``) don't get logged as model operations.  It is
+    used inside ``save_tensor_data`` and wherever helper functions call
+    decorated torch methods on tensors.
 """
 
 import copy
@@ -58,6 +84,12 @@ def log_function_output_tensors(
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
 ):
+    """Dispatch to exhaustive or fast logging based on current logging mode.
+
+    Called by every decorated torch function wrapper after executing the
+    original function.  The mode was set in ``save_new_activations`` (fast)
+    or ``log_forward_pass`` (exhaustive).
+    """
     if self.logging_mode == "exhaustive":
         log_function_output_tensors_exhaustive(
             self,
@@ -229,14 +261,24 @@ def _build_shared_fields_dict(
 ) -> Tuple[Dict[str, Any], List, List, Dict]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
+    When a function produces multiple output tensors (e.g. ``torch.split``),
+    many metadata fields are identical across outputs (function info, parent
+    relationships, module context).  This function computes those shared fields
+    once; per-tensor fields (shape, label, equivalence type) are added later
+    in ``_log_output_tensor_info``.
+
     Returns:
         (fields_dict, parent_layer_entries, arg_tensors, parent_param_passes)
     """
+    # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = func_name.lower().replace("_", "")
     all_args = list(args) + list(kwargs.values())
 
+    # Separate tensor args (which define graph edges) from non-tensor args
+    # (which become metadata and feed into operation_equivalence_type hashing).
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
+    # Retrieve parent tensors (excluding Parameters — they're tracked separately).
     arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
     parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw")
     parent_layer_entries = [self[label] for label in parent_layer_labels]
@@ -308,7 +350,14 @@ def _tag_tensor_and_track_variations(
     arg_copies: Tuple[Any],
     kwarg_copies: Dict[str, Any],
 ) -> None:
-    """Tag the output tensor with its label, add backward hook, and track parent content variations."""
+    """Tag the output tensor with its label, add backward hook, and track parent content variations.
+
+    Parent content variation tracking detects in-place mutations: if a parent
+    tensor's value at function-call time (from arg_copies) differs from its
+    saved activation, the pre-mutation value is recorded in
+    ``children_tensor_versions``.  This is critical for validation replay,
+    which needs the actual input values each child operation saw.
+    """
     out.tl_tensor_label_raw = fields_dict_onetensor["tensor_label_raw"]  # type: ignore[attr-defined]
     if self.save_gradients:
         _add_backward_hook(self, out, out.tl_tensor_label_raw)  # type: ignore[attr-defined]
@@ -341,17 +390,26 @@ def log_function_output_tensors_exhaustive(
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
 ):
-    """Logs tensor or set of tensors that were computed from a function call.
+    """Full metadata logging for each output tensor of a function call.
+
+    For each loggable output tensor:
+      1. Build per-tensor fields (label, shape, equivalence type, FLOPs).
+      2. Create a LayerPassLog entry and optionally save activation data.
+      3. Update bidirectional family links (parent→child, sibling, spouse).
+      4. Tag the output tensor with ``tl_tensor_label_raw`` so downstream
+         operations can identify it as a parent.
+      5. Track parent content variations (for in-place mutation detection).
 
     Args:
-        func: function that was called
-        args: positional arguments to function that was called
-        kwargs: keyword arguments to function that was called
-        arg_copies: copies of positional arguments to function that was called
-        kwarg_copies: copies of keyword arguments to function that was called
-        out_orig: original output from function
+        func: The original (unwrapped) function that was called.
+        args: Positional arguments to the function.
+        kwargs: Keyword arguments to the function.
+        arg_copies: Pre-call copies of args (for child tensor variation tracking).
+        kwarg_copies: Pre-call copies of kwargs.
+        out_orig: Original output from the function (may be tensor, tuple, etc.).
         exec_ctx: Timing, RNG, and autocast state captured around the function call.
-        is_bottom_level_func: whether the function is at the bottom-level of function nesting
+        is_bottom_level_func: True if this function was not called by another
+            decorated function (i.e., it's a leaf in the decoration nesting).
     """
     fields_dict, parent_layer_entries, arg_tensors, parent_param_passes = _build_shared_fields_dict(
         self,
@@ -369,15 +427,17 @@ def log_function_output_tensors_exhaustive(
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
 
-        # Shallow-copy only mutable containers; immutable values (str, int, bool,
-        # None, tuple, torch.dtype) don't need copying.
+        # Each output tensor gets its own fields_dict to avoid shared-mutation bugs.
+        # Shallow-copy mutable containers (list, dict, set); immutable values
+        # (str, int, bool, None, tuple, torch.dtype) are safely shared.
         fields_dict_onetensor = {}
         for key, value in fields_dict.items():
             if isinstance(value, (list, dict, set)):
                 fields_dict_onetensor[key] = copy.copy(value)
             else:
                 fields_dict_onetensor[key] = value
-        # These nested structures need deep copies to avoid cross-tensor mutation.
+        # These nested structures need deep copies because they contain mutable
+        # sub-containers that could be mutated independently per output tensor.
         for field in (
             "parent_layer_arg_locs",
             "containing_modules_origin_nested",
@@ -413,7 +473,12 @@ def log_function_output_tensors_exhaustive(
 
 
 def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs) -> Any:
-    """Utility function to get the value of a parent layer from the arguments passed to a function."""
+    """Retrieve a parent tensor's pre-call value from the saved argument copies.
+
+    Used for child tensor variation tracking: if a parent's value in arg_copies
+    differs from its currently saved tensor_contents, the parent was mutated
+    in-place between operations, and the variation is recorded.
+    """
     for pos, label in parent_layer_arg_locs["args"].items():
         if label == parent_label:
             return index_nested(arg_copies, pos)
@@ -434,7 +499,18 @@ def log_function_output_tensors_fast(
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
 ):
-    # Collect information.
+    """Fast-path logging: save new activation values into existing graph entries.
+
+    Skips all metadata collection.  Instead:
+      1. Increment counters identically to the exhaustive pass (counter alignment).
+      2. Reconstruct the raw label from counters and verify it maps to the same
+         final label as the exhaustive pass (graph-change detection).
+      3. Save activation data and update shape/dtype/timing metadata.
+
+    If any counter, label, or parent mismatch is detected, raises ValueError
+    telling the user to re-run ``log_forward_pass``.
+    """
+    # Minimal info collection — only what's needed for counter alignment and saving.
     layer_type = func_name.lower().replace("_", "")
     all_args = list(args) + list(kwargs.values())
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
@@ -446,13 +522,17 @@ def log_function_output_tensors_fast(
     for i, out in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
+        # Mirror the exhaustive pass's counter increments exactly.
+        # The raw label reconstructed here MUST match the exhaustive pass's label.
         self._layer_counter += 1
         self._raw_layer_type_counter[layer_type] += 1
         realtime_tensor_num = self._layer_counter
         layer_type_num = self._raw_layer_type_counter[layer_type]
         tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+        # Skip orphans — these were pruned from the graph during postprocessing.
         if tensor_label_raw in self.orphan_layers:
             continue
+        # Map parent raw labels → final labels for graph-change verification.
         parent_layer_labels_raw = get_attr_values_from_tensor_list(
             arg_tensors, "tl_tensor_label_raw"
         )
@@ -465,6 +545,7 @@ def log_function_output_tensors_fast(
                     f"Fast-path parent {raw_label} not found in raw→final label map "
                     f"and not in orphan_layers. The computational graph may have changed."
                 )
+        # Tag tensor so downstream ops can find this tensor's label.
         out.tl_tensor_label_raw = tensor_label_raw
         if tensor_label_raw not in self._raw_to_final_layer_labels:
             raise ValueError(
@@ -479,9 +560,11 @@ def log_function_output_tensors_fast(
         orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
 
         if self.save_gradients:
-            _add_backward_hook(self, out, tensor_label_raw)  # Must pass raw label (#86)
+            _add_backward_hook(self, out, tensor_label_raw)  # Must pass RAW label (#86)
 
-        # Check to make sure the graph didn't change.
+        # Structural integrity check: verify counter, type, label, and parents
+        # all match the exhaustive pass.  Any mismatch means dynamic control flow
+        # changed the graph and the fast pass cannot proceed.
         if (
             orig_layer_entry.realtime_tensor_num != self._layer_counter
             or orig_layer_entry.layer_type != layer_type
@@ -495,7 +578,7 @@ def log_function_output_tensors_fast(
                 "log_forward_pass with the desired inputs."
             )
 
-        # Update any relevant fields.
+        # Save activation data if this layer is in the save list.
         if (self._layer_nums_to_save == "all") or (
             orig_layer_entry.realtime_tensor_num in self._layer_nums_to_save
         ):
@@ -507,6 +590,9 @@ def log_function_output_tensors_fast(
                 self.save_function_args,
                 self.activation_postfunc,
             )
+            # Output layers are identity wrappers whose tensor_contents come
+            # from their parent.  Propagate the parent's saved activation to
+            # any child that is an output layer so postprocess_fast can find it.
             for child_layer in orig_layer_entry.child_layers:
                 if child_layer in self.output_layers:
                     child_output = self.layer_dict_main_keys[child_layer]
@@ -514,12 +600,14 @@ def log_function_output_tensors_fast(
                         orig_layer_entry.has_child_tensor_variations
                         and child_layer in orig_layer_entry.children_tensor_versions
                     ):
-                        # children_tensor_versions already has transforms applied
+                        # children_tensor_versions already has postfunc applied.
                         tensor_to_save = orig_layer_entry.children_tensor_versions[child_layer]
                         child_output.tensor_contents = safe_copy(tensor_to_save)
                     else:
                         child_output.tensor_contents = safe_copy(out)
                         if self.activation_postfunc is not None:
+                            # pause_logging prevents activation_postfunc from
+                            # triggering decorated torch ops that would be logged.
                             with pause_logging():
                                 child_output.tensor_contents = self.activation_postfunc(
                                     child_output.tensor_contents
@@ -530,6 +618,8 @@ def log_function_output_tensors_fast(
                     )
                     child_output.tensor_fsize_nice = human_readable_size(child_output.tensor_fsize)
 
+        # Update lightweight metadata that may vary across inputs
+        # (shape can differ for dynamic-shape models that still share graph structure).
         orig_layer_entry.tensor_shape = tuple(out.shape)
         orig_layer_entry.tensor_dtype = out.dtype
         fsize = get_tensor_memory_amount(out)
@@ -543,12 +633,21 @@ def log_function_output_tensors_fast(
 
 
 def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
-    """Function to check whether to log the output of a function.
+    """Determine whether an output value should be logged as a new graph node.
+
+    Two conditions must hold:
+      1. ``out`` must be a torch.Tensor (non-tensor outputs like ints are skipped).
+      2. Either the tensor is genuinely new (no ``tl_tensor_label_raw`` attribute),
+         OR this is a bottom-level function.  Bottom-level functions are leaf
+         operations in the decoration nesting — even if they return an already-
+         labeled tensor (in-place ops), we log them to capture the operation.
+         Non-bottom-level functions returning an already-labeled tensor are
+         higher-level wrappers whose sub-operations were already logged.
 
     Returns:
         True if the output should be logged, False otherwise.
     """
-    if type(out) is not torch.Tensor:  # only log if it's a tensor
+    if type(out) is not torch.Tensor:
         return False
 
     if (not hasattr(out, "tl_tensor_label_raw")) or is_bottom_level_func:
@@ -591,18 +690,27 @@ def _log_output_tensor_info(
     parent_param_passes: Dict[str, int],
     fields_dict: Dict[str, Any],
 ) -> None:
-    """Logs info specific to a single output tensor (e.g. shape, equivalence type, FLOPs).
+    """Populate per-tensor fields that differ across outputs of a single function call.
 
-    Handles fields that differ per output tensor in a multi-output function call,
-    as opposed to fields shared by all outputs of the same call.
+    This includes:
+      - Counter-based label generation (``tensor_label_raw``).
+      - Operation equivalence type assignment (used by loop detection to
+        identify structurally identical operations across forward-pass iterations).
+      - FLOPs computation.
+      - Shape, dtype, and memory size.
+
+    Label format: ``"{layer_type}_{type_num}_{realtime_num}_raw"``
+      - ``layer_type``: normalized function name (e.g. "conv2d")
+      - ``type_num``: how many times this layer_type has been seen (monotonic)
+      - ``realtime_num``: global operation counter across all types (monotonic)
 
     Args:
-        t: tensor to log
-        i: index of the tensor in the function output
-        args: positional args to the function that created the tensor
-        kwargs: keyword args to the function that created the tensor
-        parent_param_passes: Dict mapping barcodes of parent params to how many passes they've seen
-        fields_dict: dictionary of fields with which to initialize the new LayerPassLog
+        t: The output tensor.
+        i: Index of this tensor in a multi-output function call (0 for single outputs).
+        args: Positional args to the function that created the tensor.
+        kwargs: Keyword args to the function.
+        parent_param_passes: Dict mapping param barcodes to their current pass number.
+        fields_dict: Per-tensor fields dict to populate (mutated in place).
     """
     layer_type = fields_dict["layer_type"]
     indiv_param_barcodes = list(parent_param_passes.keys())
@@ -612,21 +720,32 @@ def _log_output_tensor_info(
     layer_type_num = self._raw_layer_type_counter[layer_type]
     tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
 
+    # Determine operation equivalence type — the fingerprint used by loop detection
+    # to group structurally identical operations (same layer across passes).
     if len(parent_param_passes) > 0:
+        # Parameterized ops: equivalence is defined by the exact set of parameters
+        # used, combined with the operation type.  E.g., two conv2d calls using the
+        # same weight+bias tensors are the same layer on different passes.
         operation_equivalence_type = _make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
         fields_dict["operation_equivalence_type"] = operation_equivalence_type
         self.layers_computed_with_params[operation_equivalence_type].append(tensor_label_raw)
         fields_dict["pass_num"] = len(self.layers_computed_with_params[operation_equivalence_type])
     else:
+        # Non-parameterized ops: equivalence is a hash of the operation type,
+        # non-tensor args, output index, and containing module.  Each unique
+        # non-param operation is seen only once (pass_num=1).
         operation_equivalence_type = _get_operation_equivalence_type(
             args, kwargs, i, layer_type, fields_dict
         )
         fields_dict["operation_equivalence_type"] = operation_equivalence_type
         fields_dict["pass_num"] = 1
 
+    # equivalent_operations is a DIRECT reference to the ModelLog-level set —
+    # all entries sharing this equivalence type point to the same set object.
     self.equivalent_operations[operation_equivalence_type].add(tensor_label_raw)
     fields_dict["equivalent_operations"] = self.equivalent_operations[operation_equivalence_type]
 
+    # In-place ops return the same tensor object, which already has tl_tensor_label_raw.
     fields_dict["function_is_inplace"] = hasattr(t, "tl_tensor_label_raw")
     fields_dict["gradfunc"] = type(t.grad_fn).__name__
 
@@ -709,17 +828,18 @@ def _make_layer_log_entry(
     t_kwargs: Optional[Dict] = None,
     activation_postfunc: Optional[Callable] = None,
 ):
-    """
-    Given a tensor, adds it to the model_history, additionally saving the activations and input
-    arguments if specified. Also tags the tensor itself with its raw tensor label
-    and a pointer to ModelLog.
+    """Create a LayerPassLog (or BufferLog) entry and register it in ModelLog.
+
+    Instantiates the appropriate log class from ``fields_dict``, conditionally
+    saves activation data (if this layer is in ``_layer_nums_to_save``), and
+    appends the entry to ``_raw_layer_dict`` and ``_raw_layer_labels_list``.
 
     Args:
-        t: tensor to log
-        fields_dict: dictionary of fields to log in LayerPassLog
-        t_args: Positional arguments to the function that created the tensor
-        t_kwargs: Keyword arguments to the function that created the tensor
-        activation_postfunc: Function to apply to activations before saving them.
+        t: The tensor to log.
+        fields_dict: Complete field dictionary (~80 fields) for the log entry.
+        t_args: Positional arguments to the function that created the tensor.
+        t_kwargs: Keyword arguments to the function that created the tensor.
+        activation_postfunc: Optional transform applied to activations before saving.
     """
     if t_args is None:
         t_args = []  # type: ignore[assignment]

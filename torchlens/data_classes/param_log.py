@@ -1,4 +1,23 @@
-"""ParamLog and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters."""
+"""ParamLog and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters.
+
+ParamLog stores static metadata (address, shape, dtype, trainability) plus
+lazy gradient information.  It does NOT store the parameter tensor itself --
+only a weak-ish reference (``_param_ref``) used solely for lazy gradient
+access via ``_check_param_grad()``.
+
+**GC concern with _param_ref**: ``_param_ref`` holds a direct reference to
+the ``nn.Parameter`` object.  This prevents the parameter from being garbage
+collected as long as the ParamLog (and thus the ModelLog) is alive.  This
+is acceptable because the ModelLog's lifetime is typically shorter than or
+equal to the model's lifetime.  The ``cleanup()`` method on ModelLog
+deletes all ParamLog references.
+
+**Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
+grad_fsize) is computed lazily on first access via ``_check_param_grad()``.
+This allows gradients computed after ``log_forward_pass()`` returns (e.g.
+after a ``loss.backward()`` call) to be reflected without re-logging.
+The check is one-shot: once ``_has_grad`` is True, no further checks are made.
+"""
 
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -8,7 +27,12 @@ from ..utils.display import human_readable_size
 
 
 class ParamLog:
-    """Metadata about a single model parameter."""
+    """Metadata about a single model parameter (weight or bias).
+
+    Captures static parameter identity (address, shape, dtype, trainability)
+    and links to the module that owns it.  Does NOT store the parameter tensor
+    itself -- only a ``_param_ref`` reference for lazy gradient access.
+    """
 
     def __init__(
         self,
@@ -25,8 +49,8 @@ class ParamLog:
         barcode: str,
         has_optimizer: Optional[bool] = None,
     ):
-        self.address = address
-        self.name = name
+        self.address = address  # e.g. "features.0.weight"
+        self.name = name  # short name, e.g. "weight"
         self.shape = shape
         self.dtype = dtype
         self.num_params = num_params
@@ -38,14 +62,16 @@ class ParamLog:
         self.barcode = barcode
         self.has_optimizer = has_optimizer
 
-        # Reference to the actual nn.Parameter for lazy gradient access
+        # Direct reference to the actual nn.Parameter for lazy gradient access.
+        # Prevents GC of the parameter while this ParamLog is alive (acceptable
+        # because ModelLog lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
 
-        # Populated during postprocessing
-        self.num_passes: int = 1
-        self.layer_log_entries: List[str] = []
-        self.linked_params: List[str] = []
-        self._has_grad: bool = False
+        # Populated during postprocessing:
+        self.num_passes: int = 1  # how many forward passes used this param
+        self.layer_log_entries: List[str] = []  # layer labels that used this param
+        self.linked_params: List[str] = []  # other param addresses sharing the same tensor
+        self._has_grad: bool = False  # one-shot flag: once True, no further checks
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
         self._grad_fsize: int = 0
@@ -64,7 +90,12 @@ class ParamLog:
         return self.dtype in _QUANTIZED_DTYPES
 
     def _check_param_grad(self):
-        """Check if the parameter reference has a gradient and cache the result."""
+        """Lazily check if the parameter has a gradient and cache the result.
+
+        Called by each grad property on first access.  Once a gradient is
+        found, all grad metadata is cached and no further checks are made
+        (``_has_grad`` acts as a one-shot flag).
+        """
         if not self._has_grad and self._param_ref is not None and self._param_ref.grad is not None:
             grad = self._param_ref.grad
             self._has_grad = True
@@ -151,11 +182,19 @@ class ParamLog:
 
 
 class ParamAccessor:
-    """Dict-like accessor for ParamLog objects. Supports indexing by address, short name, or ordinal position."""
+    """Dict-like accessor for ParamLog objects.
+
+    Supports indexing by:
+    * **full address** (str) -- e.g. ``"features.0.weight"``.
+    * **short name** (str) -- e.g. ``"weight"`` (must be unambiguous).
+    * **ordinal position** (int) -- index into insertion-order list.
+
+    Available as ``model_log.params``, ``layer_log.params``, ``module_log.params``.
+    """
 
     def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
-        self._dict = param_logs
-        self._list = list(param_logs.values())
+        self._dict = param_logs  # address -> ParamLog
+        self._list = list(param_logs.values())  # insertion-order list
 
     def __getitem__(self, key: Union[int, str]) -> "ParamLog":
         """Retrieve a parameter by integer index, full address, or short name (e.g. 'weight')."""

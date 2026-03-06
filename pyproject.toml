@@ -83,7 +83,7 @@ show_missing = true
 skip_empty = true
 
 [tool.coverage.html]
-directory = "tests/test_outputs/coverage_html"
+directory = "tests/test_outputs/reports/coverage_html"
 
 [tool.coverage.lcov]
 output = "tests/test_outputs/coverage.lcov"

@@ -1,4 +1,13 @@
-"""Steps 1-4: Output nodes, ancestry tracing, orphan removal, distance marking."""
+"""Steps 1-4: Output nodes, ancestry tracing, orphan removal, distance marking.
+
+Step 1 (_add_output_layers): Creates dedicated output LayerPassLog nodes, copying
+    metadata from the original output tensors but stripping params and module info.
+Step 2 (_find_output_ancestors): DFS backward from outputs marking is_output_ancestor.
+Step 3 (_remove_orphan_nodes): Bidirectional flood from inputs AND outputs to find
+    connected nodes; any node unreachable from both is removed as an orphan.
+Step 4 (_mark_input_output_distances): Optional forward/backward BFS recording
+    min/max hop counts from input and output nodes.
+"""
 
 from collections import OrderedDict
 from typing import TYPE_CHECKING, List
@@ -19,8 +28,18 @@ if TYPE_CHECKING:
 def _add_output_layers(
     self: "ModelLog", output_tensors: List[torch.Tensor], output_addresses: List[str]
 ) -> None:
-    """
-    Adds dedicated output nodes to the graph.
+    """Step 1: Add dedicated output nodes to the graph.
+
+    For each tensor in the model's output, creates a new LayerPassLog that acts
+    as a terminal "output" node. The new node copies tensor metadata from the
+    original output tensor but resets function, parameter, and module information
+    to reflect that this is a synthetic bookkeeping node (func_applied=identity,
+    no params, no containing module). The original output tensor becomes the
+    parent of the new output node.
+
+    Also detects child_tensor_variations: if the actual output tensor differs
+    from the parent's saved activation (e.g., due to in-place ops or postfunc),
+    the difference is recorded for validation.
     """
     new_output_layers = []
     for i, output_layer_label in enumerate(self.output_layers):
@@ -145,10 +164,21 @@ def _add_output_layers(
 
 
 def _find_output_ancestors(self) -> None:
-    """Mark every node that is an ancestor of an output node.
+    """Step 2: Mark every node that is an ancestor of an output node.
 
-    Walks backward from output nodes through parent_layers, setting
-    is_output_ancestor=True and accumulating output_descendents on each visited node.
+    Uses a LIFO stack (DFS) starting from output nodes. For each node popped,
+    checks its children — if any child is_output_ancestor, this node is too,
+    and it inherits the child's output_descendents. Then pushes all unseen parents
+    onto the stack.
+
+    Note: A node may be pushed onto the stack multiple times if it's shared by
+    sibling paths. The second pop is redundant (nodes_seen prevents re-pushing
+    parents) but harmless — it may beneficially propagate output_descendents
+    from newly-marked children on the second visit.
+
+    The boolean is_output_ancestor is always correct after this function; the
+    output_descendents set may be incomplete for multi-output graphs, but Step 4's
+    flood corrects it if distance marking is enabled.
     """
     node_stack = self.output_layers[:]
     nodes_seen = set()
@@ -166,12 +196,21 @@ def _find_output_ancestors(self) -> None:
 
 
 def _remove_orphan_nodes(self) -> None:
-    """
-    Removes nodes that are connected to neither the input nor the output by flooding in both directions
-    from the input and output nodes.
+    """Step 3: Remove orphan nodes unreachable from both inputs and outputs.
+
+    Floods BIDIRECTIONALLY from input and output nodes simultaneously. A node is
+    reachable if it can be reached by following child_layers OR parent_layers from
+    any starting node. This bidirectional approach is necessary because:
+    - Forward-only (from inputs) would miss nodes reachable only backward from outputs
+      (e.g., internally-initialized tensors that only feed into outputs).
+    - Backward-only (from outputs) would miss input-side dead ends.
+
+    Any non-output node with no children is logged as an internally-terminated tensor
+    (it produced a value that was never used by downstream computation reaching an output).
     """
     orig_nodes = set(self._raw_layer_labels_list)
     nodes_seen = set()
+    # Seed with both input and output nodes for bidirectional reachability.
     node_stack = self.input_layers + self.output_layers
     while len(node_stack) > 0:
         tensor_label = node_stack.pop()
@@ -179,6 +218,7 @@ def _remove_orphan_nodes(self) -> None:
         layer_entry = self._raw_layer_dict[tensor_label]
         if (len(layer_entry.child_layers) == 0) and (not layer_entry.is_output_layer):
             _log_internally_terminated_tensor(self, tensor_label)
+        # Follow BOTH directions to ensure full bidirectional reachability.
         for next_label in layer_entry.child_layers + layer_entry.parent_layers:
             if next_label not in nodes_seen:
                 node_stack.append(next_label)
@@ -186,8 +226,7 @@ def _remove_orphan_nodes(self) -> None:
     orphan_nodes = orig_nodes - nodes_seen
     self.orphan_layers = list(orphan_nodes)
 
-    # Now remove all orphaned nodes using batch removal.
-
+    # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
     orphan_entries = [self._raw_layer_dict[label] for label in orphan_nodes]
     self._batch_remove_log_entries(orphan_entries, remove_references=True)
 
@@ -202,9 +241,16 @@ def _remove_orphan_nodes(self) -> None:
 
 
 def _mark_input_output_distances(self) -> None:
-    """
-    Traverses the graph forward and backward, marks the minimum and maximum distances of each
-    node from the input and output, and removes any orphan nodes.
+    """Step 4: Compute min/max hop distances from inputs and outputs.
+
+    Runs two unidirectional floods: forward from inputs (following child_layers)
+    and backward from outputs (following parent_layers). Each flood records
+    min_distance_from_{input,output} and max_distance_from_{input,output} on
+    every reachable node.
+
+    This step is CONDITIONAL on ``self.mark_input_output_distances`` — it is
+    skipped when the user doesn't need distance metadata, saving time on
+    large graphs.
     """
     _flood_graph_from_input_or_output_nodes(self, "input")
     _flood_graph_from_input_or_output_nodes(self, "output")
@@ -216,6 +262,15 @@ def _flood_graph_from_input_or_output_nodes(self, mode: str) -> None:
     Traverses unidirectionally from starting nodes (input or output), recording
     each node's min and max hop count from the start. Also marks each node's
     ancestry (input_ancestors or output_descendents).
+
+    Unlike the bidirectional flood in Step 3, this flood is UNIDIRECTIONAL:
+    from inputs it follows child_layers (forward), from outputs it follows
+    parent_layers (backward). This ensures hop counts reflect actual data-flow
+    distance, not arbitrary graph traversal paths.
+
+    A node may be revisited if a new path provides a shorter min or longer max
+    distance, or adds a new ancestor/descendent — see
+    ``_check_whether_to_add_node_to_flood_stack`` for the pruning logic.
 
     Args:
         mode: 'input' to flood forward from inputs, 'output' to flood backward from outputs.
@@ -317,9 +372,17 @@ def _check_whether_to_add_node_to_flood_stack(
     layer_logging_field: str,
     nodes_seen: set,
 ) -> bool:
-    """
-    Checker function to trim uninformative nodes when tracing input and output distances:
-    trims nodes if they don't exceed the min or max, or don't add an informative new ancestor or descendent.
+    """Decide whether to push a candidate node onto the flood stack.
+
+    Returns True (re-visit needed) if any of:
+    - Node has never been visited.
+    - The current path provides a new minimum distance.
+    - The current path provides a new maximum distance.
+    - The originating input/output node is not yet recorded in the candidate's
+      ancestor/descendent set (adds new lineage information).
+
+    This pruning prevents redundant BFS expansion while ensuring all
+    distance extremes and lineage relationships are captured.
     """
     candidate_node = self[candidate_node_label]
 

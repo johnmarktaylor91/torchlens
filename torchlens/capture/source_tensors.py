@@ -1,8 +1,24 @@
 """Functions for logging source tensors (inputs and buffers) during model tracing.
 
 Source tensors are the starting points of the computational graph: model inputs
-and module buffers. This module handles creating LayerPassLog entries for these
+and module buffers.  This module handles creating LayerPassLog entries for these
 tensors in both exhaustive and fast logging modes.
+
+Source tensors differ from function-output tensors in several ways:
+  - They have no parent layers (``parent_layers=[]``).
+  - Inputs are roots with ``has_input_ancestor=True``; buffers are internally
+    initialized with ``has_internally_initialized_ancestor=True``.
+  - Their ``func_applied`` is None and ``func_applied_name`` is ``"none"``.
+  - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
+  - Buffers may carry a ``tl_buffer_parent`` attribute (set during model prep)
+    identifying the module that owns them.
+  - Buffer entries are instantiated as ``BufferLog`` (a LayerPassLog subclass
+    that adds ``name`` and ``module_address`` fields).
+
+The ``operation_equivalence_type`` for inputs encodes shape+dtype (so inputs
+with different shapes are distinct equivalence classes).  For buffers, it
+encodes the buffer's module address (so the same buffer across passes is
+recognized as the same layer).
 """
 
 from collections import defaultdict
@@ -25,6 +41,17 @@ if TYPE_CHECKING:
 
 
 def log_source_tensor(self, t: torch.Tensor, source: str, extra_address: Optional[str] = None):
+    """Dispatch source tensor logging to exhaustive or fast mode.
+
+    Called explicitly for model inputs (from ``run_and_log_inputs_through_model``)
+    and for module buffers (from the module forward decorator in model_prep.py).
+
+    Args:
+        t: The source tensor (input or buffer).
+        source: ``"input"`` or ``"buffer"``.
+        extra_address: For inputs, the address string (e.g. ``"input.x"``);
+            for buffers, the buffer's module address (e.g. ``"encoder.bn.running_mean"``).
+    """
     if self.logging_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self.logging_mode == "fast":
@@ -51,6 +78,9 @@ def log_source_tensor_exhaustive(
 
     tensor_label = f"{layer_type}_{layer_type_num}_raw"
 
+    # Configure source-type-specific fields.
+    # Inputs are graph roots with themselves as their own input ancestor.
+    # Buffers are internally initialized (no input ancestry).
     if source == "input":
         is_input_layer = True
         has_input_ancestor = True
@@ -62,6 +92,8 @@ def log_source_tensor_exhaustive(
         has_internally_initialized_ancestor = False
         input_ancestors = {tensor_label}
         internally_initialized_ancestors = set()
+        # Inputs with different shapes/dtypes get different equivalence types
+        # so they're not grouped as the "same layer" by loop detection.
         operation_equivalence_type = (
             f"input_{'_'.join(tuple(str(s) for s in t.shape))}_{str(t.dtype)}"
         )
@@ -75,7 +107,11 @@ def log_source_tensor_exhaustive(
         has_internally_initialized_ancestor = True
         internally_initialized_ancestors = {tensor_label}
         input_ancestors = set()
+        # Buffer equivalence keyed by module address so the same buffer
+        # is recognized as the same layer across loop iterations.
         operation_equivalence_type = f"buffer_{extra_addr}"
+        # tl_buffer_parent is set during model_prep on buffers that belong
+        # to a specific module; None for detached or anonymous buffers.
         if hasattr(t, "tl_buffer_parent"):
             buffer_parent = t.tl_buffer_parent
         else:
@@ -224,14 +260,17 @@ def log_source_tensor_exhaustive(
         "module_entry_exit_thread_output": [],
     }
 
+    # Reuse the shared entry-creation logic from output_tensors.
+    # Imported here (not at module level) to avoid circular imports.
     from .output_tensors import _make_layer_log_entry
 
+    # Creates a BufferLog if is_buffer_layer=True, else LayerPassLog.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_postfunc)
 
-    # Tag the tensor itself with its label, and with a reference to the model history log.
+    # Tag the live tensor so downstream operations can find this tensor's label.
     t.tl_tensor_label_raw = tensor_label  # type: ignore[attr-defined]
 
-    # Log info to ModelLog
+    # Register in ModelLog-level tracking structures.
     self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)  # type: ignore[attr-defined]
     if source == "input":
         self.input_layers.append(tensor_label)
@@ -239,18 +278,17 @@ def log_source_tensor_exhaustive(
         self.buffer_layers.append(tensor_label)
         self.internally_initialized_layers.append(tensor_label)
 
-    # Make it track gradients if relevant
-
+    # Register backward hook for gradient capture if requested.
     if self.save_gradients:
         _add_backward_hook(self, t, t.tl_tensor_label_raw)  # type: ignore[attr-defined]
 
 
 def log_source_tensor_fast(self, t: torch.Tensor, source: str):
-    """NOTES TO SELF--fields to change are:
-    for ModelLog: pass timing, num tensors saved, tensor fsize
-    for Tensors: tensor contents, fsize, args, kwargs, make sure to clear gradients.
-    Add a minimal postprocessing thing for tallying stuff pertaining to saved tensors.
-    Have some minimal checker to make sure the graph didn't change.
+    """Fast-path source tensor logging: save new activation into existing entry.
+
+    Mirrors the exhaustive pass's counter increments for alignment, then
+    saves the tensor value and updates shape/dtype/size metadata.  Does NOT
+    rebuild the fields_dict or create new log entries.
     """
     layer_type = source
     # Fetch counters and increment to be ready for next tensor to be logged
@@ -258,7 +296,10 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     self._raw_layer_type_counter[layer_type] += 1
     layer_type_num = self._raw_layer_type_counter[layer_type]
 
+    # Source tensor raw labels omit the realtime_num component (unlike function
+    # outputs) because source tensors are identified only by type and type_num.
     tensor_label_raw = f"{layer_type}_{layer_type_num}_raw"
+    # Tag tensor for downstream fast-path ops to identify it.
     t.tl_tensor_label_raw = tensor_label_raw  # type: ignore[attr-defined]
     if tensor_label_raw in self.orphan_layers:
         return
@@ -298,13 +339,19 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
 
 
 def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:
-    """Utility function to extract information about module entry/exit from input tensors.
+    """Determine the module nesting context for a new tensor from its parents.
+
+    Finds the most deeply nested parent tensor and returns its current
+    containing-module stack (after applying any module entry/exit transitions
+    recorded in its ``module_entry_exit_thread_output``).  This determines
+    which module the new operation is "inside" for module-level metadata.
 
     Args:
-        arg_tensors: List of input tensors
+        arg_tensors: List of parent tensors (input arguments to the function).
 
     Returns:
-        List of containing module pass strings from the most deeply nested input tensor.
+        List of module pass strings (e.g. ``["encoder:1", "encoder.layer1:1"]``)
+        representing the nesting stack of the most deeply nested parent.
     """
     max_input_module_nesting = 0
     most_nested_containing_modules = []

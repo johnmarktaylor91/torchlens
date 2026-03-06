@@ -1,4 +1,20 @@
-"""Public API entry points: log_forward_pass and related user-facing functions."""
+"""Public API entry points for TorchLens.
+
+This module contains every user-facing function:
+  - ``log_forward_pass``  — the main entry point (runs model, returns ModelLog)
+  - ``validate_forward_pass`` — replay-based correctness check
+  - ``show_model_graph`` — visualization convenience wrapper
+  - ``get_model_metadata`` — metadata-only convenience wrapper (deprecated path)
+  - ``validate_batch_of_models_and_inputs`` — bulk validation harness
+
+**Two-pass strategy** (``log_forward_pass`` with selective layers):
+When the user requests specific layers (not "all" or "none"), TorchLens must
+first run an exhaustive pass to discover the full graph structure — only then can
+it resolve user-friendly layer names/indices to internal layer numbers.  A second
+fast pass replays the model, saving only the requested activations.  This is why
+``log_forward_pass`` has two branches: the simple path (save all/none) and the
+two-pass path (save specific layers).
+"""
 
 import collections.abc
 import os
@@ -27,7 +43,11 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
 
 
 def _move_tensors_to_device(obj, device):
-    """Recursively move tensors in a nested structure to the given device."""
+    """Recursively move tensors in a nested structure (lists, tuples, dicts) to *device*.
+
+    Handles common dict-like types (OrderedDict, HuggingFace BatchEncoding, etc.)
+    by attempting to reconstruct the original container type after moving values.
+    """
     if isinstance(obj, torch.Tensor):
         return obj.to(device)
     elif isinstance(obj, (list, tuple)):
@@ -61,31 +81,38 @@ def _run_model_and_save_specified_activations(
     num_context_lines: int = 7,
     optimizer=None,
 ) -> ModelLog:
-    """Internal function that runs the given input through the given model, and saves the
-    specified activations, as given by the tensor numbers (these will not be visible to the user;
-    they will be generated from the nicer human-readable names and then fed in).
+    """Run a forward pass with logging enabled, returning a populated ModelLog.
+
+    This is the single internal entry point that creates a ModelLog, configures it,
+    and delegates to ``ModelLog._run_and_log_inputs_through_model`` which handles
+    model preparation, the exhaustive (and optionally fast) forward pass, and all
+    postprocessing.
 
     Args:
         model: PyTorch model.
-        input_args: Input arguments to the model's forward pass: either a single tensor, or a list of arguments.
-        input_kwargs: Keyword arguments to the model's forward pass.
-        layers_to_save: List of layers to save
-        keep_unsaved_layers: Whether to keep layers in the ModelLog log if they don't have saved activations.
-        output_device: device where saved tensors will be stored: either 'same' to keep unchanged, or
-            'cpu' or 'cuda' to move to cpu or cuda.
-        activation_postfunc: Function to apply to activations before saving them (e.g., any averaging)
-        mark_input_output_distances: Whether to compute the distance of each layer from the input or output.
-            This is computationally expensive for large networks, so it is off by default.
-        detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
-        save_function_args: whether to save the arguments to each function
-        save_gradients: whether to save gradients from any subsequent backward pass
-        random_seed: Which random seed to use.
-        optimizer: Optional optimizer to tag which params are being optimized.
+        input_args: Positional arguments to model.forward(); a single tensor or list.
+        input_kwargs: Keyword arguments to model.forward().
+        layers_to_save: Which layers to save activations for ('all', 'none'/None, or a list).
+        keep_unsaved_layers: If False, layers without saved activations are pruned from the log.
+        output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
+        activation_postfunc: Optional transform applied to each activation before storage
+            (e.g., channel-wise averaging to reduce memory).
+        mark_input_output_distances: Compute BFS distances from input/output layers.
+            Expensive for large graphs — off by default.
+        detach_saved_tensors: If True, saved tensors are detached from the autograd graph.
+        save_function_args: If True, store the non-tensor arguments to each function call.
+            Required for validation replay (``validate_saved_activations``).
+        save_gradients: If True, register backward hooks to capture gradients.
+        random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
+        num_context_lines: Number of source-code context lines stored per function call.
+        optimizer: Optional optimizer — used to tag which parameters have optimizers attached.
 
     Returns:
-        ModelLog object with full log of the forward pass
+        Fully-populated ModelLog.
     """
-    # Move inputs to model device if needed (e.g. model on CUDA, inputs on CPU)
+    # Auto-detect model device from its first parameter and move inputs to match.
+    # This prevents silent device-mismatch errors when the model is on CUDA but
+    # the user passes CPU tensors (a common mistake).
     model_device = next((p.device for p in model.parameters()), None)
     if model_device is not None:
         input_args = _move_tensors_to_device(input_args, model_device)
@@ -140,46 +167,64 @@ def log_forward_pass(
     num_context_lines: int = 7,
     optimizer=None,
 ) -> ModelLog:
-    """Runs a forward pass through a model given input x, and returns a ModelLog object containing a log
-    (layer activations and accompanying layer metadata) of the forward pass for all layers specified in which_layers,
-    and optionally visualizes the model graph if vis_opt is set to 'rolled' or 'unrolled'.
+    """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
-    In which_layers, can specify 'all', for all layers (default), or a list containing any combination of:
-    1) desired layer names (e.g., 'conv2d_1_1'; if a layer has multiple passes, this includes all passes),
-    2) a layer pass (e.g., conv2d_1_1:2 for just the second pass), 3) a module name to fetch the output of a particular
-    module, 4) the ordinal index of a layer in the model (e.g. 3 for the third layer, -2 for the second to last, etc.),
-    or 5) a desired substring with which to filter desired layers (e.g., 'conv2d' for all conv2d layers).
+    This is the primary user-facing entry point for TorchLens.  It intercepts every
+    tensor-producing operation during ``model.forward()``, records metadata and
+    (optionally) saves activations, then returns a ``ModelLog`` that provides
+    dict-like access to every layer's data.
+
+    **Layer selection** (``layers_to_save``):
+
+    - ``'all'`` (default) — save activations for every layer.
+    - ``'none'`` / ``None`` / ``[]`` — save no activations (metadata only).
+    - A list containing any mix of:
+      1. Layer name, e.g. ``'conv2d_1_1'`` (all passes).
+      2. Pass-qualified label, e.g. ``'conv2d_1_1:2'`` (second pass only).
+      3. Module address, e.g. ``'features.0'`` (output of that module).
+      4. Integer index (ordinal position; negative indices work).
+      5. Substring filter, e.g. ``'conv2d'`` (all matching layers).
+
+    When specific layers are requested, a **two-pass strategy** is used: first an
+    exhaustive pass discovers the full graph structure (needed to resolve names),
+    then ``save_new_activations`` replays the model in fast mode to save only the
+    requested layers.  For ``'all'`` or ``'none'``, a single pass suffices.
 
     Args:
-        model: PyTorch model
-        input_args: input arguments for model forward pass; as a list if multiple, else as a single tensor.
-        input_kwargs: keyword arguments for model forward pass
-        layers_to_save: list of layers to include (described above), or 'all' to include all layers.
-        keep_unsaved_layers: whether to keep layers without saved activations in the log (i.e., with just metadata)
-        activation_postfunc: Function to apply to tensors before saving them (e.g., channelwise averaging).
-        mark_input_output_distances: whether to mark the distance of each layer from the input or output;
-            False by default since this is computationally expensive.
-        output_device: device where saved tensors are to be stored. Either 'same' to keep on the same device,
-            or 'cpu' or 'cuda' to move them to cpu or cuda when saved.
-        detach_saved_tensors: whether to detach the saved tensors, so they remain attached to the computational graph
-        save_function_args: whether to save the arguments to each function involved in computing each tensor
-        save_gradients: whether to save gradients from any subsequent backward pass
-        vis_opt: whether, and how, to visualize the network; 'none' for
-            no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
-            one node per layer if a recurrent network), or 'unrolled' to show the graph
-            in unrolled format (i.e., one node per pass through a layer if a recurrent)
-        vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
-            levels, etc.
-        vis_outpath: file path to save the graph visualization
-        vis_save_only: whether to only save the graph visual without immediately showing it
-        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
-        vis_buffer_layers: whether to visualize the buffer layers
-        vis_direction: either 'bottomup', 'topdown', or 'leftright'
-        random_seed: which random seed to use in case model involves randomness
+        model: PyTorch model.
+        input_args: Positional args for ``model.forward()``; a single tensor or list.
+        input_kwargs: Keyword args for ``model.forward()``.
+        layers_to_save: Which layers to save activations for (see above).
+        keep_unsaved_layers: If False, layers without saved activations are removed from
+            the returned ModelLog (they still exist during processing).
+        output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
+        activation_postfunc: Optional function applied to each activation before saving.
+        mark_input_output_distances: Compute BFS distances from inputs/outputs (expensive).
+        detach_saved_tensors: If True, detach saved tensors from the autograd graph.
+        save_function_args: Store non-tensor args for each function call (needed for
+            ``validate_saved_activations``).
+        save_gradients: Capture gradients during a subsequent backward pass.
+        vis_opt: ``'none'`` (default), ``'rolled'``, or ``'unrolled'`` visualization.
+        vis_nesting_depth: Max module nesting depth shown in visualization.
+        vis_outpath: Output file path for the graph visualization.
+        vis_save_only: If True, save the visualization file without displaying it.
+        vis_fileformat: Image format (``'pdf'``, ``'png'``, ``'jpg'``, etc.).
+        vis_buffer_layers: Include buffer layers in the visualization.
+        vis_direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
+        vis_graph_overrides: Graphviz graph-level attribute overrides.
+        vis_node_overrides: Graphviz node attribute overrides.
+        vis_nested_node_overrides: Graphviz attribute overrides for nested (module) nodes.
+        vis_edge_overrides: Graphviz edge attribute overrides.
+        vis_gradient_edge_overrides: Graphviz attribute overrides for gradient edges.
+        vis_module_overrides: Graphviz subgraph (module cluster) attribute overrides.
+        random_seed: Fixed RNG seed for reproducibility with stochastic models.
+        num_context_lines: Lines of source context to capture per function call.
+        optimizer: Optional optimizer to annotate which params are being optimized.
 
     Returns:
-        ModelLog object with layer activations and metadata
+        A ``ModelLog`` containing layer activations (if requested) and full metadata.
     """
+    # DataParallel is not supported — unwrap and warn if present.
     warn_parallel()
     model = _unwrap_data_parallel(model)
 
@@ -193,6 +238,8 @@ def log_forward_pass(
         layers_to_save = layers_to_save.lower()
 
     if layers_to_save in ["all", "none", None, []]:
+        # --- SINGLE-PASS path ---
+        # "all" or "none": no name resolution needed, so one pass suffices.
         model_log = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,  # type: ignore[arg-type]
@@ -210,6 +257,10 @@ def log_forward_pass(
             optimizer=optimizer,
         )
     else:
+        # --- TWO-PASS path ---
+        # Pass 1 (exhaustive): Run with layers_to_save=None and keep_unsaved_layers=True
+        # so the full graph is discovered and all layer labels are assigned.  No
+        # activations are saved yet — this pass is purely for metadata/structure.
         model_log = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,  # type: ignore[arg-type]
@@ -226,6 +277,8 @@ def log_forward_pass(
             num_context_lines=num_context_lines,
             optimizer=optimizer,
         )
+        # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
+        # layers and replay the model, saving only the matching activations.
         model_log.keep_unsaved_layers = keep_unsaved_layers
         model_log.save_new_activations(
             model=model,
@@ -261,16 +314,19 @@ def get_model_metadata(
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
     input_kwargs: Optional[Dict[Any, Any]] = None,
 ) -> ModelLog:
-    """Logs all metadata for a given model and inputs without saving any activations. NOTE: this function
-    will be removed in a future version of TorchLens, since calling it is identical to calling
-    log_forward_pass without saving any layers.
+    """Return model metadata without saving any activations.
+
+    Equivalent to ``log_forward_pass(model, input_args, input_kwargs, layers_to_save=None,
+    mark_input_output_distances=True)``.  Prefer using ``log_forward_pass`` directly —
+    this wrapper exists for backward compatibility and may be removed in a future release.
 
     Args:
-        model: model to inspect
-        input_args: list of input positional arguments, or a single tensor
-        input_kwargs: dict of keyword arguments
+        model: PyTorch model to inspect.
+        input_args: Positional args for ``model.forward()``.
+        input_kwargs: Keyword args for ``model.forward()``.
+
     Returns:
-        ModelLog object with metadata about the model.
+        ModelLog with full metadata but no saved activations.
     """
     model_log = log_forward_pass(
         model,
@@ -301,27 +357,28 @@ def show_model_graph(
     vis_direction: str = "bottomup",
     random_seed: Optional[int] = None,
 ) -> None:
-    """Visualize the model graph without saving any activations.
+    """Convenience wrapper: visualize the computational graph without saving activations.
+
+    Runs an exhaustive forward pass (no activations saved) to discover the graph
+    structure, renders the visualization, then cleans up the ModelLog.  For more
+    control, use ``log_forward_pass`` with ``vis_opt`` set and access the ModelLog
+    directly.
 
     Args:
-        model: PyTorch model
-        input_args: Arguments for model forward pass
-        input_kwargs: Keyword arguments for model forward pass
-        vis_opt: whether, and how, to visualize the network; 'none' for
-            no visualization, 'rolled' to show the graph in rolled-up format (i.e.,
-            one node per layer if a recurrent network), or 'unrolled' to show the graph
-            in unrolled format (i.e., one node per pass through a layer if a recurrent)
-        vis_nesting_depth: How many levels of nested modules to show; 1 for only top-level modules, 2 for two
-            levels, etc.
-        vis_outpath: file path to save the graph visualization
-        save_only: whether to only save the graph visual without immediately showing it
-        vis_fileformat: the format of the visualization (e.g,. 'pdf', 'jpg', etc.)
-        vis_buffer_layers: whether to visualize the buffer layers
-        vis_direction: either 'bottomup', 'topdown', or 'leftright'
-        random_seed: which random seed to use in case model involves randomness
+        model: PyTorch model.
+        input_args: Positional args for ``model.forward()``.
+        input_kwargs: Keyword args for ``model.forward()``.
+        vis_opt: ``'rolled'`` or ``'unrolled'`` (``'none'`` is accepted but a no-op).
+        vis_nesting_depth: Max module nesting depth shown (default 1000 = all).
+        vis_outpath: Output file path for the visualization.
+        save_only: If True, save without displaying.
+        vis_fileformat: Image format (``'pdf'``, ``'png'``, ``'jpg'``, etc.).
+        vis_buffer_layers: Include buffer layers in the visualization.
+        vis_direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
+        random_seed: Fixed RNG seed for stochastic models.
 
     Returns:
-        Nothing.
+        None.
     """
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
@@ -341,6 +398,8 @@ def show_model_graph(
         save_gradients=False,
         random_seed=random_seed,
     )
+    # Render in a try/finally so temporary tl_ attributes on the model are
+    # always cleaned up, even if Graphviz rendering raises.
     try:
         model_log.render_graph(
             vis_opt,
@@ -369,42 +428,58 @@ def validate_forward_pass(
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
-    """Validate that the saved model activations correctly reproduce the ground truth output, and
-    optionally check all metadata invariants across the ModelLog data structures.
+    """Validate that saved activations faithfully reproduce the model's output.
 
-    Works by running a forward pass through the model, saving all activations, re-running the
-    forward pass starting from the saved activations in each layer, and checking that the resulting
-    output matches the original output. Additionally, it substitutes in random activations and checks
-    whether the output changes accordingly. When ``validate_metadata=True`` (default), also runs
-    comprehensive invariant checks on all metadata cross-references.
+    **How it works:**
+
+    1. Run model.forward() *without* TorchLens to get ground-truth output tensors.
+    2. Run ``log_forward_pass`` with ``save_function_args=True`` and ``layers_to_save='all'``
+       to capture every activation and its creating function's arguments.
+    3. Call ``ModelLog.validate_saved_activations`` which replays the forward pass
+       layer-by-layer from saved activations, checking that the output matches
+       ground truth.  It also injects random activations and verifies the output
+       changes (proving the saved activations are actually used, not just ignored).
+    4. If ``validate_metadata=True``, run comprehensive invariant checks on all
+       metadata cross-references (graph edges, module containment, labels, etc.).
+
+    **Why save_function_args=True is required:**  The validation replay re-executes
+    each function using its saved non-tensor arguments (e.g., stride, padding for
+    conv2d).  Without them, replay cannot reconstruct the correct computation.
 
     Args:
         model: PyTorch model.
         input_args: Input for which to validate the saved activations.
-        input_kwargs: Keyword arguments for model forward pass
-        random_seed: random seed in case model is stochastic
-        verbose: whether to show verbose error messages
-        validate_metadata: whether to run metadata invariant checks (default True)
+        input_kwargs: Keyword arguments for model forward pass.
+        random_seed: Fixed RNG seed for reproducibility (auto-generated if None).
+        verbose: If True, print detailed error messages on validation failure.
+        validate_metadata: If True (default), also run metadata invariant checks.
+
     Returns:
-        True if the saved activations correctly reproduce the ground truth output, false otherwise.
+        True if all validation checks pass, False otherwise.
     """
     warn_parallel()
     model = _unwrap_data_parallel(model)
-    if random_seed is None:  # set random seed
+    # Fix a random seed so both the ground-truth run and the logged run see
+    # identical randomness (critical for models with dropout, etc.).
+    if random_seed is None:
         random_seed = random.randint(1, 4294967294)
     set_random_seed(random_seed)
     input_args = normalize_input_args(input_args, model)
     if not input_kwargs:
         input_kwargs = {}
+    # Deep-copy inputs so the ground-truth forward pass doesn't mutate the
+    # originals (some models modify inputs in-place).
     input_args_copy = safe_copy_args(input_args)
     input_kwargs_copy = safe_copy_kwargs(input_kwargs)
 
-    # Move inputs to model device if needed (e.g. model on CUDA, inputs on CPU)
     model_device = next((p.device for p in model.parameters()), None)
     if model_device is not None:
         input_args_copy = _move_tensors_to_device(input_args_copy, model_device)
         input_kwargs_copy = _move_tensors_to_device(input_kwargs_copy, model_device)
 
+    # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
+    # Save state_dict first because requires_grad forcing during logging can
+    # alter parameter metadata; we restore it afterward.
     state_dict = model.state_dict()
     ground_truth_output_all = get_vars_of_type_from_obj(
         model(*input_args_copy, **input_kwargs_copy),
@@ -413,7 +488,8 @@ def validate_forward_pass(
         return_addresses=True,
         allow_repeats=True,
     )
-    # Deduplicate by address to match capture/trace.py output extraction
+    # Deduplicate by structural address to match how capture/trace.py extracts
+    # outputs (same tensor returned in multiple positions is counted once).
     addresses_used = []
     ground_truth_output_tensors = []
     for entry in ground_truth_output_all:
@@ -422,6 +498,10 @@ def validate_forward_pass(
         ground_truth_output_tensors.append(entry[0])
         addresses_used.append(entry[1])
     model.load_state_dict(state_dict)
+
+    # Step 2: Run the model *through* TorchLens, saving all activations.
+    # save_function_args=True is essential — the replay needs each function's
+    # non-tensor arguments to re-execute the computation from saved activations.
     model_log = _run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
@@ -435,6 +515,7 @@ def validate_forward_pass(
         save_function_args=True,
         random_seed=random_seed,
     )
+    # Step 3: Validate by replaying the forward pass from saved activations.
     try:
         activations_are_valid = model_log.validate_saved_activations(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
@@ -470,19 +551,22 @@ def validate_batch_of_models_and_inputs(
     out_path: str,
     redo_model_if_already_run: bool = True,
 ) -> pd.DataFrame:
-    """Given multiple models and several inputs for each, validates the saved activations for all of them
-    and returns a Pandas dataframe summarizing the validation results.
+    """Batch-validate multiple models, writing incremental results to a CSV.
+
+    For each model/input pair, calls ``validate_forward_pass`` and appends the
+    result to a running CSV at *out_path*.  If the CSV already exists, previously
+    validated models can be skipped (controlled by *redo_model_if_already_run*).
 
     Args:
-        models_and_inputs_dict: Dict mapping each model name to a dict of model info:
-                model_category: category of model (e.g., torchvision; just for directory bookkeeping)
-                model_loading_func: function to load the model
-                model_sample_inputs: dict of example inputs {name: input}
-        out_path: Path to save the validation results to
-        redo_model_if_already_run: If True, will re-run the validation for a model even if already run
+        models_and_inputs_dict: Mapping of model_name to a dict with keys:
+            - ``model_category`` (str): grouping label (e.g. 'torchvision').
+            - ``model_loading_func`` (callable): zero-arg function returning an nn.Module.
+            - ``model_sample_inputs`` (dict[str, input]): named sample inputs.
+        out_path: File path for the results CSV (created if absent, appended otherwise).
+        redo_model_if_already_run: Re-validate models already present in the CSV.
 
     Returns:
-        Pandas dataframe with validation information for each model and input
+        DataFrame with columns: model_category, model_name, input_name, validation_success.
     """
     if os.path.exists(out_path):
         current_csv = pd.read_csv(out_path)
