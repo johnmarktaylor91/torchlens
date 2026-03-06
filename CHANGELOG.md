@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v0.15.12 (2026-03-06)
+
+### Performance Improvements
+
+- **capture**: O(1) tensor/param extraction via per-function ArgSpec lookup table
+  ([`b1d6c56`](https://github.com/johnmarktaylor91/torchlens/commit/b1d6c56f4f1c5cf1176232e8fc33e229f8555baf))
+
+Replace expensive 3-level BFS crawl (~1.44s, 39% self-time, ~1.9M getattr calls) with O(1)
+  position-based lookups using a static ArgSpec table of 350+ entries. Three-tier strategy: static
+  table for known torch functions, dynamic cache for user-defined modules, BFS fallback (fires at
+  most once per unique class).
+
+Also hoists warnings.catch_warnings() from per-attribute (~77K entries) to per-call level, and adds
+  usage stats collection + coverage test infrastructure.
+
+Benchmark: Swin-T log_forward_pass 5.91s → 4.41s (-25%).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.11 (2026-03-06)
 
 ### Bug Fixes
