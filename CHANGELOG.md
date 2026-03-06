@@ -1,6 +1,41 @@
 # CHANGELOG
 
 
+## v0.15.11 (2026-03-06)
+
+### Bug Fixes
+
+- **gc**: Convert back-references to weakrefs and add optional call stack collection
+  ([`2bed167`](https://github.com/johnmarktaylor91/torchlens/commit/2bed167d78fed3a143060f8f5d75007cd3a06214))
+
+Convert 5 circular back-references from strong to weakref.ref() so ModelLog and its children
+  (LayerPassLog, LayerLog, ModuleLog, BufferAccessor, LayerAccessor) no longer prevent timely
+  garbage collection. GPU tensors are now freed immediately when the last strong reference to
+  ModelLog is dropped, instead of waiting for Python's gen-2 GC cycle.
+
+Also add save_call_stacks parameter to log_forward_pass() (default True). When False, skips
+  _get_func_call_stack() on every tensor operation, which is the main per-op overhead in production
+  use. Call stacks remain on by default for pedagogical use.
+
+Fixes: GC-2, GC-3, GC-4, PERF-19
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Add folder-wise CLAUDE.md files and comprehensive inline documentation
+  ([`deaec2d`](https://github.com/johnmarktaylor91/torchlens/commit/deaec2d4b3fb3c7ffee1fe7f61c8701bdc36dc70))
+
+- Add CLAUDE.md to every package directory (torchlens/, capture/, data_classes/, decoration/,
+  postprocess/, utils/, validation/, visualization/, tests/, scripts/, .github/) with file maps, key
+  concepts, gotchas, and cross-references - Add module-level docstrings, function/class docstrings,
+  and inline comments across all 39 source files explaining non-obvious logic, ordering
+  dependencies, design decisions, and invariants - Fix coverage HTML output directory in
+  pyproject.toml to point to tests/test_outputs/reports/coverage_html (matching conftest.py)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.10 (2026-03-05)
 
 ### Bug Fixes
