@@ -45,6 +45,7 @@ MODEL_LOG_FIELD_ORDER = [
     "save_function_args",
     "num_context_lines",
     "save_gradients",
+    "save_call_stacks",
     "has_saved_gradients",
     "activation_postfunc",
     "mark_input_output_distances",

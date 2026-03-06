@@ -302,7 +302,9 @@ def _build_shared_fields_dict(
     # Function call info
     fields_dict["func_applied"] = func  # type: ignore[assignment]
     fields_dict["func_applied_name"] = func_name
-    fields_dict["func_call_stack"] = _get_func_call_stack(self.num_context_lines)  # type: ignore[assignment]
+    fields_dict["func_call_stack"] = (
+        _get_func_call_stack(self.num_context_lines) if self.save_call_stacks else []
+    )  # type: ignore[assignment]
     fields_dict["func_time_elapsed"] = exec_ctx.time_elapsed  # type: ignore[assignment]
     fields_dict["func_rng_states"] = exec_ctx.rng_states  # type: ignore[assignment]
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state  # type: ignore[assignment]

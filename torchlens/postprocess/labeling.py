@@ -519,8 +519,12 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
         if field in old_dict:
             new_dir_dict[field] = old_dict[field]
     # Second: any remaining fields not in the order list (preserves all data).
+    # The callable check skips bound methods, but must not skip weakref.ref
+    # objects (which are callable but are data, not methods).
+    import weakref
+
     for field, value in old_dict.items():
-        if field not in new_dir_dict and not callable(value):
+        if field not in new_dir_dict and (not callable(value) or isinstance(value, weakref.ref)):
             new_dir_dict[field] = value
     layer_entry.__dict__ = new_dir_dict
 

@@ -22,6 +22,7 @@ ModuleLog vs ModulePassLog label convention:
 This matches each accessor's natural granularity.
 """
 
+import weakref
 from typing import Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import pandas as pd
@@ -204,7 +205,22 @@ class ModuleLog:
         self.extra_attributes = extra_attributes if extra_attributes is not None else {}
         self.methods = methods if methods is not None else []
 
-        self._source_model_log = _source_model_log
+        # Store as weakref to break circular reference (ModelLog -> _module_logs -> ModuleLog -> ModelLog).
+        self._source_model_log_ref = (
+            weakref.ref(_source_model_log) if _source_model_log is not None else None
+        )
+
+    @property
+    def _source_model_log(self):
+        """Back-reference to the owning ModelLog (stored as weakref)."""
+        ref = self.__dict__.get("_source_model_log_ref")
+        if ref is None:
+            return None
+        return ref()
+
+    @_source_model_log.setter
+    def _source_model_log(self, value):
+        self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
     # --- Per-call delegating properties ---
     # Mirror the LayerLog delegation pattern: single-pass modules transparently
