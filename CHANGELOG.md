@@ -1,6 +1,79 @@
 # CHANGELOG
 
 
+## v0.16.0 (2026-03-07)
+
+### Bug Fixes
+
+- **validation**: Batch of bug fixes for edge-case models
+  ([`dca5a7e`](https://github.com/johnmarktaylor91/torchlens/commit/dca5a7e11d31c81823601b5b93f79e143cd33c55))
+
+- Fix vmap/functorch compatibility: skip logging inside functorch transforms to avoid missing
+  batching rules (torch_funcs.py) - Fix tensor_nanequal infinite recursion: wrap decorated tensor
+  ops (.isinf, .resolve_conj, etc.) in pause_logging() (tensor_utils.py) - Fix perturbation for
+  range-restricted functions: use uniform random within original value range instead of scaled
+  normal (core.py) - Fix atomic_bool_val crash inside vmap context (output_tensors.py) - Fix output
+  node initialized_inside_model flag (graph_traversal.py) - Add scatter_ full-overwrite exemption
+  (exemptions.py) - Add max/min indices exemption for integer dtype outputs - Add bernoulli scalar-p
+  exemption, constant-output exemption - Add non-perturbed parent special-value check for nested
+  args (einsum) - Fix buffer_xrefs invariant: accept ancestor module matches - Fix real-world model
+  configs: CvT, CLAP, EnCodec, SpeechT5, Informer, Autoformer, MobileBERT kwarg names
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Fix ELK rendering and scale for large graphs
+  ([`ea96a85`](https://github.com/johnmarktaylor91/torchlens/commit/ea96a85a766068527366cbe0a77ecd7c7f467eef))
+
+- Fix neato -n position format: use points (not inches) — fixes empty nodes, missing edges, and
+  invisible labels in ELK output - Auto-scale Node.js heap and stack with graph JSON size -
+  Auto-scale ELK and neato timeouts with node count - Use straight-line edges for graphs > 1k nodes
+  (spline routing is O(n^2)) - Warn users to use SVG format for graphs > 25k nodes (PDF renders
+  empty) - Add dot-vs-ELK aesthetic comparison tests at 15/100/500/1k/3k nodes - Add 1M node test
+  (rare marker) for trophy-file rendering
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **vis**: Add ELK layout engine for large graph visualization
+  ([`5245872`](https://github.com/johnmarktaylor91/torchlens/commit/5245872746ee07dddd41a222392aa7548e33ce3f))
+
+- New elk_layout.py: ELK-based node placement via Node.js/elkjs subprocess, with graceful fallback
+  to sfdp when unavailable - New vis_node_placement parameter ("auto"/"dot"/"elk"/"sfdp") threaded
+  through show_model_graph, log_forward_pass, and render_graph - Auto mode uses dot for <3500 nodes,
+  ELK (or sfdp fallback) for larger - RandomGraphModel in example_models.py: seeded random model
+  generator with calibrated node counts (within ~5% of target up to 100k+) - 39 tests in
+  test_large_graphs.py: node count accuracy, validation, engine selection, ELK utilities, rendering
+  at 3k-100k scales, dot threshold benchmark - Increased Node.js stack size (--stack-size=65536) to
+  handle graphs up to 250k+ nodes without stack overflow
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Add hierarchical module grouping to ELK layout
+  ([`bcc1ad2`](https://github.com/johnmarktaylor91/torchlens/commit/bcc1ad207aa2d9512960201594bfa9afc2495fb0))
+
+- New build_elk_graph_hierarchical(): builds nested ELK compound nodes from module containment
+  structure (containing_modules_origin_nested) - ELK's "INCLUDE_CHILDREN" hierarchy handling
+  preserves module grouping in the layout — nodes within the same module cluster together -
+  inject_elk_positions() now recurses into compound nodes, accumulating absolute positions from
+  nested ELK coordinates - render_with_elk() passes entries_to_plot for hierarchical layout, falls
+  back to flat DOT parsing when entries not available - Tests for hierarchical graph building and
+  nested position injection
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **vis**: Add rare marker for 250k-node tests, fill test coverage gaps
+  ([`c749b94`](https://github.com/johnmarktaylor91/torchlens/commit/c749b94e69a1eee18f9084c1f46efc472fb3fe72))
+
+- New pytest marker "rare": always excluded by default via addopts, run explicitly with `pytest -m
+  rare` - Add 250k node count, validation, and ELK render tests (marked rare) - Fill gaps:
+  validation tests at 5k/10k/20k/50k/100k, ELK render tests at 5k/20k, node count test at 20k
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.15 (2026-03-07)
 
 ### Bug Fixes
