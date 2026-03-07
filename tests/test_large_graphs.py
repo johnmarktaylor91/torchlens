@@ -16,7 +16,7 @@ from torchlens.visualization.elk_layout import (
     _ELK_NODE_THRESHOLD,
 )
 
-from tests.example_models import RandomGraphModel
+from example_models import RandomGraphModel
 
 VIS_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "test_outputs", "visualizations", "large")
 
@@ -84,6 +84,7 @@ class TestRandomGraphModel:
         assert 45000 < count < 55000, f"Expected ~50000 nodes, got {count}"
 
     @pytest.mark.slow
+    @pytest.mark.rare
     def test_100k_nodes(self):
         model = RandomGraphModel(target_nodes=100000, seed=42)
         x = torch.randn(2, 64)
@@ -174,6 +175,7 @@ class TestRandomGraphModel:
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
+    @pytest.mark.rare
     def test_validation_100k(self):
         """Validation passes for 100k-node random model."""
         model = RandomGraphModel(target_nodes=100000, seed=42)
@@ -406,6 +408,7 @@ class TestLargeGraphRendering:
 
     @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
     @pytest.mark.slow
+    @pytest.mark.rare
     def test_elk_renders_100k(self):
         """ELK engine works for 100k-node graphs."""
         model = RandomGraphModel(target_nodes=100000, seed=42)

@@ -753,23 +753,30 @@ class TestSignalSafety:
 
         class SlowModel(nn.Module):
             def forward(self, x):
-                # Do enough work that the alarm fires
-                for _ in range(1000):
+                # Do enough work that the alarm fires mid-logging
+                for _ in range(50000):
                     x = x + 0.001
                 return x
 
+        alarm_fired = False
+
         def alarm_handler(signum, frame):
+            nonlocal alarm_fired
+            alarm_fired = True
             raise TimeoutError("alarm fired")
 
         old_handler = signal.signal(signal.SIGALRM, alarm_handler)
         try:
-            signal.alarm(1)  # 1 second
+            signal.setitimer(signal.ITIMER_REAL, 0.05)  # 50ms — fires mid-forward
             model = SlowModel()
             try:
                 log_forward_pass(model, torch.randn(5))
             except TimeoutError:
                 pass
-            signal.alarm(0)  # cancel alarm
+            signal.setitimer(signal.ITIMER_REAL, 0)  # cancel
+
+            if not alarm_fired:
+                pytest.skip("alarm didn't fire — forward pass too fast")
 
             # Toggle MUST be off
             assert _state._logging_enabled is False
