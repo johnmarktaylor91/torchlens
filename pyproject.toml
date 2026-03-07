@@ -58,7 +58,9 @@ include = ["torchlens*"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "smoke: marks tests as smoke tests for quick critical-path validation (select with '-m smoke')",
+    "rare: marks tests that are always excluded unless explicitly requested (select with '-m rare')",
 ]
+addopts = "-m 'not rare'"
 filterwarnings = [
     # External: torchvision model init deprecations
     "ignore:The default weight initialization of.*:FutureWarning",

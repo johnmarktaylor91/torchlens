@@ -89,6 +89,13 @@ class TestRandomGraphModel:
         count = _count_nodes(model, x)
         assert 90000 < count < 110000, f"Expected ~100000 nodes, got {count}"
 
+    @pytest.mark.rare
+    def test_250k_nodes(self):
+        model = RandomGraphModel(target_nodes=250000, seed=42)
+        x = torch.randn(2, 64)
+        count = _count_nodes(model, x)
+        assert 225000 < count < 275000, f"Expected ~250000 nodes, got {count}"
+
     def test_deterministic(self):
         """Same seed produces same structure."""
         m1 = RandomGraphModel(target_nodes=1000, seed=123)
@@ -160,6 +167,12 @@ class TestRandomGraphModel:
     def test_validation_100k(self):
         """Validation passes for 100k-node random model."""
         model = RandomGraphModel(target_nodes=100000, seed=42)
+        assert validate_forward_pass(model, torch.randn(2, 64))
+
+    @pytest.mark.rare
+    def test_validation_250k(self):
+        """Validation passes for 250k-node random model."""
+        model = RandomGraphModel(target_nodes=250000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
 
@@ -356,6 +369,19 @@ class TestLargeGraphRendering:
             vis_node_placement="elk",
             save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_100k"),
+        )
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    @pytest.mark.rare
+    def test_elk_renders_250k(self):
+        """ELK engine works for 250k-node graphs."""
+        model = RandomGraphModel(target_nodes=250000, seed=42)
+        show_model_graph(
+            model,
+            torch.randn(2, 64),
+            vis_node_placement="elk",
+            save_only=True,
+            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_250k"),
         )
 
     def test_vis_node_placement_forwarded(self):
