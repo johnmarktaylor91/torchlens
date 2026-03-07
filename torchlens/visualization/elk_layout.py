@@ -44,6 +44,29 @@ process.stdin.on('end', () => {
 """
 
 
+def _find_node_binary() -> "Optional[str]":
+    """Locate the ``node`` binary, probing nvm paths if not on PATH."""
+    import os
+    import shutil
+
+    node_bin = shutil.which("node")
+    if node_bin is not None:
+        return node_bin
+
+    # nvm installs node under ~/.nvm/versions/node/<version>/bin/node but
+    # non-interactive shells often don't have nvm's PATH additions.
+    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
+    versions_dir = os.path.join(nvm_dir, "versions", "node")
+    if os.path.isdir(versions_dir):
+        # Pick the newest installed version.
+        versions = sorted(os.listdir(versions_dir), reverse=True)
+        for v in versions:
+            candidate = os.path.join(versions_dir, v, "bin", "node")
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
 def _node_env() -> dict:
     """Build environment dict for Node.js subprocesses.
 
@@ -52,12 +75,17 @@ def _node_env() -> dict:
     found even when using nvm or non-standard Node.js installs.
     """
     import os
-    import shutil
 
     env = os.environ.copy()
-    node_bin = shutil.which("node")
+    node_bin = _find_node_binary()
     if node_bin is None:
         return env
+
+    # Ensure the node binary's directory is on PATH for subprocess calls.
+    node_dir = os.path.dirname(node_bin)
+    path = env.get("PATH", "")
+    if node_dir not in path.split(os.pathsep):
+        env["PATH"] = f"{node_dir}{os.pathsep}{path}" if path else node_dir
 
     # Derive global node_modules: <prefix>/lib/node_modules
     prefix_dir = os.path.dirname(os.path.dirname(os.path.realpath(node_bin)))
