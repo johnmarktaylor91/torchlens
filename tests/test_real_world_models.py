@@ -2472,11 +2472,11 @@ def test_nystromformer():
         num_attention_heads=4,
         intermediate_size=128,
         vocab_size=100,
-        max_position_embeddings=32,
+        max_position_embeddings=64,
         num_landmarks=8,
     )
     model = transformers.NystromformerModel(config).eval()
-    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 64))}
     show_model_graph(
         model,
         [],

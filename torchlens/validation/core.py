@@ -794,11 +794,10 @@ def _perturb_layer_activations(
             lo = parent_activations.float().min().item()
             hi = parent_activations.float().max().item()
             if lo == hi:
-                # Constant tensor — expand range so perturbation is meaningful.
-                # Scale expansion by magnitude to ensure float32-distinguishable
-                # perturbation for large values (e.g. 1e8 ± 1 is indistinguishable
-                # in float32, but 1e8 ± 1e4 is).
-                expansion = max(1.0, abs(lo) * 1e-4)
+                # Constant tensor — expand by ±10% of magnitude (or ±1 near zero).
+                # Kept conservative to avoid feeding invalid values to C extensions
+                # (e.g. ROI align segfaults on out-of-range coordinates).
+                expansion = max(1.0, abs(lo) * 0.1)
                 lo, hi = lo - expansion, hi + expansion
             perturbed_activations = (
                 torch.rand_like(parent_activations.float(), device=device) * (hi - lo) + lo

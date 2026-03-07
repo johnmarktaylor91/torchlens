@@ -66,6 +66,9 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
     "randn_like",
     "meshgrid",
     "broadcast_tensors",
+    # torchvision C++ ops (PyCapsule): nms, roi_align, etc. Perturbed coordinates
+    # can segfault these native extensions since they bypass Python exception handling.
+    "_op",
 }
 
 # ---------------------------------------------------------------------------
@@ -427,6 +430,25 @@ def posthoc_perturb_check(
                     f"(all-zeros or all-ones), so validation still succeeds..."
                 )
             return True
+
+    # Float32 precision exemption: when a non-perturbed parent's magnitude dwarfs
+    # the perturbed parent's, the perturbation is swallowed by float32 arithmetic.
+    # E.g., add(~51, ~659344): perturbing ~51 by ±5 doesn't change the sum at
+    # float32 precision because 659344+51 and 659344+56 round to the same value.
+    for parent_label in layer_to_validate_parents_for.parent_layers:
+        if parent_label in layers_to_perturb:
+            continue
+        parent_tensor = self[parent_label].tensor_contents
+        if parent_tensor is None:
+            continue
+        other_mag = parent_tensor.float().abs().max().item()
+        for perturbed_label in layers_to_perturb:
+            perturbed_tensor = self[perturbed_label].tensor_contents
+            if perturbed_tensor is None:
+                continue
+            perturbed_mag = perturbed_tensor.float().abs().max().item()
+            if perturbed_mag > 0 and other_mag / perturbed_mag > 100:
+                return True
 
     print(
         f"Activations for layer {layer_label} do not change when "
