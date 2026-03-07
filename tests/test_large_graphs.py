@@ -16,7 +16,7 @@ from torchlens.visualization.elk_layout import (
     _ELK_NODE_THRESHOLD,
 )
 
-from tests.example_models import RandomGraphModel
+from example_models import RandomGraphModel
 
 VIS_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "test_outputs", "visualizations", "large")
 
