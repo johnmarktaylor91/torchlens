@@ -2620,10 +2620,11 @@ def test_cvt():
         patch_padding=[1, 1],
         embed_dim=[32, 64],
         num_heads=[2, 4],
-        depth=[1, 1],
+        depth=[1, 2],
         mlp_ratio=[2.0, 2.0],
         cls_token=[False, True],
-        strides=[2, 1],
+        stride_q=[1, 1],
+        stride_kv=[2, 2],
     )
     model = transformers.CvtModel(config).eval()
     model_kwargs = {"pixel_values": torch.rand(1, 3, 32, 32)}
@@ -2737,6 +2738,7 @@ def test_maskrcnn_resnet50_eval():
     """Mask R-CNN (eval mode): instance segmentation inference."""
     from torchvision.models.detection import maskrcnn_resnet50_fpn_v2
 
+    torch.manual_seed(0)
     torch.use_deterministic_algorithms(False)
     try:
         model = maskrcnn_resnet50_fpn_v2(weights=None, num_classes=10).eval()
@@ -3358,11 +3360,13 @@ def test_audio_clap():
         audio_config={
             "hidden_size": 64,
             "num_hidden_layers": 2,
-            "num_attention_heads": 2,
+            "num_attention_heads": [2, 2],
             "patch_size": 4,
+            "patch_embeds_hidden_size": 32,
             "spec_size": 32,
             "num_mel_bins": 32,
             "depths": [2, 2],
+            "window_size": 4,
         },
         projection_dim=32,
     )
@@ -3389,7 +3393,7 @@ def test_audio_encodec():
     """EnCodec: neural audio codec with residual vector quantization."""
     transformers = pytest.importorskip("transformers")
     config = transformers.EncodecConfig(
-        target_bandwidths=[1.5],
+        target_bandwidths=[3.6],
         sampling_rate=24000,
         audio_channels=1,
         hidden_size=32,
@@ -3397,8 +3401,7 @@ def test_audio_encodec():
         num_residual_layers=1,
         upsampling_ratios=[5, 4, 4, 2],
         codebook_size=64,
-        codebook_dim=8,
-        num_quantizers=4,
+        codebook_dim=32,
     )
     model = transformers.EncodecModel(config).eval()
     audio = torch.rand(1, 1, 3200)
@@ -3457,11 +3460,18 @@ def test_audio_speecht5():
         vocab_size=100,
         num_mel_bins=20,
     )
-    model = transformers.SpeechT5Model(config).eval()
-    input_ids = torch.randint(0, 100, (1, 16))
+    from transformers.models.speecht5.modeling_speecht5 import (
+        SpeechT5EncoderWithTextPrenet,
+        SpeechT5DecoderWithSpeechPrenet,
+    )
+
+    encoder = SpeechT5EncoderWithTextPrenet(config)
+    decoder = SpeechT5DecoderWithSpeechPrenet(config)
+    model = transformers.SpeechT5Model(config, encoder=encoder, decoder=decoder).eval()
+    input_values = torch.randint(0, 100, (1, 16))
     decoder_input_values = torch.rand(1, 50, 20)
     model_kwargs = {
-        "input_ids": input_ids,
+        "input_values": input_values,
         "decoder_input_values": decoder_input_values,
     }
     show_model_graph(
@@ -3529,11 +3539,12 @@ def test_informer():
         encoder_ffn_dim=64,
         decoder_ffn_dim=64,
         scaling="std",
+        num_time_features=1,
     )
     model = transformers.InformerModel(config).eval()
-    past_values = torch.rand(1, 16)
-    past_time_features = torch.rand(1, 16, 1)
-    past_observed_mask = torch.ones(1, 16)
+    past_values = torch.rand(1, 23)
+    past_time_features = torch.rand(1, 23, 1)
+    past_observed_mask = torch.ones(1, 23)
     future_time_features = torch.rand(1, 4, 1)
     model_kwargs = {
         "past_values": past_values,
@@ -3568,12 +3579,13 @@ def test_autoformer():
         encoder_ffn_dim=64,
         decoder_ffn_dim=64,
         scaling="std",
-        moving_average=4,
+        moving_average=5,
+        num_time_features=1,
     )
     model = transformers.AutoformerModel(config).eval()
-    past_values = torch.rand(1, 16)
-    past_time_features = torch.rand(1, 16, 1)
-    past_observed_mask = torch.ones(1, 16)
+    past_values = torch.rand(1, 23)
+    past_time_features = torch.rand(1, 23, 1)
+    past_observed_mask = torch.ones(1, 23)
     future_time_features = torch.rand(1, 4, 1)
     model_kwargs = {
         "past_values": past_values,
@@ -3633,6 +3645,7 @@ def test_keypointrcnn_resnet50_train():
 @pytest.mark.slow
 def test_keypointrcnn_resnet50_eval():
     """Keypoint R-CNN: eval mode."""
+    torch.manual_seed(0)
     model = torchvision.models.detection.keypointrcnn_resnet50_fpn(
         weights=None, num_classes=2, num_keypoints=5
     ).eval()
@@ -3905,12 +3918,12 @@ def test_mobilebert():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "mobilebert"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================

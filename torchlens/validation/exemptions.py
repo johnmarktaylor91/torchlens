@@ -44,6 +44,7 @@ from ..utils.tensor_utils import tensor_all_nan
 # ---------------------------------------------------------------------------
 SKIP_VALIDATION_ENTIRELY: Set[str] = {
     "empty_like",
+    "new",  # torch.Tensor.new() — uninitialized memory
 }
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,31 @@ def _check_interpolate_exempt(self, layer: LayerPassLog, layers_to_perturb: List
     return False
 
 
+def _check_scatter_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
+    """Exempt scatter_ when the perturbed layer is the destination tensor and
+    the index covers all positions along the scatter dimension (full overwrite)."""
+    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
+    args = layer.creation_args
+    # scatter_(dim, index, src): args[0]=self(dest), args[1]=dim, args[2]=index, args[3]=src
+    if len(args) < 4:
+        return False
+    dest, dim, index = args[0], args[1], args[2]
+    if not isinstance(dest, torch.Tensor) or not isinstance(index, torch.Tensor):
+        return False
+    # Only exempt when the perturbed layer is the destination (arg[0])
+    if not torch.equal(perturbed_tensor, dest):
+        return False
+    # Check if index covers all positions along the scatter dimension
+    if isinstance(dim, int) and dim < 0:
+        dim = dest.ndim + dim
+    if isinstance(dim, int) and dim < dest.ndim:
+        n_positions = dest.shape[dim]
+        n_index_entries = index.shape[dim]
+        if n_index_entries >= n_positions:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Registry 4: Custom exemption checks keyed by func name.
 # ---------------------------------------------------------------------------
@@ -190,6 +216,7 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[..., bool]] = {
     "__setitem__": _check_setitem_exempt,
     "lstm": _check_lstm_exempt,
     "interpolate": _check_interpolate_exempt,
+    "scatter_": _check_scatter_exempt,
 }
 
 
@@ -269,8 +296,15 @@ def posthoc_perturb_check(
     if layer_to_validate_parents_for.tensor_dtype == torch.bool:
         return True
 
-    # topk/sort indices — discrete output insensitive to value perturbation
-    if func_name in ("topk", "sort") and layer_to_validate_parents_for.tensor_dtype in (
+    # topk/sort/max/min indices — discrete output insensitive to value perturbation.
+    # max(tensor, dim) and min(tensor, dim) return (values, indices); the indices
+    # output is integer and may not change when values are perturbed.
+    if func_name in (
+        "topk",
+        "sort",
+        "max",
+        "min",
+    ) and layer_to_validate_parents_for.tensor_dtype in (
         torch.int,
         torch.long,
         torch.int32,
@@ -332,8 +366,18 @@ def posthoc_perturb_check(
     if func_name == "max" and not torch.is_floating_point(args[0]):
         return True
 
-    # All-inf / all-NaN output — extreme values
+    # bernoulli with scalar p kwarg — self tensor is just a shape template,
+    # output is determined entirely by p and RNG state, not self's values.
+    if func_name == "bernoulli" and "p" in layer_to_validate_parents_for.creation_kwargs:
+        return True
+
+    # Constant output — function is structurally constant-valued
+    # (e.g., softmax on a dimension with size 1 always produces all-ones).
     output_tensor = layer_to_validate_parents_for.tensor_contents
+    if output_tensor.numel() > 0 and len(torch.unique(output_tensor)) == 1:
+        return True
+
+    # All-inf / all-NaN output — extreme values
     num_inf = torch.isinf(output_tensor.abs()).int().sum()
     num_nan = torch.isnan(output_tensor.abs()).int().sum()
     if (num_inf == output_tensor.numel()) or (num_nan == output_tensor.numel()):
@@ -365,6 +409,23 @@ def posthoc_perturb_check(
                         f"still succeeds..."
                     )
                 return True
+
+    # Check non-perturbed parent tensors directly — catches nested args
+    # (e.g. einsum receives operands as a tuple, so the special-value loop
+    # above can't see inside).
+    for parent_label in layer_to_validate_parents_for.parent_layers:
+        if parent_label in layers_to_perturb:
+            continue
+        parent_tensor = self[parent_label].tensor_contents
+        if parent_tensor is not None and _check_if_arg_is_special_val(parent_tensor):
+            if verbose:
+                print(
+                    f"Activations for layer {layer_label} do not change when "
+                    f"values for {layers_to_perturb} are changed, but "
+                    f"non-perturbed parent {parent_label} has special values "
+                    f"(all-zeros or all-ones), so validation still succeeds..."
+                )
+            return True
 
     print(
         f"Activations for layer {layer_label} do not change when "

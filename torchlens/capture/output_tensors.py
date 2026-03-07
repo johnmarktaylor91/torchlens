@@ -777,7 +777,11 @@ def _log_output_tensor_info(
 
     if (t.dtype == torch.bool) and (t.dim()) == 0:
         fields_dict["is_atomic_bool_layer"] = True
-        fields_dict["atomic_bool_val"] = t.item()
+        try:
+            fields_dict["atomic_bool_val"] = t.item()
+        except RuntimeError:
+            # .item() forbidden inside torch.vmap context
+            fields_dict["atomic_bool_val"] = None
     else:
         fields_dict["is_atomic_bool_layer"] = False
         fields_dict["atomic_bool_val"] = None

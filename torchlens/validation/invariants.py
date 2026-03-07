@@ -832,14 +832,23 @@ def _check_buffer_xrefs(ml: "ModelLog") -> None:
                     name,
                     f"BufferLog '{buf.layer_label}' has empty buffer_address",
                 )
-            # module_address references a valid module
-            try:
-                ml.modules[buf.module_address]
-            except (KeyError, IndexError):
+            # module_address references a valid module or an ancestor does.
+            # Buffers may live on modules that were never entered during the
+            # forward pass (e.g. anchor_generator creates buffers but they're
+            # consumed by parent code), or in non-module containers
+            # (ParameterList, top-level attrs like "rope"). Accept the buffer
+            # if any ancestor module is in the accessor.
+            addr = buf.module_address
+            found_ancestor = addr in ml.modules
+            while not found_ancestor and "." in addr:
+                addr = addr.rsplit(".", 1)[0]
+                found_ancestor = addr in ml.modules
+            if not found_ancestor and "" not in ml.modules:
                 raise MetadataInvariantError(
                     name,
                     f"BufferLog '{buf.layer_label}' module_address="
-                    f"'{buf.module_address}' not in module accessor",
+                    f"'{buf.module_address}' — no ancestor found in "
+                    f"module accessor",
                 )
 
 

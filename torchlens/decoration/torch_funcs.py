@@ -52,6 +52,17 @@ from ..capture.source_tensors import log_source_tensor
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
+
+def _is_inside_functorch_transform() -> bool:
+    """Return True if inside a vmap/grad/etc. functorch transform."""
+    try:
+        from torch._C._functorch import maybe_current_level
+
+        return maybe_current_level() is not None
+    except (ImportError, AttributeError):
+        return False
+
+
 # Functions that should never be logged — they are metadata queries, not
 # computational operations, and logging them would cause infinite recursion
 # (e.g. size() is called internally by logging code).
@@ -232,6 +243,12 @@ def torch_func_decorator(func: Callable, func_name: str):
             return func(*args, **kwargs)
 
         model_log = _state._active_model_log
+
+        # Skip logging inside vmap/functorch transforms — internal TorchLens
+        # operations (safe_copy, torch.equal, .item()) don't have vmap batching
+        # rules and will crash. The original function is already vmap-compatible.
+        if _is_inside_functorch_transform():
+            return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.
         if _state._collect_usage_stats:

@@ -115,6 +115,7 @@ def _add_output_layers(
 
         # Fix ancestry information:
 
+        new_output_node.initialized_inside_model = False
         new_output_node.is_output_ancestor = True
         new_output_node.output_descendents = {new_output_node.tensor_label_raw}
         new_output_node.child_layers = []

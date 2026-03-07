@@ -61,6 +61,12 @@ def tensor_nanequal(tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolera
     needs to confirm that the replay produced the same NaN pattern, not
     that NaN != NaN.
 
+    ``pause_logging()`` is required because this function is called during
+    active logging (from ``_tag_tensor_and_track_variations``) and uses
+    decorated tensor methods like ``.resolve_conj()``, ``.isinf()``, etc.
+    Without pausing, these calls re-enter the logging pipeline and cause
+    infinite recursion.
+
     Args:
         tensor_a: First tensor.
         tensor_b: Second tensor.
@@ -71,43 +77,46 @@ def tensor_nanequal(tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolera
     Returns:
         True if the tensors are considered equal.
     """
+    from .._state import pause_logging
+
     if tensor_a.shape != tensor_b.shape:
         return False
 
     if tensor_a.dtype != tensor_b.dtype:
         return False
 
-    # Inf positions must match exactly (inf != -inf).
-    if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
-        return False
+    with pause_logging():
+        # Inf positions must match exactly (inf != -inf).
+        if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
+            return False
 
-    # Replace NaNs with a sentinel value so torch.equal treats NaN positions
-    # as equal.  The sentinel (0.7234691827346) is arbitrary but unlikely to
-    # appear in real data.  Complex tensors need view_as_real/view_as_complex
-    # because torch.nan_to_num doesn't support complex dtypes directly.
-    if tensor_a.is_complex():
-        tensor_a_nonan = torch.view_as_complex(
-            torch.nan_to_num(torch.view_as_real(tensor_a), 0.7234691827346)
-        )
-        tensor_b_nonan = torch.view_as_complex(
-            torch.nan_to_num(torch.view_as_real(tensor_b), 0.7234691827346)
-        )
-    else:
-        tensor_a_nonan = torch.nan_to_num(tensor_a, 0.7234691827346)
-        tensor_b_nonan = torch.nan_to_num(tensor_b, 0.7234691827346)
+        # Replace NaNs with a sentinel value so torch.equal treats NaN positions
+        # as equal.  The sentinel (0.7234691827346) is arbitrary but unlikely to
+        # appear in real data.  Complex tensors need view_as_real/view_as_complex
+        # because torch.nan_to_num doesn't support complex dtypes directly.
+        if tensor_a.is_complex():
+            tensor_a_nonan = torch.view_as_complex(
+                torch.nan_to_num(torch.view_as_real(tensor_a.resolve_conj()), 0.7234691827346)
+            )
+            tensor_b_nonan = torch.view_as_complex(
+                torch.nan_to_num(torch.view_as_real(tensor_b.resolve_conj()), 0.7234691827346)
+            )
+        else:
+            tensor_a_nonan = torch.nan_to_num(tensor_a, 0.7234691827346)
+            tensor_b_nonan = torch.nan_to_num(tensor_b, 0.7234691827346)
 
-    if torch.equal(tensor_a_nonan, tensor_b_nonan):
-        return True
+        if torch.equal(tensor_a_nonan, tensor_b_nonan):
+            return True
 
-    # Tolerance path: allow small floating-point differences (e.g. from
-    # non-deterministic GPU reductions or mixed-precision rounding).
-    if (
-        allow_tolerance
-        and (tensor_a_nonan.dtype != torch.bool)
-        and (tensor_b_nonan.dtype != torch.bool)
-        and ((tensor_a_nonan - tensor_b_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
-    ):
-        return True
+        # Tolerance path: allow small floating-point differences (e.g. from
+        # non-deterministic GPU reductions or mixed-precision rounding).
+        if (
+            allow_tolerance
+            and (tensor_a_nonan.dtype != torch.bool)
+            and (tensor_b_nonan.dtype != torch.bool)
+            and ((tensor_a_nonan - tensor_b_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+        ):
+            return True
 
     return False
 

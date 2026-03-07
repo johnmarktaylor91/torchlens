@@ -772,22 +772,32 @@ def _perturb_layer_activations(
             if not torch.equal(perturbed_activations, parent_activations):
                 break
     else:
-        # Float/complex: scaled random normal.  The scale is derived from the
-        # output's mean absolute value plus random jitter, ensuring the
-        # perturbation is large enough to be detectable but not astronomical.
-        output_std = output_activations.detach().float().abs().mean()
-        output_std += torch.rand(output_std.shape, device=device) * 100
-        output_std *= torch.rand(output_std.shape, device=device)
-        output_std.requires_grad = False
-        scale = output_std.to(device)
+        # Float/complex: uniform random within the original value range.
+        # Using the original range ensures perturbed values stay in the
+        # valid domain for range-restricted functions (e.g., bernoulli
+        # requires probabilities in [0,1]).  For typical tensors with wide
+        # range this produces meaningfully different values.
         if parent_activations.is_complex():
+            real = parent_activations.real.float()
+            imag = parent_activations.imag.float()
+            r_lo, r_hi = real.min().item(), real.max().item()
+            i_lo, i_hi = imag.min().item(), imag.max().item()
+            if r_lo == r_hi:
+                r_lo, r_hi = r_lo - 1.0, r_hi + 1.0
+            if i_lo == i_hi:
+                i_lo, i_hi = i_lo - 1.0, i_hi + 1.0
             perturbed_activations = torch.complex(
-                torch.randn(parent_activations.shape, device=device) * scale,
-                torch.randn(parent_activations.shape, device=device) * scale,
+                torch.rand(parent_activations.shape, device=device) * (r_hi - r_lo) + r_lo,
+                torch.rand(parent_activations.shape, device=device) * (i_hi - i_lo) + i_lo,
             ).type(parent_activations.dtype)
         else:
+            lo = parent_activations.float().min().item()
+            hi = parent_activations.float().max().item()
+            if lo == hi:
+                # Constant tensor — expand range so perturbation is meaningful.
+                lo, hi = lo - 1.0, hi + 1.0
             perturbed_activations = (
-                torch.randn_like(parent_activations.float(), device=device) * scale
+                torch.rand_like(parent_activations.float(), device=device) * (hi - lo) + lo
             )
             perturbed_activations = perturbed_activations.type(parent_activations.dtype)
 
