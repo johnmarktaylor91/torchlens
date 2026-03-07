@@ -793,10 +793,11 @@ def _perturb_layer_activations(
         else:
             lo = parent_activations.float().min().item()
             hi = parent_activations.float().max().item()
-            if lo == hi:
-                # Constant tensor — expand by ±10% of magnitude (or ±1 near zero).
-                # Kept conservative to avoid feeding invalid values to C extensions
-                # (e.g. ROI align segfaults on out-of-range coordinates).
+            if hi - lo < max(1e-6, abs(lo) * 1e-6):
+                # Near-constant tensor — range is too narrow for meaningful
+                # perturbation at float32 precision.  Expand by ±10% of
+                # magnitude (or ±1 near zero).  Conservative to avoid feeding
+                # invalid values to C extensions (e.g. ROI align segfaults).
                 expansion = max(1.0, abs(lo) * 0.1)
                 lo, hi = lo - expansion, hi + expansion
             perturbed_activations = (
