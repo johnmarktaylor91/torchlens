@@ -273,7 +273,15 @@ def render_graph(
     try:
         if engine == "elk":
             try:
-                render_with_elk(dot.source, source_path, vis_outpath, vis_fileformat, save_only)
+                render_with_elk(
+                    dot.source,
+                    source_path,
+                    vis_outpath,
+                    vis_fileformat,
+                    save_only,
+                    entries_to_plot=entries_to_plot,
+                    show_buffer_layers=show_buffer_layers,
+                )
             except RuntimeError as e:
                 warnings.warn(f"ELK layout failed ({e}), falling back to sfdp.")
                 render_with_sfdp(source_path, vis_outpath, vis_fileformat, save_only)

@@ -11,6 +11,7 @@ from torchlens.visualization.elk_layout import (
     elk_available,
     get_node_placement_engine,
     build_elk_graph,
+    build_elk_graph_hierarchical,
     inject_elk_positions,
     _ELK_NODE_THRESHOLD,
 )
@@ -260,6 +261,42 @@ class TestElkUtilities:
         dot_source = 'my_node [label="test"]'
         result = inject_elk_positions(dot_source, {"children": []})
         assert result == dot_source
+
+    def test_build_hierarchical_has_groups(self):
+        """Hierarchical builder creates compound nodes for module nesting."""
+        model = RandomGraphModel(target_nodes=500, nesting_depth=3, seed=42)
+        ml = log_forward_pass(model, torch.randn(2, 64))
+        entries = ml.layer_dict_main_keys
+        elk = build_elk_graph_hierarchical(entries)
+        # Should have at least one group_ compound node at top level.
+        group_ids = [c["id"] for c in elk["children"] if c["id"].startswith("group_")]
+        assert len(group_ids) > 0, "Expected module groups in hierarchical ELK graph"
+        # Groups should have children.
+        for child in elk["children"]:
+            if child["id"].startswith("group_"):
+                assert "children" in child and len(child["children"]) > 0
+        ml.cleanup()
+
+    def test_inject_positions_hierarchical(self):
+        """Position injection works with nested compound nodes."""
+        positioned = {
+            "children": [
+                {
+                    "id": "group_mod1",
+                    "x": 0,
+                    "y": 0,
+                    "children": [
+                        {"id": "node_a", "x": 10, "y": 20, "width": 150, "height": 40},
+                        {"id": "node_b", "x": 10, "y": 80, "width": 150, "height": 40},
+                    ],
+                },
+                {"id": "node_c", "x": 200, "y": 0, "width": 150, "height": 40},
+            ]
+        }
+        dot_source = 'node_a [label="A"]\nnode_b [label="B"]\nnode_c [label="C"]'
+        result = inject_elk_positions(dot_source, positioned)
+        # All three leaf nodes should have positions.
+        assert result.count('pos="') == 3
 
 
 # -----------------------------------------------

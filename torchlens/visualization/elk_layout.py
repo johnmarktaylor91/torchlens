@@ -120,6 +120,146 @@ def get_node_placement_engine(vis_node_placement: str, num_nodes: int) -> str:
     return "sfdp"
 
 
+def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = False) -> dict:
+    """Build an ELK JSON graph with module hierarchy from model entries.
+
+    Creates nested ELK compound nodes that mirror the module containment
+    structure, so ELK's layered algorithm can produce a layout with proper
+    module grouping (analogous to Graphviz subgraph clusters).
+
+    Args:
+        entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog
+            (same as used by render_graph).
+        show_buffer_layers: Whether to include buffer layers.
+
+    Returns:
+        ELK graph dict with hierarchical children, ready for ``run_elk_layout``.
+    """
+    from collections import defaultdict
+
+    # Step 1: Collect all nodes and their module paths.
+    # module_path is containing_modules_origin_nested with pass info stripped.
+    node_module_map = {}  # node_label -> [module_addr, ...]
+    node_labels = []
+    edges = []
+    edge_id = 0
+
+    for node_barcode, node in entries_to_plot.items():
+        if node.is_buffer_layer and not show_buffer_layers:
+            continue
+        label = node.layer_label
+        node_labels.append(label)
+
+        # Strip pass numbers from module addresses for grouping.
+        modules = []
+        for mod in node.containing_modules_origin_nested:
+            addr = mod.split(":")[0]
+            if addr not in modules:
+                modules.append(addr)
+        node_module_map[label] = modules
+
+        # Collect edges from parent layers.
+        for parent_label in node.parent_layers:
+            edges.append((parent_label, label, f"e{edge_id}"))
+            edge_id += 1
+
+    # Step 2: Build module tree structure.
+    # Each module becomes an ELK compound node containing its direct children.
+    all_modules = set()
+    module_children = defaultdict(set)  # module_addr -> set of child module addrs
+    for modules in node_module_map.values():
+        for i, mod in enumerate(modules):
+            all_modules.add(mod)
+            if i > 0:
+                module_children[modules[i - 1]].add(mod)
+
+    # Step 3: Assign each node to its deepest module (or root).
+    module_nodes = defaultdict(list)  # module_addr -> [node_labels]
+    root_nodes = []
+    for label in node_labels:
+        modules = node_module_map[label]
+        if modules:
+            module_nodes[modules[-1]].append(label)
+        else:
+            root_nodes.append(label)
+
+    # Step 4: Build ELK graph recursively.
+    def _make_elk_node(label):
+        return {"id": label, "width": _DEFAULT_NODE_WIDTH, "height": _DEFAULT_NODE_HEIGHT}
+
+    def _make_elk_group(module_addr, visited=None):
+        if visited is None:
+            visited = set()
+        if module_addr in visited:
+            return None
+        visited.add(module_addr)
+
+        children = []
+        # Add direct leaf nodes in this module.
+        for label in module_nodes.get(module_addr, []):
+            children.append(_make_elk_node(label))
+
+        # Add child modules as compound nodes.
+        for child_mod in sorted(module_children.get(module_addr, [])):
+            child_group = _make_elk_group(child_mod, visited)
+            if child_group and child_group.get("children"):
+                children.append(child_group)
+
+        if not children:
+            return None
+
+        return {
+            "id": f"group_{module_addr}",
+            "layoutOptions": {
+                "elk.padding": "[top=30,left=10,bottom=10,right=10]",
+            },
+            "children": children,
+        }
+
+    # Step 5: Assemble root-level ELK graph.
+    top_children = []
+    # Add root-level nodes (no module containment).
+    for label in root_nodes:
+        top_children.append(_make_elk_node(label))
+
+    # Find top-level modules (not children of any other module).
+    child_modules = set()
+    for children in module_children.values():
+        child_modules.update(children)
+    top_modules = all_modules - child_modules
+
+    for mod in sorted(top_modules):
+        group = _make_elk_group(mod)
+        if group and group.get("children"):
+            top_children.append(group)
+
+    # Any orphan modules (modules that are top-level but have no direct children
+    # because all their nodes are in sub-modules) — their nodes are already
+    # included via the sub-module groups.
+
+    # Step 6: Build edge list. ELK edges at root level reference node IDs
+    # anywhere in the hierarchy.
+    elk_edges = []
+    node_set = set(node_labels)
+    for source, target, eid in edges:
+        if source in node_set and target in node_set:
+            elk_edges.append({"id": eid, "sources": [source], "targets": [target]})
+
+    return {
+        "id": "root",
+        "layoutOptions": {
+            "elk.algorithm": "layered",
+            "elk.direction": "UP",
+            "elk.spacing.nodeNode": "20",
+            "elk.layered.spacing.nodeNodeBetweenLayers": "40",
+            "elk.edgeRouting": "ORTHOGONAL",
+            "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+        },
+        "children": top_children,
+        "edges": elk_edges,
+    }
+
+
 def build_elk_graph(dot_source: str) -> dict:
     """Parse a Graphviz DOT source string and build an ELK JSON graph.
 
@@ -233,14 +373,24 @@ def inject_elk_positions(dot_source: str, positioned_graph: dict) -> str:
     Returns:
         Modified DOT source with position attributes injected.
     """
-    # Build position lookup from ELK output.
+    # Build position lookup from ELK output, recursing into compound nodes.
     positions = {}
-    for child in positioned_graph.get("children", []):
-        node_id = child["id"]
-        # ELK coordinates: top-left corner. Convert to center for Graphviz.
-        x = child["x"] + child.get("width", _DEFAULT_NODE_WIDTH) / 2
-        y = child["y"] + child.get("height", _DEFAULT_NODE_HEIGHT) / 2
-        positions[node_id] = (x, y)
+
+    def _collect_positions(node, offset_x=0, offset_y=0):
+        """Recurse into ELK compound nodes, accumulating absolute positions."""
+        for child in node.get("children", []):
+            abs_x = offset_x + child.get("x", 0)
+            abs_y = offset_y + child.get("y", 0)
+            if child["id"].startswith("group_"):
+                # Compound node — recurse into its children.
+                _collect_positions(child, abs_x, abs_y)
+            else:
+                # Leaf node — record center position.
+                cx = abs_x + child.get("width", _DEFAULT_NODE_WIDTH) / 2
+                cy = abs_y + child.get("height", _DEFAULT_NODE_HEIGHT) / 2
+                positions[child["id"]] = (cx, cy)
+
+    _collect_positions(positioned_graph)
 
     if not positions:
         return dot_source
@@ -307,6 +457,8 @@ def render_with_elk(
     vis_outpath: str,
     vis_fileformat: str,
     save_only: bool = False,
+    entries_to_plot=None,
+    show_buffer_layers: bool = False,
 ) -> None:
     """Render using ELK for layout and neato -n for drawing.
 
@@ -316,10 +468,16 @@ def render_with_elk(
         vis_outpath: Output path (without extension).
         vis_fileformat: Output format (pdf, png, etc.).
         save_only: If True, don't open viewer.
+        entries_to_plot: If provided, build hierarchical ELK graph with
+            module grouping. Otherwise falls back to flat DOT parsing.
+        show_buffer_layers: Whether to include buffer layers.
     """
     import graphviz
 
-    elk_graph = build_elk_graph(dot_source)
+    if entries_to_plot is not None:
+        elk_graph = build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers)
+    else:
+        elk_graph = build_elk_graph(dot_source)
     positioned = run_elk_layout(elk_graph)
     positioned_source = inject_elk_positions(dot_source, positioned)
 
