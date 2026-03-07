@@ -2070,3 +2070,1016 @@ def test_dimenet():
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "dimenet"),
     )
     assert validate_forward_pass(model, model_inputs)
+
+
+# =============================================================================
+# Decoder-Only LLMs (requires transformers, small random-init configs)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_llama():
+    """LLaMA: RoPE, SwiGLU, GQA (small config, no pretrained)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.LlamaConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.LlamaForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "llama"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_mistral():
+    """Mistral: sliding window attention, GQA (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.MistralConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        sliding_window=16,
+    )
+    model = transformers.MistralForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "mistral"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_phi():
+    """Phi: small efficient LLM (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.PhiConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.PhiForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "phi"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_gemma():
+    """Gemma: Google's open model (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.GemmaConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        head_dim=16,
+    )
+    model = transformers.GemmaForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gemma"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_qwen2():
+    """Qwen2: Alibaba's model with GQA (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.Qwen2Config(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.Qwen2ForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "qwen2"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_falcon_llm():
+    """Falcon: multi-query attention (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.FalconConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        vocab_size=100,
+        new_decoder_architecture=False,
+    )
+    model = transformers.FalconForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "falcon"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_bloom():
+    """BLOOM: ALiBi positional encoding (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.BloomConfig(
+        hidden_size=64,
+        n_layer=2,
+        n_head=4,
+        vocab_size=100,
+    )
+    model = transformers.BloomForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "bloom"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_opt():
+    """OPT: Meta's open pre-trained transformer (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.OPTConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        ffn_dim=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.OPTForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "opt"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Encoder-Only Models (additional, requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_albert():
+    """ALBERT: cross-layer weight sharing, factorized embeddings (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.AlbertConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        embedding_size=32,
+        vocab_size=100,
+    )
+    model = transformers.AlbertModel(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "albert"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_deberta():
+    """DeBERTa v2: disentangled attention (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.DebertaV2Config(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.DebertaV2Model(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_xlm_roberta():
+    """XLM-RoBERTa: cross-lingual encoder (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.XLMRobertaConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.XLMRobertaModel(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "xlm_roberta"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Encoder-Decoder Models (additional, requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_pegasus():
+    """Pegasus: abstractive summarization encoder-decoder (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.PegasusConfig(
+        d_model=64,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.PegasusModel(config).eval()
+    model_kwargs = {
+        "input_ids": torch.randint(0, 100, (1, 16)),
+        "decoder_input_ids": torch.randint(0, 100, (1, 8)),
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "pegasus"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_led():
+    """LED: Longformer Encoder-Decoder for long documents (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.LEDConfig(
+        d_model=64,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        vocab_size=100,
+        max_encoder_position_embeddings=32,
+        max_decoder_position_embeddings=32,
+        attention_window=[8, 8],
+    )
+    model = transformers.LEDModel(config).eval()
+    model_kwargs = {
+        "input_ids": torch.randint(0, 100, (1, 16)),
+        "decoder_input_ids": torch.randint(0, 100, (1, 8)),
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "led"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Efficient / Long-Range Transformers (requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_fnet():
+    """FNet: Fourier transform replaces attention (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.FNetConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.FNetModel(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    torch.use_deterministic_algorithms(False)
+    try:
+        show_model_graph(
+            model,
+            [],
+            model_kwargs,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "fnet"),
+        )
+        assert validate_forward_pass(model, [], model_kwargs)
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+@pytest.mark.slow
+def test_nystromformer():
+    """Nystromformer: Nystrom-based attention approximation (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.NystromformerConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        num_landmarks=8,
+    )
+    model = transformers.NystromformerModel(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "nystromformer"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_bigbird():
+    """BigBird: block sparse + random + global attention (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.BigBirdConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=64,
+        attention_type="original_full",
+    )
+    model = transformers.BigBirdModel(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 32))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "bigbird"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Mixture of Experts (requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_mixtral():
+    """Mixtral: Mistral + sparse MoE, top-2 routing (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.MixtralConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        num_local_experts=4,
+        num_experts_per_tok=2,
+    )
+    model = transformers.MixtralForCausalLM(config).eval()
+    model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "moe-models", "mixtral"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_switch_transformer():
+    """Switch Transformer: top-1 expert routing (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.SwitchTransformersConfig(
+        d_model=64,
+        d_ff=128,
+        d_kv=16,
+        num_heads=4,
+        num_layers=2,
+        num_decoder_layers=2,
+        vocab_size=100,
+        num_experts=4,
+        expert_capacity=4,
+    )
+    model = transformers.SwitchTransformersModel(config).eval()
+    model_kwargs = {
+        "input_ids": torch.randint(0, 100, (1, 16)),
+        "decoder_input_ids": torch.randint(0, 100, (1, 8)),
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "moe-models", "switch_transformer"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Vision Transformers (additional, requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_deit():
+    """DeiT: data-efficient ViT with distillation token (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.DeiTConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        image_size=32,
+        patch_size=8,
+        num_channels=3,
+    )
+    model = transformers.DeiTModel(config).eval()
+    model_kwargs = {"pixel_values": torch.rand(1, 3, 32, 32)}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "deit"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_cvt():
+    """CvT: convolutional vision transformer (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.CvtConfig(
+        num_channels=3,
+        patch_sizes=[3, 3],
+        patch_stride=[2, 2],
+        patch_padding=[1, 1],
+        embed_dim=[32, 64],
+        num_heads=[2, 4],
+        depth=[1, 1],
+        mlp_ratio=[2.0, 2.0],
+        cls_token=[False, True],
+        strides=[2, 1],
+    )
+    model = transformers.CvtModel(config).eval()
+    model_kwargs = {"pixel_values": torch.rand(1, 3, 32, 32)}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "cvt"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_segformer():
+    """SegFormer: hierarchical transformer for segmentation (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.SegformerConfig(
+        num_channels=3,
+        hidden_sizes=[32, 64],
+        num_encoder_blocks=2,
+        depths=[2, 2],
+        sr_ratios=[4, 2],
+        num_attention_heads=[2, 4],
+        mlp_ratios=[2, 2],
+        patch_sizes=[7, 3],
+        strides=[4, 2],
+    )
+    model = transformers.SegformerModel(config).eval()
+    model_kwargs = {"pixel_values": torch.rand(1, 3, 64, 64)}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-segmentation", "segformer"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Transformer-Based Detection (requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_detr():
+    """DETR: transformer encoder-decoder detection with object queries."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.DetrConfig(
+        d_model=64,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        num_queries=10,
+        num_channels=3,
+    )
+    model = transformers.DetrModel(config).eval()
+    model_kwargs = {"pixel_values": torch.rand(1, 3, 64, 64)}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "detr"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# TorchVision Detection (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_maskrcnn_resnet50_train():
+    """Mask R-CNN (train mode): instance segmentation with mask branch."""
+    from torchvision.models.detection import maskrcnn_resnet50_fpn_v2
+
+    torch.use_deterministic_algorithms(False)
+    try:
+        model = maskrcnn_resnet50_fpn_v2(weights=None, num_classes=10).train()
+        img = [torch.rand(3, 128, 128)]
+        targets = [
+            {
+                "boxes": torch.tensor([[10.0, 10.0, 50.0, 50.0]]),
+                "labels": torch.tensor([1], dtype=torch.long),
+                "masks": torch.zeros(1, 128, 128, dtype=torch.uint8),
+            }
+        ]
+        show_model_graph(
+            model,
+            (img, targets),
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "maskrcnn_train"),
+        )
+        assert validate_forward_pass(model, (img, targets))
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+@pytest.mark.slow
+def test_maskrcnn_resnet50_eval():
+    """Mask R-CNN (eval mode): instance segmentation inference."""
+    from torchvision.models.detection import maskrcnn_resnet50_fpn_v2
+
+    torch.use_deterministic_algorithms(False)
+    try:
+        model = maskrcnn_resnet50_fpn_v2(weights=None, num_classes=10).eval()
+        img = [torch.rand(3, 128, 128)]
+        show_model_graph(
+            model,
+            (img,),
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "maskrcnn_eval"),
+        )
+        assert validate_forward_pass(model, (img,))
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+# =============================================================================
+# TIMM Vision Models (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_timm_hrnet_w18():
+    """HRNet: parallel multi-resolution branches maintained throughout."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("hrnet_w18", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "hrnet_w18"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_efficientnetv2_s():
+    """EfficientNet V2: fused MBConv in early stages."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("efficientnetv2_s", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "efficientnetv2_s"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_levit_128():
+    """LeViT: hybrid CNN-transformer for fast inference."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("levit_128", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "levit_128"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_crossvit_tiny_240():
+    """CrossViT: dual-branch multi-scale patches with cross-attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("crossvit_tiny_240", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 240, 240)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "crossvit_tiny_240"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_pvt_v2_b0():
+    """PVT v2: Pyramid Vision Transformer with spatial-reduction attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("pvt_v2_b0", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "pvt_v2_b0"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_twins_svt_small():
+    """Twins SVT: spatially alternating local-global attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("twins_svt_small", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "twins_svt_small"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_focalnet_tiny_srf():
+    """FocalNet: focal modulation replaces attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("focalnet_tiny_srf", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "focalnet_tiny_srf"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+# =============================================================================
+# Perceiver (requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_perceiver():
+    """Perceiver: cross-attention from input to fixed-size latent array."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.PerceiverConfig(
+        d_model=64,
+        d_latents=64,
+        num_latents=16,
+        num_self_attends_per_block=2,
+        num_blocks=1,
+        num_self_attention_heads=4,
+        num_cross_attention_heads=4,
+        qk_channels=64,
+        v_channels=64,
+    )
+    model = transformers.PerceiverModel(config).eval()
+    model_kwargs = {"inputs": torch.rand(1, 16, 64)}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "perceiver", "perceiver"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Time Series (requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_patchtst():
+    """PatchTST: patch-based time series transformer."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.PatchTSTConfig(
+        num_input_channels=3,
+        context_length=32,
+        patch_length=4,
+        stride=4,
+        d_model=32,
+        num_attention_heads=2,
+        num_hidden_layers=2,
+        ffn_dim=64,
+    )
+    model = transformers.PatchTSTModel(config).eval()
+    model_kwargs = {"past_values": torch.rand(1, 32, 3)}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "patchtst"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Reinforcement Learning (requires transformers)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_decision_transformer():
+    """Decision Transformer: transformer for offline RL."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.DecisionTransformerConfig(
+        state_dim=4,
+        act_dim=2,
+        hidden_size=64,
+        max_ep_len=32,
+        n_layer=2,
+        n_head=4,
+    )
+    model = transformers.DecisionTransformerModel(config).eval()
+    model_kwargs = {
+        "states": torch.rand(1, 8, 4),
+        "actions": torch.rand(1, 8, 2),
+        "rewards": torch.rand(1, 8, 1),
+        "returns_to_go": torch.rand(1, 8, 1),
+        "timesteps": torch.arange(8).unsqueeze(0),
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "reinforcement-learning", "decision_transformer"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Graph Neural Networks (additional, requires torch_geometric)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_graphsage_pyg():
+    """GraphSAGE via PyG SAGEConv: neighborhood sampling + mean aggregation."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import SAGEConv
+
+    class _SAGENet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = SAGEConv(8, 16)
+            self.conv2 = SAGEConv(16, 4)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _SAGENet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graphsage_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_gin_pyg():
+    """GIN via PyG GINConv: maximally powerful under WL test."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import GINConv
+
+    class _GINNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            mlp1 = torch.nn.Sequential(
+                torch.nn.Linear(8, 16),
+                torch.nn.ReLU(),
+                torch.nn.Linear(16, 16),
+            )
+            self.conv1 = GINConv(mlp1)
+            mlp2 = torch.nn.Sequential(
+                torch.nn.Linear(16, 16),
+                torch.nn.ReLU(),
+                torch.nn.Linear(16, 4),
+            )
+            self.conv2 = GINConv(mlp2)
+
+        def forward(self, x, edge_index):
+            x = self.conv1(x, edge_index)
+            return self.conv2(x, edge_index)
+
+    model = _GINNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gin_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_graph_transformer_pyg():
+    """Graph Transformer via PyG TransformerConv: attention on graph."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import TransformerConv
+
+    class _GraphTransformerNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = TransformerConv(8, 4, heads=2, concat=True)
+            self.conv2 = TransformerConv(8, 4, heads=1, concat=False)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _GraphTransformerNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graph_transformer_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)

@@ -3440,3 +3440,739 @@ class CapsuleNetwork(nn.Module):
         norms = caps.norm(dim=-1, keepdim=True)
         squashed = (norms**2 / (1 + norms**2)) * (caps / (norms + 1e-8))
         return self.out(squashed.flatten(1))
+
+
+# =============================================================================
+# Group M: Attention Variants
+# =============================================================================
+
+
+class MultiQueryAttentionModel(nn.Module):
+    """Multi-Query Attention: single K/V head shared across all Q heads."""
+
+    def __init__(self, dim=32, n_heads=4):
+        super().__init__()
+        self.n_heads = n_heads
+        self.head_dim = dim // n_heads
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, self.head_dim)
+        self.v_proj = nn.Linear(dim, self.head_dim)
+        self.out_proj = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        B, T, _ = x.shape
+        q = self.q_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(x).unsqueeze(1)
+        v = self.v_proj(x).unsqueeze(1)
+        attn = torch.softmax((q @ k.transpose(-2, -1)) / (self.head_dim**0.5), dim=-1)
+        out = (attn @ v).transpose(1, 2).contiguous().view(B, T, -1)
+        return self.out_proj(out)
+
+
+class GroupedQueryAttentionModel(nn.Module):
+    """Grouped-Query Attention: K/V shared within groups of Q heads."""
+
+    def __init__(self, dim=32, n_heads=4, n_kv_heads=2):
+        super().__init__()
+        self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads
+        self.head_dim = dim // n_heads
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, n_kv_heads * self.head_dim)
+        self.v_proj = nn.Linear(dim, n_kv_heads * self.head_dim)
+        self.out_proj = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        B, T, _ = x.shape
+        q = self.q_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(x).view(B, T, self.n_kv_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(x).view(B, T, self.n_kv_heads, self.head_dim).transpose(1, 2)
+        reps = self.n_heads // self.n_kv_heads
+        k = k.repeat_interleave(reps, dim=1)
+        v = v.repeat_interleave(reps, dim=1)
+        attn = torch.softmax((q @ k.transpose(-2, -1)) / (self.head_dim**0.5), dim=-1)
+        out = (attn @ v).transpose(1, 2).contiguous().view(B, T, -1)
+        return self.out_proj(out)
+
+
+class RoPEAttentionModel(nn.Module):
+    """Self-attention with Rotary Position Embeddings (RoPE)."""
+
+    def __init__(self, dim=32, n_heads=4, max_seq=64):
+        super().__init__()
+        self.n_heads = n_heads
+        self.head_dim = dim // n_heads
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+        self.out_proj = nn.Linear(dim, dim)
+        freqs = 1.0 / (10000 ** (torch.arange(0, self.head_dim, 2).float() / self.head_dim))
+        t = torch.arange(max_seq).float()
+        angles = torch.outer(t, freqs)
+        self.register_buffer("cos_cached", angles.cos())
+        self.register_buffer("sin_cached", angles.sin())
+
+    def _apply_rope(self, x):
+        T = x.shape[2]
+        x1, x2 = x[..., ::2], x[..., 1::2]
+        cos = self.cos_cached[:T].unsqueeze(0).unsqueeze(0)
+        sin = self.sin_cached[:T].unsqueeze(0).unsqueeze(0)
+        out1 = x1 * cos - x2 * sin
+        out2 = x1 * sin + x2 * cos
+        return torch.stack([out1, out2], dim=-1).flatten(-2)
+
+    def forward(self, x):
+        B, T, _ = x.shape
+        q = self.q_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        q, k = self._apply_rope(q), self._apply_rope(k)
+        attn = torch.softmax((q @ k.transpose(-2, -1)) / (self.head_dim**0.5), dim=-1)
+        out = (attn @ v).transpose(1, 2).contiguous().view(B, T, -1)
+        return self.out_proj(out)
+
+
+class ALiBiAttentionModel(nn.Module):
+    """ALiBi: linear bias on attention scores based on distance."""
+
+    def __init__(self, dim=32, n_heads=4, max_seq=32):
+        super().__init__()
+        self.n_heads = n_heads
+        self.head_dim = dim // n_heads
+        self.q = nn.Linear(dim, dim)
+        self.k = nn.Linear(dim, dim)
+        self.v = nn.Linear(dim, dim)
+        self.out = nn.Linear(dim, dim)
+        slopes = torch.pow(2, -torch.arange(1, n_heads + 1).float() * 8 / n_heads)
+        self.register_buffer("slopes", slopes)
+
+    def forward(self, x):
+        B, T, _ = x.shape
+        q = self.q(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        k = self.k(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        v = self.v(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        attn = q @ k.transpose(-2, -1) / (self.head_dim**0.5)
+        positions = torch.arange(T, device=x.device)
+        bias = -(positions.unsqueeze(0) - positions.unsqueeze(1)).abs().float()
+        bias = bias.unsqueeze(0) * self.slopes.view(1, -1, 1, 1)
+        attn = torch.softmax(attn + bias, dim=-1)
+        out = (attn @ v).transpose(1, 2).contiguous().view(B, T, -1)
+        return self.out(out)
+
+
+class SlotAttentionModel(nn.Module):
+    """Slot Attention: iterative competitive binding to discrete slots."""
+
+    def __init__(self, n_slots=4, dim=32, n_iter=3):
+        super().__init__()
+        self.n_slots = n_slots
+        self.n_iter = n_iter
+        self.norm_input = nn.LayerNorm(dim)
+        self.norm_slots = nn.LayerNorm(dim)
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+        self.q_proj = nn.Linear(dim, dim)
+        self.gru = nn.GRUCell(dim, dim)
+        self.mlp = nn.Sequential(nn.Linear(dim, dim * 2), nn.ReLU(), nn.Linear(dim * 2, dim))
+        self.slots_mu = nn.Parameter(torch.randn(1, 1, dim))
+
+    def forward(self, x):
+        B, N, D = x.shape
+        slots = self.slots_mu.expand(B, self.n_slots, -1) + 0.1 * torch.randn(
+            B, self.n_slots, D, device=x.device
+        )
+        x = self.norm_input(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        for _ in range(self.n_iter):
+            slots_prev = slots
+            slots = self.norm_slots(slots)
+            q = self.q_proj(slots)
+            attn = torch.softmax(q @ k.transpose(-2, -1) / (D**0.5), dim=-1)
+            updates = attn @ v
+            slots = self.gru(updates.reshape(-1, D), slots_prev.reshape(-1, D)).view(
+                B, self.n_slots, D
+            )
+            slots = slots + self.mlp(slots)
+        return slots
+
+
+class CrossAttentionModel(nn.Module):
+    """Cross-attention: Q from learned latents, K/V from input (Perceiver-style)."""
+
+    def __init__(self, dim=16, n_latents=4):
+        super().__init__()
+        self.latents = nn.Parameter(torch.randn(n_latents, dim))
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+        self.out_proj = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        B = x.shape[0]
+        latents = self.latents.unsqueeze(0).expand(B, -1, -1)
+        q = self.q_proj(latents)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        attn = torch.softmax(q @ k.transpose(-2, -1) / (x.shape[-1] ** 0.5), dim=-1)
+        return self.out_proj(attn @ v)
+
+
+# =============================================================================
+# Group N: Gating & Skip Patterns
+# =============================================================================
+
+
+class HighwayNetwork(nn.Module):
+    """Highway Network: T(x)*H(x) + (1-T(x))*x gated skip connections."""
+
+    def __init__(self, dim=32, n_layers=3):
+        super().__init__()
+        self.layers = nn.ModuleList()
+        for _ in range(n_layers):
+            self.layers.append(
+                nn.ModuleDict(
+                    {
+                        "transform": nn.Linear(dim, dim),
+                        "gate": nn.Linear(dim, dim),
+                    }
+                )
+            )
+
+    def forward(self, x):
+        for layer in self.layers:
+            h = torch.relu(layer["transform"](x))
+            t = torch.sigmoid(layer["gate"](x))
+            x = t * h + (1 - t) * x
+        return x
+
+
+class SqueezeExcitationBlock(nn.Module):
+    """SE Block: global pool -> FC -> sigmoid -> channel-wise rescaling."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(3, 16, 3, padding=1)
+        self.se_fc1 = nn.Linear(16, 4)
+        self.se_fc2 = nn.Linear(4, 16)
+        self.out = nn.Conv2d(16, 8, 1)
+
+    def forward(self, x):
+        h = torch.relu(self.conv(x))
+        se = h.mean(dim=[2, 3])
+        se = torch.relu(self.se_fc1(se))
+        se = torch.sigmoid(self.se_fc2(se))
+        h = h * se.unsqueeze(-1).unsqueeze(-1)
+        return self.out(h)
+
+
+class DepthwiseSeparableConv(nn.Module):
+    """Depthwise separable: groups=in_channels depthwise + 1x1 pointwise."""
+
+    def __init__(self):
+        super().__init__()
+        self.depthwise = nn.Conv2d(3, 3, 3, padding=1, groups=3)
+        self.pointwise = nn.Conv2d(3, 16, 1)
+        self.bn = nn.BatchNorm2d(16)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(16, 10)
+
+    def forward(self, x):
+        x = torch.relu(self.depthwise(x))
+        x = torch.relu(self.bn(self.pointwise(x)))
+        return self.fc(self.pool(x).flatten(1))
+
+
+class InvertedResidualBlock(nn.Module):
+    """MobileNetV2: expand -> depthwise -> project with residual."""
+
+    def __init__(self, dim=16, expand=4):
+        super().__init__()
+        mid = dim * expand
+        self.conv_in = nn.Conv2d(3, dim, 3, padding=1)
+        self.expand = nn.Conv2d(dim, mid, 1)
+        self.depthwise = nn.Conv2d(mid, mid, 3, padding=1, groups=mid)
+        self.project = nn.Conv2d(mid, dim, 1)
+        self.bn1 = nn.BatchNorm2d(mid)
+        self.bn2 = nn.BatchNorm2d(mid)
+        self.bn3 = nn.BatchNorm2d(dim)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(dim, 10)
+
+    def forward(self, x):
+        x = torch.relu(self.conv_in(x))
+        residual = x
+        x = torch.relu(self.bn1(self.expand(x)))
+        x = torch.relu(self.bn2(self.depthwise(x)))
+        x = self.bn3(self.project(x))
+        x = x + residual
+        return self.fc(self.pool(x).flatten(1))
+
+
+class FeaturePyramidNet(nn.Module):
+    """FPN: multi-scale backbone with lateral + top-down connections."""
+
+    def __init__(self):
+        super().__init__()
+        self.c1 = nn.Sequential(nn.Conv2d(3, 16, 3, stride=2, padding=1), nn.ReLU())
+        self.c2 = nn.Sequential(nn.Conv2d(16, 32, 3, stride=2, padding=1), nn.ReLU())
+        self.c3 = nn.Sequential(nn.Conv2d(32, 64, 3, stride=2, padding=1), nn.ReLU())
+        self.lat2 = nn.Conv2d(32, 64, 1)
+        self.lat1 = nn.Conv2d(16, 64, 1)
+        self.out3 = nn.Conv2d(64, 64, 3, padding=1)
+        self.out2 = nn.Conv2d(64, 64, 3, padding=1)
+        self.out1 = nn.Conv2d(64, 64, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(64, 10)
+
+    def forward(self, x):
+        c1 = self.c1(x)
+        c2 = self.c2(c1)
+        c3 = self.c3(c2)
+        p3 = self.out3(c3)
+        p2 = self.out2(
+            self.lat2(c2) + nn.functional.interpolate(p3, size=c2.shape[2:], mode="nearest")
+        )
+        p1 = self.out1(
+            self.lat1(c1) + nn.functional.interpolate(p2, size=c1.shape[2:], mode="nearest")
+        )
+        return self.fc(self.pool(p1).flatten(1))
+
+
+# =============================================================================
+# Group O: Generative & Self-Supervised
+# =============================================================================
+
+
+class HierarchicalVAE(nn.Module):
+    """Two-level hierarchical VAE with top-down conditional prior."""
+
+    def __init__(self):
+        super().__init__()
+        self.enc1 = nn.Linear(16, 32)
+        self.enc2 = nn.Linear(32, 16)
+        self.mu2 = nn.Linear(16, 8)
+        self.logvar2 = nn.Linear(16, 8)
+        self.prior1 = nn.Linear(8, 32)
+        self.mu1 = nn.Linear(32, 8)
+        self.logvar1 = nn.Linear(32, 8)
+        self.dec = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 16))
+
+    def _reparam(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        return mu + torch.randn_like(std) * std
+
+    def forward(self, x):
+        h1 = torch.relu(self.enc1(x))
+        h2 = torch.relu(self.enc2(h1))
+        z2 = self._reparam(self.mu2(h2), self.logvar2(h2))
+        h_prior = torch.relu(self.prior1(z2))
+        z1 = self._reparam(self.mu1(h_prior), self.logvar1(h_prior))
+        return self.dec(torch.cat([z1, z2], dim=-1))
+
+
+class GatedConvModel(nn.Module):
+    """WaveNet-style gated convolutions: tanh(conv_f) * sigmoid(conv_g)."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv_in = nn.Conv1d(3, 16, 1)
+        self.conv_f1 = nn.Conv1d(16, 16, 3, padding=1, dilation=1)
+        self.conv_g1 = nn.Conv1d(16, 16, 3, padding=1, dilation=1)
+        self.conv_f2 = nn.Conv1d(16, 16, 3, padding=2, dilation=2)
+        self.conv_g2 = nn.Conv1d(16, 16, 3, padding=2, dilation=2)
+        self.out = nn.Linear(16, 4)
+
+    def forward(self, x):
+        x = self.conv_in(x)
+        x = torch.tanh(self.conv_f1(x)) * torch.sigmoid(self.conv_g1(x))
+        x = torch.tanh(self.conv_f2(x)) * torch.sigmoid(self.conv_g2(x))
+        return self.out(x.mean(dim=-1))
+
+
+class MaskedConvModel(nn.Module):
+    """PixelCNN-style: mask applied to conv weights for autoregressive ordering."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, 3, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(16, 16, 3, padding=1, bias=False)
+        self.out = nn.Conv2d(16, 1, 1)
+        mask = torch.ones(3, 3)
+        mask[1, 2] = 0
+        mask[2, :] = 0
+        self.register_buffer("mask", mask)
+
+    def forward(self, x):
+        w1 = self.conv1.weight * self.mask
+        h = torch.relu(nn.functional.conv2d(x, w1, padding=1))
+        w2 = self.conv2.weight * self.mask
+        h = torch.relu(nn.functional.conv2d(h, w2, padding=1))
+        return torch.sigmoid(self.out(h))
+
+
+class SimCLRModel(nn.Module):
+    """SimCLR: shared encoder + projection head on two views."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 16))
+        self.projector = nn.Sequential(nn.Linear(16, 16), nn.ReLU(), nn.Linear(16, 8))
+
+    def forward(self, x1, x2):
+        z1 = nn.functional.normalize(self.projector(self.encoder(x1)), dim=-1)
+        z2 = nn.functional.normalize(self.projector(self.encoder(x2)), dim=-1)
+        return (z1 * z2).sum(dim=-1)
+
+
+class StopGradientModel(nn.Module):
+    """BYOL-style asymmetric: online encoder + predictor vs. detached target."""
+
+    def __init__(self):
+        super().__init__()
+        self.online = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 16))
+        self.predictor = nn.Sequential(nn.Linear(16, 16), nn.ReLU(), nn.Linear(16, 16))
+        self.target = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 16))
+
+    def forward(self, x):
+        online_out = self.predictor(self.online(x))
+        target_out = self.target(x).detach()
+        return nn.functional.mse_loss(online_out, target_out)
+
+
+class AdaINModel(nn.Module):
+    """Adaptive Instance Normalization: style transfer building block."""
+
+    def __init__(self):
+        super().__init__()
+        self.content_enc = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU())
+        self.style_enc = nn.Sequential(
+            nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1)
+        )
+        self.style_scale = nn.Linear(16, 16)
+        self.style_shift = nn.Linear(16, 16)
+        self.decoder = nn.Sequential(nn.Conv2d(16, 3, 3, padding=1), nn.Sigmoid())
+
+    def forward(self, content, style):
+        c = self.content_enc(content)
+        s = self.style_enc(style).flatten(1)
+        scale = self.style_scale(s).unsqueeze(-1).unsqueeze(-1)
+        shift = self.style_shift(s).unsqueeze(-1).unsqueeze(-1)
+        mean = c.mean(dim=[2, 3], keepdim=True)
+        std = c.std(dim=[2, 3], keepdim=True) + 1e-6
+        styled = (c - mean) / std * scale + shift
+        return self.decoder(styled)
+
+
+# =============================================================================
+# Group P: Exotic Architectures
+# =============================================================================
+
+
+class HyperNetwork(nn.Module):
+    """One network generates weights for another (weight prediction)."""
+
+    def __init__(self):
+        super().__init__()
+        self.weight_gen = nn.Sequential(nn.Linear(4, 32), nn.ReLU(), nn.Linear(32, 8 * 16))
+        self.bias_gen = nn.Linear(4, 16)
+        self.main_fc = nn.Linear(16, 4)
+
+    def forward(self, x, cond):
+        w = self.weight_gen(cond).view(16, 8)
+        b = self.bias_gen(cond).squeeze(0)
+        h = torch.relu(x @ w.t() + b)
+        return self.main_fc(h)
+
+
+class DEQModel(nn.Module):
+    """Deep Equilibrium Model: fixed-point iteration z* = f(z*) in forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.inject = nn.Linear(8, 16)
+        self.f = nn.Sequential(nn.Linear(16, 16), nn.Tanh())
+        self.out = nn.Linear(16, 4)
+
+    def forward(self, x):
+        z = self.inject(x)
+        for _ in range(5):
+            z = self.f(z) + self.inject(x)
+        return self.out(z)
+
+
+class SimpleNeuralODE(nn.Module):
+    """Neural ODE via Euler integration: z(t+dt) = z(t) + dt*f(z(t))."""
+
+    def __init__(self):
+        super().__init__()
+        self.dynamics = nn.Sequential(nn.Linear(8, 16), nn.Tanh(), nn.Linear(16, 8))
+        self.out = nn.Linear(8, 4)
+
+    def forward(self, x):
+        z = x
+        dt = 0.1
+        for _ in range(10):
+            z = z + dt * self.dynamics(z)
+        return self.out(z)
+
+
+class MemoryAugmentedNet(nn.Module):
+    """NTM-style differentiable read/write on external memory matrix."""
+
+    def __init__(self, mem_size=8, mem_dim=16, input_dim=8):
+        super().__init__()
+        self.mem_size = mem_size
+        self.mem_dim = mem_dim
+        self.controller = nn.Linear(input_dim, 32)
+        self.read_key = nn.Linear(32, mem_dim)
+        self.write_key = nn.Linear(32, mem_dim)
+        self.write_val = nn.Linear(32, mem_dim)
+        self.out = nn.Linear(mem_dim, 4)
+
+    def forward(self, x):
+        B = x.shape[0]
+        memory = torch.zeros(B, self.mem_size, self.mem_dim, device=x.device)
+        h = torch.relu(self.controller(x))
+        wk = self.write_key(h)
+        wv = self.write_val(h)
+        w_attn = torch.softmax(memory @ wk.unsqueeze(-1), dim=1).squeeze(-1)
+        memory = memory + w_attn.unsqueeze(-1) * wv.unsqueeze(1)
+        rk = self.read_key(h)
+        r_attn = torch.softmax(memory @ rk.unsqueeze(-1), dim=1).squeeze(-1)
+        read = (r_attn.unsqueeze(-1) * memory).sum(dim=1)
+        return self.out(read)
+
+
+class SwiGLUFFN(nn.Module):
+    """SwiGLU gated linear unit (LLaMA/Mistral FFN): silu(W1*x) * W3*x."""
+
+    def __init__(self, dim=16, hidden=32):
+        super().__init__()
+        self.w1 = nn.Linear(dim, hidden)
+        self.w2 = nn.Linear(hidden, dim)
+        self.w3 = nn.Linear(dim, hidden)
+
+    def forward(self, x):
+        return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
+
+
+# =============================================================================
+# Group Q: Graph Neural Networks (expanded, pure-torch)
+# =============================================================================
+
+
+class GraphSAGEModel(nn.Module):
+    """GraphSAGE: mean-aggregate neighbors, concat with self, project."""
+
+    def __init__(self, in_dim=8, hidden=16, out_dim=4):
+        super().__init__()
+        self.W1 = nn.Linear(in_dim * 2, hidden)
+        self.W2 = nn.Linear(hidden * 2, out_dim)
+
+    def _aggregate(self, x, adj):
+        deg = adj.sum(dim=-1, keepdim=True).clamp(min=1)
+        return (adj @ x) / deg
+
+    def forward(self, x, adj):
+        neigh = self._aggregate(x, adj)
+        h = torch.relu(self.W1(torch.cat([x, neigh], dim=-1)))
+        neigh2 = self._aggregate(h, adj)
+        return self.W2(torch.cat([h, neigh2], dim=-1))
+
+
+class GINModel(nn.Module):
+    """Graph Isomorphism Network: MLP((1+eps)*h + sum(neighbors))."""
+
+    def __init__(self, in_dim=8, hidden=16, out_dim=4):
+        super().__init__()
+        self.eps1 = nn.Parameter(torch.zeros(1))
+        self.mlp1 = nn.Sequential(nn.Linear(in_dim, hidden), nn.ReLU(), nn.Linear(hidden, hidden))
+        self.eps2 = nn.Parameter(torch.zeros(1))
+        self.mlp2 = nn.Sequential(nn.Linear(hidden, hidden), nn.ReLU(), nn.Linear(hidden, out_dim))
+
+    def forward(self, x, adj):
+        h = self.mlp1((1 + self.eps1) * x + adj @ x)
+        return self.mlp2((1 + self.eps2) * h + adj @ h)
+
+
+class EdgeConvModel(nn.Module):
+    """DGCNN EdgeConv: MLP(x_i || x_j - x_i), max over neighbors."""
+
+    def __init__(self, in_dim=3, hidden=16, out_dim=4):
+        super().__init__()
+        self.edge_mlp = nn.Sequential(nn.Linear(in_dim * 2, hidden), nn.ReLU())
+        self.fc = nn.Linear(hidden, out_dim)
+
+    def forward(self, x, adj):
+        N = x.shape[0]
+        xi = x.unsqueeze(1).expand(-1, N, -1)
+        xj = x.unsqueeze(0).expand(N, -1, -1)
+        edge_feat = torch.cat([xi, xj - xi], dim=-1)
+        edge_out = self.edge_mlp(edge_feat) * adj.unsqueeze(-1)
+        h = edge_out.max(dim=1)[0]
+        return self.fc(h)
+
+
+class GraphTransformerModel(nn.Module):
+    """Graph Transformer: multi-head attention masked by adjacency."""
+
+    def __init__(self, in_dim=8, hidden=16, n_heads=2, out_dim=4):
+        super().__init__()
+        self.n_heads = n_heads
+        self.head_dim = hidden // n_heads
+        self.norm1 = nn.LayerNorm(in_dim)
+        self.q = nn.Linear(in_dim, hidden)
+        self.k = nn.Linear(in_dim, hidden)
+        self.v = nn.Linear(in_dim, hidden)
+        self.out_proj = nn.Linear(hidden, in_dim)
+        self.norm2 = nn.LayerNorm(in_dim)
+        self.ffn = nn.Sequential(nn.Linear(in_dim, hidden), nn.ReLU(), nn.Linear(hidden, in_dim))
+        self.fc = nn.Linear(in_dim, out_dim)
+
+    def forward(self, x, adj):
+        N = x.shape[0]
+        h = self.norm1(x)
+        q = self.q(h).view(N, self.n_heads, self.head_dim)
+        k = self.k(h).view(N, self.n_heads, self.head_dim)
+        v = self.v(h).view(N, self.n_heads, self.head_dim)
+        attn = torch.einsum("ihd,jhd->ijh", q, k) / (self.head_dim**0.5)
+        attn = attn.masked_fill(adj.unsqueeze(-1) == 0, float("-inf"))
+        attn = torch.softmax(attn, dim=1)
+        attn = attn.masked_fill(torch.isnan(attn), 0)
+        out = torch.einsum("ijh,jhd->ihd", attn, v).reshape(N, -1)
+        x = x + self.out_proj(out)
+        x = x + self.ffn(self.norm2(x))
+        return self.fc(x)
+
+
+# =============================================================================
+# Group R: Additional Computational Patterns
+# =============================================================================
+
+
+class MoEModel(nn.Module):
+    """Mixture of Experts with top-2 routing."""
+
+    def __init__(self, dim=16, n_experts=4):
+        super().__init__()
+        self.gate = nn.Linear(dim, n_experts)
+        self.experts = nn.ModuleList(
+            [
+                nn.Sequential(nn.Linear(dim, 32), nn.ReLU(), nn.Linear(32, dim))
+                for _ in range(n_experts)
+            ]
+        )
+        self.out = nn.Linear(dim, 4)
+
+    def forward(self, x):
+        scores = torch.softmax(self.gate(x), dim=-1)
+        topk_vals, topk_idx = scores.topk(2, dim=-1)
+        topk_vals = topk_vals / topk_vals.sum(dim=-1, keepdim=True)
+        result = torch.zeros_like(x)
+        for i, expert in enumerate(self.experts):
+            mask = (topk_idx == i).any(dim=-1)
+            if mask.any():
+                expert_out = expert(x)
+                weight = (topk_vals * (topk_idx == i).float()).sum(dim=-1)
+                result = result + weight.unsqueeze(-1) * expert_out
+        return self.out(result)
+
+
+class SpatialTransformerNet(nn.Module):
+    """Learned affine transform on feature maps (Jaderberg et al.)."""
+
+    def __init__(self):
+        super().__init__()
+        self.localization = nn.Sequential(
+            nn.Conv2d(1, 8, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(8, 16, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(4),
+        )
+        self.fc_loc = nn.Sequential(nn.Linear(16 * 4 * 4, 32), nn.ReLU(), nn.Linear(32, 6))
+        self.classifier = nn.Sequential(
+            nn.Conv2d(1, 16, 3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(16, 10),
+        )
+        self.fc_loc[-1].weight.data.zero_()
+        self.fc_loc[-1].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
+
+    def forward(self, x):
+        theta = self.fc_loc(self.localization(x).flatten(1)).view(-1, 2, 3)
+        grid = nn.functional.affine_grid(theta, x.size(), align_corners=False)
+        x = nn.functional.grid_sample(x, grid, align_corners=False)
+        return self.classifier(x)
+
+
+class DuelingDQN(nn.Module):
+    """Dueling DQN: separate value and advantage streams."""
+
+    def __init__(self, obs_dim=8, n_actions=4):
+        super().__init__()
+        self.features = nn.Sequential(nn.Linear(obs_dim, 32), nn.ReLU())
+        self.value = nn.Sequential(nn.Linear(32, 16), nn.ReLU(), nn.Linear(16, 1))
+        self.advantage = nn.Sequential(nn.Linear(32, 16), nn.ReLU(), nn.Linear(16, n_actions))
+
+    def forward(self, x):
+        h = self.features(x)
+        v = self.value(h)
+        a = self.advantage(h)
+        return v + a - a.mean(dim=-1, keepdim=True)
+
+
+class RMSNormModel(nn.Module):
+    """RMS Normalization (LLaMA/Mistral): normalize by RMS, no mean centering."""
+
+    def __init__(self, dim=16):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.fc1 = nn.Linear(dim, 32)
+        self.fc2 = nn.Linear(32, dim)
+
+    def _rms_norm(self, x):
+        rms = torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + 1e-6)
+        return x / rms * self.weight
+
+    def forward(self, x):
+        return self.fc2(torch.relu(self.fc1(self._rms_norm(x))))
+
+
+class SparsePrunedModel(nn.Module):
+    """Structured pruning: binary masks on weight matrices."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(16, 32)
+        self.fc2 = nn.Linear(32, 8)
+        self.register_buffer("mask1", (torch.rand(32, 16) > 0.5).float())
+        self.register_buffer("mask2", (torch.rand(8, 32) > 0.5).float())
+
+    def forward(self, x):
+        w1 = self.fc1.weight * self.mask1
+        h = torch.relu(nn.functional.linear(x, w1, self.fc1.bias))
+        w2 = self.fc2.weight * self.mask2
+        return nn.functional.linear(h, w2, self.fc2.bias)
+
+
+class FourierMixingModel(nn.Module):
+    """FNet-style: FFT token mixing replaces attention."""
+
+    def __init__(self, dim=16):
+        super().__init__()
+        self.embed = nn.Linear(dim, dim)
+        self.norm1 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
+        self.ffn = nn.Sequential(nn.Linear(dim, 32), nn.GELU(), nn.Linear(32, dim))
+        self.out = nn.Linear(dim, 4)
+
+    def forward(self, x):
+        x = self.embed(x)
+        h = torch.fft.fft(torch.fft.fft(x, dim=-1), dim=-2).real
+        x = self.norm1(x + h)
+        x = self.norm2(x + self.ffn(x))
+        return self.out(x.mean(dim=1))
