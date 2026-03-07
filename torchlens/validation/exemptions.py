@@ -69,6 +69,8 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
     # torchvision C++ ops (PyCapsule): nms, roi_align, etc. Perturbed coordinates
     # can segfault these native extensions since they bypass Python exception handling.
     "_op",
+    # In-place RNG ops: output is determined by RNG state, not input values.
+    "exponential_",
 }
 
 # ---------------------------------------------------------------------------
