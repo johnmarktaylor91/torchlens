@@ -169,6 +169,7 @@ def log_forward_pass(
     vis_edge_overrides: Optional[Dict] = None,
     vis_gradient_edge_overrides: Optional[Dict] = None,
     vis_module_overrides: Optional[Dict] = None,
+    vis_node_placement: str = "auto",
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
@@ -229,6 +230,8 @@ def log_forward_pass(
         vis_edge_overrides: Graphviz edge attribute overrides.
         vis_gradient_edge_overrides: Graphviz attribute overrides for gradient edges.
         vis_module_overrides: Graphviz subgraph (module cluster) attribute overrides.
+        vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
+            or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK/sfdp for large.
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Lines of source context to capture per function call.
         optimizer: Optional optimizer to annotate which params are being optimized.
@@ -320,6 +323,7 @@ def log_forward_pass(
             vis_fileformat,
             vis_buffer_layers,
             vis_direction,
+            vis_node_placement=vis_node_placement,
         )
 
     return model_log
@@ -371,6 +375,7 @@ def show_model_graph(
     vis_fileformat: str = "pdf",
     vis_buffer_layers: bool = False,
     vis_direction: str = "bottomup",
+    vis_node_placement: str = "auto",
     random_seed: Optional[int] = None,
 ) -> None:
     """Convenience wrapper: visualize the computational graph without saving activations.
@@ -431,6 +436,7 @@ def show_model_graph(
             vis_fileformat,
             vis_buffer_layers,
             vis_direction,
+            vis_node_placement=vis_node_placement,
         )
     finally:
         model_log.cleanup()

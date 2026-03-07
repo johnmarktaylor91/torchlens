@@ -5146,3 +5146,156 @@ class TinyNeRF(nn.Module):
         weights = alpha * transmittance  # (B, S)
         rgb = (weights.unsqueeze(-1) * color).sum(dim=1)  # (B, 3)
         return rgb
+
+
+# **********************************************
+# **** Random Graph Model (for scale tests) ****
+# **********************************************
+
+
+class _SequentialBlock(nn.Module):
+    """~3 TorchLens nodes: Linear -> ReLU -> Linear."""
+
+    APPROX_NODES = 3
+
+    def __init__(self, dim):
+        super().__init__()
+        self.fc1 = nn.Linear(dim, dim)
+        self.act = nn.ReLU()
+        self.fc2 = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        return self.fc2(self.act(self.fc1(x)))
+
+
+class _ResidualBlock(nn.Module):
+    """~4 TorchLens nodes: Linear -> ReLU -> Linear + skip."""
+
+    APPROX_NODES = 4
+
+    def __init__(self, dim):
+        super().__init__()
+        self.fc1 = nn.Linear(dim, dim)
+        self.act = nn.ReLU()
+        self.fc2 = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        return self.fc2(self.act(self.fc1(x))) + x
+
+
+class _BranchMergeBlock(nn.Module):
+    """~8 TorchLens nodes: input -> [branch1, branch2, branch3] -> cat -> Linear."""
+
+    APPROX_NODES = 8
+
+    def __init__(self, dim):
+        super().__init__()
+        self.branch1 = nn.Sequential(nn.Linear(dim, dim), nn.ReLU())
+        self.branch2 = nn.Sequential(nn.Linear(dim, dim), nn.Tanh())
+        self.branch3 = nn.Sequential(nn.Linear(dim, dim), nn.Sigmoid())
+        self.merge = nn.Linear(dim * 3, dim)
+
+    def forward(self, x):
+        b1 = self.branch1(x)
+        b2 = self.branch2(x)
+        b3 = self.branch3(x)
+        return self.merge(torch.cat([b1, b2, b3], dim=-1))
+
+
+class _AttentionBlock(nn.Module):
+    """~9 TorchLens nodes: Q/K/V projections -> matmul -> softmax -> matmul -> out."""
+
+    APPROX_NODES = 9
+
+    def __init__(self, dim):
+        super().__init__()
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+        self.out_proj = nn.Linear(dim, dim)
+        self.scale = dim**0.5
+
+    def forward(self, x):
+        # Treat batch dim as sequence for simplicity.
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        attn = torch.matmul(q, k.transpose(-2, -1)) / self.scale
+        attn = torch.softmax(attn, dim=-1)
+        out = torch.matmul(attn, v)
+        return self.out_proj(out)
+
+
+_BLOCK_TYPES = [_SequentialBlock, _ResidualBlock, _BranchMergeBlock, _AttentionBlock]
+
+
+class RandomGraphModel(nn.Module):
+    """Programmatically generated model with controlled node count.
+
+    Args:
+        target_nodes: Approximate number of TorchLens nodes to generate.
+        nesting_depth: Levels of nn.Module nesting (1-5).
+        seed: RNG seed for deterministic structure.
+        branch_probability: Fraction of blocks that use branch/attention types.
+        hidden_dim: Hidden dimension for all layers.
+    """
+
+    def __init__(
+        self,
+        target_nodes: int = 1000,
+        nesting_depth: int = 2,
+        seed: int = 42,
+        branch_probability: float = 0.3,
+        hidden_dim: int = 64,
+    ):
+        super().__init__()
+        import random as _random
+
+        rng = _random.Random(seed)
+        self.input_proj = nn.Linear(hidden_dim, hidden_dim)
+
+        # Compute how many blocks we need.
+        # Weighted average: branch_probability controls mix of complex vs simple blocks.
+        simple_avg = (_SequentialBlock.APPROX_NODES + _ResidualBlock.APPROX_NODES) / 2
+        complex_avg = (_BranchMergeBlock.APPROX_NODES + _AttentionBlock.APPROX_NODES) / 2
+        avg_nodes_per_block = (
+            1 - branch_probability
+        ) * simple_avg + branch_probability * complex_avg
+        # Subtract 2 fixed overhead nodes (model input + input_proj).
+        effective_target = max(1, target_nodes - 2)
+        num_blocks = max(1, round(effective_target / avg_nodes_per_block))
+
+        # Choose block types.
+        blocks = []
+        for _ in range(num_blocks):
+            if rng.random() < branch_probability:
+                block_cls = rng.choice([_BranchMergeBlock, _AttentionBlock])
+            else:
+                block_cls = rng.choice([_SequentialBlock, _ResidualBlock])
+            blocks.append(block_cls(hidden_dim))
+
+        # Distribute across nesting depth using ModuleList wrappers.
+        nesting_depth = max(1, min(nesting_depth, 5))
+        if nesting_depth == 1:
+            self.layers = nn.ModuleList(blocks)
+        else:
+            # Split blocks into groups and nest them.
+            group_size = max(1, len(blocks) // nesting_depth)
+            nested = nn.ModuleList()
+            for i in range(0, len(blocks), group_size):
+                group = nn.ModuleList(blocks[i : i + group_size])
+                nested.append(group)
+            self.layers = nested
+
+        self.nesting_depth = nesting_depth
+
+    def forward(self, x):
+        x = self.input_proj(x)
+        if self.nesting_depth == 1:
+            for layer in self.layers:
+                x = layer(x)
+        else:
+            for group in self.layers:
+                for layer in group:
+                    x = layer(x)
+        return x

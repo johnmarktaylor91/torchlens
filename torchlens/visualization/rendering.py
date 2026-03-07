@@ -31,6 +31,8 @@ Key mechanisms:
   reference absent layers.
 """
 
+import subprocess
+import warnings
 from collections import defaultdict
 from typing import Any, Optional, Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
@@ -80,6 +82,7 @@ def render_graph(
     vis_fileformat: str = "pdf",
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
+    vis_node_placement: str = "auto",
 ) -> str:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -106,6 +109,9 @@ def render_graph(
         vis_fileformat: Output format (pdf, png, svg, etc.).
         show_buffer_layers: Whether to include buffer layers in the graph.
         direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
+        vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
+            or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK (or sfdp
+            fallback) for large ones.
 
     Returns:
         The Graphviz DOT source string.
@@ -167,6 +173,12 @@ def render_graph(
     else:
         raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
 
+    # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
+    from .elk_layout import get_node_placement_engine
+
+    num_nodes = len(entries_to_plot)
+    engine = get_node_placement_engine(vis_node_placement, num_nodes)
+
     if self.total_params == 0:
         params_detail = "0 params"
     elif self.total_params_frozen == 0:
@@ -187,6 +199,29 @@ def render_graph(
         f"tensors total ({self.tensor_fsize_total_nice})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
+
+    # ELK fast path: skip graphviz.Digraph construction entirely.
+    # Generates DOT directly with ELK positions and cluster subgraphs (module boxes).
+    if engine == "elk":
+        from .elk_layout import render_elk_direct, render_with_sfdp
+
+        try:
+            return render_elk_direct(
+                self,
+                entries_to_plot,
+                vis_opt,
+                vis_nesting_depth,
+                show_buffer_layers,
+                overrides,
+                vis_outpath,
+                vis_fileformat,
+                save_only,
+                graph_caption,
+                rankdir,
+            )
+        except RuntimeError as e:
+            warnings.warn(f"ELK layout failed ({e}), falling back to sfdp.")
+            engine = "sfdp"  # fall through to build graphviz.Digraph for sfdp
 
     dot = graphviz.Digraph(
         name=self.model_name,
@@ -252,7 +287,35 @@ def render_graph(
 
         display(dot)
 
-    dot.render(vis_outpath, view=(not save_only), cleanup=True)
+    # ELK was already handled above (early return). Only dot/sfdp reach here.
+    from .elk_layout import render_with_sfdp
+
+    _RENDER_TIMEOUT = 120  # seconds
+    source_path = dot.save(vis_outpath)
+    try:
+        if engine == "sfdp":
+            render_with_sfdp(source_path, vis_outpath, vis_fileformat, save_only)
+        else:
+            # dot engine (default for small graphs)
+            rendered_path = f"{vis_outpath}.{vis_fileformat}"
+            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+            if not save_only:
+                graphviz.backend.viewing.view(rendered_path)
+    except subprocess.TimeoutExpired:
+        warnings.warn(
+            f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for graph with "
+            f"{self.num_tensors_total} nodes. DOT source saved to "
+            f"'{source_path}'. Consider using vis_node_placement='sfdp' or "
+            f"vis_nesting_depth to collapse modules."
+        )
+    except subprocess.CalledProcessError as e:
+        warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
+    finally:
+        import os
+
+        if os.path.exists(source_path):
+            os.remove(source_path)
     return dot.source
 
 
