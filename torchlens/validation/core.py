@@ -795,7 +795,11 @@ def _perturb_layer_activations(
             hi = parent_activations.float().max().item()
             if lo == hi:
                 # Constant tensor — expand range so perturbation is meaningful.
-                lo, hi = lo - 1.0, hi + 1.0
+                # Scale expansion by magnitude to ensure float32-distinguishable
+                # perturbation for large values (e.g. 1e8 ± 1 is indistinguishable
+                # in float32, but 1e8 ± 1e4 is).
+                expansion = max(1.0, abs(lo) * 1e-4)
+                lo, hi = lo - expansion, hi + expansion
             perturbed_activations = (
                 torch.rand_like(parent_activations.float(), device=device) * (hi - lo) + lo
             )
