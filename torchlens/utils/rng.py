@@ -46,22 +46,26 @@ def set_random_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
-def log_current_rng_states() -> Dict:
+def log_current_rng_states(torch_only: bool = False) -> Dict:
     """Snapshot the current state of all RNG engines.
 
     The returned dict can be passed to :func:`set_rng_from_saved_states`
     to restore the exact same RNG position later (e.g. during validation
     replay).
 
+    Args:
+        torch_only: If True, only capture PyTorch RNG state (skip Python
+            ``random`` and NumPy). This is faster and sufficient for most
+            torch operations (dropout, randn, etc.).
+
     Returns:
         Dict with keys ``"random"``, ``"np"``, ``"torch"``, and optionally
         ``"torch_cuda"``, each holding the opaque state object for that engine.
     """
-    rng_dict = {
-        "random": random.getstate(),
-        "np": np.random.get_state(),
-        "torch": torch.random.get_rng_state(),
-    }
+    rng_dict = {"torch": torch.random.get_rng_state()}
+    if not torch_only:
+        rng_dict["random"] = random.getstate()
+        rng_dict["np"] = np.random.get_state()
     if _is_cuda_available():
         rng_dict["torch_cuda"] = torch.cuda.get_rng_state("cuda")
     return rng_dict
@@ -72,9 +76,14 @@ def set_rng_from_saved_states(rng_states: Dict):
 
     Args:
         rng_states: Dict produced by :func:`log_current_rng_states`.
+            If empty (RNG capture was disabled), this is a no-op.
     """
-    random.setstate(rng_states["random"])
-    np.random.set_state(rng_states["np"])
+    if not rng_states:
+        return
+    if "random" in rng_states:
+        random.setstate(rng_states["random"])
+    if "np" in rng_states:
+        np.random.set_state(rng_states["np"])
     torch.random.set_rng_state(rng_states["torch"])
     if _is_cuda_available() and "torch_cuda" in rng_states:
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")

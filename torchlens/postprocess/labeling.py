@@ -21,6 +21,7 @@ Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (un
     module path, buffer/input/output address), and logs remaining layer metadata.
 """
 
+import weakref
 from collections import OrderedDict, defaultdict
 from typing import TYPE_CHECKING
 
@@ -521,8 +522,6 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
     # Second: any remaining fields not in the order list (preserves all data).
     # The callable check skips bound methods, but must not skip weakref.ref
     # objects (which are callable but are data, not methods).
-    import weakref
-
     for field, value in old_dict.items():
         if field not in new_dir_dict and (not callable(value) or isinstance(value, weakref.ref)):
             new_dir_dict[field] = value

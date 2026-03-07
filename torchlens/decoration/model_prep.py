@@ -284,12 +284,15 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
 # ---------------------------------------------------------------------------
 
 
-def _get_class_metadata(module_class: type) -> dict:
+def _get_class_metadata(module_class: type, save_source_context: bool = False) -> dict:
     """Return class-level metadata for a module class, cached across instances.
 
-    Caches ``inspect.getsourcelines``, ``inspect.signature``, and docstrings
-    per class type. This avoids redundant filesystem reads when a model has
-    many instances of the same layer type (e.g. 12 TransformerBlocks).
+    When ``save_source_context`` is False (default), skips expensive
+    ``inspect.getsourcelines`` and ``inspect.signature`` calls. Only class
+    name and docstrings (already in memory) are captured.
+
+    When True, also fetches source file/line and signatures. Cached per class
+    type to avoid redundant filesystem reads.
     """
     cached = _module_class_metadata_cache.get(module_class)
     if cached is not None:
@@ -297,30 +300,37 @@ def _get_class_metadata(module_class: type) -> dict:
 
     meta = {}
     meta["module_class_name"] = module_class.__name__
-
-    try:
-        meta["source_file"] = inspect.getfile(module_class)
-    except (TypeError, OSError):
-        meta["source_file"] = None  # type: ignore[assignment]
-    try:
-        _, line = inspect.getsourcelines(module_class)
-        meta["source_line"] = line  # type: ignore[assignment]
-    except (TypeError, OSError):
-        meta["source_line"] = None  # type: ignore[assignment]
-
     meta["class_docstring"] = module_class.__doc__  # type: ignore[assignment]
 
-    try:
-        meta["init_signature"] = str(inspect.signature(module_class.__init__))  # type: ignore[misc]
-    except (ValueError, TypeError):
-        meta["init_signature"] = None  # type: ignore[assignment]
-    meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)  # type: ignore[assignment, misc]
+    if save_source_context:
+        try:
+            meta["source_file"] = inspect.getfile(module_class)
+        except (TypeError, OSError):
+            meta["source_file"] = None  # type: ignore[assignment]
+        try:
+            _, line = inspect.getsourcelines(module_class)
+            meta["source_line"] = line  # type: ignore[assignment]
+        except (TypeError, OSError):
+            meta["source_line"] = None  # type: ignore[assignment]
 
-    try:
-        meta["forward_signature"] = str(inspect.signature(module_class.forward))  # type: ignore[attr-defined]
-    except (ValueError, TypeError):
-        meta["forward_signature"] = None  # type: ignore[assignment]
-    meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)  # type: ignore[assignment, attr-defined]
+        try:
+            meta["init_signature"] = str(inspect.signature(module_class.__init__))  # type: ignore[misc]
+        except (ValueError, TypeError):
+            meta["init_signature"] = None  # type: ignore[assignment]
+        meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)  # type: ignore[assignment, misc]
+
+        try:
+            meta["forward_signature"] = str(inspect.signature(module_class.forward))  # type: ignore[attr-defined]
+        except (ValueError, TypeError):
+            meta["forward_signature"] = None  # type: ignore[assignment]
+        meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)  # type: ignore[assignment, attr-defined]
+    else:
+        meta["source_file"] = None
+        meta["source_line"] = None
+        meta["init_signature"] = None
+        meta["init_docstring"] = None
+        meta["forward_signature"] = None
+        meta["forward_docstring"] = None
 
     _module_class_metadata_cache[module_class] = meta
     return meta
@@ -359,13 +369,14 @@ def _capture_module_metadata(
     # Start from cached class-level metadata. dict() creates a shallow copy;
     # mutable fields (all_addresses, extra_attributes, methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
-    class_meta = _get_class_metadata(type(module))
+    save_source = getattr(model_log, "save_source_context", False)
+    class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
 
     # Per-instance forward override — rare, but handles cases where user
     # assigned a custom forward directly on the instance before preparation.
-    if "forward" in module.__dict__:
+    if save_source and "forward" in module.__dict__:
         forward_func = module.__dict__["forward"]
         try:
             meta["forward_signature"] = str(inspect.signature(forward_func))
@@ -444,28 +455,57 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
     buffer first appears as an argument to a wrapped torch function, the
     interceptor can call ``log_source_tensor`` with the correct address.
 
-    Scans both ``named_buffers()`` (registered buffers) and
-    ``iter_accessible_attributes()`` (plain tensor attributes) to catch all
-    tensor-like attributes that aren't parameters.
+    Uses ``named_buffers()`` for registered buffers and ``__dict__`` scan for
+    plain tensor attributes (faster than ``iter_accessible_attributes`` which
+    walks the MRO via ``dir()``). Tracks tagged tensor ids in
+    ``_state._tagged_buffer_ids`` for fast cleanup.
     """
-    submodules = get_all_submodules(model)
-    for submodule in submodules:
-        attr_list = list(submodule.named_buffers()) + list(iter_accessible_attributes(submodule))
-        for attribute_name, attribute in attr_list:
+    _state._tagged_buffer_ids.clear()
+    for submodule in model.modules():
+        module_addr = getattr(submodule, "tl_module_address", "")
+        # Scan registered buffers
+        for buf_name, buf_tensor in submodule.named_buffers(recurse=False):
             if (
-                issubclass(type(attribute), torch.Tensor)
-                and not issubclass(type(attribute), torch.nn.Parameter)
-                and not hasattr(attribute, "tl_buffer_address")
+                isinstance(buf_tensor, torch.Tensor)
+                and not isinstance(buf_tensor, torch.nn.Parameter)
+                and not hasattr(buf_tensor, "tl_buffer_address")
             ):
-                # Build full dotted address relative to the root model.
-                if submodule.tl_module_address == "":
-                    buffer_address = attribute_name
-                else:
-                    buffer_address = submodule.tl_module_address + "." + attribute_name  # type: ignore[operator]
+                buffer_address = f"{module_addr}.{buf_name}" if module_addr else buf_name
                 try:
-                    setattr(attribute, "tl_buffer_address", buffer_address)
+                    buf_tensor.tl_buffer_address = buffer_address
+                    _state._tagged_buffer_ids.add(id(buf_tensor))
                 except Exception:
-                    pass  # Some tensor subclasses disallow setattr (#40)
+                    pass
+        # Scan __dict__ for plain tensor attributes (not registered as buffers/params)
+        for attr_name, attr_val in submodule.__dict__.items():
+            if attr_name.startswith("_") or attr_name.startswith("tl_"):
+                continue
+            if (
+                isinstance(attr_val, torch.Tensor)
+                and not isinstance(attr_val, torch.nn.Parameter)
+                and not hasattr(attr_val, "tl_buffer_address")
+            ):
+                buffer_address = f"{module_addr}.{attr_name}" if module_addr else attr_name
+                try:
+                    attr_val.tl_buffer_address = buffer_address
+                    _state._tagged_buffer_ids.add(id(attr_val))
+                except Exception:
+                    pass
+            elif isinstance(attr_val, (list, tuple)):
+                for i, item in enumerate(attr_val):
+                    if (
+                        isinstance(item, torch.Tensor)
+                        and not isinstance(item, torch.nn.Parameter)
+                        and not hasattr(item, "tl_buffer_address")
+                    ):
+                        item_addr = (
+                            f"{module_addr}.{attr_name}.{i}" if module_addr else f"{attr_name}.{i}"
+                        )
+                        try:
+                            item.tl_buffer_address = item_addr
+                            _state._tagged_buffer_ids.add(id(item))
+                        except Exception:
+                            pass
 
 
 # ---------------------------------------------------------------------------
@@ -846,40 +886,41 @@ def _cleanup_model_session(model: nn.Module, input_tensors=None) -> None:
                 delattr(t, "tl_tensor_label_raw")
 
 
+_TL_TENSOR_ATTRS = ("tl_tensor_label_raw", "tl_buffer_address", "tl_buffer_parent")
+
+
+def _strip_tl_attrs(tensor):
+    """Remove session-scoped tl_* attributes from a single tensor."""
+    for tl_attr in _TL_TENSOR_ATTRS:
+        if hasattr(tensor, tl_attr):
+            delattr(tensor, tl_attr)
+
+
 def _undecorate_model_tensors(model: nn.Module) -> None:
     """Remove session-scoped ``tl_*`` attributes from non-parameter tensors in the model.
 
-    Handles tensors stored directly as attributes, inside lists/tuples/sets,
-    and inside dicts. Parameters are skipped (cleaned separately).
+    Uses ``__dict__`` scan (fast) instead of ``iter_accessible_attributes`` (slow
+    dir() + getattr MRO walk). Handles tensors stored directly as attributes,
+    inside lists/tuples, and inside dicts.
     """
-    submodules = get_all_submodules(model)
-    for submodule in submodules:
-        for attribute_name, attribute in iter_accessible_attributes(submodule):
-            if issubclass(type(attribute), torch.Tensor):
-                if not issubclass(type(attribute), torch.nn.Parameter):
-                    for tl_attr in ("tl_tensor_label_raw", "tl_buffer_address", "tl_buffer_parent"):
-                        if hasattr(attribute, tl_attr):
-                            delattr(attribute, tl_attr)
-            elif type(attribute) in [list, tuple, set]:
-                for item in attribute:
-                    if issubclass(type(item), torch.Tensor):
-                        for tl_attr in (
-                            "tl_tensor_label_raw",
-                            "tl_buffer_address",
-                            "tl_buffer_parent",
-                        ):
-                            if hasattr(item, tl_attr):
-                                delattr(item, tl_attr)
-            elif type(attribute) == dict:
-                for key, val in attribute.items():
-                    if issubclass(type(val), torch.Tensor):
-                        for tl_attr in (
-                            "tl_tensor_label_raw",
-                            "tl_buffer_address",
-                            "tl_buffer_parent",
-                        ):
-                            if hasattr(val, tl_attr):
-                                delattr(val, tl_attr)
+    for submodule in model.modules():
+        for attr_val in submodule.__dict__.values():
+            if isinstance(attr_val, torch.Tensor):
+                if not isinstance(attr_val, torch.nn.Parameter):
+                    _strip_tl_attrs(attr_val)
+            elif isinstance(attr_val, (list, tuple, set)):
+                for item in attr_val:
+                    if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
+                        _strip_tl_attrs(item)
+            elif isinstance(attr_val, dict):
+                for val in attr_val.values():
+                    if isinstance(val, torch.Tensor) and not isinstance(val, torch.nn.Parameter):
+                        _strip_tl_attrs(val)
+    # Also clean any tensors from the registered buffer dict (_buffers)
+    for submodule in model.modules():
+        for buf_tensor in submodule._buffers.values():
+            if buf_tensor is not None:
+                _strip_tl_attrs(buf_tensor)
 
 
 # ---------------------------------------------------------------------------

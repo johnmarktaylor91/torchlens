@@ -123,6 +123,67 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict) -> dict:
     return kwargs
 
 
+def _collect_tensor_args(args, kwargs):
+    """Fast inline tensor extraction from function arguments.
+
+    Most torch function calls have flat args (tensors, ints, bools, etc.).
+    This avoids the full BFS crawl of get_vars_of_type_from_obj for the
+    common case. Falls back to BFS only when nested containers are found.
+    """
+    tensors = []
+    needs_bfs = False
+    for arg in args:
+        if isinstance(arg, torch.Tensor):
+            tensors.append(arg)
+        elif isinstance(arg, (list, tuple)):
+            for item in arg:
+                if isinstance(item, torch.Tensor):
+                    tensors.append(item)
+                elif not isinstance(item, (int, float, bool, str, type(None))):
+                    needs_bfs = True
+        elif isinstance(arg, dict):
+            for val in arg.values():
+                if isinstance(val, torch.Tensor):
+                    tensors.append(val)
+        elif not isinstance(arg, (int, float, bool, str, type(None), torch.dtype, torch.device)):
+            needs_bfs = True
+    for val in kwargs.values():
+        if isinstance(val, torch.Tensor):
+            tensors.append(val)
+        elif isinstance(val, (list, tuple)):
+            for item in val:
+                if isinstance(item, torch.Tensor):
+                    tensors.append(item)
+    if needs_bfs:
+        all_args = args if not kwargs else (*args, *kwargs.values())
+        return get_vars_of_type_from_obj(all_args, torch.Tensor)
+    return tensors
+
+
+def _collect_output_tensors(out):
+    """Fast inline output tensor extraction.
+
+    Most torch functions return a single tensor. This handles that case
+    with a simple isinstance check, falling back to BFS for compound outputs.
+    """
+    if isinstance(out, torch.Tensor):
+        if isinstance(out, torch.nn.Parameter):
+            return []
+        return [out]
+    if isinstance(out, (list, tuple)):
+        tensors = []
+        for item in out:
+            if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
+                tensors.append(item)
+        return tensors
+    if out is None:
+        return []
+    # Rare: dict, custom object, etc. — fall back to BFS.
+    return get_vars_of_type_from_obj(
+        out, which_type=torch.Tensor, subclass_exceptions=[torch.nn.Parameter]
+    )
+
+
 def torch_func_decorator(func: Callable, func_name: str):
     """Wrap a single torch function with toggle-gated logging.
 
@@ -186,8 +247,9 @@ def torch_func_decorator(func: Callable, func_name: str):
         if func_name in funcs_not_to_log:
             return func(*args, **kwargs)
 
-        all_args = args if not kwargs else (*args, *kwargs.values())
-        arg_tensorlike = get_vars_of_type_from_obj(all_args, torch.Tensor)
+        # Inline tensor extraction — avoids BFS crawl for the common case
+        # where args are flat tensors. Falls back to BFS only for nested containers.
+        arg_tensorlike = _collect_tensor_args(args, kwargs)
 
         # Register buffer tensors on first encounter. Buffers are tagged with
         # tl_buffer_address during model prep but don't get a tl_tensor_label_raw
@@ -216,7 +278,8 @@ def torch_func_decorator(func: Callable, func_name: str):
         func_call_barcode = make_random_barcode()
         model_log.current_function_call_barcode = func_call_barcode
         start_time = time.time()
-        rng_states = log_current_rng_states()
+        _save_rng = getattr(model_log, "save_rng_states", False)
+        rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
         out_orig = func(*args, **kwargs)
         exec_ctx = FuncExecutionContext(
@@ -247,11 +310,8 @@ def torch_func_decorator(func: Callable, func_name: str):
             out_orig = safe_copy(out_orig)
 
         # Log all output tensors (excluding Parameters, which are source tensors).
-        output_tensors = get_vars_of_type_from_obj(
-            out_orig,
-            which_type=torch.Tensor,
-            subclass_exceptions=[torch.nn.Parameter],
-        )
+        # Fast inline check for the common single-tensor output case.
+        output_tensors = _collect_output_tensors(out_orig)
 
         if len(output_tensors) > 0:
             log_function_output_tensors(
