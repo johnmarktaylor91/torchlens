@@ -1,6 +1,35 @@
 # CHANGELOG
 
 
+## v0.15.14 (2026-03-07)
+
+### Performance Improvements
+
+- **capture**: Lazy _fsize_nice properties, remove _trim_and_reorder, batch pause_logging, drop
+  deepcopy
+  ([`986bd91`](https://github.com/johnmarktaylor91/torchlens/commit/986bd914a317be6acde0a4c0898a417fb9f6dcbb))
+
+Four low-risk optimizations targeting remaining allocation pressure and per-operation overhead in
+  the instrumentation path:
+
+1. Lazy _fsize_nice properties — tensor_fsize_nice, grad_fsize_nice, parent_params_fsize_nice,
+  total_params_fsize_nice, params_fsize_nice, and fsize_nice converted from eagerly computed strings
+  to @property methods. Eliminates ~2700 human_readable_size() calls per Swin-T pass.
+
+2. Remove _trim_and_reorder from postprocess — the OrderedDict rebuild of every LayerPassLog's
+  __dict__ (685 calls, ~0.04s on Swin-T) is purely cosmetic. Python 3.7+ dicts maintain insertion
+  order. Function definition kept for opt-in use.
+
+3. Batch pause_logging for tensor memory — inline nelement() * element_size() at the two hottest
+  call sites (_build_param_fields, _log_output_tensor_info) inside a single pause_logging() context.
+  Eliminates per-call context manager overhead (~1088 calls).
+
+4. Remove activation_postfunc deepcopy — copy.deepcopy() on a callable is unnecessary; callables are
+  effectively immutable.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.13 (2026-03-07)
 
 ### Performance Improvements
