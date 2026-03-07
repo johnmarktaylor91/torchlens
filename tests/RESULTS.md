@@ -10,11 +10,11 @@ Public summary of TorchLens test suite outcomes. Updated after each release.
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 714 |
+| Total tests | 736 |
 | Smoke tests (`-m smoke`) | 18 |
 | Test files | 14 |
-| Example models (toy) | 121 |
-| Real-world models | 87 |
+| Example models (toy) | 139 |
+| Real-world models | 92 |
 
 **Run the suite:**
 ```bash
@@ -30,9 +30,9 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| test_toy_models.py | 165 | API coverage on 121 example models (log, validate, visualize, metadata) |
+| test_toy_models.py | 183 | API coverage on 139 example models (log, validate, visualize, metadata) |
 | test_metadata.py | 107 | Field invariants, FLOPs, timing, RNG, func_call_location, corruption detection |
-| test_real_world_models.py | 87 | Real-world architectures: validation + visualization |
+| test_real_world_models.py | 92 | Real-world architectures: validation + visualization |
 | test_param_log.py | 70 | ParamLog, ParamAccessor, shared params, grad metadata |
 | test_decoration.py | 61 | Toggle state, detached imports, pause_logging, JIT compat, signal safety |
 | test_validation.py | 59 | Perturbation checks, metadata invariants, edge cases |
@@ -49,11 +49,13 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 ## Model Compatibility
 
-### Toy Models (121 architectures)
+### Toy Models (139 architectures)
 
-All 121 example models in `tests/example_models.py` pass `validate_forward_pass`.
+All 139 example models in `tests/example_models.py` pass `validate_forward_pass`.
 Covers: simple feedforward, branching, conditionals, 48 loop/recurrence variants,
-in-place ops, attention, view mutations, VAE, UNet, GAN, and edge cases.
+in-place ops, attention, view mutations, autoencoders (vanilla/conv/sparse/denoising/
+VQ-VAE/beta-VAE/CVAE), state space models (simple/selective/stacked SSM), GCN, GAT,
+MLP-Mixer, Siamese, diffusion, normalizing flow, capsule network, and edge cases.
 
 ### Real-World Models
 
@@ -64,6 +66,8 @@ in-place ops, attention, view mutations, VAE, UNet, GAN, and edge cases.
 | **timm** | BEiT, GluonResNeXt, ECAResNet, MobileViT, ADV-Inception, CaiT, CoAT, ConViT, DarkNet, GhostNet, MixNet, PoolFormer, ResNeSt, EdgeNeXt, HardCoreNAS, SEMNASNet, XCiT, SEResNet | 18/18 pass |
 | **Audio** | Conv-TasNet, Wav2Letter, HuBERT, Wav2Vec2, DeepSpeech, Conformer, Whisper-tiny | 7/7 pass |
 | **Language** | LSTM, RNN, GPT-2, BERT, DistilBERT, T5-small, RoBERTa, Sentence-BERT | 8/8 pass |
+| **State Space Models** | Mamba, Mamba-2, RWKV, Falcon-Mamba | 4/4 pass |
+| **Autoencoders** | ViT-MAE (ForPreTraining) | 1/1 pass |
 | **Multimodal / Special** | Stable Diffusion (UNet), StyleTTS, QML, Lightning, CLIP, BLIP, ViT-MAE | 7/7 pass |
 | **Segmentation** | DeepLab-v3 (ResNet50), DeepLab-v3 (MobileNet), LRASPP, FCN-ResNet50 | 4/4 pass |
 | **Detection** | Faster R-CNN (train+eval), FCOS (train+eval), RetinaNet (train+eval), SSD300 (train+eval) | 8/8 pass |
@@ -71,7 +75,7 @@ in-place ops, attention, view mutations, VAE, UNet, GAN, and edge cases.
 | **Video** | R(2+1)D-18, MC3-18, MViT-v2-S, R3D-18, S3D | 5/5 pass |
 | **Optical Flow** | RAFT-Small, RAFT-Large | 2/2 pass |
 | **Other** | Taskonomy, DimeNet (GNN), MoE | 3/3 pass |
-| | **Total** | **85/85 pass** |
+| | **Total** | **90/90 pass** |
 
 *2 tests (Taskonomy, DimeNet) require optional packages and show as SKIPPED when unavailable.*
 

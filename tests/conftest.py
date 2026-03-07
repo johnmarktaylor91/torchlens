@@ -38,6 +38,8 @@ sub_dirs = [
     "time-series",
     "point-cloud",
     "super-resolution",
+    "autoencoders",
+    "state-space-models",
 ]
 
 os.makedirs(REPORTS_DIR, exist_ok=True)

@@ -1495,6 +1495,143 @@ def test_simple_moe():
 
 
 # =============================================================================
+# State Space Models (requires transformers)
+# =============================================================================
+
+
+def test_mamba():
+    """Mamba SSM via HuggingFace transformers (small config, no pretrained)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.MambaConfig(
+        vocab_size=100,
+        hidden_size=32,
+        state_size=8,
+        num_hidden_layers=2,
+        intermediate_size=64,
+    )
+    model = transformers.MambaModel(config)
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "mamba"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+def test_mamba2():
+    """Mamba-2 SSM via HuggingFace transformers (small config, no pretrained)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.Mamba2Config(
+        vocab_size=100,
+        hidden_size=64,
+        state_size=8,
+        num_hidden_layers=2,
+        head_dim=16,
+        num_heads=8,
+    )
+    model = transformers.Mamba2Model(config)
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "mamba2"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+def test_rwkv():
+    """RWKV linear-attention model via HuggingFace transformers (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.RwkvConfig(
+        vocab_size=100,
+        hidden_size=32,
+        num_hidden_layers=2,
+        attention_hidden_size=32,
+        intermediate_size=64,
+    )
+    model = transformers.RwkvModel(config)
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "rwkv"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+def test_falcon_mamba():
+    """Falcon-Mamba hybrid SSM via HuggingFace transformers (small config)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.FalconMambaConfig(
+        vocab_size=100,
+        hidden_size=32,
+        state_size=8,
+        num_hidden_layers=2,
+        intermediate_size=64,
+    )
+    model = transformers.FalconMambaModel(config)
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "falcon_mamba"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Autoencoders (real-world, via transformers)
+# =============================================================================
+
+
+def test_autoencoder_vit_mae():
+    """ViT-MAE as masked autoencoder (small config, no pretrained weights)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.ViTMAEConfig(
+        image_size=32,
+        patch_size=4,
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        decoder_hidden_size=32,
+        decoder_num_hidden_layers=1,
+        decoder_num_attention_heads=4,
+        decoder_intermediate_size=64,
+    )
+    model = transformers.ViTMAEForPreTraining(config)
+    pixel_values = torch.randn(1, 3, 32, 32)
+    model_kwargs = {"pixel_values": pixel_values}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        random_seed=1,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "vit_mae_pretrain"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs, random_seed=1)
+
+
+# =============================================================================
 # TorchVision Segmentation Models
 # =============================================================================
 

@@ -2942,3 +2942,501 @@ class AutocastMidForward(nn.Module):
         with torch.amp.autocast("cpu"):
             x = self.fc2(x)
         return x
+
+
+# =============================================================================
+# Group J: Autoencoders
+# =============================================================================
+
+
+class VanillaAutoencoder(nn.Module):
+    """Standard deterministic autoencoder: encoder→bottleneck→decoder."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(784, 128),
+            nn.ReLU(),
+            nn.Linear(128, 32),
+            nn.ReLU(),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(32, 128),
+            nn.ReLU(),
+            nn.Linear(128, 784),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        z = self.encoder(x)
+        return self.decoder(z)
+
+
+class ConvAutoencoder(nn.Module):
+    """Convolutional autoencoder with symmetric encoder-decoder."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 16, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        z = self.encoder(x)
+        return self.decoder(z)
+
+
+class SparseAutoencoder(nn.Module):
+    """Autoencoder with L1-penalized bottleneck (sparsity via activation)."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(784, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 784),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        z = self.encoder(x)
+        # L1 sparsity applied externally during training; forward is standard
+        return self.decoder(z)
+
+
+class DenoisingAutoencoder(nn.Module):
+    """Autoencoder that adds noise in forward (trains to reconstruct clean input)."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(784, 128),
+            nn.ReLU(),
+            nn.Linear(128, 32),
+            nn.ReLU(),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(32, 128),
+            nn.ReLU(),
+            nn.Linear(128, 784),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        # Add noise during forward (denoising objective)
+        noisy = x + 0.1 * torch.randn_like(x)
+        z = self.encoder(noisy)
+        return self.decoder(z)
+
+
+class VQVAE(nn.Module):
+    """Vector-quantized VAE: encoder→nearest codebook→decoder.
+
+    Straight-through estimator for gradients past the argmin.
+    """
+
+    def __init__(self, num_embeddings=16, embedding_dim=32):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 16, 3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, embedding_dim, 3, stride=2, padding=1),
+        )
+        self.codebook = nn.Embedding(num_embeddings, embedding_dim)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(embedding_dim, 16, 3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 1, 3, stride=2, padding=1, output_padding=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        ze = self.encoder(x)  # (B, D, H, W)
+        B, D, H, W = ze.shape
+        flat = ze.permute(0, 2, 3, 1).reshape(-1, D)  # (B*H*W, D)
+        # Nearest codebook lookup
+        dists = torch.cdist(flat, self.codebook.weight)
+        indices = dists.argmin(dim=-1)
+        zq = self.codebook(indices).view(B, H, W, D).permute(0, 3, 1, 2)
+        # Straight-through estimator
+        zq_st = ze + (zq - ze).detach()
+        return self.decoder(zq_st)
+
+
+class BetaVAE(nn.Module):
+    """Beta-VAE with tunable KL weight (same architecture as VAE, different loss weighting)."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(784, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+        )
+        self.fc_mu = nn.Linear(128, 16)
+        self.fc_logvar = nn.Linear(128, 16)
+        self.decoder = nn.Sequential(
+            nn.Linear(16, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 784),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        h = self.encoder(x)
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
+        std = torch.exp(0.5 * logvar)
+        z = mu + std * torch.randn_like(std)
+        return self.decoder(z)
+
+
+class ConditionalVAE(nn.Module):
+    """Conditional VAE: label embedding concatenated to both encoder and decoder."""
+
+    def __init__(self, num_classes=10):
+        super().__init__()
+        self.label_embed = nn.Embedding(num_classes, 16)
+        self.encoder = nn.Sequential(
+            nn.Linear(784 + 16, 128),
+            nn.ReLU(),
+        )
+        self.fc_mu = nn.Linear(128, 16)
+        self.fc_logvar = nn.Linear(128, 16)
+        self.decoder = nn.Sequential(
+            nn.Linear(16 + 16, 128),
+            nn.ReLU(),
+            nn.Linear(128, 784),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x, label):
+        label_emb = self.label_embed(label)
+        h = self.encoder(torch.cat([x, label_emb], dim=-1))
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
+        std = torch.exp(0.5 * logvar)
+        z = mu + std * torch.randn_like(std)
+        return self.decoder(torch.cat([z, label_emb], dim=-1))
+
+
+# =============================================================================
+# Group K: State Space Models
+# =============================================================================
+
+
+class SimpleSSM(nn.Module):
+    """Minimal state-space model: discretized linear recurrence + output projection.
+
+    Implements x_k = A x_{k-1} + B u_k; y_k = C x_k
+    Uses a sequential scan (no parallel associative scan for simplicity).
+    """
+
+    def __init__(self, input_dim=8, state_dim=16, output_dim=8):
+        super().__init__()
+        self.A = nn.Parameter(torch.randn(state_dim, state_dim) * 0.1)
+        self.B = nn.Parameter(torch.randn(state_dim, input_dim) * 0.1)
+        self.C = nn.Parameter(torch.randn(output_dim, state_dim) * 0.1)
+        self.state_dim = state_dim
+
+    def forward(self, u):
+        # u: (batch, seq_len, input_dim)
+        B, T, _ = u.shape
+        x = torch.zeros(B, self.state_dim, device=u.device, dtype=u.dtype)
+        outputs = []
+        for t in range(T):
+            x = torch.tanh(x @ self.A.T + u[:, t] @ self.B.T)
+            outputs.append(x @ self.C.T)
+        return torch.stack(outputs, dim=1)
+
+
+class SelectiveSSM(nn.Module):
+    """Simplified Mamba-style selective SSM: input-dependent gating.
+
+    Key innovation vs simple SSM: A/B/C parameters are projected from input,
+    making the system input-dependent (selective).
+    """
+
+    def __init__(self, d_model=16, d_state=8):
+        super().__init__()
+        self.d_state = d_state
+        self.proj_in = nn.Linear(d_model, d_model * 2)
+        self.conv1d = nn.Conv1d(d_model, d_model, kernel_size=3, padding=1, groups=d_model)
+        self.proj_dt = nn.Linear(d_model, d_model)
+        self.proj_B = nn.Linear(d_model, d_state)
+        self.proj_C = nn.Linear(d_model, d_state)
+        self.A_log = nn.Parameter(torch.randn(d_model, d_state))
+        self.proj_out = nn.Linear(d_model, d_model)
+
+    def forward(self, x):
+        # x: (batch, seq_len, d_model)
+        B, T, D = x.shape
+        xz = self.proj_in(x)
+        x_branch, z = xz.chunk(2, dim=-1)
+        # Conv1d expects (B, D, T)
+        x_conv = self.conv1d(x_branch.transpose(1, 2)).transpose(1, 2)
+        x_conv = torch.nn.functional.silu(x_conv)
+        # Input-dependent parameters
+        dt = torch.nn.functional.softplus(self.proj_dt(x_conv))
+        B_param = self.proj_B(x_conv)
+        C_param = self.proj_C(x_conv)
+        A = -torch.exp(self.A_log)
+        # Sequential scan
+        h = torch.zeros(B, D, self.d_state, device=x.device, dtype=x.dtype)
+        outputs = []
+        for t in range(T):
+            dA = torch.exp(dt[:, t].unsqueeze(-1) * A)
+            dB = dt[:, t].unsqueeze(-1) * B_param[:, t].unsqueeze(1)
+            h = h * dA + x_conv[:, t].unsqueeze(-1) * dB
+            y = (h * C_param[:, t].unsqueeze(1)).sum(dim=-1)
+            outputs.append(y)
+        y = torch.stack(outputs, dim=1)
+        y = y * torch.nn.functional.silu(z)
+        return self.proj_out(y)
+
+
+class GatedSSMBlock(nn.Module):
+    """SSM block with pre-norm and residual connection (Mamba block pattern)."""
+
+    def __init__(self, d_model=16, d_state=8):
+        super().__init__()
+        self.norm = nn.LayerNorm(d_model)
+        self.ssm = SelectiveSSM(d_model, d_state)
+
+    def forward(self, x):
+        return x + self.ssm(self.norm(x))
+
+
+class StackedSSM(nn.Module):
+    """Multi-layer SSM with embedding and classification head."""
+
+    def __init__(self, vocab_size=100, d_model=16, d_state=8, n_layers=2, n_classes=4):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, d_model)
+        self.layers = nn.ModuleList([GatedSSMBlock(d_model, d_state) for _ in range(n_layers)])
+        self.norm = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, n_classes)
+
+    def forward(self, x):
+        # x: (batch, seq_len) integer tokens
+        h = self.embed(x)
+        for layer in self.layers:
+            h = layer(h)
+        h = self.norm(h)
+        return self.head(h.mean(dim=1))
+
+
+# =============================================================================
+# Group L: Additional Architecture Patterns
+# =============================================================================
+
+
+class SiameseNetwork(nn.Module):
+    """Siamese network: shared encoder, L2 distance output."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+        )
+
+    def forward(self, x1, x2):
+        z1 = self.encoder(x1)
+        z2 = self.encoder(x2)
+        return torch.norm(z1 - z2, dim=-1)
+
+
+class MLPMixer(nn.Module):
+    """MLP-Mixer: token-mixing + channel-mixing MLPs, no attention."""
+
+    def __init__(self, num_patches=16, d_model=32, num_classes=10, depth=2):
+        super().__init__()
+        self.patch_embed = nn.Linear(12, d_model)  # 2x2 patches from 3-channel
+        self.blocks = nn.ModuleList()
+        for _ in range(depth):
+            self.blocks.append(
+                nn.ModuleDict(
+                    {
+                        "norm1": nn.LayerNorm(d_model),
+                        "token_mix": nn.Sequential(
+                            nn.Linear(num_patches, num_patches),
+                            nn.GELU(),
+                            nn.Linear(num_patches, num_patches),
+                        ),
+                        "norm2": nn.LayerNorm(d_model),
+                        "channel_mix": nn.Sequential(
+                            nn.Linear(d_model, d_model * 2),
+                            nn.GELU(),
+                            nn.Linear(d_model * 2, d_model),
+                        ),
+                    }
+                )
+            )
+        self.norm = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, num_classes)
+
+    def forward(self, x):
+        # x: (B, 3, 8, 8) -> 16 patches of 2x2x3=12
+        B = x.shape[0]
+        patches = x.unfold(2, 2, 2).unfold(3, 2, 2)  # (B, 3, 4, 4, 2, 2)
+        patches = patches.contiguous().view(B, -1, 12)  # (B, 16, 12)
+        h = self.patch_embed(patches)  # (B, 16, d_model)
+        for block in self.blocks:
+            # Token mixing
+            residual = h
+            h = block["norm1"](h)
+            h = h.transpose(1, 2)  # (B, d_model, num_patches)
+            h = block["token_mix"](h)
+            h = h.transpose(1, 2) + residual
+            # Channel mixing
+            residual = h
+            h = block["norm2"](h)
+            h = block["channel_mix"](h) + residual
+        h = self.norm(h)
+        return self.head(h.mean(dim=1))
+
+
+class SimpleGCN(nn.Module):
+    """Graph Convolutional Network (Kipf & Welling): A_hat @ X @ W per layer.
+
+    Takes adjacency + features as separate inputs.
+    """
+
+    def __init__(self, in_features=8, hidden=16, out_features=4):
+        super().__init__()
+        self.w1 = nn.Linear(in_features, hidden, bias=False)
+        self.w2 = nn.Linear(hidden, out_features, bias=False)
+
+    def forward(self, x, adj):
+        # x: (num_nodes, in_features), adj: (num_nodes, num_nodes)
+        h = torch.relu(adj @ self.w1(x))
+        return adj @ self.w2(h)
+
+
+class SimpleGAT(nn.Module):
+    """Graph Attention Network: attention-weighted message passing."""
+
+    def __init__(self, in_features=8, hidden=16, out_features=4):
+        super().__init__()
+        self.W = nn.Linear(in_features, hidden, bias=False)
+        self.a = nn.Linear(2 * hidden, 1, bias=False)
+        self.out_proj = nn.Linear(hidden, out_features)
+
+    def forward(self, x, adj):
+        # x: (N, in_features), adj: (N, N)
+        N = x.shape[0]
+        h = self.W(x)  # (N, hidden)
+        # Compute attention for all pairs
+        h_i = h.unsqueeze(1).expand(-1, N, -1)  # (N, N, hidden)
+        h_j = h.unsqueeze(0).expand(N, -1, -1)  # (N, N, hidden)
+        e = torch.nn.functional.leaky_relu(self.a(torch.cat([h_i, h_j], dim=-1)).squeeze(-1), 0.2)
+        # Mask non-edges
+        e = e.masked_fill(adj == 0, float("-inf"))
+        alpha = torch.softmax(e, dim=-1)
+        alpha = alpha.masked_fill(torch.isnan(alpha), 0)
+        out = alpha @ h  # (N, hidden)
+        return self.out_proj(out)
+
+
+class SimpleDiffusion(nn.Module):
+    """Minimal denoising diffusion: noise predictor network.
+
+    Takes noisy input + timestep embedding, predicts noise.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.time_embed = nn.Sequential(
+            nn.Linear(1, 32),
+            nn.SiLU(),
+            nn.Linear(32, 32),
+        )
+        self.net = nn.Sequential(
+            nn.Linear(784 + 32, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 784),
+        )
+
+    def forward(self, x, t):
+        # x: (B, 784), t: (B, 1)
+        t_emb = self.time_embed(t)
+        return self.net(torch.cat([x, t_emb], dim=-1))
+
+
+class SimpleNormalizingFlow(nn.Module):
+    """Normalizing flow with affine coupling layers."""
+
+    def __init__(self, dim=8, n_layers=3):
+        super().__init__()
+        self.layers = nn.ModuleList()
+        for _ in range(n_layers):
+            self.layers.append(
+                nn.ModuleDict(
+                    {
+                        "scale_net": nn.Sequential(
+                            nn.Linear(dim // 2, dim),
+                            nn.ReLU(),
+                            nn.Linear(dim, dim // 2),
+                        ),
+                        "shift_net": nn.Sequential(
+                            nn.Linear(dim // 2, dim),
+                            nn.ReLU(),
+                            nn.Linear(dim, dim // 2),
+                        ),
+                    }
+                )
+            )
+
+    def forward(self, x):
+        # x: (B, dim)
+        for layer in self.layers:
+            x1, x2 = x.chunk(2, dim=-1)
+            s = layer["scale_net"](x1)
+            t = layer["shift_net"](x1)
+            x2 = x2 * torch.exp(s) + t
+            x = torch.cat([x2, x1], dim=-1)  # swap halves
+        return x
+
+
+class CapsuleNetwork(nn.Module):
+    """Simplified capsule network with dynamic routing."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, 3, stride=2, padding=1)
+        # Primary capsules: 8 capsule types, each producing 4-dim vectors
+        self.primary_caps = nn.Conv2d(16, 32, 3, stride=2, padding=1)
+        self.fc = nn.Linear(32 * 7 * 7, 10 * 8)  # 10 classes, 8-dim capsules
+        self.out = nn.Linear(80, 10)
+
+    def forward(self, x):
+        # x: (B, 1, 28, 28)
+        h = torch.relu(self.conv1(x))
+        h = torch.relu(self.primary_caps(h))
+        h = h.flatten(1)
+        caps = self.fc(h).view(-1, 10, 8)
+        # Squash activation (capsule nonlinearity)
+        norms = caps.norm(dim=-1, keepdim=True)
+        squashed = (norms**2 / (1 + norms**2)) * (caps / (norms + 1e-8))
+        return self.out(squashed.flatten(1))
