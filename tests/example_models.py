@@ -4816,3 +4816,244 @@ class ECAModel(nn.Module):
         attn = torch.sigmoid(attn).unsqueeze(-1).unsqueeze(-1)
         x = x * attn
         return self.fc(self.pool(x).flatten(1))
+
+
+# ============================================================================
+# Group U: Final Coverage — Novel Computational Patterns
+# ============================================================================
+
+
+class LinearAttentionModel(nn.Module):
+    """Kernel-based linear attention: phi(Q) @ (phi(K)^T @ V).
+
+    Avoids softmax entirely — O(N*d^2) instead of O(N^2*d).
+    Tests the associative-reorder pattern that is fundamentally different
+    from standard scaled-dot-product attention.
+    """
+
+    def __init__(self, dim=16, heads=2, seq_len=8):
+        super().__init__()
+        self.heads = heads
+        self.head_dim = dim // heads
+        self.qkv = nn.Linear(dim, dim * 3)
+        self.out = nn.Linear(dim, 4)
+
+    def forward(self, x):
+        B, S, D = x.shape
+        qkv = self.qkv(x).reshape(B, S, 3, self.heads, self.head_dim)
+        q, k, v = qkv.unbind(dim=2)  # each (B, S, heads, head_dim)
+        q = q.transpose(1, 2)  # (B, heads, S, head_dim)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+        # Kernel feature map: elu(x) + 1 (positive features)
+        q = torch.nn.functional.elu(q) + 1
+        k = torch.nn.functional.elu(k) + 1
+        # Linear attention: phi(Q) @ (phi(K)^T @ V) — RIGHT associativity
+        kv = torch.matmul(k.transpose(-2, -1), v)  # (B, h, d, d)
+        out = torch.matmul(q, kv)  # (B, h, S, d)
+        # Normalize by sum of keys
+        k_sum = k.sum(dim=-2, keepdim=True)  # (B, h, 1, d)
+        denom = torch.matmul(q, k_sum.transpose(-2, -1)).clamp(min=1e-6)
+        out = out / denom
+        out = out.transpose(1, 2).reshape(B, S, D)
+        return self.out(out.mean(dim=1))
+
+
+class SimpleFNO(nn.Module):
+    """Fourier Neural Operator: FFT -> spectral weights -> iFFT.
+
+    Tests the spectral convolution pattern: transform to frequency domain,
+    multiply by learned complex weights, transform back. Fundamentally
+    different from spatial convolution.
+    """
+
+    def __init__(self, in_channels=3, width=8, modes=4):
+        super().__init__()
+        self.modes = modes
+        self.lift = nn.Linear(in_channels, width)
+        # Complex spectral weights (learnable Fourier coefficients)
+        self.spectral_weight = nn.Parameter(
+            torch.randn(width, width, modes, dtype=torch.cfloat) * 0.02
+        )
+        self.project = nn.Linear(width, 4)
+
+    def forward(self, x):
+        # x: (B, N, in_channels) — 1D function on N grid points
+        x = self.lift(x)  # (B, N, width)
+        x_ft = torch.fft.rfft(x, dim=1)  # (B, N//2+1, width)
+        # Multiply only the first `modes` frequencies by learned weights
+        out_ft = torch.zeros_like(x_ft)
+        modes = min(self.modes, x_ft.shape[1])
+        out_ft[:, :modes, :] = torch.einsum(
+            "bmi,iom->bmo", x_ft[:, :modes, :], self.spectral_weight[:, :, :modes]
+        )
+        # Back to physical space
+        x = torch.fft.irfft(out_ft, n=x.shape[1], dim=1)  # (B, N, width)
+        x = torch.relu(x)
+        return self.project(x.mean(dim=1))
+
+
+class PerceiverModel(nn.Module):
+    """Perceiver: cross-attention from input->latent, then self-attention on latents.
+
+    Tests the asymmetric cross-attention bottleneck pattern: arbitrary-length
+    input is compressed into a fixed-size latent array, then processed
+    with self-attention. Distinct from encoder-decoder cross-attention
+    because latent is LEARNED, not derived from input.
+    """
+
+    def __init__(self, input_dim=16, latent_dim=8, num_latents=4, heads=2):
+        super().__init__()
+        self.latents = nn.Parameter(torch.randn(1, num_latents, latent_dim))
+        # Cross-attention: Q from latent, K/V from input
+        self.cross_q = nn.Linear(latent_dim, latent_dim)
+        self.cross_kv = nn.Linear(input_dim, latent_dim * 2)
+        # Self-attention on latents
+        self.self_attn = nn.MultiheadAttention(latent_dim, heads, batch_first=True)
+        self.ff = nn.Linear(latent_dim, latent_dim)
+        self.out = nn.Linear(latent_dim, 4)
+        self.scale = latent_dim**-0.5
+
+    def forward(self, x):
+        B = x.shape[0]
+        latents = self.latents.expand(B, -1, -1)
+        # Cross-attention: latents attend to input
+        q = self.cross_q(latents)
+        kv = self.cross_kv(x)
+        k, v = kv.chunk(2, dim=-1)
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        attn = torch.softmax(attn, dim=-1)
+        latents = latents + torch.matmul(attn, v)
+        # Self-attention on latents
+        sa_out, _ = self.self_attn(latents, latents, latents)
+        latents = latents + sa_out
+        latents = latents + torch.relu(self.ff(latents))
+        return self.out(latents.mean(dim=1))
+
+
+class ASPPModel(nn.Module):
+    """Atrous Spatial Pyramid Pooling: parallel dilated convs at multiple rates.
+
+    Tests multi-rate parallel branches — each branch sees the same input
+    through a different dilation rate, then all branches are concatenated.
+    Used in DeepLab for multi-scale context aggregation.
+    """
+
+    def __init__(self, in_channels=3, mid=8, rates=(1, 6, 12)):
+        super().__init__()
+        self.branches = nn.ModuleList(
+            [nn.Conv2d(in_channels, mid, 3, padding=r, dilation=r) for r in rates]
+        )
+        # Global average pooling branch
+        self.gap_conv = nn.Conv2d(in_channels, mid, 1)
+        self.fuse = nn.Conv2d(mid * (len(rates) + 1), 4, 1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x):
+        branch_outs = [torch.relu(b(x)) for b in self.branches]
+        # GAP branch: pool -> 1x1 conv -> upsample
+        gap = self.pool(x)
+        gap = torch.relu(self.gap_conv(gap))
+        gap = torch.nn.functional.interpolate(
+            gap, size=x.shape[2:], mode="bilinear", align_corners=False
+        )
+        branch_outs.append(gap)
+        fused = torch.cat(branch_outs, dim=1)
+        return self.fuse(fused).mean(dim=(2, 3))
+
+
+class ControlNetModel(nn.Module):
+    """ControlNet pattern: frozen encoder + trainable copy + zero-conv injection.
+
+    Tests the parallel-copy-with-injection pattern: a trainable copy of an
+    encoder processes conditioning, then its features are injected into the
+    frozen encoder via zero-initialized convolutions. The zero init ensures
+    training starts from the pretrained model's behavior.
+    """
+
+    def __init__(self, channels=8):
+        super().__init__()
+        # "Frozen" main encoder (we just don't update it, structurally same)
+        self.main_conv1 = nn.Conv2d(3, channels, 3, padding=1)
+        self.main_conv2 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.main_fc = nn.Linear(channels, 4)
+        # Trainable copy (ControlNet branch)
+        self.ctrl_conv1 = nn.Conv2d(3, channels, 3, padding=1)
+        self.ctrl_conv2 = nn.Conv2d(channels, channels, 3, padding=1)
+        # Zero convolutions for injection (initialized to zero)
+        self.zero_conv1 = nn.Conv2d(channels, channels, 1)
+        self.zero_conv2 = nn.Conv2d(channels, channels, 1)
+        nn.init.zeros_(self.zero_conv1.weight)
+        nn.init.zeros_(self.zero_conv1.bias)
+        nn.init.zeros_(self.zero_conv2.weight)
+        nn.init.zeros_(self.zero_conv2.bias)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x):
+        # Main path
+        h1 = torch.relu(self.main_conv1(x))
+        # ControlNet path (parallel copy)
+        c1 = torch.relu(self.ctrl_conv1(x))
+        # Inject via zero conv
+        h1 = h1 + self.zero_conv1(c1)
+        h2 = torch.relu(self.main_conv2(h1))
+        c2 = torch.relu(self.ctrl_conv2(c1))
+        h2 = h2 + self.zero_conv2(c2)
+        return self.main_fc(self.pool(h2).flatten(1))
+
+
+class SimpleEGNN(nn.Module):
+    """E(n) Equivariant Graph Neural Network: message passing with coordinate updates.
+
+    Tests the equivariant pattern where both node features AND spatial coordinates
+    are updated during message passing. Messages depend on distances (invariant),
+    and coordinate updates are weighted by relative positions (equivariant).
+    Takes TWO inputs: (features, coordinates).
+    """
+
+    def __init__(self, node_dim=8, hidden_dim=16, out_dim=4):
+        super().__init__()
+        # Edge MLP: maps (hi, hj, ||xi-xj||^2) -> message
+        self.edge_mlp = nn.Sequential(
+            nn.Linear(node_dim * 2 + 1, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+        # Node update
+        self.node_mlp = nn.Sequential(
+            nn.Linear(node_dim + hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, node_dim),
+        )
+        # Coordinate update weight (scalar per edge)
+        self.coord_mlp = nn.Sequential(
+            nn.Linear(hidden_dim, 1),
+        )
+        self.out = nn.Linear(node_dim, out_dim)
+
+    def forward(self, h, x):
+        # h: (B, N, node_dim) node features
+        # x: (B, N, 3) coordinates
+        B, N, _ = h.shape
+        # All-pairs: compute messages for complete graph
+        hi = h.unsqueeze(2).expand(-1, -1, N, -1)  # (B, N, N, D)
+        hj = h.unsqueeze(1).expand(-1, N, -1, -1)  # (B, N, N, D)
+        xi = x.unsqueeze(2).expand(-1, -1, N, -1)  # (B, N, N, 3)
+        xj = x.unsqueeze(1).expand(-1, N, -1, -1)  # (B, N, N, 3)
+        # Squared distances (E(n) invariant)
+        diff = xi - xj  # (B, N, N, 3)
+        dist_sq = (diff**2).sum(dim=-1, keepdim=True)  # (B, N, N, 1)
+        # Edge messages
+        edge_input = torch.cat([hi, hj, dist_sq], dim=-1)
+        msg = self.edge_mlp(edge_input)  # (B, N, N, hidden)
+        # Aggregate messages (sum over neighbors)
+        agg = msg.sum(dim=2)  # (B, N, hidden)
+        # Update node features
+        h = h + self.node_mlp(torch.cat([h, agg], dim=-1))
+        # Update coordinates (equivariant: weighted sum of relative positions)
+        coord_weights = self.coord_mlp(msg).squeeze(-1)  # (B, N, N)
+        # x_update = sum_j w_ij * (x_i - x_j)
+        x_update = (diff * coord_weights.unsqueeze(-1)).sum(dim=2)  # (B, N, 3)
+        x = x + x_update
+        # Readout: mean pool features
+        return self.out(h.mean(dim=1))

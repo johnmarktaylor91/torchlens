@@ -3596,6 +3596,91 @@ def test_eca_model():
 
 
 # =============================================================================
+# Group U: Final Coverage — Novel Computational Patterns
+# =============================================================================
+
+
+def test_linear_attention_model():
+    model = example_models.LinearAttentionModel()
+    x = torch.rand(2, 8, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "linear_attention_model"),
+    )
+
+
+def test_simple_fno():
+    model = example_models.SimpleFNO()
+    x = torch.rand(2, 16, 3)  # (B, N_grid, in_channels)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_fno"),
+    )
+
+
+def test_perceiver_model():
+    model = example_models.PerceiverModel()
+    x = torch.rand(2, 12, 16)  # arbitrary-length input
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "perceiver_model"),
+    )
+
+
+def test_aspp_model():
+    model = example_models.ASPPModel()
+    x = torch.rand(2, 3, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "aspp_model"),
+    )
+
+
+def test_controlnet_model():
+    model = example_models.ControlNetModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "controlnet_model"),
+    )
+
+
+def test_simple_egnn():
+    model = example_models.SimpleEGNN()
+    h = torch.rand(2, 6, 8)  # node features
+    x = torch.rand(2, 6, 3)  # 3D coordinates
+    model_input = (h, x)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_egnn"),
+    )
+
+
+# =============================================================================
 # Group Z: Adversarial Edge Cases
 # =============================================================================
 

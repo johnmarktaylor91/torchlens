@@ -10,10 +10,10 @@ Public summary of TorchLens test suite outcomes. Updated after each release.
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 882 |
+| Total tests | 888 |
 | Smoke tests (`-m smoke`) | 18 |
 | Test files | 14 |
-| Example models (toy) | 241 |
+| Example models (toy) | 247 |
 | Real-world models | 183 |
 
 **Run the suite:**
@@ -30,7 +30,7 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| test_toy_models.py | 242 | API coverage on 241 example models (log, validate, visualize, metadata) |
+| test_toy_models.py | 248 | API coverage on 247 example models (log, validate, visualize, metadata) |
 | test_real_world_models.py | 183 | Real-world architectures: validation + visualization |
 | test_metadata.py | 107 | Field invariants, FLOPs, timing, RNG, func_call_location, corruption detection |
 | test_param_log.py | 70 | ParamLog, ParamAccessor, shared params, grad metadata |
@@ -49,9 +49,9 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 ## Model Compatibility
 
-### Toy Models (241 architectures)
+### Toy Models (247 architectures)
 
-All 241 example models in `tests/example_models.py` pass `validate_forward_pass`.
+All 247 example models in `tests/example_models.py` pass `validate_forward_pass`.
 
 **Core patterns:** simple feedforward (incl. LeNet-5), branching, conditionals,
 48 loop/recurrence variants, in-place ops, view mutations, edge cases.
@@ -61,7 +61,8 @@ ALiBi, slot attention, cross-attention (Perceiver-style), axial attention,
 CBAM (channel+spatial), scaled dot-product, transformer encoder/decoder,
 embedding+positional, differential attention (noise cancellation),
 relative position bias (T5-style), coordinate attention (factorized H/W),
-efficient channel attention (ECA, 1D conv).
+efficient channel attention (ECA, 1D conv), linear attention (kernel-based,
+no softmax).
 
 **Gating & skip patterns:** highway network, squeeze-and-excitation, depthwise
 separable conv, inverted residual (MobileNetV2), feature pyramid network (FPN),
@@ -78,11 +79,15 @@ normalization (AdaIN).
 **Exotic architectures:** hypernetwork (weight generation), deep equilibrium model
 (DEQ, fixed-point iteration), neural ODE (Euler integration), NTM-style memory
 augmented network, end-to-end memory network (multi-hop), SwiGLU FFN, Fourier
-mixing (FNet-style), spatial transformer network, SIREN (sinusoidal activations),
-radial basis function network (RBF).
+mixing (FNet-style), Fourier Neural Operator (spectral convolution), spatial
+transformer network, SIREN (sinusoidal activations), radial basis function
+network (RBF), Perceiver (cross-attention bottleneck).
 
 **Graph neural networks:** GCN, GAT, GraphSAGE, GIN, EdgeConv (DGCNN), graph
-transformer, Chebyshev spectral GCN.
+transformer, Chebyshev spectral GCN, E(n) equivariant GNN (EGNN).
+
+**Dense prediction:** ASPP (multi-rate dilated convolution), ControlNet-style
+parallel encoder with zero-conv injection.
 
 **Architecture patterns:** MLP-Mixer, Siamese, triplet network (metric learning),
 prototypical network (few-shot), capsule network, U-Net, TCN (temporal conv net),
@@ -235,6 +240,12 @@ The test suite explicitly covers these distinct computational motifs:
 | LSTM spatial mixing | — | Sequencer2D |
 | Pooling-based ViT | — | PiT |
 | Dual attention (spatial+channel) | — | DaViT |
+| Linear attention (kernel-based) | LinearAttentionModel | RWKV |
+| Spectral convolution (FNO) | SimpleFNO | — |
+| Cross-attention bottleneck (Perceiver) | PerceiverModel | Perceiver IO |
+| Multi-rate dilated conv (ASPP) | ASPPModel | DeepLab-v3 |
+| Parallel encoder + zero-conv (ControlNet) | ControlNetModel | — |
+| E(n) equivariant message passing | SimpleEGNN | DimeNet |
 
 ---
 
