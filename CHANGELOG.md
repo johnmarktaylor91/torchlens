@@ -1,6 +1,25 @@
 # CHANGELOG
 
 
+## v0.16.1 (2026-03-07)
+
+### Bug Fixes
+
+- **tests**: Use relative import for example_models in test_large_graphs
+  ([`e2d0ae4`](https://github.com/johnmarktaylor91/torchlens/commit/e2d0ae476e4d54c2211a3629e8958032c82b1c0f))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Harden ELK heap scaling and fix flaky signal safety test
+  ([`41b9f89`](https://github.com/johnmarktaylor91/torchlens/commit/41b9f893692bc39a4ea0342092df62b2f2ee2b38))
+
+- Bump ELK Node.js heap scaling from 8x to 16x JSON size to prevent OOM on 250k+ node graphs - Mark
+  100k node tests as @rare (too slow for regular runs) - Fix flaky TestSignalSafety: use
+  setitimer(50ms) instead of alarm(1s), increase model iterations to 50k, skip if alarm doesn't fire
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.16.0 (2026-03-07)
 
 ### Bug Fixes
