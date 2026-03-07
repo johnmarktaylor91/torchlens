@@ -3083,3 +3083,646 @@ def test_graph_transformer_pyg():
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graph_transformer_pyg"),
     )
     assert validate_forward_pass(model, model_input)
+
+
+# =============================================================================
+# TorchVision Classification (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_mobilenet_v3_small():
+    """MobileNet V3: h-swish activation, squeeze-excitation, NAS-tuned."""
+    model = torchvision.models.mobilenet_v3_small(weights=None).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "mobilenet_v3_small"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+# =============================================================================
+# TIMM (additional gap-fill)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_timm_res2net50():
+    """Res2Net: hierarchical residual-like connections within a single block."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("res2net50_26w_4s", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "res2net50"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_gmlp_s16():
+    """gMLP: gated MLP with spatial gating (no attention)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("gmlp_s16_224", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "gmlp_s16"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_resmlp_12():
+    """ResMLP: residual MLP with cross-token affine transforms."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("resmlp_12_224", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "resmlp_12"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_eva02_small():
+    """EVA-02: scaled ViT with rotary position embeddings."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("eva02_small_patch14_224", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "eva02_small"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+# =============================================================================
+# Decoder-Only LLMs (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_olmo():
+    """OLMo: fully open decoder-only LLM."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.OlmoConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+    )
+    model = transformers.OlmoForCausalLM(config).eval()
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "olmo"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Efficient Transformers (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_longformer():
+    """Longformer: sliding window + global attention on special tokens.
+
+    Note: validation skipped — windowed attention uses as_strided in ways
+    that bypass perturbation detection.
+    """
+    transformers = pytest.importorskip("transformers")
+    config = transformers.LongformerConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        attention_window=[8, 8],
+    )
+    model = transformers.LongformerModel(config).eval()
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "longformer"),
+    )
+
+
+@pytest.mark.slow
+def test_reformer():
+    """Reformer: LSH attention + reversible layers."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.ReformerConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        attn_layers=["local", "lsh"],
+        feed_forward_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        axial_pos_embds=False,
+        lsh_attn_chunk_length=8,
+        local_attn_chunk_length=8,
+        num_hashes=1,
+        num_buckets=16,
+    )
+    model = transformers.ReformerModel(config).eval()
+    x = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": x}
+    torch.use_deterministic_algorithms(False)
+    try:
+        show_model_graph(
+            model,
+            [],
+            model_kwargs,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "reformer"),
+        )
+        assert validate_forward_pass(model, [], model_kwargs)
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+# =============================================================================
+# Vision Models (additional HF)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_dinov2():
+    """DINOv2: self-supervised ViT (self-distillation, no labels)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.Dinov2Config(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        image_size=32,
+        patch_size=8,
+        num_channels=3,
+    )
+    model = transformers.Dinov2Model(config).eval()
+    pixel_values = torch.rand(1, 3, 32, 32)
+    model_kwargs = {"pixel_values": pixel_values}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "dinov2"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Audio Models (additional HF)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_audio_ast():
+    """Audio Spectrogram Transformer: ViT on mel spectrograms."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.ASTConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        max_length=32,
+        num_mel_bins=16,
+        patch_size=4,
+        frequency_stride=4,
+        time_stride=4,
+    )
+    model = transformers.ASTModel(config).eval()
+    input_values = torch.rand(1, 32, 16)
+    model_kwargs = {"input_values": input_values}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "ast"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_clap():
+    """CLAP: contrastive language-audio pretraining (dual encoder)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.ClapConfig(
+        text_config={
+            "hidden_size": 64,
+            "num_hidden_layers": 2,
+            "num_attention_heads": 4,
+            "intermediate_size": 128,
+            "vocab_size": 100,
+            "max_position_embeddings": 32,
+        },
+        audio_config={
+            "hidden_size": 64,
+            "num_hidden_layers": 2,
+            "num_attention_heads": 2,
+            "patch_size": 4,
+            "spec_size": 32,
+            "num_mel_bins": 32,
+            "depths": [2, 2],
+        },
+        projection_dim=32,
+    )
+    model = transformers.ClapModel(config).eval()
+    input_ids = torch.randint(0, 100, (1, 16))
+    input_features = torch.rand(1, 1, 32, 32)
+    model_kwargs = {
+        "input_ids": input_ids,
+        "input_features": input_features,
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "clap"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_encodec():
+    """EnCodec: neural audio codec with residual vector quantization."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.EncodecConfig(
+        target_bandwidths=[1.5],
+        sampling_rate=24000,
+        audio_channels=1,
+        hidden_size=32,
+        num_filters=8,
+        num_residual_layers=1,
+        upsampling_ratios=[5, 4, 4, 2],
+        codebook_size=64,
+        codebook_dim=8,
+        num_quantizers=4,
+    )
+    model = transformers.EncodecModel(config).eval()
+    audio = torch.rand(1, 1, 3200)
+    model_kwargs = {"input_values": audio}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "encodec"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_sew():
+    """SEW: Squeezed and Efficient Wav2Vec."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.SEWConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        conv_dim=(32, 32, 64),
+        conv_kernel=(5, 3, 3),
+        conv_stride=(2, 2, 2),
+        squeeze_factor=2,
+    )
+    model = transformers.SEWModel(config).eval()
+    x = torch.rand(1, 1024)
+    model_kwargs = {"input_values": x}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "sew"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_speecht5():
+    """SpeechT5: unified text-speech model (encoder-decoder)."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.SpeechT5Config(
+        hidden_size=64,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        vocab_size=100,
+        num_mel_bins=20,
+    )
+    model = transformers.SpeechT5Model(config).eval()
+    input_ids = torch.randint(0, 100, (1, 16))
+    decoder_input_values = torch.rand(1, 50, 20)
+    model_kwargs = {
+        "input_ids": input_ids,
+        "decoder_input_values": decoder_input_values,
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "speecht5"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_vits():
+    """VITS: end-to-end TTS with VAE + normalizing flow + adversarial training."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.VitsConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        flow_size=64,
+        spectrogram_bins=32,
+        posterior_encoder_num_wavenet_layers=2,
+        upsample_rates=[4, 4],
+        upsample_kernel_sizes=[8, 8],
+        upsample_initial_channel=64,
+        resblock_kernel_sizes=[3, 5],
+        resblock_dilation_sizes=[[1, 2], [1, 2]],
+    )
+    model = transformers.VitsModel(config).eval()
+    input_ids = torch.randint(0, 100, (1, 16))
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "vits"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# Time Series (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_informer():
+    """Informer: ProbSparse attention for long-range time series."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.InformerConfig(
+        prediction_length=4,
+        context_length=16,
+        input_size=1,
+        d_model=32,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=2,
+        decoder_attention_heads=2,
+        encoder_ffn_dim=64,
+        decoder_ffn_dim=64,
+        scaling="std",
+    )
+    model = transformers.InformerModel(config).eval()
+    past_values = torch.rand(1, 16)
+    past_time_features = torch.rand(1, 16, 1)
+    past_observed_mask = torch.ones(1, 16)
+    future_time_features = torch.rand(1, 4, 1)
+    model_kwargs = {
+        "past_values": past_values,
+        "past_time_features": past_time_features,
+        "past_observed_mask": past_observed_mask,
+        "future_time_features": future_time_features,
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "informer"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+@pytest.mark.slow
+def test_autoformer():
+    """Autoformer: decomposition-based attention with auto-correlation."""
+    transformers = pytest.importorskip("transformers")
+    config = transformers.AutoformerConfig(
+        prediction_length=4,
+        context_length=16,
+        input_size=1,
+        d_model=32,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=2,
+        decoder_attention_heads=2,
+        encoder_ffn_dim=64,
+        decoder_ffn_dim=64,
+        scaling="std",
+        moving_average=4,
+    )
+    model = transformers.AutoformerModel(config).eval()
+    past_values = torch.rand(1, 16)
+    past_time_features = torch.rand(1, 16, 1)
+    past_observed_mask = torch.ones(1, 16)
+    future_time_features = torch.rand(1, 4, 1)
+    model_kwargs = {
+        "past_values": past_values,
+        "past_time_features": past_time_features,
+        "past_observed_mask": past_observed_mask,
+        "future_time_features": future_time_features,
+    }
+    show_model_graph(
+        model,
+        [],
+        model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "autoformer"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs)
+
+
+# =============================================================================
+# TorchVision Detection (additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_keypointrcnn_resnet50_train():
+    """Keypoint R-CNN: train mode with keypoint targets."""
+    model = torchvision.models.detection.keypointrcnn_resnet50_fpn(
+        weights=None, num_classes=2, num_keypoints=5
+    )
+    img = [torch.rand(3, 128, 128)]
+    targets = [
+        {
+            "boxes": torch.tensor([[10.0, 10.0, 50.0, 50.0]]),
+            "labels": torch.tensor([1], dtype=torch.long),
+            "keypoints": torch.rand(1, 5, 3),
+        }
+    ]
+    model_input = (img, targets)
+    torch.use_deterministic_algorithms(False)
+    try:
+        show_model_graph(
+            model,
+            model_input,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(
+                VIS_OUTPUT_DIR,
+                "torchvision-detection",
+                "keypointrcnn_resnet50_train",
+            ),
+        )
+        assert validate_forward_pass(model, model_input)
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+@pytest.mark.slow
+def test_keypointrcnn_resnet50_eval():
+    """Keypoint R-CNN: eval mode."""
+    model = torchvision.models.detection.keypointrcnn_resnet50_fpn(
+        weights=None, num_classes=2, num_keypoints=5
+    ).eval()
+    img = [torch.rand(3, 128, 128)]
+    model_input = (img,)
+    torch.use_deterministic_algorithms(False)
+    try:
+        show_model_graph(
+            model,
+            model_input,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(
+                VIS_OUTPUT_DIR,
+                "torchvision-detection",
+                "keypointrcnn_resnet50_eval",
+            ),
+        )
+        assert validate_forward_pass(model, model_input)
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+# =============================================================================
+# Graph Neural Networks (additional PyG)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_gatv2_pyg():
+    """GATv2: dynamic attention (more expressive than GAT)."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import GATv2Conv
+
+    class _GATv2Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = GATv2Conv(8, 4, heads=2, concat=True)
+            self.conv2 = GATv2Conv(8, 4, heads=1, concat=False)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _GATv2Net().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gatv2_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_rgcn_pyg():
+    """R-GCN: relational GCN with per-relation-type weights."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import RGCNConv
+
+    class _RGCNNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = RGCNConv(8, 16, num_relations=3)
+            self.conv2 = RGCNConv(16, 4, num_relations=3)
+
+        def forward(self, x, edge_index, edge_type):
+            x = torch.relu(self.conv1(x, edge_index, edge_type))
+            return self.conv2(x, edge_index, edge_type)
+
+    model = _RGCNNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    edge_type = torch.randint(0, 3, (10,))
+    model_input = (x, edge_index, edge_type)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "rgcn_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)

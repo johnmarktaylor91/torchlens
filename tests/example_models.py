@@ -4176,3 +4176,188 @@ class FourierMixingModel(nn.Module):
         x = self.norm1(x + h)
         x = self.norm2(x + self.ffn(x))
         return self.out(x.mean(dim=1))
+
+
+# ── Group S: Gap-fill models ─────────────────────────────────────────────
+
+
+class LeNet5(nn.Module):
+    """The original CNN (LeCun 1998). Pure sequential conv→pool→conv→pool→FC."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 6, 5)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.fc1 = nn.Linear(16 * 5 * 5, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = nn.functional.avg_pool2d(x, 2)
+        x = torch.relu(self.conv2(x))
+        x = nn.functional.avg_pool2d(x, 2)
+        x = x.flatten(1)
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return self.fc3(x)
+
+
+class BiLSTMModel(nn.Module):
+    """Bidirectional LSTM — forward + backward, concatenated outputs."""
+
+    def __init__(self, input_dim=8, hidden_dim=16, num_classes=4):
+        super().__init__()
+        self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(hidden_dim * 2, num_classes)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        return self.fc(out[:, -1, :])
+
+
+class Seq2SeqWithAttention(nn.Module):
+    """Encoder-decoder with Bahdanau (additive) attention."""
+
+    def __init__(self, input_dim=8, hidden_dim=16, output_dim=4, seq_len=6):
+        super().__init__()
+        self.encoder = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+        self.decoder_cell = nn.LSTMCell(output_dim + hidden_dim, hidden_dim)
+        self.attn_W = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.attn_v = nn.Linear(hidden_dim, 1, bias=False)
+        self.out_proj = nn.Linear(hidden_dim, output_dim)
+        self.seq_len = seq_len
+
+    def forward(self, x):
+        enc_out, (h, c) = self.encoder(x)
+        h, c = h.squeeze(0), c.squeeze(0)
+        batch = x.size(0)
+        dec_input = torch.zeros(batch, self.out_proj.out_features, device=x.device)
+        outputs = []
+        for _ in range(self.seq_len):
+            h_expand = h.unsqueeze(1).expand_as(enc_out)
+            energy = torch.tanh(self.attn_W(torch.cat([enc_out, h_expand], dim=-1)))
+            scores = self.attn_v(energy).squeeze(-1)
+            weights = torch.softmax(scores, dim=-1)
+            context = (weights.unsqueeze(-1) * enc_out).sum(dim=1)
+            h, c = self.decoder_cell(torch.cat([dec_input, context], dim=-1), (h, c))
+            dec_input = self.out_proj(h)
+            outputs.append(dec_input)
+        return torch.stack(outputs, dim=1)
+
+
+class TripletNetwork(nn.Module):
+    """Three shared-weight paths: anchor, positive, negative for metric learning."""
+
+    def __init__(self, input_dim=16, embed_dim=8):
+        super().__init__()
+        self.encoder = nn.Sequential(nn.Linear(input_dim, 32), nn.ReLU(), nn.Linear(32, embed_dim))
+
+    def forward(self, anchor, positive, negative):
+        e_a = self.encoder(anchor)
+        e_p = self.encoder(positive)
+        e_n = self.encoder(negative)
+        return e_a, e_p, e_n
+
+
+class BarlowTwinsModel(nn.Module):
+    """Twin encoders with cross-correlation redundancy reduction."""
+
+    def __init__(self, input_dim=16, proj_dim=8):
+        super().__init__()
+        self.encoder = nn.Sequential(nn.Linear(input_dim, 32), nn.ReLU(), nn.Linear(32, proj_dim))
+
+    def forward(self, x1, x2):
+        z1 = self.encoder(x1)
+        z2 = self.encoder(x2)
+        z1_norm = (z1 - z1.mean(0)) / (z1.std(0) + 1e-5)
+        z2_norm = (z2 - z2.mean(0)) / (z2.std(0) + 1e-5)
+        cross_corr = (z1_norm.T @ z2_norm) / z1.size(0)
+        return cross_corr
+
+
+class DeepCrossNetwork(nn.Module):
+    """Explicit feature crossing layers + deep MLP (recommender pattern)."""
+
+    def __init__(self, input_dim=16, num_cross_layers=3, deep_dim=32):
+        super().__init__()
+        self.cross_weights = nn.ParameterList(
+            [nn.Parameter(torch.randn(input_dim)) for _ in range(num_cross_layers)]
+        )
+        self.cross_biases = nn.ParameterList(
+            [nn.Parameter(torch.zeros(input_dim)) for _ in range(num_cross_layers)]
+        )
+        self.deep = nn.Sequential(
+            nn.Linear(input_dim, deep_dim),
+            nn.ReLU(),
+            nn.Linear(deep_dim, deep_dim),
+            nn.ReLU(),
+        )
+        self.final = nn.Linear(input_dim + deep_dim, 1)
+
+    def forward(self, x):
+        x0 = x
+        x_cross = x
+        for w, b in zip(self.cross_weights, self.cross_biases):
+            x_cross = x0 * (x_cross * w).sum(dim=-1, keepdim=True) + b + x_cross
+        x_deep = self.deep(x)
+        return self.final(torch.cat([x_cross, x_deep], dim=-1))
+
+
+class AxialAttentionModel(nn.Module):
+    """Decomposed attention: height-axis then width-axis (sequential)."""
+
+    def __init__(self, dim=16, heads=2):
+        super().__init__()
+        self.embed = nn.Conv2d(3, dim, 1)
+        self.height_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
+        self.width_attn = nn.MultiheadAttention(dim, heads, batch_first=True)
+        self.norm1 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
+        self.out = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(dim, 4)
+
+    def forward(self, x):
+        x = self.embed(x)
+        B, C, H, W = x.shape
+        # Height-axis attention: (B*W, H, C)
+        xh = x.permute(0, 3, 2, 1).reshape(B * W, H, C)
+        xh = self.norm1(xh + self.height_attn(xh, xh, xh)[0])
+        xh = xh.reshape(B, W, H, C).permute(0, 3, 2, 1)
+        # Width-axis attention: (B*H, W, C)
+        xw = xh.permute(0, 2, 3, 1).reshape(B * H, W, C)
+        xw = self.norm2(xw + self.width_attn(xw, xw, xw)[0])
+        xw = xw.reshape(B, H, W, C).permute(0, 3, 1, 2)
+        return self.fc(self.out(xw).flatten(1))
+
+
+class CBAMBlock(nn.Module):
+    """CBAM: channel attention (pool→FC→sigmoid) + spatial attention (pool→conv→sigmoid)."""
+
+    def __init__(self, channels=16, reduction=4):
+        super().__init__()
+        self.conv = nn.Conv2d(3, channels, 3, padding=1)
+        # Channel attention
+        self.ca_fc1 = nn.Linear(channels, channels // reduction)
+        self.ca_fc2 = nn.Linear(channels // reduction, channels)
+        # Spatial attention
+        self.sa_conv = nn.Conv2d(2, 1, 7, padding=3)
+        self.out = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(channels, 4)
+
+    def forward(self, x):
+        x = torch.relu(self.conv(x))
+        # Channel attention
+        avg_pool = x.mean(dim=[2, 3])
+        max_pool = x.amax(dim=[2, 3])
+        ca = torch.sigmoid(
+            self.ca_fc2(torch.relu(self.ca_fc1(avg_pool)))
+            + self.ca_fc2(torch.relu(self.ca_fc1(max_pool)))
+        )
+        x = x * ca.unsqueeze(-1).unsqueeze(-1)
+        # Spatial attention
+        sa_avg = x.mean(dim=1, keepdim=True)
+        sa_max = x.amax(dim=1, keepdim=True)
+        sa = torch.sigmoid(self.sa_conv(torch.cat([sa_avg, sa_max], dim=1)))
+        x = x * sa
+        return self.fc(self.out(x).flatten(1))

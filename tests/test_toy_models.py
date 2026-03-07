@@ -3209,6 +3209,118 @@ def test_fourier_mixing():
 
 
 # =============================================================================
+# Group S: Gap-Fill Models
+# =============================================================================
+
+
+def test_lenet5():
+    model = example_models.LeNet5()
+    x = torch.rand(2, 1, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "lenet5"),
+    )
+
+
+def test_bilstm():
+    model = example_models.BiLSTMModel()
+    x = torch.rand(4, 10, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "bilstm"),
+    )
+
+
+def test_seq2seq_attention():
+    model = example_models.Seq2SeqWithAttention()
+    x = torch.rand(2, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "seq2seq_attention"),
+    )
+
+
+def test_triplet_network():
+    model = example_models.TripletNetwork()
+    anchor = torch.rand(4, 16)
+    positive = torch.rand(4, 16)
+    negative = torch.rand(4, 16)
+    assert validate_forward_pass(model, (anchor, positive, negative))
+    show_model_graph(
+        model,
+        (anchor, positive, negative),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "triplet_network"),
+    )
+
+
+def test_barlow_twins():
+    model = example_models.BarlowTwinsModel()
+    x1 = torch.rand(8, 16)
+    x2 = torch.rand(8, 16)
+    assert validate_forward_pass(model, (x1, x2))
+    show_model_graph(
+        model,
+        (x1, x2),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "barlow_twins"),
+    )
+
+
+def test_deep_cross_network():
+    model = example_models.DeepCrossNetwork()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "deep_cross_network"),
+    )
+
+
+def test_axial_attention():
+    model = example_models.AxialAttentionModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "axial_attention"),
+    )
+
+
+def test_cbam():
+    model = example_models.CBAMBlock()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "cbam"),
+    )
+
+
+# =============================================================================
 # Group Z: Adversarial Edge Cases
 # =============================================================================
 

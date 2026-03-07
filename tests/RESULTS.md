@@ -10,11 +10,11 @@ Public summary of TorchLens test suite outcomes. Updated after each release.
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 805 |
+| Total tests | 834 |
 | Smoke tests (`-m smoke`) | 18 |
 | Test files | 14 |
-| Example models (toy) | 213 |
-| Real-world models | 129 |
+| Example models (toy) | 221 |
+| Real-world models | 150 |
 
 **Run the suite:**
 ```bash
@@ -30,8 +30,8 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| test_toy_models.py | 214 | API coverage on 213 example models (log, validate, visualize, metadata) |
-| test_real_world_models.py | 129 | Real-world architectures: validation + visualization |
+| test_toy_models.py | 222 | API coverage on 221 example models (log, validate, visualize, metadata) |
+| test_real_world_models.py | 150 | Real-world architectures: validation + visualization |
 | test_metadata.py | 107 | Field invariants, FLOPs, timing, RNG, func_call_location, corruption detection |
 | test_param_log.py | 70 | ParamLog, ParamAccessor, shared params, grad metadata |
 | test_decoration.py | 61 | Toggle state, detached imports, pause_logging, JIT compat, signal safety |
@@ -49,16 +49,17 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 ## Model Compatibility
 
-### Toy Models (213 architectures)
+### Toy Models (221 architectures)
 
-All 213 example models in `tests/example_models.py` pass `validate_forward_pass`.
+All 221 example models in `tests/example_models.py` pass `validate_forward_pass`.
 
-**Core patterns:** simple feedforward, branching, conditionals, 48 loop/recurrence
-variants, in-place ops, view mutations, edge cases.
+**Core patterns:** simple feedforward (incl. LeNet-5), branching, conditionals,
+48 loop/recurrence variants, in-place ops, view mutations, edge cases.
 
 **Attention variants:** multi-head, multi-query (MQA), grouped-query (GQA), RoPE,
-ALiBi, slot attention, cross-attention (Perceiver-style), scaled dot-product,
-transformer encoder/decoder, embedding+positional.
+ALiBi, slot attention, cross-attention (Perceiver-style), axial attention,
+CBAM (channel+spatial), scaled dot-product, transformer encoder/decoder,
+embedding+positional.
 
 **Gating & skip patterns:** highway network, squeeze-and-excitation, depthwise
 separable conv, inverted residual (MobileNetV2), feature pyramid network (FPN),
@@ -67,7 +68,10 @@ residual blocks, shared-param branching.
 **Generative & self-supervised:** VAE, hierarchical VAE, VQ-VAE, beta-VAE, CVAE,
 GAN (generator + discriminator), diffusion, normalizing flow, WaveNet-style gated
 convolutions, PixelCNN masked convolutions, SimCLR contrastive, BYOL-style
-stop-gradient, adaptive instance normalization (AdaIN).
+stop-gradient, Barlow Twins (cross-correlation), adaptive instance normalization
+(AdaIN).
+
+**Sequence models:** BiLSTM (bidirectional), seq2seq with Bahdanau attention.
 
 **Exotic architectures:** hypernetwork (weight generation), deep equilibrium model
 (DEQ, fixed-point iteration), neural ODE (Euler integration), NTM-style memory
@@ -77,10 +81,11 @@ network.
 **Graph neural networks:** GCN, GAT, GraphSAGE, GIN, EdgeConv (DGCNN), graph
 transformer.
 
-**Architecture patterns:** MLP-Mixer, Siamese, capsule network, U-Net, TCN
-(temporal conv net), super-resolution (PixelShuffle), PointNet, actor-critic,
-two-tower recommender, depth estimator, dueling DQN, mixture of experts (MoE),
-RMS normalization, sparse/pruned networks.
+**Architecture patterns:** MLP-Mixer, Siamese, triplet network (metric learning),
+capsule network, U-Net, TCN (temporal conv net), super-resolution (PixelShuffle),
+PointNet, actor-critic, two-tower recommender, deep & cross network (recommender),
+depth estimator, dueling DQN, mixture of experts (MoE), RMS normalization,
+sparse/pruned networks.
 
 **Autoencoders:** vanilla, convolutional, sparse, denoising, VQ-VAE, beta-VAE, CVAE.
 
@@ -90,35 +95,36 @@ RMS normalization, sparse/pruned networks.
 
 | Category | Models | Status |
 |----------|--------|--------|
-| **TorchVision Classification** | AlexNet, VGG16, ViT, GoogLeNet, ResNet50, ConvNeXt, DenseNet121, EfficientNet-B6, SqueezeNet, MobileNetV2, Wide ResNet, MNASNet, ShuffleNet, ResNeXt, RegNet, Swin-v2-B, MaxViT, Inception-v3 | 18/18 pass |
+| **TorchVision Classification** | AlexNet, VGG16, ViT, GoogLeNet, ResNet50, ConvNeXt, DenseNet121, EfficientNet-B6, SqueezeNet, MobileNetV2, MobileNetV3, Wide ResNet, MNASNet, ShuffleNet, ResNeXt, RegNet, Swin-v2-B, MaxViT, Inception-v3 | 19/19 pass |
 | **CORnet** | Z, S, R, RT | 4/4 pass |
 | **timm (original)** | BEiT, GluonResNeXt, ECAResNet, MobileViT, ADV-Inception, CaiT, CoAT, ConViT, DarkNet, GhostNet, MixNet, PoolFormer, ResNeSt, EdgeNeXt, HardCoreNAS, SEMNASNet, XCiT, SEResNet | 18/18 pass |
-| **timm (additional)** | HRNet, EfficientNetV2, LeViT, CrossViT, PVT-v2, Twins-SVT, FocalNet | 7/7 pass |
-| **Audio** | Conv-TasNet, Wav2Letter, HuBERT, Wav2Vec2, DeepSpeech, Conformer, Whisper-tiny | 7/7 pass |
+| **timm (additional)** | HRNet, EfficientNetV2, LeViT, CrossViT, PVT-v2, Twins-SVT, FocalNet, Res2Net, gMLP, ResMLP, EVA-02 | 11/11 pass |
+| **Audio (original)** | Conv-TasNet, Wav2Letter, HuBERT, Wav2Vec2, DeepSpeech, Conformer, Whisper-tiny | 7/7 pass |
+| **Audio (additional)** | AST, CLAP, EnCodec, SEW, SpeechT5, VITS | 6/6 pass |
 | **Language (original)** | LSTM, RNN, GPT-2, BERT, DistilBERT, ELECTRA, T5-small, BART, RoBERTa, Sentence-BERT | 10/10 pass |
-| **Decoder-Only LLMs** | LLaMA, Mistral, Phi, Gemma, Qwen2, Falcon, BLOOM, OPT | 8/8 pass |
+| **Decoder-Only LLMs** | LLaMA, Mistral, Phi, Gemma, Qwen2, Falcon, BLOOM, OPT, OLMo | 9/9 pass |
 | **Encoder-Only (additional)** | ALBERT, DeBERTa-v2, XLM-RoBERTa | 3/3 pass |
 | **Encoder-Decoder (additional)** | Pegasus, LED | 2/2 pass |
-| **Efficient Transformers** | FNet, Nystromformer, BigBird | 3/3 pass |
+| **Efficient Transformers** | FNet, Nystromformer, BigBird, Longformer, Reformer | 5/5 pass |
 | **State Space Models** | Mamba, Mamba-2, RWKV, Falcon-Mamba | 4/4 pass |
 | **Mixture of Experts** | Mixtral, Switch Transformer, MoE (toy) | 3/3 pass |
 | **Autoencoders** | ViT-MAE (ForPreTraining) | 1/1 pass |
 | **Multimodal / Special** | Stable Diffusion (UNet), StyleTTS, QML, Lightning, CLIP, BLIP, ViT-MAE | 7/7 pass |
-| **Vision Transformers (HF)** | DeiT, CvT, SegFormer | 3/3 pass |
+| **Vision Transformers (HF)** | DeiT, CvT, SegFormer, DINOv2 | 4/4 pass |
 | **Perceiver** | Perceiver IO | 1/1 pass |
 | **Segmentation** | DeepLab-v3 (ResNet50), DeepLab-v3 (MobileNet), LRASPP, FCN-ResNet50 | 4/4 pass |
 | **Detection (original)** | Faster R-CNN (train+eval), FCOS (train+eval), RetinaNet (train+eval), SSD300 (train+eval) | 8/8 pass |
-| **Detection (additional)** | DETR, Mask R-CNN (train+eval) | 3/3 pass |
+| **Detection (additional)** | DETR, Mask R-CNN (train+eval), Keypoint R-CNN (train+eval) | 5/5 pass |
 | **Quantized** | ResNet50 (quantized) | 1/1 pass |
 | **Video** | R(2+1)D-18, MC3-18, MViT-v2-S, R3D-18, S3D | 5/5 pass |
 | **Optical Flow** | RAFT-Small, RAFT-Large | 2/2 pass |
-| **Time Series** | PatchTST | 1/1 pass |
+| **Time Series** | PatchTST, Informer, Autoformer | 3/3 pass |
 | **Reinforcement Learning** | Decision Transformer | 1/1 pass |
-| **Graph Neural Networks** | DimeNet, GraphSAGE (PyG), GIN (PyG), Graph Transformer (PyG) | 4/4 pass |
+| **Graph Neural Networks** | DimeNet, GraphSAGE (PyG), GIN (PyG), Graph Transformer (PyG), GATv2 (PyG), R-GCN (PyG) | 6/6 pass |
 | **Other** | Taskonomy | 1/1 pass |
-| | **Total** | **129/129 pass** |
+| | **Total** | **150/150 pass** |
 
-*4 tests (Taskonomy, DimeNet, GraphSAGE-PyG, GIN-PyG, Graph-Transformer-PyG) require optional packages and may show as SKIPPED.*
+*Tests requiring optional packages (torch_geometric, taskonomy) may show as SKIPPED.*
 
 ---
 
@@ -161,9 +167,28 @@ The test suite explicitly covers these distinct computational motifs:
 | Highway gating | HighwayNetwork | — |
 | Graph message passing | SimpleGCN, GraphSAGEModel, GINModel | DimeNet, GraphSAGE-PyG |
 | Graph attention | SimpleGAT, GraphTransformerModel | Graph Transformer (PyG) |
-| Sliding window attention | — | Mistral |
+| Sliding window attention | — | Mistral, Longformer |
 | Disentangled attention | — | DeBERTa-v2 |
 | Nystrom attention approximation | — | Nystromformer |
+| LSH attention (reversible) | — | Reformer |
+| Axial attention | AxialAttentionModel | — |
+| Channel+spatial attention (CBAM) | CBAMBlock | — |
+| Bidirectional RNN | BiLSTMModel, BidirectionalGRUModel | — |
+| Seq2seq + Bahdanau attention | Seq2SeqWithAttention | — |
+| Triplet (metric learning) | TripletNetwork | — |
+| Cross-correlation (Barlow Twins) | BarlowTwinsModel | — |
+| Feature crossing (DCN) | DeepCrossNetwork | — |
+| Hierarchical residual (Res2Net) | — | Res2Net |
+| Spatial gating MLP | — | gMLP, ResMLP |
+| Contrastive audio-text | — | CLAP |
+| Neural audio codec (RVQ) | — | EnCodec |
+| TTS (flow + adversarial) | — | VITS |
+| Audio spectrogram ViT | — | AST |
+| Relational message passing | — | R-GCN (PyG) |
+| Dynamic graph attention (GATv2) | — | GATv2 (PyG) |
+| Keypoint detection | — | Keypoint R-CNN |
+| Time series decomposition | — | Autoformer, Informer |
+| Self-supervised ViT | — | DINOv2 |
 
 ---
 
