@@ -1,6 +1,32 @@
 # CHANGELOG
 
 
+## v0.15.13 (2026-03-07)
+
+### Performance Improvements
+
+- **capture**: Speed-optimized defaults and remaining bottleneck elimination
+  ([#110](https://github.com/johnmarktaylor91/torchlens/pull/110),
+  [`7c9a00c`](https://github.com/johnmarktaylor91/torchlens/commit/7c9a00cdec26258090cf6be1c93869cb82aa351a))
+
+Seven targeted optimizations that reduce Swin-T log_forward_pass from 5.91s to 1.55s (3.8x):
+
+1. Unified save_source_context flag (was save_call_stacks) — controls both per-function call stacks
+  AND module source/signature fetching. Default: False. 2. save_rng_states=False default — skips
+  per-op RNG state capture. Auto-enabled by validate_forward_pass. Uses torch_only=True when enabled
+  (skips Python/NumPy RNG). 3. Inline isinstance in wrapped_func — _collect_tensor_args() and
+  _collect_output_tensors() replace BFS crawls for flat arg/output cases. Falls back to BFS only for
+  nested containers. 4. __dict__ scan for buffer prep/cleanup — replaces iter_accessible_attributes
+  (dir() + MRO walk) with direct __dict__ iteration. 10x faster for buffer tagging and tensor
+  cleanup. 5. Hoisted warnings.catch_warnings() — moved from per-attribute (46K entries) to caller
+  level. 6. Lazy module metadata — _get_class_metadata skips
+  inspect.getsourcelines/inspect.signature when save_source_context=False. Only captures class name
+  and docstrings. 7. Module-level import weakref — moved from per-call in _trim_and_reorder to
+  module level.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.12 (2026-03-06)
 
 ### Performance Improvements
