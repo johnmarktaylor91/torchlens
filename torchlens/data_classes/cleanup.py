@@ -26,6 +26,17 @@ from ..utils.collections import remove_entry_from_list
 from .layer_pass_log import LayerPassLog
 
 
+def release_param_refs(self) -> None:
+    """Release nn.Parameter references from all ParamLogs.
+
+    After calling this, gradients already cached are still accessible,
+    but new gradients won't be detected. The model's parameters can be
+    garbage collected independently of the ModelLog.
+    """
+    for pl in self.param_logs:
+        pl.release_param_ref()
+
+
 def cleanup(self) -> None:
     """Delete all log entries, break circular references, and free GPU memory.
 
@@ -33,6 +44,10 @@ def cleanup(self) -> None:
     session.  After cleanup, the ModelLog is effectively empty and should
     not be used further.
     """
+    # GC-1: Release parameter references to allow model GC.
+    if hasattr(self, "param_logs"):
+        for pl in self.param_logs:
+            pl.release_param_ref()
     # First, clear all attributes from each LayerPassLog entry.
     # This breaks the LayerPassLog -> ModelLog circular reference
     # (via source_model_log) without needing per-entry reference removal.
@@ -54,6 +69,7 @@ def cleanup(self) -> None:
         "_module_metadata",
         "_module_forward_args",
         "_module_build_data",
+        "_param_logs_by_module",
         "layer_logs",
         "layer_dict_all_keys",
         "layer_dict_main_keys",
