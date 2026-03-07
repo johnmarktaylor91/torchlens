@@ -90,12 +90,21 @@ class TestRandomGraphModel:
         count = _count_nodes(model, x)
         assert 90000 < count < 110000, f"Expected ~100000 nodes, got {count}"
 
+    @pytest.mark.slow
     @pytest.mark.rare
     def test_250k_nodes(self):
         model = RandomGraphModel(target_nodes=250000, seed=42)
         x = torch.randn(2, 64)
         count = _count_nodes(model, x)
         assert 225000 < count < 275000, f"Expected ~250000 nodes, got {count}"
+
+    @pytest.mark.slow
+    @pytest.mark.rare
+    def test_1M_nodes(self):
+        model = RandomGraphModel(target_nodes=1000000, seed=42)
+        x = torch.randn(2, 64)
+        count = _count_nodes(model, x)
+        assert 900000 < count < 1100000, f"Expected ~1000000 nodes, got {count}"
 
     def test_deterministic(self):
         """Same seed produces same structure."""
@@ -417,8 +426,23 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
+            vis_fileformat="svg",
             save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_250k"),
+        )
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    @pytest.mark.rare
+    def test_elk_renders_1M(self):
+        """ELK engine works for 1M-node graphs. The trophy file."""
+        model = RandomGraphModel(target_nodes=1000000, seed=42)
+        show_model_graph(
+            model,
+            torch.randn(2, 64),
+            vis_node_placement="elk",
+            vis_fileformat="svg",
+            save_only=True,
+            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_1M"),
         )
 
     def test_vis_node_placement_forwarded(self):
@@ -432,6 +456,77 @@ class TestLargeGraphRendering:
             vis_node_placement="dot",
         )
         ml.cleanup()
+
+
+# -----------------------------------------------
+# dot vs ELK aesthetic comparison (manual inspection)
+# -----------------------------------------------
+
+
+class TestDotVsElkComparison:
+    """Generate side-by-side dot and ELK renders for visual comparison.
+
+    Run with: pytest tests/test_large_graphs.py -k "TestDotVsElk" -v
+    Then inspect tests/test_outputs/visualizations/large/compare_*/
+    """
+
+    COMPARE_DIR = os.path.join(VIS_OUTPUT_DIR, "dot_vs_elk")
+
+    @pytest.fixture(autouse=True)
+    def _ensure_compare_dir(self):
+        os.makedirs(self.COMPARE_DIR, exist_ok=True)
+
+    def _render_both(self, model, x, name):
+        """Render with both dot and ELK, save side by side."""
+        # dot
+        show_model_graph(
+            model,
+            x,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_node_placement="dot",
+            vis_outpath=os.path.join(self.COMPARE_DIR, f"{name}_dot"),
+        )
+        # ELK
+        show_model_graph(
+            model,
+            x,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_node_placement="elk",
+            vis_outpath=os.path.join(self.COMPARE_DIR, f"{name}_elk"),
+        )
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    def test_compare_15_nodes(self):
+        """Tiny model — easiest to spot aesthetic differences."""
+        model = RandomGraphModel(target_nodes=15, seed=42, nesting_depth=1)
+        self._render_both(model, torch.randn(2, 64), "15n")
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    def test_compare_100_nodes(self):
+        """Small model with moderate nesting."""
+        model = RandomGraphModel(target_nodes=100, seed=42, nesting_depth=2)
+        self._render_both(model, torch.randn(2, 64), "100n")
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    def test_compare_500_nodes(self):
+        """Medium model — complexity where differences become visible."""
+        model = RandomGraphModel(target_nodes=500, seed=42, nesting_depth=2)
+        self._render_both(model, torch.randn(2, 64), "500n")
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    def test_compare_1k_nodes(self):
+        """Larger model — still renderable by both engines."""
+        model = RandomGraphModel(target_nodes=1000, seed=42, nesting_depth=3)
+        self._render_both(model, torch.randn(2, 64), "1k")
+
+    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
+    @pytest.mark.slow
+    def test_compare_3k_nodes(self):
+        """Near the ELK threshold — last size where dot is comfortable."""
+        model = RandomGraphModel(target_nodes=3000, seed=42, nesting_depth=3)
+        self._render_both(model, torch.randn(2, 64), "3k")
 
 
 # -----------------------------------------------

@@ -173,6 +173,12 @@ def render_graph(
     else:
         raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
 
+    # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
+    from .elk_layout import get_node_placement_engine
+
+    num_nodes = len(entries_to_plot)
+    engine = get_node_placement_engine(vis_node_placement, num_nodes)
+
     if self.total_params == 0:
         params_detail = "0 params"
     elif self.total_params_frozen == 0:
@@ -193,6 +199,29 @@ def render_graph(
         f"tensors total ({self.tensor_fsize_total_nice})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
+
+    # ELK fast path: skip graphviz.Digraph construction entirely.
+    # Generates DOT directly with ELK positions and cluster subgraphs (module boxes).
+    if engine == "elk":
+        from .elk_layout import render_elk_direct, render_with_sfdp
+
+        try:
+            return render_elk_direct(
+                self,
+                entries_to_plot,
+                vis_opt,
+                vis_nesting_depth,
+                show_buffer_layers,
+                overrides,
+                vis_outpath,
+                vis_fileformat,
+                save_only,
+                graph_caption,
+                rankdir,
+            )
+        except RuntimeError as e:
+            warnings.warn(f"ELK layout failed ({e}), falling back to sfdp.")
+            engine = "sfdp"  # fall through to build graphviz.Digraph for sfdp
 
     dot = graphviz.Digraph(
         name=self.model_name,
@@ -258,34 +287,13 @@ def render_graph(
 
         display(dot)
 
-    # Resolve the layout engine based on graph size and user preference.
-    from .elk_layout import (
-        get_node_placement_engine,
-        render_with_elk,
-        render_with_sfdp,
-    )
-
-    num_nodes = len(entries_to_plot)
-    engine = get_node_placement_engine(vis_node_placement, num_nodes)
+    # ELK was already handled above (early return). Only dot/sfdp reach here.
+    from .elk_layout import render_with_sfdp
 
     _RENDER_TIMEOUT = 120  # seconds
     source_path = dot.save(vis_outpath)
     try:
-        if engine == "elk":
-            try:
-                render_with_elk(
-                    dot.source,
-                    source_path,
-                    vis_outpath,
-                    vis_fileformat,
-                    save_only,
-                    entries_to_plot=entries_to_plot,
-                    show_buffer_layers=show_buffer_layers,
-                )
-            except RuntimeError as e:
-                warnings.warn(f"ELK layout failed ({e}), falling back to sfdp.")
-                render_with_sfdp(source_path, vis_outpath, vis_fileformat, save_only)
-        elif engine == "sfdp":
+        if engine == "sfdp":
             render_with_sfdp(source_path, vis_outpath, vis_fileformat, save_only)
         else:
             # dot engine (default for small graphs)
