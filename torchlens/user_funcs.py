@@ -80,7 +80,8 @@ def _run_model_and_save_specified_activations(
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
-    save_call_stacks: bool = True,
+    save_source_context: bool = False,
+    save_rng_states: bool = False,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
 
@@ -132,7 +133,8 @@ def _run_model_and_save_specified_activations(
         mark_input_output_distances,
         num_context_lines,
         optimizer,
-        save_call_stacks,
+        save_source_context,
+        save_rng_states,
     )
     model_log._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
@@ -152,7 +154,8 @@ def log_forward_pass(
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
     save_gradients: bool = False,
-    save_call_stacks: bool = True,
+    save_source_context: bool = False,
+    save_rng_states: bool = False,
     vis_opt: str = "none",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "graph.gv",
@@ -207,8 +210,12 @@ def log_forward_pass(
         save_function_args: Store non-tensor args for each function call (needed for
             ``validate_saved_activations``).
         save_gradients: Capture gradients during a subsequent backward pass.
-        save_call_stacks: If True (default), record the Python call stack for each
-            tensor operation. Set to False for faster logging when call stacks are not needed.
+        save_source_context: If True, record the Python call stack for each
+            tensor operation and capture module source code (file, line, signatures).
+            Default False for speed; enable for debugging and code inspection.
+        save_rng_states: If True, capture RNG states before each operation (needed for
+            validation replay of stochastic ops like dropout). Auto-enabled when
+            ``validate_forward_pass`` is used. Default False for speed.
         vis_opt: ``'none'`` (default), ``'rolled'``, or ``'unrolled'`` visualization.
         vis_nesting_depth: Max module nesting depth shown in visualization.
         vis_outpath: Output file path for the graph visualization.
@@ -260,7 +267,8 @@ def log_forward_pass(
             random_seed=random_seed,
             num_context_lines=num_context_lines,
             optimizer=optimizer,
-            save_call_stacks=save_call_stacks,
+            save_source_context=save_source_context,
+            save_rng_states=save_rng_states,
         )
     else:
         # --- TWO-PASS path ---
@@ -282,7 +290,8 @@ def log_forward_pass(
             random_seed=random_seed,
             num_context_lines=num_context_lines,
             optimizer=optimizer,
-            save_call_stacks=save_call_stacks,
+            save_source_context=save_source_context,
+            save_rng_states=save_rng_states,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
@@ -521,6 +530,7 @@ def validate_forward_pass(
         save_gradients=False,
         save_function_args=True,
         random_seed=random_seed,
+        save_rng_states=True,
     )
     # Step 3: Validate by replaying the forward pass from saved activations.
     try:

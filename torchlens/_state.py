@@ -144,6 +144,15 @@ _dynamic_arg_specs: Dict[str, object] = {}
 call to an uncovered function.  Subsequent calls reuse the cached spec."""
 
 # ---------------------------------------------------------------------------
+# Tagged tensor tracking — for fast cleanup
+# ---------------------------------------------------------------------------
+
+_tagged_buffer_ids: Set[int] = set()
+"""ids of tensors tagged with tl_buffer_address during prepare_buffer_tensors.
+Used by _undecorate_model_tensors for O(n) cleanup instead of re-scanning
+all module attributes."""
+
+# ---------------------------------------------------------------------------
 # Context managers
 # ---------------------------------------------------------------------------
 

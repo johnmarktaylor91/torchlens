@@ -346,13 +346,10 @@ def iter_accessible_attributes(
         # working with objects that we don't know anything about.  This
         # function makes a best-effort attempt to access every attribute, but
         # gracefully skips any that cause problems.
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            try:
-                attr = getattr(obj, attr_name)
-            except Exception:
-                continue
+        try:
+            attr = getattr(obj, attr_name)
+        except Exception:
+            continue
 
         yield attr_name, attr
 

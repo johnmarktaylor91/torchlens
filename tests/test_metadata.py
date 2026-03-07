@@ -866,7 +866,7 @@ def test_flops_sdpa():
 def _get_func_call_stack(small_input):
     """Helper: run a model and return the func_call_stack from a non-input layer."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = log_forward_pass(model, small_input, save_source_context=True)
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input_layer:
@@ -1013,7 +1013,7 @@ def test_default_num_context_lines(small_input):
 
 def test_custom_num_context_lines(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, num_context_lines=3)
+    mh = log_forward_pass(model, small_input, num_context_lines=3, save_source_context=True)
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input_layer and entry.func_call_stack:

@@ -120,7 +120,7 @@ class TestModuleLogFields:
         assert ml.module_class_name == "Linear"
 
     def test_source_info(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = log_forward_pass(_make_simple_model(), _simple_input(), save_source_context=True)
         ml = log.modules["0"]
         assert ml.source_file is not None  # nn.Linear has inspectable source
         assert ml.forward_signature is not None

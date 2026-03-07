@@ -109,7 +109,8 @@ class ModelLog:
         mark_input_output_distances: bool = True,
         num_context_lines: int = 7,
         optimizer=None,
-        save_call_stacks: bool = True,
+        save_source_context: bool = False,
+        save_rng_states: bool = False,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -155,7 +156,8 @@ class ModelLog:
         self.detach_saved_tensors = detach_saved_tensors
         self.save_function_args = save_function_args
         self.save_gradients = save_gradients
-        self.save_call_stacks = save_call_stacks
+        self.save_source_context = save_source_context
+        self.save_rng_states = save_rng_states
         self.has_saved_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
 

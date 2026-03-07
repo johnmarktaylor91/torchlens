@@ -170,12 +170,12 @@ def log_source_tensor_exhaustive(
         "func_applied": None,
         "func_applied_name": "none",
         "func_call_stack": _get_func_call_stack(self.num_context_lines)
-        if self.save_call_stacks
+        if self.save_source_context
         else [],
         "func_time_elapsed": 0,
         "flops_forward": 0,
         "flops_backward": 0,
-        "func_rng_states": log_current_rng_states(),
+        "func_rng_states": log_current_rng_states(torch_only=True) if self.save_rng_states else {},
         "func_autocast_state": {},
         "func_argnames": (),
         "num_func_args_total": 0,
