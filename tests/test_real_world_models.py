@@ -3726,3 +3726,910 @@ def test_rgcn_pyg():
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "rgcn_pyg"),
     )
     assert validate_forward_pass(model, model_input)
+
+
+# =============================================================================
+# Decoder-Only LLMs (Additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_gptj():
+    """GPT-J: parallel attention + FFN (different from GPT-2 sequential)."""
+    pytest.importorskip("transformers")
+    from transformers import GPTJConfig, GPTJModel
+
+    config = GPTJConfig(
+        vocab_size=100,
+        n_embd=64,
+        n_layer=2,
+        n_head=4,
+        rotary_dim=16,
+        n_positions=64,
+    )
+    model = GPTJModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gptj"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_gpt_bigcode():
+    """GPTBigCode (StarCoder arch): multi-query attention for code."""
+    pytest.importorskip("transformers")
+    from transformers import GPTBigCodeConfig, GPTBigCodeModel
+
+    config = GPTBigCodeConfig(
+        vocab_size=100,
+        n_embd=64,
+        n_layer=2,
+        n_head=4,
+        n_positions=64,
+        multi_query=True,
+    )
+    model = GPTBigCodeModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_gpt_neox():
+    """GPT-NeoX: parallel attention + FFN, rotary embeddings."""
+    pytest.importorskip("transformers")
+    from transformers import GPTNeoXConfig, GPTNeoXModel
+
+    config = GPTNeoXConfig(
+        vocab_size=100,
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        max_position_embeddings=64,
+    )
+    model = GPTNeoXModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_neox"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# Encoder-Only (Additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_funnel_transformer():
+    """Funnel Transformer: progressively reduces sequence length through layers."""
+    pytest.importorskip("transformers")
+    from transformers import FunnelConfig, FunnelModel
+
+    config = FunnelConfig(
+        vocab_size=100,
+        d_model=64,
+        n_head=4,
+        d_inner=128,
+        block_sizes=[2, 2],
+        num_decoder_layers=1,
+    )
+    model = FunnelModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "funnel_transformer"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_canine():
+    """CANINE: character-level tokenization-free transformer."""
+    pytest.importorskip("transformers")
+    from transformers import CanineConfig, CanineModel
+
+    config = CanineConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        max_position_embeddings=128,
+    )
+    model = CanineModel(config).eval()
+    # CANINE takes raw character codepoints (integers)
+    input_ids = torch.randint(0, 128, (2, 32))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "canine"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_mobilebert():
+    """MobileBERT: bottleneck-structured BERT for mobile."""
+    pytest.importorskip("transformers")
+    from transformers import MobileBertConfig, MobileBertModel
+
+    config = MobileBertConfig(
+        vocab_size=100,
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        embedding_size=32,
+        true_hidden_size=64,
+    )
+    model = MobileBertModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "mobilebert"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# Encoder-Decoder (Additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_mbart():
+    """mBART: multilingual BART."""
+    pytest.importorskip("transformers")
+    from transformers import MBartConfig, MBartModel
+
+    config = MBartConfig(
+        vocab_size=100,
+        d_model=64,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        max_position_embeddings=64,
+    )
+    model = MBartModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    decoder_input_ids = torch.randint(0, 100, (2, 8))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "mbart"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_prophetnet():
+    """ProphetNet: n-gram prediction encoder-decoder."""
+    pytest.importorskip("transformers")
+    from transformers import ProphetNetConfig, ProphetNetModel
+
+    config = ProphetNetConfig(
+        vocab_size=100,
+        hidden_size=64,
+        num_encoder_layers=2,
+        num_decoder_layers=2,
+        num_encoder_attention_heads=4,
+        num_decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        max_position_embeddings=64,
+        ngram=2,
+    )
+    model = ProphetNetModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 16))
+    decoder_input_ids = torch.randint(0, 100, (2, 8))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids, "decoder_input_ids": decoder_input_ids}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "prophetnet"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# Audio (Additional Set 2)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_audio_wavlm():
+    """WavLM: masked speech denoising self-supervised model."""
+    pytest.importorskip("transformers")
+    from transformers import WavLMConfig, WavLMModel
+
+    config = WavLMConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        conv_dim=(32, 32),
+        conv_kernel=(10, 3),
+        conv_stride=(5, 2),
+    )
+    model = WavLMModel(config).eval()
+    waveform = torch.rand(2, 3200)
+    model_input = []
+    model_kwargs = {"input_values": waveform}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "wavlm"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_data2vec():
+    """Data2VecAudio: self-distillation on audio representations."""
+    pytest.importorskip("transformers")
+    from transformers import Data2VecAudioConfig, Data2VecAudioModel
+
+    config = Data2VecAudioConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        conv_dim=(32, 32),
+        conv_kernel=(10, 3),
+        conv_stride=(5, 2),
+    )
+    model = Data2VecAudioModel(config).eval()
+    waveform = torch.rand(2, 3200)
+    model_input = []
+    model_kwargs = {"input_values": waveform}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "data2vec_audio"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_audio_unispeech():
+    """UniSpeech: unified speech representation learning."""
+    pytest.importorskip("transformers")
+    from transformers import UniSpeechConfig, UniSpeechModel
+
+    config = UniSpeechConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        conv_dim=(32, 32),
+        conv_kernel=(10, 3),
+        conv_stride=(5, 2),
+    )
+    model = UniSpeechModel(config).eval()
+    waveform = torch.rand(2, 3200)
+    model_input = []
+    model_kwargs = {"input_values": waveform}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "unispeech"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# TIMM Models (Additional Set 2)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_timm_convnextv2_atto():
+    """ConvNeXt v2: Global Response Normalization (GRN)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("convnextv2_atto", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "convnextv2_atto"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_nfnet_l0():
+    """NFNet: normalizer-free network (no batch norm)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("nfnet_l0", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "nfnet_l0"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_davit_tiny():
+    """DaViT: dual attention ViT (spatial + channel attention)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("davit_tiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "davit_tiny"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_coatnet():
+    """CoAtNet: CNN + Transformer hybrid (conv early, attention late)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("coatnet_0_rw_224", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "coatnet_0"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_repvgg_a0():
+    """RepVGG: reparameterizable VGG-style (multi-branch train, single inference)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("repvgg_a0", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "repvgg_a0"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_rexnet():
+    """ReXNet: rank expansion network (learned channel expansion ratios)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("rexnet_100", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "rexnet_100"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_pit():
+    """PiT: Pooling-based ViT (spatial token reduction via pooling)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("pit_ti_224", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "pit_ti_224"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_visformer():
+    """Visformer: vision-friendly transformer (spatial conv in early stages)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("visformer_tiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "visformer_tiny"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_gcvit():
+    """GC-ViT: Global Context Vision Transformer."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("gcvit_xxtiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "gcvit_xxtiny"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_efficientformer():
+    """EfficientFormer: hardware-efficient ViT."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("efficientformer_l1", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "efficientformer_l1"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_fastvit():
+    """FastViT: reparameterizable hybrid CNN-transformer."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("fastvit_t8", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 256, 256)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "fastvit_t8"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_nest():
+    """NesT: Nested Hierarchical Transformer (aggregation within blocks)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("nest_tiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "nest_tiny"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_sequencer():
+    """Sequencer2D: LSTM-based token mixing for vision."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("sequencer2d_s", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "sequencer2d_s"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_tresnet():
+    """TResNet: training tricks for ResNet (anti-alias, SpaceToBatch)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("tresnet_m", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "tresnet_m"),
+    )
+    assert validate_forward_pass(model, x)
+
+
+# =============================================================================
+# Multimodal (Additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_siglip():
+    """SigLIP: sigmoid contrastive loss (replaces softmax in CLIP)."""
+    pytest.importorskip("transformers")
+    from transformers import SiglipConfig, SiglipModel
+
+    text_config = {
+        "vocab_size": 100,
+        "hidden_size": 64,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 128,
+        "max_position_embeddings": 32,
+    }
+    vision_config = {
+        "hidden_size": 64,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 128,
+        "image_size": 64,
+        "patch_size": 16,
+        "num_channels": 3,
+    }
+    config = SiglipConfig(text_config=text_config, vision_config=vision_config)
+    model = SiglipModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 8))
+    pixel_values = torch.rand(2, 3, 64, 64)
+    model_input = []
+    model_kwargs = {"input_ids": input_ids, "pixel_values": pixel_values}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "siglip"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+@pytest.mark.slow
+def test_blip2():
+    """BLIP-2: Q-Former bridge module between vision and language."""
+    pytest.importorskip("transformers")
+    from transformers import Blip2Config, Blip2Model
+
+    vision_config = {
+        "hidden_size": 64,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 128,
+        "image_size": 64,
+        "patch_size": 16,
+    }
+    qformer_config = {
+        "hidden_size": 64,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "intermediate_size": 128,
+        "cross_attention_frequency": 1,
+        "vocab_size": 100,
+    }
+    config = Blip2Config(
+        vision_config=vision_config,
+        qformer_config=qformer_config,
+        num_query_tokens=8,
+    )
+    model = Blip2Model(config).eval()
+    pixel_values = torch.rand(2, 3, 64, 64)
+    model_input = []
+    model_kwargs = {"pixel_values": pixel_values}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip2"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# Detection (Additional Set 2)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_deformable_detr():
+    """Deformable DETR: deformable attention for efficient multi-scale detection."""
+    pytest.importorskip("transformers")
+    from transformers import DeformableDetrConfig, DeformableDetrModel
+
+    config = DeformableDetrConfig(
+        d_model=64,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=128,
+        decoder_ffn_dim=128,
+        num_feature_levels=2,
+        backbone_config={
+            "model_type": "resnet",
+            "hidden_sizes": [32, 64],
+            "depths": [1, 1],
+            "out_features": ["stage2", "stage3"],
+        },
+    )
+    model = DeformableDetrModel(config).eval()
+    pixel_values = torch.rand(2, 3, 64, 64)
+    model_input = []
+    model_kwargs = {"pixel_values": pixel_values}
+    try:
+        torch.use_deterministic_algorithms(False)
+        show_model_graph(
+            model,
+            model_input,
+            model_kwargs=model_kwargs,
+            save_only=True,
+            vis_opt="unrolled",
+            vis_outpath=opj(VIS_OUTPUT_DIR, "detection-additional", "deformable_detr"),
+        )
+        assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    finally:
+        torch.use_deterministic_algorithms(True)
+
+
+# =============================================================================
+# Document Understanding
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_layoutlm():
+    """LayoutLM: joint text + layout (bounding box positions) understanding."""
+    pytest.importorskip("transformers")
+    from transformers import LayoutLMConfig, LayoutLMModel
+
+    config = LayoutLMConfig(
+        vocab_size=100,
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        intermediate_size=128,
+        max_position_embeddings=64,
+        max_2d_position_embeddings=256,
+    )
+    model = LayoutLMModel(config).eval()
+    input_ids = torch.randint(0, 100, (2, 8))
+    bbox = torch.randint(0, 255, (2, 8, 4))
+    model_input = []
+    model_kwargs = {"input_ids": input_ids, "bbox": bbox}
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "layoutlm"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# Time Series (Additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_time_series_transformer():
+    """TimeSeriesTransformer: HF base time series forecasting model."""
+    pytest.importorskip("transformers")
+    from transformers import (
+        TimeSeriesTransformerConfig,
+        TimeSeriesTransformerModel,
+    )
+
+    config = TimeSeriesTransformerConfig(
+        prediction_length=4,
+        context_length=16,
+        d_model=32,
+        encoder_layers=2,
+        decoder_layers=2,
+        encoder_attention_heads=4,
+        decoder_attention_heads=4,
+        encoder_ffn_dim=64,
+        decoder_ffn_dim=64,
+        input_size=1,
+        num_time_features=2,
+        lags_sequence=[1, 2],
+        scaling="std",
+    )
+    model = TimeSeriesTransformerModel(config).eval()
+    seq_len = 18  # context_length + max(lags_sequence)
+    past_values = torch.rand(2, seq_len)
+    past_time_features = torch.rand(2, seq_len, 2)
+    past_observed_mask = torch.ones(2, seq_len)
+    future_values = torch.rand(2, 4)
+    future_time_features = torch.rand(2, 4, 2)
+    model_input = []
+    model_kwargs = {
+        "past_values": past_values,
+        "past_time_features": past_time_features,
+        "past_observed_mask": past_observed_mask,
+        "future_values": future_values,
+        "future_time_features": future_time_features,
+    }
+    show_model_graph(
+        model,
+        model_input,
+        model_kwargs=model_kwargs,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "time_series_transformer"),
+    )
+    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+
+
+# =============================================================================
+# GNN PyG (Additional)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_chebconv_pyg():
+    """ChebConv: Chebyshev spectral graph convolution."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import ChebConv
+
+    class _ChebNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = ChebConv(8, 16, K=3)
+            self.conv2 = ChebConv(16, 4, K=3)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _ChebNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "chebconv_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_sgc_pyg():
+    """SGConv: Simple Graph Convolution (remove nonlinearities between layers)."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import SGConv
+
+    class _SGCNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = SGConv(8, 4, K=3)
+
+        def forward(self, x, edge_index):
+            return self.conv(x, edge_index)
+
+    model = _SGCNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "sgc_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_tag_pyg():
+    """TAGConv: Topology Adaptive Graph Convolution (fixed polynomial)."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import TAGConv
+
+    class _TAGNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = TAGConv(8, 16, K=3)
+            self.conv2 = TAGConv(16, 4, K=3)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _TAGNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "tag_pyg"),
+    )
+    assert validate_forward_pass(model, model_input)

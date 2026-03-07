@@ -4361,3 +4361,458 @@ class CBAMBlock(nn.Module):
         sa = torch.sigmoid(self.sa_conv(torch.cat([sa_avg, sa_max], dim=1)))
         x = x * sa
         return self.fc(self.out(x).flatten(1))
+
+
+# =============================================================================
+# Group T: Additional Pattern Coverage
+# =============================================================================
+
+
+class GRUModel(nn.Module):
+    """Simple GRU forward pass."""
+
+    def __init__(self):
+        super().__init__()
+        self.gru = nn.GRU(input_size=8, hidden_size=16, batch_first=True)
+        self.fc = nn.Linear(16, 4)
+
+    def forward(self, x):
+        out, _ = self.gru(x)
+        return self.fc(out[:, -1, :])
+
+
+class NiNModel(nn.Module):
+    """Network in Network: 1x1 conv (mlpconv) + global average pooling."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
+        self.mlpconv1 = nn.Conv2d(16, 16, 1)  # 1x1 conv
+        self.mlpconv2 = nn.Conv2d(16, 16, 1)
+        self.conv2 = nn.Conv2d(16, 8, 3, padding=1)
+        self.mlpconv3 = nn.Conv2d(8, 4, 1)  # final 1x1 → num_classes channels
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.mlpconv1(x))
+        x = torch.relu(self.mlpconv2(x))
+        x = torch.relu(self.conv2(x))
+        x = self.mlpconv3(x)
+        x = x.mean(dim=[2, 3])  # global average pooling
+        return x
+
+
+class ChannelShuffleModel(nn.Module):
+    """Channel shuffle operation (ShuffleNet-style)."""
+
+    def __init__(self, groups=2):
+        super().__init__()
+        self.groups = groups
+        self.conv1 = nn.Conv2d(3, 16, 3, padding=1, groups=1)
+        self.gconv = nn.Conv2d(16, 16, 1, groups=groups)
+        self.conv2 = nn.Conv2d(16, 4, 1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = self.gconv(x)
+        # Channel shuffle
+        B, C, H, W = x.shape
+        x = x.view(B, self.groups, C // self.groups, H, W)
+        x = x.permute(0, 2, 1, 3, 4).contiguous()
+        x = x.view(B, C, H, W)
+        x = torch.relu(x)
+        return (
+            self.conv2(self.pool(x).flatten(1, -1).unsqueeze(-1).unsqueeze(-1))
+            .squeeze(-1)
+            .squeeze(-1)
+        )
+
+
+class PixelShuffleModel(nn.Module):
+    """Sub-pixel convolution upsampling (PixelShuffle)."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
+        self.conv2 = nn.Conv2d(16, 64, 3, padding=1)  # 16 * 4 for 2x upscale
+        self.shuffle = nn.PixelShuffle(2)  # 64 → 16 channels, 2x spatial
+        self.conv3 = nn.Conv2d(16, 4, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = self.shuffle(x)
+        x = self.conv3(x)
+        return self.pool(x).flatten(1)
+
+
+class PartialConvModel(nn.Module):
+    """Partial convolution: mask-aware conv (inpainting pattern)."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(3, 16, 3, padding=1, bias=False)
+        self.mask_conv_weight = nn.Parameter(torch.ones(16, 3, 3, 3) / 27.0, requires_grad=False)
+        self.bias = nn.Parameter(torch.zeros(16))
+        self.fc = nn.Linear(16, 4)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x):
+        # Simulate partial convolution: apply conv only where mask=1
+        mask = (x.sum(dim=1, keepdim=True) > 0).float()
+        mask3 = mask.expand_as(x)
+        x_masked = x * mask3
+        out = self.conv(x_masked)
+        # Update mask: count valid pixels in each receptive field
+        with torch.no_grad():
+            mask_sum = torch.nn.functional.conv2d(
+                mask, torch.ones(1, 1, 3, 3, device=x.device), padding=1
+            )
+            mask_ratio = 9.0 / (mask_sum + 1e-8)
+            new_mask = (mask_sum > 0).float()
+        out = out * mask_ratio * new_mask + self.bias.view(1, -1, 1, 1)
+        return self.fc(self.pool(torch.relu(out)).flatten(1))
+
+
+class FiLMModel(nn.Module):
+    """Feature-wise Linear Modulation: external signal conditions features."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(3, 16, 3, padding=1)
+        # Conditioning network: produces scale (gamma) and shift (beta)
+        self.cond_fc = nn.Linear(8, 32)  # 8-dim conditioning → 16 gamma + 16 beta
+        self.conv2 = nn.Conv2d(16, 4, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x, cond):
+        feat = torch.relu(self.conv(x))
+        # Generate FiLM parameters from conditioning signal
+        film_params = self.cond_fc(cond)
+        gamma = film_params[:, :16].unsqueeze(-1).unsqueeze(-1)
+        beta = film_params[:, 16:].unsqueeze(-1).unsqueeze(-1)
+        # Apply FiLM: scale and shift
+        feat = gamma * feat + beta
+        return self.pool(self.conv2(torch.relu(feat))).flatten(1)
+
+
+class CoordinateAttentionModel(nn.Module):
+    """Coordinate attention: factorized H/W pooling for spatial attention."""
+
+    def __init__(self, channels=16, reduction=4):
+        super().__init__()
+        self.conv = nn.Conv2d(3, channels, 3, padding=1)
+        mid = max(channels // reduction, 4)
+        self.fc_shared = nn.Conv2d(channels, mid, 1)
+        self.fc_h = nn.Conv2d(mid, channels, 1)
+        self.fc_w = nn.Conv2d(mid, channels, 1)
+        self.out = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(channels, 4)
+
+    def forward(self, x):
+        x = torch.relu(self.conv(x))
+        B, C, H, W = x.shape
+        # Pool along W → (B, C, H, 1), pool along H → (B, C, 1, W)
+        h_pool = x.mean(dim=3, keepdim=True)  # (B, C, H, 1)
+        w_pool = x.mean(dim=2, keepdim=True)  # (B, C, 1, W)
+        # Concatenate along spatial dim, share FC
+        h_pool_t = h_pool.permute(0, 1, 3, 2)  # (B, C, 1, H)
+        cat = torch.cat([w_pool, h_pool_t], dim=3)  # (B, C, 1, W+H)
+        cat = torch.relu(self.fc_shared(cat))
+        w_attn, h_attn = cat.split([W, H], dim=3)
+        w_attn = torch.sigmoid(self.fc_w(w_attn))  # (B, C, 1, W)
+        h_attn = torch.sigmoid(self.fc_h(h_attn.permute(0, 1, 3, 2)))  # (B, C, H, 1)
+        x = x * w_attn * h_attn
+        return self.fc(self.out(x).flatten(1))
+
+
+class DifferentialAttentionModel(nn.Module):
+    """Differential attention: subtract two attention patterns for noise cancellation."""
+
+    def __init__(self, dim=16, num_heads=2):
+        super().__init__()
+        self.embed = nn.Linear(dim, dim)
+        self.q1 = nn.Linear(dim, dim)
+        self.k1 = nn.Linear(dim, dim)
+        self.q2 = nn.Linear(dim, dim)
+        self.k2 = nn.Linear(dim, dim)
+        self.v = nn.Linear(dim, dim)
+        self.out = nn.Linear(dim, dim)
+        self.scale = dim**-0.5
+        self.lambda_param = nn.Parameter(torch.tensor(0.5))
+
+    def forward(self, x):
+        x = self.embed(x)
+        q1, k1 = self.q1(x), self.k1(x)
+        q2, k2 = self.q2(x), self.k2(x)
+        v = self.v(x)
+        attn1 = torch.softmax(q1 @ k1.transpose(-2, -1) * self.scale, dim=-1)
+        attn2 = torch.softmax(q2 @ k2.transpose(-2, -1) * self.scale, dim=-1)
+        # Differential: subtract attention patterns
+        diff_attn = attn1 - self.lambda_param * attn2
+        out = diff_attn @ v
+        return self.out(out)
+
+
+class RelativePositionAttentionModel(nn.Module):
+    """T5-style relative position bias in self-attention."""
+
+    def __init__(self, dim=16, num_heads=2, max_len=32, num_buckets=8):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.qkv = nn.Linear(dim, 3 * dim)
+        self.out = nn.Linear(dim, dim)
+        self.rel_bias = nn.Embedding(num_buckets, num_heads)
+        self.num_buckets = num_buckets
+        self.scale = self.head_dim**-0.5
+
+    def _relative_position_bucket(self, rel_pos):
+        return torch.clamp(rel_pos + self.num_buckets // 2, 0, self.num_buckets - 1)
+
+    def forward(self, x):
+        B, S, D = x.shape
+        qkv = self.qkv(x).reshape(B, S, 3, self.num_heads, self.head_dim)
+        q, k, v = qkv.unbind(2)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+        attn = q @ k.transpose(-2, -1) * self.scale
+        # Relative position bias
+        pos = torch.arange(S, device=x.device)
+        rel_pos = pos.unsqueeze(0) - pos.unsqueeze(1)
+        buckets = self._relative_position_bucket(rel_pos)
+        bias = self.rel_bias(buckets).permute(2, 0, 1).unsqueeze(0)
+        attn = attn + bias
+        attn = torch.softmax(attn, dim=-1)
+        out = (attn @ v).transpose(1, 2).reshape(B, S, D)
+        return self.out(out)
+
+
+class EarlyExitModel(nn.Module):
+    """Early exit: multiple classifier heads at different depths."""
+
+    def __init__(self):
+        super().__init__()
+        self.block1 = nn.Sequential(nn.Linear(16, 32), nn.ReLU())
+        self.block2 = nn.Sequential(nn.Linear(32, 32), nn.ReLU())
+        self.block3 = nn.Sequential(nn.Linear(32, 32), nn.ReLU())
+        self.exit1 = nn.Linear(32, 4)
+        self.exit2 = nn.Linear(32, 4)
+        self.exit3 = nn.Linear(32, 4)
+
+    def forward(self, x):
+        x1 = self.block1(x)
+        out1 = self.exit1(x1)
+        x2 = self.block2(x1)
+        out2 = self.exit2(x2)
+        x3 = self.block3(x2)
+        out3 = self.exit3(x3)
+        return out1, out2, out3
+
+
+class MultiScaleParallelModel(nn.Module):
+    """HRNet-like parallel multi-resolution streams with fusion."""
+
+    def __init__(self):
+        super().__init__()
+        # High-res stream
+        self.high_conv1 = nn.Conv2d(3, 8, 3, padding=1)
+        self.high_conv2 = nn.Conv2d(8, 8, 3, padding=1)
+        # Low-res stream (downsampled)
+        self.low_conv1 = nn.Conv2d(3, 16, 3, stride=2, padding=1)
+        self.low_conv2 = nn.Conv2d(16, 16, 3, padding=1)
+        # Fusion: low→high (upsample + 1x1), high→low (stride + 1x1)
+        self.low_to_high = nn.Conv2d(16, 8, 1)
+        self.high_to_low = nn.Conv2d(8, 16, 1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(8 + 16, 4)
+
+    def forward(self, x):
+        hi = torch.relu(self.high_conv1(x))
+        lo = torch.relu(self.low_conv1(x))
+        hi = torch.relu(self.high_conv2(hi))
+        lo = torch.relu(self.low_conv2(lo))
+        # Cross-resolution fusion
+        lo_up = torch.nn.functional.interpolate(
+            self.low_to_high(lo), size=hi.shape[2:], mode="nearest"
+        )
+        h_down = self.high_to_low(torch.nn.functional.avg_pool2d(hi, 2))
+        hi = hi + lo_up
+        lo = lo + h_down
+        h_pool = self.pool(hi).flatten(1)
+        l_pool = self.pool(lo).flatten(1)
+        return self.fc(torch.cat([h_pool, l_pool], dim=1))
+
+
+class GumbelVQModel(nn.Module):
+    """Gumbel-Softmax vector quantization (differentiable discrete tokens)."""
+
+    def __init__(self, input_dim=16, codebook_size=8, embed_dim=8):
+        super().__init__()
+        self.encoder = nn.Linear(input_dim, codebook_size)
+        self.codebook = nn.Embedding(codebook_size, embed_dim)
+        self.decoder = nn.Linear(embed_dim, input_dim)
+
+    def forward(self, x):
+        logits = self.encoder(x)
+        # Gumbel-Softmax: differentiable discrete sampling
+        soft = torch.nn.functional.gumbel_softmax(logits, tau=1.0, hard=True)
+        # Lookup: weighted sum of codebook entries
+        quantized = soft @ self.codebook.weight
+        return self.decoder(quantized)
+
+
+class EndToEndMemoryNetwork(nn.Module):
+    """End-to-end memory network: multi-hop attention over memory slots."""
+
+    def __init__(self, vocab_size=32, embed_dim=16, mem_slots=8, hops=3):
+        super().__init__()
+        self.hops = hops
+        self.embed_a = nn.Embedding(vocab_size, embed_dim)
+        self.embed_c = nn.Embedding(vocab_size, embed_dim)
+        self.query_embed = nn.Embedding(vocab_size, embed_dim)
+        self.fc = nn.Linear(embed_dim, 4)
+
+    def forward(self, query, memory):
+        # query: (B,) int, memory: (B, M) int
+        u = self.query_embed(query)  # (B, D)
+        for _ in range(self.hops):
+            m = self.embed_a(memory)  # (B, M, D)
+            p = torch.softmax((u.unsqueeze(1) * m).sum(-1), dim=-1)  # (B, M)
+            c = self.embed_c(memory)  # (B, M, D)
+            o = (p.unsqueeze(-1) * c).sum(1)  # (B, D)
+            u = u + o
+        return self.fc(u)
+
+
+class RBFNetwork(nn.Module):
+    """Radial Basis Function network: Gaussian kernel hidden layer."""
+
+    def __init__(self, input_dim=8, num_centers=16, output_dim=4):
+        super().__init__()
+        self.centers = nn.Parameter(torch.randn(num_centers, input_dim))
+        self.log_sigmas = nn.Parameter(torch.zeros(num_centers))
+        self.fc = nn.Linear(num_centers, output_dim)
+
+    def forward(self, x):
+        # Compute RBF activations: exp(-||x - c||^2 / (2*sigma^2))
+        diff = x.unsqueeze(1) - self.centers.unsqueeze(0)  # (B, K, D)
+        dist_sq = (diff**2).sum(-1)  # (B, K)
+        sigma_sq = torch.exp(self.log_sigmas) ** 2 * 2
+        rbf = torch.exp(-dist_sq / (sigma_sq + 1e-8))
+        return self.fc(rbf)
+
+
+class SIRENModel(nn.Module):
+    """SIREN: sinusoidal activations for coordinate-based MLP."""
+
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(2, 32)
+        self.fc2 = nn.Linear(32, 32)
+        self.fc3 = nn.Linear(32, 1)
+        self.omega = 30.0
+
+    def forward(self, coords):
+        x = torch.sin(self.omega * self.fc1(coords))
+        x = torch.sin(self.omega * self.fc2(x))
+        return self.fc3(x)
+
+
+class MultiTaskModel(nn.Module):
+    """Multi-task: shared trunk + task-specific heads."""
+
+    def __init__(self):
+        super().__init__()
+        self.shared = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 32), nn.ReLU())
+        self.head_cls = nn.Linear(32, 4)  # classification head
+        self.head_reg = nn.Linear(32, 1)  # regression head
+        self.head_embed = nn.Linear(32, 8)  # embedding head
+
+    def forward(self, x):
+        feat = self.shared(x)
+        return self.head_cls(feat), self.head_reg(feat), self.head_embed(feat)
+
+
+class WideAndDeepModel(nn.Module):
+    """Wide & Deep: wide linear + deep MLP merged."""
+
+    def __init__(self, input_dim=16):
+        super().__init__()
+        # Wide: linear path
+        self.wide = nn.Linear(input_dim, 4)
+        # Deep: MLP path
+        self.deep = nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 4),
+        )
+
+    def forward(self, x):
+        return self.wide(x) + self.deep(x)
+
+
+class ChebGCN(nn.Module):
+    """Chebyshev polynomial spectral GCN (manual implementation)."""
+
+    def __init__(self, in_features=8, hidden=16, out_features=4, K=3):
+        super().__init__()
+        self.K = K
+        self.theta = nn.ParameterList(
+            [nn.Parameter(torch.randn(in_features, hidden)) for _ in range(K)]
+        )
+        self.fc = nn.Linear(hidden, out_features)
+
+    def forward(self, x, adj):
+        # Chebyshev polynomial: T0=I, T1=adj, Tk=2*adj*T_{k-1} - T_{k-2}
+        T = [x]  # T0(adj) @ x = x
+        if self.K > 1:
+            T.append(adj @ x)  # T1(adj) @ x
+        for k in range(2, self.K):
+            T.append(2 * adj @ T[-1] - T[-2])
+        out = sum(T[k] @ self.theta[k] for k in range(self.K))
+        return self.fc(torch.relu(out))
+
+
+class PrototypicalNetwork(nn.Module):
+    """Prototypical network: compute class prototypes, classify by distance."""
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 16))
+
+    def forward(self, support, support_labels, query):
+        # support: (N*K, D), support_labels: (N*K,), query: (Q, D)
+        s_embed = self.encoder(support)
+        q_embed = self.encoder(query)
+        # Compute prototypes per class
+        classes = support_labels.unique()
+        prototypes = torch.stack([s_embed[support_labels == c].mean(0) for c in classes])
+        # Negative squared distance
+        dists = -(torch.cdist(q_embed, prototypes) ** 2)
+        return dists
+
+
+class ECAModel(nn.Module):
+    """Efficient Channel Attention: 1D conv instead of FC for channel attention."""
+
+    def __init__(self, channels=16, kernel_size=3):
+        super().__init__()
+        self.conv = nn.Conv2d(3, channels, 3, padding=1)
+        self.eca = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=kernel_size // 2, bias=False)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(channels, 4)
+
+    def forward(self, x):
+        x = torch.relu(self.conv(x))
+        # ECA: GAP → 1D conv on channel dim → sigmoid → scale
+        attn = self.pool(x).squeeze(-1).squeeze(-1)  # (B, C)
+        attn = self.eca(attn.unsqueeze(1)).squeeze(1)  # (B, C)
+        attn = torch.sigmoid(attn).unsqueeze(-1).unsqueeze(-1)
+        x = x * attn
+        return self.fc(self.pool(x).flatten(1))
