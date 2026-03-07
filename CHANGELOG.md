@@ -1,6 +1,142 @@
 # CHANGELOG
 
 
+## v0.15.15 (2026-03-07)
+
+### Bug Fixes
+
+- **gc**: Release ParamLog._param_ref on cleanup, add GC test suite (#GC-1, #GC-12)
+  ([`83e1bd2`](https://github.com/johnmarktaylor91/torchlens/commit/83e1bd2df4304b55bff7d59bea8ffe2728ee7c7f))
+
+- Add ParamLog.release_param_ref() to cache grad metadata then null _param_ref - cleanup() now nulls
+  all _param_ref before clearing entries - Add ModelLog.release_param_refs() public API for early
+  param release - Add _param_logs_by_module to cleanup's internal containers list - New test_gc.py
+  with 10 tests covering ModelLog/param GC, memory growth, save_new_activations stability, and
+  transient data clearing
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Move RESULTS.md to repo root for visibility
+  ([`2e814dd`](https://github.com/johnmarktaylor91/torchlens/commit/2e814ddbd3421b3c81d7f2518d169a3470c8e9a8))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **tests**: Add public test results summary
+  ([`fd7b33f`](https://github.com/johnmarktaylor91/torchlens/commit/fd7b33ff4f8bf1b4b74548642f70dc58a98f85f7))
+
+Committed tests/RESULTS.md with suite overview, model compatibility matrix (121 toy + 85
+  real-world), profiling baselines, and pointers to generated reports. Transparent scoreboard for
+  the repo.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **models**: Add autoencoders, state space models, and architecture coverage
+  ([`716cc9d`](https://github.com/johnmarktaylor91/torchlens/commit/716cc9dc425eb6245886eb7873c7a212db16d4d5))
+
+Toy models (18 new in example_models.py): - Autoencoders: VanillaAutoencoder, ConvAutoencoder,
+  SparseAutoencoder, DenoisingAutoencoder, VQVAE, BetaVAE, ConditionalVAE - State space: SimpleSSM,
+  SelectiveSSM (Mamba-style), GatedSSMBlock, StackedSSM - Additional: SiameseNetwork, MLPMixer,
+  SimpleGCN, SimpleGAT, SimpleDiffusion, SimpleNormalizingFlow, CapsuleNetwork
+
+Real-world models (5 new in test_real_world_models.py): - SSMs: Mamba, Mamba-2, RWKV, Falcon-Mamba
+  (via transformers) - Autoencoders: ViT-MAE ForPreTraining (via transformers)
+
+All 22 new tests pass. Updated RESULTS.md to reflect 736 total tests, 139 toy models, 92 real-world
+  models.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **models**: Close remaining stress-test gaps — MAML, NeRF, RecurrentGemma, VOLO
+  ([`a1f2254`](https://github.com/johnmarktaylor91/torchlens/commit/a1f22543bcc2cbb22b2008121a5082e64a534860))
+
+Toy models (+2): - MAMLInnerLoop: higher-order gradients (torch.autograd.grad inside forward) -
+  TinyNeRF: differentiable volumetric rendering (ray marching + alpha compositing)
+
+Real-world models (+2): - RecurrentGemma: Griffin architecture (linear recurrence + local attention
+  hybrid) - VOLO: outlooker attention (distinct from standard self-attention)
+
+Closes 37/38 stress-test patterns from taxonomy. Only remaining gap is test-time training (TTT
+  layers) which requires gradient computation within inference — fundamentally incompatible with
+  TorchLens forward-pass logging.
+
+Total: 249 toy models, 185 real-world models, 892 tests.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **models**: Exhaustive architecture coverage across 30+ categories
+  ([`8411a72`](https://github.com/johnmarktaylor91/torchlens/commit/8411a725439819de55a54f4339afa21410f67686))
+
+Add 32 new toy models (Groups M-R) covering distinct computational patterns: - Group M: Attention
+  variants (MQA, GQA, RoPE, ALiBi, slot, cross-attention) - Group N: Gating & skip patterns
+  (highway, SE, depthwise-sep, inverted-residual, FPN) - Group O: Generative & self-supervised
+  (hierarchical VAE, gated conv, masked conv, SimCLR, stop-gradient/BYOL, AdaIN) - Group P: Exotic
+  architectures (hypernetwork, DEQ, neural ODE, NTM memory, SwiGLU) - Group Q: Graph neural networks
+  (GraphSAGE, GIN, EdgeConv, graph transformer) - Group R: Additional patterns (MoE, spatial
+  transformer, dueling DQN, RMS norm, sparse pruning, Fourier mixing)
+
+Add 37 new real-world model tests: - Decoder-only LLMs: LLaMA, Mistral, Phi, Gemma, Qwen2, Falcon,
+  BLOOM, OPT - Encoder-only: ALBERT, DeBERTa-v2, XLM-RoBERTa - Encoder-decoder: Pegasus, LED -
+  Efficient transformers: FNet, Nystromformer, BigBird - MoE: Mixtral, Switch Transformer - Vision
+  transformers: DeiT, CvT, SegFormer - Detection: DETR, Mask R-CNN (train+eval) - Perceiver IO,
+  PatchTST, Decision Transformer - timm: HRNet, EfficientNetV2, LeViT, CrossViT, PVT-v2, Twins-SVT,
+  FocalNet - GNN (PyG): GraphSAGE, GIN, Graph Transformer
+
+Total: 805 tests, 213 toy models, 129 real-world tests.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **models**: Exhaustive coverage expansion — 20 toy + 33 real-world architectures
+  ([`4f4e7ae`](https://github.com/johnmarktaylor91/torchlens/commit/4f4e7aeb958e35ed7845b03b209367d8d55e5ab0))
+
+Toy models (+20): GRU, NiN, ChannelShuffle, PixelShuffle, PartialConv, FiLM, CoordinateAttention,
+  DifferentialAttention, RelativePositionAttention, EarlyExit, MultiScaleParallel, GumbelVQ,
+  EndToEndMemoryNetwork, RBFNetwork, SIREN, MultiTask, WideAndDeep, ChebGCN, PrototypicalNetwork,
+  ECA.
+
+Real-world models (+33): GPT-J, GPTBigCode, GPT-NeoX, FunnelTransformer, CANINE, MobileBERT, mBART,
+  ProphetNet, WavLM, Data2VecAudio, UniSpeech, ConvNeXt-v2, NFNet, DaViT, CoAtNet, RepVGG, ReXNet,
+  PiT, Visformer, GC-ViT, EfficientFormer, FastViT, NesT, Sequencer2D, TResNet, SigLIP, BLIP-2,
+  Deformable DETR, LayoutLM, TimeSeriesTransformer, ChebConv, SGConv, TAGConv.
+
+Total: 241 toy models, 183 real-world models, 882 tests. RESULTS.md updated with all new entries and
+  pattern coverage table.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **models**: Final coverage pass — 6 novel computational patterns
+  ([`e33c71a`](https://github.com/johnmarktaylor91/torchlens/commit/e33c71a0cec2a64fce944aa36a42690fe3f6fe15))
+
+New toy models targeting genuinely missing graph patterns: - LinearAttentionModel: kernel-based
+  phi(Q)(phi(K)^T V), no softmax - SimpleFNO: FFT -> learned spectral weights -> iFFT (Fourier
+  Neural Operator) - PerceiverModel: cross-attention to fixed learned latent bottleneck - ASPPModel:
+  multi-rate parallel dilated convolutions (DeepLab ASPP) - ControlNetModel: parallel encoder copy +
+  zero-conv injection - SimpleEGNN: E(n) equivariant message passing with coordinate updates
+
+Total: 247 toy models, 183 real-world models, 888 tests. RESULTS.md updated with new patterns and
+  counts.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **models**: Gap-fill 8 toy models + 21 real-world models for exhaustive coverage
+  ([`7d5f879`](https://github.com/johnmarktaylor91/torchlens/commit/7d5f879bdefc9547d7341eea8b9c8adda3fd7e9f))
+
+Toy models (8 new, 221 total): - LeNet5, BiLSTM, Seq2SeqWithAttention, TripletNetwork -
+  BarlowTwinsModel, DeepCrossNetwork, AxialAttentionModel, CBAMBlock
+
+Real-world models (21 new, 150 total): - TorchVision: MobileNetV3, Keypoint R-CNN (train+eval) -
+  timm: Res2Net, gMLP, ResMLP, EVA-02 - HF decoder-only: OLMo - HF vision: DINOv2 - HF efficient:
+  Longformer, Reformer - HF audio: AST, CLAP, EnCodec, SEW, SpeechT5, VITS - HF time series:
+  Informer, Autoformer - PyG GNN: GATv2, R-GCN
+
+834 total tests, 221 toy models, 150 real-world tests.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.15.14 (2026-03-07)
 
 ### Performance Improvements
