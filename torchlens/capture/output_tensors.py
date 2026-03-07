@@ -47,7 +47,6 @@ from ..utils.introspection import (
     get_vars_of_type_from_obj,
 )
 from ..utils.tensor_utils import get_tensor_memory_amount, safe_copy, tensor_nanequal
-from ..utils.display import human_readable_size
 from ..utils.collections import index_nested, ensure_iterable
 from .flops import compute_backward_flops, compute_forward_flops
 from ..data_classes.buffer_log import BufferLog
@@ -233,10 +232,10 @@ def _build_param_fields(
     fields_dict["num_params_frozen"] = sum(
         pl.num_params for pl in parent_param_logs if not pl.trainable
     )
-    fields_dict["parent_params_fsize"] = sum(get_tensor_memory_amount(p) for p in arg_parameters)
-    fields_dict["parent_params_fsize_nice"] = human_readable_size(
-        fields_dict["parent_params_fsize"]
-    )
+    with pause_logging():
+        fields_dict["parent_params_fsize"] = sum(
+            p.nelement() * p.element_size() for p in arg_parameters
+        )
     return parent_param_passes
 
 
@@ -321,7 +320,6 @@ def _build_shared_fields_dict(
     fields_dict["grad_shape"] = None  # type: ignore[assignment]
     fields_dict["grad_dtype"] = None  # type: ignore[assignment]
     fields_dict["grad_fsize"] = 0  # type: ignore[assignment]
-    fields_dict["grad_fsize_nice"] = human_readable_size(0)
 
     # Function call info
     fields_dict["func_applied"] = func  # type: ignore[assignment]
@@ -642,15 +640,12 @@ def log_function_output_tensors_fast(
                     child_output.tensor_fsize = get_tensor_memory_amount(
                         child_output.tensor_contents
                     )
-                    child_output.tensor_fsize_nice = human_readable_size(child_output.tensor_fsize)
 
         # Update lightweight metadata that may vary across inputs
         # (shape can differ for dynamic-shape models that still share graph structure).
         orig_layer_entry.tensor_shape = tuple(out.shape)
         orig_layer_entry.tensor_dtype = out.dtype
-        fsize = get_tensor_memory_amount(out)
-        orig_layer_entry.tensor_fsize = fsize
-        orig_layer_entry.tensor_fsize_nice = human_readable_size(fsize)
+        orig_layer_entry.tensor_fsize = get_tensor_memory_amount(out)
         orig_layer_entry.func_time_elapsed = exec_ctx.time_elapsed
         orig_layer_entry.func_rng_states = exec_ctx.rng_states
         orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
@@ -818,8 +813,8 @@ def _log_output_tensor_info(
     fields_dict["creation_kwargs"] = None
     fields_dict["tensor_shape"] = tuple(t.shape)
     fields_dict["tensor_dtype"] = t.dtype
-    fields_dict["tensor_fsize"] = get_tensor_memory_amount(t)
-    fields_dict["tensor_fsize_nice"] = human_readable_size(fields_dict["tensor_fsize"])
+    with pause_logging():
+        fields_dict["tensor_fsize"] = t.nelement() * t.element_size()
 
     # FLOPs computation
     fields_dict["flops_forward"] = compute_forward_flops(

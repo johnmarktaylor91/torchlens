@@ -201,7 +201,6 @@ def _log_final_info_for_all_layers(self) -> None:
 
     self.num_tensors_total = len(self)
     self.tensor_fsize_total_nice = human_readable_size(self.tensor_fsize_total)
-    self.total_params_fsize_nice = human_readable_size(self.total_params_fsize)
 
 
 def _finalize_output_operation_nums(self) -> None:
@@ -398,7 +397,6 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
             self.layer_num_passes[layer_entry.layer_label_no_pass] = layer_entry.layer_passes_total
             if layer_entry.has_saved_activations:
                 self.tensor_fsize_saved += layer_entry.tensor_fsize
-            _trim_and_reorder_layer_entry_fields(layer_entry)  # Final reformatting of fields
             i += 1
         else:
             layers_to_remove.append(layer_entry)
