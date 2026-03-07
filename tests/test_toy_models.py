@@ -2498,6 +2498,1217 @@ def test_simple_depth_estimator():
 
 
 # =============================================================================
+# Group J: Autoencoders
+# =============================================================================
+
+
+def test_vanilla_autoencoder():
+    model = example_models.VanillaAutoencoder()
+    x = torch.rand(2, 784)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "vanilla_autoencoder"),
+    )
+
+
+def test_conv_autoencoder():
+    model = example_models.ConvAutoencoder()
+    x = torch.rand(2, 1, 28, 28)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "conv_autoencoder"),
+    )
+
+
+def test_sparse_autoencoder():
+    model = example_models.SparseAutoencoder()
+    x = torch.rand(2, 784)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "sparse_autoencoder"),
+    )
+
+
+def test_denoising_autoencoder():
+    model = example_models.DenoisingAutoencoder()
+    x = torch.rand(2, 784)
+    assert validate_forward_pass(model, x, random_seed=42)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        random_seed=42,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "denoising_autoencoder"),
+    )
+
+
+def test_vq_vae():
+    model = example_models.VQVAE()
+    x = torch.rand(2, 1, 28, 28)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "vq_vae"),
+    )
+
+
+def test_beta_vae():
+    model = example_models.BetaVAE()
+    x = torch.rand(2, 784)
+    assert validate_forward_pass(model, x, random_seed=42)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        random_seed=42,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "beta_vae"),
+    )
+
+
+def test_conditional_vae():
+    model = example_models.ConditionalVAE()
+    x = torch.rand(2, 784)
+    label = torch.randint(0, 10, (2,))
+    assert validate_forward_pass(model, (x, label), random_seed=42)
+    show_model_graph(
+        model,
+        (x, label),
+        save_only=True,
+        vis_opt="unrolled",
+        random_seed=42,
+        vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "conditional_vae"),
+    )
+
+
+# =============================================================================
+# Group K: State Space Models
+# =============================================================================
+
+
+def test_simple_ssm():
+    model = example_models.SimpleSSM()
+    x = torch.rand(2, 10, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "simple_ssm"),
+    )
+
+
+def test_selective_ssm():
+    model = example_models.SelectiveSSM()
+    x = torch.rand(2, 10, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "selective_ssm"),
+    )
+
+
+def test_stacked_ssm():
+    model = example_models.StackedSSM()
+    x = torch.randint(0, 100, (2, 10))
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "stacked_ssm"),
+    )
+
+
+# =============================================================================
+# Group L: Additional Architecture Patterns
+# =============================================================================
+
+
+def test_siamese_network():
+    model = example_models.SiameseNetwork()
+    x1 = torch.rand(2, 32)
+    x2 = torch.rand(2, 32)
+    assert validate_forward_pass(model, (x1, x2))
+    show_model_graph(
+        model,
+        (x1, x2),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "siamese_network"),
+    )
+
+
+def test_mlp_mixer():
+    model = example_models.MLPMixer()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "mlp_mixer"),
+    )
+
+
+def test_simple_gcn():
+    model = example_models.SimpleGCN()
+    x = torch.rand(6, 8)
+    adj = torch.rand(6, 6).gt(0.5).float()
+    adj = adj + adj.T  # symmetric
+    adj = adj.clamp(max=1)
+    adj = adj + torch.eye(6)  # self-loops
+    assert validate_forward_pass(model, (x, adj))
+    show_model_graph(
+        model,
+        (x, adj),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "simple_gcn"),
+    )
+
+
+def test_simple_gat():
+    model = example_models.SimpleGAT()
+    x = torch.rand(6, 8)
+    adj = torch.rand(6, 6).gt(0.5).float()
+    adj = adj + adj.T
+    adj = adj.clamp(max=1)
+    adj = adj + torch.eye(6)
+    assert validate_forward_pass(model, (x, adj))
+    show_model_graph(
+        model,
+        (x, adj),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "simple_gat"),
+    )
+
+
+def test_simple_diffusion():
+    model = example_models.SimpleDiffusion()
+    x = torch.rand(2, 784)
+    t = torch.rand(2, 1)
+    assert validate_forward_pass(model, (x, t))
+    show_model_graph(
+        model,
+        (x, t),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "simple_diffusion"),
+    )
+
+
+def test_simple_normalizing_flow():
+    model = example_models.SimpleNormalizingFlow()
+    x = torch.rand(2, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "simple_normalizing_flow"),
+    )
+
+
+def test_capsule_network():
+    model = example_models.CapsuleNetwork()
+    x = torch.rand(2, 1, 28, 28)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "capsule_network"),
+    )
+
+
+# =============================================================================
+# Group M: Attention Variants
+# =============================================================================
+
+
+def test_multi_query_attention():
+    model = example_models.MultiQueryAttentionModel()
+    x = torch.rand(2, 8, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_query_attention"),
+    )
+
+
+def test_grouped_query_attention():
+    model = example_models.GroupedQueryAttentionModel()
+    x = torch.rand(2, 8, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "grouped_query_attention"),
+    )
+
+
+def test_rope_attention():
+    model = example_models.RoPEAttentionModel()
+    x = torch.rand(2, 8, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "rope_attention"),
+    )
+
+
+def test_alibi_attention():
+    model = example_models.ALiBiAttentionModel()
+    x = torch.rand(2, 8, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "alibi_attention"),
+    )
+
+
+def test_slot_attention():
+    model = example_models.SlotAttentionModel()
+    x = torch.rand(2, 16, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "slot_attention"),
+    )
+
+
+def test_cross_attention():
+    model = example_models.CrossAttentionModel()
+    x = torch.rand(2, 16, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "cross_attention"),
+    )
+
+
+# =============================================================================
+# Group N: Gating & Skip Patterns
+# =============================================================================
+
+
+def test_highway_network():
+    model = example_models.HighwayNetwork()
+    x = torch.rand(4, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "highway_network"),
+    )
+
+
+def test_squeeze_excitation():
+    model = example_models.SqueezeExcitationBlock()
+    x = torch.rand(2, 3, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "squeeze_excitation"),
+    )
+
+
+def test_depthwise_separable():
+    model = example_models.DepthwiseSeparableConv()
+    x = torch.rand(2, 3, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "depthwise_separable"),
+    )
+
+
+def test_inverted_residual():
+    model = example_models.InvertedResidualBlock()
+    x = torch.rand(2, 3, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "inverted_residual"),
+    )
+
+
+def test_feature_pyramid_net():
+    model = example_models.FeaturePyramidNet()
+    x = torch.rand(2, 3, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "feature_pyramid_net"),
+    )
+
+
+# =============================================================================
+# Group O: Generative & Self-Supervised
+# =============================================================================
+
+
+def test_hierarchical_vae():
+    model = example_models.HierarchicalVAE()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x, random_seed=1)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "hierarchical_vae"),
+    )
+
+
+def test_gated_conv():
+    model = example_models.GatedConvModel()
+    x = torch.rand(2, 3, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "gated_conv"),
+    )
+
+
+def test_masked_conv():
+    model = example_models.MaskedConvModel()
+    x = torch.rand(2, 1, 16, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "generative-models", "masked_conv"),
+    )
+
+
+def test_simclr():
+    model = example_models.SimCLRModel()
+    x1 = torch.rand(4, 16)
+    x2 = torch.rand(4, 16)
+    assert validate_forward_pass(model, (x1, x2))
+    show_model_graph(
+        model,
+        (x1, x2),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simclr"),
+    )
+
+
+def test_stop_gradient():
+    model = example_models.StopGradientModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "stop_gradient"),
+    )
+
+
+def test_adain():
+    model = example_models.AdaINModel()
+    content = torch.rand(2, 3, 16, 16)
+    style = torch.rand(2, 3, 16, 16)
+    assert validate_forward_pass(model, (content, style))
+    show_model_graph(
+        model,
+        (content, style),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "adain"),
+    )
+
+
+# =============================================================================
+# Group P: Exotic Architectures
+# =============================================================================
+
+
+def test_hyper_network():
+    model = example_models.HyperNetwork()
+    x = torch.rand(4, 8)
+    cond = torch.rand(1, 4)
+    assert validate_forward_pass(model, (x, cond))
+    show_model_graph(
+        model,
+        (x, cond),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "hyper_network"),
+    )
+
+
+def test_deq_model():
+    model = example_models.DEQModel()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "deq_model"),
+    )
+
+
+def test_neural_ode():
+    model = example_models.SimpleNeuralODE()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "neural_ode"),
+    )
+
+
+def test_memory_augmented():
+    model = example_models.MemoryAugmentedNet()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "memory_augmented"),
+    )
+
+
+def test_swiglu_ffn():
+    model = example_models.SwiGLUFFN()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "swiglu_ffn"),
+    )
+
+
+# =============================================================================
+# Group Q: Graph Neural Networks (expanded)
+# =============================================================================
+
+
+def test_graphsage():
+    model = example_models.GraphSAGEModel()
+    x = torch.rand(8, 8)
+    adj = (torch.rand(8, 8) > 0.5).float()
+    adj = (adj + adj.t()).clamp(max=1)
+    adj.fill_diagonal_(0)
+    assert validate_forward_pass(model, (x, adj))
+    show_model_graph(
+        model,
+        (x, adj),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graphsage"),
+    )
+
+
+def test_gin():
+    model = example_models.GINModel()
+    x = torch.rand(8, 8)
+    adj = (torch.rand(8, 8) > 0.5).float()
+    adj = (adj + adj.t()).clamp(max=1)
+    adj.fill_diagonal_(0)
+    assert validate_forward_pass(model, (x, adj))
+    show_model_graph(
+        model,
+        (x, adj),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gin"),
+    )
+
+
+def test_edge_conv():
+    model = example_models.EdgeConvModel()
+    x = torch.rand(8, 3)
+    adj = (torch.rand(8, 8) > 0.5).float()
+    adj = (adj + adj.t()).clamp(max=1)
+    adj.fill_diagonal_(0)
+    assert validate_forward_pass(model, (x, adj))
+    show_model_graph(
+        model,
+        (x, adj),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "edge_conv"),
+    )
+
+
+def test_graph_transformer():
+    model = example_models.GraphTransformerModel()
+    x = torch.rand(8, 8)
+    adj = (torch.rand(8, 8) > 0.5).float()
+    adj = (adj + adj.t()).clamp(max=1)
+    adj.fill_diagonal_(1)
+    assert validate_forward_pass(model, (x, adj))
+    show_model_graph(
+        model,
+        (x, adj),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graph_transformer"),
+    )
+
+
+# =============================================================================
+# Group R: Additional Computational Patterns
+# =============================================================================
+
+
+def test_moe():
+    model = example_models.MoEModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "moe"),
+    )
+
+
+def test_spatial_transformer():
+    model = example_models.SpatialTransformerNet()
+    x = torch.rand(2, 1, 28, 28)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "spatial_transformer"),
+    )
+
+
+def test_dueling_dqn():
+    model = example_models.DuelingDQN()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "dueling_dqn"),
+    )
+
+
+def test_rms_norm():
+    model = example_models.RMSNormModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "rms_norm"),
+    )
+
+
+def test_sparse_pruned():
+    model = example_models.SparsePrunedModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "sparse_pruned"),
+    )
+
+
+def test_fourier_mixing():
+    model = example_models.FourierMixingModel()
+    x = torch.rand(2, 8, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "fourier_mixing"),
+    )
+
+
+# =============================================================================
+# Group S: Gap-Fill Models
+# =============================================================================
+
+
+def test_lenet5():
+    model = example_models.LeNet5()
+    x = torch.rand(2, 1, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "lenet5"),
+    )
+
+
+def test_bilstm():
+    model = example_models.BiLSTMModel()
+    x = torch.rand(4, 10, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "bilstm"),
+    )
+
+
+def test_seq2seq_attention():
+    model = example_models.Seq2SeqWithAttention()
+    x = torch.rand(2, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "seq2seq_attention"),
+    )
+
+
+def test_triplet_network():
+    model = example_models.TripletNetwork()
+    anchor = torch.rand(4, 16)
+    positive = torch.rand(4, 16)
+    negative = torch.rand(4, 16)
+    assert validate_forward_pass(model, (anchor, positive, negative))
+    show_model_graph(
+        model,
+        (anchor, positive, negative),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "triplet_network"),
+    )
+
+
+def test_barlow_twins():
+    model = example_models.BarlowTwinsModel()
+    x1 = torch.rand(8, 16)
+    x2 = torch.rand(8, 16)
+    assert validate_forward_pass(model, (x1, x2))
+    show_model_graph(
+        model,
+        (x1, x2),
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "barlow_twins"),
+    )
+
+
+def test_deep_cross_network():
+    model = example_models.DeepCrossNetwork()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "deep_cross_network"),
+    )
+
+
+def test_axial_attention():
+    model = example_models.AxialAttentionModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "axial_attention"),
+    )
+
+
+def test_cbam():
+    model = example_models.CBAMBlock()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "cbam"),
+    )
+
+
+# =============================================================================
+# Group T: Additional Pattern Coverage
+# =============================================================================
+
+
+def test_gru_model():
+    model = example_models.GRUModel()
+    x = torch.rand(4, 10, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "gru_model"),
+    )
+
+
+def test_nin_model():
+    model = example_models.NiNModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nin_model"),
+    )
+
+
+def test_channel_shuffle_model():
+    model = example_models.ChannelShuffleModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "channel_shuffle_model"),
+    )
+
+
+def test_pixel_shuffle_model():
+    model = example_models.PixelShuffleModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "pixel_shuffle_model"),
+    )
+
+
+def test_partial_conv_model():
+    model = example_models.PartialConvModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "partial_conv_model"),
+    )
+
+
+def test_film_model():
+    model = example_models.FiLMModel()
+    x = torch.rand(2, 3, 8, 8)
+    cond = torch.rand(2, 8)
+    model_input = (x, cond)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "film_model"),
+    )
+
+
+def test_coordinate_attention_model():
+    model = example_models.CoordinateAttentionModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "coordinate_attention_model"),
+    )
+
+
+def test_differential_attention_model():
+    model = example_models.DifferentialAttentionModel()
+    x = torch.rand(2, 10, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "differential_attention_model"),
+    )
+
+
+def test_relative_position_attention_model():
+    model = example_models.RelativePositionAttentionModel()
+    x = torch.rand(2, 10, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "relative_position_attention_model"),
+    )
+
+
+def test_early_exit_model():
+    model = example_models.EarlyExitModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "early_exit_model"),
+    )
+
+
+def test_multi_scale_parallel_model():
+    model = example_models.MultiScaleParallelModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_scale_parallel_model"),
+    )
+
+
+def test_gumbel_vq_model():
+    model = example_models.GumbelVQModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "gumbel_vq_model"),
+    )
+
+
+def test_end_to_end_memory_network():
+    model = example_models.EndToEndMemoryNetwork()
+    query = torch.randint(0, 32, (4,))
+    memory = torch.randint(0, 32, (4, 8))
+    model_input = (query, memory)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "end_to_end_memory_network"),
+    )
+
+
+def test_rbf_network():
+    model = example_models.RBFNetwork()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "rbf_network"),
+    )
+
+
+def test_siren_model():
+    model = example_models.SIRENModel()
+    x = torch.rand(100, 2)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "siren_model"),
+    )
+
+
+def test_multi_task_model():
+    model = example_models.MultiTaskModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "multi_task_model"),
+    )
+
+
+def test_wide_and_deep_model():
+    model = example_models.WideAndDeepModel()
+    x = torch.rand(4, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "wide_and_deep_model"),
+    )
+
+
+def test_cheb_gcn():
+    model = example_models.ChebGCN()
+    x = torch.rand(10, 8)
+    adj = torch.rand(10, 10)
+    adj = (adj + adj.t()) / 2
+    model_input = (x, adj)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "cheb_gcn"),
+    )
+
+
+def test_prototypical_network():
+    model = example_models.PrototypicalNetwork()
+    support = torch.rand(8, 16)
+    labels = torch.tensor([0, 0, 1, 1, 2, 2, 3, 3])
+    query = torch.rand(4, 16)
+    model_input = (support, labels, query)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "prototypical_network"),
+    )
+
+
+def test_eca_model():
+    model = example_models.ECAModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "eca_model"),
+    )
+
+
+# =============================================================================
+# Group U: Final Coverage — Novel Computational Patterns
+# =============================================================================
+
+
+def test_linear_attention_model():
+    model = example_models.LinearAttentionModel()
+    x = torch.rand(2, 8, 16)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "linear_attention_model"),
+    )
+
+
+def test_simple_fno():
+    model = example_models.SimpleFNO()
+    x = torch.rand(2, 16, 3)  # (B, N_grid, in_channels)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_fno"),
+    )
+
+
+def test_perceiver_model():
+    model = example_models.PerceiverModel()
+    x = torch.rand(2, 12, 16)  # arbitrary-length input
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "perceiver_model"),
+    )
+
+
+def test_aspp_model():
+    model = example_models.ASPPModel()
+    x = torch.rand(2, 3, 32, 32)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "aspp_model"),
+    )
+
+
+def test_controlnet_model():
+    model = example_models.ControlNetModel()
+    x = torch.rand(2, 3, 8, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "controlnet_model"),
+    )
+
+
+def test_simple_egnn():
+    model = example_models.SimpleEGNN()
+    h = torch.rand(2, 6, 8)  # node features
+    x = torch.rand(2, 6, 3)  # 3D coordinates
+    model_input = (h, x)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_egnn"),
+    )
+
+
+def test_maml_inner_loop():
+    model = example_models.MAMLInnerLoop()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "maml_inner_loop"),
+    )
+
+
+def test_tiny_nerf():
+    model = example_models.TinyNeRF()
+    origins = torch.rand(4, 3)
+    dirs = torch.nn.functional.normalize(torch.rand(4, 3), dim=-1)
+    model_input = (origins, dirs)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "tiny_nerf"),
+    )
+
+
+# =============================================================================
 # Group Z: Adversarial Edge Cases
 # =============================================================================
 

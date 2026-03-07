@@ -38,6 +38,19 @@ sub_dirs = [
     "time-series",
     "point-cloud",
     "super-resolution",
+    "autoencoders",
+    "state-space-models",
+    "attention-variants",
+    "gating-skip-patterns",
+    "exotic-architectures",
+    "reinforcement-learning",
+    "efficient-transformers",
+    "decoder-only-llms",
+    "encoder-only",
+    "encoder-decoder",
+    "perceiver",
+    "moe-models",
+    "detection-additional",
 ]
 
 os.makedirs(REPORTS_DIR, exist_ok=True)

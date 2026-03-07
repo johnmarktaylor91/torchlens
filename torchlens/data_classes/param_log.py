@@ -178,6 +178,11 @@ class ParamLog:
             lines.append(f"  num_passes: {self.num_passes}")
         return "\n".join(lines)
 
+    def release_param_ref(self):
+        """Cache gradient info, then null _param_ref to allow param GC."""
+        self._check_param_grad()
+        self._param_ref = None
+
     def __len__(self) -> int:
         """Return the number of scalar elements in this parameter."""
         return self.num_params

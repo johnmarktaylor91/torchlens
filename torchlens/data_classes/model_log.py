@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
 
-from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup
+from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup, release_param_refs
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
 from ..utils.display import human_readable_size
@@ -394,6 +394,7 @@ class ModelLog:
     validate_forward_pass = validate_saved_activations  # user-facing alias
     check_metadata_invariants = check_metadata_invariants
     cleanup = cleanup
+    release_param_refs = release_param_refs
     _postprocess = postprocess
     _run_and_log_inputs_through_model = run_and_log_inputs_through_model
     _remove_log_entry = _remove_log_entry
