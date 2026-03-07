@@ -25,6 +25,8 @@ This matches each accessor's natural granularity.
 import weakref
 from typing import Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
+from ..utils.display import human_readable_size
+
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -142,7 +144,6 @@ class ModuleLog:
         num_params_trainable: int = 0,
         num_params_frozen: int = 0,
         params_fsize: int = 0,
-        params_fsize_nice: str = "",
         requires_grad: bool = False,
         # Buffers
         buffer_layers: Optional[List[str]] = None,
@@ -193,7 +194,6 @@ class ModuleLog:
         self.num_params_trainable = num_params_trainable
         self.num_params_frozen = num_params_frozen
         self.params_fsize = params_fsize
-        self.params_fsize_nice = params_fsize_nice
         self.requires_grad = requires_grad
 
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
@@ -209,6 +209,10 @@ class ModuleLog:
         self._source_model_log_ref = (
             weakref.ref(_source_model_log) if _source_model_log is not None else None
         )
+
+    @property
+    def params_fsize_nice(self) -> str:
+        return human_readable_size(self.params_fsize)
 
     @property
     def _source_model_log(self):

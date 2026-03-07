@@ -107,7 +107,6 @@ MODEL_LOG_FIELD_ORDER = [
     "total_params_trainable",
     "total_params_frozen",
     "total_params_fsize",
-    "total_params_fsize_nice",
     # Time elapsed
     "pass_start_time",
     "pass_end_time",
@@ -156,7 +155,6 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "tensor_shape",
     "tensor_dtype",
     "tensor_fsize",
-    "tensor_fsize_nice",
     # Child tensor variation tracking
     "has_child_tensor_variations",
     "children_tensor_versions",
@@ -167,7 +165,6 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "grad_shape",
     "grad_dtype",
     "grad_fsize",
-    "grad_fsize_nice",
     # Function call info
     "func_applied",
     "func_applied_name",
@@ -200,7 +197,6 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "num_params_trainable",
     "num_params_frozen",
     "parent_params_fsize",
-    "parent_params_fsize_nice",
     # Corresponding layer info
     "operation_equivalence_type",
     "equivalent_operations",
@@ -292,7 +288,6 @@ LAYER_LOG_FIELD_ORDER = [
     "tensor_shape",
     "tensor_dtype",
     "tensor_fsize",
-    "tensor_fsize_nice",
     # Config
     "output_device",
     "activation_postfunc",
@@ -311,7 +306,6 @@ LAYER_LOG_FIELD_ORDER = [
     "num_params_trainable",
     "num_params_frozen",
     "parent_params_fsize",
-    "parent_params_fsize_nice",
     # Equivalence
     "operation_equivalence_type",
     "equivalent_operations",
@@ -374,7 +368,6 @@ PARAM_LOG_FIELD_ORDER = [
     "grad_shape",
     "grad_dtype",
     "grad_fsize",
-    "grad_fsize_nice",
 ]
 
 # Per-pass module execution data (one ModulePassLog per forward call to a module).
@@ -431,7 +424,6 @@ MODULE_LOG_FIELD_ORDER = [
     "num_params_trainable",
     "num_params_frozen",
     "params_fsize",
-    "params_fsize_nice",
     "requires_grad",
     # Buffers
     "buffer_layers",

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, List
 import torch
 
 from .._state import pause_logging
-from ..utils.display import human_readable_size, identity
+from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
 from ..utils.introspection import _get_func_call_stack
@@ -95,7 +95,6 @@ def _add_output_layers(
         new_output_node.num_params_trainable = 0
         new_output_node.num_params_frozen = 0
         new_output_node.parent_params_fsize = 0
-        new_output_node.parent_params_fsize_nice = human_readable_size(0)
 
         # Strip module info:
 

@@ -29,7 +29,6 @@ from torch import nn
 
 from ..utils.introspection import _get_func_call_stack, get_attr_values_from_tensor_list
 from ..utils.tensor_utils import get_tensor_memory_amount
-from ..utils.display import human_readable_size
 from ..utils.rng import log_current_rng_states
 from ..data_classes.buffer_log import BufferLog
 from ..data_classes.layer_pass_log import LayerPassLog
@@ -154,7 +153,6 @@ def log_source_tensor_exhaustive(
         "tensor_shape": tuple(t.shape),
         "tensor_dtype": t.dtype,
         "tensor_fsize": tensor_fsize,
-        "tensor_fsize_nice": human_readable_size(tensor_fsize),
         # Child tensor variation tracking
         "has_child_tensor_variations": False,
         "children_tensor_versions": {},
@@ -165,7 +163,6 @@ def log_source_tensor_exhaustive(
         "grad_shape": None,
         "grad_dtype": None,
         "grad_fsize": 0,
-        "grad_fsize_nice": human_readable_size(0),
         # Function call info:
         "func_applied": None,
         "func_applied_name": "none",
@@ -200,7 +197,6 @@ def log_source_tensor_exhaustive(
         "num_params_trainable": 0,
         "num_params_frozen": 0,
         "parent_params_fsize": 0,
-        "parent_params_fsize_nice": human_readable_size(0),
         # Corresponding layer info:
         "operation_equivalence_type": operation_equivalence_type,
         "equivalent_operations": self.equivalent_operations[operation_equivalence_type],
@@ -337,7 +333,6 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     orig_layer_entry.tensor_dtype = t.dtype
     fsize = get_tensor_memory_amount(t)
     orig_layer_entry.tensor_fsize = fsize
-    orig_layer_entry.tensor_fsize_nice = human_readable_size(fsize)
 
 
 def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:

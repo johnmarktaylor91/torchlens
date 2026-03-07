@@ -130,8 +130,7 @@ class ModelLog:
             optimizer: Optional torch optimizer, used to annotate which params
                 have optimizers attached.
         """
-        # Deep-copy the postfunc so mutations by the caller don't affect us.
-        activation_postfunc = copy.deepcopy(activation_postfunc)
+        # Callables are effectively immutable — deepcopy is unnecessary.
 
         # General info
         self.model_name = model_name
@@ -233,7 +232,6 @@ class ModelLog:
         self.total_params_trainable: int = 0
         self.total_params_frozen: int = 0
         self.total_params_fsize: int = 0
-        self.total_params_fsize_nice: str = human_readable_size(0)
 
         # Transient module build data (consumed by _build_module_logs, then cleared):
         self._module_build_data: Dict = _init_module_build_data()
@@ -306,6 +304,10 @@ class ModelLog:
     # flops_backward on each LayerPassLog).  These properties aggregate
     # across the entire model.  Layers with None FLOPs (unknown ops) are
     # skipped, so the totals may undercount.
+
+    @property
+    def total_params_fsize_nice(self) -> str:
+        return human_readable_size(self.total_params_fsize)
 
     @property
     def total_flops_forward(self) -> int:

@@ -210,7 +210,6 @@ def postprocess_fast(self: "ModelLog") -> None:
             safe_copy(parent_contents, detach_tensor=True) if parent_contents is not None else None
         )
         output_layer.tensor_fsize = parent_layer.tensor_fsize
-        output_layer.tensor_fsize_nice = parent_layer.tensor_fsize_nice
         output_layer.has_saved_activations = parent_layer.has_saved_activations
         output_layer.has_saved_grad = parent_layer.has_saved_grad
         output_layer.grad_contents = parent_layer.grad_contents

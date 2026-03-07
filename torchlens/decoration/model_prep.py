@@ -36,7 +36,6 @@ from .. import _state
 from ..data_classes import ParamAccessor, ParamLog
 from ..utils.tensor_utils import get_tensor_memory_amount
 from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
-from ..utils.display import human_readable_size
 from ..utils.hashing import make_random_barcode
 from ..capture.source_tensors import log_source_tensor
 
@@ -266,7 +265,6 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
             dtype=param.dtype,
             num_params=param.numel(),
             fsize=param_fsize,
-            fsize_nice=human_readable_size(param_fsize),
             trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
             module_address=module_address,
             module_type=module_type,

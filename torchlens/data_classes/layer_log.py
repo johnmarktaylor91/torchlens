@@ -28,6 +28,8 @@ All other 78+ fields use the first pass's values only.
 import weakref
 from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
+from ..utils.display import human_readable_size
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -86,7 +88,6 @@ class LayerLog:
         self.tensor_shape = first_pass.tensor_shape
         self.tensor_dtype = first_pass.tensor_dtype
         self.tensor_fsize = first_pass.tensor_fsize
-        self.tensor_fsize_nice = first_pass.tensor_fsize_nice
 
         # Config
         self.output_device = first_pass.output_device
@@ -108,7 +109,6 @@ class LayerLog:
         self.num_params_trainable = first_pass.num_params_trainable
         self.num_params_frozen = first_pass.num_params_frozen
         self.parent_params_fsize = first_pass.parent_params_fsize
-        self.parent_params_fsize_nice = first_pass.parent_params_fsize_nice
 
         # Equivalence
         self.operation_equivalence_type = first_pass.operation_equivalence_type
@@ -148,6 +148,14 @@ class LayerLog:
         # Pass management
         self.passes: Dict[int, "LayerPassLog"] = {}
         self.pass_labels: List[str] = []
+
+    @property
+    def tensor_fsize_nice(self) -> str:
+        return human_readable_size(self.tensor_fsize)
+
+    @property
+    def parent_params_fsize_nice(self) -> str:
+        return human_readable_size(self.parent_params_fsize)
 
     @property
     def source_model_log(self) -> "ModelLog":

@@ -27,7 +27,6 @@ import torch
 from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from ..utils.introspection import get_vars_of_type_from_obj
-from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -89,9 +88,6 @@ def _finalize_param_logs(self: "ModelLog") -> None:
     LayerPassLog entries to reduce memory, while preserving ParamLog._param_ref
     for potential backward() calls by the user.
     """
-    from ..utils.tensor_utils import get_tensor_memory_amount
-    from ..utils.display import human_readable_size
-
     # Build layer_log_entries and linked_params from LayerPassLog entries
     for layer_entry in self.layer_list:
         if not layer_entry.parent_param_logs:
@@ -172,7 +168,6 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
         num_params_trainable=root_num_trainable,
         num_params_frozen=root_num_frozen,
         params_fsize=root_fsize,
-        params_fsize_nice=human_readable_size(root_fsize),
         requires_grad=root_num_trainable > 0,
         buffer_layers=list(self.buffer_layers),
         training_mode=root_meta.get("training_mode", True),
@@ -485,7 +480,6 @@ def _build_module_logs(self: "ModelLog") -> None:
             num_params_trainable=param_info.num_trainable,
             num_params_frozen=param_info.num_frozen,
             params_fsize=param_info.fsize,
-            params_fsize_nice=human_readable_size(param_info.fsize),
             requires_grad=param_info.num_trainable > 0,
             buffer_layers=param_info.buffer_layers,
             training_mode=mbd["module_training_modes"].get(

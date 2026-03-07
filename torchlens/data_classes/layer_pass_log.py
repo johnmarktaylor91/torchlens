@@ -142,7 +142,6 @@ class LayerPassLog:
         self.tensor_shape = fields_dict["tensor_shape"]
         self.tensor_dtype = fields_dict["tensor_dtype"]
         self.tensor_fsize = fields_dict["tensor_fsize"]
-        self.tensor_fsize_nice = fields_dict["tensor_fsize_nice"]
 
         # Child tensor variation tracking — stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
@@ -158,7 +157,6 @@ class LayerPassLog:
         self.grad_shape = fields_dict["grad_shape"]
         self.grad_dtype = fields_dict["grad_dtype"]
         self.grad_fsize = fields_dict["grad_fsize"]
-        self.grad_fsize_nice = fields_dict["grad_fsize_nice"]
 
         # Function call info:
         self.func_applied = fields_dict["func_applied"]
@@ -193,7 +191,6 @@ class LayerPassLog:
         self.num_params_trainable = fields_dict["num_params_trainable"]
         self.num_params_frozen = fields_dict["num_params_frozen"]
         self.parent_params_fsize = fields_dict["parent_params_fsize"]
-        self.parent_params_fsize_nice = fields_dict["parent_params_fsize_nice"]
 
         # Loop-detection equivalence info:
         # operation_equivalence_type groups structurally identical operations
@@ -270,6 +267,18 @@ class LayerPassLog:
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
         self.parent_layer_log = None
+
+    @property
+    def tensor_fsize_nice(self) -> str:
+        return human_readable_size(self.tensor_fsize)
+
+    @property
+    def grad_fsize_nice(self) -> str:
+        return human_readable_size(self.grad_fsize)
+
+    @property
+    def parent_params_fsize_nice(self) -> str:
+        return human_readable_size(self.parent_params_fsize)
 
     @property
     def source_model_log(self) -> "ModelLog":
@@ -403,9 +412,7 @@ class LayerPassLog:
         self.has_saved_grad = True
         self.grad_shape = grad.shape
         self.grad_dtype = grad.dtype
-        grad_fsize = get_tensor_memory_amount(grad)
-        self.grad_fsize = grad_fsize
-        self.grad_fsize_nice = human_readable_size(grad_fsize)
+        self.grad_fsize = get_tensor_memory_amount(grad)
 
     # ********************************************
     # ************* Fetcher Functions ************

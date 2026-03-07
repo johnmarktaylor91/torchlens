@@ -42,7 +42,6 @@ class ParamLog:
         dtype: torch.dtype,
         num_params: int,
         fsize: int,
-        fsize_nice: str,
         trainable: bool,
         module_address: str,
         module_type: str,
@@ -55,7 +54,6 @@ class ParamLog:
         self.dtype = dtype
         self.num_params = num_params
         self.fsize = fsize
-        self.fsize_nice = fsize_nice
         self.trainable = trainable
         self.module_address = module_address
         self.module_type = module_type
@@ -76,6 +74,10 @@ class ParamLog:
         self._grad_dtype: Optional[torch.dtype] = None
         self._grad_fsize: int = 0
         self._grad_fsize_nice: str = human_readable_size(0)
+
+    @property
+    def fsize_nice(self) -> str:
+        return human_readable_size(self.fsize)
 
     @property
     def is_quantized(self) -> bool:
