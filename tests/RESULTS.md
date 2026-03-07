@@ -10,11 +10,11 @@ Public summary of TorchLens test suite outcomes. Updated after each release.
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 888 |
+| Total tests | 892 |
 | Smoke tests (`-m smoke`) | 18 |
 | Test files | 14 |
-| Example models (toy) | 247 |
-| Real-world models | 183 |
+| Example models (toy) | 249 |
+| Real-world models | 185 |
 
 **Run the suite:**
 ```bash
@@ -30,8 +30,8 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| test_toy_models.py | 248 | API coverage on 247 example models (log, validate, visualize, metadata) |
-| test_real_world_models.py | 183 | Real-world architectures: validation + visualization |
+| test_toy_models.py | 250 | API coverage on 249 example models (log, validate, visualize, metadata) |
+| test_real_world_models.py | 185 | Real-world architectures: validation + visualization |
 | test_metadata.py | 107 | Field invariants, FLOPs, timing, RNG, func_call_location, corruption detection |
 | test_param_log.py | 70 | ParamLog, ParamAccessor, shared params, grad metadata |
 | test_decoration.py | 61 | Toggle state, detached imports, pause_logging, JIT compat, signal safety |
@@ -49,9 +49,9 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 ## Model Compatibility
 
-### Toy Models (247 architectures)
+### Toy Models (249 architectures)
 
-All 247 example models in `tests/example_models.py` pass `validate_forward_pass`.
+All 249 example models in `tests/example_models.py` pass `validate_forward_pass`.
 
 **Core patterns:** simple feedforward (incl. LeNet-5), branching, conditionals,
 48 loop/recurrence variants, in-place ops, view mutations, edge cases.
@@ -81,7 +81,8 @@ normalization (AdaIN).
 augmented network, end-to-end memory network (multi-hop), SwiGLU FFN, Fourier
 mixing (FNet-style), Fourier Neural Operator (spectral convolution), spatial
 transformer network, SIREN (sinusoidal activations), radial basis function
-network (RBF), Perceiver (cross-attention bottleneck).
+network (RBF), Perceiver (cross-attention bottleneck), MAML inner loop
+(higher-order gradients), tiny NeRF (differentiable volumetric rendering).
 
 **Graph neural networks:** GCN, GAT, GraphSAGE, GIN, EdgeConv (DGCNN), graph
 transformer, Chebyshev spectral GCN, E(n) equivariant GNN (EGNN).
@@ -110,7 +111,7 @@ Network in Network (1x1 conv + GAP), pixel shuffle upsampling.
 | **CORnet** | Z, S, R, RT | 4/4 pass |
 | **timm (original)** | BEiT, GluonResNeXt, ECAResNet, MobileViT, ADV-Inception, CaiT, CoAT, ConViT, DarkNet, GhostNet, MixNet, PoolFormer, ResNeSt, EdgeNeXt, HardCoreNAS, SEMNASNet, XCiT, SEResNet | 18/18 pass |
 | **timm (additional)** | HRNet, EfficientNetV2, LeViT, CrossViT, PVT-v2, Twins-SVT, FocalNet, Res2Net, gMLP, ResMLP, EVA-02 | 11/11 pass |
-| **timm (set 3)** | ConvNeXt-v2, NFNet, DaViT, CoAtNet, RepVGG, ReXNet, PiT, Visformer, GC-ViT, EfficientFormer, FastViT, NesT, Sequencer2D, TResNet | 14/14 pass |
+| **timm (set 3)** | ConvNeXt-v2, NFNet, DaViT, CoAtNet, RepVGG, ReXNet, PiT, Visformer, GC-ViT, EfficientFormer, FastViT, NesT, Sequencer2D, TResNet, VOLO | 15/15 pass |
 | **Audio (original)** | Conv-TasNet, Wav2Letter, HuBERT, Wav2Vec2, DeepSpeech, Conformer, Whisper-tiny | 7/7 pass |
 | **Audio (additional)** | AST, CLAP, EnCodec, SEW, SpeechT5, VITS | 6/6 pass |
 | **Audio (set 3)** | WavLM, Data2VecAudio, UniSpeech | 3/3 pass |
@@ -119,7 +120,7 @@ Network in Network (1x1 conv + GAP), pixel shuffle upsampling.
 | **Encoder-Only (additional)** | ALBERT, DeBERTa-v2, XLM-RoBERTa, Funnel Transformer, CANINE, MobileBERT | 6/6 pass |
 | **Encoder-Decoder (additional)** | Pegasus, LED, mBART, ProphetNet | 4/4 pass |
 | **Efficient Transformers** | FNet, Nystromformer, BigBird, Longformer, Reformer | 5/5 pass |
-| **State Space Models** | Mamba, Mamba-2, RWKV, Falcon-Mamba | 4/4 pass |
+| **State Space Models** | Mamba, Mamba-2, RWKV, Falcon-Mamba, RecurrentGemma | 5/5 pass |
 | **Mixture of Experts** | Mixtral, Switch Transformer, MoE (toy) | 3/3 pass |
 | **Autoencoders** | ViT-MAE (ForPreTraining) | 1/1 pass |
 | **Multimodal / Special** | Stable Diffusion (UNet), StyleTTS, QML, Lightning, CLIP, BLIP, ViT-MAE, SigLIP, BLIP-2 | 9/9 pass |
@@ -136,7 +137,7 @@ Network in Network (1x1 conv + GAP), pixel shuffle upsampling.
 | **Graph Neural Networks** | DimeNet, GraphSAGE (PyG), GIN (PyG), Graph Transformer (PyG), GATv2 (PyG), R-GCN (PyG), ChebConv (PyG), SGConv (PyG), TAGConv (PyG) | 9/9 pass |
 | **Document Understanding** | LayoutLM | 1/1 pass |
 | **Other** | Taskonomy | 1/1 pass |
-| | **Total** | **183/183 pass** |
+| | **Total** | **185/185 pass** |
 
 *Tests requiring optional packages (torch_geometric, taskonomy) may show as SKIPPED.*
 
@@ -246,6 +247,10 @@ The test suite explicitly covers these distinct computational motifs:
 | Multi-rate dilated conv (ASPP) | ASPPModel | DeepLab-v3 |
 | Parallel encoder + zero-conv (ControlNet) | ControlNetModel | — |
 | E(n) equivariant message passing | SimpleEGNN | DimeNet |
+| Higher-order gradients (MAML) | MAMLInnerLoop | — |
+| Differentiable rendering (NeRF) | TinyNeRF | — |
+| Linear recurrence (Griffin) | — | RecurrentGemma |
+| Outlooker attention | — | VOLO |
 
 ---
 

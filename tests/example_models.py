@@ -5057,3 +5057,92 @@ class SimpleEGNN(nn.Module):
         x = x + x_update
         # Readout: mean pool features
         return self.out(h.mean(dim=1))
+
+
+class MAMLInnerLoop(nn.Module):
+    """MAML-style higher-order gradients: gradient computation within forward pass.
+
+    Tests the pattern where torch.autograd.grad is called INSIDE the forward
+    method to compute an inner-loop gradient update, and the outer loss
+    backpropagates THROUGH that inner gradient. This is the "gradient of
+    gradient" pattern — the most demanding test for activation tracking.
+    """
+
+    def __init__(self, in_dim=8, hidden=16, out_dim=4):
+        super().__init__()
+        self.w1 = nn.Parameter(torch.randn(in_dim, hidden) * 0.1)
+        self.b1 = nn.Parameter(torch.zeros(hidden))
+        self.w2 = nn.Parameter(torch.randn(hidden, out_dim) * 0.1)
+        self.b2 = nn.Parameter(torch.zeros(out_dim))
+
+    def forward(self, x):
+        # "Support set" forward pass (inner loop)
+        h = torch.relu(x @ self.w1 + self.b1)
+        support_out = h @ self.w2 + self.b2
+        # Inner loss (MSE to zero — dummy task)
+        inner_loss = (support_out**2).mean()
+        # Inner gradient step (differentiable!)
+        grads = torch.autograd.grad(
+            inner_loss, [self.w1, self.b1, self.w2, self.b2], create_graph=True
+        )
+        # Fast weights (one gradient step)
+        w1_fast = self.w1 - 0.01 * grads[0]
+        b1_fast = self.b1 - 0.01 * grads[1]
+        w2_fast = self.w2 - 0.01 * grads[2]
+        b2_fast = self.b2 - 0.01 * grads[3]
+        # "Query set" forward with fast weights (outer loop)
+        h2 = torch.relu(x @ w1_fast + b1_fast)
+        return h2 @ w2_fast + b2_fast
+
+
+class TinyNeRF(nn.Module):
+    """Minimal differentiable volumetric renderer (NeRF-style).
+
+    Tests the differentiable rendering pattern: sample points along rays,
+    query an MLP for (density, color), then composite via volume rendering
+    equation (alpha compositing). The ray marching loop with learned
+    density/color is unique to neural radiance fields.
+    """
+
+    def __init__(self, pos_dim=3, hidden=32, num_samples=8):
+        super().__init__()
+        self.num_samples = num_samples
+        # Simple MLP: position -> (density, RGB)
+        self.net = nn.Sequential(
+            nn.Linear(pos_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
+        )
+        self.density_head = nn.Linear(hidden, 1)
+        self.color_head = nn.Linear(hidden, 3)
+
+    def forward(self, ray_origins, ray_dirs):
+        # ray_origins: (B, 3), ray_dirs: (B, 3)
+        B = ray_origins.shape[0]
+        # Sample points along each ray
+        t_vals = torch.linspace(0.0, 1.0, self.num_samples, device=ray_origins.device)
+        t_vals = t_vals.unsqueeze(0).expand(B, -1)  # (B, num_samples)
+        # Points: o + t*d for each sample
+        pts = ray_origins.unsqueeze(1) + t_vals.unsqueeze(-1) * ray_dirs.unsqueeze(1)  # (B, S, 3)
+        # Query MLP for all points
+        feats = self.net(pts.reshape(B * self.num_samples, -1))
+        raw_density = self.density_head(feats).reshape(B, self.num_samples)
+        raw_color = self.color_head(feats).reshape(B, self.num_samples, 3)
+        # Volume rendering (alpha compositing)
+        density = torch.relu(raw_density)
+        color = torch.sigmoid(raw_color)
+        # Spacing between samples
+        dists = t_vals[:, 1:] - t_vals[:, :-1]
+        dists = torch.cat([dists, torch.ones(B, 1, device=dists.device) * 1e-3], dim=-1)
+        # Alpha = 1 - exp(-density * dist)
+        alpha = 1.0 - torch.exp(-density * dists)
+        # Transmittance: cumulative product of (1 - alpha)
+        transmittance = torch.cumprod(
+            torch.cat([torch.ones(B, 1, device=alpha.device), 1.0 - alpha[:, :-1]], dim=-1),
+            dim=-1,
+        )
+        # Weighted sum of colors
+        weights = alpha * transmittance  # (B, S)
+        rgb = (weights.unsqueeze(-1) * color).sum(dim=1)  # (B, 3)
+        return rgb

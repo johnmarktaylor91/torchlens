@@ -3680,6 +3680,34 @@ def test_simple_egnn():
     )
 
 
+def test_maml_inner_loop():
+    model = example_models.MAMLInnerLoop()
+    x = torch.rand(4, 8)
+    assert validate_forward_pass(model, x)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "maml_inner_loop"),
+    )
+
+
+def test_tiny_nerf():
+    model = example_models.TinyNeRF()
+    origins = torch.rand(4, 3)
+    dirs = torch.nn.functional.normalize(torch.rand(4, 3), dim=-1)
+    model_input = (origins, dirs)
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "tiny_nerf"),
+    )
+
+
 # =============================================================================
 # Group Z: Adversarial Edge Cases
 # =============================================================================

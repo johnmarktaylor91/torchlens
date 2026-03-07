@@ -4633,3 +4633,58 @@ def test_tag_pyg():
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "tag_pyg"),
     )
     assert validate_forward_pass(model, model_input)
+
+
+# =============================================================================
+# Linear Recurrence (Griffin-style)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_recurrent_gemma():
+    """RecurrentGemma: Griffin architecture — linear recurrence + local attention hybrid."""
+    pytest.importorskip("transformers")
+    from transformers import RecurrentGemmaConfig, RecurrentGemmaModel
+
+    config = RecurrentGemmaConfig(
+        vocab_size=256,
+        hidden_size=64,
+        intermediate_size=128,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        num_key_value_heads=2,
+        lru_width=64,
+        attention_window_size=16,
+    )
+    model = RecurrentGemmaModel(config).eval()
+    input_ids = torch.randint(0, 256, (2, 16))
+    show_model_graph(
+        model,
+        [],
+        model_kwargs={"input_ids": input_ids},
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "linear-recurrence", "recurrent_gemma"),
+    )
+    assert validate_forward_pass(model, [], model_kwargs={"input_ids": input_ids})
+
+
+# =============================================================================
+# Outlooker Attention (VOLO)
+# =============================================================================
+
+
+@pytest.mark.slow
+def test_timm_volo():
+    """VOLO: outlooker attention — a distinct attention variant (not self-attention)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("volo_d1_224", pretrained=False, num_classes=10).eval()
+    x = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(VIS_OUTPUT_DIR, "timm-models", "volo_d1"),
+    )
+    assert validate_forward_pass(model, x)
