@@ -191,7 +191,7 @@ def _extract_arg_tensors_and_params(
     """O(1) tensor/param extraction via lookup table, with BFS fallback."""
     spec = FUNC_ARG_SPECS.get(normalized_name) or _st._dynamic_arg_specs.get(normalized_name)
     if spec is not None:
-        return extract_tensors_and_params(spec, args, kwargs)
+        return extract_tensors_and_params(spec, args, kwargs)  # type: ignore[arg-type]
 
     # Tier 3 fallback: BFS crawl once, then cache for subsequent calls
     all_args = list(args) + list(kwargs.values())
@@ -325,8 +325,8 @@ def _build_shared_fields_dict(
     fields_dict["func_applied"] = func  # type: ignore[assignment]
     fields_dict["func_applied_name"] = func_name
     fields_dict["func_call_stack"] = (
-        _get_func_call_stack(self.num_context_lines) if self.save_source_context else []
-    )  # type: ignore[assignment]
+        _get_func_call_stack(self.num_context_lines) if self.save_source_context else []  # type: ignore[assignment]
+    )
     fields_dict["func_time_elapsed"] = exec_ctx.time_elapsed  # type: ignore[assignment]
     fields_dict["func_rng_states"] = exec_ctx.rng_states  # type: ignore[assignment]
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state  # type: ignore[assignment]

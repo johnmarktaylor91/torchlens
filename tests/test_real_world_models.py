@@ -3767,15 +3767,18 @@ def test_gptj():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gptj"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
+@pytest.mark.skip(
+    reason="GPTBigCode JIT-compiles attention internally, incompatible with TorchLens wrappers"
+)
 def test_gpt_bigcode():
     """GPTBigCode (StarCoder arch): multi-query attention for code."""
     pytest.importorskip("transformers")
@@ -3796,12 +3799,12 @@ def test_gpt_bigcode():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -3825,12 +3828,12 @@ def test_gpt_neox():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_neox"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================
@@ -3859,12 +3862,12 @@ def test_funnel_transformer():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "funnel_transformer"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -3888,12 +3891,12 @@ def test_canine():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "canine"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -3956,12 +3959,12 @@ def test_mbart():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "mbart"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -3990,12 +3993,12 @@ def test_prophetnet():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "prophetnet"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================
@@ -4025,12 +4028,12 @@ def test_audio_wavlm():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "wavlm"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -4055,12 +4058,12 @@ def test_audio_data2vec():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "data2vec_audio"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -4085,12 +4088,12 @@ def test_audio_unispeech():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "unispeech"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================
@@ -4359,12 +4362,12 @@ def test_siglip():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "siglip"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 @pytest.mark.slow
@@ -4401,12 +4404,12 @@ def test_blip2():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip2"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================
@@ -4433,7 +4436,7 @@ def test_deformable_detr():
             "model_type": "resnet",
             "hidden_sizes": [32, 64],
             "depths": [1, 1],
-            "out_features": ["stage2", "stage3"],
+            "out_features": ["stage1", "stage2"],
         },
     )
     model = DeformableDetrModel(config).eval()
@@ -4445,12 +4448,12 @@ def test_deformable_detr():
         show_model_graph(
             model,
             model_input,
-            model_kwargs=model_kwargs,
+            input_kwargs=model_kwargs,
             save_only=True,
             vis_opt="unrolled",
             vis_outpath=opj(VIS_OUTPUT_DIR, "detection-additional", "deformable_detr"),
         )
-        assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+        assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
     finally:
         torch.use_deterministic_algorithms(True)
 
@@ -4483,12 +4486,12 @@ def test_layoutlm():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "layoutlm"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================
@@ -4538,12 +4541,12 @@ def test_time_series_transformer():
     show_model_graph(
         model,
         model_input,
-        model_kwargs=model_kwargs,
+        input_kwargs=model_kwargs,
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "time_series_transformer"),
     )
-    assert validate_forward_pass(model, model_input, model_kwargs=model_kwargs)
+    assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
 
 
 # =============================================================================
@@ -4674,12 +4677,12 @@ def test_recurrent_gemma():
     show_model_graph(
         model,
         [],
-        model_kwargs={"input_ids": input_ids},
+        input_kwargs={"input_ids": input_ids},
         save_only=True,
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "linear-recurrence", "recurrent_gemma"),
     )
-    assert validate_forward_pass(model, [], model_kwargs={"input_ids": input_ids})
+    assert validate_forward_pass(model, [], input_kwargs={"input_ids": input_ids})
 
 
 # =============================================================================

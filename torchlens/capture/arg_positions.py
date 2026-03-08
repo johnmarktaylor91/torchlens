@@ -585,6 +585,10 @@ _UNARY_FUNCS = [
     # Hook/utility methods
     "registerhook",
     "isinteger",
+    # Dunder / internal
+    "index",
+    "symint",
+    "checkkeypaddingmask",
 ]
 
 for _name in _UNARY_FUNCS:

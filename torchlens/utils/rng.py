@@ -62,7 +62,7 @@ def log_current_rng_states(torch_only: bool = False) -> Dict:
         Dict with keys ``"random"``, ``"np"``, ``"torch"``, and optionally
         ``"torch_cuda"``, each holding the opaque state object for that engine.
     """
-    rng_dict = {"torch": torch.random.get_rng_state()}
+    rng_dict: Dict[str, object] = {"torch": torch.random.get_rng_state()}
     if not torch_only:
         rng_dict["random"] = random.getstate()
         rng_dict["np"] = np.random.get_state()
