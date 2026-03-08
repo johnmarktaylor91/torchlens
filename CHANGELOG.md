@@ -1,6 +1,48 @@
 # CHANGELOG
 
 
+## v0.20.3 (2026-03-08)
+
+### Bug Fixes
+
+- **vis**: Increase ELK Node.js stack floor to 4GB for large graphs
+  ([`29af94e`](https://github.com/johnmarktaylor91/torchlens/commit/29af94ed51b9018ba214f2de15c48e5454a773b3))
+
+128MB was insufficient for ELK's recursive layout on 500k+ node graphs.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Raise OS stack limit for ELK Node.js subprocess
+  ([`da82c9d`](https://github.com/johnmarktaylor91/torchlens/commit/da82c9d0fd66c2fdcbaabb86b31750811693a930))
+
+The OS soft stack limit (ulimit -s) was smaller than the --stack-size value passed to Node.js,
+  causing a segfault on large graphs (500k+ nodes) instead of allowing V8 to use the requested
+  stack. Uses preexec_fn to set RLIMIT_STACK to unlimited in the child process only.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Performance Improvements
+
+- **decoration**: Optimize model prep and move session attrs to ModelLog dicts
+  ([`b63a4fa`](https://github.com/johnmarktaylor91/torchlens/commit/b63a4fa3871113a5cc73554c576fb11c5eac2cd2))
+
+Five performance fixes for _prepare_model_session and related setup code:
+
+- PERF-38: Replace O(N²) list concat in _traverse_model_modules with deque - PERF-37: Cache
+  user_methods per class in _get_class_metadata; move _pytorch_internal set to module-level
+  frozenset - PERF-36: Iterate module._parameters directly instead of rsplit on named_parameters
+  addresses + lookup dict - PERF-39: Skip patch_model_instance for already-prepared models - Move 4
+  session-scoped module attrs (tl_module_pass_num, tl_module_pass_labels, tl_tensors_entered_labels,
+  tl_tensors_exited_labels) from nn.Module instances to ModelLog dicts keyed by id(module). Remove
+  tl_source_model_log (dead code). Eliminates per-module cleanup iteration in
+  _cleanup_model_session.
+
+At 10K modules: ensure_prepared repeat calls drop from ~48ms to ~0.4ms (111x), session setup ~1.3x
+  faster, cleanup ~1.4x faster.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.20.2 (2026-03-08)
 
 ### Bug Fixes
