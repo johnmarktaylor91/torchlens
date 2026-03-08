@@ -100,10 +100,8 @@ class LayerLog:
         self.flops_backward = first_pass.flops_backward
 
         # Param identity
-        self.computed_with_params = first_pass.computed_with_params
         self.parent_param_barcodes = first_pass.parent_param_barcodes
         self.parent_param_logs: List["ParamLog"] = first_pass.parent_param_logs
-        self.num_param_tensors = first_pass.num_param_tensors
         self.parent_param_shapes = first_pass.parent_param_shapes
         self.num_params_total = first_pass.num_params_total
         self.num_params_trainable = first_pass.num_params_trainable
@@ -128,10 +126,8 @@ class LayerLog:
         self.atomic_bool_val = first_pass.atomic_bool_val
 
         # Module (static containment)
-        self.is_computed_inside_submodule = first_pass.is_computed_inside_submodule
         self.containing_module_origin = first_pass.containing_module_origin
         self.containing_modules_origin_nested = first_pass.containing_modules_origin_nested
-        self.module_nesting_depth = first_pass.module_nesting_depth
 
         # Fields stored as aggregate for vis compatibility.
         # Initialized from first pass.  For multi-pass layers, _build_layer_logs
@@ -158,6 +154,26 @@ class LayerLog:
     def macs_backward(self) -> Optional[int]:
         """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
         return self.flops_backward // 2 if self.flops_backward is not None else None
+
+    @property
+    def computed_with_params(self) -> bool:
+        """Whether this layer uses model parameters."""
+        return len(self.parent_param_barcodes) > 0
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors used by this layer."""
+        return len(self.parent_param_barcodes)
+
+    @property
+    def is_computed_inside_submodule(self) -> bool:
+        """Whether this layer was computed inside a submodule."""
+        return self.containing_module_origin is not None
+
+    @property
+    def module_nesting_depth(self) -> int:
+        """Depth of module nesting for this layer."""
+        return len(self.containing_modules_origin_nested)
 
     @property
     def tensor_fsize_nice(self) -> str:

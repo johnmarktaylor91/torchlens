@@ -180,12 +180,10 @@ class LayerPassLog:
         self.iterable_output_index = fields_dict["iterable_output_index"]
 
         # Param info:
-        self.computed_with_params = fields_dict["computed_with_params"]
         self.parent_params = fields_dict["parent_params"]
         self.parent_param_barcodes = fields_dict["parent_param_barcodes"]
         self.parent_param_passes = fields_dict["parent_param_passes"]
         self.parent_param_logs: List["ParamLog"] = fields_dict["parent_param_logs"]
-        self.num_param_tensors = fields_dict["num_param_tensors"]
         self.parent_param_shapes = fields_dict["parent_param_shapes"]
         self.num_params_total = fields_dict["num_params_total"]
         self.num_params_trainable = fields_dict["num_params_trainable"]
@@ -204,15 +202,10 @@ class LayerPassLog:
 
         # Graph info:
         self.parent_layers = fields_dict["parent_layers"]
-        self.has_parents = fields_dict["has_parents"]
         self.parent_layer_arg_locs = fields_dict["parent_layer_arg_locs"]
         self.orig_ancestors = fields_dict["orig_ancestors"]
         self.child_layers = fields_dict["child_layers"]
         self.has_children = fields_dict["has_children"]
-        self.sibling_layers = fields_dict["sibling_layers"]
-        self.has_siblings = fields_dict["has_siblings"]
-        self.spouse_layers = fields_dict["spouse_layers"]
-        self.has_spouses = fields_dict["has_spouses"]
         self.is_input_layer = fields_dict["is_input_layer"]
         self.has_input_ancestor = fields_dict["has_input_ancestor"]
         self.input_ancestors = fields_dict["input_ancestors"]
@@ -246,14 +239,11 @@ class LayerPassLog:
         self.cond_branch_start_children = fields_dict["cond_branch_start_children"]
 
         # Module info
-        self.is_computed_inside_submodule = fields_dict["is_computed_inside_submodule"]
         self.containing_module_origin = fields_dict["containing_module_origin"]
         self.containing_modules_origin_nested = fields_dict["containing_modules_origin_nested"]
-        self.module_nesting_depth = fields_dict["module_nesting_depth"]
         self.modules_entered = fields_dict["modules_entered"]
         self.modules_entered_argnames = fields_dict["modules_entered_argnames"]
         self.module_passes_entered = fields_dict["module_passes_entered"]
-        self.is_submodule_input = fields_dict["is_submodule_input"]
         self.modules_exited = fields_dict["modules_exited"]
         self.module_passes_exited = fields_dict["module_passes_exited"]
         self.is_submodule_output = fields_dict["is_submodule_output"]
@@ -277,6 +267,84 @@ class LayerPassLog:
     def macs_backward(self) -> Optional[int]:
         """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
         return self.flops_backward // 2 if self.flops_backward is not None else None
+
+    @property
+    def has_parents(self) -> bool:
+        """Whether this layer has any parent layers."""
+        return len(self.parent_layers) > 0
+
+    @property
+    def sibling_layers(self) -> list:
+        """Layers sharing at least one parent (excluding output layers)."""
+        ml = self.source_model_log
+        if ml is None:
+            return []
+        my_label = self.layer_label if self._pass_finished else self.tensor_label_raw
+        siblings = []
+        seen = {my_label}
+        for parent_label in self.parent_layers:
+            parent = ml[parent_label]
+            for child_label in parent.child_layers:
+                if child_label not in seen:
+                    seen.add(child_label)
+                    child = ml[child_label]
+                    if not child.is_output_layer:
+                        siblings.append(child_label)
+        return siblings
+
+    @property
+    def has_siblings(self) -> bool:
+        """Whether this layer shares parents with other layers."""
+        return len(self.sibling_layers) > 0
+
+    @property
+    def spouse_layers(self) -> list:
+        """Layers sharing at least one child (excluding output layers)."""
+        ml = self.source_model_log
+        if ml is None:
+            return []
+        my_label = self.layer_label if self._pass_finished else self.tensor_label_raw
+        spouses = []
+        seen = {my_label}
+        for child_label in self.child_layers:
+            child = ml[child_label]
+            for parent_label in child.parent_layers:
+                if parent_label not in seen:
+                    seen.add(parent_label)
+                    parent = ml[parent_label]
+                    if not parent.is_output_layer:
+                        spouses.append(parent_label)
+        return spouses
+
+    @property
+    def has_spouses(self) -> bool:
+        """Whether this layer shares children with other layers."""
+        return len(self.spouse_layers) > 0
+
+    @property
+    def computed_with_params(self) -> bool:
+        """Whether this operation used model parameters."""
+        return len(self.parent_param_barcodes) > 0
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors used by this operation."""
+        return len(self.parent_param_barcodes)
+
+    @property
+    def is_computed_inside_submodule(self) -> bool:
+        """Whether this operation was computed inside a submodule."""
+        return self.containing_module_origin is not None
+
+    @property
+    def module_nesting_depth(self) -> int:
+        """Depth of module nesting for this operation."""
+        return len(self.containing_modules_origin_nested)
+
+    @property
+    def is_submodule_input(self) -> bool:
+        """Whether this operation is the first inside a submodule's forward()."""
+        return len(self.modules_entered) > 0
 
     @property
     def tensor_fsize_nice(self) -> str:

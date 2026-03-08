@@ -62,7 +62,6 @@ class ModulePassLog:
         self.pass_num = pass_num
         self.pass_label = pass_label  # e.g. "features.0:1"
         self.layers = layers  # pass-qualified layer labels
-        self.num_layers = len(layers)
         self.input_layers = input_layers
         self.output_layers = output_layers
         self.forward_args = forward_args
@@ -72,7 +71,16 @@ class ModulePassLog:
         self.all_module_addresses = (
             all_module_addresses if all_module_addresses is not None else [module_address]
         )
-        self.is_shared_module = len(self.all_module_addresses) > 1
+
+    @property
+    def num_layers(self) -> int:
+        """Number of layers in this pass."""
+        return len(self.layers)
+
+    @property
+    def is_shared_module(self) -> bool:
+        """Whether this module appears at multiple addresses."""
+        return len(self.all_module_addresses) > 1
 
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
@@ -158,7 +166,6 @@ class ModuleLog:
     ):
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
-        self.is_shared = len(self.all_addresses) > 1
         self.name = name
         self.module_class_name = module_class_name
 
@@ -185,7 +192,6 @@ class ModuleLog:
         # all_layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
         # Contrast with ModulePassLog.layers which stores pass-qualified labels.
         self.all_layers = all_layers if all_layers is not None else []
-        self.num_layers = len(self.all_layers)
 
         from .param_log import ParamAccessor
 
@@ -209,6 +215,16 @@ class ModuleLog:
         self._source_model_log_ref = (
             weakref.ref(_source_model_log) if _source_model_log is not None else None
         )
+
+    @property
+    def is_shared(self) -> bool:
+        """Whether this module appears at multiple addresses."""
+        return len(self.all_addresses) > 1
+
+    @property
+    def num_layers(self) -> int:
+        """Number of unique layers in this module."""
+        return len(self.all_layers)
 
     @property
     def params_fsize_nice(self) -> str:

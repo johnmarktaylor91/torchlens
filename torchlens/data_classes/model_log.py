@@ -162,11 +162,8 @@ class ModelLog:
         self.has_saved_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
 
-        # Model structure info
-        self.model_is_recurrent = False
-        self.model_max_recurrent_loops = 1
-        self.model_has_conditional_branching = False
-        self.model_is_branching = False
+        # Model structure info (computed @properties: model_is_recurrent,
+        # model_max_recurrent_loops, model_is_branching, model_has_conditional_branching)
 
         # Tensor Tracking — post-processed (populated after _pass_finished=True):
         self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
@@ -219,12 +216,9 @@ class ModelLog:
         self.equivalent_operations: Dict[str, set] = defaultdict(set)
 
         # Aggregate tensor statistics (computed during postprocessing):
-        self.num_tensors_total: int = 0
         self.tensor_fsize_total: int = 0
-        self.tensor_fsize_total_nice: str = human_readable_size(0)
         self.num_tensors_saved: int = 0  # layers with has_saved_activations=True
         self.tensor_fsize_saved: int = 0
-        self.tensor_fsize_saved_nice: str = human_readable_size(0)
 
         # Param info:
         self.param_logs: "ParamAccessor" = ParamAccessor({})
@@ -251,9 +245,7 @@ class ModelLog:
         self.elapsed_time_setup: float = 0
         self.elapsed_time_forward_pass: float = 0
         self.elapsed_time_cleanup: float = 0
-        self.elapsed_time_total: float = 0
         self.elapsed_time_function_calls: float = 0
-        self.elapsed_time_torchlens_logging: float = 0
 
     # ********************************************
     # ************ Built-in Methods **************
@@ -298,6 +290,57 @@ class ModelLog:
             return iter(self.layer_list)
         else:
             return iter(list(self._raw_layer_dict.values()))
+
+    # ********************************************
+    # ********** Computed Properties *************
+    # ********************************************
+
+    @property
+    def model_is_recurrent(self) -> bool:
+        """Whether any layer has more than one pass."""
+        return any(v > 1 for v in self.layer_num_passes.values())
+
+    @property
+    def model_max_recurrent_loops(self) -> int:
+        """Maximum number of passes for any layer."""
+        return max(self.layer_num_passes.values(), default=1)
+
+    @property
+    def model_is_branching(self) -> bool:
+        """Whether any layer has more than one child."""
+        return any(len(entry.child_layers) > 1 for entry in self.layer_list)
+
+    @property
+    def model_has_conditional_branching(self) -> bool:
+        """Whether any layer is in a conditional branch."""
+        return any(entry.in_cond_branch for entry in self.layer_list)
+
+    @property
+    def num_tensors_total(self) -> int:
+        """Total number of tensor operations."""
+        return len(self)
+
+    @property
+    def tensor_fsize_total_nice(self) -> str:
+        """Human-readable total tensor size."""
+        return human_readable_size(self.tensor_fsize_total)
+
+    @property
+    def tensor_fsize_saved_nice(self) -> str:
+        """Human-readable saved tensor size."""
+        return human_readable_size(self.tensor_fsize_saved)
+
+    @property
+    def elapsed_time_total(self) -> float:
+        """Total time from start to end of pass."""
+        if not self.pass_start_time or not self.pass_end_time:
+            return 0
+        return self.pass_end_time - self.pass_start_time
+
+    @property
+    def elapsed_time_torchlens_logging(self) -> float:
+        """Time spent on TorchLens overhead (total minus function calls)."""
+        return self.elapsed_time_total - self.elapsed_time_function_calls
 
     # ********************************************
     # ************* FLOPs Properties *************
