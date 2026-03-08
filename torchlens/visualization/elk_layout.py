@@ -586,7 +586,7 @@ def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
     # from render_elk_direct's all_edges, which are DOT-level dicts with
     # string "source"/"target" keys (not ELK format).
     children_of = defaultdict(list)
-    in_degree = defaultdict(int)
+    in_degree: dict[str, int] = defaultdict(int)
     for e in edges:
         src = e.get("tail_name")
         tgt = e.get("head_name")
@@ -596,7 +596,7 @@ def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
 
     # Kahn's algorithm for topological depth assignment.
     depth = {}
-    queue = deque()
+    queue: deque[str] = deque()
     for nid in leaf_ids:
         if in_degree[nid] == 0:
             depth[nid] = 0
