@@ -373,7 +373,7 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
     graph_json = json.dumps(elk_graph)
     graph_kb = len(graph_json) // 1024
     heap_mb = max(16384, graph_kb * 48)  # ~48x JSON size, 16GB floor
-    stack_kb = max(65536, graph_kb * 16)  # ~16x JSON size
+    stack_kb = max(131072, graph_kb * 48)  # ~48x JSON size, 128MB floor
 
     try:
         result = subprocess.run(
