@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.20.1 (2026-03-08)
+
+### Chores
+
+- **scripts**: Use log_forward_pass vis_opt instead of separate render call
+  ([`d2aea0f`](https://github.com/johnmarktaylor91/torchlens/commit/d2aea0fab326e02444d99aadc7dcf12abf9c8b10))
+
+Let verbose mode handle all phase timing instead of manual timestamps. Use log_forward_pass's
+  built-in vis_opt to render in one call.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Performance Improvements
+
+- **model_prep**: Optimize _prepare_model_session for large models
+  ([`2892323`](https://github.com/johnmarktaylor91/torchlens/commit/2892323ac2910532c9bbde894280ba917a72e966))
+
+- Hoist set(dir(nn.Module)) to module-level constant _NN_MODULE_ATTRS - Replace dir(module) MRO walk
+  with __dict__ scans for attrs and methods - Pre-build address→module dict to eliminate
+  per-parameter tree walks - Use model.modules() with cached tl_module_address instead of second DFS
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.20.0 (2026-03-08)
 
 ### Chores
