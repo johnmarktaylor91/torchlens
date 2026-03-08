@@ -246,6 +246,8 @@ def log_source_tensor_exhaustive(
         "bottom_level_submodule_pass_exited": None,
         "module_entry_exit_threads_inputs": [],
         "module_entry_exit_thread_output": [],
+        # Function config
+        "func_config": {},
     }
 
     # Reuse the shared entry-creation logic from output_tensors.

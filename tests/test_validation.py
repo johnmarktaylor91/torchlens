@@ -368,7 +368,7 @@ def test_corruption_module_back_reference():
             mod_log = log.modules._dict[cmo_addr]
             if lpl.layer_label_no_pass in mod_log.all_layers:
                 mod_log.all_layers = [x for x in mod_log.all_layers if x != lpl.layer_label_no_pass]
-                mod_log.num_layers = len(mod_log.all_layers)
+                # num_layers is a read-only property derived from all_layers
                 break
     with pytest.raises(MetadataInvariantError, match="module_layer_containment"):
         check_metadata_invariants(log)
@@ -580,7 +580,7 @@ def test_corruption_connectivity_parentless_layer():
                 parent.child_layers = [c for c in parent.child_layers if c != lpl.layer_label]
                 parent.has_children = len(parent.child_layers) > 0
             lpl.parent_layers = []
-            lpl.has_parents = False
+            # has_parents is a read-only property derived from parent_layers
             break
     with pytest.raises(MetadataInvariantError, match="graph_connectivity"):
         check_metadata_invariants(log)

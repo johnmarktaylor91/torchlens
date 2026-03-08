@@ -122,6 +122,9 @@ def _add_output_layers(
             "kwargs": {},
         }
 
+        # Clear func_config on synthetic output nodes:
+        new_output_node.func_config = {}
+
         # Fix layer equivalence information:
         new_output_node.same_layer_operations = []
         equiv_type = (
