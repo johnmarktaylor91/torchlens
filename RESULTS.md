@@ -2,7 +2,7 @@
 
 Public summary of TorchLens test suite outcomes. Updated after each release.
 
-**Last updated**: v0.15.14 · 2026-03-06 · PyTorch 2.8 · CPU + CUDA
+**Last updated**: v0.18.0 · 2026-03-08 · PyTorch 2.8 · CPU + CUDA
 
 ---
 
@@ -10,10 +10,10 @@ Public summary of TorchLens test suite outcomes. Updated after each release.
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 892 |
+| Total tests | 951 |
 | Smoke tests (`-m smoke`) | 18 |
-| Test files | 14 |
-| Example models (toy) | 249 |
+| Test files | 15 |
+| Example models (toy) | 250 |
 | Real-world models | 185 |
 
 **Run the suite:**
@@ -30,28 +30,29 @@ pytest tests/test_profiling.py -vs  # profiling report
 
 | File | Tests | What it covers |
 |------|------:|----------------|
-| test_toy_models.py | 250 | API coverage on 249 example models (log, validate, visualize, metadata) |
+| test_toy_models.py | 258 | API coverage on 250 example models (log, validate, visualize, metadata) |
 | test_real_world_models.py | 185 | Real-world architectures: validation + visualization |
 | test_metadata.py | 107 | Field invariants, FLOPs, timing, RNG, func_call_location, corruption detection |
 | test_param_log.py | 70 | ParamLog, ParamAccessor, shared params, grad metadata |
 | test_decoration.py | 61 | Toggle state, detached imports, pause_logging, JIT compat, signal safety |
 | test_validation.py | 59 | Perturbation checks, metadata invariants, edge cases |
+| test_large_graphs.py | 51 | Large graph rendering, RandomGraphModel, ELK layout engine |
 | test_module_log.py | 45 | ModuleLog, ModulePassLog, ModuleAccessor, module hierarchy |
 | test_internals.py | 36 | Field order sync, safe_copy, internal algorithms |
 | test_layer_log.py | 34 | LayerLog aggregates, multi-pass delegation, loop detection |
 | test_save_new_activations.py | 21 | Fast re-logging, state reset, buffer handling |
 | test_output_aesthetics.py | 12 | Visual report generation (PDF/TeX/text) |
 | test_gc.py | 10 | GC correctness, memory leak detection, param ref release |
-| test_profiling.py | 1 | Overhead benchmarks (generates profiling_report.txt) |
+| test_profiling.py | 1 | Overhead benchmarks + decoration overhead (generates profiling_report.txt) |
 | test_arg_positions.py | 1 | ArgSpec lookup table coverage (runs last) |
 
 ---
 
 ## Model Compatibility
 
-### Toy Models (249 architectures)
+### Toy Models (250 architectures)
 
-All 249 example models in `tests/example_models.py` pass `validate_forward_pass`.
+All 250 example models in `tests/example_models.py` pass `validate_forward_pass`.
 
 **Core patterns:** simple feedforward (incl. LeNet-5), branching, conditionals,
 48 loop/recurrence variants, in-place ops, view mutations, edge cases.
@@ -269,6 +270,45 @@ Overhead of `log_forward_pass` vs raw `model.forward()`. See `test_outputs/repor
 | VGG16 | 138M | ~40 | ~80ms | ~120ms | ~1.5x |
 
 *Overhead is dominated by per-operation bookkeeping. Large models with fewer, heavier ops (VGG16) show lower relative overhead. Small models with many lightweight ops show higher relative overhead. All measurements on CPU.*
+
+### Decoration Overhead (logging disabled)
+
+TorchLens permanently wraps all ~2000 PyTorch functions at import time. When logging
+is disabled, each wrapper is a single bool check (`if not _logging_enabled: return func(...)`).
+
+| Function | Original | Decorated | Overhead |
+|----------|----------|-----------|----------|
+| torch.relu | ~8μs | ~8μs | +3–10% |
+| torch.add | ~10μs | ~10μs | +3–14% |
+| torch.cat | ~4μs | ~5μs | +10–30% |
+| F.linear | ~13μs | ~13μs | +3–5% |
+| F.conv2d | ~4.5ms | ~4.5ms | <0.2% |
+| F.batch_norm | ~32μs | ~33μs | ~1.5% |
+| F.layer_norm | ~43μs | ~43μs | <1% |
+| torch.matmul (512×512) | ~320μs | ~320μs | <1% |
+| F.scaled_dot_product_attention | ~180μs | ~180μs | ~1% |
+
+*Heavy ops (conv2d, matmul, SDPA) show <1% overhead — within measurement noise. The ~600ns wrapper cost is only visible on sub-10μs elementwise ops. In practice, decoration has negligible impact on model inference speed.*
+
+---
+
+## Large Graph Scaling
+
+TorchLens supports visualization of very large computational graphs using the ELK layout engine
+(auto-selected above 3,500 nodes, or via `vis_node_placement="elk"`).
+
+| Scale | Nodes | Status |
+|-------|------:|--------|
+| 100 | 100 | Tested (Graphviz dot) |
+| 500 | 500 | Tested (Graphviz dot) |
+| 1,000 | 1,000 | Tested (auto-switches to ELK) |
+| 5,000 | 5,000 | Tested (ELK, hierarchical) |
+| 25,000 | 25,000 | Tested (ELK, stress + topo seeding) |
+| 250,000 | 250,000 | In progress |
+| 1,000,000 | 1,000,000 | In progress |
+
+Tests in `test_large_graphs.py` cover ELK engine selection, hierarchical layout, node count
+validation, and rendering at multiple scales.
 
 ---
 
