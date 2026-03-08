@@ -62,7 +62,6 @@ class ModulePassLog:
         self.pass_num = pass_num
         self.pass_label = pass_label  # e.g. "features.0:1"
         self.layers = layers  # pass-qualified layer labels
-        self.num_layers = len(layers)
         self.input_layers = input_layers
         self.output_layers = output_layers
         self.forward_args = forward_args
@@ -72,7 +71,16 @@ class ModulePassLog:
         self.all_module_addresses = (
             all_module_addresses if all_module_addresses is not None else [module_address]
         )
-        self.is_shared_module = len(self.all_module_addresses) > 1
+
+    @property
+    def num_layers(self) -> int:
+        """Number of layers in this pass."""
+        return len(self.layers)
+
+    @property
+    def is_shared_module(self) -> bool:
+        """Whether this module appears at multiple addresses."""
+        return len(self.all_module_addresses) > 1
 
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
@@ -158,7 +166,6 @@ class ModuleLog:
     ):
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
-        self.is_shared = len(self.all_addresses) > 1
         self.name = name
         self.module_class_name = module_class_name
 
@@ -185,7 +192,6 @@ class ModuleLog:
         # all_layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
         # Contrast with ModulePassLog.layers which stores pass-qualified labels.
         self.all_layers = all_layers if all_layers is not None else []
-        self.num_layers = len(self.all_layers)
 
         from .param_log import ParamAccessor
 
@@ -209,6 +215,16 @@ class ModuleLog:
         self._source_model_log_ref = (
             weakref.ref(_source_model_log) if _source_model_log is not None else None
         )
+
+    @property
+    def is_shared(self) -> bool:
+        """Whether this module appears at multiple addresses."""
+        return len(self.all_addresses) > 1
+
+    @property
+    def num_layers(self) -> int:
+        """Number of unique layers in this module."""
+        return len(self.all_layers)
 
     @property
     def params_fsize_nice(self) -> str:
@@ -289,6 +305,48 @@ class ModuleLog:
         }
         self._buffer_accessor = BufferAccessor(scoped, source_model_log=self._source_model_log)
         return self._buffer_accessor
+
+    def _sum_layer_field(self, field: str) -> int:
+        """Sum a numeric field across all layers in this module (skipping None)."""
+        if self._source_model_log is None:
+            return 0
+        total = 0
+        for label in self.all_layers:
+            entry = self._source_model_log[label]
+            val = getattr(entry, field, None)
+            if val is not None:
+                total += val
+        return total
+
+    @property
+    def flops_forward(self) -> int:
+        """Total forward FLOPs across all layers in this module."""
+        return self._sum_layer_field("flops_forward")
+
+    @property
+    def flops_backward(self) -> int:
+        """Total backward FLOPs across all layers in this module."""
+        return self._sum_layer_field("flops_backward")
+
+    @property
+    def flops(self) -> int:
+        """Total FLOPs (forward + backward) for this module."""
+        return self.flops_forward + self.flops_backward
+
+    @property
+    def macs_forward(self) -> int:
+        """Total forward MACs for this module. 1 MAC = 2 FLOPs."""
+        return self.flops_forward // 2
+
+    @property
+    def macs_backward(self) -> int:
+        """Total backward MACs for this module. 1 MAC = 2 FLOPs."""
+        return self.flops_backward // 2
+
+    @property
+    def macs(self) -> int:
+        """Total MACs (forward + backward) for this module."""
+        return self.flops // 2
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""

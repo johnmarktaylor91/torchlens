@@ -592,7 +592,6 @@ def _handle_module_entry(model_log, module, args, kwargs):
         module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
         layer_entry.modules_entered.append(module_address)
         layer_entry.module_passes_entered.append(module_pass_label)
-        layer_entry.is_submodule_input = True
         # Record which arg position this tensor occupies for this module pass.
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:

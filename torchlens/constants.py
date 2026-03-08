@@ -50,11 +50,8 @@ MODEL_LOG_FIELD_ORDER = [
     "has_saved_gradients",
     "activation_postfunc",
     "mark_input_output_distances",
-    # Model structure info
-    "model_is_recurrent",
-    "model_max_recurrent_loops",
-    "model_is_branching",
-    "model_has_conditional_branching",
+    # Model structure info (model_is_recurrent, model_max_recurrent_loops,
+    # model_is_branching, model_has_conditional_branching are computed @properties)
     # Layer tracking logs
     "layer_list",
     "layer_dict_main_keys",
@@ -93,12 +90,9 @@ MODEL_LOG_FIELD_ORDER = [
     "layers_with_saved_gradients",
     "orphan_layers",
     # Tensor info:
-    "num_tensors_total",
     "tensor_fsize_total",
-    "tensor_fsize_total_nice",
     "num_tensors_saved",
     "tensor_fsize_saved",
-    "tensor_fsize_saved_nice",
     # Param info
     "param_logs",
     "total_param_tensors",
@@ -113,9 +107,7 @@ MODEL_LOG_FIELD_ORDER = [
     "elapsed_time_setup",
     "elapsed_time_forward_pass",
     "elapsed_time_cleanup",
-    "elapsed_time_total",
     "elapsed_time_function_calls",
-    "elapsed_time_torchlens_logging",
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [
@@ -186,12 +178,10 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "is_part_of_iterable_output",
     "iterable_output_index",
     # Param info
-    "computed_with_params",
     "parent_params",
     "parent_param_barcodes",
     "parent_param_passes",
     "parent_param_logs",
-    "num_param_tensors",
     "parent_param_shapes",
     "num_params_total",
     "num_params_trainable",
@@ -203,15 +193,10 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "same_layer_operations",
     # Graph info
     "parent_layers",
-    "has_parents",
     "parent_layer_arg_locs",
     "orig_ancestors",
     "child_layers",
     "has_children",
-    "sibling_layers",
-    "has_siblings",
-    "spouse_layers",
-    "has_spouses",
     "is_input_layer",
     "has_input_ancestor",
     "input_ancestors",
@@ -241,14 +226,11 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "in_cond_branch",
     "cond_branch_start_children",
     # Module info
-    "is_computed_inside_submodule",
     "containing_module_origin",
     "containing_modules_origin_nested",
-    "module_nesting_depth",
     "modules_entered",
     "module_passes_entered",
     "modules_entered_argnames",
-    "is_submodule_input",
     "modules_exited",
     "module_passes_exited",
     "is_submodule_output",
@@ -297,10 +279,8 @@ LAYER_LOG_FIELD_ORDER = [
     "flops_forward",
     "flops_backward",
     # Param identity
-    "computed_with_params",
     "parent_param_barcodes",
     "parent_param_logs",
-    "num_param_tensors",
     "parent_param_shapes",
     "num_params_total",
     "num_params_trainable",
@@ -322,10 +302,8 @@ LAYER_LOG_FIELD_ORDER = [
     "is_atomic_bool_layer",
     "atomic_bool_val",
     # Module (static containment)
-    "is_computed_inside_submodule",
     "containing_module_origin",
     "containing_modules_origin_nested",
-    "module_nesting_depth",
     # Pass management
     "passes",
     "pass_labels",

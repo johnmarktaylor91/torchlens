@@ -220,42 +220,6 @@ def _update_tensor_family_links(self: "ModelLog", entry_to_update: LayerPassLog)
             parent_tensor.child_layers.append(tensor_label)
             parent_tensor.has_children = True
 
-    # Spouse ↔ Spouse: co-parents are spouses of each other.
-    for spouse1, spouse2 in it.combinations(parent_tensor_labels, 2):
-        if spouse1 not in self[spouse2].spouse_layers:
-            self[spouse2].spouse_layers.append(spouse1)
-            self[spouse2].has_spouses = True
-        if spouse2 not in self[spouse1].spouse_layers:
-            self[spouse1].spouse_layers.append(spouse2)
-            self[spouse1].has_spouses = True
-
-    # Sibling ↔ Sibling: children of the same parent are siblings.
-    for parent_tensor_label in parent_tensor_labels:
-        _add_sibling_labels_for_new_tensor(self, entry_to_update, self[parent_tensor_label])
-
-
-def _add_sibling_labels_for_new_tensor(
-    self: "ModelLog", entry_to_update: LayerPassLog, parent_tensor: LayerPassLog
-) -> None:
-    """Given a tensor and specified parent tensor, adds sibling labels to that tensor, and
-    adds itself as a sibling to all existing children.
-
-    Args:
-        entry_to_update: the new tensor
-        parent_tensor: the parent tensor
-    """
-    new_tensor_label = entry_to_update.tensor_label_raw
-    for sibling_tensor_label in parent_tensor.child_layers:
-        if sibling_tensor_label == new_tensor_label:
-            continue
-        sibling_tensor = self[sibling_tensor_label]
-        if new_tensor_label not in sibling_tensor.sibling_layers:
-            sibling_tensor.sibling_layers.append(new_tensor_label)
-            sibling_tensor.has_siblings = True
-        if sibling_tensor_label not in entry_to_update.sibling_layers:
-            entry_to_update.sibling_layers.append(sibling_tensor_label)
-            entry_to_update.has_siblings = True
-
 
 def _process_parent_param_passes(
     arg_parameters: List[torch.nn.Parameter],

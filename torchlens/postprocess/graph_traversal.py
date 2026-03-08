@@ -84,12 +84,10 @@ def _add_output_layers(
 
         # Strip any params:
 
-        new_output_node.computed_with_params = False
         new_output_node.parent_params = []
         new_output_node.parent_param_barcodes = []
         new_output_node.parent_param_passes = {}
         new_output_node.parent_param_logs = []
-        new_output_node.num_param_tensors = 0
         new_output_node.parent_param_shapes = []
         new_output_node.num_params_total = int(0)
         new_output_node.num_params_trainable = 0
@@ -98,12 +96,10 @@ def _add_output_layers(
 
         # Strip module info:
 
-        new_output_node.is_computed_inside_submodule = False
         new_output_node.containing_module_origin = None
         new_output_node.containing_modules_origin_nested = []
         new_output_node.modules_entered = []
         new_output_node.module_passes_entered = []
-        new_output_node.is_submodule_input = False
         new_output_node.modules_exited = [
             mod_pass[0] for mod_pass in output_node.containing_modules_origin_nested
         ]
@@ -121,9 +117,6 @@ def _add_output_layers(
         new_output_node.child_layers = []
         new_output_node.has_children = False
         new_output_node.parent_layers = [output_node.tensor_label_raw]
-        new_output_node.has_parents = True
-        new_output_node.sibling_layers = []
-        new_output_node.has_siblings = False
         new_output_node.parent_layer_arg_locs = {
             "args": {0: output_node.tensor_label_raw},
             "kwargs": {},

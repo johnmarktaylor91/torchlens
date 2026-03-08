@@ -72,8 +72,6 @@ def _log_time_elapsed(self) -> None:
         - self.elapsed_time_setup
         - self.elapsed_time_forward_pass
     )
-    self.elapsed_time_total = self.pass_end_time - self.pass_start_time
-    self.elapsed_time_torchlens_logging = self.elapsed_time_total - self.elapsed_time_function_calls
 
 
 def _finalize_param_logs(self: "ModelLog") -> None:

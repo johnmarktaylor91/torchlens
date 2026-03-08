@@ -187,20 +187,8 @@ def _log_final_info_for_all_layers(self) -> None:
 
         self.elapsed_time_function_calls += layer_entry.func_time_elapsed
 
-        # Update model structural information:
-        if len(layer_entry.child_layers) > 1:
-            self.model_is_branching = True
-        if layer_entry.layer_passes_total > self.model_max_recurrent_loops:
-            self.model_is_recurrent = True
-            self.model_max_recurrent_loops = layer_entry.layer_passes_total
-        if layer_entry.in_cond_branch:
-            self.model_has_conditional_branching = True
-
     _finalize_output_operation_nums(self)
     _build_module_hierarchy_dicts(self)
-
-    self.num_tensors_total = len(self)
-    self.tensor_fsize_total_nice = human_readable_size(self.tensor_fsize_total)
 
 
 def _finalize_output_operation_nums(self) -> None:
@@ -231,8 +219,6 @@ _LIST_FIELDS_TO_RENAME = [
     "parent_layers",
     "orig_ancestors",
     "child_layers",
-    "sibling_layers",
-    "spouse_layers",
     "input_ancestors",
     "output_descendents",
     "internally_initialized_parents",
@@ -347,7 +333,6 @@ def _log_module_hierarchy_info_for_layer(
         if module_pass_nice_label not in _module_passes_seen:
             _module_passes_seen.add(module_pass_nice_label)
             mbd["module_passes"].append(module_pass_nice_label)
-    layer_entry.module_nesting_depth = len(layer_entry.containing_modules_origin_nested)
 
 
 def _remove_unwanted_entries_and_log_remaining(self) -> None:
@@ -416,9 +401,6 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
         self._all_layers_saved = True
     else:
         self._all_layers_saved = False
-
-    # Make the saved tensor filesize pretty:
-    self.tensor_fsize_saved_nice = human_readable_size(self.tensor_fsize_saved)
 
 
 def _add_lookup_keys_for_layer_entry(

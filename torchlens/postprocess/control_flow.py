@@ -203,7 +203,6 @@ def _fix_buffer_layers(self) -> None:
         layer = self[layer_label]
         if layer.buffer_parent is not None:
             layer.parent_layers.append(layer.buffer_parent)
-            layer.has_parents = True
             self[layer.buffer_parent].child_layers.append(layer_label)
             self[layer.buffer_parent].has_children = True
             layer.func_applied = identity
@@ -294,19 +293,6 @@ def _merge_buffer_entries(
     for parent_layer in buffer_to_remove.internally_initialized_parents:
         if parent_layer not in source_buffer.internally_initialized_parents:
             source_buffer.internally_initialized_parents.append(parent_layer)
-
-    if buffer_to_remove.tensor_label_raw in source_buffer.spouse_layers:
-        source_buffer.spouse_layers.remove(buffer_to_remove.tensor_label_raw)
-
-    if buffer_to_remove.tensor_label_raw in source_buffer.sibling_layers:
-        source_buffer.sibling_layers.remove(buffer_to_remove.tensor_label_raw)
-
-    for spouse_layer in buffer_to_remove.spouse_layers:
-        if buffer_to_remove.tensor_label_raw in self[spouse_layer].spouse_layers:
-            self[spouse_layer].spouse_layers.remove(buffer_to_remove.tensor_label_raw)
-            self[spouse_layer].spouse_layers.append(source_buffer.tensor_label_raw)
-
-    # Note: sibling_layers iteration removed — buffers always have empty sibling_layers (#2)
 
     self._raw_layer_labels_list.remove(buffer_to_remove.tensor_label_raw)
     self._raw_layer_dict.pop(buffer_to_remove.tensor_label_raw)

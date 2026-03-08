@@ -68,7 +68,6 @@ from .tensor_tracking import (
     _make_raw_param_group_barcode,
     _get_operation_equivalence_type,
     _get_hash_from_args,
-    _add_sibling_labels_for_new_tensor,
     _update_tensor_containing_modules,
 )
 from ..data_classes.internal_types import FuncExecutionContext
@@ -143,14 +142,9 @@ def _build_graph_relationship_fields(
 
     fields_dict["parent_layers"] = parent_layer_labels
     fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
-    fields_dict["has_parents"] = len(parent_layer_labels) > 0
     fields_dict["orig_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
     fields_dict["child_layers"] = []
     fields_dict["has_children"] = False
-    fields_dict["sibling_layers"] = []
-    fields_dict["has_siblings"] = False
-    fields_dict["spouse_layers"] = []
-    fields_dict["has_spouses"] = False
     fields_dict["is_input_layer"] = False
     fields_dict["has_input_ancestor"] = len(input_ancestors) > 0
     fields_dict["input_ancestors"] = input_ancestors
@@ -216,12 +210,10 @@ def _build_param_fields(
         if addr is not None and addr in self.param_logs:
             parent_param_logs.append(self.param_logs[addr])
 
-    fields_dict["computed_with_params"] = len(parent_param_passes) > 0
     fields_dict["parent_params"] = arg_parameters
     fields_dict["parent_param_barcodes"] = indiv_param_barcodes
     fields_dict["parent_param_passes"] = parent_param_passes
     fields_dict["parent_param_logs"] = parent_param_logs
-    fields_dict["num_param_tensors"] = len(arg_parameters)
     fields_dict["parent_param_shapes"] = [tuple(param.shape) for param in arg_parameters]
     fields_dict["num_params_total"] = sum(
         prod(shape) for shape in fields_dict["parent_param_shapes"]
@@ -247,21 +239,15 @@ def _build_module_context_fields(
 ) -> None:
     """Populate module nesting, address, and input/output status fields."""
     containing_modules_origin_nested = _get_input_module_info(self, arg_tensors)
-    if len(containing_modules_origin_nested) > 0:
-        is_computed_inside_submodule = True
-        containing_module_origin = containing_modules_origin_nested[-1]
-    else:
-        is_computed_inside_submodule = False
-        containing_module_origin = None
+    containing_module_origin = (
+        containing_modules_origin_nested[-1] if containing_modules_origin_nested else None
+    )
 
-    fields_dict["is_computed_inside_submodule"] = is_computed_inside_submodule
     fields_dict["containing_module_origin"] = containing_module_origin
     fields_dict["containing_modules_origin_nested"] = containing_modules_origin_nested
-    fields_dict["module_nesting_depth"] = len(containing_modules_origin_nested)
     fields_dict["modules_entered"] = []
     fields_dict["modules_entered_argnames"] = defaultdict(list)
     fields_dict["module_passes_entered"] = []
-    fields_dict["is_submodule_input"] = False
     fields_dict["modules_exited"] = []
     fields_dict["module_passes_exited"] = []
     fields_dict["is_submodule_output"] = False
