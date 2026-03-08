@@ -44,6 +44,11 @@ from ..capture.source_tensors import log_source_tensor
 # session in _prepare_model_session to avoid stale data from reloaded modules.
 _module_class_metadata_cache: Dict[type, dict] = {}
 
+# Pre-computed set of nn.Module attribute names (from MRO). Used to filter out
+# inherited methods/attrs when scanning for user-defined extras. Computed once
+# at import time — nn.Module's interface is stable within a process.
+_NN_MODULE_ATTRS = set(dir(nn.Module))
+
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
@@ -195,7 +200,12 @@ def _prepare_model_session(
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: Dict[int, str] = {}
 
-    def _visit_session(module, address, named_children, is_root):
+    # Use model.modules() + cached tl_module_address from phase 1, avoiding a
+    # second full DFS with string concatenation and list(named_children()) calls.
+    for module in model.modules():
+        is_root = module is model
+        address = getattr(module, "tl_module_address", "")
+        named_children = list(module.named_children())
         _capture_module_metadata(
             model_log,
             module,
@@ -204,19 +214,16 @@ def _prepare_model_session(
             _seen_module_ids,
             is_root=is_root,
         )
-        if is_root:
-            return
-        # Set session-scoped tracking attributes on each submodule.
-        module.tl_source_model_log = model_log
-        model_log._module_build_data["module_types"][module.tl_module_address] = (
-            module.tl_module_type
-        )
-        module.tl_module_pass_num = 0
-        module.tl_module_pass_labels = []
-        module.tl_tensors_entered_labels = []
-        module.tl_tensors_exited_labels = []
-
-    _traverse_model_modules(model, _visit_session)
+        if not is_root:
+            # Set session-scoped tracking attributes on each submodule.
+            module.tl_source_model_log = model_log
+            model_log._module_build_data["module_types"][module.tl_module_address] = (
+                module.tl_module_type
+            )
+            module.tl_module_pass_num = 0
+            module.tl_module_pass_labels = []
+            module.tl_tensors_entered_labels = []
+            module.tl_tensors_exited_labels = []
     _create_session_param_logs(model_log, model, optimizer)
     prepare_buffer_tensors(model_log, model)
 
@@ -234,6 +241,11 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
             for p in group["params"]:
                 optimized_param_ids.add(id(p))
 
+    # Pre-build address→module lookup to avoid per-parameter tree walks.
+    module_by_address = {"": model}
+    for addr, mod in model.named_modules():
+        module_by_address[addr] = mod
+
     param_logs = {}
     for address, param in model.named_parameters():
         # Save original requires_grad before forcing True.
@@ -250,12 +262,8 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
         module_address = parts[0] if len(parts) > 1 else ""
         param_name = parts[-1]
 
-        # Walk the module tree to find the owning module for this parameter.
-        module = model
-        if module_address:
-            for attr in module_address.split("."):
-                module = getattr(module, attr)
-        module_type = type(module).__name__
+        owning_module = module_by_address[module_address]
+        module_type = type(owning_module).__name__
 
         param_fsize = get_tensor_memory_amount(param)
         param_log = ParamLog(
@@ -416,24 +424,24 @@ def _capture_module_metadata(
     }
     extra_attrs = {}
     user_methods = []
-    nn_module_attrs = set(dir(nn.Module))
-    for attr_name in dir(module):
-        if attr_name.startswith("_"):
+    # Scan instance __dict__ for user-defined non-callable attrs (e.g. fc1, act).
+    # Much faster than dir(module) which walks the full MRO.
+    for attr_name, val in module.__dict__.items():
+        if attr_name.startswith("_") or attr_name.startswith("tl_"):
             continue
-        if attr_name.startswith("tl_"):
+        if attr_name in _pytorch_internal or attr_name in _NN_MODULE_ATTRS:
             continue
-        if attr_name in _pytorch_internal:
+        if not callable(val):
+            extra_attrs[attr_name] = val
+    # Scan class __dict__ (minus nn.Module methods) for user-defined methods.
+    for attr_name in type(module).__dict__:
+        if attr_name.startswith("_") or attr_name.startswith("tl_"):
             continue
-        try:
-            val = getattr(module, attr_name)
-        except Exception:
+        if attr_name in _pytorch_internal or attr_name in _NN_MODULE_ATTRS:
             continue
+        val = type(module).__dict__[attr_name]
         if callable(val):
-            if attr_name not in nn_module_attrs:
-                user_methods.append(attr_name)
-        else:
-            if attr_name not in nn_module_attrs:
-                extra_attrs[attr_name] = val
+            user_methods.append(attr_name)
     meta["extra_attributes"] = extra_attrs
     meta["methods"] = user_methods
 
