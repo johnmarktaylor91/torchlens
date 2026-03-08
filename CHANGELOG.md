@@ -1,6 +1,52 @@
 # CHANGELOG
 
 
+## v0.19.0 (2026-03-08)
+
+### Chores
+
+- Add large graph render scripts to scripts/
+  ([`d02233b`](https://github.com/johnmarktaylor91/torchlens/commit/d02233bc050657ed6088b8338e056c2c531d45bd))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Update RESULTS.md and tests/CLAUDE.md with current counts
+  ([`75fa346`](https://github.com/johnmarktaylor91/torchlens/commit/75fa3463b16505d21b3498a29c848e5da248bd36))
+
+- Total tests: 892 → 951, test files: 14 → 15, toy models: 249 → 250 - Add test_large_graphs.py (51
+  tests) to file tables - Add decoration overhead benchmark table to profiling baselines - Add large
+  graph scaling section (100 to 1M nodes) - Update all per-file test counts to current values
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **capture**: Add func_config field for lightweight hyperparameter extraction
+  ([`7144d6d`](https://github.com/johnmarktaylor91/torchlens/commit/7144d6d5200bb17377956ffb8c579553ae34ddfe))
+
+Adds a `func_config` dict to every LayerPassLog/LayerLog containing computation-defining
+  hyperparameters (kernel_size, stride, in/out channels, dropout p, etc.) extracted at capture time
+  with zero tensor cloning. Empty for source tensors and output nodes.
+
+Also fixes pre-existing test failures in test_validation.py (read-only property assignments) and
+  adds detect_loops to MODEL_LOG_FIELD_ORDER.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **profiling**: Add decoration overhead benchmark to profiling report
+  ([`c8fbffd`](https://github.com/johnmarktaylor91/torchlens/commit/c8fbffdc43b4f97a2e7ab90cecd78a8d59950592))
+
+Measures per-call overhead of TorchLens's toggle-gated wrappers when logging is disabled. Benchmarks
+  11 functions from cheap (relu, add) to heavy (conv2d, SDPA) — confirms ~600ns overhead on cheap
+  ops, <1% on real compute.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.18.0 (2026-03-08)
 
 ### Features
