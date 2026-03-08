@@ -1321,9 +1321,10 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
       without revisiting a node).
     - Root module 'self' has address_depth == 0; others have
       address_depth == addr.count('.') + 1.
-    - Per-layer containing_modules_origin_nested:
+    - Per-layer containing_modules_origin_nested (call nesting stack):
       - Last element matches containing_module_origin.
-      - Nesting depth is monotonically increasing through the path.
+      - Every element is a known module address.
+      - No duplicate addresses (can't be inside the same module twice).
     """
     name = "module_containment_logic"
     mod_accessor = ml.modules
@@ -1385,21 +1386,30 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
                     f"!= containing_module_origin '{lpl.containing_module_origin}'",
                 )
 
-        # Path validity: each element's address should be deeper than the
-        # previous (basic nesting depth ordering).  We do NOT check that each
-        # element's address_parent chains to the previous — the nested path
-        # records execution-time module context which can diverge from the
-        # static address tree for complex models (e.g., ModuleList indexing).
-        for i in range(1, len(nested)):
-            child_addr = nested[i].split(":")[0] if ":" in nested[i] else nested[i]
-            parent_addr = nested[i - 1].split(":")[0] if ":" in nested[i - 1] else nested[i - 1]
-            # At minimum, the child should be deeper in the module tree
-            if child_addr.count(".") < parent_addr.count("."):
+        # Path validity: each element must be a known module, and no
+        # duplicate addresses (a module can't appear twice in the same call
+        # stack).  We do NOT check address depth ordering — address depth
+        # (position in the nn.Module tree) is independent of call nesting
+        # depth (position on the forward() call stack).  A module at a
+        # shallow address can be called from inside a deeply-addressed
+        # module's forward(), e.g., encoder.blocks.1.1.attention calling
+        # encoder.attention_structure.sin_dropout.
+        seen_addrs = set()
+        for entry in nested:
+            addr = entry.split(":")[0] if ":" in entry else entry
+            if addr not in known_addrs:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}': nested path depth decreases at "
-                    f"index {i}: '{child_addr}' is shallower than '{parent_addr}'",
+                    f"Layer '{lpl.layer_label}': nested path contains unknown "
+                    f"module address '{addr}'",
                 )
+            if addr in seen_addrs:
+                raise MetadataInvariantError(
+                    name,
+                    f"Layer '{lpl.layer_label}': duplicate module address "
+                    f"'{addr}' in nested path {nested}",
+                )
+            seen_addrs.add(addr)
 
 
 # ---------------------------------------------------------------------------

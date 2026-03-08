@@ -4396,11 +4396,14 @@ def test_blip2():
         vision_config=vision_config,
         qformer_config=qformer_config,
         num_query_tokens=8,
+        image_token_id=99,
     )
     model = Blip2Model(config).eval()
     pixel_values = torch.rand(2, 3, 64, 64)
+    # input_ids go to the language model (OPT, vocab_size=50272 by default)
+    input_ids = torch.randint(0, 98, (2, 8))  # avoid image_token_id=99
     model_input = []
-    model_kwargs = {"pixel_values": pixel_values}
+    model_kwargs = {"pixel_values": pixel_values, "input_ids": input_ids}
     show_model_graph(
         model,
         model_input,
@@ -4480,7 +4483,11 @@ def test_layoutlm():
     )
     model = LayoutLMModel(config).eval()
     input_ids = torch.randint(0, 100, (2, 8))
-    bbox = torch.randint(0, 255, (2, 8, 4))
+    # bbox format: [x0, y0, x1, y1] with x1 >= x0, y1 >= y0
+    # Differences must fit in [0, max_2d_position_embeddings-1]
+    x_vals = torch.randint(0, 255, (2, 8, 2)).sort(dim=-1).values
+    y_vals = torch.randint(0, 255, (2, 8, 2)).sort(dim=-1).values
+    bbox = torch.stack([x_vals[..., 0], y_vals[..., 0], x_vals[..., 1], y_vals[..., 1]], dim=-1)
     model_input = []
     model_kwargs = {"input_ids": input_ids, "bbox": bbox}
     show_model_graph(
