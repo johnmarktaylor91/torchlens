@@ -5,6 +5,8 @@
 | File | Purpose |
 |------|---------|
 | `check_flops_coverage.py` | Reports FLOPs module coverage against all decorated torch functions |
+| `run_250k.py` | Render a 250k-node graph with ELK layout |
+| `run_1M.py` | Render a 1M-node graph with ELK (phased: construct → log → render) |
 
 ## check_flops_coverage.py
 
