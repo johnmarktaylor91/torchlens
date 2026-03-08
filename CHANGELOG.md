@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.16.4 (2026-03-08)
+
+### Bug Fixes
+
+- **validation**: Use call nesting depth not address depth in invariant Q, fix test inputs
+  ([#117](https://github.com/johnmarktaylor91/torchlens/pull/117),
+  [`98660ff`](https://github.com/johnmarktaylor91/torchlens/commit/98660ff114f31a2324d3268c0d925cf0b31c02c9))
+
+
 ## v0.16.3 (2026-03-08)
 
 ### Bug Fixes
