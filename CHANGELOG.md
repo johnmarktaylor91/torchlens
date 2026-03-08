@@ -1,6 +1,75 @@
 # CHANGELOG
 
 
+## v0.16.2 (2026-03-08)
+
+### Bug Fixes
+
+- **validation**: Exempt exponential_ from perturbation check
+  ([`a6dce40`](https://github.com/johnmarktaylor91/torchlens/commit/a6dce40dc314a36a0296a7c65dd4faf04647b126))
+
+In-place RNG op — output is determined by RNG state, not input values. Fixes test_gumbel_vq_model.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Exempt maximum/minimum from perturbation check
+  ([`9d658bc`](https://github.com/johnmarktaylor91/torchlens/commit/9d658bc1d80222523ec7e410c0cf1d38665b16f2))
+
+torch.maximum/minimum with extreme-valued args (e.g. RWKV's negative infinity masks) are insensitive
+  to perturbation — same as max/min.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Fix perturbation precision and add exemptions for C++ ops
+  ([`7f86655`](https://github.com/johnmarktaylor91/torchlens/commit/7f86655705a8d914126a174ff8b95cf3cc123cee))
+
+- Scale constant-tensor perturbation by ±10% of magnitude to ensure float32-distinguishable values
+  while staying in safe range - Add posthoc magnitude-ratio exemption: when non-perturbed parent's
+  magnitude dwarfs the perturbed parent's (>100x), float32 arithmetic swallows the perturbation —
+  exempt rather than fail - Add maximum/minimum to posthoc exemption (element-wise binary ops
+  insensitive to perturbation when one arg dominates) - Skip perturbation for _op (torchvision C++
+  PyCapsule ops like nms, roi_align) — perturbed coordinates segfault native extensions - Fix
+  nystromformer test: seq_len must equal num_landmarks² (64)
+
+Fixes: test_fcos_resnet50_train, test_retinanet_resnet50_train, test_nystromformer,
+  test_maskrcnn_resnet50_train
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Scale perturbation range by magnitude for large constants
+  ([`efcd876`](https://github.com/johnmarktaylor91/torchlens/commit/efcd8766b38c6ea9f5d3715fac4994509985299b))
+
+Constant tensors with large values (e.g. 1e8) were perturbed by ±1.0, which is indistinguishable in
+  float32 precision. Now scales expansion by abs(value) * 1e-4 to ensure perturbation is always
+  detectable.
+
+Fixes test_fcos_resnet50_train validation failure.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **validation**: Use relative threshold for near-constant tensor perturbation
+  ([`e0c82c7`](https://github.com/johnmarktaylor91/torchlens/commit/e0c82c7a63e63d2f6e033274d152afc68ecb060b))
+
+Near-constant float tensors (e.g. [2.6785714, 2.6785717]) had a value range smaller than float32
+  precision, so perturbation within [min, max] produced the same value after rounding. Changed exact
+  `lo == hi` check to relative threshold `hi - lo < max(1e-6, abs(lo) * 1e-6)` to trigger range
+  expansion for these cases.
+
+Fixes test_ssd300_vgg16_train validation failure.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Probe nvm paths when node is not on PATH
+  ([`4d3ae24`](https://github.com/johnmarktaylor91/torchlens/commit/4d3ae2414bbcc0835d4cb01da230f158004da690))
+
+Non-interactive shells (IDE test runners, cron, subprocesses) often lack nvm's PATH additions,
+  causing elk_available() to return False even when elkjs is installed. Add _find_node_binary() to
+  probe ~/.nvm/versions/node/ as a fallback, and inject the node binary's directory into the
+  subprocess PATH so elkjs detection works regardless of shell configuration.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.16.1 (2026-03-07)
 
 ### Bug Fixes
