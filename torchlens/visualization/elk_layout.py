@@ -728,7 +728,7 @@ def render_elk_direct(
                 else:
                     title = f"<b>@{mod_addr} (x{np_})</b>"
 
-                out_shape = mod_out.tensor_shape or ()
+                out_shape: tuple = mod_out.tensor_shape or ()
                 if len(out_shape) > 1:
                     ss = "x".join(str(s) for s in out_shape)
                 elif len(out_shape) == 1:

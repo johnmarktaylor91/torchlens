@@ -296,7 +296,7 @@ def _get_class_metadata(module_class: type, save_source_context: bool = False) -
     if cached is not None:
         return cached
 
-    meta = {}
+    meta: Dict[str, object] = {}
     meta["module_class_name"] = module_class.__name__
     meta["class_docstring"] = module_class.__doc__  # type: ignore[assignment]
 
@@ -470,7 +470,7 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
             ):
                 buffer_address = f"{module_addr}.{buf_name}" if module_addr else buf_name
                 try:
-                    buf_tensor.tl_buffer_address = buffer_address
+                    buf_tensor.tl_buffer_address = buffer_address  # type: ignore[attr-defined]
                     _state._tagged_buffer_ids.add(id(buf_tensor))
                 except Exception:
                     pass
@@ -485,7 +485,7 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
             ):
                 buffer_address = f"{module_addr}.{attr_name}" if module_addr else attr_name
                 try:
-                    attr_val.tl_buffer_address = buffer_address
+                    attr_val.tl_buffer_address = buffer_address  # type: ignore[attr-defined]
                     _state._tagged_buffer_ids.add(id(attr_val))
                 except Exception:
                     pass
@@ -500,7 +500,7 @@ def prepare_buffer_tensors(model_log, model: nn.Module):
                             f"{module_addr}.{attr_name}.{i}" if module_addr else f"{attr_name}.{i}"
                         )
                         try:
-                            item.tl_buffer_address = item_addr
+                            item.tl_buffer_address = item_addr  # type: ignore[attr-defined]
                             _state._tagged_buffer_ids.add(id(item))
                         except Exception:
                             pass
