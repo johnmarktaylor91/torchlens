@@ -1,6 +1,31 @@
 # CHANGELOG
 
 
+## v0.16.3 (2026-03-08)
+
+### Bug Fixes
+
+- **tests**: Rename model_kwargs to input_kwargs and fix test configs
+  ([`8768339`](https://github.com/johnmarktaylor91/torchlens/commit/87683393e2c38a2703a73643c7b975517bffd589))
+
+- Rename model_kwargs= to input_kwargs= in 17 test call sites to match API - Skip test_gpt_bigcode
+  (JIT-compiled attention incompatible with TorchLens) - Fix test_deformable_detr backbone
+  out_features to match 2-layer ResNet - Add index, symint, checkkeypaddingmask to _UNARY_FUNCS
+  ArgSpec entries
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **types**: Resolve 14 pre-existing mypy errors across 4 files
+  ([`7adcc36`](https://github.com/johnmarktaylor91/torchlens/commit/7adcc362552697cf8961024d9bc1dcd7a4fb347f))
+
+- rng.py: annotate rng_dict as Dict[str, object] for mixed-type values - elk_layout.py: annotate
+  out_shape as tuple to avoid index-out-of-range - model_prep.py: annotate meta as Dict[str,
+  object], add type: ignore for dynamic tl_buffer_address attrs on Tensor - output_tensors.py: add
+  type: ignore for ArgSpec arg-type and assignment
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.16.2 (2026-03-08)
 
 ### Bug Fixes
