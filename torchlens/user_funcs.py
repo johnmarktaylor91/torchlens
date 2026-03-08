@@ -82,6 +82,7 @@ def _run_model_and_save_specified_activations(
     optimizer=None,
     save_source_context: bool = False,
     save_rng_states: bool = False,
+    detect_loops: bool = True,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
 
@@ -108,6 +109,9 @@ def _run_model_and_save_specified_activations(
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer — used to tag which parameters have optimizers attached.
+        detect_loops: If True (default), run full isomorphic subgraph expansion to
+            detect repeated patterns (loops). If False, only group operations that
+            share the same parameters — much faster for very large graphs.
 
     Returns:
         Fully-populated ModelLog.
@@ -135,6 +139,7 @@ def _run_model_and_save_specified_activations(
         optimizer,
         save_source_context,
         save_rng_states,
+        detect_loops,
     )
     model_log._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
@@ -173,6 +178,7 @@ def log_forward_pass(
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
+    detect_loops: bool = True,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -272,6 +278,7 @@ def log_forward_pass(
             optimizer=optimizer,
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
+            detect_loops=detect_loops,
         )
     else:
         # --- TWO-PASS path ---
@@ -295,6 +302,7 @@ def log_forward_pass(
             optimizer=optimizer,
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
+            detect_loops=detect_loops,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
@@ -377,6 +385,7 @@ def show_model_graph(
     vis_direction: str = "bottomup",
     vis_node_placement: str = "auto",
     random_seed: Optional[int] = None,
+    detect_loops: bool = True,
 ) -> None:
     """Convenience wrapper: visualize the computational graph without saving activations.
 
@@ -418,6 +427,7 @@ def show_model_graph(
         detach_saved_tensors=False,
         save_gradients=False,
         random_seed=random_seed,
+        detect_loops=detect_loops,
     )
     # Render in a try/finally so temporary tl_ attributes on the model are
     # always cleaned up, even if Graphviz rendering raises.

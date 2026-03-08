@@ -64,7 +64,7 @@ from .labeling import (
     _rename_model_history_layer_names,
     _trim_and_reorder_model_history_fields,
 )
-from .loop_detection import _detect_and_label_loops
+from .loop_detection import _detect_and_label_loops, _group_by_shared_params
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -135,7 +135,10 @@ def postprocess(
 
     # Step 8: Identify all loops, mark repeated layers.
 
-    _detect_and_label_loops(self)
+    if self.detect_loops:
+        _detect_and_label_loops(self)
+    else:
+        _group_by_shared_params(self)
 
     # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
 

@@ -125,6 +125,37 @@ class IsomorphicExpansionState:
     node_stack: deque
 
 
+def _group_by_shared_params(self) -> None:
+    """Lightweight same-param grouping without full loop detection.
+
+    Groups operations that share identical ``(func_applied_name,
+    sorted(parent_param_barcodes))`` into the same layer. This is Rule 1
+    (the fundamental invariant) from the full loop detection algorithm,
+    without the expensive isomorphic subgraph expansion (Phases 2-3).
+
+    Operations without parameters remain as individual single-pass layers.
+    Sets ``layer_label_raw``, ``same_layer_operations``, ``pass_num``,
+    and ``layer_passes_total`` on each LayerPassLog.
+    """
+    param_barcode_groups: Dict[tuple, list] = defaultdict(list)
+    for label in self._raw_layer_labels_list:
+        node = self[label]
+        if node.computed_with_params and node.parent_param_barcodes:
+            key = (node.func_applied_name, tuple(sorted(node.parent_param_barcodes)))
+            param_barcode_groups[key].append(label)
+
+    # For multi-member groups, set layer_label_raw to the first member's raw label.
+    for key, members in param_barcode_groups.items():
+        if len(members) > 1:
+            leader = min(members, key=lambda x: self[x].realtime_tensor_num)
+            leader_raw = self[leader].layer_label_raw
+            for label in members:
+                self[label].layer_label_raw = leader_raw
+
+    # Rebuild same_layer_operations, pass_num, layer_passes_total from layer_label_raw.
+    _rebuild_pass_assignments(self)
+
+
 def _detect_and_label_loops(self) -> None:
     """Phase 1: Entry point for loop detection.
 
