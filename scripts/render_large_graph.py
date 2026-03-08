@@ -36,31 +36,26 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     label = f"elk_{args.num_nodes // 1000}k"
 
-    # Phase 1: Model construction
     t0 = time.time()
+    print(f"Building RandomGraphModel with target_nodes={args.num_nodes}...", flush=True)
     model = RandomGraphModel(target_nodes=args.num_nodes, seed=args.seed)
     x = torch.randn(2, 64)
-    t1 = time.time()
-    print(f"Phase 1 — Model construction: {t1 - t0:.1f}s", flush=True)
+    print(f"Model constructed ({time.time() - t0:.1f}s)", flush=True)
 
-    # Phase 2: log_forward_pass (logging + postprocessing)
-    ml = log_forward_pass(model, x, layers_to_save=None, detect_loops=False, verbose=True)
-    t2 = time.time()
-    print(f"Phase 2 — log_forward_pass:    {t2 - t1:.1f}s ({len(ml)} layers)", flush=True)
-
-    # Phase 3: Render
-    ml.render_graph(
+    ml = log_forward_pass(
+        model,
+        x,
+        layers_to_save=None,
+        detect_loops=False,
+        verbose=True,
         vis_opt="unrolled",
-        vis_nesting_depth=1000,
         vis_outpath=os.path.join(args.outdir, label),
-        save_only=True,
+        vis_save_only=True,
         vis_fileformat=args.format,
         vis_node_placement="elk",
     )
-    t3 = time.time()
-    print(f"Phase 3 — ELK render:          {t3 - t2:.1f}s", flush=True)
 
-    total = t3 - t0
+    total = time.time() - t0
     print(f"Total: {total:.1f}s ({total / 60:.1f} min)", flush=True)
 
     out_path = os.path.join(args.outdir, f"{label}.{args.format}")
