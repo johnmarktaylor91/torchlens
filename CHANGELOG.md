@@ -1,6 +1,32 @@
 # CHANGELOG
 
 
+## v0.18.0 (2026-03-08)
+
+### Features
+
+- **data**: Add MACs properties to LayerPassLog, LayerLog, ModelLog, ModuleLog
+  ([`c60e7b9`](https://github.com/johnmarktaylor91/torchlens/commit/c60e7b9a2fd29de09d82c5be076e75c6e4c8b39d))
+
+MACs (multiply-accumulate operations) = FLOPs / 2. Added: - LayerPassLog: macs_forward,
+  macs_backward properties - LayerLog: macs_forward, macs_backward properties - ModelLog:
+  total_macs_forward, total_macs_backward, total_macs, macs_by_type() - ModuleLog: flops_forward,
+  flops_backward, flops, macs_forward, macs_backward, macs
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- **data**: Convert 23 stored fields to computed @properties across data classes
+  ([`2c22208`](https://github.com/johnmarktaylor91/torchlens/commit/2c22208a72636bb796268510a3529cf1183519eb))
+
+Replace redundant stored fields with computed @property methods that derive their values from
+  existing data. Eliminates ~155 lines of write-site code across 13 files while preserving identical
+  behavior and passing all invariants.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.17.0 (2026-03-08)
 
 ### Bug Fixes
