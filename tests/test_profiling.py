@@ -295,7 +295,190 @@ def _generate_report(results):
 
 
 # ---------------------------------------------------------------------------
-# Test entry point
+# Decoration overhead benchmarking
+# ---------------------------------------------------------------------------
+
+NUM_WARMUP_ITERS = 100
+NUM_BENCH_ITERS = 5000
+
+
+def _benchmark_decoration_overhead():
+    """Measure per-call overhead of TorchLens decoration on torch functions.
+
+    Compares decorated (normal import state) vs original (unwrapped) functions.
+    TorchLens decorates all torch functions at import time but the wrapper is
+    a single bool check when logging is disabled.
+
+    Uses ``_decorated_to_orig[id(func)]`` to retrieve the unwrapped original
+    for direct comparison — no monkey-patching needed.
+    """
+    from torchlens._state import _decorated_to_orig
+
+    # Build lookup: map each benchmark's torch function to its original.
+    # Each call_fn uses a specific torch function; we resolve it here.
+    F = torch.nn.functional
+    BENCH_FUNC_PAIRS = [
+        # --- Cheap (elementwise / small) ---
+        ("torch.relu", torch.relu, lambda f, a: f(a[0]), lambda: (torch.randn(256, 256),)),
+        (
+            "torch.add",
+            torch.add,
+            lambda f, a: f(a[0], a[1]),
+            lambda: (torch.randn(256, 256), torch.randn(256, 256)),
+        ),
+        (
+            "torch.cat",
+            torch.cat,
+            lambda f, a: f(a[0], dim=0),
+            lambda: ([torch.randn(64, 64), torch.randn(64, 64)],),
+        ),
+        ("Tensor.sum", torch.Tensor.sum, lambda f, a: f(a[0]), lambda: (torch.randn(256, 256),)),
+        # --- Moderate (matmul, linear) ---
+        (
+            "torch.matmul",
+            torch.matmul,
+            lambda f, a: f(a[0], a[1]),
+            lambda: (torch.randn(128, 128), torch.randn(128, 128)),
+        ),
+        (
+            "F.linear",
+            F.linear,
+            lambda f, a: f(a[0], a[1]),
+            lambda: (torch.randn(32, 64), torch.randn(128, 64)),
+        ),
+        # --- Heavy (conv2d, batch_norm, layer_norm, large matmul) ---
+        (
+            "F.conv2d",
+            F.conv2d,
+            lambda f, a: f(a[0], a[1]),
+            lambda: (torch.randn(1, 3, 224, 224), torch.randn(64, 3, 7, 7)),
+        ),
+        (
+            "F.batch_norm",
+            F.batch_norm,
+            lambda f, a: f(a[0], a[1], a[2], a[3], a[4], training=False),
+            lambda: (
+                torch.randn(1, 64, 56, 56),
+                torch.randn(64),
+                torch.randn(64),
+                torch.randn(64),
+                torch.randn(64),
+            ),
+        ),
+        (
+            "F.layer_norm",
+            F.layer_norm,
+            lambda f, a: f(a[0], a[1]),
+            lambda: (torch.randn(1, 197, 768), [768]),
+        ),
+        (
+            "torch.matmul (large)",
+            torch.matmul,
+            lambda f, a: f(a[0], a[1]),
+            lambda: (torch.randn(512, 512), torch.randn(512, 512)),
+        ),
+        (
+            "F.scaled_dot_product_attention",
+            F.scaled_dot_product_attention,
+            lambda f, a: f(a[0], a[1], a[2]),
+            lambda: (
+                torch.randn(1, 8, 197, 64),
+                torch.randn(1, 8, 197, 64),
+                torch.randn(1, 8, 197, 64),
+            ),
+        ),
+    ]
+
+    results = []
+    for name, decorated_fn, call_fn, setup_fn in BENCH_FUNC_PAIRS:
+        orig_fn = _decorated_to_orig.get(id(decorated_fn))
+        if orig_fn is None:
+            # Not all functions may be in the map (e.g. Tensor methods
+            # may be wrapped differently). Skip gracefully.
+            continue
+
+        # --- Decorated ---
+        bench_args = setup_fn()
+        for _ in range(NUM_WARMUP_ITERS):
+            call_fn(decorated_fn, bench_args)
+        _sync()
+        t0 = time.perf_counter()
+        for _ in range(NUM_BENCH_ITERS):
+            call_fn(decorated_fn, bench_args)
+        _sync()
+        decorated_per_call = (time.perf_counter() - t0) / NUM_BENCH_ITERS
+
+        # --- Original ---
+        bench_args = setup_fn()
+        for _ in range(NUM_WARMUP_ITERS):
+            call_fn(orig_fn, bench_args)
+        _sync()
+        t0 = time.perf_counter()
+        for _ in range(NUM_BENCH_ITERS):
+            call_fn(orig_fn, bench_args)
+        _sync()
+        original_per_call = (time.perf_counter() - t0) / NUM_BENCH_ITERS
+
+        overhead_ns = (decorated_per_call - original_per_call) * 1e9
+        overhead_pct = (
+            ((decorated_per_call / original_per_call) - 1) * 100 if original_per_call > 0 else 0
+        )
+
+        results.append(
+            {
+                "name": name,
+                "original_ns": original_per_call * 1e9,
+                "decorated_ns": decorated_per_call * 1e9,
+                "overhead_ns": overhead_ns,
+                "overhead_pct": overhead_pct,
+            }
+        )
+
+    return results
+
+
+def _generate_overhead_report(results):
+    """Format decoration overhead results as a text report section."""
+    lines = []
+    W = 90
+    lines.append("")
+    lines.append("=" * W)
+    lines.append("DECORATION OVERHEAD (logging disabled)")
+    lines.append("=" * W)
+    lines.append("")
+    lines.append(f"  Iterations per benchmark: {NUM_BENCH_ITERS}")
+    lines.append("")
+
+    hdr = (
+        f"  {'Function':<30} {'Original':>10} {'Decorated':>10} {'Overhead':>10} {'Overhead%':>10}"
+    )
+    lines.append(hdr)
+    lines.append("  " + "-" * (W - 2))
+
+    for r in results:
+        row = (
+            f"  {r['name']:<30} "
+            f"{r['original_ns']:>8.0f}ns "
+            f"{r['decorated_ns']:>8.0f}ns "
+            f"{r['overhead_ns']:>+8.0f}ns "
+            f"{r['overhead_pct']:>+8.1f}%"
+        )
+        lines.append(row)
+
+    lines.append("  " + "-" * (W - 2))
+
+    avg_overhead_pct = sum(r["overhead_pct"] for r in results) / len(results)
+    avg_overhead_ns = sum(r["overhead_ns"] for r in results) / len(results)
+    lines.append(
+        f"  {'AVERAGE':<30} {'':>10} {'':>10} {avg_overhead_ns:>+8.0f}ns {avg_overhead_pct:>+8.1f}%"
+    )
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Test entry points
 # ---------------------------------------------------------------------------
 
 
@@ -309,7 +492,10 @@ def test_profiling_report():
         result = _profile_model(name, model, input_tensor, description)
         results.append(result)
 
+    overhead_results = _benchmark_decoration_overhead()
+
     report = _generate_report(results)
+    report += _generate_overhead_report(overhead_results)
 
     os.makedirs(REPORTS_DIR, exist_ok=True)
     with open(REPORT_PATH, "w") as f:
