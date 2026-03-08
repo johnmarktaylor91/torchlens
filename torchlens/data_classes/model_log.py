@@ -349,6 +349,44 @@ class ModelLog:
         return result
 
     # ********************************************
+    # ************** MACs Properties *************
+    # ********************************************
+    # MACs (multiply-accumulate operations) = FLOPs / 2.
+
+    @property
+    def total_macs_forward(self) -> int:
+        """Total forward MACs across all layers (skipping None/unknown)."""
+        return self.total_flops_forward // 2
+
+    @property
+    def total_macs_backward(self) -> int:
+        """Total backward MACs across all layers (skipping None/unknown)."""
+        return self.total_flops_backward // 2
+
+    @property
+    def total_macs(self) -> int:
+        """Total MACs (forward + backward)."""
+        return self.total_flops // 2
+
+    def macs_by_type(self) -> Dict[str, Dict[str, int]]:
+        """Group MACs by layer type.
+
+        Returns:
+            Dict mapping layer_type to {"forward": int, "backward": int, "count": int}.
+        """
+        result: Dict[str, Dict[str, int]] = {}
+        for entry in self.layer_list:
+            lt = entry.layer_type
+            if lt not in result:
+                result[lt] = {"forward": 0, "backward": 0, "count": 0}
+            result[lt]["count"] += 1
+            if entry.flops_forward is not None:
+                result[lt]["forward"] += entry.flops_forward // 2
+            if entry.flops_backward is not None:
+                result[lt]["backward"] += entry.flops_backward // 2
+        return result
+
+    # ********************************************
     # ************* Params Accessor **************
     # ********************************************
 

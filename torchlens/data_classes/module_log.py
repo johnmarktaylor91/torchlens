@@ -290,6 +290,48 @@ class ModuleLog:
         self._buffer_accessor = BufferAccessor(scoped, source_model_log=self._source_model_log)
         return self._buffer_accessor
 
+    def _sum_layer_field(self, field: str) -> int:
+        """Sum a numeric field across all layers in this module (skipping None)."""
+        if self._source_model_log is None:
+            return 0
+        total = 0
+        for label in self.all_layers:
+            entry = self._source_model_log[label]
+            val = getattr(entry, field, None)
+            if val is not None:
+                total += val
+        return total
+
+    @property
+    def flops_forward(self) -> int:
+        """Total forward FLOPs across all layers in this module."""
+        return self._sum_layer_field("flops_forward")
+
+    @property
+    def flops_backward(self) -> int:
+        """Total backward FLOPs across all layers in this module."""
+        return self._sum_layer_field("flops_backward")
+
+    @property
+    def flops(self) -> int:
+        """Total FLOPs (forward + backward) for this module."""
+        return self.flops_forward + self.flops_backward
+
+    @property
+    def macs_forward(self) -> int:
+        """Total forward MACs for this module. 1 MAC = 2 FLOPs."""
+        return self.flops_forward // 2
+
+    @property
+    def macs_backward(self) -> int:
+        """Total backward MACs for this module. 1 MAC = 2 FLOPs."""
+        return self.flops_backward // 2
+
+    @property
+    def macs(self) -> int:
+        """Total MACs (forward + backward) for this module."""
+        return self.flops // 2
+
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""
         lines = [

@@ -150,6 +150,16 @@ class LayerLog:
         self.pass_labels: List[str] = []
 
     @property
+    def macs_forward(self) -> Optional[int]:
+        """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
+        return self.flops_forward // 2 if self.flops_forward is not None else None
+
+    @property
+    def macs_backward(self) -> Optional[int]:
+        """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
+        return self.flops_backward // 2 if self.flops_backward is not None else None
+
+    @property
     def tensor_fsize_nice(self) -> str:
         return human_readable_size(self.tensor_fsize)
 
