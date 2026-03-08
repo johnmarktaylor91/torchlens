@@ -49,6 +49,7 @@ from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_sa
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from .source_tensors import log_source_tensor
 from ..data_classes.interface import _give_user_feedback_about_lookup_key
+from ..utils.display import _vprint, _vtimed
 
 
 def save_new_activations(
@@ -133,6 +134,7 @@ def save_new_activations(
         self._raw_layer_dict.pop(label, None)
 
     # Now run and log the new inputs.
+    _vprint(self, "Running fast pass (saving requested activations)")
     self._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
     )
@@ -431,12 +433,23 @@ def run_and_log_inputs_through_model(
         # Per-session model preparation
         _prepare_model_session(self, model, self._optimizer)
         self.elapsed_time_setup = time.time() - self.pass_start_time
+        _vprint(self, f"Model prepared ({self.elapsed_time_setup:.2f}s)")
+
+        # Print input summary
+        if getattr(self, "verbose", False):
+            devices = set()
+            for t in input_tensors:
+                if hasattr(t, "device"):
+                    devices.add(str(t.device))
+            device_str = ", ".join(sorted(devices)) if devices else "unknown"
+            _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
         # Turn on the logging toggle and run the forward pass.
         # Inside this context, every decorated torch function will log its
         # inputs/outputs.  Source tensors (model inputs) are logged explicitly
         # before invoking the model; all subsequent operations are captured
         # automatically by the decorated wrappers.
+        _vprint(self, f"Running {self.logging_mode} forward pass...")
         with _state.active_logging(self):
             for i, t in enumerate(input_tensors):
                 log_source_tensor(self, t, "input", input_tensor_addresses[i])
@@ -446,10 +459,16 @@ def run_and_log_inputs_through_model(
         self.elapsed_time_forward_pass = (
             time.time() - self.pass_start_time - self.elapsed_time_setup
         )
+        _vprint(
+            self,
+            f"Forward pass complete ({self.elapsed_time_forward_pass:.2f}s, "
+            f"{len(self._raw_layer_dict)} raw operations)",
+        )
 
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
 
         _cleanup_model_session(model, input_tensors)
+        _vprint(self, f"Postprocessing {len(self._raw_layer_dict)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
 
     except Exception as e:

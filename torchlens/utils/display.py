@@ -5,7 +5,12 @@ plus environment checks (Jupyter detection, parallel-processing guard).
 """
 
 import multiprocessing as mp
-from typing import Any, List
+import time
+from contextlib import contextmanager
+from typing import Any, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..data_classes.model_log import ModelLog
 
 
 def identity(x: Any) -> Any:
@@ -94,6 +99,31 @@ def in_notebook() -> bool:
     except (ImportError, AttributeError):
         return False
     return True
+
+
+def _vprint(model_log: "ModelLog", message: str) -> None:
+    """Print a progress message if verbose mode is enabled on the ModelLog."""
+    if getattr(model_log, "verbose", False):
+        print(f"[torchlens] {message}")
+
+
+@contextmanager
+def _vtimed(model_log: "ModelLog", description: str):
+    """Context manager that prints a timed progress message if verbose mode is enabled.
+
+    Prints ``[torchlens] description...`` on entry, then appends `` done (X.XXs)``
+    on exit.
+    """
+    if not getattr(model_log, "verbose", False):
+        yield
+        return
+    print(f"[torchlens] {description}...", end="", flush=True)
+    start = time.time()
+    try:
+        yield
+    finally:
+        elapsed = time.time() - start
+        print(f" done ({elapsed:.2f}s)")
 
 
 def warn_parallel():

@@ -584,8 +584,9 @@ def _trim_and_reorder_model_history_fields(self) -> None:
     new_dir_dict = OrderedDict()
     for field in MODEL_LOG_FIELD_ORDER:
         new_dir_dict[field] = getattr(self, field)
-    # Preserve private/internal fields not in the canonical order.
+    # Preserve all remaining fields not in the canonical order (private/internal
+    # fields AND runtime-config attributes like ``verbose``).
     for field, value in self.__dict__.items():
-        if field.startswith("_") and field not in new_dir_dict:
+        if field not in new_dir_dict:
             new_dir_dict[field] = value
     self.__dict__ = new_dir_dict

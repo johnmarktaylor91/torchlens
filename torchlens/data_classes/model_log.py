@@ -112,6 +112,7 @@ class ModelLog:
         save_source_context: bool = False,
         save_rng_states: bool = False,
         detect_loops: bool = True,
+        verbose: bool = False,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -130,6 +131,7 @@ class ModelLog:
                 around each function call (used by FuncCallLocation).
             optimizer: Optional torch optimizer, used to annotate which params
                 have optimizers attached.
+            verbose: If True, print timed progress messages at each major pipeline stage.
         """
         # Callables are effectively immutable — deepcopy is unnecessary.
 
@@ -159,6 +161,7 @@ class ModelLog:
         self.save_source_context = save_source_context
         self.save_rng_states = save_rng_states
         self.detect_loops = detect_loops
+        self.verbose = verbose
         self.has_saved_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
 
