@@ -252,6 +252,9 @@ class LayerPassLog:
         self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
         self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
+        # Function config — lightweight hyperparameters always captured.
+        self.func_config = fields_dict["func_config"]
+
         # Back-reference to the aggregate LayerLog that groups all passes of
         # this layer.  Set during postprocessing by _build_layer_logs — NOT
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
@@ -581,6 +584,9 @@ class LayerPassLog:
             module_str = f"\n\tComputed inside module: {self.containing_module_origin}"
         if not self.is_input_layer:
             s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc}) {module_str}"
+            if self.func_config:
+                config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
+                s += f"\n\tConfig: {config_str}"
             s += f"\n\tTime elapsed: {self.func_time_elapsed: .3E}s"
         if len(self.modules_exited) > 0:
             modules_exited_str = ", ".join(self.modules_exited)

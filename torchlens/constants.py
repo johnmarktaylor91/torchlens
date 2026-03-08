@@ -47,6 +47,7 @@ MODEL_LOG_FIELD_ORDER = [
     "save_gradients",
     "save_source_context",
     "save_rng_states",
+    "detect_loops",
     "has_saved_gradients",
     "activation_postfunc",
     "mark_input_output_distances",
@@ -238,6 +239,8 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "bottom_level_submodule_pass_exited",
     "module_entry_exit_threads_inputs",
     "module_entry_exit_thread_output",
+    # Function config
+    "func_config",
 ]
 
 # Backward-compatible alias — LayerPassLog was formerly called TensorLog.
@@ -304,6 +307,8 @@ LAYER_LOG_FIELD_ORDER = [
     # Module (static containment)
     "containing_module_origin",
     "containing_modules_origin_nested",
+    # Function config
+    "func_config",
     # Pass management
     "passes",
     "pass_labels",

@@ -457,7 +457,8 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
             )
 
     # Per-layer pass consistency: layer_num_passes is keyed by no-pass labels.
-    # Validate that each key exists in layer_labels_no_pass.
+    # Validate that each key exists in layer_labels_no_pass, and that the
+    # recorded count matches the actual LayerLog.num_passes.
     no_pass_labels = set(ml.layer_labels_no_pass)
     for label_key, num_passes in ml.layer_num_passes.items():
         if label_key not in no_pass_labels:
@@ -465,6 +466,13 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
                 name,
                 f"layer_num_passes key '{label_key}' not in layer_labels_no_pass",
             )
+        if label_key in ml.layer_logs:
+            actual = ml.layer_logs[label_key].num_passes
+            if num_passes != actual:
+                raise MetadataInvariantError(
+                    name,
+                    f"layer_num_passes['{label_key}']={num_passes} != LayerLog.num_passes={actual}",
+                )
 
     # For top-level (no-pass) layer_logs, verify pass dict consistency
     for no_pass_label, ll in ml.layer_logs.items():

@@ -108,6 +108,9 @@ class LayerLog:
         self.num_params_frozen = first_pass.num_params_frozen
         self.parent_params_fsize = first_pass.parent_params_fsize
 
+        # Function config
+        self.func_config = first_pass.func_config
+
         # Equivalence
         self.operation_equivalence_type = first_pass.operation_equivalence_type
         self.equivalent_operations = first_pass.equivalent_operations
@@ -551,6 +554,9 @@ class LayerLog:
         )
         if not self.is_input_layer:
             s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc})"
+            if self.func_config:
+                config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
+                s += f"\n\tConfig: {config_str}"
         if self.containing_module_origin is not None:
             s += f"\n\tComputed inside module: {self.containing_module_origin}"
         if len(self.parent_param_shapes) > 0:

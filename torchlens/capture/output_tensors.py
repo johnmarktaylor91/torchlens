@@ -71,6 +71,7 @@ from .tensor_tracking import (
     _update_tensor_containing_modules,
 )
 from ..data_classes.internal_types import FuncExecutionContext
+from .salient_args import extract_salient_args
 from .source_tensors import _get_input_module_info
 
 if TYPE_CHECKING:
@@ -329,6 +330,15 @@ def _build_shared_fields_dict(
     )
     parent_param_passes = _build_param_fields(self, fields_dict, arg_parameters)
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
+
+    # Function config — lightweight hyperparameter extraction, always on.
+    fields_dict["func_config"] = extract_salient_args(
+        layer_type,
+        func_name,
+        args,
+        kwargs,
+        fields_dict.get("parent_param_shapes", []),
+    )
 
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_passes
 
@@ -637,6 +647,15 @@ def log_function_output_tensors_fast(
         orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
         orig_layer_entry.func_position_args_non_tensor = non_tensor_args
         orig_layer_entry.func_keyword_args_non_tensor = non_tensor_kwargs
+
+        # Update func_config — some may be input-dependent (e.g. interpolate size).
+        orig_layer_entry.func_config = extract_salient_args(
+            layer_type,
+            func_name,
+            args,
+            kwargs,
+            orig_layer_entry.parent_param_shapes,
+        )
 
 
 def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
