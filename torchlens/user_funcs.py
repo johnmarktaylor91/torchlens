@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 from .utils.introspection import get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
-from .utils.display import warn_parallel
+from .utils.display import warn_parallel, _vprint
 from .utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from .data_classes.model_log import (
     ModelLog,
@@ -83,6 +83,7 @@ def _run_model_and_save_specified_activations(
     save_source_context: bool = False,
     save_rng_states: bool = False,
     detect_loops: bool = True,
+    verbose: bool = False,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
 
@@ -112,6 +113,7 @@ def _run_model_and_save_specified_activations(
         detect_loops: If True (default), run full isomorphic subgraph expansion to
             detect repeated patterns (loops). If False, only group operations that
             share the same parameters — much faster for very large graphs.
+        verbose: If True, print timed progress messages at each major pipeline stage.
 
     Returns:
         Fully-populated ModelLog.
@@ -140,6 +142,7 @@ def _run_model_and_save_specified_activations(
         save_source_context,
         save_rng_states,
         detect_loops,
+        verbose,
     )
     model_log._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, random_seed
@@ -179,6 +182,7 @@ def log_forward_pass(
     num_context_lines: int = 7,
     optimizer=None,
     detect_loops: bool = True,
+    verbose: bool = False,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -241,6 +245,7 @@ def log_forward_pass(
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Lines of source context to capture per function call.
         optimizer: Optional optimizer to annotate which params are being optimized.
+        verbose: If True, print timed progress messages at each major pipeline stage.
 
     Returns:
         A ``ModelLog`` containing layer activations (if requested) and full metadata.
@@ -279,12 +284,15 @@ def log_forward_pass(
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
             detect_loops=detect_loops,
+            verbose=verbose,
         )
     else:
         # --- TWO-PASS path ---
         # Pass 1 (exhaustive): Run with layers_to_save=None and keep_unsaved_layers=True
         # so the full graph is discovered and all layer labels are assigned.  No
         # activations are saved yet — this pass is purely for metadata/structure.
+        if verbose:
+            print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
         model_log = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,  # type: ignore[arg-type]
@@ -303,9 +311,11 @@ def log_forward_pass(
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
             detect_loops=detect_loops,
+            verbose=verbose,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
+        _vprint(model_log, "Two-pass mode: Pass 2 (fast, saving requested layers)")
         model_log.keep_unsaved_layers = keep_unsaved_layers
         model_log.save_new_activations(
             model=model,
@@ -314,6 +324,14 @@ def log_forward_pass(
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
             random_seed=random_seed,
         )
+
+    # Print final summary.
+    _vprint(
+        model_log,
+        f"Done: {len(model_log.layer_logs)} layers, "
+        f"{model_log.num_tensors_saved} saved, "
+        f"{model_log.tensor_fsize_total_nice}",
+    )
 
     # Visualize if desired.
     if vis_opt != "none":
@@ -386,6 +404,7 @@ def show_model_graph(
     vis_node_placement: str = "auto",
     random_seed: Optional[int] = None,
     detect_loops: bool = True,
+    verbose: bool = False,
 ) -> None:
     """Convenience wrapper: visualize the computational graph without saving activations.
 
@@ -428,6 +447,7 @@ def show_model_graph(
         save_gradients=False,
         random_seed=random_seed,
         detect_loops=detect_loops,
+        verbose=verbose,
     )
     # Render in a try/finally so temporary tl_ attributes on the model are
     # always cleaned up, even if Graphviz rendering raises.

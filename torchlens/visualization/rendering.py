@@ -39,7 +39,7 @@ from typing import Any, Optional, Dict, List, Set, TYPE_CHECKING, Tuple, Union
 import graphviz
 
 from ..data_classes.internal_types import VisualizationOverrides
-from ..utils.display import in_notebook, int_list_to_compact_str
+from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
 
@@ -178,6 +178,8 @@ def render_graph(
 
     num_nodes = len(entries_to_plot)
     engine = get_node_placement_engine(vis_node_placement, num_nodes)
+    _vprint(self, f"Rendering {vis_opt} graph ({num_nodes} nodes, format={vis_fileformat})")
+    _vprint(self, f"Layout engine: {engine}")
 
     if self.total_params == 0:
         params_detail = "0 params"
@@ -206,7 +208,7 @@ def render_graph(
         from .elk_layout import render_elk_direct, render_with_sfdp
 
         try:
-            return render_elk_direct(
+            result = render_elk_direct(
                 self,
                 entries_to_plot,
                 vis_opt,
@@ -219,6 +221,8 @@ def render_graph(
                 graph_caption,
                 rankdir,
             )
+            _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
+            return result
         except RuntimeError as e:
             warnings.warn(f"ELK layout failed ({e}), falling back to sfdp.")
             engine = "sfdp"  # fall through to build graphviz.Digraph for sfdp
@@ -302,6 +306,7 @@ def render_graph(
             subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
             if not save_only:
                 graphviz.backend.viewing.view(rendered_path)
+        _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
     except subprocess.TimeoutExpired:
         warnings.warn(
             f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for graph with "

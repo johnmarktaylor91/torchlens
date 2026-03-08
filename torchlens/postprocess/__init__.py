@@ -69,6 +69,8 @@ from .loop_detection import _detect_and_label_loops, _group_by_shared_params
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
+from ..utils.display import _vprint, _vtimed
+
 
 def postprocess(
     self: "ModelLog", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
@@ -97,89 +99,83 @@ def postprocess(
         _set_pass_finished(self)
         return
 
-    # Step 1: Add dedicated output nodes
+    # Steps 1-3: Graph traversal (output nodes, ancestry, orphan removal)
+    with _vtimed(self, "Steps 1-3: Graph traversal"):
+        # Step 1: Add dedicated output nodes
+        _add_output_layers(self, output_tensors, output_tensor_addresses)
 
-    _add_output_layers(self, output_tensors, output_tensor_addresses)
+        # Step 2: Trace which nodes are ancestors of output nodes
+        _find_output_ancestors(self)
 
-    # Step 2: Trace which nodes are ancestors of output nodes
-
-    _find_output_ancestors(self)
-
-    # Step 3: Remove orphan nodes, find nodes that don't terminate in output node
-
-    _remove_orphan_nodes(self)
+        # Step 3: Remove orphan nodes, find nodes that don't terminate in output node
+        _remove_orphan_nodes(self)
 
     # Step 4: Find min/max distance from input and output nodes.
     # Conditional: only runs when the user requested distance metadata.
-
     if self.mark_input_output_distances:
-        _mark_input_output_distances(self)
+        with _vtimed(self, "Step 4: Input/output distances"):
+            _mark_input_output_distances(self)
 
-    # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
+    # Steps 5-7: Control flow (conditional branches, module fixing, buffers)
+    with _vtimed(self, "Steps 5-7: Control flow"):
+        # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
+        _mark_conditional_branches(self)
 
-    _mark_conditional_branches(self)
+        # Step 6: Annotate the containing modules for all internally-generated tensors.
+        _fix_modules_for_internal_tensors(self)
 
-    # Step 6: Annotate the containing modules for all internally-generated tensors.
-    # Internally-initialized tensors (e.g., constants, arange results) don't know
-    # what module they belong to. This traces backward from input-descendant tensors
-    # to infer module containment. IMPORTANT: also appends module path suffixes to
-    # operation_equivalence_type, which affects Step 8 loop detection grouping.
-
-    _fix_modules_for_internal_tensors(self)
-
-    # Step 7: Fix the buffer passes and parent information.
-    # Connects buffer parents, merges duplicate buffer nodes (same module, same
-    # value, same parents), and assigns buffer pass numbers.
-
-    _fix_buffer_layers(self)
+        # Step 7: Fix the buffer passes and parent information.
+        _fix_buffer_layers(self)
 
     # Step 8: Identify all loops, mark repeated layers.
+    loop_desc = (
+        "Step 8: Loop detection (full)"
+        if self.detect_loops
+        else "Step 8: Loop detection (params only)"
+    )
+    with _vtimed(self, loop_desc):
+        if self.detect_loops:
+            _detect_and_label_loops(self)
+        else:
+            _group_by_shared_params(self)
 
-    if self.detect_loops:
-        _detect_and_label_loops(self)
-    else:
-        _group_by_shared_params(self)
+    # Steps 9-12: Labeling (label mapping, final info, rename, cleanup)
+    with _vtimed(self, "Steps 9-12: Labeling"):
+        # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+        _map_raw_labels_to_final_labels(self)
 
-    # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+        # Step 10: Log final info for all layers
+        _log_final_info_for_all_layers(self)
 
-    _map_raw_labels_to_final_labels(self)
+        # Step 11: Rename all raw labels to final labels
+        _rename_model_history_layer_names(self)
+        _trim_and_reorder_model_history_fields(self)
 
-    # Step 10: Log final info for all layers (operation numbers, module hierarchy,
-    # param tallies, structural flags). MUST run before Step 12 because lookup key
-    # generation in Step 12 needs module hierarchy data populated here.
-    _log_final_info_for_all_layers(self)
+        # Step 12: Remove unsaved layers, build lookup key mappings
+        _remove_unwanted_entries_and_log_remaining(self)
 
-    # Step 11: Rename all raw labels (e.g., "cos_3_raw") to final labels
-    # (e.g., "cos_1_3:2") in both ModelLog-level fields and LayerPassLog fields.
-    # Then reorder ModelLog fields into the canonical display order.
-    _rename_model_history_layer_names(self)
-    _trim_and_reorder_model_history_fields(self)
+    # Steps 13-18: Finalization
+    with _vtimed(self, "Steps 13-18: Finalization"):
+        # Step 13: Undecorate all saved tensors and remove saved grad_fns.
+        _undecorate_all_saved_tensors(self)
 
-    # Step 12: Remove unsaved layers (unless keep_unsaved_layers=True), build
-    # lookup key mappings, and log remaining layer metadata.
-    _remove_unwanted_entries_and_log_remaining(self)
+        # Step 14: Clear the cache after any tensor deletions for garbage collection purposes:
+        torch.cuda.empty_cache()
 
-    # Step 13: Undecorate all saved tensors and remove saved grad_fns.
-    _undecorate_all_saved_tensors(self)
+        # Step 15: Log time elapsed.
+        _log_time_elapsed(self)
 
-    # Step 14: Clear the cache after any tensor deletions for garbage collection purposes:
-    torch.cuda.empty_cache()
+        # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
+        _finalize_param_logs(self)
 
-    # Step 15: Log time elapsed.
-    _log_time_elapsed(self)
+        # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+        _build_layer_logs(self)
 
-    # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
-    _finalize_param_logs(self)
+        # Step 17: Build structured ModuleLog objects from raw module_* dicts.
+        _build_module_logs(self)
 
-    # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
-    _build_layer_logs(self)
-
-    # Step 17: Build structured ModuleLog objects from raw module_* dicts.
-    _build_module_logs(self)
-
-    # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
-
-    _set_pass_finished(self)
+        # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
+        _set_pass_finished(self)
 
 
 def postprocess_fast(self: "ModelLog") -> None:
@@ -202,6 +198,7 @@ def postprocess_fast(self: "ModelLog") -> None:
     - Step 17: _build_module_logs — module structure doesn't change between
       passes and _module_build_data isn't repopulated in fast mode (#108).
     """
+    _vprint(self, "Fast-pass postprocessing...")
     # Use layer_dict_main_keys to get LayerPassLog directly (not LayerLog)
     for output_layer_label in self.output_layers:
         output_layer = self.layer_dict_main_keys[output_layer_label]
