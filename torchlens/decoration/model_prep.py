@@ -9,11 +9,11 @@ This module implements the model preparation pipeline, which has two phases:
   survive across multiple ``log_forward_pass`` calls.
 
 **Phase 2 — Per-session preparation** (``_prepare_model_session``):
-  Runs on every ``log_forward_pass`` call. Sets session-scoped attributes
-  (``tl_source_model_log``, pass counters), captures module metadata, forces
-  ``requires_grad=True`` on all parameters (needed for ``grad_fn`` metadata),
-  creates ``ParamLog`` objects, and tags buffer tensors. Cleaned up by
-  ``_cleanup_model_session`` after the forward pass completes.
+  Runs on every ``log_forward_pass`` call. Populates session-scoped tracking
+  dicts on ModelLog (pass counters, entered/exited labels), captures module
+  metadata, forces ``requires_grad=True`` on all parameters (needed for
+  ``grad_fn`` metadata), creates ``ParamLog`` objects, and tags buffer tensors.
+  Session data is GC'd with the ModelLog — no per-module cleanup needed.
 
 The ``module_forward_decorator`` wraps each submodule's ``forward`` with a
 toggle-gated wrapper that reads ``model_log`` from ``_state._active_model_log``
@@ -26,6 +26,7 @@ fast mode, it skips entry/exit tracking entirely but still handles
 import inspect
 import itertools
 import warnings
+from collections import deque
 from functools import wraps
 from typing import Callable, Dict, List, TYPE_CHECKING
 
@@ -49,20 +50,30 @@ _module_class_metadata_cache: Dict[type, dict] = {}
 # at import time — nn.Module's interface is stable within a process.
 _NN_MODULE_ATTRS = set(dir(nn.Module))
 
+# PyTorch internal instance attributes to skip when scanning for user-defined
+# extras. Module-level constant to avoid recreating per-module.
+_PYTORCH_INTERNAL = frozenset(
+    {
+        "_parameters",
+        "_buffers",
+        "_modules",
+        "_backward_hooks",
+        "_backward_pre_hooks",
+        "_forward_hooks",
+        "_forward_pre_hooks",
+        "_state_dict_hooks",
+        "_load_state_dict_pre_hooks",
+        "_load_state_dict_post_hooks",
+        "_non_persistent_buffers_set",
+        "training",
+        "T_destination",
+        "dump_patches",
+        "call_super_init",
+    }
+)
+
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
-
-# Session-scoped attributes set on modules during _prepare_model_session and
-# removed by _cleanup_model_session. These live only for one log_forward_pass call.
-# IMPORTANT: Do NOT add tl_module_address or tl_module_type here — those are
-# permanent (cached across sessions via _prepare_model_once).
-_SESSION_MODULE_ATTRS = [
-    "tl_source_model_log",  # back-reference to the active ModelLog
-    "tl_module_pass_num",  # how many times this module's forward has been called
-    "tl_module_pass_labels",  # stack of (address, pass_num) for nested calls
-    "tl_tensors_entered_labels",  # raw labels of tensors that entered this module
-    "tl_tensors_exited_labels",  # raw labels of tensors that exited this module
-]
 
 # Session-scoped attributes set on parameters during _create_session_param_logs.
 _SESSION_PARAM_ATTRS = [
@@ -89,16 +100,18 @@ def _traverse_model_modules(model: nn.Module, visitor_fn) -> None:
         visitor_fn: Called as ``visitor_fn(module, address, named_children, is_root)``
             for every module. ``named_children`` is ``list(module.named_children())``.
     """
-    module_stack = [(model, "")]
+    module_stack: deque = deque([(model, "")])
     while module_stack:
-        module, address = module_stack.pop()
+        module, address = module_stack.popleft()
         named_children = list(module.named_children())
         child_entries = []
         for child_name, child_module in named_children:
             child_address = f"{address}.{child_name}" if address else child_name
             child_entries.append((child_module, child_address))
-        # Prepend children to front of stack for DFS pre-order traversal.
-        module_stack = child_entries + module_stack
+        # Prepend children to front of deque for DFS pre-order traversal.
+        # extendleft reverses, so we reverse child_entries first to maintain order.
+        for entry in reversed(child_entries):
+            module_stack.appendleft(entry)
         visitor_fn(module, address, named_children, module is model)
 
 
@@ -195,7 +208,6 @@ def _prepare_model_session(
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
     model_log.model_name = str(type(model).__name__)
-    model.tl_source_model_log = model_log  # type: ignore[assignment]
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: Dict[int, str] = {}
@@ -215,15 +227,15 @@ def _prepare_model_session(
             is_root=is_root,
         )
         if not is_root:
-            # Set session-scoped tracking attributes on each submodule.
-            module.tl_source_model_log = model_log
             model_log._module_build_data["module_types"][module.tl_module_address] = (
                 module.tl_module_type
             )
-            module.tl_module_pass_num = 0
-            module.tl_module_pass_labels = []
-            module.tl_tensors_entered_labels = []
-            module.tl_tensors_exited_labels = []
+            # Session-scoped tracking in ModelLog dicts (keyed by id(module)).
+            mod_id = id(module)
+            model_log._mod_pass_num[mod_id] = 0
+            model_log._mod_pass_labels[mod_id] = []
+            model_log._mod_entered[mod_id] = []
+            model_log._mod_exited[mod_id] = []
     _create_session_param_logs(model_log, model, optimizer)
     prepare_buffer_tensors(model_log, model)
 
@@ -241,46 +253,47 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
             for p in group["params"]:
                 optimized_param_ids.add(id(p))
 
-    # Pre-build address→module lookup to avoid per-parameter tree walks.
-    module_by_address = {"": model}
-    for addr, mod in model.named_modules():
-        module_by_address[addr] = mod
-
     param_logs = {}
-    for address, param in model.named_parameters():
-        # Save original requires_grad before forcing True.
-        param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]
-        param.requires_grad = True
+    seen_param_ids: set = set()
+    for module in model.modules():
+        module_address = getattr(module, "tl_module_address", "")
+        module_type = type(module).__name__
+        for param_name, param in module._parameters.items():
+            if param is None:
+                continue
+            # Shared parameters: only create one ParamLog per unique tensor.
+            pid = id(param)
+            if pid in seen_param_ids:
+                continue
+            seen_param_ids.add(pid)
 
-        barcode = make_random_barcode()
-        param.tl_param_barcode = barcode  # type: ignore[attr-defined]
-        param.tl_param_address = address  # type: ignore[attr-defined]
-        param.tl_pass_num = 0  # type: ignore[attr-defined]
+            address = f"{module_address}.{param_name}" if module_address else param_name
 
-        # Split "encoder.layer.0.weight" -> module_address="encoder.layer.0", param_name="weight"
-        parts = address.rsplit(".", 1)
-        module_address = parts[0] if len(parts) > 1 else ""
-        param_name = parts[-1]
+            # Save original requires_grad before forcing True.
+            param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]
+            param.requires_grad = True
 
-        owning_module = module_by_address[module_address]
-        module_type = type(owning_module).__name__
+            barcode = make_random_barcode()
+            param.tl_param_barcode = barcode  # type: ignore[attr-defined]
+            param.tl_param_address = address  # type: ignore[attr-defined]
+            param.tl_pass_num = 0  # type: ignore[attr-defined]
 
-        param_fsize = get_tensor_memory_amount(param)
-        param_log = ParamLog(
-            address=address,
-            name=param_name,
-            shape=tuple(param.shape),
-            dtype=param.dtype,
-            num_params=param.numel(),
-            fsize=param_fsize,
-            trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
-            module_address=module_address,
-            module_type=module_type,
-            barcode=barcode,
-            has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
-        )
-        param_log._param_ref = param
-        param_logs[address] = param_log
+            param_fsize = get_tensor_memory_amount(param)
+            param_log = ParamLog(
+                address=address,
+                name=param_name,
+                shape=tuple(param.shape),
+                dtype=param.dtype,
+                num_params=param.numel(),
+                fsize=param_fsize,
+                trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
+                module_address=module_address,
+                module_type=module_type,
+                barcode=barcode,
+                has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
+            )
+            param_log._param_ref = param
+            param_logs[address] = param_log
 
     model_log.param_logs = ParamAccessor(param_logs)
 
@@ -307,6 +320,18 @@ def _get_class_metadata(module_class: type, save_source_context: bool = False) -
     meta: Dict[str, object] = {}
     meta["module_class_name"] = module_class.__name__
     meta["class_docstring"] = module_class.__doc__  # type: ignore[assignment]
+
+    # Cache user-defined methods from class __dict__ (same for all instances of this class).
+    user_methods = []
+    for attr_name in module_class.__dict__:
+        if attr_name.startswith("_") or attr_name.startswith("tl_"):
+            continue
+        if attr_name in _PYTORCH_INTERNAL or attr_name in _NN_MODULE_ATTRS:
+            continue
+        val = module_class.__dict__[attr_name]
+        if callable(val):
+            user_methods.append(attr_name)
+    meta["user_methods"] = user_methods
 
     if save_source_context:
         try:
@@ -405,45 +430,19 @@ def _capture_module_metadata(
             child_addresses.append(f"{parent_address}.{child_name}")
     meta["address_children"] = child_addresses
 
-    _pytorch_internal = {
-        "_parameters",
-        "_buffers",
-        "_modules",
-        "_backward_hooks",
-        "_backward_pre_hooks",
-        "_forward_hooks",
-        "_forward_pre_hooks",
-        "_state_dict_hooks",
-        "_load_state_dict_pre_hooks",
-        "_load_state_dict_post_hooks",
-        "_non_persistent_buffers_set",
-        "training",
-        "T_destination",
-        "dump_patches",
-        "call_super_init",
-    }
     extra_attrs = {}
-    user_methods = []
     # Scan instance __dict__ for user-defined non-callable attrs (e.g. fc1, act).
     # Much faster than dir(module) which walks the full MRO.
     for attr_name, val in module.__dict__.items():
         if attr_name.startswith("_") or attr_name.startswith("tl_"):
             continue
-        if attr_name in _pytorch_internal or attr_name in _NN_MODULE_ATTRS:
+        if attr_name in _PYTORCH_INTERNAL or attr_name in _NN_MODULE_ATTRS:
             continue
         if not callable(val):
             extra_attrs[attr_name] = val
-    # Scan class __dict__ (minus nn.Module methods) for user-defined methods.
-    for attr_name in type(module).__dict__:
-        if attr_name.startswith("_") or attr_name.startswith("tl_"):
-            continue
-        if attr_name in _pytorch_internal or attr_name in _NN_MODULE_ATTRS:
-            continue
-        val = type(module).__dict__[attr_name]
-        if callable(val):
-            user_methods.append(attr_name)
     meta["extra_attributes"] = extra_attrs
-    meta["methods"] = user_methods
+    # User-defined methods are cached per class type in _get_class_metadata.
+    meta["methods"] = class_meta["user_methods"]
 
     model_log._module_metadata[address] = meta
 
@@ -574,14 +573,16 @@ def _handle_module_entry(model_log, module, args, kwargs):
         needed by ``_handle_module_exit`` to trim the entry thread.
     """
     module_address = module.tl_module_address
+    mod_id = id(module)
     model_log._module_build_data["module_training_modes"][module_address] = module.training
-    module.tl_module_pass_num += 1
-    module_pass_label = (module_address, module.tl_module_pass_num)
+    model_log._mod_pass_num[mod_id] += 1
+    module_pass_num = model_log._mod_pass_num[mod_id]
+    module_pass_label = (module_address, module_pass_num)
     # Push onto stack — popped by _handle_module_exit (or exception handler).
-    module.tl_module_pass_labels.append(module_pass_label)
+    model_log._mod_pass_labels[mod_id].append(module_pass_label)
 
     # Stash forward args for later use by _build_module_logs.
-    model_log._module_forward_args[(module_address, module.tl_module_pass_num)] = (args, kwargs)
+    model_log._module_forward_args[(module_address, module_pass_num)] = (args, kwargs)
 
     # Find all tensor arguments (excluding Parameters, which are source tensors).
     input_tensors = get_vars_of_type_from_obj(
@@ -597,7 +598,7 @@ def _handle_module_entry(model_log, module, args, kwargs):
             continue  # Skip untracked tensors (e.g. external constants) (#117)
         layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
         input_tensor_labels.add(t.tl_tensor_label_raw)
-        module.tl_tensors_entered_labels.append(t.tl_tensor_label_raw)
+        model_log._mod_entered[mod_id].append(t.tl_tensor_label_raw)
         layer_entry.modules_entered.append(module_address)
         layer_entry.module_passes_entered.append(module_pass_label)
         # Record which arg position this tensor occupies for this module pass.
@@ -640,8 +641,9 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
        module-nesting analysis.
     """
     module_address = module.tl_module_address
-    module_pass_num = module.tl_module_pass_num
-    module_entry_label = module.tl_module_pass_labels.pop()
+    mod_id = id(module)
+    module_pass_num = model_log._mod_pass_num[mod_id]
+    module_entry_label = model_log._mod_pass_labels[mod_id].pop()
     output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
     for t in output_tensors:
         # nn.Identity modules and pass-through tensors (output is same object
@@ -662,7 +664,7 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
         layer_entry.module_entry_exit_thread_output.append(
             ("-", module_entry_label[0], module_entry_label[1])
         )
-        module.tl_tensors_exited_labels.append(t.tl_tensor_label_raw)
+        model_log._mod_exited[mod_id].append(t.tl_tensor_label_raw)
 
     # Trim entry threads on input tensors: remove the "+" marker and
     # everything after it. The module boundary is now closed, so input
@@ -759,8 +761,10 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
         except Exception:
             # Exception safety: pop module pass label to keep the stack
             # consistent, preventing corruption in subsequent forward calls (#122).
-            if module.tl_module_pass_labels:
-                module.tl_module_pass_labels.pop()
+            mod_id = id(module)
+            pass_labels = model_log._mod_pass_labels.get(mod_id)
+            if pass_labels:
+                pass_labels.pop()
             raise
         _handle_module_exit(
             model_log, module, out, input_tensor_labels, input_tensor_labels_at_entry
@@ -792,6 +796,7 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
     """
     layer_entry = model_log._raw_layer_dict[getattr(t, "tl_tensor_label_raw")]
     submodule_address = submodule.tl_module_address
+    sub_id = id(submodule)
 
     # Case 1: already determined in a prior call.
     if layer_entry.is_bottom_level_submodule_output:
@@ -799,11 +804,11 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
 
     # Case 2: tensor originated inside the model with no inputs entering
     # this submodule (e.g. a buffer-derived tensor in a leaf module).
-    if layer_entry.initialized_inside_model and len(submodule.tl_tensors_entered_labels) == 0:  # type: ignore[arg-type]
+    if layer_entry.initialized_inside_model and len(model_log._mod_entered[sub_id]) == 0:
         layer_entry.is_bottom_level_submodule_output = True
         layer_entry.bottom_level_submodule_pass_exited = (
             submodule_address,
-            submodule.tl_module_pass_num,
+            model_log._mod_pass_num[sub_id],
         )
         return True
 
@@ -820,7 +825,7 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
     layer_entry.is_bottom_level_submodule_output = True
     layer_entry.bottom_level_submodule_pass_exited = (
         submodule_address,
-        submodule.tl_module_pass_num,
+        model_log._mod_pass_num[sub_id],
     )
     return True
 
@@ -872,14 +877,9 @@ def _cleanup_model_session(model: nn.Module, input_tensors=None) -> None:
                 except (AttributeError, RuntimeError):
                     pass
 
-    # Remove session-scoped module attributes
-    for module in model.modules():
-        for attr_name in _SESSION_MODULE_ATTRS:
-            if hasattr(module, attr_name):
-                try:
-                    delattr(module, attr_name)
-                except (AttributeError, RuntimeError):
-                    pass
+    # Session-scoped module tracking data lives in ModelLog dicts (not on
+    # modules), so no per-module cleanup iteration is needed — the dicts
+    # are GC'd with the ModelLog.
 
     # Clean tensor labels from model tensors (buffers, etc.)
     _undecorate_model_tensors(model)
@@ -948,9 +948,13 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     from .torch_funcs import decorate_all_once, patch_detached_references, patch_model_instance
 
     decorate_all_once()  # idempotent — no-op after first call
+    already_prepared = model in _state._prepared_models
     _prepare_model_once(model)  # idempotent — cached in _state._prepared_models
     patch_detached_references()  # incremental — only new sys.modules entries
-    patch_model_instance(model)  # level 4 — model instance attrs
+    # Phase 1 already patches instance attrs during its DFS, so skip the
+    # redundant full crawl for models that were already prepared.
+    if not already_prepared:
+        patch_model_instance(model)  # level 4 — model instance attrs
 
 
 # Keep old names as aliases for backward compatibility during transition

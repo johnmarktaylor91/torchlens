@@ -232,6 +232,15 @@ class ModelLog:
         self.total_params_frozen: int = 0
         self.total_params_fsize: int = 0
 
+        # Session-scoped per-module tracking dicts (keyed by id(module)).
+        # These replace the old tl_* attrs that were set directly on nn.Module
+        # instances. Lives on ModelLog so they're GC'd with the log — no cleanup
+        # iteration over modules needed.
+        self._mod_pass_num: Dict[int, int] = {}  # id(module) -> pass count
+        self._mod_pass_labels: Dict[int, list] = {}  # id(module) -> [(addr, pass_num), ...]
+        self._mod_entered: Dict[int, list] = {}  # id(module) -> [raw_label, ...]
+        self._mod_exited: Dict[int, list] = {}  # id(module) -> [raw_label, ...]
+
         # Transient module build data (consumed by _build_module_logs, then cleared):
         self._module_build_data: Dict = _init_module_build_data()
 
