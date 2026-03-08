@@ -14,9 +14,23 @@ Graphviz ``dot`` engine can hang or crash.  This module provides:
 import functools
 import json
 import re
+import resource
 import subprocess
 import warnings
 from typing import Optional
+
+
+def _unlimit_stack():
+    """Remove OS stack size limit so Node.js --stack-size flag works.
+
+    V8's --stack-size requests a JS stack allocation, but the OS enforces
+    its own limit via RLIMIT_STACK.  If the OS soft limit (ulimit -s) is
+    smaller than what --stack-size asks for, Node.js segfaults instead of
+    raising a clean JS RangeError.  Called as preexec_fn in subprocess.run
+    so only the child process is affected.
+    """
+    resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+
 
 _ELK_NODE_THRESHOLD = 3500
 _ELK_TIMEOUT = 120  # seconds for Node.js subprocess
@@ -373,7 +387,7 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
     graph_json = json.dumps(elk_graph)
     graph_kb = len(graph_json) // 1024
     heap_mb = max(16384, graph_kb * 48)  # ~48x JSON size, 16GB floor
-    stack_kb = max(131072, graph_kb * 48)  # ~48x JSON size, 128MB floor
+    stack_kb = max(4194304, graph_kb * 64)  # ~64x JSON size, 4GB floor
 
     try:
         result = subprocess.run(
@@ -389,6 +403,7 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
             text=True,
             timeout=timeout,
             env=_node_env(),
+            preexec_fn=_unlimit_stack,
         )
     except FileNotFoundError:
         raise RuntimeError("Node.js not found. Install from https://nodejs.org/")
