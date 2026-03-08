@@ -3914,3 +3914,83 @@ def test_autocast_mid_forward():
         vis_opt="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "autocast_mid_forward"),
     )
+
+
+# =============================================================================
+# Loop detection comparison (detect_loops=True vs False)
+# =============================================================================
+# These tests render the same looping models with and without full loop
+# detection, producing side-by-side visualizations for manual comparison.
+# With detect_loops=True: repeated operations are collapsed into multi-pass layers.
+# With detect_loops=False: only same-param operations are grouped.
+
+
+LOOP_COMPARISON_DIR = opj(VIS_OUTPUT_DIR, "loop-comparison")
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _ensure_loop_comparison_dir():
+    import os
+
+    os.makedirs(LOOP_COMPARISON_DIR, exist_ok=True)
+
+
+def _render_both(model, x, name):
+    """Render a model with and without loop detection for comparison."""
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_on"),
+        detect_loops=True,
+    )
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="rolled",
+        vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off"),
+        detect_loops=False,
+    )
+    # Also render unrolled for the no-loops case
+    show_model_graph(
+        model,
+        x,
+        save_only=True,
+        vis_opt="unrolled",
+        vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off_unrolled"),
+        detect_loops=False,
+    )
+
+
+def test_loop_compare_repeated_module(vector_input):
+    _render_both(example_models.RepeatedModule(), vector_input, "repeated_module")
+
+
+def test_loop_compare_simple_loop_no_param(vector_input):
+    _render_both(example_models.SimpleLoopNoParam(), vector_input, "simple_loop_no_param")
+
+
+def test_loop_compare_varying_loop_with_param(vector_input):
+    _render_both(example_models.VaryingLoopWithParam(), vector_input, "varying_loop_with_param")
+
+
+def test_loop_compare_recurrent_params_simple(vector_input):
+    _render_both(example_models.RecurrentParamsSimple(), vector_input, "recurrent_params_simple")
+
+
+def test_loop_compare_recurrent_params_complex(vector_input):
+    _render_both(example_models.RecurrentParamsComplex(), vector_input, "recurrent_params_complex")
+
+
+def test_loop_compare_nested_param_free_loops(vector_input):
+    _render_both(example_models.NestedParamFreeLoops(), vector_input, "nested_param_free_loops")
+
+
+def test_loop_compare_diamond_loop(vector_input):
+    _render_both(example_models.DiamondLoop(), vector_input, "diamond_loop")
+
+
+def test_loop_compare_long_loop(vector_input):
+    _render_both(example_models.LongLoop(), vector_input, "long_loop")

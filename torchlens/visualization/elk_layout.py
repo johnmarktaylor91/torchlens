@@ -372,7 +372,7 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
 
     graph_json = json.dumps(elk_graph)
     graph_kb = len(graph_json) // 1024
-    heap_mb = max(4096, graph_kb * 16)  # ~16x JSON size
+    heap_mb = max(16384, graph_kb * 48)  # ~48x JSON size, 16GB floor
     stack_kb = max(65536, graph_kb * 16)  # ~16x JSON size
 
     try:
@@ -396,7 +396,16 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
         raise RuntimeError(f"ELK layout timed out after {timeout}s")
 
     if result.returncode != 0:
-        raise RuntimeError(f"ELK layout failed: {result.stderr}")
+        detail = (
+            result.stderr.strip()
+            if result.stderr
+            else (
+                f"Node.js exited with code {result.returncode} (no stderr). "
+                f"Likely OOM — JSON was {graph_kb} KB, heap was {heap_mb} MB. "
+                f"Try reducing vis_nesting_depth to collapse modules."
+            )
+        )
+        raise RuntimeError(f"ELK layout failed: {detail}")
 
     return json.loads(result.stdout)
 
@@ -546,6 +555,92 @@ def render_with_elk(
 
         if os.path.exists(positioned_path):
             os.remove(positioned_path)
+
+
+def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
+    """Assign initial positions to ELK nodes via topological sort.
+
+    For the stress algorithm, initial positions bias the final layout.
+    By assigning y-coordinates from topological depth and spreading
+    x-coordinates within each rank, we get directional flow (inputs
+    at bottom, outputs at top) even though stress doesn't natively
+    support ``elk.direction``.
+
+    Mutates ``elk_graph`` in place, setting ``x`` and ``y`` on leaf nodes.
+    """
+    from collections import defaultdict, deque
+
+    # Collect all leaf node IDs from the ELK graph.
+    leaf_ids = set()
+
+    def _collect_leaves(node):
+        for ch in node.get("children", []):
+            if ch["id"].startswith("group_"):
+                _collect_leaves(ch)
+            else:
+                leaf_ids.add(ch["id"])
+
+    _collect_leaves(elk_graph)
+
+    # Build adjacency from edges. Edge dicts have "sources" and "targets"
+    # from render_elk_direct's all_edges, which are DOT-level dicts with
+    # string "source"/"target" keys (not ELK format).
+    children_of = defaultdict(list)
+    in_degree = defaultdict(int)
+    for e in edges:
+        src = e.get("tail_name")
+        tgt = e.get("head_name")
+        if src in leaf_ids and tgt in leaf_ids:
+            children_of[src].append(tgt)
+            in_degree[tgt] += 1
+
+    # Kahn's algorithm for topological depth assignment.
+    depth = {}
+    queue = deque()
+    for nid in leaf_ids:
+        if in_degree[nid] == 0:
+            depth[nid] = 0
+            queue.append(nid)
+
+    while queue:
+        nid = queue.popleft()
+        for child in children_of[nid]:
+            new_depth = depth[nid] + 1
+            if child not in depth or new_depth > depth[child]:
+                depth[child] = new_depth
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                queue.append(child)
+
+    # Nodes not reached (cycles or disconnected) get depth 0.
+    for nid in leaf_ids:
+        if nid not in depth:
+            depth[nid] = 0
+
+    # Group by depth, spread x within each rank.
+    ranks = defaultdict(list)
+    for nid, d in depth.items():
+        ranks[d].append(nid)
+
+    spacing_y = 100  # points between ranks
+    spacing_x = 250  # points between nodes in same rank
+
+    positions = {}
+    for d, nodes in ranks.items():
+        for i, nid in enumerate(nodes):
+            x = i * spacing_x
+            y = d * spacing_y  # deeper = higher y (ELK y-down = bottom of graph)
+            positions[nid] = (x, y)
+
+    # Inject positions into ELK leaf nodes.
+    def _inject(node):
+        for ch in node.get("children", []):
+            if ch["id"].startswith("group_"):
+                _inject(ch)
+            elif ch["id"] in positions:
+                ch["x"], ch["y"] = positions[ch["id"]]
+
+    _inject(elk_graph)
 
 
 def _estimate_node_size(label: str) -> tuple:
@@ -904,6 +999,15 @@ def render_elk_direct(
     # Scale timeout with graph size: ~15ms per node, minimum 120s.
     # Empirical: 5k→10s, 25k→114s, scaling ~O(n^1.4).
     num_elk_nodes = len(node_data)
+
+    # The layered algorithm (Sugiyama) uses O(n^2) memory for crossing
+    # minimization — at ~100k+ nodes it triggers std::bad_alloc in elkjs.
+    # Switch to stress-majorization which is O(n) memory, seeded with
+    # topological positions so the layout preserves directional flow.
+    if num_elk_nodes > 150000:
+        elk_graph["layoutOptions"]["elk.algorithm"] = "stress"
+        _seed_stress_positions(elk_graph, all_edges)
+
     elk_timeout = max(_ELK_TIMEOUT, int(num_elk_nodes * 0.015))
     positioned = run_elk_layout(elk_graph, timeout=elk_timeout)
 

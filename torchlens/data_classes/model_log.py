@@ -111,6 +111,7 @@ class ModelLog:
         optimizer=None,
         save_source_context: bool = False,
         save_rng_states: bool = False,
+        detect_loops: bool = True,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -157,6 +158,7 @@ class ModelLog:
         self.save_gradients = save_gradients
         self.save_source_context = save_source_context
         self.save_rng_states = save_rng_states
+        self.detect_loops = detect_loops
         self.has_saved_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
 
