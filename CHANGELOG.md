@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v0.20.2 (2026-03-08)
+
+### Bug Fixes
+
+- **vis**: Increase ELK Node.js stack size to prevent overflow
+  ([`b8edbc8`](https://github.com/johnmarktaylor91/torchlens/commit/b8edbc8c779dda44b046c9efa4855b3a6fad46f7))
+
+Bump --stack-size floor from 64MB to 128MB and multiplier from 16x to 48x (matching heap scaling) to
+  prevent "Maximum call stack size exceeded" in elkjs on large graphs.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **scripts**: Enable loop detection in render_large_graph
+  ([`803e16f`](https://github.com/johnmarktaylor91/torchlens/commit/803e16f3ecec7e2fbb1c662ce963f7de51f4d16c))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.20.1 (2026-03-08)
 
 ### Chores
