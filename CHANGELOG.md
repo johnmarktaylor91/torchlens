@@ -1,6 +1,35 @@
 # CHANGELOG
 
 
+## v0.17.0 (2026-03-08)
+
+### Bug Fixes
+
+- **types**: Add mypy annotations for defaultdict and deque in elk_layout
+  ([`98478a3`](https://github.com/johnmarktaylor91/torchlens/commit/98478a33a28e890554bad6325478efb8a2ff5f85))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **vis**: Scale ELK rendering to 250k+ nodes, add detect_loops option
+  ([`4707631`](https://github.com/johnmarktaylor91/torchlens/commit/470763146ce30334b5853cfc7cfd104035fd9922))
+
+ELK's layered algorithm (Sugiyama) uses O(n²) memory for crossing minimization, causing
+  std::bad_alloc at ~150k+ nodes. This adds:
+
+- Auto-switch to ELK stress algorithm above 150k nodes (O(n) memory) - Topological position seeding
+  for stress to preserve directional flow - Increased Node.js heap allocation (16GB floor, 48x JSON
+  size) - Better error messages when Node.js OOM-kills (was silent empty stderr) - `detect_loops`
+  parameter on log_forward_pass/show_model_graph to skip expensive isomorphic subgraph expansion,
+  keeping only same-param grouping (Rule 1). Default True (existing behavior unchanged). - 8 loop
+  comparison tests rendering with/without loop detection
+
+Successfully renders 250k-node graphs in ~19 minutes (was impossible). 1M-node render in progress.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.16.4 (2026-03-08)
 
 ### Bug Fixes
