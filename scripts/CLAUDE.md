@@ -5,8 +5,7 @@
 | File | Purpose |
 |------|---------|
 | `check_flops_coverage.py` | Reports FLOPs module coverage against all decorated torch functions |
-| `run_250k.py` | Render a 250k-node graph with ELK layout |
-| `run_1M.py` | Render a 1M-node graph with ELK (phased: construct → log → render) |
+| `render_large_graph.py` | Render a large random graph with ELK layout (any node count) |
 
 ## check_flops_coverage.py
 
@@ -19,4 +18,13 @@ in `capture/flops.py`. Reports:
 Run with:
 ```bash
 python scripts/check_flops_coverage.py
+```
+
+## render_large_graph.py
+
+Renders a large random graph using the ELK layout engine. Accepts any target node count.
+
+```bash
+python scripts/render_large_graph.py 250000
+python scripts/render_large_graph.py 1000000 --format png --seed 123
 ```
