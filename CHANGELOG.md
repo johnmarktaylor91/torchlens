@@ -1,6 +1,31 @@
 # CHANGELOG
 
 
+## v0.20.0 (2026-03-08)
+
+### Chores
+
+- **scripts**: Unify large graph render scripts into single parameterized script
+  ([`07a8186`](https://github.com/johnmarktaylor91/torchlens/commit/07a8186537cf88bb39f4abae55a05dc01ec16457))
+
+Replace `run_250k.py` and `run_1M.py` with `render_large_graph.py` that accepts any node count as a
+  CLI argument, plus --format, --seed, and --outdir options.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **logging**: Add verbose mode for timed progress messages
+  ([`0603f10`](https://github.com/johnmarktaylor91/torchlens/commit/0603f1035b8be7c2c44a416099fac282eaafa686))
+
+Add `verbose: bool = False` parameter to `log_forward_pass`, `show_model_graph`, and internal
+  pipeline functions. When enabled, prints `[torchlens]`-prefixed progress at each major pipeline
+  stage with timing. Also fixes `_trim_and_reorder_model_history_fields` to preserve all non-ordered
+  attributes (not just private ones).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.19.0 (2026-03-08)
 
 ### Chores
