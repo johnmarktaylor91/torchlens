@@ -382,9 +382,17 @@ def _refine_iso_groups(
             if rx != ry:
                 uf[rx] = ry
 
-        for member1, member2 in it.combinations(members, 2):
-            if member_neighbor_isos[member1] & member_neighbor_isos[member2]:
-                union(member1, member2)
+        # Reverse-index approach: union members sharing a neighbor key.
+        # O(members × avg_neighbors) instead of O(members²).
+        _reverse_index = defaultdict(list)
+        for member_label in members:
+            for neighbor_key in member_neighbor_isos[member_label]:
+                _reverse_index[neighbor_key].append(member_label)
+        for members_with_key in _reverse_index.values():
+            if len(members_with_key) > 1:
+                first = members_with_key[0]
+                for other in members_with_key[1:]:
+                    union(first, other)
 
         components = defaultdict(list)
         for member in members:
@@ -628,10 +636,16 @@ def _find_isomorphic_matches(
 
     # Remove collisions: if the same node appears in multiple (node, subgraph) tuples,
     # discard all occurrences to avoid assigning one node to multiple subgraphs.
-    node_labels = [node[0] for node in new_equivalent_nodes]
-    new_equivalent_nodes = [
-        node for node in new_equivalent_nodes if node_labels.count(node[0]) == 1
-    ]
+    _seen_labels = set()
+    _dupe_labels = set()
+    for node in new_equivalent_nodes:
+        if node[0] in _seen_labels:
+            _dupe_labels.add(node[0])
+        _seen_labels.add(node[0])
+    if _dupe_labels:
+        new_equivalent_nodes = [
+            node for node in new_equivalent_nodes if node[0] not in _dupe_labels
+        ]
     return new_equivalent_nodes
 
 
@@ -776,26 +790,31 @@ def _merge_iso_groups_to_layers(
     for iso_nodes_orig in iso_node_groups.values():
         all_iso_nodes.update(iso_nodes_orig)
 
+    # Pre-compute param types per subgraph for O(1) lookup in the pair loop (O10).
+    _sg_param_types: Dict[str, frozenset] = {}
+    for iso_nodes_orig in iso_node_groups.values():
+        for node_label in iso_nodes_orig:
+            sg = node_to_subgraph[node_label]
+            sg_label = sg.starting_node
+            if sg_label not in _sg_param_types:
+                _sg_param_types[sg_label] = frozenset(
+                    self[pnode].operation_equivalence_type for pnode in sg.param_nodes
+                )
+
     # PASS 1: Within iso-groups — merge nodes whose subgraphs share param types or are adjacent.
     for iso_group_label, iso_nodes_orig in iso_node_groups.items():
         iso_nodes = sorted(iso_nodes_orig)
         for node1_label, node2_label in it.combinations(iso_nodes, 2):
-            node1_subgraph = node_to_subgraph[node1_label]
-            node2_subgraph = node_to_subgraph[node2_label]
-            node1_subgraph_label = node1_subgraph.starting_node
-            node2_subgraph_label = node2_subgraph.starting_node
-            node1_param_types = [
-                self[pnode].operation_equivalence_type for pnode in node1_subgraph.param_nodes
-            ]
-            node2_param_types = [
-                self[pnode].operation_equivalence_type for pnode in node2_subgraph.param_nodes
-            ]
-            overlapping_param_types = set(node1_param_types).intersection(set(node2_param_types))
+            node1_subgraph_label = node_to_subgraph[node1_label].starting_node
+            node2_subgraph_label = node_to_subgraph[node2_label].starting_node
+            overlapping_param_types = (
+                _sg_param_types[node1_subgraph_label] & _sg_param_types[node2_subgraph_label]
+            )
             subgraphs_are_adjacent = (
                 node1_subgraph_label in adjacent_subgraphs
                 and node2_subgraph_label in adjacent_subgraphs[node1_subgraph_label]
             )
-            if (len(overlapping_param_types) > 0) or subgraphs_are_adjacent:
+            if overlapping_param_types or subgraphs_are_adjacent:
                 _union(node1_label, node2_label)
 
     # PASS 2: Cross iso-groups — unconditionally merge by (func, params) identity.

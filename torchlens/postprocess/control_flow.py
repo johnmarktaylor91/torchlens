@@ -310,9 +310,14 @@ def _fix_modules_for_internal_tensors(self) -> None:
     # Append module path suffix to operation_equivalence_type for ALL tensors.
     # This ensures loop detection (Step 8) treats same-function operations in
     # different modules as distinct equivalence types.
+    _module_str_cache = {}
     for layer in self:
-        module_str = "_".join([module_pass[0] for module_pass in layer.containing_modules])
-        layer.operation_equivalence_type += module_str
+        cm_key = tuple(layer.containing_modules)
+        if cm_key not in _module_str_cache:
+            _module_str_cache[cm_key] = "_".join(
+                [module_pass[0] for module_pass in layer.containing_modules]
+            )
+        layer.operation_equivalence_type += _module_str_cache[cm_key]
 
 
 def _fix_modules_for_single_internal_tensor(

@@ -22,7 +22,7 @@ Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (un
 """
 
 import weakref
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
@@ -491,7 +491,7 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
     Callable attributes (methods) are excluded from the reordered dict.
     """
     old_dict = layer_entry.__dict__
-    new_dir_dict = OrderedDict()
+    new_dir_dict = {}
     # First: fields in canonical order.
     for field in LAYER_PASS_LOG_FIELD_ORDER:
         if field in old_dict:
@@ -563,18 +563,11 @@ def _rename_model_history_layer_names(self) -> None:
 
     mla = self._module_build_data["module_layer_argnames"]
     for module_pass, arglist in mla.items():
-        inds_to_remove = set()
-        for a, arg in enumerate(arglist):
-            raw_name = mla[module_pass][a][0]
-            if raw_name not in self._raw_to_final_layer_labels:
-                inds_to_remove.add(a)
-                continue
-            new_name = self._raw_to_final_layer_labels[raw_name]
-            argname = mla[module_pass][a][1]
-            mla[module_pass][a] = (new_name, argname)
-        mla[module_pass] = [
-            mla[module_pass][i] for i in range(len(arglist)) if i not in inds_to_remove
-        ]
+        new_arglist = []
+        for raw_name, argname in arglist:
+            if raw_name in self._raw_to_final_layer_labels:
+                new_arglist.append((self._raw_to_final_layer_labels[raw_name], argname))
+        mla[module_pass] = new_arglist
 
 
 def _trim_and_reorder_model_history_fields(self) -> None:
@@ -584,7 +577,7 @@ def _trim_and_reorder_model_history_fields(self) -> None:
     Public fields listed in MODEL_LOG_FIELD_ORDER come first, followed by any
     private fields (starting with ``_``) not already in the order list.
     """
-    new_dir_dict = OrderedDict()
+    new_dir_dict = {}
     for field in MODEL_LOG_FIELD_ORDER:
         new_dir_dict[field] = getattr(self, field)
     # Preserve all remaining fields not in the canonical order (private/internal

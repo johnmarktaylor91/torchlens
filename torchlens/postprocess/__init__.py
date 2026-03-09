@@ -34,6 +34,7 @@ LayerLogs, and marks the pass as finished. See postprocess_fast() below.
 
 from typing import TYPE_CHECKING, List
 
+import time
 import torch
 
 from ..utils.tensor_utils import safe_copy
@@ -99,39 +100,48 @@ def postprocess(
         _set_pass_finished(self)
         return
 
-    # Steps 1-3: Graph traversal (output nodes, ancestry, orphan removal)
-    with _vtimed(self, "Steps 1-3: Graph traversal"):
-        # Step 1: Add dedicated output nodes
+    _vprint(
+        self,
+        f"Postprocessing {len(self._raw_layer_labels_list):,} layers "
+        f"({len(self.buffer_layers):,} buffers)...",
+    )
+    _post_t0 = time.time() if getattr(self, "verbose", False) else 0
+
+    # Step 1: Add dedicated output nodes
+    with _vtimed(self, "  Step 1: Add output layers"):
         _add_output_layers(self, output_tensors, output_tensor_addresses)
 
-        # Step 2: Trace which nodes are ancestors of output nodes
+    # Step 2: Trace which nodes are ancestors of output nodes
+    with _vtimed(self, "  Step 2: Trace output ancestors"):
         _find_output_ancestors(self)
 
-        # Step 3: Remove orphan nodes, find nodes that don't terminate in output node
+    # Step 3: Remove orphan nodes, find nodes that don't terminate in output node
+    with _vtimed(self, "  Step 3: Remove orphan nodes"):
         _remove_orphan_nodes(self)
 
     # Step 4: Find min/max distance from input and output nodes.
     # Conditional: only runs when the user requested distance metadata.
     if self.mark_input_output_distances:
-        with _vtimed(self, "Step 4: Input/output distances"):
+        with _vtimed(self, "  Step 4: Input/output distances"):
             _mark_input_output_distances(self)
 
-    # Steps 5-7: Control flow (conditional branches, module fixing, buffers)
-    with _vtimed(self, "Steps 5-7: Control flow"):
-        # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
+    # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
+    with _vtimed(self, "  Step 5: Mark conditional branches"):
         _mark_conditional_branches(self)
 
-        # Step 6: Annotate the containing modules for all internally-generated tensors.
+    # Step 6: Annotate the containing modules for all internally-generated tensors.
+    with _vtimed(self, "  Step 6: Fix module containment"):
         _fix_modules_for_internal_tensors(self)
 
-        # Step 7: Fix the buffer passes and parent information.
+    # Step 7: Fix the buffer passes and parent information.
+    with _vtimed(self, "  Step 7: Fix buffer layers"):
         _fix_buffer_layers(self)
 
     # Step 8: Identify all loops, mark repeated layers.
     loop_desc = (
-        "Step 8: Loop detection (full)"
+        "  Step 8: Loop detection (full)"
         if self.detect_loops
-        else "Step 8: Loop detection (params only)"
+        else "  Step 8: Loop detection (params only)"
     )
     with _vtimed(self, loop_desc):
         if self.detect_loops:
@@ -139,43 +149,52 @@ def postprocess(
         else:
             _group_by_shared_params(self)
 
-    # Steps 9-12: Labeling (label mapping, final info, rename, cleanup)
-    with _vtimed(self, "Steps 9-12: Labeling"):
-        # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+    # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+    with _vtimed(self, "  Step 9: Map labels"):
         _map_raw_labels_to_final_labels(self)
 
-        # Step 10: Log final info for all layers
+    # Step 10: Log final info for all layers
+    with _vtimed(self, "  Step 10: Log final info"):
         _log_final_info_for_all_layers(self)
 
-        # Step 11: Rename all raw labels to final labels
+    # Step 11: Rename all raw labels to final labels
+    with _vtimed(self, "  Step 11: Rename labels"):
         _rename_model_history_layer_names(self)
         _trim_and_reorder_model_history_fields(self)
 
-        # Step 12: Remove unsaved layers, build lookup key mappings
+    # Step 12: Remove unsaved layers, build lookup key mappings
+    with _vtimed(self, "  Step 12: Build lookup keys"):
         _remove_unwanted_entries_and_log_remaining(self)
 
-    # Steps 13-18: Finalization
-    with _vtimed(self, "Steps 13-18: Finalization"):
-        # Step 13: Undecorate all saved tensors and remove saved grad_fns.
+    # Step 13: Undecorate all saved tensors and remove saved grad_fns.
+    with _vtimed(self, "  Step 13: Undecorate tensors"):
         _undecorate_all_saved_tensors(self)
 
-        # Step 14: Clear the cache after any tensor deletions for garbage collection purposes:
-        torch.cuda.empty_cache()
+    # Step 14: Clear the cache after any tensor deletions for garbage collection purposes.
+    torch.cuda.empty_cache()
 
-        # Step 15: Log time elapsed.
+    # Step 15: Log time elapsed.
+    with _vtimed(self, "  Step 15: Log timing"):
         _log_time_elapsed(self)
 
-        # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
+    # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
+    with _vtimed(self, "  Step 16: Finalize params"):
         _finalize_param_logs(self)
 
-        # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+    # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+    with _vtimed(self, "  Step 16.5: Build layer logs"):
         _build_layer_logs(self)
 
-        # Step 17: Build structured ModuleLog objects from raw module_* dicts.
+    # Step 17: Build structured ModuleLog objects from raw module_* dicts.
+    with _vtimed(self, "  Step 17: Build module logs"):
         _build_module_logs(self)
 
-        # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
+    # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
+    with _vtimed(self, "  Step 18: Mark pass finished"):
         _set_pass_finished(self)
+
+    if getattr(self, "verbose", False):
+        print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
 
 
 def postprocess_fast(self: "ModelLog") -> None:
