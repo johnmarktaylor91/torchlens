@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.20.5 (2026-03-09)
+
+### Bug Fixes
+
+- **vis**: Prevent OOM kill on 1M-node ELK render
+  ([#128](https://github.com/johnmarktaylor91/torchlens/pull/128),
+  [`d9a1525`](https://github.com/johnmarktaylor91/torchlens/commit/d9a15259e452bf3c224732a0bc5a1671f9cbb56e))
+
+The 1M-node render was OOM-killed at ~74GB RSS because: 1. Model params (~8-10GB) stayed alive
+  during ELK subprocess 2. preexec_fn forced fork+exec, COW-doubling the 74GB process 3. Heap/stack
+  formulas produced absurd values (5.6TB heap, 15GB stack) 4. No memory cleanup before subprocess
+  launch
+
+Changes: - render_large_graph.py: separate log_forward_pass from render_graph, free model/autograd
+  before ELK render - elk_layout.py: cap heap at 64GB, stack floor 4096MB/cap 8192MB, write JSON to
+  temp file (free string before subprocess), gc.collect before subprocess, set RLIMIT_STACK at
+  module level (removes preexec_fn and the forced fork+exec)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.20.4 (2026-03-09)
 
 ### Bug Fixes
