@@ -463,14 +463,14 @@ class TestCleanupReleasesReferences:
 
 class TestNestedTupleArgs:
     def test_nested_tuple_independence(self):
-        """Nested tuples/lists in creation_args should be independent copies."""
+        """Nested tuples/lists in captured_args should be independent copies."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = log_forward_pass(model, x, save_function_args=True)
         found_args = False
         for label in log.layer_labels:
             entry = log[label]
-            if entry.creation_args is not None and len(entry.creation_args) > 0:
+            if entry.captured_args is not None and len(entry.captured_args) > 0:
                 found_args = True
                 break
         assert found_args or True  # OK if no args (model-dependent)
@@ -495,5 +495,5 @@ class TestDisplayUsesLoggedShape:
         log = log_forward_pass(model, x, layers_to_save="all")
         for label in log.layer_labels:
             entry = log[label]
-            if entry.tensor_contents is not None:
+            if entry.activation is not None:
                 assert entry.tensor_shape is not None

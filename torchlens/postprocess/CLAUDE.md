@@ -63,8 +63,8 @@ Algorithm groups operations into "layers" (e.g., 8 iterations of sin → 1 layer
    (prevents false merging of structurally different operations sharing same equiv type).
 3. **Layer assignment**: Groups merged if subgraphs share parameter equiv types OR are
    adjacent (connected via equivalent operation chains).
-4. **Rebuild pass assignments**: Safety net — rebuilds `same_layer_operations`, `pass_num`,
-   `layer_passes_total` from scratch after all rounds.
+4. **Rebuild pass assignments**: Safety net — rebuilds `recurrent_group`, `pass_num`,
+   `num_passes` from scratch after all rounds.
 
 **Core invariant**: Two operations → same layer ONLY if subgraphs share params OR are adjacent.
 
@@ -72,7 +72,7 @@ Algorithm groups operations into "layers" (e.g., 8 iterations of sin → 1 layer
 - Step 5 backward-only flood must complete before Step 6 module fixing
 - Step 6 appends module addresses to `operation_equivalence_type` → affects Step 8 grouping
 - Step 10 renames LayerPassLog internal fields → Step 12 builds lookup dicts with final labels
-- Step 12 converts module tuples → strings in `containing_modules_origin_nested`
+- Step 12 converts module tuples → strings in `containing_modules`
 - Steps 16-17 build LayerLog/ModuleLog from finalized data — must run after all renaming
 
 ## Step 6 Module Suffix
@@ -89,7 +89,7 @@ tensor contents for saved layers.
 
 ## Gotchas
 - `_build_layer_logs` multi-pass merge: only 3 fields merged (has_input_ancestor OR,
-  input_output_address char-merge, is_bottom_level_submodule_output OR). All other
+  io_role char-merge, is_leaf_module_output OR). All other
   78 fields use first-pass values.
 - `_build_module_logs` must NOT be called in `postprocess_fast` — `_module_build_data`
   isn't populated in fast mode.

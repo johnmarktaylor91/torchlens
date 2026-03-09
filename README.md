@@ -37,8 +37,8 @@ class SimpleRecurrent(nn.Module):
 simple_recurrent = SimpleRecurrent()
 model_history = tl.log_forward_pass(simple_recurrent, x,
                                     layers_to_save='all',
-                                    vis_opt='rolled')
-print(model_history['linear_1_1:2'].tensor_contents)  # second pass of first linear layer
+                                    vis_mode='rolled')
+print(model_history['linear_1_1:2'].activation)  # second pass of first linear layer
 
 '''
 tensor([[-0.0690, -1.3957, -0.3231, -0.1980,  0.7197],
@@ -88,7 +88,7 @@ import torchlens as tl
 
 alexnet = torchvision.models.alexnet()
 x = torch.rand(1, 3, 224, 224)
-model_history = tl.log_forward_pass(alexnet, x, layers_to_save='all', vis_opt='unrolled')
+model_history = tl.log_forward_pass(alexnet, x, layers_to_save='all', vis_mode='unrolled')
 print(model_history)
 
 '''
@@ -166,7 +166,7 @@ Layer conv2d_3_7, operation 8/24:
 	Params: Computed from params with shape (384,), (384, 192, 3, 3); 663936 params total (2.5 MB)
 	Parent Layers: maxpool2d_2_6
 	Child Layers: relu_3_8
-	Function: conv2d (gradfunc=ConvolutionBackward0)
+	Function: conv2d (grad_fn=ConvolutionBackward0)
 	Computed inside module: features.6
 	Time elapsed:  5.670E-04s
 	Output of modules: features.6
@@ -174,8 +174,8 @@ Layer conv2d_3_7, operation 8/24:
 	Lookup keys: -17, 7, conv2d_3_7, conv2d_3_7:1, features.6, features.6:1
 '''
 
-# You can pull out the actual output activations from a layer with the tensor_contents field:
-print(model_history['conv2d_3_7'].tensor_contents)
+# You can pull out the actual output activations from a layer with the activation field:
+print(model_history['conv2d_3_7'].activation)
 '''
 tensor([[[[-0.0867, -0.0787, -0.0817,  ..., -0.0820, -0.0655, -0.0195],
           [-0.1213, -0.1130, -0.1386,  ..., -0.1331, -0.1118, -0.0520],
@@ -194,7 +194,7 @@ will pull out all conv layers):
 
 ```python
 # Pull out conv2d_3_7, the output of the 'features' module, the fifth-to-last layer, and all linear (i.e., fc) layers:
-model_history = tl.log_forward_pass(alexnet, x, vis_opt='unrolled',
+model_history = tl.log_forward_pass(alexnet, x, vis_mode='unrolled',
                                     layers_to_save=['conv2d_3_7', 'features', -5, 'linear'])
 print(model_history.layer_labels)
 '''

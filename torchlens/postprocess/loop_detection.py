@@ -37,12 +37,12 @@ Phase 4 — Layer Assignment (``_finalize_layer_assignments`` + ``_merge_iso_gro
     Pass 1 (Rules 2+3): Within each iso group, merge nodes whose subgraphs share
         parameter equivalence types OR are topologically adjacent.
     Pass 2 (Rule 1): Unconditionally merge ALL nodes with identical
-        (func_applied_name, sorted(parent_param_barcodes)) — the fundamental
+        (func_name, sorted(parent_param_barcodes)) — the fundamental
         invariant that same function + same params = same layer.
 
 Phase 5 — Cleanup (``_rebuild_pass_assignments``):
     Multiple expansion rounds can reassign a node to a new group while leaving
-    stale same_layer_operations in old group members. This function groups all
+    stale recurrent_group in old group members. This function groups all
     tensors by their authoritative ``layer_label_raw`` and rebuilds consistent
     pass assignments. This is NOT just defensive cleanup — it is a NECESSARY
     correctness step because Step 6's module suffix mutation causes the same
@@ -128,31 +128,31 @@ class IsomorphicExpansionState:
 def _group_by_shared_params(self) -> None:
     """Lightweight same-param grouping without full loop detection.
 
-    Groups operations that share identical ``(func_applied_name,
+    Groups operations that share identical ``(func_name,
     sorted(parent_param_barcodes))`` into the same layer. This is Rule 1
     (the fundamental invariant) from the full loop detection algorithm,
     without the expensive isomorphic subgraph expansion (Phases 2-3).
 
     Operations without parameters remain as individual single-pass layers.
-    Sets ``layer_label_raw``, ``same_layer_operations``, ``pass_num``,
-    and ``layer_passes_total`` on each LayerPassLog.
+    Sets ``layer_label_raw``, ``recurrent_group``, ``pass_num``,
+    and ``num_passes`` on each LayerPassLog.
     """
     param_barcode_groups: Dict[tuple, list] = defaultdict(list)
     for label in self._raw_layer_labels_list:
         node = self[label]
-        if node.computed_with_params and node.parent_param_barcodes:
-            key = (node.func_applied_name, tuple(sorted(node.parent_param_barcodes)))
+        if node.uses_params and node.parent_param_barcodes:
+            key = (node.func_name, tuple(sorted(node.parent_param_barcodes)))
             param_barcode_groups[key].append(label)
 
     # For multi-member groups, set layer_label_raw to the first member's raw label.
     for key, members in param_barcode_groups.items():
         if len(members) > 1:
-            leader = min(members, key=lambda x: self[x].realtime_tensor_num)
+            leader = min(members, key=lambda x: self[x].creation_order)
             leader_raw = self[leader].layer_label_raw
             for label in members:
                 self[label].layer_label_raw = leader_raw
 
-    # Rebuild same_layer_operations, pass_num, layer_passes_total from layer_label_raw.
+    # Rebuild recurrent_group, pass_num, num_passes from layer_label_raw.
     _rebuild_pass_assignments(self)
 
 
@@ -180,7 +180,7 @@ def _detect_and_label_loops(self) -> None:
     reconciles any resulting conflicts.
     """
     # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
-    _sort_keys = {label: self[label].realtime_tensor_num for label in self._raw_layer_labels_list}
+    _sort_keys = {label: self[label].creation_order for label in self._raw_layer_labels_list}
 
     # Seed the heap with root nodes (inputs + internally-initialized tensors).
     initial_labels = self.input_layers + self.internally_initialized_layers
@@ -210,11 +210,11 @@ def _detect_and_label_loops(self) -> None:
 
         # Singleton: only one operation of this type, no loop possible.
         if len(node.equivalent_operations) == 1:
-            node.same_layer_operations = [node_label]
+            node.recurrent_group = [node_label]
             continue
 
         # Already fully resolved by a previous expansion round.
-        if len(node.equivalent_operations) == len(node.same_layer_operations):
+        if len(node.equivalent_operations) == len(node.recurrent_group):
             continue
 
         # Multiple equivalent operations exist — expand isomorphic subgraphs
@@ -223,16 +223,16 @@ def _detect_and_label_loops(self) -> None:
 
     # Phase 5: Rebuild pass assignments from authoritative layer_label_raw.
     # This is NECESSARY (not just defensive) because multiple expansion rounds
-    # can leave stale same_layer_operations references. See module docstring.
+    # can leave stale recurrent_group references. See module docstring.
     _rebuild_pass_assignments(self)
 
 
 def _rebuild_pass_assignments(self) -> None:
-    """Phase 5: Rebuild same_layer_operations and pass numbers from layer_label_raw.
+    """Phase 5: Rebuild recurrent_group and pass numbers from layer_label_raw.
 
     WHY NECESSARY: Multiple rounds of ``_expand_isomorphic_subgraphs`` can reassign
     a node to a new group (via ``_finalize_layer_assignments``) while leaving stale
-    references in the old group's ``same_layer_operations``. Without this cleanup,
+    references in the old group's ``recurrent_group``. Without this cleanup,
     duplicate layer:pass labels would cause dict overwrites during renaming, leading
     to validation failures (e.g., wrong tensor looked up for children_tensor_versions).
 
@@ -242,20 +242,20 @@ def _rebuild_pass_assignments(self) -> None:
 
     HOW IT WORKS: Groups all tensors by their current ``layer_label_raw`` (the
     authoritative group key set by ``_finalize_layer_assignments``), sorts each
-    group by realtime order, and rebuilds ``same_layer_operations``, ``pass_num``,
-    and ``layer_passes_total`` from scratch. O(n), runs once.
+    group by realtime order, and rebuilds ``recurrent_group``, ``pass_num``,
+    and ``num_passes`` from scratch. O(n), runs once.
     """
     groups = defaultdict(list)
     for entry in self:
         groups[entry.layer_label_raw].append(entry.tensor_label_raw)
 
     for raw_label, members in groups.items():
-        members_sorted = sorted(members, key=lambda x: self[x].realtime_tensor_num)
+        members_sorted = sorted(members, key=lambda x: self[x].creation_order)
         for pass_index, member_label in enumerate(members_sorted):
             member = self[member_label]
-            member.same_layer_operations = members_sorted
+            member.recurrent_group = members_sorted
             member.pass_num = pass_index + 1
-            member.layer_passes_total = len(members_sorted)
+            member.num_passes = len(members_sorted)
 
 
 def _expand_isomorphic_subgraphs(self, node: LayerPassLog) -> None:
@@ -286,7 +286,7 @@ def _expand_isomorphic_subgraphs(self, node: LayerPassLog) -> None:
     sg_info = {}
     for starting_label in equivalent_operation_starting_labels:
         sg_info[starting_label] = SubgraphInfo(starting_node=starting_label)
-        if node.computed_with_params:
+        if node.uses_params:
             sg_info[starting_label].param_nodes.add(starting_label)
 
     # Initialize BFS state: all starting nodes form one iso group.
@@ -662,7 +662,7 @@ def _register_isomorphic_group(
         for node_label, node_subgraph in new_isomorphic_nodes:
             node = self[node_label]
             state.subgraph_info[node_subgraph].node_set.add(node_label)
-            if node.computed_with_params:
+            if node.uses_params:
                 state.subgraph_info[node_subgraph].param_nodes.add(node_label)
             state.node_to_subgraph[node_label] = state.subgraph_info[node_subgraph]
         state.node_stack.append(equivalent_node_labels)
@@ -680,12 +680,12 @@ def _finalize_layer_assignments(
     types OR are topologically adjacent.
 
     Guard: if a new layer assignment would REDUCE the number of equivalent layers
-    for any member node (compared to its current same_layer_operations), the
+    for any member node (compared to its current recurrent_group), the
     assignment is skipped. This prevents later expansion rounds from fragmenting
     groups established by earlier rounds.
 
-    For each accepted group, sets layer_label_raw, same_layer_operations, pass_num,
-    layer_passes_total, and unifies operation_equivalence_type to the canonical
+    For each accepted group, sets layer_label_raw, recurrent_group, pass_num,
+    num_passes, and unifies operation_equivalence_type to the canonical
     (first node's) type.
 
     Args:
@@ -698,12 +698,10 @@ def _finalize_layer_assignments(
     # Finally, label the nodes corresponding to the same layer.
     for layer_label, layer_nodes in merged_layer_groups.items():
         # Skip if the new layer asssignment reduces the number of equivalent layers.
-        if len(layer_nodes) < max(
-            [len(self[layer].same_layer_operations) for layer in layer_nodes]
-        ):
+        if len(layer_nodes) < max([len(self[layer].recurrent_group) for layer in layer_nodes]):
             continue
         # convert to list and sort
-        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].realtime_tensor_num)  # type: ignore[assignment]
+        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].creation_order)  # type: ignore[assignment]
         # Unify operation_equivalence_type: when param-sharing merges nodes
         # from different iso groups (e.g., shared module called from different
         # parent blocks), their equivalence types may differ due to module path
@@ -712,9 +710,9 @@ def _finalize_layer_assignments(
         for pass_index, node_label in enumerate(layer_nodes):
             node = self[node_label]
             node.layer_label_raw = layer_label
-            node.same_layer_operations = layer_nodes
+            node.recurrent_group = layer_nodes
             node.pass_num = pass_index + 1
-            node.layer_passes_total = len(layer_nodes)
+            node.num_passes = len(layer_nodes)
             node.operation_equivalence_type = canonical_equiv_type
 
 
@@ -736,11 +734,11 @@ def _merge_iso_groups_to_layers(
 
     Pass 2 — Cross iso-groups (Rule 1):
         Unconditionally merge ALL nodes that share identical
-        ``(func_applied_name, sorted(parent_param_barcodes))``, regardless of
+        ``(func_name, sorted(parent_param_barcodes))``, regardless of
         iso-group membership. This ensures the fundamental invariant: operations
         applying the same function to the same parameters are ALWAYS the same layer.
         Note: different functions on the same params (e.g., __getitem__ vs __add__)
-        are NOT merged — the func_applied_name must match.
+        are NOT merged — the func_name must match.
 
     Union-find uses lexicographic ordering so the earliest node label is always
     the root, ensuring deterministic group leaders.
@@ -806,8 +804,8 @@ def _merge_iso_groups_to_layers(
     param_barcode_groups: Dict[tuple, list] = defaultdict(list)
     for node_label in all_iso_nodes:
         node = self[node_label]
-        if node.computed_with_params and node.parent_param_barcodes:
-            barcode_key = (node.func_applied_name, tuple(sorted(node.parent_param_barcodes)))
+        if node.uses_params and node.parent_param_barcodes:
+            barcode_key = (node.func_name, tuple(sorted(node.parent_param_barcodes)))
             param_barcode_groups[barcode_key].append(node_label)
 
     for barcode_key, nodes_with_same_params in param_barcode_groups.items():

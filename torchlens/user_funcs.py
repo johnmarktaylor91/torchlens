@@ -164,7 +164,7 @@ def log_forward_pass(
     save_gradients: bool = False,
     save_source_context: bool = False,
     save_rng_states: bool = False,
-    vis_opt: str = "none",
+    vis_mode: str = "none",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "graph.gv",
     vis_save_only: bool = False,
@@ -227,7 +227,7 @@ def log_forward_pass(
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
-        vis_opt: ``'none'`` (default), ``'rolled'``, or ``'unrolled'`` visualization.
+        vis_mode: ``'none'`` (default), ``'rolled'``, or ``'unrolled'`` visualization.
         vis_nesting_depth: Max module nesting depth shown in visualization.
         vis_outpath: Output file path for the graph visualization.
         vis_save_only: If True, save the visualization file without displaying it.
@@ -254,7 +254,7 @@ def log_forward_pass(
     warn_parallel()
     model = _unwrap_data_parallel(model)
 
-    if vis_opt not in ["none", "rolled", "unrolled"]:
+    if vis_mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     if output_device not in ["same", "cpu", "cuda"]:
@@ -330,13 +330,13 @@ def log_forward_pass(
         model_log,
         f"Done: {len(model_log.layer_logs)} layers, "
         f"{model_log.num_tensors_saved} saved, "
-        f"{model_log.tensor_fsize_total_nice}",
+        f"{model_log.total_activation_memory_str}",
     )
 
     # Visualize if desired.
-    if vis_opt != "none":
+    if vis_mode != "none":
         model_log.render_graph(
-            vis_opt,
+            vis_mode,
             vis_nesting_depth,
             vis_outpath,
             vis_graph_overrides,
@@ -388,7 +388,7 @@ def show_model_graph(
     model: nn.Module,
     input_args: Union[torch.Tensor, List, Tuple],
     input_kwargs: Optional[Dict[Any, Any]] = None,
-    vis_opt: str = "unrolled",
+    vis_mode: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "graph.gv",
     vis_graph_overrides: Optional[Dict] = None,
@@ -397,7 +397,7 @@ def show_model_graph(
     vis_edge_overrides: Optional[Dict] = None,
     vis_gradient_edge_overrides: Optional[Dict] = None,
     vis_module_overrides: Optional[Dict] = None,
-    save_only: bool = False,
+    vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
     vis_buffer_layers: bool = False,
     vis_direction: str = "bottomup",
@@ -410,17 +410,17 @@ def show_model_graph(
 
     Runs an exhaustive forward pass (no activations saved) to discover the graph
     structure, renders the visualization, then cleans up the ModelLog.  For more
-    control, use ``log_forward_pass`` with ``vis_opt`` set and access the ModelLog
+    control, use ``log_forward_pass`` with ``vis_mode`` set and access the ModelLog
     directly.
 
     Args:
         model: PyTorch model.
         input_args: Positional args for ``model.forward()``.
         input_kwargs: Keyword args for ``model.forward()``.
-        vis_opt: ``'rolled'`` or ``'unrolled'`` (``'none'`` is accepted but a no-op).
+        vis_mode: ``'rolled'`` or ``'unrolled'`` (``'none'`` is accepted but a no-op).
         vis_nesting_depth: Max module nesting depth shown (default 1000 = all).
         vis_outpath: Output file path for the visualization.
-        save_only: If True, save without displaying.
+        vis_save_only: If True, save without displaying.
         vis_fileformat: Image format (``'pdf'``, ``'png'``, ``'jpg'``, etc.).
         vis_buffer_layers: Include buffer layers in the visualization.
         vis_direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
@@ -433,7 +433,7 @@ def show_model_graph(
     if not input_kwargs:
         input_kwargs = {}
 
-    if vis_opt not in ["none", "rolled", "unrolled"]:
+    if vis_mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     model_log = _run_model_and_save_specified_activations(
@@ -453,7 +453,7 @@ def show_model_graph(
     # always cleaned up, even if Graphviz rendering raises.
     try:
         model_log.render_graph(
-            vis_opt,
+            vis_mode,
             vis_nesting_depth,
             vis_outpath,
             vis_graph_overrides,
@@ -462,7 +462,7 @@ def show_model_graph(
             vis_edge_overrides,
             vis_gradient_edge_overrides,
             vis_module_overrides,
-            save_only,
+            vis_save_only,
             vis_fileformat,
             vis_buffer_layers,
             vis_direction,

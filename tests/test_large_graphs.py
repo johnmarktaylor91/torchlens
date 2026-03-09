@@ -127,9 +127,7 @@ class TestRandomGraphModel:
         """Module nesting creates expected hierarchy."""
         model = RandomGraphModel(target_nodes=500, nesting_depth=4, seed=42)
         ml = log_forward_pass(model, torch.randn(2, 64))
-        max_depth = max(
-            len(ml[label].containing_modules_origin_nested) for label in ml.layer_labels
-        )
+        max_depth = max(len(ml[label].containing_modules) for label in ml.layer_labels)
         assert max_depth >= 3
         ml.cleanup()
 
@@ -325,7 +323,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="dot",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "dot_200"),
         )
 
@@ -337,7 +335,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="sfdp",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "sfdp_3k"),
         )
 
@@ -350,7 +348,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_3k"),
         )
 
@@ -363,7 +361,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_5k"),
         )
 
@@ -376,7 +374,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_10k"),
         )
 
@@ -389,7 +387,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_20k"),
         )
 
@@ -402,7 +400,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_50k"),
         )
 
@@ -416,7 +414,7 @@ class TestLargeGraphRendering:
             model,
             torch.randn(2, 64),
             vis_node_placement="elk",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_100k"),
         )
 
@@ -430,7 +428,7 @@ class TestLargeGraphRendering:
             torch.randn(2, 64),
             vis_node_placement="elk",
             vis_fileformat="svg",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_250k"),
         )
 
@@ -444,7 +442,7 @@ class TestLargeGraphRendering:
             torch.randn(2, 64),
             vis_node_placement="elk",
             vis_fileformat="svg",
-            save_only=True,
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_1M"),
         )
 
@@ -453,8 +451,8 @@ class TestLargeGraphRendering:
         model = RandomGraphModel(target_nodes=200, seed=42)
         ml = log_forward_pass(model, torch.randn(2, 64))
         ml.render_graph(
-            vis_opt="unrolled",
-            save_only=True,
+            vis_mode="unrolled",
+            vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "placement_test"),
             vis_node_placement="dot",
         )
@@ -485,8 +483,8 @@ class TestDotVsElkComparison:
         show_model_graph(
             model,
             x,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_node_placement="dot",
             vis_outpath=os.path.join(self.COMPARE_DIR, f"{name}_dot"),
         )
@@ -494,8 +492,8 @@ class TestDotVsElkComparison:
         show_model_graph(
             model,
             x,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_node_placement="elk",
             vis_outpath=os.path.join(self.COMPARE_DIR, f"{name}_elk"),
         )
@@ -553,8 +551,8 @@ class TestDotThresholdBenchmark:
             start = time.time()
             try:
                 ml.render_graph(
-                    vis_opt="unrolled",
-                    save_only=True,
+                    vis_mode="unrolled",
+                    vis_save_only=True,
                     vis_outpath=os.path.join(VIS_OUTPUT_DIR, f"bench_{target}"),
                     vis_node_placement="dot",
                 )

@@ -55,9 +55,9 @@ def main():
 
     # Render from ModelLog metadata (model tensors no longer in memory).
     ml.render_graph(
-        vis_opt="rolled",
+        vis_mode="rolled",
         vis_outpath=os.path.join(args.outdir, label),
-        save_only=True,
+        vis_save_only=True,
         vis_fileformat=args.format,
         vis_node_placement="elk",
     )

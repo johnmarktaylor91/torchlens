@@ -87,26 +87,26 @@ def save_new_activations(
 
     # Clear all existing activations from the previous pass.
     for layer_log_entry in self:
-        layer_log_entry.tensor_contents = None
+        layer_log_entry.activation = None
         layer_log_entry.has_saved_activations = False
-        layer_log_entry.has_saved_grad = False
-        layer_log_entry.grad_contents = None
+        layer_log_entry.has_gradient = False
+        layer_log_entry.gradient = None
         layer_log_entry.has_child_tensor_variations = False
         # Note: children_tensor_versions is cleared and NOT rebuilt in fast pass.
         # This is a known limitation (#93): validation should not be run after
         # save_new_activations since child tensor variations aren't recaptured.
         layer_log_entry.children_tensor_versions = {}
 
-    # Reset per-pass bookkeeping fields.  Graph-level totals (tensor_fsize_total,
+    # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
     # num_tensors_total) are NOT reset — they describe the static graph structure.
     self.layers_with_saved_activations = []
     self.layers_with_saved_gradients = []
     self._saved_gradients_set = set()
-    self.has_saved_gradients = False
+    self.has_gradients = False
     self.unlogged_layers = []
     self.num_tensors_saved = 0
-    self.tensor_fsize_saved = 0
-    self.elapsed_time_function_calls = 0  # #87: reset timing
+    self.saved_activation_memory = 0
+    self.time_function_calls = 0  # #87: reset timing
     # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
     # Counter alignment is the mechanism that lets the fast pass verify the graph
     # hasn't changed: same counter value → same raw label → same operation.
@@ -161,7 +161,7 @@ def _get_input_arg_names(model, input_args) -> List[str]:
 def _get_op_nums_from_user_labels(
     self: "ModelLog", which_layers: Union[str, List[Union[str, int]]]
 ) -> Union[List[int], str]:
-    """Resolve user-provided layer identifiers to internal realtime_tensor_num values.
+    """Resolve user-provided layer identifiers to internal creation_order values.
 
     Supports exact key match, substring match across all lookup keys, and the
     special sentinel ``"all"`` (which passes through as-is).  Returns sorted
@@ -183,7 +183,7 @@ def _get_op_nums_from_user_labels(
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].realtime_tensor_num)
+                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].creation_order)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
@@ -202,7 +202,7 @@ def _fetch_label_move_input_tensors(
 
     Handles nested structures (lists, tuples, dicts) up to ``search_depth=5``.
     Each tensor gets a hierarchical address string like ``"input.x"`` or
-    ``"input.x.0.nested"`` that is stored as its ``input_output_address``.
+    ``"input.x.0.nested"`` that is stored as its ``io_role``.
 
     Returns:
         (input_tensors, input_tensor_addresses): flat lists of tensors and
@@ -319,7 +319,7 @@ def _extract_and_mark_outputs(
 
     Called AFTER the forward pass completes (outside ``active_logging``), so
     operations here don't trigger logging.  Marks each output tensor's graph
-    entry as ``is_output_parent=True`` so postprocessing can identify them.
+    entry as ``feeds_output=True`` so postprocessing can identify them.
 
     Deduplication is by address string (not tensor identity) to handle cases
     where the same tensor appears at multiple output positions.
@@ -350,7 +350,7 @@ def _extract_and_mark_outputs(
         # Only record output_layers during exhaustive pass; fast pass reuses the list.
         if self.logging_mode == "exhaustive":
             self.output_layers.append(t.tl_tensor_label_raw)
-        self._raw_layer_dict[t.tl_tensor_label_raw].is_output_parent = True
+        self._raw_layer_dict[t.tl_tensor_label_raw].feeds_output = True
 
     return output_tensors, output_tensor_addresses
 
@@ -389,7 +389,7 @@ def run_and_log_inputs_through_model(
 
     self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment, arg-type]
 
-    # In fast mode, output layers' tensor_contents are derived from their parents
+    # In fast mode, output layers' activation are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must
     # also include output-layer parents so their activations are available (#46).
     if self._layer_nums_to_save != "all" and self._pass_finished:
@@ -398,7 +398,7 @@ def run_and_log_inputs_through_model(
             output_entry = self[output_label]
             for parent_label in output_entry.parent_layers:
                 parent_entry = self[parent_label]
-                output_parent_nums.add(parent_entry.realtime_tensor_num)
+                output_parent_nums.add(parent_entry.creation_order)
         if output_parent_nums:
             combined = set(self._layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
@@ -432,8 +432,8 @@ def run_and_log_inputs_through_model(
 
         # Per-session model preparation
         _prepare_model_session(self, model, self._optimizer)
-        self.elapsed_time_setup = time.time() - self.pass_start_time
-        _vprint(self, f"Model prepared ({self.elapsed_time_setup:.2f}s)")
+        self.time_setup = time.time() - self.pass_start_time
+        _vprint(self, f"Model prepared ({self.time_setup:.2f}s)")
 
         # Print input summary
         if getattr(self, "verbose", False):
@@ -456,12 +456,10 @@ def run_and_log_inputs_through_model(
 
             outputs = model(*input_args, **input_kwargs)
 
-        self.elapsed_time_forward_pass = (
-            time.time() - self.pass_start_time - self.elapsed_time_setup
-        )
+        self.time_forward_pass = time.time() - self.pass_start_time - self.time_setup
         _vprint(
             self,
-            f"Forward pass complete ({self.elapsed_time_forward_pass:.2f}s, "
+            f"Forward pass complete ({self.time_forward_pass:.2f}s, "
             f"{len(self._raw_layer_dict)} raw operations)",
         )
 
@@ -478,15 +476,11 @@ def run_and_log_inputs_through_model(
         _cleanup_model_session(model, input_tensors)
         for label in list(self._raw_layer_dict.keys()):
             entry = self._raw_layer_dict.get(label)
-            if (
-                entry is not None
-                and hasattr(entry, "tensor_contents")
-                and entry.tensor_contents is not None
-            ):
+            if entry is not None and hasattr(entry, "activation") and entry.activation is not None:
                 for attr in ("tl_tensor_label_raw",):
-                    if hasattr(entry.tensor_contents, attr):
+                    if hasattr(entry.activation, attr):
                         try:
-                            delattr(entry.tensor_contents, attr)
+                            delattr(entry.activation, attr)
                         except Exception:
                             pass
         print(

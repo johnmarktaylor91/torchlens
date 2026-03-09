@@ -75,7 +75,7 @@ SKIP_PERTURBATION_ENTIRELY: Set[str] = {
 
 # ---------------------------------------------------------------------------
 # Registry 3: Specific arg positions that are structural (not value-sensitive).
-# When the perturbed layer's tensor matches creation_args[pos], skip perturbation.
+# When the perturbed layer's tensor matches captured_args[pos], skip perturbation.
 # ---------------------------------------------------------------------------
 STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "cross_entropy": {1},  # target labels (LongTensor)
@@ -100,8 +100,8 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
 def _check_getitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt __getitem__ when the perturbed layer is a structural arg (index tensor,
     or any non-data arg)."""
-    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
-    args = layer.creation_args
+    perturbed_tensor = self[layers_to_perturb[0]].activation
+    args = layer.captured_args
 
     # Case 1: perturbed layer IS the tensor index — tensor indexing is structural
     if isinstance(args[1], torch.Tensor) and torch.equal(perturbed_tensor, args[1]):
@@ -117,10 +117,10 @@ def _check_getitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str
 
 def _check_setitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt __setitem__ when the perturbed layer is a bool mask arg."""
-    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
-    args = layer.creation_args
+    perturbed_tensor = self[layers_to_perturb[0]].activation
+    args = layer.captured_args
 
-    # Case 1: creation_args[1] is a bool tensor and perturbed layer matches it (mask arg)
+    # Case 1: captured_args[1] is a bool tensor and perturbed layer matches it (mask arg)
     if (
         isinstance(args[1], torch.Tensor)
         and args[1].dtype == torch.bool
@@ -128,7 +128,7 @@ def _check_setitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str
     ):
         return True
 
-    # Case 2: creation_args[1] is a tuple whose first element is a bool tensor
+    # Case 2: captured_args[1] is a tuple whose first element is a bool tensor
     if (
         type(args[1]) == tuple
         and isinstance(args[1][0], torch.Tensor)
@@ -148,8 +148,8 @@ def _check_setitem_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str
 
 def _check_lstm_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt lstm when the perturbed layer is a hidden/cell state arg."""
-    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
-    args = layer.creation_args
+    perturbed_tensor = self[layers_to_perturb[0]].activation
+    args = layer.captured_args
 
     return (
         torch.equal(perturbed_tensor, args[1][0])  # hidden state h
@@ -165,9 +165,9 @@ def _check_lstm_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) 
 
 def _check_interpolate_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt interpolate when the perturbed layer is the scale_factor arg."""
-    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
-    kwargs = layer.creation_kwargs
-    args = layer.creation_args
+    perturbed_tensor = self[layers_to_perturb[0]].activation
+    kwargs = layer.captured_kwargs
+    args = layer.captured_args
 
     # Path 1: scale_factor as kwarg
     if (
@@ -191,8 +191,8 @@ def _check_interpolate_exempt(self, layer: LayerPassLog, layers_to_perturb: List
 def _check_scatter_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
     """Exempt scatter_ when the perturbed layer is the destination tensor and
     the index covers all positions along the scatter dimension (full overwrite)."""
-    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
-    args = layer.creation_args
+    perturbed_tensor = self[layers_to_perturb[0]].activation
+    args = layer.captured_args
     # scatter_(dim, index, src): args[0]=self(dest), args[1]=dim, args[2]=index, args[3]=src
     if len(args) < 4:
         return False
@@ -238,7 +238,7 @@ def perturbed_layer_at_structural_position(
 ) -> bool:
     """Check if the perturbed layer's tensor occupies a structural arg position.
 
-    Compares the perturbed layer's tensor_contents to creation_args at each
+    Compares the perturbed layer's activation to captured_args at each
     exempt position using ``torch.equal``.  If there is a match, the perturbed
     layer controls structure (e.g., indices, masks) rather than values, so
     perturbation is meaningless.
@@ -247,11 +247,11 @@ def perturbed_layer_at_structural_position(
     theoretically false-positive if two different parents have identical
     tensor values, but this is exceedingly rare in practice.
     """
-    perturbed_tensor = self[layers_to_perturb[0]].tensor_contents
+    perturbed_tensor = self[layers_to_perturb[0]].activation
     for pos in exempt_positions:
-        if pos >= len(layer.creation_args):
+        if pos >= len(layer.captured_args):
             continue
-        arg_val = layer.creation_args[pos]
+        arg_val = layer.captured_args[pos]
         if not isinstance(arg_val, torch.Tensor):
             continue
         if torch.equal(perturbed_tensor, arg_val):
@@ -293,9 +293,9 @@ def posthoc_perturb_check(
     Returns True if there's a valid excuse (validation passes), False otherwise
     (validation fails with a printed message).
     """
-    func_name = layer_to_validate_parents_for.func_applied_name
+    func_name = layer_to_validate_parents_for.func_name
     layer_label = layer_to_validate_parents_for.layer_label
-    args = layer_to_validate_parents_for.creation_args
+    args = layer_to_validate_parents_for.captured_args
 
     # Bool output — discrete, perturbation may not change it
     if layer_to_validate_parents_for.tensor_dtype == torch.bool:
@@ -336,7 +336,7 @@ def posthoc_perturb_check(
     # __getitem__/unbind numel < 20 — small tensor coincidence
     if (
         func_name in ["__getitem__", "unbind"]
-        and layer_to_validate_parents_for.tensor_contents.numel() < 20
+        and layer_to_validate_parents_for.activation.numel() < 20
     ):
         return True
 
@@ -374,12 +374,12 @@ def posthoc_perturb_check(
 
     # bernoulli with scalar p kwarg — self tensor is just a shape template,
     # output is determined entirely by p and RNG state, not self's values.
-    if func_name == "bernoulli" and "p" in layer_to_validate_parents_for.creation_kwargs:
+    if func_name == "bernoulli" and "p" in layer_to_validate_parents_for.captured_kwargs:
         return True
 
     # Constant output — function is structurally constant-valued
     # (e.g., softmax on a dimension with size 1 always produces all-ones).
-    output_tensor = layer_to_validate_parents_for.tensor_contents
+    output_tensor = layer_to_validate_parents_for.activation
     if output_tensor.numel() > 0 and len(torch.unique(output_tensor)) == 1:
         return True
 
@@ -391,8 +391,8 @@ def posthoc_perturb_check(
 
     # Special-value arg loop — all-zeros/all-ones in other args
     arg_type_dict = {
-        "args": (enumerate, "creation_args"),
-        "kwargs": (lambda x: x.items(), "creation_kwargs"),
+        "args": (enumerate, "captured_args"),
+        "kwargs": (lambda x: x.items(), "captured_kwargs"),
     }
 
     for arg_type in ["args", "kwargs"]:
@@ -422,7 +422,7 @@ def posthoc_perturb_check(
     for parent_label in layer_to_validate_parents_for.parent_layers:
         if parent_label in layers_to_perturb:
             continue
-        parent_tensor = self[parent_label].tensor_contents
+        parent_tensor = self[parent_label].activation
         if parent_tensor is not None and _check_if_arg_is_special_val(parent_tensor):
             if verbose:
                 print(
@@ -440,12 +440,12 @@ def posthoc_perturb_check(
     for parent_label in layer_to_validate_parents_for.parent_layers:
         if parent_label in layers_to_perturb:
             continue
-        parent_tensor = self[parent_label].tensor_contents
+        parent_tensor = self[parent_label].activation
         if parent_tensor is None:
             continue
         other_mag = parent_tensor.float().abs().max().item()
         for perturbed_label in layers_to_perturb:
-            perturbed_tensor = self[perturbed_label].tensor_contents
+            perturbed_tensor = self[perturbed_label].activation
             if perturbed_tensor is None:
                 continue
             perturbed_mag = perturbed_tensor.float().abs().max().item()

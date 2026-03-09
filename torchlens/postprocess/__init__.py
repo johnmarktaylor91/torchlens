@@ -19,7 +19,7 @@ Step ordering invariants:
 - Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
 - Step 6 (module suffix appending) MUST precede Step 8 (loop detection uses
   operation_equivalence_type which includes module suffixes).
-- Step 8 MUST precede Step 9 (label generation needs same_layer_operations).
+- Step 8 MUST precede Step 9 (label generation needs recurrent_group).
 - Step 9 MUST precede Step 10 (final info logging uses finalized labels).
 - Step 10 MUST precede Step 12 (lookup key generation needs module hierarchy data
   populated in Step 10).
@@ -205,14 +205,14 @@ def postprocess_fast(self: "ModelLog") -> None:
         if not output_layer.parent_layers:
             continue  # Guard for parentless output layers (#152)
         parent_layer = self.layer_dict_main_keys[output_layer.parent_layers[0]]
-        parent_contents = parent_layer.tensor_contents
-        output_layer.tensor_contents = (
+        parent_contents = parent_layer.activation
+        output_layer.activation = (
             safe_copy(parent_contents, detach_tensor=True) if parent_contents is not None else None
         )
-        output_layer.tensor_fsize = parent_layer.tensor_fsize
+        output_layer.tensor_memory = parent_layer.tensor_memory
         output_layer.has_saved_activations = parent_layer.has_saved_activations
-        output_layer.has_saved_grad = parent_layer.has_saved_grad
-        output_layer.grad_contents = parent_layer.grad_contents
+        output_layer.has_gradient = parent_layer.has_gradient
+        output_layer.gradient = parent_layer.gradient
         if output_layer.has_saved_activations:
             self.layers_with_saved_activations.append(output_layer_label)
     _trim_and_reorder_model_history_fields(self)

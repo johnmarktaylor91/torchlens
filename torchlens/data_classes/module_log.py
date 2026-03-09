@@ -151,12 +151,12 @@ class ModuleLog:
         num_params: int = 0,
         num_params_trainable: int = 0,
         num_params_frozen: int = 0,
-        params_fsize: int = 0,
+        params_memory: int = 0,
         requires_grad: bool = False,
         # Buffers
         buffer_layers: Optional[List[str]] = None,
         # Module state
-        training_mode: bool = True,
+        is_training: bool = True,
         has_forward_hooks: bool = False,
         has_backward_hooks: bool = False,
         extra_attributes: Optional[Dict] = None,
@@ -199,13 +199,13 @@ class ModuleLog:
         self.num_params = num_params
         self.num_params_trainable = num_params_trainable
         self.num_params_frozen = num_params_frozen
-        self.params_fsize = params_fsize
+        self.params_memory = params_memory
         self.requires_grad = requires_grad
 
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
         self._buffer_accessor = None  # populated by _build_module_logs
 
-        self.training_mode = training_mode
+        self.is_training = is_training
         self.has_forward_hooks = has_forward_hooks
         self.has_backward_hooks = has_backward_hooks
         self.extra_attributes = extra_attributes if extra_attributes is not None else {}
@@ -227,8 +227,8 @@ class ModuleLog:
         return len(self.all_layers)
 
     @property
-    def params_fsize_nice(self) -> str:
-        return human_readable_size(self.params_fsize)
+    def params_memory_str(self) -> str:
+        return human_readable_size(self.params_memory)
 
     @property
     def _source_model_log(self):
@@ -409,7 +409,7 @@ class ModuleLog:
                     "tensor_shape": entry.tensor_shape,
                     "tensor_dtype": entry.tensor_dtype,
                     "pass_num": entry.pass_num,
-                    "func_applied_name": entry.func_applied_name,
+                    "func_name": entry.func_name,
                 }
             )
         return pd.DataFrame(rows)

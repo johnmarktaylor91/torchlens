@@ -8,7 +8,7 @@ Source tensors differ from function-output tensors in several ways:
   - They have no parent layers (``parent_layers=[]``).
   - Inputs are roots with ``has_input_ancestor=True``; buffers are internally
     initialized with ``has_internally_initialized_ancestor=True``.
-  - Their ``func_applied`` is None and ``func_applied_name`` is ``"none"``.
+  - Their ``func_applied`` is None and ``func_name`` is ``"none"``.
   - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
   - Buffers may carry a ``tl_buffer_parent`` attribute (set during model prep)
     identifying the module that owns them.
@@ -72,7 +72,7 @@ def log_source_tensor_exhaustive(
     # Fetch counters and increment to be ready for next tensor to be logged
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    realtime_tensor_num = self._layer_counter
+    creation_order = self._layer_counter
     layer_type_num = self._raw_layer_type_counter[layer_type]
 
     tensor_label = f"{layer_type}_{layer_type_num}_raw"
@@ -83,11 +83,11 @@ def log_source_tensor_exhaustive(
     if source == "input":
         is_input_layer = True
         has_input_ancestor = True
-        input_output_address = extra_addr
+        io_role = extra_addr
         is_buffer_layer = False
         buffer_address = None
         buffer_parent = None
-        initialized_inside_model = False
+        is_internally_initialized = False
         has_internally_initialized_ancestor = False
         input_ancestors = {tensor_label}
         internally_initialized_ancestors = set()
@@ -99,10 +99,10 @@ def log_source_tensor_exhaustive(
     elif source == "buffer":
         is_input_layer = False
         has_input_ancestor = False
-        input_output_address = None
+        io_role = None
         is_buffer_layer = True
         buffer_address = extra_addr
-        initialized_inside_model = True
+        is_internally_initialized = True
         has_internally_initialized_ancestor = True
         internally_initialized_ancestors = {tensor_label}
         input_ancestors = set()
@@ -118,13 +118,13 @@ def log_source_tensor_exhaustive(
     else:
         raise ValueError("source must be either 'input' or 'buffer'")
 
-    tensor_fsize = get_tensor_memory_amount(t)
+    tensor_memory = get_tensor_memory_amount(t)
 
     fields_dict = {
         # General info:
         "tensor_label_raw": tensor_label,
         "layer_label_raw": tensor_label,
-        "realtime_tensor_num": realtime_tensor_num,
+        "creation_order": creation_order,
         "operation_num": None,
         "source_model_log": self,
         "_pass_finished": False,
@@ -139,50 +139,50 @@ def log_source_tensor_exhaustive(
         "layer_type_num": layer_type_num,
         "layer_total_num": None,
         "pass_num": 1,
-        "layer_passes_total": 1,
+        "num_passes": 1,
         "lookup_keys": [],
         # Saved tensor info:
-        "tensor_contents": None,
+        "activation": None,
         "has_saved_activations": False,
         "activation_postfunc": self.activation_postfunc,
         "detach_saved_tensor": self.detach_saved_tensors,
         "output_device": self.output_device,
-        "function_args_saved": False,
-        "creation_args": None,
-        "creation_kwargs": None,
+        "args_captured": False,
+        "captured_args": None,
+        "captured_kwargs": None,
         "tensor_shape": tuple(t.shape),
         "tensor_dtype": t.dtype,
-        "tensor_fsize": tensor_fsize,
+        "tensor_memory": tensor_memory,
         # Child tensor variation tracking
         "has_child_tensor_variations": False,
         "children_tensor_versions": {},
         # Grad info:
-        "grad_contents": None,
+        "gradient": None,
         "save_gradients": self.save_gradients,
-        "has_saved_grad": False,
+        "has_gradient": False,
         "grad_shape": None,
         "grad_dtype": None,
-        "grad_fsize": 0,
+        "grad_memory": 0,
         # Function call info:
         "func_applied": None,
-        "func_applied_name": "none",
+        "func_name": "none",
         "func_call_stack": _get_func_call_stack(self.num_context_lines)
         if self.save_source_context
         else [],
-        "func_time_elapsed": 0,
+        "func_time": 0,
         "flops_forward": 0,
         "flops_backward": 0,
         "func_rng_states": log_current_rng_states(torch_only=True) if self.save_rng_states else {},
         "func_autocast_state": {},
         "func_argnames": (),
-        "num_func_args_total": 0,
-        "num_position_args": 0,
+        "num_args": 0,
+        "num_positional_args": 0,
         "num_keyword_args": 0,
-        "func_position_args_non_tensor": [],
-        "func_keyword_args_non_tensor": {},
-        "func_all_args_non_tensor": [],
-        "function_is_inplace": False,
-        "gradfunc": "none",
+        "func_positional_args_non_tensor": [],
+        "func_kwargs_non_tensor": {},
+        "func_non_tensor_args": [],
+        "func_is_inplace": False,
+        "grad_fn_name": "none",
         "is_part_of_iterable_output": False,
         "iterable_output_index": None,
         # Param info:
@@ -194,15 +194,15 @@ def log_source_tensor_exhaustive(
         "num_params_total": int(0),
         "num_params_trainable": 0,
         "num_params_frozen": 0,
-        "parent_params_fsize": 0,
+        "params_memory": 0,
         # Corresponding layer info:
         "operation_equivalence_type": operation_equivalence_type,
         "equivalent_operations": self.equivalent_operations[operation_equivalence_type],
-        "same_layer_operations": [],
+        "recurrent_group": [],
         # Graph info:
         "parent_layers": [],
         "parent_layer_arg_locs": {"args": {}, "kwargs": {}},
-        "orig_ancestors": {tensor_label},
+        "root_ancestors": {tensor_label},
         "child_layers": [],
         "has_children": False,
         "is_input_layer": is_input_layer,
@@ -211,40 +211,40 @@ def log_source_tensor_exhaustive(
         "min_distance_from_input": None,
         "max_distance_from_input": None,
         "is_output_layer": False,
-        "is_output_parent": False,
-        "is_last_output_layer": False,
+        "feeds_output": False,
+        "is_final_output": False,
         "is_output_ancestor": False,
-        "output_descendents": set(),
+        "output_descendants": set(),
         "min_distance_from_output": None,
         "max_distance_from_output": None,
-        "input_output_address": input_output_address,
+        "io_role": io_role,
         "is_buffer_layer": is_buffer_layer,
         "buffer_address": buffer_address,
         "buffer_pass": None,
         "buffer_parent": buffer_parent,
-        "initialized_inside_model": initialized_inside_model,
+        "is_internally_initialized": is_internally_initialized,
         "has_internally_initialized_ancestor": has_internally_initialized_ancestor,
         "internally_initialized_parents": [],
         "internally_initialized_ancestors": internally_initialized_ancestors,
-        "terminated_inside_model": False,
+        "is_internally_terminated": False,
         # Conditional info:
         "is_terminal_bool_layer": False,
-        "is_atomic_bool_layer": False,
-        "atomic_bool_val": None,
+        "is_scalar_bool": False,
+        "scalar_bool_value": None,
         "in_cond_branch": False,
         "cond_branch_start_children": [],
         "cond_branch_then_children": [],
         # Module info:
-        "containing_module_origin": None,
-        "containing_modules_origin_nested": [],
+        "containing_module": None,
+        "containing_modules": [],
         "modules_entered": [],
         "modules_entered_argnames": defaultdict(list),
         "module_passes_entered": [],
         "modules_exited": [],
         "module_passes_exited": [],
         "is_submodule_output": False,
-        "is_bottom_level_submodule_output": False,
-        "bottom_level_submodule_pass_exited": None,
+        "is_leaf_module_output": False,
+        "leaf_module_pass": None,
         "module_entry_exit_threads_inputs": [],
         "module_entry_exit_thread_output": [],
         # Function config
@@ -305,7 +305,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
         return
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
     if (self._layer_nums_to_save == "all") or (
-        orig_layer_entry.realtime_tensor_num in self._layer_nums_to_save
+        orig_layer_entry.creation_order in self._layer_nums_to_save
     ):
         self.layers_with_saved_activations.append(orig_layer_entry.layer_label)
         orig_layer_entry.save_tensor_data(
@@ -324,8 +324,8 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
         )
     orig_layer_entry.tensor_shape = new_shape
     orig_layer_entry.tensor_dtype = t.dtype
-    fsize = get_tensor_memory_amount(t)
-    orig_layer_entry.tensor_fsize = fsize
+    memory = get_tensor_memory_amount(t)
+    orig_layer_entry.tensor_memory = memory
 
 
 def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:

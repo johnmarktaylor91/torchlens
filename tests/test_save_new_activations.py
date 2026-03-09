@@ -72,7 +72,7 @@ def test_save_new_activations_basic():
     model.eval()
     with torch.no_grad():
         expected = model(x2)
-    actual = log[log.output_layers[0]].tensor_contents
+    actual = log[log.output_layers[0]].activation
     assert torch.allclose(actual, expected, atol=1e-5)
     log.cleanup()
 
@@ -98,12 +98,12 @@ def test_save_new_activations_activations_change():
     torch.manual_seed(0)
     x1 = torch.randn(2, 5)
     log = log_forward_pass(model, x1, random_seed=42)
-    act1 = log[log.output_layers[0]].tensor_contents.clone()
+    act1 = log[log.output_layers[0]].activation.clone()
 
     torch.manual_seed(99)
     x2 = torch.randn(2, 5)
     log.save_new_activations(model, x2, random_seed=42)
-    act2 = log[log.output_layers[0]].tensor_contents.clone()
+    act2 = log[log.output_layers[0]].activation.clone()
 
     assert not torch.equal(act1, act2), "Activations should differ for different inputs"
     log.cleanup()
@@ -123,7 +123,7 @@ def test_save_new_activations_recurrent():
     """save_new_activations works on recurrent models."""
     model = _RecurrentFF()
     log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
-    assert log.model_is_recurrent
+    assert log.is_recurrent
 
     log.save_new_activations(model, torch.randn(2, 5), random_seed=42)
     assert log[log.output_layers[0]].has_saved_activations
@@ -239,10 +239,10 @@ class TestSaveNewActivationsRegression:
         model = _SimpleLinear()
         x1 = torch.randn(2, 10)
         log = log_forward_pass(model, x1)
-        first_output = log[log.output_layers[0]].tensor_contents.clone()
+        first_output = log[log.output_layers[0]].activation.clone()
         x2 = torch.randn(2, 10) + 10
         log.save_new_activations(model, x2)
-        second_output = log[log.output_layers[0]].tensor_contents
+        second_output = log[log.output_layers[0]].activation
         assert not torch.equal(first_output, second_output)
 
 
@@ -250,11 +250,11 @@ class TestSaveNewActivationsStateReset:
     """Stale state in save_new_activations."""
 
     def test_timing_reset(self):
-        """elapsed_time_function_calls should be fresh."""
+        """time_function_calls should be fresh."""
         model = _SimpleLinear()
         log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
         log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
-        assert log.elapsed_time_function_calls >= 0
+        assert log.time_function_calls >= 0
 
     def test_lookup_keys_clean(self):
         """Lookup caches should not have stale entries."""
@@ -277,14 +277,14 @@ class TestSaveNewActivationsStateReset:
         """Each pass should reflect new input values."""
         model = _SimpleLinear()
         log = log_forward_pass(model, torch.ones(2, 10), layers_to_save="all")
-        input_val_1 = log["input_1"].tensor_contents.clone()
+        input_val_1 = log["input_1"].activation.clone()
         log.save_new_activations(model, torch.zeros(2, 10), layers_to_save="all")
-        input_val_2 = log["input_1"].tensor_contents
+        input_val_2 = log["input_1"].activation
         assert not torch.equal(input_val_1, input_val_2)
 
 
 class TestOutputTensorIndependence:
-    """Fast-mode tensor_contents shared reference."""
+    """Fast-mode activation shared reference."""
 
     def test_output_independent_of_parent(self):
         model = _SimpleLinear()
@@ -293,13 +293,13 @@ class TestOutputTensorIndependence:
         log.save_new_activations(model, torch.randn(2, 10))
         for label in log.output_layers:
             output_entry = log[label]
-            if output_entry.parent_layers and output_entry.tensor_contents is not None:
+            if output_entry.parent_layers and output_entry.activation is not None:
                 parent_label = output_entry.parent_layers[0]
                 parent_entry = log[parent_label]
-                if parent_entry.tensor_contents is not None:
-                    original_parent = parent_entry.tensor_contents.clone()
-                    output_entry.tensor_contents.fill_(999)
-                    assert torch.equal(parent_entry.tensor_contents, original_parent)
+                if parent_entry.activation is not None:
+                    original_parent = parent_entry.activation.clone()
+                    output_entry.activation.fill_(999)
+                    assert torch.equal(parent_entry.activation, original_parent)
                     break
 
 

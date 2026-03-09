@@ -162,11 +162,11 @@ class ModelLog:
         self.save_rng_states = save_rng_states
         self.detect_loops = detect_loops
         self.verbose = verbose
-        self.has_saved_gradients = False
+        self.has_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
 
-        # Model structure info (computed @properties: model_is_recurrent,
-        # model_max_recurrent_loops, model_is_branching, model_has_conditional_branching)
+        # Model structure info (computed @properties: is_recurrent,
+        # max_recurrent_loops, is_branching, has_conditional_branching)
 
         # Tensor Tracking — post-processed (populated after _pass_finished=True):
         self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
@@ -214,15 +214,15 @@ class ModelLog:
         self.unlogged_layers: List[str] = []
         self.layers_with_saved_gradients: List[str] = []
         self._saved_gradients_set: set = set()
-        self.layers_computed_with_params: Dict[str, List] = defaultdict(list)
+        self.layers_with_params: Dict[str, List] = defaultdict(list)
         # Maps operation_equivalence_type -> set of layer labels that share
         # that equivalence type (populated by loop_detection.py).
         self.equivalent_operations: Dict[str, set] = defaultdict(set)
 
         # Aggregate tensor statistics (computed during postprocessing):
-        self.tensor_fsize_total: int = 0
+        self.total_activation_memory: int = 0
         self.num_tensors_saved: int = 0  # layers with has_saved_activations=True
-        self.tensor_fsize_saved: int = 0
+        self.saved_activation_memory: int = 0
 
         # Param info:
         self.param_logs: "ParamAccessor" = ParamAccessor({})
@@ -231,7 +231,7 @@ class ModelLog:
         self.total_params: int = 0
         self.total_params_trainable: int = 0
         self.total_params_frozen: int = 0
-        self.total_params_fsize: int = 0
+        self.total_params_memory: int = 0
 
         # Session-scoped per-module tracking dicts (keyed by id(module)).
         # These replace the old tl_* attrs that were set directly on nn.Module
@@ -255,10 +255,10 @@ class ModelLog:
         # Time elapsed:
         self.pass_start_time: float = 0
         self.pass_end_time: float = 0
-        self.elapsed_time_setup: float = 0
-        self.elapsed_time_forward_pass: float = 0
-        self.elapsed_time_cleanup: float = 0
-        self.elapsed_time_function_calls: float = 0
+        self.time_setup: float = 0
+        self.time_forward_pass: float = 0
+        self.time_cleanup: float = 0
+        self.time_function_calls: float = 0
 
     # ********************************************
     # ************ Built-in Methods **************
@@ -309,22 +309,22 @@ class ModelLog:
     # ********************************************
 
     @property
-    def model_is_recurrent(self) -> bool:
+    def is_recurrent(self) -> bool:
         """Whether any layer has more than one pass."""
         return any(v > 1 for v in self.layer_num_passes.values())
 
     @property
-    def model_max_recurrent_loops(self) -> int:
+    def max_recurrent_loops(self) -> int:
         """Maximum number of passes for any layer."""
         return max(self.layer_num_passes.values(), default=1)
 
     @property
-    def model_is_branching(self) -> bool:
+    def is_branching(self) -> bool:
         """Whether any layer has more than one child."""
         return any(len(entry.child_layers) > 1 for entry in self.layer_list)
 
     @property
-    def model_has_conditional_branching(self) -> bool:
+    def has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
         return any(entry.in_cond_branch for entry in self.layer_list)
 
@@ -334,26 +334,26 @@ class ModelLog:
         return len(self)
 
     @property
-    def tensor_fsize_total_nice(self) -> str:
+    def total_activation_memory_str(self) -> str:
         """Human-readable total tensor size."""
-        return human_readable_size(self.tensor_fsize_total)
+        return human_readable_size(self.total_activation_memory)
 
     @property
-    def tensor_fsize_saved_nice(self) -> str:
+    def saved_activation_memory_str(self) -> str:
         """Human-readable saved tensor size."""
-        return human_readable_size(self.tensor_fsize_saved)
+        return human_readable_size(self.saved_activation_memory)
 
     @property
-    def elapsed_time_total(self) -> float:
+    def time_total(self) -> float:
         """Total time from start to end of pass."""
         if not self.pass_start_time or not self.pass_end_time:
             return 0
         return self.pass_end_time - self.pass_start_time
 
     @property
-    def elapsed_time_torchlens_logging(self) -> float:
+    def time_logging(self) -> float:
         """Time spent on TorchLens overhead (total minus function calls)."""
-        return self.elapsed_time_total - self.elapsed_time_function_calls
+        return self.time_total - self.time_function_calls
 
     # ********************************************
     # ************* FLOPs Properties *************
@@ -364,8 +364,8 @@ class ModelLog:
     # skipped, so the totals may undercount.
 
     @property
-    def total_params_fsize_nice(self) -> str:
-        return human_readable_size(self.total_params_fsize)
+    def total_params_memory_str(self) -> str:
+        return human_readable_size(self.total_params_memory)
 
     @property
     def total_flops_forward(self) -> int:

@@ -3,7 +3,7 @@
 ## What This Does
 Renders computational graphs using Python's `graphviz` library and an optional ELK
 layout engine for large graphs. Called via `show_model_graph()` or
-`log_forward_pass(..., vis_opt='rolled')`.
+`log_forward_pass(..., vis_mode='rolled')`.
 
 ## Files
 
@@ -13,8 +13,8 @@ layout engine for large graphs. Called via `show_model_graph()` or
 | `elk_layout.py` | 1276 | ELK-based layout engine for large graphs (150k+ nodes), Worker thread, sfdp fallback |
 
 ## Visualization Modes
-- **`vis_opt='unrolled'`**: Shows every pass separately (uses LayerPassLog entries)
-- **`vis_opt='rolled'`**: Collapses repeated layers into single nodes (uses LayerLog)
+- **`vis_mode='unrolled'`**: Shows every pass separately (uses LayerPassLog entries)
+- **`vis_mode='rolled'`**: Collapses repeated layers into single nodes (uses LayerLog)
 - **`vis_nesting_depth`**: How many module levels to show as subgraphs. Deeper modules
   rendered as collapsed "box3d" nodes.
 - **`vis_direction`**: `'bottomup'` (default), `'topdown'`, or `'leftright'`
@@ -51,7 +51,7 @@ not all layers are saved.
 ### `_is_collapsed_module()` (rendering.py, lines 226-234)
 **THE single guard point for IndexError safety.** Returns True when module nesting
 exceeds `vis_nesting_depth`. All downstream indexing into
-`containing_modules_origin_nested[vis_nesting_depth - 1]` relies on this. Do not weaken.
+`containing_modules[vis_nesting_depth - 1]` relies on this. Do not weaken.
 
 ### `_set_up_subgraphs()` (rendering.py)
 Recursive context managers creating graphviz subgraphs for module nesting.

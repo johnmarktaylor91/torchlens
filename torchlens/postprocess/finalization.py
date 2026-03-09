@@ -4,11 +4,11 @@ Step 13 (_undecorate_all_saved_tensors): Removes tl_tensor_label_raw attribute f
     all saved tensors and their creation args/kwargs.
 Step 14: torch.cuda.empty_cache() — handled inline in __init__.py.
 Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
-Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (layer_log_entries,
+Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
     linked_params), num_passes, and clears Parameter tensor references.
 Step 16.5 (_build_layer_logs): Groups LayerPassLog entries by layer_label_no_pass to
     create aggregate LayerLog objects. Only 3 fields are merged across passes
-    (has_input_ancestor, input_output_address, is_bottom_level_submodule_output);
+    (has_input_ancestor, io_role, is_leaf_module_output);
     all other 78+ fields use first-pass values only.
 Step 17 (_build_module_logs): Builds structured ModuleLog/ModulePassLog objects from
     _module_build_data and _module_metadata. MUST NOT run in fast mode — _module_build_data
@@ -37,20 +37,20 @@ def _undecorate_all_saved_tensors(self) -> None:
 
     During logging, tensors are "decorated" with a tl_tensor_label_raw attribute
     for tracking. This function strips that attribute from saved activations and
-    any tensors embedded in creation_args/creation_kwargs, so that tensors
+    any tensors embedded in captured_args/captured_kwargs, so that tensors
     returned to the user are clean.
     """
     tensors_to_undecorate = []
     for layer_label in self.layer_labels:
         layer_entry = self.layer_dict_main_keys[layer_label]
-        if layer_entry.tensor_contents is not None:
-            tensors_to_undecorate.append(layer_entry.tensor_contents)
+        if layer_entry.activation is not None:
+            tensors_to_undecorate.append(layer_entry.activation)
 
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(layer_entry.creation_args, torch.Tensor, search_depth=2)
+            get_vars_of_type_from_obj(layer_entry.captured_args, torch.Tensor, search_depth=2)
         )
         tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(layer_entry.creation_kwargs, torch.Tensor, search_depth=2)
+            get_vars_of_type_from_obj(layer_entry.captured_kwargs, torch.Tensor, search_depth=2)
         )
 
     for t in tensors_to_undecorate:
@@ -66,11 +66,8 @@ def _log_time_elapsed(self) -> None:
     as total time minus actual function call time.
     """
     self.pass_end_time = time.time()
-    self.elapsed_time_cleanup = (
-        self.pass_end_time
-        - self.pass_start_time
-        - self.elapsed_time_setup
-        - self.elapsed_time_forward_pass
+    self.time_cleanup = (
+        self.pass_end_time - self.pass_start_time - self.time_setup - self.time_forward_pass
     )
 
 
@@ -78,22 +75,22 @@ def _finalize_param_logs(self: "ModelLog") -> None:
     """Step 16: Populate ParamLog reverse mappings, linked params, and num_passes.
 
     For each LayerPassLog with parent_param_logs:
-    - Adds the layer's label to each ParamLog's layer_log_entries list.
+    - Adds the layer's label to each ParamLog's used_by_layers list.
     - Links params that co-occur in the same operation (linked_params).
-    - Sets num_passes = max(1, len(layer_log_entries)).
+    - Sets num_passes = max(1, len(used_by_layers)).
 
     Then clears actual Parameter tensor references (parent_params) from
     LayerPassLog entries to reduce memory, while preserving ParamLog._param_ref
     for potential backward() calls by the user.
     """
-    # Build layer_log_entries and linked_params from LayerPassLog entries
+    # Build used_by_layers and linked_params from LayerPassLog entries
     for layer_entry in self.layer_list:
         if not layer_entry.parent_param_logs:
             continue
         addresses_in_op = [pl.address for pl in layer_entry.parent_param_logs]
         for pl in layer_entry.parent_param_logs:
-            if layer_entry.layer_label not in pl.layer_log_entries:
-                pl.layer_log_entries.append(layer_entry.layer_label)
+            if layer_entry.layer_label not in pl.used_by_layers:
+                pl.used_by_layers.append(layer_entry.layer_label)
             # Link to other params in the same operation
             for other_addr in addresses_in_op:
                 if other_addr != pl.address and other_addr not in pl.linked_params:
@@ -101,7 +98,7 @@ def _finalize_param_logs(self: "ModelLog") -> None:
 
     # Populate num_passes: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
-        pl.num_passes = max(1, len(pl.layer_log_entries))
+        pl.num_passes = max(1, len(pl.used_by_layers))
 
     # ParamLog gradient metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
@@ -133,7 +130,7 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
     root_num_params = sum(pl.num_params for pl in self.param_logs)
     root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.trainable)
     root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.trainable)
-    root_fsize = sum(pl.fsize for pl in self.param_logs)
+    root_fsize = sum(pl.memory for pl in self.param_logs)
 
     root_module = ModuleLog(
         address="self",
@@ -165,10 +162,10 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
         num_params=root_num_params,
         num_params_trainable=root_num_trainable,
         num_params_frozen=root_num_frozen,
-        params_fsize=root_fsize,
+        params_memory=root_fsize,
         requires_grad=root_num_trainable > 0,
         buffer_layers=list(self.buffer_layers),
-        training_mode=root_meta.get("training_mode", True),
+        is_training=root_meta.get("is_training", True),
         has_forward_hooks=root_meta.get("has_forward_hooks", False),
         has_backward_hooks=root_meta.get("has_backward_hooks", False),
         extra_attributes=root_meta.get("extra_attributes", {}),
@@ -320,7 +317,7 @@ class ModuleParamInfo(NamedTuple):
     num_params: int
     num_trainable: int
     num_frozen: int
-    fsize: int
+    memory: int
     buffer_layers: list
 
 
@@ -333,7 +330,7 @@ def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> Modul
     m_num_params = mbd["module_nparams"].get(address, 0)
     m_num_trainable = mbd["module_nparams_trainable"].get(address, 0)
     m_num_frozen = mbd["module_nparams_frozen"].get(address, 0)
-    m_fsize = sum(pl.fsize for pl in module_param_dict.values())
+    m_fsize = sum(pl.memory for pl in module_param_dict.values())
 
     module_buffer_layers = [
         bl
@@ -477,12 +474,10 @@ def _build_module_logs(self: "ModelLog") -> None:
             num_params=param_info.num_params,
             num_params_trainable=param_info.num_trainable,
             num_params_frozen=param_info.num_frozen,
-            params_fsize=param_info.fsize,
+            params_memory=param_info.memory,
             requires_grad=param_info.num_trainable > 0,
             buffer_layers=param_info.buffer_layers,
-            training_mode=mbd["module_training_modes"].get(
-                address, meta.get("training_mode", True)
-            ),
+            is_training=mbd["module_training_modes"].get(address, meta.get("is_training", True)),
             has_forward_hooks=meta.get("has_forward_hooks", False),
             has_backward_hooks=meta.get("has_backward_hooks", False),
             extra_attributes=meta.get("extra_attributes", {}),
@@ -531,9 +526,9 @@ def _build_layer_logs(self: "ModelLog") -> None:
 
     MERGE RULES for multi-pass layers (only 3 fields are merged):
     1. has_input_ancestor: OR across passes (True if ANY pass has an input ancestor).
-    2. input_output_address: Character-wise merge with '*' for differing characters
+    2. io_role: Character-wise merge with '*' for differing characters
        (e.g., "output.0" + "output.1" -> "output.*").
-    3. is_bottom_level_submodule_output: OR across passes.
+    3. is_leaf_module_output: OR across passes.
 
     All other 78+ fields use first-pass values only. This is correct because
     same-layer grouping requires same structural position, so module containment,
@@ -562,26 +557,23 @@ def _build_layer_logs(self: "ModelLog") -> None:
             # Merge field 1/3: has_input_ancestor (OR across passes).
             if pass_log.has_input_ancestor:
                 layer_log.has_input_ancestor = True
-            # Merge field 2/3: input_output_address (char-merge with '*').
-            if (
-                layer_log.input_output_address is not None
-                and pass_log.input_output_address is not None
-            ):
+            # Merge field 2/3: io_role (char-merge with '*').
+            if layer_log.io_role is not None and pass_log.io_role is not None:
                 merged = "".join(
                     c if c == s else "*"
                     for c, s in zip(
-                        layer_log.input_output_address,
-                        pass_log.input_output_address,
+                        layer_log.io_role,
+                        pass_log.io_role,
                     )
                 )
                 if merged.endswith("."):
                     merged = merged[:-1]
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
-                layer_log.input_output_address = merged
-            # Merge field 3/3: is_bottom_level_submodule_output (OR across passes).
-            if pass_log.is_bottom_level_submodule_output:
-                layer_log.is_bottom_level_submodule_output = True
+                layer_log.io_role = merged
+            # Merge field 3/3: is_leaf_module_output (OR across passes).
+            if pass_log.is_leaf_module_output:
+                layer_log.is_leaf_module_output = True
 
         layer_log.passes[pass_log.pass_num] = pass_log
         layer_log.pass_labels.append(pass_log.layer_label)

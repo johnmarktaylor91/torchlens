@@ -3,9 +3,9 @@
 Step 9 (_map_raw_labels_to_final_labels): Assigns human-readable labels to each
     tensor. Label format: ``{layer_type}_{type_num}_{total_num}:{pass_num}`` for
     regular layers, or ``{layer_type}_{type_num}:{pass_num}`` for input/output/buffer.
-    The ``:pass_num`` suffix is omitted when layer_passes_total == 1. For multi-pass
+    The ``:pass_num`` suffix is omitted when num_passes == 1. For multi-pass
     layers (pass > 1), layer_type and layer_type_num are INHERITED from the first
-    pass to guarantee label consistency within same_layer_operations groups.
+    pass to guarantee label consistency within recurrent_group groups.
 
 Step 10 (_log_final_info_for_all_layers): Logs operation numbers, module hierarchy,
     param/size tallies, and structural flags. Populates _module_build_data dicts
@@ -42,12 +42,12 @@ def _map_raw_labels_to_final_labels(self) -> None:
       e.g., ``conv2d_3_12:2`` (3rd conv2d overall, 12th layer total, pass 2)
     - Input/output/buffer: ``{layer_type}_{type_num}:{pass_num}``
       e.g., ``input_1:1`` (total_num is always 0 for these types)
-    - When layer_passes_total == 1, the ``:pass_num`` suffix is omitted in
+    - When num_passes == 1, the ``:pass_num`` suffix is omitted in
       the default ``layer_label`` (but ``layer_label_w_pass`` always includes it).
 
     For multi-pass layers (pass_num > 1), ``layer_type`` AND ``layer_type_num``
     are INHERITED from the first pass's tensor to guarantee that all members of
-    a same_layer_operations group share the same ``layer_label_no_pass``. Using
+    a recurrent_group group share the same ``layer_label_no_pass``. Using
     the entry's own layer_type would cause label mismatches when passes have
     different layer types (e.g., SSD300 train with getitem passes {1,3} gap).
 
@@ -74,7 +74,7 @@ def _map_raw_labels_to_final_labels(self) -> None:
         else:
             # Pass > 1: INHERIT layer_type and numbers from the first pass.
             # This ensures all passes of the same layer share layer_label_no_pass.
-            first_pass_tensor = self[tensor_log_entry.same_layer_operations[0]]
+            first_pass_tensor = self[tensor_log_entry.recurrent_group[0]]
             layer_type = first_pass_tensor.layer_type
             layer_type_num = first_pass_tensor.layer_type_num
             if layer_type in ["input", "buffer"]:
@@ -97,7 +97,7 @@ def _map_raw_labels_to_final_labels(self) -> None:
 
         tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{layer_type_num}:{pass_num}"
         tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{layer_type_num}"
-        if tensor_log_entry.layer_passes_total == 1:
+        if tensor_log_entry.num_passes == 1:
             tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
             tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
         else:
@@ -157,26 +157,24 @@ def _log_final_info_for_all_layers(self) -> None:
 
         # Log the module hierarchy information:
         _log_module_hierarchy_info_for_layer(self, layer_entry, _shadow_sets)
-        if layer_entry.bottom_level_submodule_pass_exited is not None:
-            submodule_pass_nice_name = ":".join(
-                [str(i) for i in layer_entry.bottom_level_submodule_pass_exited]
-            )
-            layer_entry.bottom_level_submodule_pass_exited = submodule_pass_nice_name
+        if layer_entry.leaf_module_pass is not None:
+            submodule_pass_nice_name = ":".join([str(i) for i in layer_entry.leaf_module_pass])
+            layer_entry.leaf_module_pass = submodule_pass_nice_name
 
         # Tally the tensor sizes:
-        self.tensor_fsize_total += layer_entry.tensor_fsize
+        self.total_activation_memory += layer_entry.tensor_memory
 
         # Tally the parameter sizes:
         if layer_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
-            if layer_entry.computed_with_params:
+            if layer_entry.uses_params:
                 self.total_param_layers += 1
             self.total_params += layer_entry.num_params_total
             self.total_params_trainable += layer_entry.num_params_trainable
             self.total_params_frozen += layer_entry.num_params_frozen
             self.total_param_tensors += layer_entry.num_param_tensors
-            self.total_params_fsize += layer_entry.parent_params_fsize
+            self.total_params_memory += layer_entry.params_memory
             # Tally for modules, too.
-            for module_name, _ in layer_entry.containing_modules_origin_nested:
+            for module_name, _ in layer_entry.containing_modules:
                 mbd["module_nparams"][module_name] += layer_entry.num_params_total
                 mbd["module_nparams_trainable"][module_name] += layer_entry.num_params_trainable
                 mbd["module_nparams_frozen"][module_name] += layer_entry.num_params_frozen
@@ -185,7 +183,7 @@ def _log_final_info_for_all_layers(self) -> None:
 
         # Tally elapsed time:
 
-        self.elapsed_time_function_calls += layer_entry.func_time_elapsed
+        self.time_function_calls += layer_entry.func_time
 
     _finalize_output_operation_nums(self)
     _build_module_hierarchy_dicts(self)
@@ -217,16 +215,16 @@ def _build_module_hierarchy_dicts(self) -> None:
 # These may be lists or sets — the rename logic handles both via type(orig).
 _LIST_FIELDS_TO_RENAME = [
     "parent_layers",
-    "orig_ancestors",
+    "root_ancestors",
     "child_layers",
     "input_ancestors",
-    "output_descendents",
+    "output_descendants",
     "internally_initialized_parents",
     "internally_initialized_ancestors",
     "cond_branch_start_children",
     "cond_branch_then_children",
     "equivalent_operations",
-    "same_layer_operations",
+    "recurrent_group",
 ]
 
 
@@ -275,7 +273,7 @@ def _log_module_hierarchy_info_for_layer(
 ) -> None:
     """Populate module hierarchy data for a single layer in _module_build_data.
 
-    For each module in the layer's containing_modules_origin_nested, records:
+    For each module in the layer's containing_modules, records:
     - Module tensor counts (per-module and per-pass).
     - Module-to-layer mappings.
     - Top-level module passes and parent-child relationships.
@@ -298,7 +296,7 @@ def _log_module_hierarchy_info_for_layer(
 
     containing_module_pass_label = None
     layer_label = layer_entry.layer_label
-    for module_index, module_pass_label in enumerate(layer_entry.containing_modules_origin_nested):
+    for module_index, module_pass_label in enumerate(layer_entry.containing_modules):
         if isinstance(module_pass_label, str):
             module_name, module_pass = module_pass_label.rsplit(":", 1)
             module_pass = int(module_pass)  # type: ignore[assignment]
@@ -380,9 +378,9 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
             self.layer_labels.append(layer_entry.layer_label)
             self.layer_labels_no_pass.append(layer_entry.layer_label_no_pass)
             self.layer_labels_w_pass.append(layer_entry.layer_label_w_pass)
-            self.layer_num_passes[layer_entry.layer_label_no_pass] = layer_entry.layer_passes_total
+            self.layer_num_passes[layer_entry.layer_label_no_pass] = layer_entry.num_passes
             if layer_entry.has_saved_activations:
-                self.tensor_fsize_saved += layer_entry.tensor_fsize
+                self.saved_activation_memory += layer_entry.tensor_memory
             i += 1
         else:
             layers_to_remove.append(layer_entry)
@@ -415,7 +413,7 @@ def _add_lookup_keys_for_layer_entry(
     - Module paths: module_pass labels for modules exited by this layer.
     - Addresses: buffer_address, input/output address.
 
-    Also reformats module_passes_exited/entered and containing_modules_origin_nested
+    Also reformats module_passes_exited/entered and containing_modules
     from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
 
     Args:
@@ -432,7 +430,7 @@ def _add_lookup_keys_for_layer_entry(
     ]
 
     # If just one pass, also allow indexing by pass label.
-    if layer_entry.layer_passes_total == 1:
+    if layer_entry.num_passes == 1:
         lookup_keys_for_tensor.extend(
             [layer_entry.layer_label_w_pass, layer_entry.layer_label_w_pass_short]
         )
@@ -447,18 +445,16 @@ def _add_lookup_keys_for_layer_entry(
             f"{module_name}:{module_pass}"
             for module_name, module_pass in layer_entry.module_passes_entered
         ]
-        if layer_entry.containing_module_origin is not None:
-            layer_entry.containing_module_origin = ":".join(
-                [str(i) for i in layer_entry.containing_module_origin]
+        if layer_entry.containing_module is not None:
+            layer_entry.containing_module = ":".join(
+                [str(i) for i in layer_entry.containing_module]
             )
-        layer_entry.containing_modules_origin_nested = [
+        layer_entry.containing_modules = [
             f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.containing_modules_origin_nested
+            for module_name, module_pass in layer_entry.containing_modules
         ]
-        if (layer_entry.containing_module_origin is None) and len(
-            layer_entry.containing_modules_origin_nested
-        ) > 0:
-            layer_entry.containing_module_origin = layer_entry.containing_modules_origin_nested[-1]
+        if (layer_entry.containing_module is None) and len(layer_entry.containing_modules) > 0:
+            layer_entry.containing_module = layer_entry.containing_modules[-1]
 
     # Allow indexing by modules exited as well:
     for module_pass in layer_entry.module_passes_exited:
@@ -473,7 +469,7 @@ def _add_lookup_keys_for_layer_entry(
             lookup_keys_for_tensor.append(layer_entry.buffer_address)
         lookup_keys_for_tensor.append(f"{layer_entry.buffer_address}:{layer_entry.buffer_pass}")
     elif layer_entry.is_input_layer or layer_entry.is_output_layer:
-        lookup_keys_for_tensor.append(layer_entry.input_output_address)
+        lookup_keys_for_tensor.append(layer_entry.io_role)
 
     lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
 
@@ -481,9 +477,9 @@ def _add_lookup_keys_for_layer_entry(
     layer_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
-            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.realtime_tensor_num
+            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.creation_order
             self.layer_dict_all_keys[lookup_key] = layer_entry
-        self._layer_num_to_lookup_keys_dict[layer_entry.realtime_tensor_num].append(lookup_key)
+        self._layer_num_to_lookup_keys_dict[layer_entry.creation_order].append(lookup_key)
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
@@ -513,7 +509,7 @@ def _rename_model_history_layer_names(self) -> None:
     """Step 11: Rename raw labels to final labels in all ModelLog-level fields.
 
     Updates list fields (input_layers, output_layers, etc.), dict fields
-    (layers_computed_with_params, equivalent_operations), conditional branch
+    (layers_with_params, equivalent_operations), conditional branch
     edges, and module layer argument names. Creates NEW container objects
     (no shared-set corruption) — see set() constructor in equivalent_operations
     rename.
@@ -538,12 +534,12 @@ def _rename_model_history_layer_names(self) -> None:
         )
 
     new_param_tensors = {}
-    for key, values in self.layers_computed_with_params.items():
+    for key, values in self.layers_with_params.items():
         new_key = self[values[0]].layer_label
         new_param_tensors[new_key] = [
             self._raw_to_final_layer_labels[tensor_label] for tensor_label in values
         ]
-    self.layers_computed_with_params = new_param_tensors
+    self.layers_with_params = new_param_tensors
 
     new_equiv_operations_tensors = {}
     for key, values in self.equivalent_operations.items():

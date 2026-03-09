@@ -181,24 +181,24 @@ def _str_after_pass(self) -> str:
 
     s += f"\n\tRandom seed: {self.random_seed_used}"
     s += (
-        f"\n\tTime elapsed: {np.round(self.elapsed_time_total, 3)}s "
-        f"({np.round(self.elapsed_time_torchlens_logging, 3)}s spent logging)"
+        f"\n\tTime elapsed: {np.round(self.time_total, 3)}s "
+        f"({np.round(self.time_logging, 3)}s spent logging)"
     )
 
     # Overall model structure
 
     s += "\n\tStructure:"
-    if self.model_is_recurrent:
-        s += f"\n\t\t- recurrent (at most {self.model_max_recurrent_loops} loops)"
+    if self.is_recurrent:
+        s += f"\n\t\t- recurrent (at most {self.max_recurrent_loops} loops)"
     else:
         s += "\n\t\t- purely feedforward, no recurrence"
 
-    if self.model_is_branching:
+    if self.is_branching:
         s += "\n\t\t- with branching"
     else:
         s += "\n\t\t- no branching"
 
-    if self.model_has_conditional_branching:
+    if self.has_conditional_branching:
         s += "\n\t\t- with conditional (if-then) branching"
     else:
         s += "\n\t\t- no conditional (if-then) branching"
@@ -212,16 +212,16 @@ def _str_after_pass(self) -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {self.num_tensors_total} total tensors ({self.tensor_fsize_total_nice}) "
+        f"\n\t\t- {self.num_tensors_total} total tensors ({self.total_activation_memory_str}) "
         f"computed in forward pass."
     )
-    s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.tensor_fsize_saved_nice}) with saved activations."
+    s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.saved_activation_memory_str}) with saved activations."
 
     # Model parameters:
 
     s += (
         f"\n\tParameters: {self.total_param_layers} parameter operations ({self.total_params} params total; "
-        f"{self.total_params_fsize_nice})"
+        f"{self.total_params_memory_str})"
     )
 
     # Print the module hierarchy.
@@ -238,7 +238,7 @@ def _str_after_pass(self) -> str:
         s += " (* means layer has saved activations):"
     for layer_ind, layer_barcode in enumerate(self.layer_labels):
         pass_num = self.layer_dict_main_keys[layer_barcode].pass_num
-        total_passes = self.layer_dict_main_keys[layer_barcode].layer_passes_total
+        total_passes = self.layer_dict_main_keys[layer_barcode].num_passes
         if total_passes > 1:
             pass_str = f" ({pass_num}/{total_passes} passes)"
         else:
@@ -427,17 +427,17 @@ def to_pandas(self) -> pd.DataFrame:
         "layer_type",
         "layer_type_num",
         "layer_total_num",
-        "layer_passes_total",
+        "num_passes",
         "pass_num",
         "operation_num",
         "tensor_shape",
         "tensor_dtype",
-        "tensor_fsize",
-        "tensor_fsize_nice",
-        "func_applied_name",
-        "func_time_elapsed",
-        "function_is_inplace",
-        "gradfunc",
+        "tensor_memory",
+        "tensor_memory_str",
+        "func_name",
+        "func_time",
+        "func_is_inplace",
+        "grad_fn_name",
         "is_input_layer",
         "is_output_layer",
         "is_buffer_layer",
@@ -445,39 +445,39 @@ def to_pandas(self) -> pd.DataFrame:
         "iterable_output_index",
         "parent_layers",
         "has_parents",
-        "orig_ancestors",
+        "root_ancestors",
         "child_layers",
         "has_children",
-        "output_descendents",
+        "output_descendants",
         "sibling_layers",
         "has_siblings",
-        "spouse_layers",
-        "has_spouses",
-        "initialized_inside_model",
+        "co_parent_layers",
+        "has_co_parents",
+        "is_internally_initialized",
         "min_distance_from_input",
         "max_distance_from_input",
         "min_distance_from_output",
         "max_distance_from_output",
-        "computed_with_params",
+        "uses_params",
         "num_params_total",
         "parent_param_shapes",
-        "parent_params_fsize",
-        "parent_params_fsize_nice",
+        "params_memory",
+        "params_memory_str",
         "modules_entered",
         "modules_exited",
         "is_submodule_input",
         "is_submodule_output",
-        "containing_module_origin",
-        "containing_modules_origin_nested",
+        "containing_module",
+        "containing_modules",
     ]
 
     fields_to_change_type = {
         "layer_type_num": int,
         "layer_total_num": int,
-        "layer_passes_total": int,
+        "num_passes": int,
         "pass_num": int,
         "operation_num": int,
-        "function_is_inplace": bool,
+        "func_is_inplace": bool,
         "is_input_layer": bool,
         "is_output_layer": bool,
         "is_buffer_layer": bool,
@@ -485,11 +485,11 @@ def to_pandas(self) -> pd.DataFrame:
         "has_parents": bool,
         "has_children": bool,
         "has_siblings": bool,
-        "has_spouses": bool,
-        "computed_with_params": bool,
+        "has_co_parents": bool,
+        "uses_params": bool,
         "num_params_total": int,
-        "parent_params_fsize": int,
-        "tensor_fsize": int,
+        "params_memory": int,
+        "tensor_memory": int,
         "is_submodule_input": bool,
         "is_submodule_output": bool,
     }

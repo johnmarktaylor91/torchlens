@@ -4,8 +4,8 @@ LayerLog groups one or more LayerPassLog entries that represent the same
 logical layer across recurrent passes.  For non-recurrent models (the
 common case), every LayerLog wraps exactly one LayerPassLog.
 
-**Delegation pattern**: For single-pass layers, per-pass fields (tensor_contents,
-grad_contents, operation_num, etc.) are accessible directly on the LayerLog
+**Delegation pattern**: For single-pass layers, per-pass fields (activation,
+gradient, operation_num, etc.) are accessible directly on the LayerLog
 via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``passes[1]``.
 For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
 ``AttributeError``) directing the user to ``layer_log.passes[N].field``.
@@ -18,8 +18,8 @@ the user a clear error message.
 **_build_layer_logs merge rules** (in postprocess/layer_log.py):
 When merging multiple passes into one LayerLog, only 3 fields are merged:
   - ``has_input_ancestor``: OR across passes
-  - ``input_output_address``: character-level merge of "I", "O", "IO" strings
-  - ``is_bottom_level_submodule_output``: OR across passes
+  - ``io_role``: character-level merge of "I", "O", "IO" strings
+  - ``is_leaf_module_output``: OR across passes
 All other 78+ fields use the first pass's values only.
 ``modules_exited`` / ``module_passes_exited`` are NOT updated across passes
 (correct because same-layer grouping requires identical structural position).
@@ -49,8 +49,8 @@ class LayerLog:
     execution state, gradients) live on the LayerPassLog objects in ``self.passes``.
 
     For single-pass layers, per-pass fields are accessible directly via
-    ``__getattr__`` delegation (e.g. ``layer_log.tensor_contents`` transparently
-    reads from ``passes[1].tensor_contents``).
+    ``__getattr__`` delegation (e.g. ``layer_log.activation`` transparently
+    reads from ``passes[1].activation``).
     """
 
     def __init__(self, first_pass: "LayerPassLog"):
@@ -65,7 +65,7 @@ class LayerLog:
         self.layer_type = first_pass.layer_type
         self.layer_type_num = first_pass.layer_type_num
         self.layer_total_num = first_pass.layer_total_num
-        self.num_passes = first_pass.layer_passes_total
+        self.num_passes = first_pass.num_passes
         # Store as weakref to break circular reference (ModelLog -> layer_logs -> LayerLog -> ModelLog).
         _sml = first_pass.source_model_log
         self._source_model_log_ref: Optional[weakref.ref] = (
@@ -74,12 +74,12 @@ class LayerLog:
 
         # Function identity
         self.func_applied = first_pass.func_applied
-        self.func_applied_name = first_pass.func_applied_name
-        self.function_is_inplace = first_pass.function_is_inplace
-        self.gradfunc = first_pass.gradfunc
+        self.func_name = first_pass.func_name
+        self.func_is_inplace = first_pass.func_is_inplace
+        self.grad_fn_name = first_pass.grad_fn_name
         self.func_argnames = first_pass.func_argnames
-        self.num_func_args_total = first_pass.num_func_args_total
-        self.num_position_args = first_pass.num_position_args
+        self.num_args = first_pass.num_args
+        self.num_positional_args = first_pass.num_positional_args
         self.num_keyword_args = first_pass.num_keyword_args
         self.is_part_of_iterable_output = first_pass.is_part_of_iterable_output
         self.iterable_output_index = first_pass.iterable_output_index
@@ -87,7 +87,7 @@ class LayerLog:
         # Tensor type (representative from first pass)
         self.tensor_shape = first_pass.tensor_shape
         self.tensor_dtype = first_pass.tensor_dtype
-        self.tensor_fsize = first_pass.tensor_fsize
+        self.tensor_memory = first_pass.tensor_memory
 
         # Config
         self.output_device = first_pass.output_device
@@ -106,7 +106,7 @@ class LayerLog:
         self.num_params_total = first_pass.num_params_total
         self.num_params_trainable = first_pass.num_params_trainable
         self.num_params_frozen = first_pass.num_params_frozen
-        self.parent_params_fsize = first_pass.parent_params_fsize
+        self.params_memory = first_pass.params_memory
 
         # Function config
         self.func_config = first_pass.func_config
@@ -118,32 +118,32 @@ class LayerLog:
         # Special flags
         self.is_input_layer = first_pass.is_input_layer
         self.is_output_layer = first_pass.is_output_layer
-        self.is_last_output_layer = first_pass.is_last_output_layer
+        self.is_final_output = first_pass.is_final_output
         self.is_buffer_layer = first_pass.is_buffer_layer
         self.buffer_address = first_pass.buffer_address
         self.buffer_parent = first_pass.buffer_parent
-        self.initialized_inside_model = first_pass.initialized_inside_model
-        self.terminated_inside_model = first_pass.terminated_inside_model
+        self.is_internally_initialized = first_pass.is_internally_initialized
+        self.is_internally_terminated = first_pass.is_internally_terminated
         self.is_terminal_bool_layer = first_pass.is_terminal_bool_layer
-        self.is_atomic_bool_layer = first_pass.is_atomic_bool_layer
-        self.atomic_bool_val = first_pass.atomic_bool_val
+        self.is_scalar_bool = first_pass.is_scalar_bool
+        self.scalar_bool_value = first_pass.scalar_bool_value
 
         # Module (static containment)
-        self.containing_module_origin = first_pass.containing_module_origin
-        self.containing_modules_origin_nested = first_pass.containing_modules_origin_nested
+        self.containing_module = first_pass.containing_module
+        self.containing_modules = first_pass.containing_modules
 
         # Fields stored as aggregate for vis compatibility.
         # Initialized from first pass.  For multi-pass layers, _build_layer_logs
-        # merges only has_input_ancestor (OR), input_output_address (char-merge),
-        # and is_bottom_level_submodule_output (OR).  All others keep first-pass values.
+        # merges only has_input_ancestor (OR), io_role (char-merge),
+        # and is_leaf_module_output (OR).  All others keep first-pass values.
         self.modules_exited = first_pass.modules_exited
         self.module_passes_exited = first_pass.module_passes_exited
         self.cond_branch_start_children = first_pass.cond_branch_start_children
         self.cond_branch_then_children = first_pass.cond_branch_then_children
         self.has_input_ancestor = first_pass.has_input_ancestor
-        self.input_output_address = first_pass.input_output_address
+        self.io_role = first_pass.io_role
         self.buffer_pass = first_pass.buffer_pass
-        self.is_bottom_level_submodule_output = first_pass.is_bottom_level_submodule_output
+        self.is_leaf_module_output = first_pass.is_leaf_module_output
 
         # Pass management
         self.passes: Dict[int, "LayerPassLog"] = {}
@@ -160,7 +160,7 @@ class LayerLog:
         return self.flops_backward // 2 if self.flops_backward is not None else None
 
     @property
-    def computed_with_params(self) -> bool:
+    def uses_params(self) -> bool:
         """Whether this layer uses model parameters."""
         return len(self.parent_param_barcodes) > 0
 
@@ -172,20 +172,20 @@ class LayerLog:
     @property
     def is_computed_inside_submodule(self) -> bool:
         """Whether this layer was computed inside a submodule."""
-        return self.containing_module_origin is not None
+        return self.containing_module is not None
 
     @property
     def module_nesting_depth(self) -> int:
         """Depth of module nesting for this layer."""
-        return len(self.containing_modules_origin_nested)
+        return len(self.containing_modules)
 
     @property
-    def tensor_fsize_nice(self) -> str:
-        return human_readable_size(self.tensor_fsize)
+    def tensor_memory_str(self) -> str:
+        return human_readable_size(self.tensor_memory)
 
     @property
-    def parent_params_fsize_nice(self) -> str:
-        return human_readable_size(self.parent_params_fsize)
+    def params_memory_str(self) -> str:
+        return human_readable_size(self.params_memory)
 
     @property
     def source_model_log(self) -> "ModelLog":
@@ -226,36 +226,36 @@ class LayerLog:
         return getattr(self.passes[1], field_name)
 
     @property
-    def tensor_contents(self):
-        return self._single_pass_or_error("tensor_contents")
+    def activation(self):
+        return self._single_pass_or_error("activation")
 
     @property
     def has_saved_activations(self):
         return self._single_pass_or_error("has_saved_activations")
 
     @property
-    def creation_args(self):
-        return self._single_pass_or_error("creation_args")
+    def captured_args(self):
+        return self._single_pass_or_error("captured_args")
 
     @property
-    def creation_kwargs(self):
-        return self._single_pass_or_error("creation_kwargs")
+    def captured_kwargs(self):
+        return self._single_pass_or_error("captured_kwargs")
 
     @property
-    def grad_contents(self):
-        return self._single_pass_or_error("grad_contents")
+    def gradient(self):
+        return self._single_pass_or_error("gradient")
 
     @property
-    def has_saved_grad(self):
-        return self._single_pass_or_error("has_saved_grad")
+    def has_gradient(self):
+        return self._single_pass_or_error("has_gradient")
 
     @property
     def func_call_stack(self):
         return self._single_pass_or_error("func_call_stack")
 
     @property
-    def func_time_elapsed(self):
-        return self._single_pass_or_error("func_time_elapsed")
+    def func_time(self):
+        return self._single_pass_or_error("func_time")
 
     @property
     def func_rng_states(self):
@@ -270,8 +270,8 @@ class LayerLog:
         return self._single_pass_or_error("pass_num")
 
     @property
-    def realtime_tensor_num(self):
-        return self._single_pass_or_error("realtime_tensor_num")
+    def creation_order(self):
+        return self._single_pass_or_error("creation_order")
 
     @property
     def lookup_keys(self):
@@ -337,12 +337,12 @@ class LayerLog:
         return any(p.has_siblings for p in self.passes.values())
 
     @property
-    def spouse_layers(self):
+    def co_parent_layers(self):
         """Union of spouse layers (no-pass labels) across all passes."""
         result = []
         seen = set()
         for pass_log in self.passes.values():
-            for label in pass_log.spouse_layers:
+            for label in pass_log.co_parent_layers:
                 no_pass = self.source_model_log[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
@@ -350,8 +350,8 @@ class LayerLog:
         return result
 
     @property
-    def has_spouses(self):
-        return any(p.has_spouses for p in self.passes.values())
+    def has_co_parents(self):
+        return any(p.has_co_parents for p in self.passes.values())
 
     @property
     def _pass_finished(self):
@@ -363,11 +363,6 @@ class LayerLog:
     # ********************************************
     # ****** Convenience properties **************
     # ********************************************
-
-    @property
-    def layer_passes_total(self):
-        """Alias for num_passes, matching LayerPassLog field name."""
-        return self.num_passes
 
     @property
     def layer_label_no_pass(self):
@@ -467,12 +462,12 @@ class LayerLog:
         return any(len(passes) < self.num_passes for passes in all_pass_lists)
 
     @property
-    def bottom_level_submodule_passes_exited(self):
+    def leaf_module_passes(self):
         """Set of module passes exited across all passes."""
         result = set()
         for pass_log in self.passes.values():
-            if pass_log.is_bottom_level_submodule_output:
-                result.add(pass_log.bottom_level_submodule_pass_exited)
+            if pass_log.is_leaf_module_output:
+                result.add(pass_log.leaf_module_pass)
         return result
 
     @property
@@ -551,20 +546,20 @@ class LayerLog:
             s += f" ({self.num_passes} passes)"
         s += (
             f"\n\tOutput tensor: shape={self.tensor_shape}, "
-            f"dtype={self.tensor_dtype}, size={self.tensor_fsize_nice}"
+            f"dtype={self.tensor_dtype}, size={self.tensor_memory_str}"
         )
         if not self.is_input_layer:
-            s += f"\n\tFunction: {self.func_applied_name} (grad_fn: {self.gradfunc})"
+            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_name})"
             if self.func_config:
                 config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
                 s += f"\n\tConfig: {config_str}"
-        if self.containing_module_origin is not None:
-            s += f"\n\tComputed inside module: {self.containing_module_origin}"
+        if self.containing_module is not None:
+            s += f"\n\tComputed inside module: {self.containing_module}"
         if len(self.parent_param_shapes) > 0:
             params_shapes_str = ", ".join(str(ps) for ps in self.parent_param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params_total} total ({self.parent_params_fsize_nice})"
+                f"{self.num_params_total} total ({self.params_memory_str})"
             )
         s += "\n\tRelated Layers:"
         s += f"\n\t\t- parents: {', '.join(self.parent_layers) or 'none'}"
@@ -639,7 +634,7 @@ class LayerAccessor:
         items = []
         for ll in self._list:
             items.append(
-                f"  '{ll.layer_label}': {ll.func_applied_name or 'input'} "
+                f"  '{ll.layer_label}': {ll.func_name or 'input'} "
                 f"(shape={list(ll.tensor_shape) if ll.tensor_shape else '?'}, "
                 f"passes={ll.num_passes})"
             )
@@ -656,13 +651,13 @@ class LayerAccessor:
                 {
                     "layer_label": ll.layer_label,
                     "layer_type": ll.layer_type,
-                    "func_applied_name": ll.func_applied_name,
+                    "func_name": ll.func_name,
                     "tensor_shape": ll.tensor_shape,
                     "tensor_dtype": ll.tensor_dtype,
-                    "tensor_fsize_nice": ll.tensor_fsize_nice,
+                    "tensor_memory_str": ll.tensor_memory_str,
                     "num_passes": ll.num_passes,
                     "num_params_total": ll.num_params_total,
-                    "containing_module_origin": ll.containing_module_origin,
+                    "containing_module": ll.containing_module,
                     "is_input_layer": ll.is_input_layer,
                     "is_output_layer": ll.is_output_layer,
                     "is_buffer_layer": ll.is_buffer_layer,

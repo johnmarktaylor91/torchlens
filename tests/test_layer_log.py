@@ -83,10 +83,10 @@ class TestLayerLogConstruction:
 class TestSinglePassDelegation:
     @pytest.mark.smoke
     def test_tensor_contents_delegation(self, simple_log):
-        """tensor_contents delegates to passes[1] for single-pass."""
+        """activation delegates to passes[1] for single-pass."""
         for layer_log in simple_log.layer_logs.values():
             pass_log = layer_log.passes[1]
-            assert layer_log.tensor_contents is pass_log.tensor_contents
+            assert layer_log.activation is pass_log.activation
 
     def test_has_saved_activations_delegation(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
@@ -121,12 +121,12 @@ class TestAggregateFields:
         for layer_log in simple_log.layer_logs.values():
             fp = layer_log.passes[1]
             assert layer_log.layer_type == fp.layer_type
-            assert layer_log.func_applied_name == fp.func_applied_name
+            assert layer_log.func_name == fp.func_name
             assert layer_log.tensor_shape == fp.tensor_shape
             assert layer_log.tensor_dtype == fp.tensor_dtype
             assert layer_log.is_input_layer == fp.is_input_layer
             assert layer_log.is_output_layer == fp.is_output_layer
-            assert layer_log.computed_with_params == fp.computed_with_params
+            assert layer_log.uses_params == fp.uses_params
 
     def test_layer_label_is_no_pass(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
@@ -155,7 +155,7 @@ class TestMultiPassLayerLog:
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_passes > 1:
                 with pytest.raises(ValueError, match="has .* passes"):
-                    _ = layer_log.tensor_contents
+                    _ = layer_log.activation
                 break
 
     def test_multi_pass_getattr_raises(self, recurrent_log):
@@ -234,17 +234,13 @@ class TestLayerLogDisplay:
 
 
 class TestConvenienceAliases:
-    def test_layer_passes_total_alias(self, simple_log):
-        for layer_log in simple_log.layer_logs.values():
-            assert layer_log.layer_passes_total == layer_log.num_passes
-
     def test_layer_label_no_pass_alias(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
             assert layer_log.layer_label_no_pass == layer_log.layer_label
 
     def test_params_accessor(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.computed_with_params:
+            if layer_log.uses_params:
                 params = layer_log.params
                 assert params is not None
                 break

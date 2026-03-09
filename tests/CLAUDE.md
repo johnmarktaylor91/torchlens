@@ -64,7 +64,7 @@ def test_model_descriptive_name(default_input1):
     model = example_models.MyNewModel()
     assert validate_saved_activations(model, default_input1)
     show_model_graph(
-        model, default_input1, save_only=True, vis_opt="unrolled",
+        model, default_input1, vis_save_only=True, vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "my_new_model"),
     )
 ```

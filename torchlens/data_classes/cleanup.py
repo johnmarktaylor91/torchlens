@@ -166,14 +166,14 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
     ]
 
     # Single-pass filter on dict fields:
-    # layers_computed_with_params: param_barcode -> [layer_labels]
-    for param_group, tensor_labels in list(self.layers_computed_with_params.items()):
-        self.layers_computed_with_params[param_group] = [
+    # layers_with_params: param_barcode -> [layer_labels]
+    for param_group, tensor_labels in list(self.layers_with_params.items()):
+        self.layers_with_params[param_group] = [
             label for label in tensor_labels if label not in labels_to_remove
         ]
-    self.layers_computed_with_params = {
+    self.layers_with_params = {
         param_group: tensor_labels
-        for param_group, tensor_labels in self.layers_computed_with_params.items()
+        for param_group, tensor_labels in self.layers_with_params.items()
         if len(tensor_labels) > 0
     }
 
@@ -218,12 +218,12 @@ def _remove_log_entry_references(self, layer_to_remove: str) -> None:
 
     # Now any nested fields.
 
-    for param_group, tensor_labels in self.layers_computed_with_params.items():
+    for param_group, tensor_labels in self.layers_with_params.items():
         if layer_to_remove in tensor_labels:
             tensor_labels.remove(layer_to_remove)
-    self.layers_computed_with_params = {
+    self.layers_with_params = {
         param_group: tensor_labels
-        for param_group, tensor_labels in self.layers_computed_with_params.items()
+        for param_group, tensor_labels in self.layers_with_params.items()
         if len(tensor_labels) > 0
     }
 

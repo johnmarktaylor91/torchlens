@@ -69,14 +69,14 @@ class TestParamLogFields:
         assert isinstance(pl.shape, tuple)
         assert isinstance(pl.dtype, torch.dtype)
         assert isinstance(pl.num_params, int)
-        assert isinstance(pl.fsize, int)
-        assert isinstance(pl.fsize_nice, str)
+        assert isinstance(pl.memory, int)
+        assert isinstance(pl.memory_str, str)
         assert isinstance(pl.trainable, bool)
         assert isinstance(pl.module_address, str)
         assert isinstance(pl.module_type, str)
         assert isinstance(pl.barcode, str)
         assert isinstance(pl.num_passes, int)
-        assert isinstance(pl.layer_log_entries, list)
+        assert isinstance(pl.used_by_layers, list)
         assert isinstance(pl.linked_params, list)
 
     def test_repr_contains_key_info(self):
@@ -154,13 +154,13 @@ class TestParamAccessorMH:
 class TestParamAccessorTLE:
     def test_access_by_address(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.computed_with_params][0]
+        entry = [e for e in mh if e.uses_params][0]
         pl = entry.params[entry.parent_param_logs[0].address]
         assert isinstance(pl, ParamLog)
 
     def test_access_by_short_name(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.computed_with_params][0]
+        entry = [e for e in mh if e.uses_params][0]
         w = entry.params["weight"]
         b = entry.params["bias"]
         assert "weight" in w.name
@@ -168,17 +168,17 @@ class TestParamAccessorTLE:
 
     def test_access_by_index(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.computed_with_params][0]
+        entry = [e for e in mh if e.uses_params][0]
         assert isinstance(entry.params[0], ParamLog)
 
     def test_len(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.computed_with_params][0]
+        entry = [e for e in mh if e.uses_params][0]
         assert len(entry.params) == 2  # weight + bias
 
     def test_iterable(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.computed_with_params][0]
+        entry = [e for e in mh if e.uses_params][0]
         params = list(entry.params)
         assert len(params) == 2
 
@@ -229,8 +229,8 @@ class TestParamMetadata:
     def test_fsize_positive(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert pl.fsize > 0
-            assert len(pl.fsize_nice) > 0
+            assert pl.memory > 0
+            assert len(pl.memory_str) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +260,7 @@ class TestTrainableFrozenTallies:
     def test_tle_tallies(self):
         mh = log_forward_pass(_make_frozen_first_layer(), _simple_input())
         for entry in mh:
-            if entry.computed_with_params:
+            if entry.uses_params:
                 assert (
                     entry.num_params_total == entry.num_params_trainable + entry.num_params_frozen
                 )
@@ -304,7 +304,7 @@ class TestLinkedParams:
 
 
 # ---------------------------------------------------------------------------
-# layer_log_entries reverse mapping
+# used_by_layers reverse mapping
 # ---------------------------------------------------------------------------
 
 
@@ -312,12 +312,12 @@ class TestTensorLogEntries:
     def test_populated(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert len(pl.layer_log_entries) > 0
+            assert len(pl.used_by_layers) > 0
 
     def test_points_to_correct_layers(self):
         mh = log_forward_pass(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            for label in pl.layer_log_entries:
+            for label in pl.used_by_layers:
                 entry = mh[label]
                 assert any(p.address == pl.address for p in entry.parent_param_logs)
 
@@ -339,14 +339,14 @@ class TestRecurrentParams:
         # fc1 is used 4 times
         pl = mh.params["fc1.weight"]
         assert pl.num_passes >= 2  # should be 4
-        assert len(pl.layer_log_entries) >= 2
+        assert len(pl.used_by_layers) >= 2
 
     def test_layer_log_entries_multi_pass(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         mh = log_forward_pass(model, input_2d)
         pl = mh.params["fc1.weight"]
-        # num_passes equals the number of layer_log_entries
-        assert pl.num_passes == len(pl.layer_log_entries)
+        # num_passes equals the number of used_by_layers
+        assert pl.num_passes == len(pl.used_by_layers)
         assert pl.num_passes >= 2
 
 
@@ -372,7 +372,7 @@ class TestGradientTracking:
         model = _make_simple_model()
         x = _simple_input()
         mh = log_forward_pass(model, x, save_gradients=True)
-        output = mh["output_1"].tensor_contents
+        output = mh["output_1"].activation
         output.sum().backward()
 
         # All trainable params should have gradients
@@ -380,14 +380,14 @@ class TestGradientTracking:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.grad_fsize > 0
-            assert len(pl.grad_fsize_nice) > 0
+            assert pl.grad_memory > 0
+            assert len(pl.grad_memory_str) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
         x = _simple_input()
         mh = log_forward_pass(model, x, save_gradients=True)
-        output = mh["output_1"].tensor_contents
+        output = mh["output_1"].activation
         output.sum().backward()
 
         # Frozen params should NOT have gradients
@@ -401,32 +401,32 @@ class TestGradientTracking:
         model = _make_simple_model()
         x = _simple_input()
         mh = log_forward_pass(model, x, save_gradients=True)
-        output = mh["output_1"].tensor_contents
+        output = mh["output_1"].activation
         output.sum().backward()
 
         # TLEs with param layers should have saved gradients
         for entry in mh:
-            if entry.computed_with_params:
-                assert entry.has_saved_grad is True
-                assert entry.grad_contents is not None
+            if entry.uses_params:
+                assert entry.has_gradient is True
+                assert entry.gradient is not None
                 assert entry.grad_shape is not None
 
     def test_layers_with_saved_gradients_populated(self):
         model = _make_simple_model()
         x = _simple_input()
         mh = log_forward_pass(model, x, save_gradients=True)
-        output = mh["output_1"].tensor_contents
+        output = mh["output_1"].activation
         output.sum().backward()
 
         assert len(mh.layers_with_saved_gradients) > 0
         for label in mh.layers_with_saved_gradients:
-            assert mh[label].has_saved_grad is True
+            assert mh[label].has_gradient is True
 
     def test_grad_shape_matches_param_shape(self):
         model = _make_simple_model()
         x = _simple_input()
         mh = log_forward_pass(model, x, save_gradients=True)
-        output = mh["output_1"].tensor_contents
+        output = mh["output_1"].activation
         output.sum().backward()
 
         for pl in mh.params:
@@ -471,13 +471,13 @@ class TestOptimizerSupport:
 
 
 class TestVisualizationParams:
-    def _get_dot_source(self, model, x, vis_opt="unrolled", vis_nesting_depth=1000):
+    def _get_dot_source(self, model, x, vis_mode="unrolled", vis_nesting_depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
         mh = log_forward_pass(model, x)
         dot_source = mh.render_graph(
-            vis_opt=vis_opt,
+            vis_mode=vis_mode,
             vis_outpath=outpath,
-            save_only=True,
+            vis_save_only=True,
             vis_nesting_depth=vis_nesting_depth,
         )
         return dot_source, mh
@@ -591,18 +591,18 @@ class TestIntegration:
         model = example_models.RecurrentParamsComplex()
         mh = log_forward_pass(model, input_2d)
         assert len(mh.params) == 4  # fc1 weight+bias, fc2 weight+bias
-        # Both fc1 and fc2 are used multiple times (as layer_log_entries)
+        # Both fc1 and fc2 are used multiple times (as used_by_layers)
         assert mh.params["fc1.weight"].num_passes >= 2
         assert mh.params["fc2.weight"].num_passes >= 2
         # Verify all entries point to real layers
         for pl in mh.params:
-            for label in pl.layer_log_entries:
+            for label in pl.used_by_layers:
                 assert label in mh.layer_dict_all_keys
 
     def test_gradient_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         mh = log_forward_pass(model, input_2d, save_gradients=True)
-        output = mh["output_1"].tensor_contents
+        output = mh["output_1"].activation
         output.sum().backward()
 
         # Despite multiple passes, each param should have exactly one gradient
@@ -623,19 +623,22 @@ class TestIntegration:
         # All trainable
         model = _make_simple_model()
         show_model_graph(
-            model, _simple_input(), save_only=True, vis_outpath=opj(outdir, "_param_all_trainable")
+            model,
+            _simple_input(),
+            vis_save_only=True,
+            vis_outpath=opj(outdir, "_param_all_trainable"),
         )
 
         # Mixed
         model = _make_frozen_first_layer()
         show_model_graph(
-            model, _simple_input(), save_only=True, vis_outpath=opj(outdir, "_param_mixed")
+            model, _simple_input(), vis_save_only=True, vis_outpath=opj(outdir, "_param_mixed")
         )
 
         # All frozen
         model = _make_all_frozen()
         show_model_graph(
-            model, _simple_input(), save_only=True, vis_outpath=opj(outdir, "_param_all_frozen")
+            model, _simple_input(), vis_save_only=True, vis_outpath=opj(outdir, "_param_all_frozen")
         )
 
     def test_vis_collapsed_renders_without_error(self):
@@ -645,7 +648,7 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            save_only=True,
+            vis_save_only=True,
             vis_nesting_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_trainable"),
         )
@@ -654,7 +657,7 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            save_only=True,
+            vis_save_only=True,
             vis_nesting_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_mixed"),
         )
@@ -663,7 +666,7 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            save_only=True,
+            vis_save_only=True,
             vis_nesting_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_frozen"),
         )

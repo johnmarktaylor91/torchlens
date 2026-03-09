@@ -55,15 +55,15 @@ class BufferLog(LayerPassLog):
             lines.append(f"  shape: {list(self.tensor_shape)}")
         if self.tensor_dtype is not None:
             lines.append(f"  dtype: {self.tensor_dtype}")
-        if self.tensor_fsize is not None:
-            lines.append(f"  size: {human_readable_size(self.tensor_fsize)}")
+        if self.tensor_memory is not None:
+            lines.append(f"  size: {human_readable_size(self.tensor_memory)}")
         if self.module_address:
             lines.append(f"  module: {self.module_address}")
         if self.buffer_pass is not None:
             lines.append(f"  pass: {self.buffer_pass}")
         lines.append(f"  has_saved_activations: {self.has_saved_activations}")
-        if self.has_saved_grad:
-            lines.append("  has_saved_grad: True")
+        if self.has_gradient:
+            lines.append("  has_gradient: True")
         if self.layer_label is not None:
             lines.append(f"  layer_label: {self.layer_label}")
         return "\n".join(lines)

@@ -69,7 +69,7 @@ COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
 def render_graph(
     self: "ModelLog",
-    vis_opt: str = "unrolled",
+    vis_mode: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
     vis_graph_overrides: Optional[Dict] = None,
@@ -78,7 +78,7 @@ def render_graph(
     vis_edge_overrides: Optional[Dict] = None,
     vis_gradient_edge_overrides: Optional[Dict] = None,
     vis_module_overrides: Optional[Dict] = None,
-    save_only: bool = False,
+    vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
@@ -93,7 +93,7 @@ def render_graph(
     4. Renders to file and optionally displays.
 
     Args:
-        vis_opt: ``'unrolled'`` (each pass is a separate node) or ``'rolled'``
+        vis_mode: ``'unrolled'`` (each pass is a separate node) or ``'rolled'``
             (multi-pass layers collapsed into one node with pass annotations).
         vis_nesting_depth: Maximum module nesting levels to show before
             collapsing deeper layers into ``box3d`` module summary nodes.
@@ -105,7 +105,7 @@ def render_graph(
         vis_edge_overrides: Overrides for forward edges.
         vis_gradient_edge_overrides: Overrides for backward (gradient) edges.
         vis_module_overrides: Overrides for module subgraph boxes.
-        save_only: If True, save without opening a viewer.
+        vis_save_only: If True, save without opening a viewer.
         vis_fileformat: Output format (pdf, png, svg, etc.).
         show_buffer_layers: Whether to include buffer layers in the graph.
         direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
@@ -157,12 +157,12 @@ def render_graph(
     # Unrolled: iterate LayerPassLog objects (one node per pass).
     # Rolled: iterate LayerLog objects (one node per logical layer, multi-pass
     # collapsed into a single node with edge annotations).
-    if vis_opt == "unrolled":
+    if vis_mode == "unrolled":
         entries_to_plot = self.layer_dict_main_keys
-    elif vis_opt == "rolled":
+    elif vis_mode == "rolled":
         entries_to_plot = self.layer_logs  # type: ignore[assignment]
     else:
-        raise ValueError("vis_opt must be either 'rolled' or 'unrolled'")
+        raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
 
     if direction == "bottomup":
         rankdir = "BT"
@@ -178,27 +178,27 @@ def render_graph(
 
     num_nodes = len(entries_to_plot)
     engine = get_node_placement_engine(vis_node_placement, num_nodes)
-    _vprint(self, f"Rendering {vis_opt} graph ({num_nodes} nodes, format={vis_fileformat})")
+    _vprint(self, f"Rendering {vis_mode} graph ({num_nodes} nodes, format={vis_fileformat})")
     _vprint(self, f"Layout engine: {engine}")
 
     if self.total_params == 0:
         params_detail = "0 params"
     elif self.total_params_frozen == 0:
         params_detail = (
-            f"{self.total_params} params (all trainable, {self.total_params_fsize_nice})"
+            f"{self.total_params} params (all trainable, {self.total_params_memory_str})"
         )
     elif self.total_params_trainable == 0:
-        params_detail = f"{self.total_params} params (all frozen, {self.total_params_fsize_nice})"
+        params_detail = f"{self.total_params} params (all frozen, {self.total_params_memory_str})"
     else:
         params_detail = (
             f"{self.total_params} params "
             f"({self.total_params_trainable}/{self.total_params} trainable, "
-            f"{self.total_params_fsize_nice})"
+            f"{self.total_params_memory_str})"
         )
 
     graph_caption = (
         f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors_total} "
-        f"tensors total ({self.tensor_fsize_total_nice})"
+        f"tensors total ({self.total_activation_memory_str})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
 
@@ -211,13 +211,13 @@ def render_graph(
             result = render_elk_direct(
                 self,
                 entries_to_plot,
-                vis_opt,
+                vis_mode,
                 vis_nesting_depth,
                 show_buffer_layers,
                 overrides,
                 vis_outpath,
                 vis_fileformat,
-                save_only,
+                vis_save_only,
                 graph_caption,
                 rankdir,
             )
@@ -276,7 +276,7 @@ def render_graph(
             dot,
             module_cluster_dict,
             edges_used,
-            vis_opt,
+            vis_mode,
             collapsed_modules,
             vis_nesting_depth,
             show_buffer_layers,
@@ -284,9 +284,9 @@ def render_graph(
         )
 
     # Finally, set up the subgraphs.
-    _setup_subgraphs(self, dot, vis_opt, module_cluster_dict, overrides)
+    _setup_subgraphs(self, dot, vis_mode, module_cluster_dict, overrides)
 
-    if in_notebook() and not save_only:
+    if in_notebook() and not vis_save_only:
         from IPython.display import display  # #72: lazy import
 
         display(dot)
@@ -298,13 +298,13 @@ def render_graph(
     source_path = dot.save(vis_outpath)
     try:
         if engine == "sfdp":
-            render_with_sfdp(source_path, vis_outpath, vis_fileformat, save_only)
+            render_with_sfdp(source_path, vis_outpath, vis_fileformat, vis_save_only)
         else:
             # dot engine (default for small graphs)
             rendered_path = f"{vis_outpath}.{vis_fileformat}"
             cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
             subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
-            if not save_only:
+            if not vis_save_only:
                 graphviz.backend.viewing.view(rendered_path)
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
     except subprocess.TimeoutExpired:
@@ -330,7 +330,7 @@ def _add_node_to_graphviz(
     graphviz_graph,
     module_edge_dict: Dict,
     edges_used: Set,
-    vis_opt: str,
+    vis_mode: str,
     collapsed_modules: Set,
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
@@ -342,7 +342,7 @@ def _add_node_to_graphviz(
         node: node to add
         graphviz_graph: The graphviz object to add the node to.
         module_edge_dict: Dictionary of the module clusters.
-        vis_opt: Whether to roll the graph or not
+        vis_mode: Whether to roll the graph or not
         vis_nesting_depth: How many levels of nested modules to show
         collapsed_modules: Labels of collapsed module nodes that have been made so far.
         show_buffer_layers: Whether to show the buffer layers
@@ -356,7 +356,7 @@ def _add_node_to_graphviz(
             node,
             graphviz_graph,
             collapsed_modules,
-            vis_opt,
+            vis_mode,
             vis_nesting_depth,
             overrides,  # type: ignore[arg-type]
         )
@@ -367,7 +367,7 @@ def _add_node_to_graphviz(
             node,
             graphviz_graph,
             show_buffer_layers,
-            vis_opt,
+            vis_mode,
             overrides,  # type: ignore[arg-type]
         )
 
@@ -380,7 +380,7 @@ def _add_node_to_graphviz(
         module_edge_dict,
         edges_used,
         graphviz_graph,
-        vis_opt,
+        vis_mode,
         show_buffer_layers,
         overrides,
     )
@@ -395,11 +395,11 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
     This function is the single decision point that determines whether a node
     gets its own graphviz node or is absorbed into a module box.  Getting this
     wrong causes IndexError when ``_build_collapsed_module_node`` tries to
-    access ``containing_modules_origin_nested[vis_nesting_depth - 1]``.
+    access ``containing_modules[vis_nesting_depth - 1]``.
 
     Special cases:
     - ``vis_nesting_depth == 0``: show all layers, never collapse (#94).
-    - ``is_bottom_level_submodule_output``: the node represents the output of
+    - ``is_leaf_module_output``: the node represents the output of
       its innermost module, so its effective nesting depth is one less (it
       visually "belongs" to the parent scope).
 
@@ -410,10 +410,10 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
     if vis_nesting_depth == 0:
         return False  # #94: depth 0 means show all layers, never collapse
 
-    node_nesting_depth = len(node.containing_modules_origin_nested)
+    node_nesting_depth = len(node.containing_modules)
     # Bottom-level submodule outputs are rendered at the parent nesting level,
     # not their own, so subtract 1 from their effective depth.
-    if getattr(node, "is_bottom_level_submodule_output", False):
+    if getattr(node, "is_leaf_module_output", False):
         node_nesting_depth -= 1
 
     if node_nesting_depth >= vis_nesting_depth:
@@ -427,7 +427,7 @@ def _build_layer_node(
     node,
     graphviz_graph,
     show_buffer_layers,
-    vis_opt,
+    vis_mode,
     overrides: VisualizationOverrides,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
@@ -436,7 +436,7 @@ def _build_layer_node(
         node: The LayerPassLog or LayerLog node to render.
         graphviz_graph: The graphviz Digraph object to add the node to.
         show_buffer_layers: Whether buffer layers are shown.
-        vis_opt: 'unrolled' or 'rolled'.
+        vis_mode: 'unrolled' or 'rolled'.
         overrides: Graphviz attribute overrides.
 
     Returns:
@@ -456,7 +456,7 @@ def _build_layer_node(
 
     # Get the text for the node label:
 
-    node_label = _make_node_label(node, node_address, vis_opt)
+    node_label = _make_node_label(node, node_address, vis_mode)
 
     # Graphviz node names can't contain colons (used for port syntax), so
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
@@ -484,7 +484,7 @@ def _build_layer_node(
 
     graphviz_graph.node(**node_args)
 
-    if node.is_last_output_layer:
+    if node.is_final_output:
         with graphviz_graph.subgraph() as s:
             s.attr(rank="sink")
             s.node(node.layer_label.replace(":", "pass"))
@@ -497,7 +497,7 @@ def _build_collapsed_module_node(
     node,
     graphviz_graph,
     collapsed_modules,
-    vis_opt,
+    vis_mode,
     vis_nesting_depth,
     overrides: VisualizationOverrides,
 ) -> None:
@@ -507,18 +507,18 @@ def _build_collapsed_module_node(
         node: The LayerPassLog or LayerLog node triggering the collapse.
         graphviz_graph: The graphviz Digraph object to add the node to.
         collapsed_modules: Set of collapsed module names already added; updated in place.
-        vis_opt: 'unrolled' or 'rolled'.
+        vis_mode: 'unrolled' or 'rolled'.
         vis_nesting_depth: Maximum nesting depth; nodes at this depth are collapsed.
         overrides: Graphviz attribute overrides.
     """
     # Access the module at the collapse threshold depth.  This index is safe
     # because _is_collapsed_module already verified the node is deep enough.
-    module_address_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
+    module_address_w_pass = node.containing_modules[vis_nesting_depth - 1]
     # rsplit with maxsplit=1 handles module names containing colons (#104).
     module_tuple = module_address_w_pass.rsplit(":", 1)
     module_output_layer = self[module_address_w_pass]
     module_output_shape = module_output_layer.tensor_shape or ()
-    module_output_fsize = module_output_layer.tensor_fsize_nice
+    module_output_fsize = module_output_layer.tensor_memory_str
     module_address, pass_num = module_tuple
     ml = self.modules[module_address]
     module_type = ml.module_class_name  # type: ignore[union-attr]
@@ -528,7 +528,7 @@ def _build_collapsed_module_node(
     # In unrolled mode, each pass of a module is a separate collapsed node
     # (e.g., "encoder.layer.0pass1").  In rolled mode, all passes share one
     # node (e.g., "encoder.layer.0").
-    if vis_opt == "unrolled":
+    if vis_mode == "unrolled":
         node_name = "pass".join(module_tuple)
         mpl = self.modules[module_address_w_pass]
         module_num_tensors = mpl.num_layers
@@ -545,7 +545,7 @@ def _build_collapsed_module_node(
 
     if module_num_passes == 1:
         node_title = f"<b>@{module_address}</b>"
-    elif vis_opt == "unrolled" and (module_num_passes > 1):
+    elif vis_mode == "unrolled" and (module_num_passes > 1):
         node_title = f"<b>@{module_address}:{pass_num}</b>"
     else:
         node_title = f"<b>@{module_address} (x{module_num_passes})</b>"
@@ -639,18 +639,16 @@ def _get_node_address_shape_color(
     else:
         only_non_buffer_layer = False
 
-    if (node.is_bottom_level_submodule_output or only_non_buffer_layer) and (
-        len(node.containing_modules_origin_nested) > 0
-    ):
+    if (node.is_leaf_module_output or only_non_buffer_layer) and (len(node.containing_modules) > 0):
         if isinstance(node, LayerPassLog):
-            module_pass_exited = node.containing_modules_origin_nested[-1]
+            module_pass_exited = node.containing_modules[-1]
             module, _ = module_pass_exited.split(":")
             if self.modules[module].num_passes == 1:  # type: ignore[union-attr]
                 node_address = module
             else:
                 node_address = module_pass_exited
         else:
-            sample_module_pass = node.containing_modules_origin_nested[-1]
+            sample_module_pass = node.containing_modules[-1]
             module = sample_module_pass.split(":")[0]
             node_address = module
 
@@ -659,7 +657,7 @@ def _get_node_address_shape_color(
         node_color = "black"
     elif node.is_buffer_layer:
         if (self.buffer_num_passes[node.buffer_address] == 1) or (
-            isinstance(node, LayerLog) and node.layer_passes_total > 1
+            isinstance(node, LayerLog) and node.num_passes > 1
         ):
             buffer_address = node.buffer_address
         else:
@@ -668,7 +666,7 @@ def _get_node_address_shape_color(
         node_shape = "box"
         node_color = BUFFER_NODE_COLOR
     elif node.is_output_layer or node.is_input_layer:
-        node_address = "<br/>@" + node.input_output_address
+        node_address = "<br/>@" + node.io_role
         node_shape = "oval"
         node_color = "black"
     else:
@@ -694,13 +692,13 @@ def _is_only_non_buffer_in_module(
     # Check whether it leaves its module:
     if not (
         (len(node.modules_exited) > 0)
-        and (len(node.containing_modules_origin_nested) > 0)
-        and (node.containing_modules_origin_nested[-1].split(":")[0] in node.modules_exited)
+        and (len(node.containing_modules) > 0)
+        and (node.containing_modules[-1].split(":")[0] in node.modules_exited)
     ):
         return False
 
     # Only apply box rendering for leaf modules (no child submodules).
-    exited_module = node.containing_modules_origin_nested[-1].split(":")[0]
+    exited_module = node.containing_modules[-1].split(":")[0]
     if exited_module in self.modules and len(self.modules[exited_module].call_children) > 0:
         return False
 
@@ -713,9 +711,8 @@ def _is_only_non_buffer_in_module(
         else:
             parent_layer = self.layer_logs[parent_layer_label]  # type: ignore[assignment]
         if (not parent_layer.is_buffer_layer) and (
-            (len(parent_layer.containing_modules_origin_nested) > 0)
-            and parent_layer.containing_modules_origin_nested[-1]
-            == node.containing_modules_origin_nested[-1]
+            (len(parent_layer.containing_modules) > 0)
+            and parent_layer.containing_modules[-1] == node.containing_modules[-1]
         ):
             return False
 
@@ -740,7 +737,7 @@ def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]
         bg_color = OUTPUT_COLOR
     elif node.is_terminal_bool_layer:
         bg_color = BOOL_NODE_COLOR
-    elif node.computed_with_params:
+    elif node.uses_params:
         param_logs = getattr(node, "parent_param_logs", [])
         if param_logs:
             trainable_flags = [pl.trainable for pl in param_logs]
@@ -762,7 +759,7 @@ def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]
 def _make_node_label(
     node: Union["LayerPassLog", "LayerLog"],
     node_address: str,
-    vis_opt: str,
+    vis_mode: str,
 ) -> str:
     """Builds an HTML-table label string for a graphviz node.
 
@@ -771,10 +768,10 @@ def _make_node_label(
     """
     # Pass info:
 
-    if (node.layer_passes_total > 1) and (vis_opt == "unrolled"):
+    if (node.num_passes > 1) and (vis_mode == "unrolled"):
         pass_label = f":{node.pass_num}"
-    elif (node.layer_passes_total > 1) and (vis_opt == "rolled"):
-        pass_label = f" (x{node.layer_passes_total})"
+    elif (node.num_passes > 1) and (vis_mode == "rolled"):
+        pass_label = f" (x{node.num_passes})"
     else:
         pass_label = ""
 
@@ -791,7 +788,7 @@ def _make_node_label(
 
     param_label = _make_param_label(node)
 
-    tensor_fsize = node.tensor_fsize_nice
+    tensor_memory = node.tensor_memory_str
     if node.layer_type in ["input", "output", "buffer"]:
         node_title = f"<b>{node.layer_type}_{node.layer_type_num}{pass_label}</b>"
     else:
@@ -800,14 +797,14 @@ def _make_node_label(
         )
 
     if node.is_terminal_bool_layer:
-        label_text = str(node.atomic_bool_val).upper()
+        label_text = str(node.scalar_bool_value).upper()
         bool_label = f"<b><u>{label_text}:</u></b><br/><br/>"
     else:
         bool_label = ""
 
     node_label = (
         f"<{bool_label}{node_title}<br/>{tensor_shape_str} "
-        f"({tensor_fsize}){param_label}{node_address}>"
+        f"({tensor_memory}){param_label}{node_address}>"
     )
 
     return node_label
@@ -856,7 +853,7 @@ def _add_edges_for_node(
     module_edge_dict: Dict,
     edges_used: Set,
     graphviz_graph,
-    vis_opt: str = "unrolled",
+    vis_mode: str = "unrolled",
     show_buffer_layers: bool = False,
     overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
@@ -888,17 +885,17 @@ def _add_edges_for_node(
         module_edge_dict: Dict mapping each cluster to its edges.
         edges_used: Set of (tail, head) pairs already added.
         graphviz_graph: The graphviz graph object.
-        vis_opt: ``'unrolled'`` or ``'rolled'``.
+        vis_mode: ``'unrolled'`` or ``'rolled'``.
         show_buffer_layers: Whether buffer layers are shown.
         overrides: Graphviz attribute overrides.
     """
     for child_layer_label in parent_node.child_layers:
-        if vis_opt == "unrolled":
+        if vis_mode == "unrolled":
             child_node = self.layer_dict_main_keys[child_layer_label]
-        elif vis_opt == "rolled":
+        elif vis_mode == "rolled":
             child_node = self.layer_logs[child_layer_label]  # type: ignore[assignment]
         else:
-            raise ValueError(f"vis_opt must be 'unrolled' or 'rolled', not {vis_opt}")
+            raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 
         if child_node.is_buffer_layer and not show_buffer_layers:
             continue
@@ -909,9 +906,9 @@ def _add_edges_for_node(
             edge_style = "dashed"
 
         if parent_is_collapsed_module:
-            module_name_w_pass = parent_node.containing_modules_origin_nested[vis_nesting_depth - 1]
+            module_name_w_pass = parent_node.containing_modules[vis_nesting_depth - 1]
             module_tuple = module_name_w_pass.split(":")
-            if vis_opt == "unrolled":
+            if vis_mode == "unrolled":
                 tail_name = "pass".join(module_tuple)
             else:
                 tail_name = module_tuple[0]
@@ -921,9 +918,9 @@ def _add_edges_for_node(
         child_is_collapsed_module = _is_collapsed_module(child_node, vis_nesting_depth)
 
         if child_is_collapsed_module:
-            module_name_w_pass = child_node.containing_modules_origin_nested[vis_nesting_depth - 1]
+            module_name_w_pass = child_node.containing_modules[vis_nesting_depth - 1]
             module_tuple = module_name_w_pass.split(":")
-            if vis_opt == "unrolled":
+            if vis_mode == "unrolled":
                 head_name = "pass".join(module_tuple)
             else:
                 head_name = module_tuple[0]
@@ -938,12 +935,12 @@ def _add_edges_for_node(
         # The tail_name != head_name check handles the case where they map to
         # different collapsed modules (cross-module edge, should be drawn).
         if both_nodes_collapsed_modules and (tail_name != head_name):
-            child_containing_modules = child_node.containing_modules_origin_nested[:]
-            parent_containing_modules = parent_node.containing_modules_origin_nested[:]
+            child_containing_modules = child_node.containing_modules[:]
+            parent_containing_modules = parent_node.containing_modules[:]
             # Adjust for bottom-level submodule outputs (they belong to parent scope).
-            if child_node.is_bottom_level_submodule_output:
+            if child_node.is_leaf_module_output:
                 child_containing_modules = child_containing_modules[:-1]
-            if parent_node.is_bottom_level_submodule_output:
+            if parent_node.is_leaf_module_output:
                 parent_containing_modules = parent_containing_modules[:-1]
             if (
                 child_containing_modules[:vis_nesting_depth]
@@ -969,14 +966,14 @@ def _add_edges_for_node(
 
         # Mark with "IF" in the case edge starts a cond branch
         cond_children = parent_node.cond_branch_start_children
-        if vis_opt == "rolled":
+        if vis_mode == "rolled":
             cond_children = [label.split(":")[0] for label in cond_children]
         if (child_layer_label in cond_children) and (not child_is_collapsed_module):
             edge_dict["label"] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
 
         # Mark with "THEN" for THEN branch children
         then_children = parent_node.cond_branch_then_children
-        if vis_opt == "rolled":
+        if vis_mode == "rolled":
             then_children = [label.split(":")[0] for label in then_children]
         if (child_layer_label in then_children) and (not child_is_collapsed_module):
             edge_dict["label"] = '<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>'
@@ -988,7 +985,7 @@ def _add_edges_for_node(
             )
 
         # Annotate passes for rolled node edge if it varies across passes
-        if vis_opt == "rolled":
+        if vis_mode == "rolled":
             _label_rolled_pass_nums(child_node, parent_node, edge_dict)  # type: ignore[arg-type]
 
         for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
@@ -1005,13 +1002,13 @@ def _add_edges_for_node(
             module_edge_dict[containing_module]["edges"].append(edge_dict)
             if parent_node.has_input_ancestor or child_node.has_input_ancestor:
                 module_edge_dict[containing_module]["has_input_ancestor"] = True
-                for module in parent_node.containing_modules_origin_nested:
-                    module_key = module.split(":")[0] if vis_opt == "rolled" else module
+                for module in parent_node.containing_modules:
+                    module_key = module.split(":")[0] if vis_mode == "rolled" else module
                     module_edge_dict[module_key]["has_input_ancestor"] = True
                     if module_key == containing_module:
                         break
-                for module in child_node.containing_modules_origin_nested:
-                    module_key = module.split(":")[0] if vis_opt == "rolled" else module
+                for module in child_node.containing_modules:
+                    module_key = module.split(":")[0] if vis_mode == "rolled" else module
                     module_edge_dict[module_key]["has_input_ancestor"] = True
                     if module_key == containing_module:
                         break
@@ -1019,7 +1016,7 @@ def _add_edges_for_node(
             graphviz_graph.edge(**edge_dict)
 
         # Finally, add a backwards edge if both tensors have stored gradients.
-        if vis_opt == "unrolled":
+        if vis_mode == "unrolled":
             _add_gradient_edge(
                 self,
                 parent_node,
@@ -1190,7 +1187,7 @@ def _get_lowest_containing_module_for_two_nodes(
     top-level graph, not any subgraph).
 
     Special handling:
-    - ``is_bottom_level_submodule_output`` nodes are adjusted to their parent
+    - ``is_leaf_module_output`` nodes are adjusted to their parent
       scope (they represent the module's output, rendered one level up).
     - Rolled mode: pass suffixes are stripped from module names so that all
       passes share the same cluster.
@@ -1206,14 +1203,14 @@ def _get_lowest_containing_module_for_two_nodes(
     Returns:
         Module name (str) for the containing cluster, or -1 for top-level.
     """
-    node1_modules = node1.containing_modules_origin_nested[:]
-    node2_modules = node2.containing_modules_origin_nested[:]
+    node1_modules = node1.containing_modules[:]
+    node2_modules = node2.containing_modules[:]
 
     if isinstance(node1, LayerLog) or isinstance(node2, LayerLog):
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
-    if node1.is_bottom_level_submodule_output:
+    if node1.is_leaf_module_output:
         node1_nested_modules = node1_modules[:-1]
     else:
         node1_nested_modules = node1_modules[:]
@@ -1226,9 +1223,9 @@ def _get_lowest_containing_module_for_two_nodes(
         return -1  # no submodule contains them both.
 
     if node1 == node2:
-        if node1.is_bottom_level_submodule_output and (len(node1_modules) == 1):
+        if node1.is_leaf_module_output and (len(node1_modules) == 1):
             return -1
-        elif node1.is_bottom_level_submodule_output and (len(node1_modules) > 1):
+        elif node1.is_leaf_module_output and (len(node1_modules) > 1):
             containing_module = node1_modules[-2]
         else:
             containing_module = node1_modules[-1]
@@ -1275,7 +1272,7 @@ def _add_gradient_edge(
         graphviz_graph: The graphviz Digraph object.
         overrides: Graphviz attribute overrides for gradient edges.
     """
-    if parent_layer.has_saved_grad and child_layer.has_saved_grad:
+    if parent_layer.has_gradient and child_layer.has_gradient:
         edge_dict = {
             "tail_name": child_layer.layer_label.replace(":", "pass"),
             "head_name": parent_layer.layer_label.replace(":", "pass"),
@@ -1300,7 +1297,7 @@ def _add_gradient_edge(
 def _setup_subgraphs(
     self: "ModelLog",
     graphviz_graph,
-    vis_opt: str,
+    vis_mode: str,
     module_edge_dict: Dict,
     overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
@@ -1320,12 +1317,12 @@ def _setup_subgraphs(
 
     Args:
         graphviz_graph: The top-level Graphviz Digraph.
-        vis_opt: ``'rolled'`` or ``'unrolled'``.
+        vis_mode: ``'rolled'`` or ``'unrolled'``.
         module_edge_dict: Dict mapping each module cluster name to
             ``{"edges": [...], "has_input_ancestor": bool}``.
         overrides: Graphviz attribute overrides for module subgraphs.
     """
-    if vis_opt == "unrolled":
+    if vis_mode == "unrolled":
         module_submodule_dict = defaultdict(list)
         for pass_label, mpl in self.modules._pass_dict.items():
             module_submodule_dict[pass_label] = list(mpl.call_children)
@@ -1354,7 +1351,7 @@ def _setup_subgraphs(
             subgraph_stack,
             nesting_depth,
             max_nesting_depth,
-            vis_opt,
+            vis_mode,
             overrides,  # type: ignore[arg-type]
         )
 
@@ -1368,7 +1365,7 @@ def _setup_subgraphs_recurse(
     subgraph_stack,
     nesting_depth,
     max_nesting_depth,
-    vis_opt,
+    vis_mode,
     overrides: VisualizationOverrides,
 ) -> None:
     """Recursively build a single branch of the module subgraph hierarchy.
@@ -1389,24 +1386,24 @@ def _setup_subgraphs_recurse(
         subgraph_stack: BFS work queue for remaining branches.
         nesting_depth: Current position in ``parent_graph_list``.
         max_nesting_depth: Maximum depth across all branches (for penwidth scaling).
-        vis_opt: ``'rolled'`` or ``'unrolled'``.
+        vis_mode: ``'rolled'`` or ``'unrolled'``.
         overrides: Graphviz attribute overrides.
     """
     subgraph_name_w_pass = parent_graph_list[nesting_depth]
     subgraph_module = subgraph_name_w_pass.split(":")[0]
-    if vis_opt == "unrolled":
+    if vis_mode == "unrolled":
         cluster_name = f"cluster_{subgraph_name_w_pass.replace(':', '_pass')}"
         subgraph_name = subgraph_name_w_pass
-    elif vis_opt == "rolled":
+    elif vis_mode == "rolled":
         cluster_name = f"cluster_{subgraph_module}"
         subgraph_name = subgraph_module
     else:
-        raise ValueError("vis_opt must be 'rolled' or 'unrolled'")
+        raise ValueError("vis_mode must be 'rolled' or 'unrolled'")
     sg_ml = self.modules[subgraph_module]
     module_type = sg_ml.module_class_name  # type: ignore[union-attr]
-    if (sg_ml.num_passes > 1) and (vis_opt == "unrolled"):  # type: ignore[union-attr]
+    if (sg_ml.num_passes > 1) and (vis_mode == "unrolled"):  # type: ignore[union-attr]
         subgraph_title = subgraph_name_w_pass
-    elif (sg_ml.num_passes > 1) and (vis_opt == "rolled"):  # type: ignore[union-attr]
+    elif (sg_ml.num_passes > 1) and (vis_mode == "rolled"):  # type: ignore[union-attr]
         subgraph_title = f"{subgraph_module} (x{sg_ml.num_passes})"  # type: ignore[union-attr]
     else:
         subgraph_title = subgraph_module
@@ -1424,7 +1421,7 @@ def _setup_subgraphs_recurse(
                 subgraph_stack,
                 nesting_depth + 1,
                 max_nesting_depth,
-                vis_opt,
+                vis_mode,
                 overrides,
             )
 
