@@ -1,6 +1,43 @@
 # CHANGELOG
 
 
+## v0.21.1 (2026-03-09)
+
+### Bug Fixes
+
+- **postprocess**: Fix mypy type errors in _build_module_param_info
+  ([`11ea006`](https://github.com/johnmarktaylor91/torchlens/commit/11ea006c9a683675c926a9b0d649a2fa24b46558))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- Trigger CI
+  ([`99f4102`](https://github.com/johnmarktaylor91/torchlens/commit/99f4102fa34564868291214d6b6cf3dfc239fdce))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Performance Improvements
+
+- **postprocess**: Optimize pipeline for large models
+  ([`a211417`](https://github.com/johnmarktaylor91/torchlens/commit/a2114170b4f5b441d4c0ab7add26435820fc8f8f))
+
+- Per-step verbose timing: unwrap grouped _vtimed blocks into individual step timing with
+  graph-stats summary, enabling users to identify which specific step is slow (O16) - Cache
+  module_str by containing_modules tuple to avoid redundant string joins in Step 6 (O8) -
+  Early-continue guards in _undecorate_all_saved_tensors to skip BFS on layers with empty
+  captured_args/kwargs (O5) - Pre-compute buffer_layers_by_module dict in _build_module_logs,
+  eliminating O(modules × buffers) scan per module (O6) - Single-pass arglist rebuild in Step 11
+  rename, replacing 3-pass enumerate + index set + filter pattern (O2) - Replace OrderedDict with
+  dict in _trim_and_reorder (Python 3.7+ preserves insertion order) for lower allocation overhead
+  (O4) - Reverse-index approach in _refine_iso_groups: O(members × neighbors) instead of O(members²)
+  all-pairs combinations (O9) - Pre-compute param types per subgraph as frozenset before pair loop
+  in _merge_iso_groups_to_layers (O10) - Set-based O(n) collision detection replacing O(n²) .count()
+  calls in _find_isomorphic_matches (O12)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.21.0 (2026-03-09)
 
 ### Bug Fixes
