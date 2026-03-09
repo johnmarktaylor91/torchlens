@@ -1,7 +1,9 @@
 """Steps 5-7: Conditional branches, module annotation fixes, buffer layer fixes.
 
 Step 5 (_mark_conditional_branches): Starting from terminal boolean tensors,
-    backtracks to find where conditional branches diverge from the main graph.
+    backtracks through parent_layers only to find where conditional branches
+    diverge from the main graph. Optionally detects THEN branches via AST
+    analysis when save_source_context=True.
 Step 6 (_fix_modules_for_internal_tensors): Internally-generated tensors
     (constants, arange, etc.) don't know their containing module. This infers
     module containment by tracing backward from known input-descendant tensors.
@@ -12,8 +14,9 @@ Step 7 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
     buffers (same module, same value, same parent), and assigns buffer pass numbers.
 """
 
+import ast
 from collections import defaultdict
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 import torch
 
@@ -32,12 +35,18 @@ def _mark_conditional_branches(self) -> None:
     These boolean tensors are identified as "internally terminated bool layers"
     during Step 3 (orphan removal).
 
-    Starting from these terminal booleans, this function floods backward and
-    forward through parent_layers and child_layers. When it encounters a node
-    that IS an output ancestor (is_output_ancestor=True), that node is the
-    "branch start" — the point where the conditional branch diverges from the
-    main computation graph. All non-output-ancestor nodes traversed are marked
-    as ``in_cond_branch=True``.
+    Starting from these terminal booleans, this function floods **backward only**
+    through parent_layers. When it encounters a node that IS an output ancestor
+    (is_output_ancestor=True), that node is the "branch start" — the point where
+    the conditional branch diverges from the main computation graph. All
+    non-output-ancestor nodes traversed are marked as ``in_cond_branch=True``.
+
+    Bug #88 fix: The original algorithm flooded bidirectionally (parents + children),
+    which caused non-conditional children of output-ancestor nodes to be falsely
+    marked as in_cond_branch. The fix restricts flooding to parent_layers only.
+
+    After IF detection, if save_source_context is enabled, THEN branches are
+    detected via AST analysis of the source file containing the ``if`` statement.
     """
     terminal_bool_nodes = self.internally_terminated_bool_layers[:]
 
@@ -48,7 +57,7 @@ def _mark_conditional_branches(self) -> None:
         node = self[node_label]
         if node_label in nodes_seen:
             continue
-        for next_tensor_label in node.parent_layers + node.child_layers:
+        for next_tensor_label in node.parent_layers:  # backward only (Bug #88 fix)
             next_node = self[next_tensor_label]
             if next_node.is_output_ancestor:  # we found the beginning of a conditional branch
                 next_node.cond_branch_start_children.append(node_label)
@@ -62,6 +71,193 @@ def _mark_conditional_branches(self) -> None:
                 node_stack.append(next_tensor_label)
 
         nodes_seen.add(node_label)
+
+    # THEN branch detection (requires source context for AST analysis)
+    if self.save_source_context:
+        _detect_then_branches(self, terminal_bool_nodes)
+
+
+def _detect_then_branches(self, terminal_bool_nodes: List[str]) -> None:
+    """Detect THEN branches by matching branch-start children to AST ``if`` body ranges.
+
+    For each branch-start node (node with cond_branch_start_children), finds a
+    terminal boolean in its condition chain, uses that boolean's func_call_stack
+    to locate the ``if`` statement in source, parses the AST to get the if-body
+    line range, then checks each output-ancestor child of the branch-start to see
+    if its source line falls within that range.
+
+    Args:
+        terminal_bool_nodes: Labels of terminal boolean nodes (the condition tensors).
+    """
+    ast_cache: Dict[str, Optional[ast.Module]] = {}
+    terminal_bool_set = set(terminal_bool_nodes)
+    # Track which branch starts have a confirmed ast.If (i.e., the bool IS
+    # used for control flow). Branch starts without an ast.If match have their
+    # IF markings cleared in post-validation.
+    branch_starts_with_ast_if: Set[str] = set()
+
+    for start_label in self._raw_layer_labels_list:
+        start_node = self[start_label]
+        if not start_node.cond_branch_start_children:
+            continue
+
+        # Find a terminal boolean reachable from this branch start's condition chain.
+        # DFS through the IF children (cond_branch_start_children) and their
+        # non-output-ancestor children to find a terminal bool with a call stack.
+        terminal_bool = _find_terminal_bool_in_chain(
+            self, start_node.cond_branch_start_children, terminal_bool_set
+        )
+        if terminal_bool is None:
+            continue
+
+        # Get the terminal boolean's source location
+        if not terminal_bool.func_call_stack:
+            continue
+        user_frame = terminal_bool.func_call_stack[0]
+        file_b = user_frame.file
+        line_b = user_frame.line_number
+
+        # Parse AST for this file (cached)
+        if file_b not in ast_cache:
+            try:
+                with open(file_b, "r") as f:
+                    source = f.read()
+                ast_cache[file_b] = ast.parse(source)
+            except Exception:
+                ast_cache[file_b] = None
+
+        tree = ast_cache[file_b]
+        if tree is None:
+            continue
+
+        # Find the ast.If node at or near line_b
+        if_node = _find_if_node_near_line(tree, line_b)
+        if if_node is None:
+            continue
+
+        # The bool IS used in an actual if-statement — keep IF markings even
+        # if no THEN children found (e.g., else branch executed instead).
+        branch_starts_with_ast_if.add(start_label)
+
+        # Get the if-body line range
+        body_start = if_node.body[0].lineno
+        body_end = _get_end_lineno(if_node.body[-1])
+
+        # Check each output-ancestor child that is NOT already an IF child
+        if_children_set = set(start_node.cond_branch_start_children)
+        for child_label in start_node.child_layers:
+            if child_label in if_children_set:
+                continue
+            child_node = self[child_label]
+            if not child_node.is_output_ancestor:
+                continue
+            # Check if this child's source line falls within the if-body
+            if not child_node.func_call_stack:
+                continue
+            child_frame = _find_frame_in_file(child_node.func_call_stack, file_b)
+            if child_frame is None:
+                continue
+            if body_start <= child_frame.line_number <= body_end:
+                start_node.cond_branch_then_children.append(child_label)
+                self.conditional_then_edges.append((start_label, child_label))
+
+    # Post-validation: clear IF markings for branch-starts where no ast.If was
+    # found (the bool was computed but not used for control flow). Branch-starts
+    # WITH a confirmed ast.If keep their IF markings even if THEN is empty
+    # (e.g., else branch executed — ELSE detection is a future TODO).
+    for label in self._raw_layer_labels_list:
+        node = self[label]
+        if not node.cond_branch_start_children:
+            continue
+        if label in branch_starts_with_ast_if:
+            continue  # confirmed if-statement — keep IF markings
+        # No ast.If found — clear false IF markings
+        seen: Set[str] = set()
+        stack = list(node.cond_branch_start_children)
+        while stack:
+            cond_label = stack.pop()
+            if cond_label in seen:
+                continue
+            seen.add(cond_label)
+            cond_node = self[cond_label]
+            cond_node.in_cond_branch = False
+            for parent_label in cond_node.parent_layers:
+                parent = self[parent_label]
+                if parent.in_cond_branch:
+                    stack.append(parent_label)
+        # Clear branch-start fields
+        self.conditional_branch_edges = [
+            edge for edge in self.conditional_branch_edges if edge[0] != label
+        ]
+        node.cond_branch_start_children.clear()
+
+
+def _find_if_node_near_line(tree: ast.Module, target_line: int) -> Optional[ast.If]:
+    """Find the ast.If node whose test covers the target line number.
+
+    Walks the entire AST looking for If nodes where the test expression's line
+    range contains the target line, or the If node itself is on the target line.
+    Returns the most specific (deepest nested) match.
+    """
+    best: Optional[ast.If] = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If):
+            test_start = node.test.lineno
+            test_end = getattr(node.test, "end_lineno", test_start)
+            # The if statement itself or its test expression covers the target line
+            if test_start <= target_line <= test_end or node.lineno == target_line:
+                # Prefer deeper (later-found in walk order, or more specific)
+                if best is None or node.lineno >= best.lineno:
+                    best = node
+    return best
+
+
+def _get_end_lineno(node: ast.AST) -> int:
+    """Get the end line number of an AST node, handling nested blocks."""
+    end = getattr(node, "end_lineno", None)
+    if end is not None:
+        return end
+    # Fallback: walk children to find the maximum line number
+    max_line = getattr(node, "lineno", 0)
+    for child in ast.walk(node):
+        child_end = getattr(child, "end_lineno", getattr(child, "lineno", 0))
+        if child_end > max_line:
+            max_line = child_end
+    return max_line
+
+
+def _find_terminal_bool_in_chain(
+    self, if_children: List[str], terminal_bool_set: Set[str]
+) -> Optional[LayerPassLog]:
+    """Find a terminal boolean node reachable from the given IF children.
+
+    DFS through IF children and their non-output-ancestor children (the condition
+    chain) to find a node in ``terminal_bool_set`` that has a func_call_stack.
+    """
+    seen: Set[str] = set()
+    stack = list(if_children)
+    while stack:
+        label = stack.pop()
+        if label in seen:
+            continue
+        seen.add(label)
+        node = self[label]
+        if label in terminal_bool_set and node.func_call_stack:
+            return node
+        # Follow children that are part of the condition chain (not output ancestors)
+        for child_label in node.child_layers:
+            child = self[child_label]
+            if not child.is_output_ancestor and child_label not in seen:
+                stack.append(child_label)
+    return None
+
+
+def _find_frame_in_file(func_call_stack, target_file: str):
+    """Find the first FuncCallLocation in the stack that matches the target file."""
+    for frame in func_call_stack:
+        if frame.file == target_file:
+            return frame
+    return None
 
 
 def _fix_modules_for_internal_tensors(self) -> None:

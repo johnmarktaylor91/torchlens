@@ -171,6 +171,7 @@ def _build_graph_relationship_fields(
     fields_dict["is_terminal_bool_layer"] = False
     fields_dict["in_cond_branch"] = False
     fields_dict["cond_branch_start_children"] = []
+    fields_dict["cond_branch_then_children"] = []
 
     is_part_of_iterable_output = any(
         issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]

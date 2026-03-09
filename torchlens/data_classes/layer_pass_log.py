@@ -237,6 +237,7 @@ class LayerPassLog:
         self.atomic_bool_val = fields_dict["atomic_bool_val"]
         self.in_cond_branch = fields_dict["in_cond_branch"]
         self.cond_branch_start_children = fields_dict["cond_branch_start_children"]
+        self.cond_branch_then_children = fields_dict["cond_branch_then_children"]
 
         # Module info
         self.containing_module_origin = fields_dict["containing_module_origin"]

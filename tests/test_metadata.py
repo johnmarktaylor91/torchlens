@@ -1170,3 +1170,290 @@ def test_corrupt_creation_args(valid_mh_and_ground_truth):
                     assert mh.validate_forward_pass(ground_truth) is False
                     return
     pytest.skip("No layer with tensor creation_args found")
+
+
+# =============================================================================
+# Conditional Branch Detection (Bug #88 fix + THEN labeling)
+# =============================================================================
+
+
+class TestConditionalBranchDetection:
+    """Tests for conditional branch detection: backward-only IF flood + THEN detection."""
+
+    # --- Shared helpers ---
+
+    @staticmethod
+    def _log(model, x, save_source_context=False):
+        return log_forward_pass(model, x, save_source_context=save_source_context)
+
+    @staticmethod
+    def _cond_input():
+        """Negative input so ConditionalBranching takes the else branch."""
+        return -torch.ones(2, 3, 32, 32)
+
+    @staticmethod
+    def _pos_input():
+        """Positive input so ConditionalBranching takes the if branch."""
+        return torch.ones(2, 3, 32, 32)
+
+    # --- Core detection tests ---
+
+    def test_if_branch_detected(self):
+        """ConditionalBranching has in_cond_branch=True nodes."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._cond_input())
+        found = any(mh[label].in_cond_branch for label in mh.layer_labels)
+        assert found, "Should detect conditional branch nodes"
+
+    def test_then_branch_detected(self):
+        """ConditionalBranching with save_source_context has cond_branch_then_children.
+
+        Uses positive input so the if-body (THEN branch) actually executes.
+        """
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._pos_input(), save_source_context=True)
+        found = any(len(mh[label].cond_branch_then_children) > 0 for label in mh.layer_labels)
+        assert found, "Should detect THEN branch children with save_source_context"
+
+    def test_branch_start_has_both_if_and_then(self):
+        """Branch start has both IF and THEN children when if-body executes."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._pos_input(), save_source_context=True)
+        for label in mh.layer_labels:
+            entry = mh[label]
+            if entry.cond_branch_start_children:
+                assert len(entry.cond_branch_then_children) > 0, (
+                    f"Branch start {label} has IF children but no THEN children"
+                )
+
+    def test_if_and_then_children_disjoint(self):
+        """No overlap between IF and THEN children sets."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._pos_input(), save_source_context=True)
+        for label in mh.layer_labels:
+            entry = mh[label]
+            if_set = set(entry.cond_branch_start_children)
+            then_set = set(entry.cond_branch_then_children)
+            overlap = if_set & then_set
+            assert len(overlap) == 0, f"IF and THEN overlap at {label}: {overlap}"
+
+    def test_terminal_bool_exists(self):
+        """At least one is_terminal_bool_layer=True node."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._cond_input())
+        found = any(mh[label].is_terminal_bool_layer for label in mh.layer_labels)
+        assert found, "Should have at least one terminal bool layer"
+
+    # --- False positive tests (Bug #88) ---
+
+    def test_no_false_cond_branch_without_condition(self):
+        """Model with no conditions has zero in_cond_branch nodes."""
+        model = example_models.SimpleFF()
+        x = torch.rand(2, 3, 32, 32)
+        mh = self._log(model, x)
+        cond_nodes = [label for label in mh.layer_labels if mh[label].in_cond_branch]
+        assert len(cond_nodes) == 0, f"SimpleFF should have no cond nodes: {cond_nodes}"
+
+    def test_non_conditional_layers_not_marked(self):
+        """In ConditionalBranching, output-ancestor non-branch layers NOT marked."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._cond_input())
+        for label in mh.layer_labels:
+            entry = mh[label]
+            if entry.is_output_ancestor and not entry.cond_branch_start_children:
+                assert entry.in_cond_branch is False, (
+                    f"Output ancestor {label} falsely marked in_cond_branch"
+                )
+
+    def test_condition_chain_no_spill(self):
+        """ConditionalChainedBools doesn't spill markings to main graph."""
+        model = example_models.ConditionalChainedBools()
+        x = torch.ones(2, 3, 32, 32)
+        mh = self._log(model, x)
+        for label in mh.layer_labels:
+            entry = mh[label]
+            # Output-ancestor nodes that are NOT branch-starts should not be marked
+            if entry.is_output_ancestor and not entry.cond_branch_start_children:
+                assert entry.in_cond_branch is False, (
+                    f"Node {label} falsely marked in_cond_branch (Bug #88)"
+                )
+
+    # --- Edge/model log tests ---
+
+    def test_conditional_branch_edges_populated(self):
+        """model_log.conditional_branch_edges is non-empty."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._cond_input())
+        assert len(mh.conditional_branch_edges) > 0
+
+    def test_conditional_then_edges_populated(self):
+        """model_log.conditional_then_edges non-empty with save_source_context."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._pos_input(), save_source_context=True)
+        assert len(mh.conditional_then_edges) > 0
+
+    def test_edges_reference_valid_labels(self):
+        """All labels in edge tuples exist in model_log.layer_labels."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._pos_input(), save_source_context=True)
+        all_labels = set(mh.layer_labels)
+        for parent, child in mh.conditional_branch_edges:
+            assert parent in all_labels, f"IF edge parent {parent} not in layer_labels"
+            assert child in all_labels, f"IF edge child {child} not in layer_labels"
+        for parent, child in mh.conditional_then_edges:
+            assert parent in all_labels, f"THEN edge parent {parent} not in layer_labels"
+            assert child in all_labels, f"THEN edge child {child} not in layer_labels"
+
+    # --- Post-validation tests ---
+
+    def test_no_branch_bool_unused(self):
+        """ConditionalNoBranch: post-validation clears false IF markings."""
+        model = example_models.ConditionalNoBranch()
+        x = torch.rand(2, 3, 32, 32)
+        mh = self._log(model, x, save_source_context=True)
+        # After post-validation, if no ast.If found, IF markings cleared
+        branch_starts = [
+            label for label in mh.layer_labels if len(mh[label].cond_branch_start_children) > 0
+        ]
+        assert len(branch_starts) == 0, (
+            f"ConditionalNoBranch should have no branch starts after post-validation: {branch_starts}"
+        )
+
+    def test_always_true_has_then_branch(self):
+        """ConditionalAlwaysTrue still detects THEN branch."""
+        model = example_models.ConditionalAlwaysTrue()
+        x = torch.rand(2, 3, 32, 32)
+        mh = self._log(model, x, save_source_context=True)
+        found = any(len(mh[label].cond_branch_then_children) > 0 for label in mh.layer_labels)
+        assert found, "ConditionalAlwaysTrue should detect THEN branch"
+
+    # --- Complex scenario tests ---
+
+    def test_nested_conditions(self):
+        """ConditionalNested has conditional branching at both levels."""
+        model = example_models.ConditionalNested()
+        x = torch.rand(2, 3, 32, 32)
+        mh = self._log(model, x)
+        assert mh.model_has_conditional_branching is True
+
+    def test_multiple_branches_independent(self):
+        """ConditionalMultipleBranches has 2 distinct branch starts."""
+        model = example_models.ConditionalMultipleBranches()
+        x = torch.ones(2, 3, 32, 32)
+        mh = self._log(model, x)
+        branch_starts = [
+            label for label in mh.layer_labels if len(mh[label].cond_branch_start_children) > 0
+        ]
+        assert len(branch_starts) >= 2, (
+            f"Expected >= 2 branch starts, got {len(branch_starts)}: {branch_starts}"
+        )
+
+    def test_conditional_with_modules(self):
+        """ConditionalWithModules correctly labels module-based branches."""
+        model = example_models.ConditionalWithModules()
+        x = torch.rand(2, 5)
+        mh = self._log(model, x)
+        assert mh.model_has_conditional_branching is True
+
+    # --- Visualization integration tests ---
+
+    def test_if_label_in_visualization(self):
+        """Rendered graph contains 'IF' edge label."""
+        from torchlens import show_model_graph
+        import tempfile
+        import os
+
+        model = example_models.ConditionalBranching()
+        x = self._cond_input()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outpath = os.path.join(tmpdir, "cond_if_test")
+            show_model_graph(
+                model,
+                x,
+                save_only=True,
+                vis_opt="unrolled",
+                vis_outpath=outpath,
+                vis_fileformat="dot",
+            )
+            dot_file = outpath + ".dot"
+            if os.path.exists(dot_file):
+                with open(dot_file) as f:
+                    dot_content = f.read()
+                assert "IF" in dot_content, "Graph should contain IF edge label"
+
+    def test_then_label_in_visualization(self):
+        """Rendered graph contains 'THEN' edge label with save_source_context."""
+        import tempfile
+        import os
+
+        model = example_models.ConditionalBranching()
+        x = self._pos_input()
+        mh = log_forward_pass(model, x, save_source_context=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outpath = os.path.join(tmpdir, "cond_then_test")
+            mh.render_graph(
+                vis_opt="unrolled",
+                vis_outpath=outpath,
+                save_only=True,
+                vis_fileformat="dot",
+            )
+            dot_file = outpath + ".dot"
+            if os.path.exists(dot_file):
+                with open(dot_file) as f:
+                    dot_content = f.read()
+                assert "THEN" in dot_content, "Graph should contain THEN edge label"
+
+    # --- Rolled graph tests ---
+
+    def test_rolled_graph_conditional_edges(self):
+        """Rolled view preserves IF/THEN labels."""
+        from torchlens import show_model_graph
+        import tempfile
+        import os
+
+        model = example_models.ConditionalBranching()
+        x = self._cond_input()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outpath = os.path.join(tmpdir, "cond_rolled_test")
+            show_model_graph(
+                model,
+                x,
+                save_only=True,
+                vis_opt="rolled",
+                vis_outpath=outpath,
+                vis_fileformat="dot",
+            )
+            dot_file = outpath + ".dot"
+            if os.path.exists(dot_file):
+                with open(dot_file) as f:
+                    dot_content = f.read()
+                assert "IF" in dot_content, "Rolled graph should contain IF edge label"
+
+    def test_cond_fields_survive_deepcopy(self):
+        """Fields persist through ModelLog deepcopy cycle."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._pos_input(), save_source_context=True)
+        mh2 = copy.deepcopy(mh)
+        assert mh2.conditional_branch_edges == mh.conditional_branch_edges
+        assert mh2.conditional_then_edges == mh.conditional_then_edges
+        for label in mh.layer_labels:
+            assert mh2[label].cond_branch_start_children == mh[label].cond_branch_start_children
+            assert mh2[label].cond_branch_then_children == mh[label].cond_branch_then_children
+
+    # --- Fallback tests (without source context) ---
+
+    def test_if_detection_works_without_source_context(self):
+        """Bug #88 fix works without save_source_context."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._cond_input(), save_source_context=False)
+        found = any(mh[label].in_cond_branch for label in mh.layer_labels)
+        assert found, "IF detection should work without source context"
+
+    def test_then_empty_without_source_context(self):
+        """cond_branch_then_children stays empty when save_source_context=False."""
+        model = example_models.ConditionalBranching()
+        mh = self._log(model, self._cond_input(), save_source_context=False)
+        for label in mh.layer_labels:
+            assert len(mh[label].cond_branch_then_children) == 0, (
+                f"THEN children should be empty without source context: {label}"
+            )

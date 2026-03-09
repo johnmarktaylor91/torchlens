@@ -208,6 +208,7 @@ class ModelLog:
         self.internally_terminated_layers: List[str] = []
         self.internally_terminated_bool_layers: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []
+        self.conditional_then_edges: List[Tuple[str, str]] = []
         self.layers_with_saved_activations: List[str] = []
         self.orphan_layers: List[str] = []
         self.unlogged_layers: List[str] = []

@@ -159,6 +159,11 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
         for edge in self.conditional_branch_edges
         if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
     ]
+    self.conditional_then_edges = [
+        edge
+        for edge in self.conditional_then_edges
+        if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
+    ]
 
     # Single-pass filter on dict fields:
     # layers_computed_with_params: param_barcode -> [layer_labels]
@@ -206,6 +211,9 @@ def _remove_log_entry_references(self, layer_to_remove: str) -> None:
 
     self.conditional_branch_edges = [
         edge for edge in self.conditional_branch_edges if layer_to_remove not in edge
+    ]
+    self.conditional_then_edges = [
+        edge for edge in self.conditional_then_edges if layer_to_remove not in edge
     ]
 
     # Now any nested fields.
