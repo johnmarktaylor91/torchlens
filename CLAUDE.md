@@ -2,7 +2,10 @@
 
 ## Project Overview
 
-TorchLens is a Python package for extracting activations from PyTorch models. It provides functionality for extracting model activations, visualizing computational graphs, and extracting exhaustive metadata about models.
+TorchLens is a Python package for extracting activations from PyTorch models. It permanently
+wraps all PyTorch functions at import time with toggle-gated wrappers, runs forward passes
+with the toggle enabled, and logs every operation into ModelLog/LayerLog/LayerPassLog objects.
+~20,800 lines core code (36 modules across 7 subpackages), ~1,004 tests across 16 test files.
 
 ## Commit Convention
 
@@ -38,12 +41,31 @@ If there is no issue, omit the issue reference — but prefer having an issue fo
 
 ## Testing
 
-- Run tests: `pytest tests/`
-- Linting: `black --check .`
+- Run all tests: `pytest tests/`
+- Smoke tests (~6s): `pytest tests/ -m smoke`
+- Skip slow tests: `pytest tests/ -m "not slow"`
+- Linting: `ruff format` + `ruff check --fix`
 
 ## Project Structure
 
-- `torchlens/` — main package source
-- `tests/` — test suite
+- `torchlens/` — main package source ([see subpackage docs](torchlens/CLAUDE.md))
+- `tests/` — test suite ([see test docs](tests/CLAUDE.md))
+- `scripts/` — development utilities ([see scripts docs](scripts/CLAUDE.md))
+- `.github/` — CI/CD workflows ([see CI docs](.github/CLAUDE.md))
 - `images/` — documentation images
-- `local_jmt/` — local development scripts (not packaged)
+
+## Architecture Quick Reference
+
+```
+import torchlens  ->  decorate_all_once() wraps ~2000 torch functions (ONE TIME)
+
+log_forward_pass(model, input)
+  1. Prepare model (decoration/model_prep.py)
+  2. Run forward pass with logging (capture/)
+  3. 18-step postprocess pipeline (postprocess/)
+  4. Return ModelLog with all data
+```
+
+Key packages: `capture/` (7 files), `data_classes/` (10 files), `decoration/` (2 files),
+`postprocess/` (6 files), `validation/` (3 files), `visualization/` (2 files: rendering.py + elk_layout.py),
+`utils/` (7 files).

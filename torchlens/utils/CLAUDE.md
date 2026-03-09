@@ -57,6 +57,16 @@ Used internally to avoid triggering decorated wrappers during logging.
 - `make_short_barcode_from_input(args)` — Hashes argument lists for tensor identity tracking
   and operation equivalence fingerprinting.
 
+## Known Bugs
+- **BFLOAT16-TOL**: `MAX_FLOATING_POINT_TOLERANCE = 3e-6` is 2,600x too tight for bfloat16
+  (epsilon ~7.8e-3). No dtype-specific tolerance adjustment in `tensor_nanequal()`.
+- **QUANTIZED-CRASH**: `tensor_nanequal()` calls `.isinf()` which raises AttributeError on
+  quantized tensors.
+- **RNG-MULTI-GPU**: `rng.py:70` only captures RNG state for CUDA device 0. Multi-GPU
+  models get non-deterministic validation replays.
+- **HASH-COLLISION**: `make_short_barcode_from_input` uses Python `hash()` + base64
+  truncation. ~0.3-0.5% collision risk at 1K params. Could cause false same-layer grouping.
+
 ## Gotchas
 - `get_tensor_memory_amount()` MUST use `pause_logging()` — `nelement()` and
   `element_size()` are decorated and would trigger infinite recursive logging.

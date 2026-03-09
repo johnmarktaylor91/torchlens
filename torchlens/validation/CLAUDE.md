@@ -9,9 +9,9 @@ parent tensors and checking outputs match. Also provides 18 metadata invariant c
 
 | File | ~Lines | Purpose |
 |------|--------|---------|
-| `core.py` | 607 | BFS orchestration, forward replay, perturbation, arg preparation |
-| `exemptions.py` | 337 | 4 data-driven exemption registries + posthoc checks |
-| `invariants.py` | 1294 | 18 metadata invariant categories (A-R) |
+| `core.py` | 808 | BFS orchestration, forward replay, perturbation, arg preparation |
+| `exemptions.py` | 482 | 4 data-driven exemption registries + posthoc checks (16 exemption conditions) |
+| `invariants.py` | 1505 | 18 metadata invariant categories (A-R), Phase 1 structural + Phase 2 semantic |
 
 ## Validation Flow (`validate_saved_activations`)
 
@@ -21,8 +21,8 @@ parent tensors and checking outputs match. Also provides 18 metadata invariant c
 3. Verify ground truth matches logged output
 4. Backward BFS from outputs — for each layer:
    a. Verify parent layers match saved args (arg position check)
-   b. Replay function with saved parents → check output matches
-   c. Perturb each parent → verify output changes
+   b. Replay function with saved parents -> check output matches
+   c. Perturb each parent -> verify output changes
 5. Return True if all checks pass
 ```
 
@@ -51,12 +51,12 @@ small tensor coincidence, all-inf/NaN, special-value args (all-zeros/all-ones).
 
 **Phase 1 (A-L) — Structural:**
 - A: model_log self-consistency (counts, timing)
-- B: special layer lists (input/output/buffer flag ↔ list bidirectionality)
+- B: special layer lists (input/output/buffer flag <-> list bidirectionality)
 - C: graph topology (parent-child bidirectionality)
 - D: layer_pass_log fields (shape/dtype, function callable)
 - E: recurrence invariants
 - F: branching invariants
-- G: LayerPassLog ↔ LayerLog cross-references
+- G: LayerPassLog <-> LayerLog cross-references
 - H: module-layer containment
 - I: module hierarchy (address tree, pass keys)
 - J: param cross-references
@@ -74,8 +74,17 @@ small tensor coincidence, all-inf/NaN, special-value args (all-zeros/all-ones).
 Entry: `check_metadata_invariants(model_log)` or `model_log.check_metadata_invariants()`.
 Raises `MetadataInvariantError(check_name, message)` on first failure.
 
-## Known Limitations
-- **Bug #151**: Replay crash → silently passes. `_execute_func_with_restored_state` catches
+## Known Bugs & Limitations
+- **BFLOAT16-TOL**: `MAX_FLOATING_POINT_TOLERANCE = 3e-6` is 2,600x too tight for bfloat16
+  (epsilon ~7.8e-3). Validation always fails for bfloat16 models with `allow_tolerance=True`.
+- **QUANTIZED-CRASH**: `tensor_nanequal()` calls `.isinf()` which raises AttributeError on
+  quantized tensors. Validation crashes for quantized models.
+- **VALIDATE-STATE-RESTORE**: `validate_forward_pass` (user_funcs.py:535-552) saves model
+  state_dict but `load_state_dict()` only runs on success path. If forward pass raises,
+  model params remain mutated. Needs try/finally.
+- **INVARIANT-COND-THEN**: No invariant check for `cond_branch_then_children` <->
+  `conditional_then_edges` consistency. No check that same-layer ops agree on `in_cond_branch`.
+- **Bug #151**: Replay crash -> silently passes. `_execute_func_with_restored_state` catches
   ANY exception and returns None; caller treats None as valid.
 - **Bug #150**: Crashes on unsaved parents when `layers_to_save` is selective.
 - **Autocast**: Context not captured during logging — replay runs outside autocast,

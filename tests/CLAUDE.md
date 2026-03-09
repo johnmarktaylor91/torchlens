@@ -1,28 +1,29 @@
 # tests/ — Test Suite
 
 ## Overview
-~951 tests across 15 test files. Uses pytest with deterministic torch seeding.
+~1,004 tests across 16 test files + 2 support files. Uses pytest with deterministic torch seeding.
 
 ## Test Files
 
 | File | Tests | What It Covers |
 |------|-------|----------------|
 | `conftest.py` | — | Fixtures, deterministic seeding, output directory setup, coverage reporting |
-| `example_models.py` | — | 250 toy model class definitions for controlled testing |
+| `example_models.py` | — | ~5,400 lines, model definitions for controlled testing |
 | `test_toy_models.py` | 258 | Validation + visualization for toy models (14 sections by category) |
 | `test_real_world_models.py` | 185 | Real-world architectures (20 fast, 165 `@pytest.mark.slow`) |
-| `test_metadata.py` | 107 | Field-level coverage for ModelLog and LayerPassLog |
-| `test_module_log.py` | 45 | ModuleLog/ModulePassLog/ModuleAccessor |
+| `test_metadata.py` | 129 | Field-level metadata tests, conditional branch detection |
 | `test_param_log.py` | 70 | ParamLog/ParamAccessor |
 | `test_decoration.py` | 61 | Permanent decoration architecture (toggle, crawl, JIT, signals) |
 | `test_validation.py` | 59 | Validation subpackage (registries, perturbation, invariants A-R) |
-| `test_large_graphs.py` | 51 | Large graph rendering, RandomGraphModel, ELK layout engine |
+| `test_module_log.py` | 45 | ModuleLog/ModulePassLog/ModuleAccessor |
+| `test_large_graphs.py` | 43 | Large graph rendering, RandomGraphModel, ELK layout engine |
+| `test_internals.py` | 41 | Internal implementation details |
+| `test_func_config.py` | 34 | func_config / salient_args metadata |
 | `test_layer_log.py` | 34 | LayerLog aggregate class |
-| `test_internals.py` | 36 | Internal implementation details |
 | `test_save_new_activations.py` | 21 | `save_new_activations()` re-logging |
-| `test_profiling.py` | 1 | Performance profiling + decoration overhead benchmarks |
 | `test_output_aesthetics.py` | 12 | Aesthetic report + vis PDFs for human review |
 | `test_gc.py` | 10 | GC correctness, memory leak detection, param ref release |
+| `test_profiling.py` | 1 | Performance profiling + decoration overhead benchmarks |
 | `test_arg_positions.py` | 1 | ArgSpec lookup table coverage (runs last) |
 
 ## Running Tests
