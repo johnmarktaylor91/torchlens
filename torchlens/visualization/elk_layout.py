@@ -40,17 +40,37 @@ _DEFAULT_NODE_HEIGHT = 60  # points — fallback when label isn't available
 
 # Inline Node.js script that reads ELK JSON from stdin, runs layout, writes to stdout.
 _ELK_LAYOUT_SCRIPT = r"""
+const { Worker } = require('worker_threads');
+
+// Run ELK layout in a worker thread with a large stack via resourceLimits.
+// resourceLimits.stackSizeMb is far more reliable than the --stack-size V8
+// flag for preventing "Maximum call stack size exceeded" in deeply recursive
+// ELK layout on large graphs (100k+ nodes).
+const stackMb = parseInt(process.env._TL_STACK_MB || '64', 10);
+
+const workerCode = `
+const { parentPort, workerData } = require('worker_threads');
 const ELK = require('elkjs');
 const elk = new ELK();
+const graph = JSON.parse(workerData);
+elk.layout(graph).then((result) => {
+    parentPort.postMessage(JSON.stringify(result));
+}).catch((err) => { throw err; });
+`;
 
 let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {
-    const graph = JSON.parse(input);
-    elk.layout(graph).then((result) => {
-        process.stdout.write(JSON.stringify(result));
-    }).catch((err) => {
+    const worker = new Worker(workerCode, {
+        eval: true,
+        workerData: input,
+        resourceLimits: { stackSizeMb: stackMb },
+    });
+    worker.on('message', (result) => {
+        process.stdout.write(result);
+    });
+    worker.on('error', (err) => {
         process.stderr.write(err.toString());
         process.exit(1);
     });
@@ -387,14 +407,18 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
     graph_json = json.dumps(elk_graph)
     graph_kb = len(graph_json) // 1024
     heap_mb = max(16384, graph_kb * 48)  # ~48x JSON size, 16GB floor
-    stack_kb = max(4194304, graph_kb * 64)  # ~64x JSON size, 4GB floor
+    # Worker thread stack via resourceLimits.stackSizeMb (MB).
+    # Much more reliable than --stack-size for deeply recursive ELK layout.
+    stack_mb = max(64, graph_kb // 8)  # ~128 bytes/KB of JSON, 64MB floor
+
+    env = _node_env()
+    env["_TL_STACK_MB"] = str(stack_mb)
 
     try:
         result = subprocess.run(
             [
                 "node",
                 f"--max-old-space-size={heap_mb}",
-                f"--stack-size={stack_kb}",
                 "-e",
                 _ELK_LAYOUT_SCRIPT,
             ],
@@ -402,7 +426,7 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
             capture_output=True,
             text=True,
             timeout=timeout,
-            env=_node_env(),
+            env=env,
             preexec_fn=_unlimit_stack,
         )
     except FileNotFoundError:
