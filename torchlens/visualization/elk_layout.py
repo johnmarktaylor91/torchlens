@@ -747,6 +747,164 @@ def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
     _inject(elk_graph)
 
 
+# ── Python topological layout for very large graphs ──
+#
+# ELK's stress algorithm allocates TWO O(n²) distance matrices (n² × 16 bytes).
+# At 150k nodes that's 360 GB — impossible on any workstation.  At 1M nodes
+# it's 16 TB.  The layered algorithm (Sugiyama) also scales poorly for wide
+# layers.
+#
+# For graphs above _ELK_STRESS_LIMIT we skip ELK entirely and compute a
+# topological rank layout in Python.  Kahn's algorithm gives O(n+m) time
+# and memory, and produces a clean DAG layout with directional flow (inputs
+# at bottom, outputs at top).  Module bounding boxes are computed from the
+# positions of nodes assigned to each module.
+
+_ELK_STRESS_LIMIT = 100_000  # nodes — above this, ELK stress cannot allocate
+
+
+def _compute_topological_layout(
+    node_data: dict,
+    all_edges: list,
+    elk_id_sizes: dict,
+    module_direct_nodes: dict,
+    module_child_map: dict,
+) -> tuple:
+    """Compute node positions via topological rank layout.
+
+    Returns ``(positions, compound_bboxes, max_y)`` with the same interface
+    as the ELK path so Phase 3 can use either interchangeably.
+
+    Args:
+        node_data: ``{dot_name: {"attrs": {...}, "elk_id": label}}``
+        all_edges: List of edge dicts with ``tail_name``, ``head_name``.
+        elk_id_sizes: ``{elk_id: (width, height)}`` — label-based size estimates.
+        module_direct_nodes: ``{module_key: [dot_names]}``
+        module_child_map: ``{module_key: {child_module_keys}}``
+
+    Returns:
+        (positions, compound_bboxes, max_y) — same types as ELK path.
+    """
+    from collections import defaultdict, deque
+
+    # Map elk_id -> dot_name for reverse lookup.
+    elk_to_dot = {}
+    for dot_name, nd in node_data.items():
+        elk_to_dot[nd["elk_id"]] = dot_name
+
+    all_elk_ids = set(nd["elk_id"] for nd in node_data.values())
+
+    # Build adjacency from DOT-level edges.
+    children_of = defaultdict(list)
+    in_degree: dict = defaultdict(int)
+    for e in all_edges:
+        src = e.get("tail_name") or e["tail_name"]
+        tgt = e.get("head_name") or e["head_name"]
+        # Map dot_name -> elk_id
+        src_eid = node_data.get(src, {}).get("elk_id")
+        tgt_eid = node_data.get(tgt, {}).get("elk_id")
+        if src_eid in all_elk_ids and tgt_eid in all_elk_ids:
+            children_of[src_eid].append(tgt_eid)
+            in_degree[tgt_eid] += 1
+
+    # Kahn's algorithm for topological depth assignment.
+    depth: dict = {}
+    queue: deque = deque()
+    for nid in all_elk_ids:
+        if in_degree[nid] == 0:
+            depth[nid] = 0
+            queue.append(nid)
+
+    while queue:
+        nid = queue.popleft()
+        for child in children_of[nid]:
+            new_depth = depth[nid] + 1
+            if child not in depth or new_depth > depth[child]:
+                depth[child] = new_depth
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                queue.append(child)
+
+    # Unreached nodes (cycles or disconnected) get depth 0.
+    for nid in all_elk_ids:
+        if nid not in depth:
+            depth[nid] = 0
+
+    # Group by depth rank.
+    ranks = defaultdict(list)
+    for nid, d in depth.items():
+        ranks[d].append(nid)
+
+    # Sort nodes within each rank by module membership for visual grouping.
+    # Build elk_id -> module_key lookup.
+    elk_id_module = {}
+    for mod_key, dot_names in module_direct_nodes.items():
+        for dn in dot_names:
+            nd = node_data.get(dn)
+            if nd:
+                elk_id_module[nd["elk_id"]] = mod_key
+
+    for d in ranks:
+        ranks[d].sort(key=lambda nid: elk_id_module.get(nid, ""))
+
+    # Compute positions.  Y = depth rank, X = position within rank.
+    spacing_y = 120  # points between ranks
+    spacing_x = 30  # points between node edges within a rank
+    positions = {}
+
+    for d, nodes in sorted(ranks.items()):
+        x_cursor = 0.0
+        for nid in nodes:
+            w, h = elk_id_sizes.get(nid, (_DEFAULT_NODE_WIDTH, _DEFAULT_NODE_HEIGHT))
+            cx = x_cursor + w / 2
+            cy = d * spacing_y + h / 2
+            positions[nid] = (cx, cy)
+            x_cursor += w + spacing_x
+
+    max_y = max((y for _, y in positions.values()), default=0) + _DEFAULT_NODE_HEIGHT
+
+    # Compute module bounding boxes from node positions.
+    # Collect all elk_ids in each module (including nested children).
+    def _collect_module_elk_ids(mod_key):
+        ids = set()
+        for dn in module_direct_nodes.get(mod_key, []):
+            nd = node_data.get(dn)
+            if nd and nd["elk_id"] in positions:
+                ids.add(nd["elk_id"])
+        for child_mod in module_child_map.get(mod_key, set()):
+            ids.update(_collect_module_elk_ids(child_mod))
+        return ids
+
+    compound_bboxes = {}
+    padding = 60  # points around contained nodes
+
+    all_mod_keys = set(module_direct_nodes.keys()) | set(module_child_map.keys())
+    for mod_key in all_mod_keys:
+        elk_ids = _collect_module_elk_ids(mod_key)
+        if not elk_ids:
+            continue
+        xs = []
+        ys = []
+        for eid in elk_ids:
+            cx, cy = positions[eid]
+            w, h = elk_id_sizes.get(eid, (_DEFAULT_NODE_WIDTH, _DEFAULT_NODE_HEIGHT))
+            xs.extend([cx - w / 2, cx + w / 2])
+            ys.extend([cy - h / 2, cy + h / 2])
+        min_x, max_x_val = min(xs) - padding, max(xs) + padding
+        min_y, max_y_val = min(ys) - padding, max(ys) + padding
+        mod_addr = mod_key.split(":")[0] if ":" in mod_key else mod_key
+        group_id = f"group_{mod_addr}"
+        # ELK bbox format: (x, y, width, height) in y-down coords
+        compound_bboxes[group_id] = (
+            min_x,
+            min_y,
+            max_x_val - min_x,
+            max_y_val - min_y,
+        )
+
+    return positions, compound_bboxes, max_y
+
+
 def _estimate_node_size(label: str) -> tuple:
     """Estimate graphviz node dimensions in points from an HTML label.
 
@@ -1077,81 +1235,82 @@ def render_elk_direct(
 
             all_edges.append(edge)
 
-    # ── Phase 2: ELK layout ──
+    # ── Phase 2: Layout ──
+    #
+    # ELK's stress algorithm allocates TWO O(n²) distance matrices totalling
+    # n² × 16 bytes.  At 100k nodes that's 160 GB — at 1M nodes, 16 TB.
+    # For graphs above _ELK_STRESS_LIMIT we bypass ELK entirely and compute
+    # a topological rank layout in Python (O(n+m) time and memory).
 
-    # Build per-node size estimates from labels, so ELK spaces correctly.
+    # Build per-node size estimates from labels (used by both paths).
     elk_id_sizes = {}
     for dot_name, nd in node_data.items():
         elk_id = nd["elk_id"]
         label = nd["attrs"].get("label", "")
         elk_id_sizes[elk_id] = _estimate_node_size(label)
 
-    elk_graph = build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers)
-
-    # Override ELK node sizes with label-based estimates.
-    def _patch_sizes(elk_node):
-        for ch in elk_node.get("children", []):
-            if ch["id"].startswith("group_"):
-                _patch_sizes(ch)
-            elif ch["id"] in elk_id_sizes:
-                w, h = elk_id_sizes[ch["id"]]
-                ch["width"] = w
-                ch["height"] = h
-
-    _patch_sizes(elk_graph)
-
-    # Scale timeout with graph size: ~15ms per node, minimum 120s.
-    # Empirical: 5k→10s, 25k→114s, scaling ~O(n^1.4).
     num_elk_nodes = len(node_data)
 
-    # The layered algorithm (Sugiyama) uses O(n^2) memory for crossing
-    # minimization — at ~100k+ nodes it triggers std::bad_alloc in elkjs.
-    # Switch to stress-majorization which is O(n) memory, seeded with
-    # topological positions so the layout preserves directional flow.
-    if num_elk_nodes > 150000:
-        elk_graph["layoutOptions"]["elk.algorithm"] = "stress"
-        _seed_stress_positions(elk_graph, all_edges)
-
-    elk_timeout = max(_ELK_TIMEOUT, int(num_elk_nodes * 0.015))
-
-    # If ELK layout fails (OOM, timeout, etc.), fall back to generating DOT
-    # without positions and rendering with sfdp.  This avoids the catastrophic
-    # graphviz.Digraph construction path in rendering.py which explodes on
-    # very large graphs (1M+ nodes) due to nested subgraph body-list copies.
-    elk_failed = False
-    try:
-        positioned = run_elk_layout(elk_graph, timeout=elk_timeout)
-    except RuntimeError as e:
-        warnings.warn(
-            f"ELK layout failed ({e}), generating DOT without positions and rendering with sfdp."
+    if num_elk_nodes > _ELK_STRESS_LIMIT:
+        # ── Python topological layout (O(n+m)) ──
+        positions, compound_bboxes, max_y = _compute_topological_layout(
+            node_data, all_edges, elk_id_sizes, module_direct_nodes, module_child_map
         )
-        elk_failed = True
+    else:
+        # ── ELK layout (Node.js subprocess) ──
+        elk_graph = build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers)
 
-    # Collect leaf node centers and compound node bounding boxes from ELK output.
-    positions = {}  # leaf_id -> (center_x, center_y) in ELK coords
-    compound_bboxes = {}  # "group_<mod>" -> (x, y, w, h) in ELK coords (absolute)
-    max_y = 0
-
-    if not elk_failed:
-
-        def _collect_pos(elk_node, ox=0, oy=0):
+        def _patch_sizes(elk_node):
             for ch in elk_node.get("children", []):
-                ax = ox + ch.get("x", 0)
-                ay = oy + ch.get("y", 0)
                 if ch["id"].startswith("group_"):
-                    w = ch.get("width", 0)
-                    h = ch.get("height", 0)
-                    compound_bboxes[ch["id"]] = (ax, ay, w, h)
-                    _collect_pos(ch, ax, ay)
-                else:
-                    w = ch.get("width", _DEFAULT_NODE_WIDTH)
-                    h = ch.get("height", _DEFAULT_NODE_HEIGHT)
-                    positions[ch["id"]] = (ax + w / 2, ay + h / 2)
+                    _patch_sizes(ch)
+                elif ch["id"] in elk_id_sizes:
+                    w, h = elk_id_sizes[ch["id"]]
+                    ch["width"] = w
+                    ch["height"] = h
 
-        _collect_pos(positioned)
-        # Use the root node's full height as the y-flip reference.
-        root_h = positioned.get("height", 0)
-        max_y = max(root_h, max((y for _, y in positions.values()), default=0))
+        _patch_sizes(elk_graph)
+
+        elk_timeout = max(_ELK_TIMEOUT, int(num_elk_nodes * 0.015))
+
+        try:
+            positioned = run_elk_layout(elk_graph, timeout=elk_timeout)
+        except RuntimeError as e:
+            warnings.warn(f"ELK layout failed ({e}), falling back to Python topological layout.")
+            positioned = None
+
+        # Collect positions from ELK output, or fall back to Python layout.
+        positions = {}
+        compound_bboxes = {}
+        max_y = 0
+
+        if positioned is None:
+            positions, compound_bboxes, max_y = _compute_topological_layout(
+                node_data,
+                all_edges,
+                elk_id_sizes,
+                module_direct_nodes,
+                module_child_map,
+            )
+        else:
+
+            def _collect_pos(elk_node, ox=0, oy=0):
+                for ch in elk_node.get("children", []):
+                    ax = ox + ch.get("x", 0)
+                    ay = oy + ch.get("y", 0)
+                    if ch["id"].startswith("group_"):
+                        w = ch.get("width", 0)
+                        h = ch.get("height", 0)
+                        compound_bboxes[ch["id"]] = (ax, ay, w, h)
+                        _collect_pos(ch, ax, ay)
+                    else:
+                        w = ch.get("width", _DEFAULT_NODE_WIDTH)
+                        h = ch.get("height", _DEFAULT_NODE_HEIGHT)
+                        positions[ch["id"]] = (ax + w / 2, ay + h / 2)
+
+            _collect_pos(positioned)
+            root_h = positioned.get("height", 0)
+            max_y = max(root_h, max((y for _, y in positions.values()), default=0))
 
     # ── Phase 3: Generate DOT with clusters and positions ──
 
@@ -1280,9 +1439,10 @@ def render_elk_direct(
     lines.append("}")
     dot_source = "\n".join(lines)
 
-    # ── Phase 4: Render ──
-    # When ELK succeeded, render with neato -n (pre-positioned layout).
-    # When ELK failed, render with sfdp (spring-embedder, computes own layout).
+    # ── Phase 4: Render with neato -n ──
+    #
+    # Both ELK and the Python topological layout produce positions, so we
+    # always use neato -n (pre-positioned layout that respects clusters).
 
     if num_elk_nodes > 25000 and vis_fileformat != "svg":
         warnings.warn(
@@ -1297,39 +1457,23 @@ def render_elk_direct(
 
     rendered_path = f"{vis_outpath}.{vis_fileformat}"
     num_nodes = len(node_data)
-
-    if elk_failed:
-        # sfdp computes its own layout — no positions needed in DOT.
-        # Use overlap removal for readability.
-        cmd = [
-            "sfdp",
-            "-Goverlap=prism",
-            f"-T{vis_fileformat}",
-            "-o",
-            rendered_path,
-            source_path,
-        ]
-    else:
-        # neato -n uses ELK-computed positions.
-        # Spline routing is O(n^2) — use straight lines for large graphs.
-        spline_mode = "true" if num_nodes < 1000 else "line"
-        cmd = [
-            "neato",
-            "-n",
-            f"-Gsplines={spline_mode}",
-            f"-T{vis_fileformat}",
-            "-o",
-            rendered_path,
-            source_path,
-        ]
-
+    # Spline routing is O(n^2) — use straight lines for large graphs.
+    spline_mode = "true" if num_nodes < 1000 else "line"
+    cmd = [
+        "neato",
+        "-n",
+        f"-Gsplines={spline_mode}",
+        f"-T{vis_fileformat}",
+        "-o",
+        rendered_path,
+        source_path,
+    ]
     render_timeout = max(_SFDP_TIMEOUT, int(num_nodes * 0.01))
     try:
         result = subprocess.run(cmd, timeout=render_timeout, capture_output=True, text=True)
         if result.returncode != 0:
-            engine_name = "sfdp" if elk_failed else "neato"
             raise RuntimeError(
-                f"{engine_name} rendering failed (exit {result.returncode}):\n{result.stderr}"
+                f"neato rendering failed (exit {result.returncode}):\n{result.stderr}"
             )
         if not vis_save_only:
             import graphviz
