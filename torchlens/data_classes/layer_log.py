@@ -139,6 +139,7 @@ class LayerLog:
         self.modules_exited = first_pass.modules_exited
         self.module_passes_exited = first_pass.module_passes_exited
         self.cond_branch_start_children = first_pass.cond_branch_start_children
+        self.cond_branch_then_children = first_pass.cond_branch_then_children
         self.has_input_ancestor = first_pass.has_input_ancestor
         self.input_output_address = first_pass.input_output_address
         self.buffer_pass = first_pass.buffer_pass

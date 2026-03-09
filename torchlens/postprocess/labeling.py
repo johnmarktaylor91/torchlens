@@ -224,6 +224,7 @@ _LIST_FIELDS_TO_RENAME = [
     "internally_initialized_parents",
     "internally_initialized_ancestors",
     "cond_branch_start_children",
+    "cond_branch_then_children",
     "equivalent_operations",
     "same_layer_operations",
 ]
@@ -557,6 +558,12 @@ def _rename_model_history_layer_names(self) -> None:
             self._raw_to_final_layer_labels[parent],
         )
         self.conditional_branch_edges[t] = (new_child, new_parent)
+
+    for t, (parent, child) in enumerate(self.conditional_then_edges):
+        self.conditional_then_edges[t] = (
+            self._raw_to_final_layer_labels[parent],
+            self._raw_to_final_layer_labels[child],
+        )
 
     mla = self._module_build_data["module_layer_argnames"]
     for module_pass, arglist in mla.items():

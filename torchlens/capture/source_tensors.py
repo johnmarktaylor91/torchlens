@@ -233,6 +233,7 @@ def log_source_tensor_exhaustive(
         "atomic_bool_val": None,
         "in_cond_branch": False,
         "cond_branch_start_children": [],
+        "cond_branch_then_children": [],
         # Module info:
         "containing_module_origin": None,
         "containing_modules_origin_nested": [],

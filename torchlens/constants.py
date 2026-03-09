@@ -48,6 +48,7 @@ MODEL_LOG_FIELD_ORDER = [
     "save_source_context",
     "save_rng_states",
     "detect_loops",
+    "verbose",
     "has_saved_gradients",
     "activation_postfunc",
     "mark_input_output_distances",
@@ -84,6 +85,7 @@ MODEL_LOG_FIELD_ORDER = [
     "internally_terminated_layers",
     "internally_terminated_bool_layers",
     "conditional_branch_edges",
+    "conditional_then_edges",
     "layers_computed_with_params",
     "equivalent_operations",
     "layers_with_saved_activations",
@@ -226,6 +228,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "atomic_bool_val",
     "in_cond_branch",
     "cond_branch_start_children",
+    "cond_branch_then_children",
     # Module info
     "containing_module_origin",
     "containing_modules_origin_nested",

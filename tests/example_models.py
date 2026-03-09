@@ -496,6 +496,116 @@ class ConditionalBranching(nn.Module):
         return x
 
 
+class ConditionalAlwaysTrue(nn.Module):
+    """Condition always True — only THEN branch executes."""
+
+    @staticmethod
+    def forward(x):
+        if torch.mean(torch.abs(x)) >= 0:  # always true (abs >= 0)
+            x = torch.sin(x)
+            x = x + 1
+        else:
+            x = torch.cos(x)
+        return x
+
+
+class ConditionalAlwaysFalse(nn.Module):
+    """Condition always False — only ELSE branch executes."""
+
+    @staticmethod
+    def forward(x):
+        if torch.mean(torch.abs(x)) < 0:  # always false (abs >= 0)
+            x = torch.sin(x)
+        else:
+            x = torch.cos(x)
+            x = x + 1
+        return x
+
+
+class ConditionalNested(nn.Module):
+    """Nested if-then (condition inside condition)."""
+
+    @staticmethod
+    def forward(x):
+        if torch.mean(x) > -1000:
+            x = x + 1
+            if torch.sum(x) > -1000:
+                x = x * 2
+            else:
+                x = x * 3
+        else:
+            x = x - 1
+        return x
+
+
+class ConditionalChainedBools(nn.Module):
+    """Two boolean conditions checked before branching."""
+
+    @staticmethod
+    def forward(x):
+        cond1 = torch.mean(x) > 0
+        cond2 = torch.sum(x) > 0
+        if cond1 and cond2:
+            x = torch.sin(x)
+        else:
+            x = torch.cos(x)
+        return x
+
+
+class ConditionalNoBranch(nn.Module):
+    """Bool computed but never used for branching (no THEN -> should clear IF)."""
+
+    @staticmethod
+    def forward(x):
+        _ = torch.mean(x) > 0  # computed but not used for control flow
+        x = torch.sin(x) + 1
+        return x
+
+
+class ConditionalMultipleBranches(nn.Module):
+    """Two separate if-then blocks in sequence."""
+
+    @staticmethod
+    def forward(x):
+        if torch.mean(x) > 0:
+            x = torch.sin(x)
+        else:
+            x = torch.cos(x)
+        if torch.sum(x) > 0:
+            x = x + 1
+        else:
+            x = x - 1
+        return x
+
+
+class ConditionalWithModules(nn.Module):
+    """Branches using nn.Linear layers."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(5, 5, bias=False)
+        self.linear2 = nn.Linear(5, 5, bias=False)
+
+    def forward(self, x):
+        if torch.mean(x) > 0:
+            x = self.linear1(x)
+        else:
+            x = self.linear2(x)
+        return x
+
+
+class ConditionalIdentity(nn.Module):
+    """Condition but both branches do same thing (still valid IF/THEN)."""
+
+    @staticmethod
+    def forward(x):
+        if torch.mean(x) > 0:
+            x = x + 1
+        else:
+            x = x + 1
+        return x
+
+
 class RepeatedModule(nn.Module):
     def __init__(self):
         super().__init__()

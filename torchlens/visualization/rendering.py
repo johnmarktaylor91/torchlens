@@ -967,12 +967,19 @@ def _add_edges_for_node(
             "labelfontsize": "8",
         }
 
-        # Mark with "if" in the case edge starts a cond branch
+        # Mark with "IF" in the case edge starts a cond branch
         cond_children = parent_node.cond_branch_start_children
         if vis_opt == "rolled":
             cond_children = [label.split(":")[0] for label in cond_children]
         if (child_layer_label in cond_children) and (not child_is_collapsed_module):
             edge_dict["label"] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+
+        # Mark with "THEN" for THEN branch children
+        then_children = parent_node.cond_branch_then_children
+        if vis_opt == "rolled":
+            then_children = [label.split(":")[0] for label in then_children]
+        if (child_layer_label in then_children) and (not child_is_collapsed_module):
+            edge_dict["label"] = '<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>'
 
         # Label the arguments to the next node if multiple inputs
         if not child_is_collapsed_module:
