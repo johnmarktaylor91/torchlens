@@ -1,6 +1,35 @@
 # CHANGELOG
 
 
+## v0.20.4 (2026-03-09)
+
+### Bug Fixes
+
+- **postprocess**: Backward-only flood in conditional branch detection + THEN labeling
+  ([#88](https://github.com/johnmarktaylor91/torchlens/pull/88),
+  [`d737828`](https://github.com/johnmarktaylor91/torchlens/commit/d7378281a4be5e56602902cd4cf1aa555b391d44))
+
+Bug #88: _mark_conditional_branches flooded bidirectionally (parents + children), causing
+  non-conditional nodes' children to be falsely marked as in_cond_branch. Fix restricts flooding to
+  parent_layers only.
+
+Additionally adds THEN branch detection via AST analysis when save_source_context=True, with IF/THEN
+  edge labels in visualization. Includes 8 new test models, 22 new tests, and fixes missing
+  'verbose' in MODEL_LOG_FIELD_ORDER.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Use Worker thread for ELK layout to fix stack overflow on large graphs
+  ([`3fe6a84`](https://github.com/johnmarktaylor91/torchlens/commit/3fe6a84c3d9d8a5856dfadcf451ef85700a2385c))
+
+V8's --stack-size flag silently caps at values well below what's requested, causing "Maximum call
+  stack size exceeded" on 1M+ node graphs. Switch to Node.js Worker threads with
+  resourceLimits.stackSizeMb, which reliably delivers the requested stack size at the V8 isolate
+  level.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.20.3 (2026-03-08)
 
 ### Bug Fixes
