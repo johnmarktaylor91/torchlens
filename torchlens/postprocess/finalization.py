@@ -46,12 +46,14 @@ def _undecorate_all_saved_tensors(self) -> None:
         if layer_entry.activation is not None:
             tensors_to_undecorate.append(layer_entry.activation)
 
-        tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(layer_entry.captured_args, torch.Tensor, search_depth=2)
-        )
-        tensors_to_undecorate.extend(
-            get_vars_of_type_from_obj(layer_entry.captured_kwargs, torch.Tensor, search_depth=2)
-        )
+        if layer_entry.captured_args:
+            tensors_to_undecorate.extend(
+                get_vars_of_type_from_obj(layer_entry.captured_args, torch.Tensor, search_depth=2)
+            )
+        if layer_entry.captured_kwargs:
+            tensors_to_undecorate.extend(
+                get_vars_of_type_from_obj(layer_entry.captured_kwargs, torch.Tensor, search_depth=2)
+            )
 
     for t in tensors_to_undecorate:
         if hasattr(t, "tl_tensor_label_raw"):
@@ -321,7 +323,9 @@ class ModuleParamInfo(NamedTuple):
     buffer_layers: list
 
 
-def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> ModuleParamInfo:
+def _build_module_param_info(
+    self: "ModelLog", address: str, mbd: dict, _buffer_layers_by_module: Optional[dict] = None
+) -> ModuleParamInfo:
     """Gather parameter counts, sizes, and buffer layers for a single module."""
     from ..data_classes.param_log import ParamAccessor
 
@@ -332,14 +336,17 @@ def _build_module_param_info(self: "ModelLog", address: str, mbd: dict) -> Modul
     m_num_frozen = mbd["module_nparams_frozen"].get(address, 0)
     m_fsize = sum(pl.memory for pl in module_param_dict.values())
 
-    module_buffer_layers = [
-        bl
-        for bl in self.buffer_layers
-        if bl in self.layer_dict_all_keys
-        and hasattr(self.layer_dict_all_keys[bl], "buffer_address")
-        and self.layer_dict_all_keys[bl].buffer_address is not None
-        and self.layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
-    ]
+    if _buffer_layers_by_module is not None:
+        module_buffer_layers = list(_buffer_layers_by_module.get(address, []))
+    else:
+        module_buffer_layers = [
+            bl
+            for bl in self.buffer_layers
+            if bl in self.layer_dict_all_keys
+            and hasattr(self.layer_dict_all_keys[bl], "buffer_address")
+            and self.layer_dict_all_keys[bl].buffer_address is not None
+            and self.layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
+        ]
 
     return ModuleParamInfo(
         module_params, m_num_params, m_num_trainable, m_num_frozen, m_fsize, module_buffer_layers
@@ -395,6 +402,15 @@ def _build_module_logs(self: "ModelLog") -> None:
         for _alias in _meta.get("all_addresses", [_primary_addr]):
             _metadata_by_alias[_alias] = _meta
 
+    # Pre-compute buffer layers grouped by parent module address (O6).
+    _buffer_layers_by_module = defaultdict(list)
+    for bl in self.buffer_layers:
+        if bl in self.layer_dict_all_keys:
+            bl_entry = self.layer_dict_all_keys[bl]
+            if hasattr(bl_entry, "buffer_address") and bl_entry.buffer_address is not None:
+                module_addr = bl_entry.buffer_address.rsplit(".", 1)[0]
+                _buffer_layers_by_module[module_addr].append(bl)
+
     # --- Build ModuleLogs for each submodule ---
     for address in mbd["module_addresses"]:
         meta = _metadata_by_alias.get(address, {})
@@ -425,7 +441,7 @@ def _build_module_logs(self: "ModelLog") -> None:
             all_module_addresses=all_addresses,
         )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
-        param_info = _build_module_param_info(self, address, mbd)
+        param_info = _build_module_param_info(self, address, mbd, _buffer_layers_by_module)
 
         # address_children from metadata may have a different address prefix
         # when the metadata was captured for a shared module under a different
