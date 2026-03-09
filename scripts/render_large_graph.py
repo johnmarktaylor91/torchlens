@@ -10,6 +10,7 @@ Examples:
 """
 
 import argparse
+import gc
 import os
 import sys
 import time
@@ -42,14 +43,21 @@ def main():
     x = torch.randn(2, 64)
     print(f"Model constructed ({time.time() - t0:.1f}s)", flush=True)
 
-    ml = log_forward_pass(
-        model,
-        x,
-        layers_to_save=None,
-        verbose=True,
+    # Log forward pass WITHOUT rendering — collect metadata only.
+    ml = log_forward_pass(model, x, layers_to_save=None, verbose=True)
+    print(f"Forward pass logged ({time.time() - t0:.1f}s)", flush=True)
+
+    # Free model parameters and autograd graphs before the memory-heavy ELK render.
+    del model, x
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    # Render from ModelLog metadata (model tensors no longer in memory).
+    ml.render_graph(
         vis_opt="rolled",
         vis_outpath=os.path.join(args.outdir, label),
-        vis_save_only=True,
+        save_only=True,
         vis_fileformat=args.format,
         vis_node_placement="elk",
     )

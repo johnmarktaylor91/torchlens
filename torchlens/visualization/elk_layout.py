@@ -12,24 +12,27 @@ Graphviz ``dot`` engine can hang or crash.  This module provides:
 """
 
 import functools
+import gc
 import json
+import os
 import re
 import resource
 import subprocess
+import tempfile
 import warnings
 from typing import Optional
 
-
-def _unlimit_stack():
-    """Remove OS stack size limit so Node.js --stack-size flag works.
-
-    V8's --stack-size requests a JS stack allocation, but the OS enforces
-    its own limit via RLIMIT_STACK.  If the OS soft limit (ulimit -s) is
-    smaller than what --stack-size asks for, Node.js segfaults instead of
-    raising a clean JS RangeError.  Called as preexec_fn in subprocess.run
-    so only the child process is affected.
-    """
-    resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+# Set the soft stack limit to match the hard limit once at import time.
+# Child processes (Node.js) inherit this, removing the need for preexec_fn
+# which forces fork+exec and COW-doubles virtual memory of large parent processes.
+try:
+    _soft, _hard = resource.getrlimit(resource.RLIMIT_STACK)
+    if _hard == resource.RLIM_INFINITY:
+        resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, _hard))
+    elif _soft < _hard:
+        resource.setrlimit(resource.RLIMIT_STACK, (_hard, _hard))
+except (ValueError, resource.error):
+    pass
 
 
 _ELK_NODE_THRESHOLD = 3500
@@ -38,9 +41,11 @@ _SFDP_TIMEOUT = 120  # seconds for sfdp/neato subprocess
 _DEFAULT_NODE_WIDTH = 200  # points — fallback when label isn't available
 _DEFAULT_NODE_HEIGHT = 60  # points — fallback when label isn't available
 
-# Inline Node.js script that reads ELK JSON from stdin, runs layout, writes to stdout.
+# Inline Node.js script that reads ELK JSON from a temp file (path in
+# _TL_JSON_PATH env var) or stdin, runs layout, writes to stdout.
 _ELK_LAYOUT_SCRIPT = r"""
 const { Worker } = require('worker_threads');
+const fs = require('fs');
 
 // Run ELK layout in a worker thread with a large stack via resourceLimits.
 // resourceLimits.stackSizeMb is far more reliable than the --stack-size V8
@@ -58,10 +63,7 @@ elk.layout(graph).then((result) => {
 }).catch((err) => { throw err; });
 `;
 
-let input = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => { input += chunk; });
-process.stdin.on('end', () => {
+function runLayout(input) {
     const worker = new Worker(workerCode, {
         eval: true,
         workerData: input,
@@ -74,7 +76,17 @@ process.stdin.on('end', () => {
         process.stderr.write(err.toString());
         process.exit(1);
     });
-});
+}
+
+const jsonPath = process.env._TL_JSON_PATH;
+if (jsonPath) {
+    runLayout(fs.readFileSync(jsonPath, 'utf8'));
+} else {
+    let input = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { input += chunk; });
+    process.stdin.on('end', () => { runLayout(input); });
+}
 """
 
 
@@ -405,34 +417,55 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
         timeout = _ELK_TIMEOUT
 
     graph_json = json.dumps(elk_graph)
+    # Free the Python dict — we only need the JSON string from here.
+    elk_graph.clear()
+
     graph_kb = len(graph_json) // 1024
-    heap_mb = max(16384, graph_kb * 48)  # ~48x JSON size, 16GB floor
+    # Cap heap at 64GB — V8 only allocates what it actually needs, and
+    # unbounded values (e.g. 5.6TB for 1M nodes) are nonsensical.
+    heap_mb = min(65536, max(16384, graph_kb * 48))
     # Worker thread stack via resourceLimits.stackSizeMb (MB).
-    # Much more reliable than --stack-size for deeply recursive ELK layout.
-    stack_mb = max(64, graph_kb // 8)  # ~128 bytes/KB of JSON, 64MB floor
+    # Floor of 4096 MB (matches CHANGELOG), cap at 8192 MB.
+    stack_mb = min(8192, max(4096, graph_kb // 8))
 
     env = _node_env()
     env["_TL_STACK_MB"] = str(stack_mb)
 
+    # Write JSON to a temp file so Node.js reads from disk instead of stdin.
+    # This lets us free the graph_json string before the subprocess runs,
+    # avoiding holding ~120MB+ in Python memory during ELK layout.
+    json_fd, json_path = tempfile.mkstemp(suffix=".json", prefix="tl_elk_")
     try:
-        result = subprocess.run(
-            [
-                "node",
-                f"--max-old-space-size={heap_mb}",
-                "-e",
-                _ELK_LAYOUT_SCRIPT,
-            ],
-            input=graph_json,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            preexec_fn=_unlimit_stack,
-        )
-    except FileNotFoundError:
-        raise RuntimeError("Node.js not found. Install from https://nodejs.org/")
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"ELK layout timed out after {timeout}s")
+        with os.fdopen(json_fd, "w") as f:
+            f.write(graph_json)
+        del graph_json
+        env["_TL_JSON_PATH"] = json_path
+
+        # Reclaim garbage before the memory-heavy subprocess.
+        gc.collect()
+
+        try:
+            result = subprocess.run(
+                [
+                    "node",
+                    f"--max-old-space-size={heap_mb}",
+                    "-e",
+                    _ELK_LAYOUT_SCRIPT,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+            )
+        except FileNotFoundError:
+            raise RuntimeError("Node.js not found. Install from https://nodejs.org/")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"ELK layout timed out after {timeout}s")
+    finally:
+        try:
+            os.unlink(json_path)
+        except OSError:
+            pass
 
     if result.returncode != 0:
         detail = (
