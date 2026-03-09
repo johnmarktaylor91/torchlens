@@ -1113,30 +1113,45 @@ def render_elk_direct(
         _seed_stress_positions(elk_graph, all_edges)
 
     elk_timeout = max(_ELK_TIMEOUT, int(num_elk_nodes * 0.015))
-    positioned = run_elk_layout(elk_graph, timeout=elk_timeout)
+
+    # If ELK layout fails (OOM, timeout, etc.), fall back to generating DOT
+    # without positions and rendering with sfdp.  This avoids the catastrophic
+    # graphviz.Digraph construction path in rendering.py which explodes on
+    # very large graphs (1M+ nodes) due to nested subgraph body-list copies.
+    elk_failed = False
+    try:
+        positioned = run_elk_layout(elk_graph, timeout=elk_timeout)
+    except RuntimeError as e:
+        warnings.warn(
+            f"ELK layout failed ({e}), generating DOT without positions and rendering with sfdp."
+        )
+        elk_failed = True
 
     # Collect leaf node centers and compound node bounding boxes from ELK output.
     positions = {}  # leaf_id -> (center_x, center_y) in ELK coords
     compound_bboxes = {}  # "group_<mod>" -> (x, y, w, h) in ELK coords (absolute)
+    max_y = 0
 
-    def _collect_pos(elk_node, ox=0, oy=0):
-        for ch in elk_node.get("children", []):
-            ax = ox + ch.get("x", 0)
-            ay = oy + ch.get("y", 0)
-            if ch["id"].startswith("group_"):
-                w = ch.get("width", 0)
-                h = ch.get("height", 0)
-                compound_bboxes[ch["id"]] = (ax, ay, w, h)
-                _collect_pos(ch, ax, ay)
-            else:
-                w = ch.get("width", _DEFAULT_NODE_WIDTH)
-                h = ch.get("height", _DEFAULT_NODE_HEIGHT)
-                positions[ch["id"]] = (ax + w / 2, ay + h / 2)
+    if not elk_failed:
 
-    _collect_pos(positioned)
-    # Use the root node's full height as the y-flip reference.
-    root_h = positioned.get("height", 0)
-    max_y = max(root_h, max((y for _, y in positions.values()), default=0))
+        def _collect_pos(elk_node, ox=0, oy=0):
+            for ch in elk_node.get("children", []):
+                ax = ox + ch.get("x", 0)
+                ay = oy + ch.get("y", 0)
+                if ch["id"].startswith("group_"):
+                    w = ch.get("width", 0)
+                    h = ch.get("height", 0)
+                    compound_bboxes[ch["id"]] = (ax, ay, w, h)
+                    _collect_pos(ch, ax, ay)
+                else:
+                    w = ch.get("width", _DEFAULT_NODE_WIDTH)
+                    h = ch.get("height", _DEFAULT_NODE_HEIGHT)
+                    positions[ch["id"]] = (ax + w / 2, ay + h / 2)
+
+        _collect_pos(positioned)
+        # Use the root node's full height as the y-flip reference.
+        root_h = positioned.get("height", 0)
+        max_y = max(root_h, max((y for _, y in positions.values()), default=0))
 
     # ── Phase 3: Generate DOT with clusters and positions ──
 
@@ -1265,7 +1280,9 @@ def render_elk_direct(
     lines.append("}")
     dot_source = "\n".join(lines)
 
-    # ── Phase 4: Render with neato -n ──
+    # ── Phase 4: Render ──
+    # When ELK succeeded, render with neato -n (pre-positioned layout).
+    # When ELK failed, render with sfdp (spring-embedder, computes own layout).
 
     if num_elk_nodes > 25000 and vis_fileformat != "svg":
         warnings.warn(
@@ -1279,24 +1296,40 @@ def render_elk_direct(
         f.write(dot_source)
 
     rendered_path = f"{vis_outpath}.{vis_fileformat}"
-    # Spline routing is O(n^2) — use straight lines for large graphs.
     num_nodes = len(node_data)
-    spline_mode = "true" if num_nodes < 1000 else "line"
-    cmd = [
-        "neato",
-        "-n",
-        f"-Gsplines={spline_mode}",
-        f"-T{vis_fileformat}",
-        "-o",
-        rendered_path,
-        source_path,
-    ]
+
+    if elk_failed:
+        # sfdp computes its own layout — no positions needed in DOT.
+        # Use overlap removal for readability.
+        cmd = [
+            "sfdp",
+            "-Goverlap=prism",
+            f"-T{vis_fileformat}",
+            "-o",
+            rendered_path,
+            source_path,
+        ]
+    else:
+        # neato -n uses ELK-computed positions.
+        # Spline routing is O(n^2) — use straight lines for large graphs.
+        spline_mode = "true" if num_nodes < 1000 else "line"
+        cmd = [
+            "neato",
+            "-n",
+            f"-Gsplines={spline_mode}",
+            f"-T{vis_fileformat}",
+            "-o",
+            rendered_path,
+            source_path,
+        ]
+
     render_timeout = max(_SFDP_TIMEOUT, int(num_nodes * 0.01))
     try:
         result = subprocess.run(cmd, timeout=render_timeout, capture_output=True, text=True)
         if result.returncode != 0:
+            engine_name = "sfdp" if elk_failed else "neato"
             raise RuntimeError(
-                f"neato rendering failed (exit {result.returncode}):\n{result.stderr}"
+                f"{engine_name} rendering failed (exit {result.returncode}):\n{result.stderr}"
             )
         if not vis_save_only:
             import graphviz

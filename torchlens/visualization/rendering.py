@@ -204,28 +204,26 @@ def render_graph(
 
     # ELK fast path: skip graphviz.Digraph construction entirely.
     # Generates DOT directly with ELK positions and cluster subgraphs (module boxes).
+    # If ELK layout fails (OOM, timeout), render_elk_direct falls back internally
+    # to sfdp — still using the fast DOT-text path, never graphviz.Digraph.
     if engine == "elk":
-        from .elk_layout import render_elk_direct, render_with_sfdp
+        from .elk_layout import render_elk_direct
 
-        try:
-            result = render_elk_direct(
-                self,
-                entries_to_plot,
-                vis_mode,
-                vis_nesting_depth,
-                show_buffer_layers,
-                overrides,
-                vis_outpath,
-                vis_fileformat,
-                vis_save_only,
-                graph_caption,
-                rankdir,
-            )
-            _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
-            return result
-        except RuntimeError as e:
-            warnings.warn(f"ELK layout failed ({e}), falling back to sfdp.")
-            engine = "sfdp"  # fall through to build graphviz.Digraph for sfdp
+        result = render_elk_direct(
+            self,
+            entries_to_plot,
+            vis_mode,
+            vis_nesting_depth,
+            show_buffer_layers,
+            overrides,
+            vis_outpath,
+            vis_fileformat,
+            vis_save_only,
+            graph_caption,
+            rankdir,
+        )
+        _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
+        return result
 
     dot = graphviz.Digraph(
         name=self.model_name,
