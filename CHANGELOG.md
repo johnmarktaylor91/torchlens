@@ -1,6 +1,67 @@
 # CHANGELOG
 
 
+## v0.21.0 (2026-03-09)
+
+### Bug Fixes
+
+- **capture**: Fix mypy type errors in output_tensors field dict
+  ([`d54e9a9`](https://github.com/johnmarktaylor91/torchlens/commit/d54e9a99df47442ddc396ca20666203cfbeb5f06))
+
+Annotate fields_dict as Dict[str, Any] and extract param_shapes with proper type to satisfy mypy
+  strict inference.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Pass heap limits to ELK Worker thread to prevent OOM on 1M nodes
+  ([`23ef8d8`](https://github.com/johnmarktaylor91/torchlens/commit/23ef8d8c175846fce1b48427a0c980a825486b9c))
+
+The Node.js Worker running ELK layout had no explicit maxOldGenerationSizeMb in its resourceLimits —
+  only stackSizeMb was set. The --max-old-space-size flag controls the main thread's V8 isolate, not
+  the Worker's. This caused the Worker to OOM at ~16GB on 1M-node graphs despite the main thread
+  being configured for up to 64GB.
+
+- Add maxOldGenerationSizeMb and maxYoungGenerationSizeMb to Worker resourceLimits, passed via
+  _TL_HEAP_MB env var - Add _available_memory_mb() to detect system RAM and cap heap allocation to
+  (available - 4GB), preventing competition with Python process - Include available system memory in
+  OOM diagnostic messages
+
+Also includes field/param renames from feat/grand-rename branch.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Update all CLAUDE.md files with deepdive session 4 findings
+  ([`b15c5bf`](https://github.com/johnmarktaylor91/torchlens/commit/b15c5bfa665011002a67cdcc7710f4737f1fc5d6))
+
+Sync all project and subpackage documentation with current codebase: - Updated line counts across
+  all 36 modules - Added elk_layout.py documentation to visualization/ - Added arg_positions.py and
+  salient_args.py to capture/ - Documented 13 new bugs (ELK-IF-THEN, BFLOAT16-TOL, etc.) - Updated
+  test counts (1,004 tests across 16 files) - Added known bugs sections to validation/, utils/,
+  decoration/ - Updated data_classes/ with new fields and properties
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Rename all data structure fields and function args for clarity
+  ([`f0d7452`](https://github.com/johnmarktaylor91/torchlens/commit/f0d7452e272bede7a874e1bda2dbce68dbb94697))
+
+Rename ~68 fields across all 8 data structures (ModelLog, LayerPassLog, LayerLog, ParamLog,
+  ModuleLog, BufferLog, ModulePassLog, FuncCallLocation) plus user-facing function arguments. Key
+  changes:
+
+- tensor_contents → activation, grad_contents → gradient - All *_fsize* → *_memory* (e.g.
+  tensor_fsize → tensor_memory) - func_applied_name → func_name, gradfunc → grad_fn_name -
+  is_bottom_level_submodule_output → is_leaf_module_output - containing_module_origin →
+  containing_module - spouse_layers → co_parent_layers, orig_ancestors → root_ancestors -
+  model_is_recurrent → is_recurrent, elapsed_time_* → time_* - vis_opt → vis_mode, save_only →
+  vis_save_only - Fix typo: output_descendents → output_descendants
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.20.5 (2026-03-09)
 
 ### Bug Fixes
