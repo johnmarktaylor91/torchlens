@@ -324,7 +324,7 @@ class ModuleParamInfo(NamedTuple):
 
 
 def _build_module_param_info(
-    self: "ModelLog", address: str, mbd: dict, _buffer_layers_by_module: dict = None
+    self: "ModelLog", address: str, mbd: dict, _buffer_layers_by_module: Optional[dict] = None
 ) -> ModuleParamInfo:
     """Gather parameter counts, sizes, and buffer layers for a single module."""
     from ..data_classes.param_log import ParamAccessor
@@ -406,9 +406,9 @@ def _build_module_logs(self: "ModelLog") -> None:
     _buffer_layers_by_module = defaultdict(list)
     for bl in self.buffer_layers:
         if bl in self.layer_dict_all_keys:
-            entry = self.layer_dict_all_keys[bl]
-            if hasattr(entry, "buffer_address") and entry.buffer_address is not None:
-                module_addr = entry.buffer_address.rsplit(".", 1)[0]
+            bl_entry = self.layer_dict_all_keys[bl]
+            if hasattr(bl_entry, "buffer_address") and bl_entry.buffer_address is not None:
+                module_addr = bl_entry.buffer_address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # --- Build ModuleLogs for each submodule ---
