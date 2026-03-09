@@ -174,7 +174,7 @@ class TestModelLogGC:
                 has_any_grad = True
                 assert pl._grad_shape is not None
                 assert pl._grad_dtype is not None
-                assert pl._grad_fsize > 0
+                assert pl._grad_memory > 0
         assert has_any_grad, "Expected at least one param to have grad metadata cached"
         model_log.cleanup()
 

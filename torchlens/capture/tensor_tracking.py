@@ -82,12 +82,12 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
         grad: The gradient tensor from autograd.
         tensor_label_raw: Raw tensor label used to look up the final label.
     """
-    self.has_saved_gradients = True
+    self.has_gradients = True
     tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
     layer_log_entry = self[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate gradient to them too.
-    if layer_log_entry.is_output_parent:
+    if layer_log_entry.feeds_output:
         for child_layer in layer_log_entry.child_layers:
             if self[child_layer].is_output_layer:
                 layers_to_update.append(child_layer)
@@ -305,7 +305,7 @@ def _get_operation_equivalence_type(
         i: Index of this output tensor within a multi-output call.
         layer_type: The normalized operation name.
         fields_dict: Must contain ``is_part_of_iterable_output`` and
-            ``containing_module_origin``.
+            ``containing_module``.
 
     Returns:
         A string key identifying this operation's equivalence class.
@@ -314,8 +314,8 @@ def _get_operation_equivalence_type(
     operation_equivalence_type = f"{layer_type}_{arg_hash}"
     if fields_dict["is_part_of_iterable_output"]:
         operation_equivalence_type += f"_outindex{i}"
-    if fields_dict["containing_module_origin"] is not None:
-        module_str = fields_dict["containing_module_origin"][0]
+    if fields_dict["containing_module"] is not None:
+        module_str = fields_dict["containing_module"][0]
         operation_equivalence_type += f"_module{module_str}"
     return operation_equivalence_type
 
@@ -383,7 +383,7 @@ def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> List[str]:
     """Compute a tensor's current module nesting by replaying entry/exit transitions.
 
     Each tensor records:
-      - ``containing_modules_origin_nested``: the module stack at creation time.
+      - ``containing_modules``: the module stack at creation time.
       - ``module_entry_exit_thread_output``: a sequence of transitions like
         ``"+encoder.layer1:1"`` (entered) or ``"-encoder.layer1:1"`` (exited).
 
@@ -397,7 +397,7 @@ def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> List[str]:
     Returns:
         Current containing-module stack as a list of module pass strings.
     """
-    containing_modules = layer_entry.containing_modules_origin_nested[:]
+    containing_modules = layer_entry.containing_modules[:]
     thread_modules = layer_entry.module_entry_exit_thread_output[:]
     for thread_module in thread_modules:
         if thread_module[0] == "+":

@@ -311,9 +311,7 @@ def _fix_modules_for_internal_tensors(self) -> None:
     # This ensures loop detection (Step 8) treats same-function operations in
     # different modules as distinct equivalence types.
     for layer in self:
-        module_str = "_".join(
-            [module_pass[0] for module_pass in layer.containing_modules_origin_nested]
-        )
+        module_str = "_".join([module_pass[0] for module_pass in layer.containing_modules])
         layer.operation_equivalence_type += module_str
 
 
@@ -341,9 +339,7 @@ def _fix_modules_for_single_internal_tensor(
         nodes_seen: Set of already-processed nodes.
     """
     node_to_fix_label = node_to_fix.tensor_label_raw
-    node_to_fix.containing_modules_origin_nested = (
-        starting_node.containing_modules_origin_nested.copy()
-    )
+    node_to_fix.containing_modules = starting_node.containing_modules.copy()
     if node_type_to_fix == "parent":
         thread_modules = starting_node.module_entry_exit_threads_inputs[
             node_to_fix.tensor_label_raw
@@ -360,18 +356,16 @@ def _fix_modules_for_single_internal_tensor(
     for enter_or_exit, module_address, module_pass in thread_modules[::step_val]:
         module_pass_label = (module_address, module_pass)
         if node_type_to_fix == "parent":
-            if (enter_or_exit == "+") and (
-                module_pass_label in node_to_fix.containing_modules_origin_nested
-            ):
-                node_to_fix.containing_modules_origin_nested.remove(module_pass_label)
+            if (enter_or_exit == "+") and (module_pass_label in node_to_fix.containing_modules):
+                node_to_fix.containing_modules.remove(module_pass_label)
             elif enter_or_exit == "-":
-                node_to_fix.containing_modules_origin_nested.append(module_pass_label)
+                node_to_fix.containing_modules.append(module_pass_label)
         elif node_type_to_fix == "child":
             if enter_or_exit == "+":
-                node_to_fix.containing_modules_origin_nested.append(module_pass_label)
+                node_to_fix.containing_modules.append(module_pass_label)
             elif enter_or_exit == "-":
-                if module_pass_label in node_to_fix.containing_modules_origin_nested:
-                    node_to_fix.containing_modules_origin_nested.remove(module_pass_label)
+                if module_pass_label in node_to_fix.containing_modules:
+                    node_to_fix.containing_modules.remove(module_pass_label)
     node_stack.append(node_to_fix_label)
     nodes_seen.add(node_to_fix_label)
 
@@ -402,23 +396,19 @@ def _fix_buffer_layers(self) -> None:
             self[layer.buffer_parent].child_layers.append(layer_label)
             self[layer.buffer_parent].has_children = True
             layer.func_applied = identity
-            layer.func_applied_name = "identity"
+            layer.func_name = "identity"
             layer.has_input_ancestor = True
             layer.input_ancestors.update(self[layer.buffer_parent].input_ancestors)
-            layer.orig_ancestors.remove(layer.tensor_label_raw)
-            layer.orig_ancestors.update(self[layer.buffer_parent].orig_ancestors)
+            layer.root_ancestors.remove(layer.tensor_label_raw)
+            layer.root_ancestors.update(self[layer.buffer_parent].root_ancestors)
             layer.parent_layer_arg_locs["args"][0] = layer.buffer_parent
-            if (self[layer.buffer_parent].tensor_contents is not None) and (
-                layer.creation_args is not None
+            if (self[layer.buffer_parent].activation is not None) and (
+                layer.captured_args is not None
             ):
-                layer.creation_args.append(
-                    self[layer.buffer_parent].tensor_contents.detach().clone()
-                )
+                layer.captured_args.append(self[layer.buffer_parent].activation.detach().clone())
 
         buffer_hash = (
-            str(layer.containing_modules_origin_nested)
-            + str(layer.buffer_parent)
-            + layer.buffer_address
+            str(layer.containing_modules) + str(layer.buffer_parent) + layer.buffer_address
         )
         buffer_hash_groups[buffer_hash].append(layer_label)
 
@@ -433,9 +423,9 @@ def _fix_buffer_layers(self) -> None:
             for unique_buffer_label in unique_buffers:
                 unique_buffer = self[unique_buffer_label]
                 if (
-                    (buffer.tensor_contents is not None)
-                    and (unique_buffer.tensor_contents is not None)
-                    and (torch.equal(buffer.tensor_contents, unique_buffer.tensor_contents))
+                    (buffer.activation is not None)
+                    and (unique_buffer.activation is not None)
+                    and (torch.equal(buffer.activation, unique_buffer.activation))
                 ):
                     _merge_buffer_entries(self, unique_buffer, buffer)
                     break
@@ -494,9 +484,9 @@ def _merge_buffer_entries(
     self._raw_layer_dict.pop(buffer_to_remove.tensor_label_raw)
 
     for layer in self:
-        if buffer_to_remove.tensor_label_raw in layer.orig_ancestors:
-            layer.orig_ancestors.remove(buffer_to_remove.tensor_label_raw)
-            layer.orig_ancestors.add(source_buffer.tensor_label_raw)
+        if buffer_to_remove.tensor_label_raw in layer.root_ancestors:
+            layer.root_ancestors.remove(buffer_to_remove.tensor_label_raw)
+            layer.root_ancestors.add(source_buffer.tensor_label_raw)
         if buffer_to_remove.tensor_label_raw in layer.internally_initialized_ancestors:
             layer.internally_initialized_ancestors.remove(buffer_to_remove.tensor_label_raw)
             layer.internally_initialized_ancestors.add(source_buffer.tensor_label_raw)

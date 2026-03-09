@@ -361,9 +361,9 @@ def test_corruption_module_back_reference():
     log = _make_clean_log()
     # Find a layer with a containing module and corrupt the ModuleLog
     for lpl in log.layer_list:
-        cmo = lpl.containing_module_origin
+        cmo = lpl.containing_module
         if cmo:
-            # containing_module_origin may include pass (e.g. 'fc:1'), strip it
+            # containing_module may include pass (e.g. 'fc:1'), strip it
             cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
             mod_log = log.modules._dict[cmo_addr]
             if lpl.layer_label_no_pass in mod_log.all_layers:
@@ -443,26 +443,26 @@ def _make_nested_log():
 
 
 def test_corruption_graph_ordering_duplicate_rt_num():
-    """Duplicate realtime_tensor_num triggers graph_ordering error."""
+    """Duplicate creation_order triggers graph_ordering error."""
     log = _make_clean_log()
-    # Set two layers to the same realtime_tensor_num
-    log.layer_list[0].realtime_tensor_num = log.layer_list[1].realtime_tensor_num
+    # Set two layers to the same creation_order
+    log.layer_list[0].creation_order = log.layer_list[1].creation_order
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_graph_ordering_topo_violation():
-    """Parent with higher realtime_tensor_num than child triggers error."""
+    """Parent with higher creation_order than child triggers error."""
     log = _make_clean_log()
     # Find a layer with parents and swap rt nums to break topo order
     for lpl in log.layer_list:
         if lpl.parent_layers:
             parent = log[lpl.parent_layers[0]]
             # Give parent a higher rt num than child
-            parent.realtime_tensor_num, lpl.realtime_tensor_num = (
-                lpl.realtime_tensor_num,
-                parent.realtime_tensor_num,
+            parent.creation_order, lpl.creation_order = (
+                lpl.creation_order,
+                parent.creation_order,
             )
             break
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
@@ -474,22 +474,22 @@ def test_corruption_graph_ordering_topo_violation():
 
 
 def test_corruption_loop_detection_slo_empty():
-    """Empty same_layer_operations triggers loop_detection error."""
+    """Empty recurrent_group triggers loop_detection error."""
     log = _make_clean_log()
-    log.layer_list[0].same_layer_operations = []
+    log.layer_list[0].recurrent_group = []
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_loop_detection_slo_asymmetry():
-    """Asymmetric same_layer_operations triggers loop_detection error."""
+    """Asymmetric recurrent_group triggers loop_detection error."""
     log = _make_recurrent_log()
     # Find a multi-pass layer and corrupt one member's slo list
     for lpl in log.layer_list:
-        if lpl.layer_passes_total > 1:
+        if lpl.num_passes > 1:
             # Remove one member from slo
-            lpl.same_layer_operations = [lpl.layer_label]
+            lpl.recurrent_group = [lpl.layer_label]
             break
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
@@ -497,9 +497,9 @@ def test_corruption_loop_detection_slo_asymmetry():
 
 
 def test_corruption_loop_detection_passes_total():
-    """Mismatched layer_passes_total vs len(same_layer_operations) triggers error."""
+    """Mismatched num_passes vs len(recurrent_group) triggers error."""
     log = _make_clean_log()
-    log.layer_list[0].layer_passes_total = 99
+    log.layer_list[0].num_passes = 99
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -571,7 +571,7 @@ def test_corruption_connectivity_parentless_layer():
             not lpl.is_input_layer
             and not lpl.is_buffer_layer
             and not lpl.is_output_layer
-            and not lpl.initialized_inside_model
+            and not lpl.is_internally_initialized
             and lpl.parent_layers
         ):
             # Also fix the parent's child list to avoid graph_topology catching it first
@@ -612,15 +612,15 @@ def test_corruption_module_depth():
 
 
 def test_corruption_module_nested_path_leaf():
-    """Last element of containing_modules_origin_nested != containing_module_origin triggers error."""
+    """Last element of containing_modules != containing_module triggers error."""
     log = _make_nested_log()
     for lpl in log.layer_list:
-        if len(lpl.containing_modules_origin_nested) >= 2 and lpl.containing_module_origin:
+        if len(lpl.containing_modules) >= 2 and lpl.containing_module:
             # Swap the last nested module to a different valid module so it
             # doesn't fail the module_layer_containment check but does fail
             # the leaf consistency check in module_containment_logic.
             # Use the first (parent) module as the last entry — valid module but wrong leaf
-            lpl.containing_modules_origin_nested[-1] = lpl.containing_modules_origin_nested[0]
+            lpl.containing_modules[-1] = lpl.containing_modules[0]
             break
     with pytest.raises(MetadataInvariantError, match="module_containment_logic"):
         check_metadata_invariants(log)
@@ -810,7 +810,7 @@ class TestSharedParamDifferentOps:
     """Regression: different operations consuming the same parameter should not
     violate loop_detection invariants.
 
-    The param sharing invariant must group by (func_applied_name, param_barcodes),
+    The param sharing invariant must group by (func_name, param_barcodes),
     not just param_barcodes alone. Otherwise, e.g. isinf(weight) and expand(weight)
     would be falsely flagged as needing the same layer_label_no_pass.
     """

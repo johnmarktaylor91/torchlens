@@ -210,7 +210,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_capture("log.modules.summary()", log.modules.summary()))
 
     # Multi-pass module info (for recurrent models)
-    if log.model_is_recurrent:
+    if log.is_recurrent:
         for ml in log.modules:
             if ml.num_passes > 1 and ml.address != "self":
                 out.write(
@@ -378,7 +378,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 break
 
     # ===== D.1 LayerLog =====
-    if log.model_is_recurrent and len(log.layer_logs) > 0:
+    if log.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("D.1 LayerLog (multi-pass)", level=3))
         for ll in log.layer_logs.values():
             if ll.num_passes > 1:
@@ -435,7 +435,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section("F.2 LayerPassLog field dump", level=3))
     tensor_for_dump = None
     for entry in log.layer_list:
-        if entry.computed_with_params:
+        if entry.uses_params:
             tensor_for_dump = entry
             break
     if tensor_for_dump is None:
@@ -444,7 +444,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(tensor_for_dump, f"LayerPassLog: {tensor_for_dump.layer_label}"))
 
     # F.3 LayerLog (multi-pass)
-    if log.model_is_recurrent and len(log.layer_logs) > 0:
+    if log.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("F.3 LayerLog field dump (multi-pass)", level=3))
         ll_for_dump = None
         for ll in log.layer_logs.values():
@@ -491,10 +491,10 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         try:
             grad_log = log_forward_pass(model, x, save_gradients=True, random_seed=42)
             output_label = grad_log.output_layers[0]
-            output_tensor = grad_log[output_label].tensor_contents
+            output_tensor = grad_log[output_label].activation
             output_tensor.sum().backward()
 
-            out.write(_capture("grad_log.has_saved_gradients", grad_log.has_saved_gradients))
+            out.write(_capture("grad_log.has_gradients", grad_log.has_gradients))
             out.write(
                 _capture(
                     "grad_log.layers_with_saved_gradients",
@@ -504,32 +504,32 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
             # Show gradient fields on a LayerPassLog that has saved grad
             for entry in grad_log.layer_list:
-                if entry.has_saved_grad:
+                if entry.has_gradient:
                     out.write(
                         _section(
                             f"G.1 LayerPassLog gradient fields — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_saved_grad", entry.has_saved_grad))
-                    out.write(_capture("grad_contents", entry.grad_contents))
+                    out.write(_capture("has_gradient", entry.has_gradient))
+                    out.write(_capture("gradient", entry.gradient))
                     out.write(_capture("grad_shape", entry.grad_shape))
                     out.write(_capture("grad_dtype", entry.grad_dtype))
-                    out.write(_capture("grad_fsize", entry.grad_fsize))
-                    out.write(_capture("grad_fsize_nice", entry.grad_fsize_nice))
+                    out.write(_capture("grad_memory", entry.grad_memory))
+                    out.write(_capture("grad_memory_str", entry.grad_memory_str))
                     break
 
             # Show a LayerPassLog WITHOUT grad for contrast
             for entry in grad_log.layer_list:
-                if not entry.has_saved_grad:
+                if not entry.has_gradient:
                     out.write(
                         _section(
                             f"G.2 LayerPassLog without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_saved_grad", entry.has_saved_grad))
-                    out.write(_capture("grad_contents", entry.grad_contents))
+                    out.write(_capture("has_gradient", entry.has_gradient))
+                    out.write(_capture("gradient", entry.gradient))
                     break
 
             # ParamLog gradient fields
@@ -539,8 +539,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
-                    out.write(_capture("grad_fsize", pl.grad_fsize))
-                    out.write(_capture("grad_fsize_nice", pl.grad_fsize_nice))
+                    out.write(_capture("grad_memory", pl.grad_memory))
+                    out.write(_capture("grad_memory_str", pl.grad_memory_str))
                     break
 
             # Show frozen param without grad (if applicable)
@@ -605,7 +605,7 @@ PDF_PATH = opj(REPORTS_DIR, "aesthetic_report.pdf")
 
 # Visualization configurations for the gallery section
 VIS_GALLERY = [
-    # (filename_stem, caption, model_class, input_shape_desc, vis_opt, depth, direction, buffers)
+    # (filename_stem, caption, model_class, input_shape_desc, vis_mode, depth, direction, buffers)
     (
         "deep_nested_depth1",
         "AestheticDeepNested — depth=1",
@@ -879,7 +879,7 @@ VIS_GALLERY = [
 ]
 
 # Gradient visualization gallery — rendered with save_gradients=True + backward()
-# (filename_stem, caption, model_name, input_shape_desc, vis_opt, depth, direction)
+# (filename_stem, caption, model_name, input_shape_desc, vis_mode, depth, direction)
 GRADIENT_VIS_GALLERY = [
     (
         "gradient_deep_nested",
@@ -1067,7 +1067,7 @@ def _build_latex_report() -> str:
         doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
 
         # D.1 LayerLog (multi-pass)
-        if log.model_is_recurrent and len(log.layer_logs) > 0:
+        if log.is_recurrent and len(log.layer_logs) > 0:
             for ll in log.layer_logs.values():
                 if ll.num_passes > 1:
                     doc.write(
@@ -1079,7 +1079,7 @@ def _build_latex_report() -> str:
                     break
 
         # Multi-pass module
-        if log.model_is_recurrent:
+        if log.is_recurrent:
             for ml in log.modules:
                 if ml.num_passes > 1 and ml.address != "self":
                     passes_text = repr(ml) + "\n\n"
@@ -1139,7 +1139,7 @@ def _build_latex_report() -> str:
         # LayerPassLog field dump — pick a layer with params
         tensor_for_dump = None
         for entry in log.layer_list:
-            if entry.computed_with_params:
+            if entry.uses_params:
                 tensor_for_dump = entry
                 break
         if tensor_for_dump is None:
@@ -1211,13 +1211,13 @@ def _build_latex_report() -> str:
         "\\texttt{show\\_model\\_graph()} with the specified parameters.\n\n"
     )
 
-    for stem, caption, model_name, input_desc, vis_opt, depth, direction, buffers in VIS_GALLERY:
+    for stem, caption, model_name, input_desc, vis_mode, depth, direction, buffers in VIS_GALLERY:
         pdf_path = opj(VIS_DIR, f"{stem}.pdf")
         if not os.path.exists(pdf_path):
             continue
         buf_str = ", buffers=True" if buffers else ""
         param_str = (
-            f"vis\\_opt={_tex_escape(vis_opt)}, "
+            f"vis\\_opt={_tex_escape(vis_mode)}, "
             f"depth={depth}, "
             f"direction={_tex_escape(direction)}"
             f"{_tex_escape(buf_str)}"
@@ -1238,13 +1238,13 @@ def _build_latex_report() -> str:
         "Gradient arrows only appear in unrolled mode.\n\n"
     )
 
-    for stem, caption, model_name, input_desc, vis_opt, depth, direction in GRADIENT_VIS_GALLERY:
+    for stem, caption, model_name, input_desc, vis_mode, depth, direction in GRADIENT_VIS_GALLERY:
         pdf_path = opj(VIS_DIR, f"{stem}.pdf")
         if not os.path.exists(pdf_path):
             continue
         param_str = (
             f"save\\_gradients=True, "
-            f"vis\\_opt={_tex_escape(vis_opt)}, "
+            f"vis\\_opt={_tex_escape(vis_mode)}, "
             f"depth={depth}, "
             f"direction={_tex_escape(direction)}"
         )
@@ -1276,19 +1276,25 @@ def _ensure_vis_pdfs_exist():
 
     # Standard gallery
     missing = [g for g in VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))]
-    for stem, caption, model_name, _, vis_opt, depth, direction, buffers in missing:
+    for stem, caption, model_name, _, vis_mode, depth, direction, buffers in missing:
         model, x = model_inputs[model_name]
         _vis(
-            model, x, stem, vis_opt=vis_opt, depth=depth, direction=direction, buffer_layers=buffers
+            model,
+            x,
+            stem,
+            vis_mode=vis_mode,
+            depth=depth,
+            direction=direction,
+            buffer_layers=buffers,
         )
 
     # Gradient gallery
     grad_missing = [
         g for g in GRADIENT_VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))
     ]
-    for stem, caption, model_name, _, vis_opt, depth, direction in grad_missing:
+    for stem, caption, model_name, _, vis_mode, depth, direction in grad_missing:
         model, x = model_inputs[model_name]
-        _vis_gradient(model, x, stem, vis_opt=vis_opt, depth=depth, direction=direction)
+        _vis_gradient(model, x, stem, vis_mode=vis_mode, depth=depth, direction=direction)
 
 
 @pytest.mark.skipif(
@@ -1343,16 +1349,16 @@ def test_generate_pdf_report():
 
 
 def _vis(
-    model, x, filename, vis_opt="unrolled", depth=1000, direction="bottomup", buffer_layers=False
+    model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup", buffer_layers=False
 ):
     """Generate a single visualization PDF."""
     show_model_graph(
         model,
         x,
-        vis_opt=vis_opt,
+        vis_mode=vis_mode,
         vis_nesting_depth=depth,
         vis_outpath=opj(VIS_DIR, filename),
-        save_only=True,
+        vis_save_only=True,
         vis_fileformat="pdf",
         vis_buffer_layers=buffer_layers,
         vis_direction=direction,
@@ -1360,20 +1366,20 @@ def _vis(
     )
 
 
-def _vis_gradient(model, x, filename, vis_opt="unrolled", depth=1000, direction="bottomup"):
+def _vis_gradient(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
     """Generate a visualization PDF with gradient backward arrows.
 
     Uses log_forward_pass(save_gradients=True) + backward() + render_graph()
     since show_model_graph() hardcodes save_gradients=False.
     """
     log = log_forward_pass(model, x, save_gradients=True, random_seed=42)
-    output = log[log.output_layers[0]].tensor_contents
+    output = log[log.output_layers[0]].activation
     output.sum().backward()
     log.render_graph(
-        vis_opt=vis_opt,
+        vis_mode=vis_mode,
         vis_nesting_depth=depth,
         vis_outpath=opj(VIS_DIR, filename),
-        save_only=True,
+        vis_save_only=True,
         vis_fileformat="pdf",
         direction=direction,
     )
@@ -1404,8 +1410,8 @@ def test_aesthetic_shared_module_visualizations():
     x = torch.rand(1, 8)
 
     _vis(model, x, "shared_unrolled")
-    _vis(model, x, "shared_rolled", vis_opt="rolled")
-    _vis(model, x, "shared_rolled_depth1", vis_opt="rolled", depth=1)
+    _vis(model, x, "shared_rolled", vis_mode="rolled")
+    _vis(model, x, "shared_rolled_depth1", vis_mode="rolled", depth=1)
 
 
 def test_aesthetic_buffer_branch_visualizations():
@@ -1425,7 +1431,7 @@ def test_aesthetic_kitchen_sink_visualizations():
     x = torch.rand(1, 8)
 
     _vis(model, x, "kitchen_sink_unrolled", buffer_layers=True)
-    _vis(model, x, "kitchen_sink_rolled", vis_opt="rolled", buffer_layers=True)
+    _vis(model, x, "kitchen_sink_rolled", vis_mode="rolled", buffer_layers=True)
     _vis(model, x, "kitchen_sink_depth1", depth=1, buffer_layers=True)
     _vis(model, x, "kitchen_sink_depth2", depth=2, buffer_layers=True)
 
@@ -1446,17 +1452,17 @@ def test_aesthetic_loop_visualizations():
     # RecurrentParamsSimple: basic loop with shared params
     model = example_models.RecurrentParamsSimple()
     _vis(model, x_5d, "loop_simple_unrolled")
-    _vis(model, x_5d, "loop_simple_rolled", vis_opt="rolled")
+    _vis(model, x_5d, "loop_simple_rolled", vis_mode="rolled")
 
     # LoopingParamsDoubleNested: double-nested loops
     model = example_models.LoopingParamsDoubleNested()
     _vis(model, x_5d, "loop_double_nested_unrolled")
-    _vis(model, x_5d, "loop_double_nested_rolled", vis_opt="rolled")
+    _vis(model, x_5d, "loop_double_nested_rolled", vis_mode="rolled")
 
     # NestedModules: deep module nesting with recurrence
     model = example_models.NestedModules()
     _vis(model, x_5d, "nested_modules_unrolled")
-    _vis(model, x_5d, "nested_modules_rolled", vis_opt="rolled")
+    _vis(model, x_5d, "nested_modules_rolled", vis_mode="rolled")
     _vis(model, x_5d, "nested_modules_depth1", depth=1)
     _vis(model, x_5d, "nested_modules_depth2", depth=2)
 
@@ -1510,7 +1516,7 @@ class TestVisualizationBugfixes:
             render_graph(
                 log,
                 vis_nesting_depth=0,
-                save_only=True,
+                vis_save_only=True,
                 vis_outpath=opj(VIS_DIR, "test_nesting_depth_0"),
             )
         except ImportError:
@@ -1525,7 +1531,9 @@ class TestVisualizationBugfixes:
         try:
             from torchlens.visualization.rendering import render_graph
 
-            render_graph(log, save_only=True, vis_outpath=opj(VIS_DIR, "test_keep_unsaved_false"))
+            render_graph(
+                log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_keep_unsaved_false")
+            )
         except ImportError:
             pytest.skip("graphviz not available")
 
@@ -1552,4 +1560,4 @@ class TestVisModuleListFormat:
 
         model = Outer()
         log = log_forward_pass(model, torch.randn(2, 10))
-        log.render_graph(save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))
+        log.render_graph(vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))

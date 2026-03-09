@@ -64,8 +64,8 @@ small tensor coincidence, all-inf/NaN, special-value args (all-zeros/all-ones).
 - L: equivalence symmetry
 
 **Phase 2 (M-R) — Semantic:**
-- M: graph ordering (realtime_tensor_num unique/monotonic)
-- N: loop detection consistency (same_layer_operations symmetry)
+- M: graph ordering (creation_order unique/monotonic)
+- N: loop detection consistency (recurrent_group symmetry)
 - O: distance invariants (conditional on `mark_input_output_distances`)
 - P: graph connectivity
 - Q: module containment logic

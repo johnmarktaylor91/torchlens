@@ -76,7 +76,7 @@ def validate_saved_activations(
     for i, output_layer_label in enumerate(self.output_layers):
         output_layer = self[output_layer_label]
         if not tensor_nanequal(
-            output_layer.tensor_contents,
+            output_layer.activation,
             ground_truth_output_tensors[i],
             allow_tolerance=False,
         ):
@@ -180,7 +180,7 @@ def validate_parents_of_saved_layer(
     # Perturbation: for each parent, substitute random values and expect
     # the output to change, proving that parent genuinely influences this layer.
 
-    func_name = layer_to_validate_parents_for.func_applied_name
+    func_name = layer_to_validate_parents_for.func_name
     for perturb_layer in layer_to_validate_parents_for.parent_layers:
         if func_name in SKIP_PERTURBATION_ENTIRELY:
             continue
@@ -236,8 +236,8 @@ def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bo
         return False
 
     argtype_dict = {
-        "args": (enumerate, "creation_args"),
-        "kwargs": (lambda x: x.items(), "creation_kwargs"),
+        "args": (enumerate, "captured_args"),
+        "kwargs": (lambda x: x.items(), "captured_kwargs"),
     }
 
     # Check for each parent layer that it is logged as a saved argument when it matches an argument, and
@@ -334,12 +334,12 @@ def _check_arglocs_correct_for_arg(
     target_layer_label = target_layer.layer_label
     parent_layer_label = parent_layer.layer_label
     # children_tensor_versions stores per-child snapshots when an in-place
-    # op modified the tensor between uses.  Fall back to tensor_contents
+    # op modified the tensor between uses.  Fall back to activation
     # when no child-specific version exists.
     if target_layer_label in parent_layer.children_tensor_versions:
         parent_activations = parent_layer.children_tensor_versions[target_layer_label]
     else:
-        parent_activations = parent_layer.tensor_contents
+        parent_activations = parent_layer.activation
 
     if isinstance(saved_arg_val, torch.Tensor):
         parent_layer_matches_arg = tensor_nanequal(
@@ -368,7 +368,7 @@ def _check_arglocs_correct_for_arg(
         and (not torch.all(torch.abs(parent_activations) == 1))
         and not any(
             [
-                torch.equal(parent_activations, self[other_parent].tensor_contents)
+                torch.equal(parent_activations, self[other_parent].activation)
                 for other_parent in target_layer.parent_layers
                 if other_parent != parent_layer_label
             ]
@@ -383,11 +383,11 @@ def _check_arglocs_correct_for_arg(
 
     # Case 2 exemption: in-place RNG ops (bernoulli_, full) mutate the tensor
     # AFTER it was logged as an arg, so the saved activation no longer matches
-    # the creation_args snapshot.  This is expected and not a real mismatch.
+    # the captured_args snapshot.  This is expected and not a real mismatch.
     if (
         not parent_layer_matches_arg
         and parent_layer_logged_as_arg
-        and parent_layer.func_applied_name in ["bernoulli_", "full"]
+        and parent_layer.func_name in ["bernoulli_", "full"]
     ):
         return True
 
@@ -422,10 +422,10 @@ def _check_perturbation_exemptions(
     # Empty tensors cannot be meaningfully perturbed.
     for perturbed_label in layers_to_perturb:
         p_entry = self[perturbed_label]
-        if p_entry.tensor_contents is not None and p_entry.tensor_contents.numel() == 0:
+        if p_entry.activation is not None and p_entry.activation.numel() == 0:
             return True
 
-    func_name = layer.func_applied_name
+    func_name = layer.func_name
 
     # Registry 3: structural arg positions (e.g., index tensor for embedding).
     if func_name in STRUCTURAL_ARG_POSITIONS:
@@ -535,7 +535,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         return True
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
-    if layer.func_applied_name in SKIP_VALIDATION_ENTIRELY:
+    if layer.func_name in SKIP_VALIDATION_ENTIRELY:
         return True
 
     # Pre-execution perturbation exemptions (structural args, custom checks).
@@ -565,14 +565,14 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         # input (e.g., wrong shape).  Treat as exempt.
         return True
 
-    matches_saved = tensor_nanequal(recomputed_output, layer.tensor_contents, allow_tolerance=True)
+    matches_saved = tensor_nanequal(recomputed_output, layer.activation, allow_tolerance=True)
 
     # Forward replay failure (non-perturbed): saved activations don't match.
     if not matches_saved and not perturb:
         # Exemption: parent is an in-place RNG op that may have mutated its
         # tensor after the child logged it as an arg.
         parent_has_inplace_rng = any(
-            self[p].func_applied_name in ["bernoulli_", "full"] for p in layer.parent_layers
+            self[p].func_name in ["bernoulli_", "full"] for p in layer.parent_layers
         )
         if parent_has_inplace_rng:
             return True
@@ -585,7 +585,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Perturbation produced identical output -- run posthoc checks to see if
     # there's a valid excuse (bool output, special-value args, type cast, etc.).
     # Uses exact equality (no tolerance) since any change should be detectable.
-    if perturb and tensor_nanequal(recomputed_output, layer.tensor_contents, allow_tolerance=False):
+    if perturb and tensor_nanequal(recomputed_output, layer.activation, allow_tolerance=False):
         return posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
 
     return True
@@ -598,7 +598,7 @@ def _prepare_input_args_for_validating_layer(
 ) -> Dict:
     """Build the input argument dict for replaying a layer's function.
 
-    Starts from the layer's saved ``creation_args`` / ``creation_kwargs``,
+    Starts from the layer's saved ``captured_args`` / ``captured_kwargs``,
     deep-clones all tensors to prevent in-place mutation during replay, then
     swaps in each parent's saved activation (or a perturbed version) at the
     correct argument position.
@@ -612,14 +612,14 @@ def _prepare_input_args_for_validating_layer(
         layers_to_perturb: Layers for which to perturb the saved activations.
 
     Returns:
-        Dict with ``"args"`` and ``"kwargs"`` keys, or None if creation_args
+        Dict with ``"args"`` and ``"kwargs"`` keys, or None if captured_args
         was not saved (can't validate without them).
     """
-    if layer_to_validate_parents_for.creation_args is None:
+    if layer_to_validate_parents_for.captured_args is None:
         return None  # type: ignore[return-value]  # Can't validate without saved args (#131)
     input_args = {
-        "args": list(layer_to_validate_parents_for.creation_args[:]),
-        "kwargs": layer_to_validate_parents_for.creation_kwargs.copy(),
+        "args": list(layer_to_validate_parents_for.captured_args[:]),
+        "kwargs": layer_to_validate_parents_for.captured_kwargs.copy(),
     }
     input_args = _copy_validation_args(input_args)
 
@@ -636,14 +636,14 @@ def _prepare_input_args_for_validating_layer(
                     layer_to_validate_parents_for.layer_label
                 ]
             else:
-                parent_values = parent_layer.tensor_contents
+                parent_values = parent_layer.activation
             if parent_values is None:
                 continue  # Skip validation for unsaved parents (#150)
             parent_values = parent_values.detach().clone()
 
             if parent_layer_arg in layers_to_perturb:
                 parent_layer_func_values = _perturb_layer_activations(
-                    parent_values, layer_to_validate_parents_for.tensor_contents
+                    parent_values, layer_to_validate_parents_for.activation
                 )
             else:
                 parent_layer_func_values = parent_values

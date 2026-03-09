@@ -34,39 +34,39 @@ def test_alexnet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth3"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth4"),
     )
@@ -78,8 +78,8 @@ def test_vgg16(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "vgg16"),
     )
 
@@ -91,8 +91,8 @@ def test_vit(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "vit_l_16"),
     )
 
@@ -104,32 +104,32 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=True,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=False,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_buffer_layers=False,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_rolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=True,
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth1"),
@@ -137,8 +137,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=False,
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth1"),
@@ -146,8 +146,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=True,
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth2"),
@@ -155,8 +155,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=False,
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth2"),
@@ -164,8 +164,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=True,
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth3"),
@@ -173,8 +173,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=False,
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth3"),
@@ -182,8 +182,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=True,
         vis_nesting_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth4"),
@@ -191,8 +191,8 @@ def test_googlenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_buffer_layers=False,
         vis_nesting_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth4"),
@@ -206,8 +206,8 @@ def test_resnet50(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "resnet50"),
     )
 
@@ -219,8 +219,8 @@ def test_convnext_large(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "convnext_large"),
     )
 
@@ -232,39 +232,39 @@ def test_densenet121(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth3"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth4"),
     )
@@ -277,8 +277,8 @@ def test_efficientnet_b6(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "efficientnet_b6"),
     )
 
@@ -290,8 +290,8 @@ def test_squeezenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "squeezenet"),
     )
 
@@ -303,8 +303,8 @@ def test_mobilenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "mobilenet_vg_large"),
     )
 
@@ -316,8 +316,8 @@ def test_wide_resnet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "wide_resnet101_2"),
     )
 
@@ -329,8 +329,8 @@ def test_mnasnet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "mnasnet1_3"),
     )
 
@@ -342,8 +342,8 @@ def test_shufflenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "shufflenet_v2_x1_5"),
     )
 
@@ -355,8 +355,8 @@ def test_resnext(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "resnext101_64x4d"),
     )
 
@@ -368,8 +368,8 @@ def test_regnet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "regnet_x_32gf"),
     )
 
@@ -381,8 +381,8 @@ def test_swin_v2b(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "swin_v2b"),
     )
 
@@ -394,8 +394,8 @@ def test_maxvit(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "max_vit_t"),
     )
 
@@ -408,8 +408,8 @@ def test_inception_v3():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "inception_v3"),
     )
 
@@ -426,62 +426,62 @@ def test_cornet_z(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth3"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth3"),
     )
@@ -495,62 +495,62 @@ def test_cornet_s(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth3"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth3"),
     )
@@ -564,62 +564,62 @@ def test_cornet_r(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth1"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth2"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth3"),
     )
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth3"),
     )
@@ -634,62 +634,62 @@ def test_cornet_rt():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth1"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth1"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth2"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth2"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth3"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_nesting_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth3"),
     )
@@ -707,8 +707,8 @@ def test_timm_beit_base_patch16_224(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_beit_base_patch16_224"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -721,8 +721,8 @@ def test_timm_gluon_resnext101_32x4d():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "gluon_resnext101_32x4d"),
     )
     assert validate_forward_pass(model, model_input)
@@ -735,8 +735,8 @@ def test_timm_ecaresnet101d():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "ecaresnet101d"),
     )
     assert validate_forward_pass(model, model_input)
@@ -749,8 +749,8 @@ def test_mobilevit_xxs():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "mobilevitv2_050"),
     )
     assert validate_forward_pass(model, model_input)
@@ -763,8 +763,8 @@ def test_timm_adv_inception_v3(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_adv_inception_v3"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -777,8 +777,8 @@ def test_timm_cait_s24_224(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_cait_s24_224"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -791,8 +791,8 @@ def test_timm_coat_mini(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_coat_mini"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -805,8 +805,8 @@ def test_timm_convit_base(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_convit_base"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -820,8 +820,8 @@ def test_timm_darknet21():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_darknet21"),
     )
     assert validate_forward_pass(model, model_input)
@@ -835,8 +835,8 @@ def test_timm_ghostnet_100():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_ghostnet_100"),
     )
     assert validate_forward_pass(model, model_input)
@@ -850,8 +850,8 @@ def test_timm_mixnet_m():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_mixnet_m"),
     )
     assert validate_forward_pass(model, model_input)
@@ -865,8 +865,8 @@ def test_timm_poolformer_s24():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_poolformer_s24"),
     )
     assert validate_forward_pass(model, model_input)
@@ -880,8 +880,8 @@ def test_timm_resnest14d():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_resnest14d"),
     )
     assert validate_forward_pass(model, model_input)
@@ -895,8 +895,8 @@ def test_timm_edgenext_small():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "timm_edgenext_small"),
     )
     assert validate_forward_pass(model, model_input)
@@ -910,8 +910,8 @@ def test_timm_hardcorenas_f():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "hardcorenas_f"),
     )
     assert validate_forward_pass(model, model_input)
@@ -925,8 +925,8 @@ def test_timm_semnasnet_100():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "semnasnet_100"),
     )
     assert validate_forward_pass(model, model_input)
@@ -940,8 +940,8 @@ def test_timm_xcit_tiny_24_p8_224():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "xcit_tiny_24_p8_224"),
     )
     assert validate_forward_pass(model, model_input)
@@ -955,8 +955,8 @@ def test_timm_seresnet152():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "seresnet152"),
     )
     assert validate_forward_pass(model, model_input)
@@ -974,8 +974,8 @@ def test_audio_conv_tasnet_base():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_conv_tasnet_base"),
     )
     assert validate_forward_pass(model, model_input)
@@ -988,8 +988,8 @@ def test_audio_wav2letter():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wav2letter"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1003,8 +1003,8 @@ def test_audio_hubert_base():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_hubert_base"),
         random_seed=1,
     )
@@ -1019,8 +1019,8 @@ def test_audio_wav2vec2_base():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wave2vec2_base"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1034,8 +1034,8 @@ def test_deepspeech():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_deepspeech"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1057,8 +1057,8 @@ def test_conformer():
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "conformer"),
     )
     assert validate_forward_pass(model, model_inputs)
@@ -1075,8 +1075,8 @@ def test_whisper_tiny():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "whisper_tiny"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -1093,15 +1093,15 @@ def test_lstm():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "language_lstm_unrolled"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "language_lstm_rolled"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1113,15 +1113,15 @@ def test_rnn():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "language_rnn_unrolled"),
     )
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="rolled",
+        vis_save_only=True,
+        vis_mode="rolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "language_rnn_rolled"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1137,8 +1137,8 @@ def test_gpt2():
         model,
         [],
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "gpt2"),
     )
     assert validate_forward_pass(model, [], model_inputs)
@@ -1153,8 +1153,8 @@ def test_distilbert():
         model,
         [],
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "distilbert"),
     )
     assert validate_forward_pass(model, [], model_inputs)
@@ -1169,8 +1169,8 @@ def test_electra_small():
         model,
         [],
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "electra_small"),
     )
     assert validate_forward_pass(model, [], model_inputs)
@@ -1188,8 +1188,8 @@ def test_bert():
         model,
         [],
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "language-models", "bert"),
     )
     assert validate_forward_pass(model, [], model_inputs)
@@ -1206,8 +1206,8 @@ def test_t5_small():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "t5_small"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -1223,8 +1223,8 @@ def test_bart_base():
         model,
         [],
         inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "bart_base"),
     )
     assert validate_forward_pass(model, [], inputs)
@@ -1240,8 +1240,8 @@ def test_roberta_base():
         model,
         [],
         inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "roberta_base"),
     )
     assert validate_forward_pass(model, [], inputs)
@@ -1258,8 +1258,8 @@ def test_sentence_transformer():
         transformer_model,
         [],
         inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "sentence_transformer"),
     )
     assert validate_forward_pass(transformer_model, [], inputs)
@@ -1282,8 +1282,8 @@ def test_stable_diffusion():
         model,
         model_inputs,
         random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "stable_diffusion"),
     )
     assert validate_forward_pass(model, model_inputs, random_seed=1)
@@ -1305,8 +1305,8 @@ def test_styletts():
         model,
         model_inputs,
         random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "text-to-speech", "styletts_text_encoder"),
     )
     assert validate_forward_pass(model, model_inputs, random_seed=1)
@@ -1336,8 +1336,8 @@ def test_qml():
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "quantum", "qml"),
     )
     assert validate_forward_pass(model, model_inputs)
@@ -1366,8 +1366,8 @@ def test_lightning():
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "lightning", "one-hot-autoencoder"),
     )
     assert validate_forward_pass(model, model_inputs)
@@ -1392,8 +1392,8 @@ def test_clip():
         [],
         model_inputs,
         random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "clip"),
     )
     assert validate_forward_pass(model, [], model_inputs, random_seed=1)
@@ -1413,8 +1413,8 @@ def test_blip_base():
         [],
         model_inputs,
         random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip_base"),
     )
     assert validate_forward_pass(model, [], model_inputs, random_seed=1)
@@ -1431,8 +1431,8 @@ def test_vit_mae():
         [],
         model_kwargs,
         random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "vit_mae"),
     )
     assert validate_forward_pass(model, [], model_kwargs, random_seed=1)
@@ -1487,8 +1487,8 @@ def test_simple_moe():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_moe"),
     )
     assert validate_forward_pass(model, x)
@@ -1516,8 +1516,8 @@ def test_mamba():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "mamba"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -1541,8 +1541,8 @@ def test_mamba2():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "mamba2"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -1565,8 +1565,8 @@ def test_rwkv():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "rwkv"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -1589,8 +1589,8 @@ def test_falcon_mamba():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "state-space-models", "falcon_mamba"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -1624,8 +1624,8 @@ def test_autoencoder_vit_mae():
         [],
         model_kwargs,
         random_seed=1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "autoencoders", "vit_mae_pretrain"),
     )
     assert validate_forward_pass(model, [], model_kwargs, random_seed=1)
@@ -1642,8 +1642,8 @@ def test_segment_deeplab_v3_resnet50(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-segmentation",
@@ -1659,8 +1659,8 @@ def test_segment_deeplabv3_mobilenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-segmentation",
@@ -1676,8 +1676,8 @@ def test_segment_lraspp_mobilenet(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-segmentation",
@@ -1693,8 +1693,8 @@ def test_segment_fcn_resnet50(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-segmentation", "segment_fcn_resnet50"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -1723,8 +1723,8 @@ def test_fasterrcnn_mobilenet_train(default_input1, default_input2):
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1742,8 +1742,8 @@ def test_fasterrcnn_mobilenet_eval(default_input1, default_input2):
     show_model_graph(
         model,
         [input_tensors],
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1771,8 +1771,8 @@ def test_fcos_resnet50_train(default_input1, default_input2):
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1791,8 +1791,8 @@ def test_fcos_resnet50_eval(default_input1, default_input2):
     show_model_graph(
         model,
         [input_tensors],
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1820,8 +1820,8 @@ def test_retinanet_resnet50_train(default_input1, default_input2):
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1839,8 +1839,8 @@ def test_retinanet_resnet50_eval(default_input1, default_input2):
     show_model_graph(
         model,
         [input_tensors],
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1868,8 +1868,8 @@ def test_ssd300_vgg16_train(default_input1, default_input2):
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "torchvision-detection",
@@ -1887,8 +1887,8 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
     show_model_graph(
         model,
         [input_tensors],
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "detect_ssd300_vgg16_eval"),
     )
     assert validate_forward_pass(model, [input_tensors])
@@ -1905,8 +1905,8 @@ def test_quantize_resnet50(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-quantize", "quantize_resnet50"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -1924,8 +1924,8 @@ def test_video_r2plus1_18():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r2plus1d_18"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1938,8 +1938,8 @@ def test_video_mc3_18():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_mc3_18"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1952,8 +1952,8 @@ def test_video_mvit_v2_s():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_mvit_v2_s"),
     )
 
@@ -1965,8 +1965,8 @@ def test_video_r3d_18():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_r3d_18"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1979,8 +1979,8 @@ def test_video_s3d():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-video", "video_s3d"),
     )
     assert validate_forward_pass(model, model_input)
@@ -1998,8 +1998,8 @@ def test_opticflow_raftsmall():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftsmall"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2013,9 +2013,9 @@ def test_opticflow_raftlarge():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
+        vis_save_only=True,
         random_seed=1,
-        vis_opt="unrolled",
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftlarge"),
     )
     assert validate_forward_pass(model, model_input, random_seed=1)
@@ -2033,8 +2033,8 @@ def test_taskonomy(default_input1):
     show_model_graph(
         model,
         default_input1,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "taskonomy", "taskonomy"),
     )
     assert validate_forward_pass(model, default_input1)
@@ -2065,8 +2065,8 @@ def test_dimenet():
     show_model_graph(
         model,
         model_inputs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "dimenet"),
     )
     assert validate_forward_pass(model, model_inputs)
@@ -2096,8 +2096,8 @@ def test_llama():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "llama"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2123,8 +2123,8 @@ def test_mistral():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "mistral"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2148,8 +2148,8 @@ def test_phi():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "phi"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2175,8 +2175,8 @@ def test_gemma():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gemma"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2201,8 +2201,8 @@ def test_qwen2():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "qwen2"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2225,8 +2225,8 @@ def test_falcon_llm():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "falcon"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2248,8 +2248,8 @@ def test_bloom():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "bloom"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2273,8 +2273,8 @@ def test_opt():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "opt"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2303,8 +2303,8 @@ def test_albert():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "albert"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2328,8 +2328,8 @@ def test_deberta():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2353,8 +2353,8 @@ def test_xlm_roberta():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "xlm_roberta"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2389,8 +2389,8 @@ def test_pegasus():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "pegasus"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2422,8 +2422,8 @@ def test_led():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "led"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2453,8 +2453,8 @@ def test_fnet():
             model,
             [],
             model_kwargs,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "fnet"),
         )
         assert validate_forward_pass(model, [], model_kwargs)
@@ -2481,8 +2481,8 @@ def test_nystromformer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "nystromformer"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2507,8 +2507,8 @@ def test_bigbird():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "bigbird"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2540,8 +2540,8 @@ def test_mixtral():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "moe-models", "mixtral"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2571,8 +2571,8 @@ def test_switch_transformer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "moe-models", "switch_transformer"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2602,8 +2602,8 @@ def test_deit():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "deit"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2632,8 +2632,8 @@ def test_cvt():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "cvt"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2660,8 +2660,8 @@ def test_segformer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-segmentation", "segformer"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2693,8 +2693,8 @@ def test_detr():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "detr"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2724,8 +2724,8 @@ def test_maskrcnn_resnet50_train():
         show_model_graph(
             model,
             (img, targets),
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "maskrcnn_train"),
         )
         assert validate_forward_pass(model, (img, targets))
@@ -2746,8 +2746,8 @@ def test_maskrcnn_resnet50_eval():
         show_model_graph(
             model,
             (img,),
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-detection", "maskrcnn_eval"),
         )
         assert validate_forward_pass(model, (img,))
@@ -2769,8 +2769,8 @@ def test_timm_hrnet_w18():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "hrnet_w18"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2785,8 +2785,8 @@ def test_timm_efficientnetv2_s():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "efficientnetv2_s"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2801,8 +2801,8 @@ def test_timm_levit_128():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "levit_128"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2817,8 +2817,8 @@ def test_timm_crossvit_tiny_240():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "crossvit_tiny_240"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2833,8 +2833,8 @@ def test_timm_pvt_v2_b0():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "pvt_v2_b0"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2849,8 +2849,8 @@ def test_timm_twins_svt_small():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "twins_svt_small"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2865,8 +2865,8 @@ def test_timm_focalnet_tiny_srf():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "focalnet_tiny_srf"),
     )
     assert validate_forward_pass(model, model_input)
@@ -2898,8 +2898,8 @@ def test_perceiver():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "perceiver", "perceiver"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2930,8 +2930,8 @@ def test_patchtst():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "patchtst"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -2966,8 +2966,8 @@ def test_decision_transformer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "reinforcement-learning", "decision_transformer"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3004,8 +3004,8 @@ def test_graphsage_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graphsage_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3047,8 +3047,8 @@ def test_gin_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gin_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3080,8 +3080,8 @@ def test_graph_transformer_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graph_transformer_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3100,8 +3100,8 @@ def test_mobilenet_v3_small():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "mobilenet_v3_small"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3121,8 +3121,8 @@ def test_timm_res2net50():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "res2net50"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3137,8 +3137,8 @@ def test_timm_gmlp_s16():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "gmlp_s16"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3153,8 +3153,8 @@ def test_timm_resmlp_12():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "resmlp_12"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3169,8 +3169,8 @@ def test_timm_eva02_small():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "eva02_small"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3200,8 +3200,8 @@ def test_olmo():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "olmo"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3236,8 +3236,8 @@ def test_longformer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "longformer"),
     )
 
@@ -3269,8 +3269,8 @@ def test_reformer():
             model,
             [],
             model_kwargs,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(VIS_OUTPUT_DIR, "efficient-transformers", "reformer"),
         )
         assert validate_forward_pass(model, [], model_kwargs)
@@ -3303,8 +3303,8 @@ def test_dinov2():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "dinov2"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3337,8 +3337,8 @@ def test_audio_ast():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "ast"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3381,8 +3381,8 @@ def test_audio_clap():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "clap"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3410,8 +3410,8 @@ def test_audio_encodec():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "encodec"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3438,8 +3438,8 @@ def test_audio_sew():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "sew"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3478,8 +3478,8 @@ def test_audio_speecht5():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "speecht5"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3511,8 +3511,8 @@ def test_audio_vits():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "vits"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3556,8 +3556,8 @@ def test_informer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "informer"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3597,8 +3597,8 @@ def test_autoformer():
         model,
         [],
         model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "autoformer"),
     )
     assert validate_forward_pass(model, [], model_kwargs)
@@ -3629,8 +3629,8 @@ def test_keypointrcnn_resnet50_train():
         show_model_graph(
             model,
             model_input,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(
                 VIS_OUTPUT_DIR,
                 "torchvision-detection",
@@ -3656,8 +3656,8 @@ def test_keypointrcnn_resnet50_eval():
         show_model_graph(
             model,
             model_input,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(
                 VIS_OUTPUT_DIR,
                 "torchvision-detection",
@@ -3700,8 +3700,8 @@ def test_gatv2_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gatv2_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3734,8 +3734,8 @@ def test_rgcn_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "rgcn_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -3768,8 +3768,8 @@ def test_gptj():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gptj"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3800,8 +3800,8 @@ def test_gpt_bigcode():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_bigcode"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3829,8 +3829,8 @@ def test_gpt_neox():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "decoder-only-llms", "gpt_neox"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3863,8 +3863,8 @@ def test_funnel_transformer():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "funnel_transformer"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3892,8 +3892,8 @@ def test_canine():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "canine"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3922,8 +3922,8 @@ def test_mobilebert():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-only", "mobilebert"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3960,8 +3960,8 @@ def test_mbart():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "mbart"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -3994,8 +3994,8 @@ def test_prophetnet():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "encoder-decoder", "prophetnet"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4029,8 +4029,8 @@ def test_audio_wavlm():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "wavlm"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4059,8 +4059,8 @@ def test_audio_data2vec():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "data2vec_audio"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4089,8 +4089,8 @@ def test_audio_unispeech():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchaudio", "unispeech"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4110,8 +4110,8 @@ def test_timm_convnextv2_atto():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "convnextv2_atto"),
     )
     assert validate_forward_pass(model, x)
@@ -4126,8 +4126,8 @@ def test_timm_nfnet_l0():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "nfnet_l0"),
     )
     assert validate_forward_pass(model, x)
@@ -4142,8 +4142,8 @@ def test_timm_davit_tiny():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "davit_tiny"),
     )
     assert validate_forward_pass(model, x)
@@ -4158,8 +4158,8 @@ def test_timm_coatnet():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "coatnet_0"),
     )
     assert validate_forward_pass(model, x)
@@ -4174,8 +4174,8 @@ def test_timm_repvgg_a0():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "repvgg_a0"),
     )
     assert validate_forward_pass(model, x)
@@ -4190,8 +4190,8 @@ def test_timm_rexnet():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "rexnet_100"),
     )
     assert validate_forward_pass(model, x)
@@ -4206,8 +4206,8 @@ def test_timm_pit():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "pit_ti_224"),
     )
     assert validate_forward_pass(model, x)
@@ -4222,8 +4222,8 @@ def test_timm_visformer():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "visformer_tiny"),
     )
     assert validate_forward_pass(model, x)
@@ -4238,8 +4238,8 @@ def test_timm_gcvit():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "gcvit_xxtiny"),
     )
     assert validate_forward_pass(model, x)
@@ -4254,8 +4254,8 @@ def test_timm_efficientformer():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "efficientformer_l1"),
     )
     assert validate_forward_pass(model, x)
@@ -4270,8 +4270,8 @@ def test_timm_fastvit():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "fastvit_t8"),
     )
     assert validate_forward_pass(model, x)
@@ -4286,8 +4286,8 @@ def test_timm_nest():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "nest_tiny"),
     )
     assert validate_forward_pass(model, x)
@@ -4302,8 +4302,8 @@ def test_timm_sequencer():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "sequencer2d_s"),
     )
     assert validate_forward_pass(model, x)
@@ -4318,8 +4318,8 @@ def test_timm_tresnet():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm", "tresnet_m"),
     )
     assert validate_forward_pass(model, x)
@@ -4363,8 +4363,8 @@ def test_siglip():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "siglip"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4408,8 +4408,8 @@ def test_blip2():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip2"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4452,8 +4452,8 @@ def test_deformable_detr():
             model,
             model_input,
             input_kwargs=model_kwargs,
-            save_only=True,
-            vis_opt="unrolled",
+            vis_save_only=True,
+            vis_mode="unrolled",
             vis_outpath=opj(VIS_OUTPUT_DIR, "detection-additional", "deformable_detr"),
         )
         assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4494,8 +4494,8 @@ def test_layoutlm():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "nlp-models", "layoutlm"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4549,8 +4549,8 @@ def test_time_series_transformer():
         model,
         model_input,
         input_kwargs=model_kwargs,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "time-series", "time_series_transformer"),
     )
     assert validate_forward_pass(model, model_input, input_kwargs=model_kwargs)
@@ -4587,8 +4587,8 @@ def test_chebconv_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "chebconv_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -4618,8 +4618,8 @@ def test_sgc_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "sgc_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -4651,8 +4651,8 @@ def test_tag_pyg():
     show_model_graph(
         model,
         model_input,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "tag_pyg"),
     )
     assert validate_forward_pass(model, model_input)
@@ -4685,8 +4685,8 @@ def test_recurrent_gemma():
         model,
         [],
         input_kwargs={"input_ids": input_ids},
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "linear-recurrence", "recurrent_gemma"),
     )
     assert validate_forward_pass(model, [], input_kwargs={"input_ids": input_ids})
@@ -4706,8 +4706,8 @@ def test_timm_volo():
     show_model_graph(
         model,
         x,
-        save_only=True,
-        vis_opt="unrolled",
+        vis_save_only=True,
+        vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "timm-models", "volo_d1"),
     )
     assert validate_forward_pass(model, x)

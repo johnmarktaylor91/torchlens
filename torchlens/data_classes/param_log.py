@@ -13,7 +13,7 @@ equal to the model's lifetime.  The ``cleanup()`` method on ModelLog
 deletes all ParamLog references.
 
 **Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
-grad_fsize) is computed lazily on first access via ``_check_param_grad()``.
+grad_memory) is computed lazily on first access via ``_check_param_grad()``.
 This allows gradients computed after ``log_forward_pass()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
@@ -41,7 +41,7 @@ class ParamLog:
         shape: Tuple[int, ...],
         dtype: torch.dtype,
         num_params: int,
-        fsize: int,
+        memory: int,
         trainable: bool,
         module_address: str,
         module_type: str,
@@ -53,7 +53,7 @@ class ParamLog:
         self.shape = shape
         self.dtype = dtype
         self.num_params = num_params
-        self.fsize = fsize
+        self.memory = memory
         self.trainable = trainable
         self.module_address = module_address
         self.module_type = module_type
@@ -67,17 +67,17 @@ class ParamLog:
 
         # Populated during postprocessing:
         self.num_passes: int = 1  # how many forward passes used this param
-        self.layer_log_entries: List[str] = []  # layer labels that used this param
+        self.used_by_layers: List[str] = []  # layer labels that used this param
         self.linked_params: List[str] = []  # other param addresses sharing the same tensor
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
-        self._grad_fsize: int = 0
-        self._grad_fsize_nice: str = human_readable_size(0)
+        self._grad_memory: int = 0
+        self._grad_memory_str: str = human_readable_size(0)
 
     @property
-    def fsize_nice(self) -> str:
-        return human_readable_size(self.fsize)
+    def memory_str(self) -> str:
+        return human_readable_size(self.memory)
 
     @property
     def is_quantized(self) -> bool:
@@ -103,8 +103,8 @@ class ParamLog:
             self._has_grad = True
             self._grad_shape = tuple(grad.shape)
             self._grad_dtype = grad.dtype
-            self._grad_fsize = grad.nelement() * grad.element_size()
-            self._grad_fsize_nice = human_readable_size(self._grad_fsize)
+            self._grad_memory = grad.nelement() * grad.element_size()
+            self._grad_memory_str = human_readable_size(self._grad_memory)
 
     @property
     def has_grad(self) -> bool:
@@ -137,24 +137,24 @@ class ParamLog:
         self._grad_dtype = value
 
     @property
-    def grad_fsize(self) -> int:
+    def grad_memory(self) -> int:
         """Size of the gradient tensor in bytes."""
         self._check_param_grad()
-        return self._grad_fsize
+        return self._grad_memory
 
-    @grad_fsize.setter
-    def grad_fsize(self, value: int) -> None:
-        self._grad_fsize = value
+    @grad_memory.setter
+    def grad_memory(self, value: int) -> None:
+        self._grad_memory = value
 
     @property
-    def grad_fsize_nice(self) -> str:
+    def grad_memory_str(self) -> str:
         """Human-readable size of the gradient tensor (e.g. '4.0 KB')."""
         self._check_param_grad()
-        return self._grad_fsize_nice
+        return self._grad_memory_str
 
-    @grad_fsize_nice.setter
-    def grad_fsize_nice(self, value: str) -> None:
-        self._grad_fsize_nice = value
+    @grad_memory_str.setter
+    def grad_memory_str(self, value: str) -> None:
+        self._grad_memory_str = value
 
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, trainability, and usage."""
@@ -163,13 +163,13 @@ class ParamLog:
             f"ParamLog: {self.address}",
             f"  shape: {self.shape}",
             f"  dtype: {self.dtype}",
-            f"  size: {self.fsize_nice}",
+            f"  size: {self.memory_str}",
             f"  {status}",
             f"  has_grad: {self.has_grad}",
             f"  module: {self.module_address} ({self.module_type})",
         ]
-        if self.layer_log_entries:
-            lines.append(f"  used by: {', '.join(self.layer_log_entries)}")
+        if self.used_by_layers:
+            lines.append(f"  used by: {', '.join(self.used_by_layers)}")
         if self.linked_params:
             lines.append(f"  linked: {', '.join(self.linked_params)}")
         if self.has_optimizer is not None:

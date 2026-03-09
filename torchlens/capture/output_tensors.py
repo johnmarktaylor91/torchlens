@@ -143,7 +143,7 @@ def _build_graph_relationship_fields(
 
     fields_dict["parent_layers"] = parent_layer_labels
     fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
-    fields_dict["orig_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
+    fields_dict["root_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
     fields_dict["child_layers"] = []
     fields_dict["has_children"] = False
     fields_dict["is_input_layer"] = False
@@ -152,22 +152,22 @@ def _build_graph_relationship_fields(
     fields_dict["min_distance_from_input"] = None
     fields_dict["max_distance_from_input"] = None
     fields_dict["is_output_layer"] = False
-    fields_dict["is_output_parent"] = False
-    fields_dict["is_last_output_layer"] = False
+    fields_dict["feeds_output"] = False
+    fields_dict["is_final_output"] = False
     fields_dict["is_output_ancestor"] = False
-    fields_dict["output_descendents"] = set()
+    fields_dict["output_descendants"] = set()
     fields_dict["min_distance_from_output"] = None
     fields_dict["max_distance_from_output"] = None
-    fields_dict["input_output_address"] = None
+    fields_dict["io_role"] = None
     fields_dict["is_buffer_layer"] = False
     fields_dict["buffer_address"] = None
     fields_dict["buffer_pass"] = None
     fields_dict["buffer_parent"] = None
-    fields_dict["initialized_inside_model"] = len(parent_layer_labels) == 0
+    fields_dict["is_internally_initialized"] = len(parent_layer_labels) == 0
     fields_dict["has_internally_initialized_ancestor"] = len(internally_initialized_ancestors) > 0
     fields_dict["internally_initialized_parents"] = internal_parent_layer_labels
     fields_dict["internally_initialized_ancestors"] = internally_initialized_ancestors
-    fields_dict["terminated_inside_model"] = False
+    fields_dict["is_internally_terminated"] = False
     fields_dict["is_terminal_bool_layer"] = False
     fields_dict["in_cond_branch"] = False
     fields_dict["cond_branch_start_children"] = []
@@ -227,9 +227,7 @@ def _build_param_fields(
         pl.num_params for pl in parent_param_logs if not pl.trainable
     )
     with pause_logging():
-        fields_dict["parent_params_fsize"] = sum(
-            p.nelement() * p.element_size() for p in arg_parameters
-        )
+        fields_dict["params_memory"] = sum(p.nelement() * p.element_size() for p in arg_parameters)
     return parent_param_passes
 
 
@@ -240,21 +238,19 @@ def _build_module_context_fields(
     parent_layer_entries: List,
 ) -> None:
     """Populate module nesting, address, and input/output status fields."""
-    containing_modules_origin_nested = _get_input_module_info(self, arg_tensors)
-    containing_module_origin = (
-        containing_modules_origin_nested[-1] if containing_modules_origin_nested else None
-    )
+    containing_modules = _get_input_module_info(self, arg_tensors)
+    containing_module = containing_modules[-1] if containing_modules else None
 
-    fields_dict["containing_module_origin"] = containing_module_origin
-    fields_dict["containing_modules_origin_nested"] = containing_modules_origin_nested
+    fields_dict["containing_module"] = containing_module
+    fields_dict["containing_modules"] = containing_modules
     fields_dict["modules_entered"] = []
     fields_dict["modules_entered_argnames"] = defaultdict(list)
     fields_dict["module_passes_entered"] = []
     fields_dict["modules_exited"] = []
     fields_dict["module_passes_exited"] = []
     fields_dict["is_submodule_output"] = False
-    fields_dict["is_bottom_level_submodule_output"] = False
-    fields_dict["bottom_level_submodule_pass_exited"] = None
+    fields_dict["is_leaf_module_output"] = False
+    fields_dict["leaf_module_pass"] = None
     fields_dict["module_entry_exit_threads_inputs"] = {
         p.tensor_label_raw: p.module_entry_exit_thread_output[:] for p in parent_layer_entries
     }
@@ -294,7 +290,7 @@ def _build_shared_fields_dict(
     parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw")
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
-    fields_dict = {}
+    fields_dict: Dict[str, Any] = {}
 
     # General info
     fields_dict["layer_type"] = layer_type
@@ -302,29 +298,29 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self.output_device
 
     # Grad info
-    fields_dict["grad_contents"] = None  # type: ignore[assignment]
+    fields_dict["gradient"] = None  # type: ignore[assignment]
     fields_dict["save_gradients"] = self.save_gradients
-    fields_dict["has_saved_grad"] = False  # type: ignore[assignment]
+    fields_dict["has_gradient"] = False  # type: ignore[assignment]
     fields_dict["grad_shape"] = None  # type: ignore[assignment]
     fields_dict["grad_dtype"] = None  # type: ignore[assignment]
-    fields_dict["grad_fsize"] = 0  # type: ignore[assignment]
+    fields_dict["grad_memory"] = 0  # type: ignore[assignment]
 
     # Function call info
     fields_dict["func_applied"] = func  # type: ignore[assignment]
-    fields_dict["func_applied_name"] = func_name
+    fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = (
         _get_func_call_stack(self.num_context_lines) if self.save_source_context else []  # type: ignore[assignment]
     )
-    fields_dict["func_time_elapsed"] = exec_ctx.time_elapsed  # type: ignore[assignment]
+    fields_dict["func_time"] = exec_ctx.time_elapsed  # type: ignore[assignment]
     fields_dict["func_rng_states"] = exec_ctx.rng_states  # type: ignore[assignment]
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state  # type: ignore[assignment]
     fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())  # type: ignore[assignment]
-    fields_dict["num_func_args_total"] = len(args) + len(kwargs)  # type: ignore[assignment]
-    fields_dict["num_position_args"] = len(args)  # type: ignore[assignment]
+    fields_dict["num_args"] = len(args) + len(kwargs)  # type: ignore[assignment]
+    fields_dict["num_positional_args"] = len(args)  # type: ignore[assignment]
     fields_dict["num_keyword_args"] = len(kwargs)  # type: ignore[assignment]
-    fields_dict["func_position_args_non_tensor"] = non_tensor_args  # type: ignore[assignment]
-    fields_dict["func_keyword_args_non_tensor"] = non_tensor_kwargs  # type: ignore[assignment]
-    fields_dict["func_all_args_non_tensor"] = non_tensor_args + list(non_tensor_kwargs.values())  # type: ignore[assignment]
+    fields_dict["func_positional_args_non_tensor"] = non_tensor_args  # type: ignore[assignment]
+    fields_dict["func_kwargs_non_tensor"] = non_tensor_kwargs  # type: ignore[assignment]
+    fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())  # type: ignore[assignment]
 
     _build_graph_relationship_fields(
         self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
@@ -333,12 +329,13 @@ def _build_shared_fields_dict(
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
 
     # Function config — lightweight hyperparameter extraction, always on.
+    param_shapes: Optional[List[Tuple]] = fields_dict.get("parent_param_shapes")
     fields_dict["func_config"] = extract_salient_args(
         layer_type,
         func_name,
         args,
         kwargs,
-        fields_dict.get("parent_param_shapes", []),
+        param_shapes,
     )
 
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_passes
@@ -351,7 +348,7 @@ def _classify_new_tensor_in_model_log(
     new_tensor_label: str,
 ) -> None:
     """Update ModelLog categories (internally_initialized, merge points) for a new tensor."""
-    if fields_dict["initialized_inside_model"]:
+    if fields_dict["is_internally_initialized"]:
         self.internally_initialized_layers.append(new_tensor_label)
     if fields_dict["has_input_ancestor"] and any(
         (
@@ -392,7 +389,7 @@ def _tag_tensor_and_track_variations(
                 kwarg_copies,
                 new_layer_entry.parent_layer_arg_locs,
             )
-            if not tensor_nanequal(parent_tensor_contents, parent.tensor_contents):
+            if not tensor_nanequal(parent_tensor_contents, parent.activation):
                 parent.children_tensor_versions[new_layer_entry.tensor_label_raw] = (
                     parent_tensor_contents
                 )
@@ -461,7 +458,7 @@ def log_function_output_tensors_exhaustive(
         # sub-containers that could be mutated independently per output tensor.
         for field in (
             "parent_layer_arg_locs",
-            "containing_modules_origin_nested",
+            "containing_modules",
             "parent_param_passes",
         ):
             fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
@@ -497,7 +494,7 @@ def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_ar
     """Retrieve a parent tensor's pre-call value from the saved argument copies.
 
     Used for child tensor variation tracking: if a parent's value in arg_copies
-    differs from its currently saved tensor_contents, the parent was mutated
+    differs from its currently saved activation, the parent was mutated
     in-place between operations, and the variation is recorded.
     """
     for pos, label in parent_layer_arg_locs["args"].items():
@@ -547,9 +544,9 @@ def log_function_output_tensors_fast(
         # The raw label reconstructed here MUST match the exhaustive pass's label.
         self._layer_counter += 1
         self._raw_layer_type_counter[layer_type] += 1
-        realtime_tensor_num = self._layer_counter
+        creation_order = self._layer_counter
         layer_type_num = self._raw_layer_type_counter[layer_type]
-        tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{creation_order}_raw"
         # Skip orphans — these were pruned from the graph during postprocessing.
         if tensor_label_raw in self.orphan_layers:
             continue
@@ -587,7 +584,7 @@ def log_function_output_tensors_fast(
         # all match the exhaustive pass.  Any mismatch means dynamic control flow
         # changed the graph and the fast pass cannot proceed.
         if (
-            orig_layer_entry.realtime_tensor_num != self._layer_counter
+            orig_layer_entry.creation_order != self._layer_counter
             or orig_layer_entry.layer_type != layer_type
             or orig_layer_entry.tensor_label_raw != tensor_label_raw
             or set(orig_layer_entry.parent_layers) != set(parent_layer_labels_orig)
@@ -601,7 +598,7 @@ def log_function_output_tensors_fast(
 
         # Save activation data if this layer is in the save list.
         if (self._layer_nums_to_save == "all") or (
-            orig_layer_entry.realtime_tensor_num in self._layer_nums_to_save
+            orig_layer_entry.creation_order in self._layer_nums_to_save
         ):
             self.layers_with_saved_activations.append(orig_layer_entry.layer_label)
             orig_layer_entry.save_tensor_data(
@@ -611,7 +608,7 @@ def log_function_output_tensors_fast(
                 self.save_function_args,
                 self.activation_postfunc,
             )
-            # Output layers are identity wrappers whose tensor_contents come
+            # Output layers are identity wrappers whose activation come
             # from their parent.  Propagate the parent's saved activation to
             # any child that is an output layer so postprocess_fast can find it.
             for child_layer in orig_layer_entry.child_layers:
@@ -623,31 +620,29 @@ def log_function_output_tensors_fast(
                     ):
                         # children_tensor_versions already has postfunc applied.
                         tensor_to_save = orig_layer_entry.children_tensor_versions[child_layer]
-                        child_output.tensor_contents = safe_copy(tensor_to_save)
+                        child_output.activation = safe_copy(tensor_to_save)
                     else:
-                        child_output.tensor_contents = safe_copy(out)
+                        child_output.activation = safe_copy(out)
                         if self.activation_postfunc is not None:
                             # pause_logging prevents activation_postfunc from
                             # triggering decorated torch ops that would be logged.
                             with pause_logging():
-                                child_output.tensor_contents = self.activation_postfunc(
-                                    child_output.tensor_contents
+                                child_output.activation = self.activation_postfunc(
+                                    child_output.activation
                                 )
                     child_output.has_saved_activations = True
-                    child_output.tensor_fsize = get_tensor_memory_amount(
-                        child_output.tensor_contents
-                    )
+                    child_output.tensor_memory = get_tensor_memory_amount(child_output.activation)
 
         # Update lightweight metadata that may vary across inputs
         # (shape can differ for dynamic-shape models that still share graph structure).
         orig_layer_entry.tensor_shape = tuple(out.shape)
         orig_layer_entry.tensor_dtype = out.dtype
-        orig_layer_entry.tensor_fsize = get_tensor_memory_amount(out)
-        orig_layer_entry.func_time_elapsed = exec_ctx.time_elapsed
+        orig_layer_entry.tensor_memory = get_tensor_memory_amount(out)
+        orig_layer_entry.func_time = exec_ctx.time_elapsed
         orig_layer_entry.func_rng_states = exec_ctx.rng_states
         orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
-        orig_layer_entry.func_position_args_non_tensor = non_tensor_args
-        orig_layer_entry.func_keyword_args_non_tensor = non_tensor_kwargs
+        orig_layer_entry.func_positional_args_non_tensor = non_tensor_args
+        orig_layer_entry.func_kwargs_non_tensor = non_tensor_kwargs
 
         # Update func_config — some may be input-dependent (e.g. interpolate size).
         orig_layer_entry.func_config = extract_salient_args(
@@ -743,9 +738,9 @@ def _log_output_tensor_info(
     indiv_param_barcodes = list(parent_param_passes.keys())
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    realtime_tensor_num = self._layer_counter
+    creation_order = self._layer_counter
     layer_type_num = self._raw_layer_type_counter[layer_type]
-    tensor_label_raw = f"{layer_type}_{layer_type_num}_{realtime_tensor_num}_raw"
+    tensor_label_raw = f"{layer_type}_{layer_type_num}_{creation_order}_raw"
 
     # Determine operation equivalence type — the fingerprint used by loop detection
     # to group structurally identical operations (same layer across passes).
@@ -755,8 +750,8 @@ def _log_output_tensor_info(
         # same weight+bias tensors are the same layer on different passes.
         operation_equivalence_type = _make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
         fields_dict["operation_equivalence_type"] = operation_equivalence_type
-        self.layers_computed_with_params[operation_equivalence_type].append(tensor_label_raw)
-        fields_dict["pass_num"] = len(self.layers_computed_with_params[operation_equivalence_type])
+        self.layers_with_params[operation_equivalence_type].append(tensor_label_raw)
+        fields_dict["pass_num"] = len(self.layers_with_params[operation_equivalence_type])
     else:
         # Non-parameterized ops: equivalence is a hash of the operation type,
         # non-tensor args, output index, and containing module.  Each unique
@@ -773,8 +768,8 @@ def _log_output_tensor_info(
     fields_dict["equivalent_operations"] = self.equivalent_operations[operation_equivalence_type]
 
     # In-place ops return the same tensor object, which already has tl_tensor_label_raw.
-    fields_dict["function_is_inplace"] = hasattr(t, "tl_tensor_label_raw")
-    fields_dict["gradfunc"] = type(t.grad_fn).__name__
+    fields_dict["func_is_inplace"] = hasattr(t, "tl_tensor_label_raw")
+    fields_dict["grad_fn_name"] = type(t.grad_fn).__name__
 
     if fields_dict["is_part_of_iterable_output"]:
         fields_dict["iterable_output_index"] = i
@@ -782,21 +777,21 @@ def _log_output_tensor_info(
         fields_dict["iterable_output_index"] = None
 
     if (t.dtype == torch.bool) and (t.dim()) == 0:
-        fields_dict["is_atomic_bool_layer"] = True
+        fields_dict["is_scalar_bool"] = True
         try:
-            fields_dict["atomic_bool_val"] = t.item()
+            fields_dict["scalar_bool_value"] = t.item()
         except RuntimeError:
             # .item() forbidden inside torch.vmap context
-            fields_dict["atomic_bool_val"] = None
+            fields_dict["scalar_bool_value"] = None
     else:
-        fields_dict["is_atomic_bool_layer"] = False
-        fields_dict["atomic_bool_val"] = None
+        fields_dict["is_scalar_bool"] = False
+        fields_dict["scalar_bool_value"] = None
 
     # General info
     fields_dict["tensor_label_raw"] = tensor_label_raw
     fields_dict["layer_total_num"] = None
-    fields_dict["same_layer_operations"] = []
-    fields_dict["realtime_tensor_num"] = realtime_tensor_num
+    fields_dict["recurrent_group"] = []
+    fields_dict["creation_order"] = creation_order
     fields_dict["operation_num"] = None
     fields_dict["source_model_log"] = self
     fields_dict["_pass_finished"] = False
@@ -811,31 +806,31 @@ def _log_output_tensor_info(
     fields_dict["layer_type"] = layer_type
     fields_dict["layer_label_raw"] = tensor_label_raw
     fields_dict["layer_type_num"] = layer_type_num
-    fields_dict["layer_passes_total"] = 1
+    fields_dict["num_passes"] = 1
     fields_dict["lookup_keys"] = []
 
     # Saved tensor info
-    fields_dict["tensor_contents"] = None
+    fields_dict["activation"] = None
     fields_dict["has_saved_activations"] = False
     fields_dict["activation_postfunc"] = self.activation_postfunc
-    fields_dict["function_args_saved"] = False
-    fields_dict["creation_args"] = None
-    fields_dict["creation_kwargs"] = None
+    fields_dict["args_captured"] = False
+    fields_dict["captured_args"] = None
+    fields_dict["captured_kwargs"] = None
     fields_dict["tensor_shape"] = tuple(t.shape)
     fields_dict["tensor_dtype"] = t.dtype
     with pause_logging():
-        fields_dict["tensor_fsize"] = t.nelement() * t.element_size()
+        fields_dict["tensor_memory"] = t.nelement() * t.element_size()
 
     # FLOPs computation
     fields_dict["flops_forward"] = compute_forward_flops(
-        fields_dict.get("func_applied_name"),  # type: ignore[arg-type]
+        fields_dict.get("func_name"),  # type: ignore[arg-type]
         fields_dict["tensor_shape"],
         fields_dict.get("parent_param_shapes", []),
         args,
         kwargs,
     )
     fields_dict["flops_backward"] = compute_backward_flops(
-        fields_dict.get("func_applied_name"),  # type: ignore[arg-type]
+        fields_dict.get("func_name"),  # type: ignore[arg-type]
         fields_dict["flops_forward"],
     )
 
@@ -845,7 +840,7 @@ def _log_output_tensor_info(
 
     # If internally initialized, fix this information:
     if len(fields_dict["parent_layers"]) == 0:
-        fields_dict["initialized_inside_model"] = True
+        fields_dict["is_internally_initialized"] = True
         fields_dict["has_internally_initialized_ancestor"] = True
         fields_dict["internally_initialized_parents"] = []
         fields_dict["internally_initialized_ancestors"] = {tensor_label_raw}
@@ -882,7 +877,7 @@ def _make_layer_log_entry(
     else:
         new_entry = LayerPassLog(fields_dict)  # type: ignore[assignment]
     if (self._layer_nums_to_save == "all") or (
-        new_entry.realtime_tensor_num in self._layer_nums_to_save
+        new_entry.creation_order in self._layer_nums_to_save
     ):
         new_entry.save_tensor_data(
             t,

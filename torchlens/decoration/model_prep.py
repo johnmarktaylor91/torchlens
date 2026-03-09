@@ -285,7 +285,7 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
                 shape=tuple(param.shape),
                 dtype=param.dtype,
                 num_params=param.numel(),
-                fsize=param_fsize,
+                memory=param_fsize,
                 trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
                 module_address=module_address,
                 module_type=module_type,
@@ -420,7 +420,7 @@ def _capture_module_metadata(
     # Instance-specific fields
     meta["has_forward_hooks"] = bool(module._forward_hooks)
     meta["has_backward_hooks"] = bool(module._backward_hooks)
-    meta["training_mode"] = module.training
+    meta["is_training"] = module.training
 
     child_addresses = []
     for child_name, _ in module_children:
@@ -655,9 +655,7 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
             t = torch.identity(t)
         layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
         layer_entry.is_submodule_output = True
-        layer_entry.is_bottom_level_submodule_output = _is_bottom_level_submodule_exit(
-            model_log, t, module
-        )
+        layer_entry.is_leaf_module_output = _is_bottom_level_submodule_exit(model_log, t, module)
         layer_entry.modules_exited.append(module_address)
         layer_entry.module_passes_exited.append((module_address, module_pass_num))
         # Record module exit in chronological thread (matches "+" from entry).
@@ -799,14 +797,14 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
     sub_id = id(submodule)
 
     # Case 1: already determined in a prior call.
-    if layer_entry.is_bottom_level_submodule_output:
+    if layer_entry.is_leaf_module_output:
         return True
 
     # Case 2: tensor originated inside the model with no inputs entering
     # this submodule (e.g. a buffer-derived tensor in a leaf module).
-    if layer_entry.initialized_inside_model and len(model_log._mod_entered[sub_id]) == 0:
-        layer_entry.is_bottom_level_submodule_output = True
-        layer_entry.bottom_level_submodule_pass_exited = (
+    if layer_entry.is_internally_initialized and len(model_log._mod_entered[sub_id]) == 0:
+        layer_entry.is_leaf_module_output = True
+        layer_entry.leaf_module_pass = (
             submodule_address,
             model_log._mod_pass_num[sub_id],
         )
@@ -819,11 +817,11 @@ def _is_bottom_level_submodule_exit(model_log, t: torch.Tensor, submodule: nn.Mo
         parent_tensor = model_log[parent_label]
         parent_modules_entered = parent_tensor.modules_entered
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != submodule_address):
-            layer_entry.is_bottom_level_submodule_output = False
+            layer_entry.is_leaf_module_output = False
             return False
 
-    layer_entry.is_bottom_level_submodule_output = True
-    layer_entry.bottom_level_submodule_pass_exited = (
+    layer_entry.is_leaf_module_output = True
+    layer_entry.leaf_module_pass = (
         submodule_address,
         model_log._mod_pass_num[sub_id],
     )

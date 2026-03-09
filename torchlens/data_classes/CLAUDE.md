@@ -46,7 +46,7 @@ log.buffers            # -> BufferAccessor
 
 # LayerLog delegation
 layer = log.layers["conv2d_1_1"]
-layer.tensor_contents  # -> delegates to passes[1] for single-pass layers
+layer.activation  # -> delegates to passes[1] for single-pass layers
 layer.child_layers     # -> union of no-pass labels across all passes
 layer.passes           # -> Dict[int, LayerPassLog]
 ```
@@ -74,8 +74,8 @@ LayerLog (too generic for the aggregate). Single-pass buffer LayerLogs access th
 via `__getattr__` delegation.
 
 ### _build_layer_logs Multi-Pass Merge
-Only 3 fields merged across passes (has_input_ancestor OR, input_output_address char-merge,
-is_bottom_level_submodule_output OR). All other 78 fields use first-pass values.
+Only 3 fields merged across passes (has_input_ancestor OR, io_role char-merge,
+is_leaf_module_output OR). All other 78 fields use first-pass values.
 `cond_branch_start_children` and `cond_branch_then_children` use first pass only.
 
 ## Circular References (GC concern)
@@ -95,11 +95,11 @@ can be called explicitly to break cycles.
 - Adding new fields: update class definition AND `constants.py` FIELD_ORDER
 - `copy()` on LayerPassLog: shallow-copies 8 specific fields, deep-copies rest.
   Safe only because downstream code uses assignment, not mutation.
-- `tensor_contents` for non-getitem output layers is a DIRECT REFERENCE to parent's
+- `activation` for non-getitem output layers is a DIRECT REFERENCE to parent's
   saved data — mutation affects both
 - `equivalent_operations` per-LayerPassLog holds direct reference to ModelLog-level
   sets; becomes stale after rename step 11 (cosmetic, not read downstream)
-- `grad_contents` is a bare reference (no clone) — shared with parent tensor
+- `gradient` is a bare reference (no clone) — shared with parent tensor
 - `FuncCallLocation._frame_func_obj` set at construction but only released in
   `_load_source()` (lazy property trigger) — leaks if properties never accessed
 

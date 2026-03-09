@@ -60,7 +60,7 @@ class FuncCallLocation:
         func_docstring: Optional[str] = _SENTINEL,
         call_line: str = _SENTINEL,
         code_context: Optional[List[str]] = _SENTINEL,
-        code_context_str: str = _SENTINEL,
+        source_context: str = _SENTINEL,
         code_context_labeled: str = _SENTINEL,
         num_context_lines: int = _SENTINEL,
     ):
@@ -79,9 +79,7 @@ class FuncCallLocation:
             self._func_docstring = func_docstring if func_docstring is not _SENTINEL else None
             self._call_line = call_line if call_line is not _SENTINEL else ""
             self._code_context = code_context if code_context is not _SENTINEL else None
-            self._code_context_str = (
-                code_context_str if code_context_str is not _SENTINEL else "None"
-            )
+            self._source_context = source_context if source_context is not _SENTINEL else "None"
             self._code_context_labeled = (
                 code_context_labeled if code_context_labeled is not _SENTINEL else ""
             )
@@ -99,7 +97,7 @@ class FuncCallLocation:
             self._source_loaded = False
             # Placeholders (set by _load_source)
             self._code_context = _SENTINEL
-            self._code_context_str = _SENTINEL
+            self._source_context = _SENTINEL
             self._code_context_labeled = _SENTINEL
             self._call_line = _SENTINEL
             self._num_context_lines = _SENTINEL
@@ -129,7 +127,7 @@ class FuncCallLocation:
             code_lines = all_lines[start:end]
 
             self._code_context = code_lines
-            self._code_context_str = "".join(code_lines)
+            self._source_context = "".join(code_lines)
             self._num_context_lines = len(code_lines)
 
             # The call line is at the position within the context window
@@ -149,7 +147,7 @@ class FuncCallLocation:
             self._code_context_labeled = "\n".join(labeled_lines)
         else:
             self._code_context = None
-            self._code_context_str = "None"
+            self._source_context = "None"
             self._call_line = ""
             self._code_context_labeled = ""
             self._num_context_lines = 0
@@ -184,13 +182,13 @@ class FuncCallLocation:
         self._code_context = value
 
     @property
-    def code_context_str(self) -> str:
+    def source_context(self) -> str:
         self._load_source()
-        return self._code_context_str
+        return self._source_context
 
-    @code_context_str.setter
-    def code_context_str(self, value: str) -> None:
-        self._code_context_str = value
+    @source_context.setter
+    def source_context(self, value: str) -> None:
+        self._source_context = value
 
     @property
     def code_context_labeled(self) -> str:

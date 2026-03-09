@@ -8,18 +8,18 @@ and raises ``MetadataInvariantError`` on the first failure.
   B. Special layer lists match per-layer boolean flags
   C. Graph topology (parent-child bidirectionality, boolean flag consistency)
   D. LayerPassLog field consistency (shape, dtype, pass numbering, nesting)
-  E. Recurrence / loop invariants (model_is_recurrent, pass dicts)
-  F. Branching invariants (model_is_branching)
+  E. Recurrence / loop invariants (is_recurrent, pass dicts)
+  F. Branching invariants (is_branching)
   G. LayerPassLog <-> LayerLog cross-references (pass numbering, back-pointers)
   H. Module <-> Layer containment (all_layers, module pass layers, reverse check)
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
-  J. Param cross-references (ParamLog -> layer, computed_with_params flag)
+  J. Param cross-references (ParamLog -> layer, uses_params flag)
   K. Buffer cross-references (buffer_layers list, BufferLog module references)
   L. Equivalence group symmetry (equivalent_operations labels are valid)
 
 **Phase 2 -- Semantic invariants (checks M-R):**
-  M. Graph ordering (realtime_tensor_num uniqueness/monotonicity, topological order, no raw labels)
-  N. Loop detection invariants (same_layer_operations symmetry, func identity, param sharing, pass numbering)
+  M. Graph ordering (creation_order uniqueness/monotonicity, topological order, no raw labels)
+  N. Loop detection invariants (recurrent_group symmetry, func identity, param sharing, pass numbering)
   O. Distance / reachability (min <= max, input/output layer distances == 0, ancestor/descendent consistency)
   P. Graph connectivity (non-input non-buffer layers have parents, orphans removed)
   Q. Module containment logic (address acyclicity, depth consistency, nested path ordering)
@@ -170,8 +170,8 @@ def _check_model_log_self_consistency(ml: "ModelLog") -> None:
         raise MetadataInvariantError(name, "No output layers found")
 
     # Timing
-    if ml.elapsed_time_total < 0:
-        raise MetadataInvariantError(name, f"elapsed_time_total={ml.elapsed_time_total} < 0")
+    if ml.time_total < 0:
+        raise MetadataInvariantError(name, f"time_total={ml.time_total} < 0")
     if ml.pass_start_time > ml.pass_end_time:
         raise MetadataInvariantError(
             name,
@@ -194,8 +194,8 @@ _SPECIAL_LIST_FLAG_PAIRS = [
     ("input_layers", "is_input_layer"),
     ("output_layers", "is_output_layer"),
     ("buffer_layers", "is_buffer_layer"),
-    ("internally_initialized_layers", "initialized_inside_model"),
-    ("internally_terminated_layers", "terminated_inside_model"),
+    ("internally_initialized_layers", "is_internally_initialized"),
+    ("internally_terminated_layers", "is_internally_terminated"),
 ]
 
 
@@ -248,7 +248,7 @@ def _check_graph_topology(ml: "ModelLog") -> None:
 
     Validates:
     - Every parent edge has a corresponding child edge (and vice versa).
-    - has_children/has_parents/has_siblings/has_spouses flags match actual counts.
+    - has_children/has_parents/has_siblings/has_co_parents flags match actual counts.
       Note: has_children excludes output layers (added during postprocessing,
       not during capture when the flag was set).
     - Input layers have no parents.
@@ -287,7 +287,7 @@ def _check_graph_topology(ml: "ModelLog") -> None:
                 )
 
         # Boolean flag consistency
-        # Note: has_children/has_parents/has_siblings/has_spouses are set during
+        # Note: has_children/has_parents/has_siblings/has_co_parents are set during
         # capture and don't account for output layers added during postprocessing.
         # So we exclude output layers from the child count for this check.
         non_output_children = [c for c in lpl.child_layers if c not in output_set]
@@ -309,11 +309,11 @@ def _check_graph_topology(ml: "ModelLog") -> None:
                 f"Layer {label}: has_siblings={lpl.has_siblings} but "
                 f"len(sibling_layers)={len(lpl.sibling_layers)}",
             )
-        if lpl.has_spouses != (len(lpl.spouse_layers) > 0):
+        if lpl.has_co_parents != (len(lpl.co_parent_layers) > 0):
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: has_spouses={lpl.has_spouses} but "
-                f"len(spouse_layers)={len(lpl.spouse_layers)}",
+                f"Layer {label}: has_co_parents={lpl.has_co_parents} but "
+                f"len(co_parent_layers)={len(lpl.co_parent_layers)}",
             )
 
         # Input layers have no parents
@@ -343,11 +343,11 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
     """Check D: per-layer field consistency (shape, dtype, pass numbering, func, nesting).
 
     Validates:
-    - Saved tensor shape/dtype match actual tensor_contents (when saved).
-    - Pass numbering: pass_num >= 1, layer_passes_total >= pass_num.
-    - Computational layers have callable func_applied and non-empty func_applied_name.
+    - Saved tensor shape/dtype match actual activation (when saved).
+    - Pass numbering: pass_num >= 1, num_passes >= pass_num.
+    - Computational layers have callable func_applied and non-empty func_name.
     - operation_num >= 1 for non-input/non-buffer layers.
-    - module_nesting_depth matches len(containing_modules_origin_nested).
+    - module_nesting_depth matches len(containing_modules).
     - Label format: pass-qualified label has ':' iff multi-pass; no-pass label never has ':'.
     """
     name = "layer_pass_log_fields"
@@ -356,37 +356,36 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
         label = lpl.layer_label
 
         # Tensor shape/dtype consistency when activations are saved
-        if lpl.has_saved_activations and lpl.tensor_contents is not None:
-            actual_shape = tuple(lpl.tensor_contents.shape)
+        if lpl.has_saved_activations and lpl.activation is not None:
+            actual_shape = tuple(lpl.activation.shape)
             if lpl.tensor_shape != actual_shape:
                 raise MetadataInvariantError(
                     name,
                     f"Layer {label}: tensor_shape={lpl.tensor_shape} != "
                     f"actual shape={actual_shape}",
                 )
-            if lpl.tensor_dtype != lpl.tensor_contents.dtype:
+            if lpl.tensor_dtype != lpl.activation.dtype:
                 raise MetadataInvariantError(
                     name,
                     f"Layer {label}: tensor_dtype={lpl.tensor_dtype} != "
-                    f"actual dtype={lpl.tensor_contents.dtype}",
+                    f"actual dtype={lpl.activation.dtype}",
                 )
 
         # Pass numbering
         if lpl.pass_num < 1:
             raise MetadataInvariantError(name, f"Layer {label}: pass_num={lpl.pass_num} < 1")
-        if lpl.layer_passes_total < lpl.pass_num:
+        if lpl.num_passes < lpl.pass_num:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: layer_passes_total={lpl.layer_passes_total} "
-                f"< pass_num={lpl.pass_num}",
+                f"Layer {label}: num_passes={lpl.num_passes} < pass_num={lpl.pass_num}",
             )
 
         # Function applied (non-input, non-buffer, non-output layers)
         if not (lpl.is_input_layer or lpl.is_buffer_layer or lpl.is_output_layer):
             if not callable(lpl.func_applied):
                 raise MetadataInvariantError(name, f"Layer {label}: func_applied is not callable")
-            if not lpl.func_applied_name:
-                raise MetadataInvariantError(name, f"Layer {label}: func_applied_name is empty")
+            if not lpl.func_name:
+                raise MetadataInvariantError(name, f"Layer {label}: func_name is empty")
 
         # Operation numbering (input/buffer layers have operation_num=0)
         if not (lpl.is_input_layer or lpl.is_buffer_layer):
@@ -394,23 +393,23 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
                 raise MetadataInvariantError(
                     name, f"Layer {label}: operation_num={lpl.operation_num} < 1"
                 )
-        if lpl.realtime_tensor_num < 1:
+        if lpl.creation_order < 1:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: realtime_tensor_num={lpl.realtime_tensor_num} < 1",
+                f"Layer {label}: creation_order={lpl.creation_order} < 1",
             )
 
         # Module nesting depth
-        if lpl.module_nesting_depth != len(lpl.containing_modules_origin_nested):
+        if lpl.module_nesting_depth != len(lpl.containing_modules):
             raise MetadataInvariantError(
                 name,
                 f"Layer {label}: module_nesting_depth={lpl.module_nesting_depth} != "
-                f"len(containing_modules_origin_nested)="
-                f"{len(lpl.containing_modules_origin_nested)}",
+                f"len(containing_modules)="
+                f"{len(lpl.containing_modules)}",
             )
 
         # Label format: pass-qualified label has ":" iff multi-pass
-        if lpl.layer_passes_total > 1 and ":" not in lpl.layer_label_w_pass:
+        if lpl.num_passes > 1 and ":" not in lpl.layer_label_w_pass:
             raise MetadataInvariantError(
                 name,
                 f"Layer {label}: multi-pass but layer_label_w_pass="
@@ -432,27 +431,26 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
     """Check E: recurrence / loop invariants.
 
     Validates:
-    - model_is_recurrent == True iff any layer has >1 pass.
-    - model_max_recurrent_loops matches the maximum pass count.
+    - is_recurrent == True iff any layer has >1 pass.
+    - max_recurrent_loops matches the maximum pass count.
     - layer_num_passes keys are valid no-pass labels.
     - LayerLog.passes dict keys are contiguous {1..N}.
     """
     name = "recurrence_invariants"
 
     any_recurrent = any(v > 1 for v in ml.layer_num_passes.values())
-    if ml.model_is_recurrent != any_recurrent:
+    if ml.is_recurrent != any_recurrent:
         raise MetadataInvariantError(
             name,
-            f"model_is_recurrent={ml.model_is_recurrent} but "
-            f"any layer has >1 pass = {any_recurrent}",
+            f"is_recurrent={ml.is_recurrent} but any layer has >1 pass = {any_recurrent}",
         )
 
-    if ml.model_is_recurrent:
+    if ml.is_recurrent:
         expected_max = max(ml.layer_num_passes.values())
-        if ml.model_max_recurrent_loops != expected_max:
+        if ml.max_recurrent_loops != expected_max:
             raise MetadataInvariantError(
                 name,
-                f"model_max_recurrent_loops={ml.model_max_recurrent_loops} != "
+                f"max_recurrent_loops={ml.max_recurrent_loops} != "
                 f"max(layer_num_passes)={expected_max}",
             )
 
@@ -491,14 +489,13 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
 
 
 def _check_branching_invariants(ml: "ModelLog") -> None:
-    """Check F: model_is_branching matches whether any layer has >1 child."""
+    """Check F: is_branching matches whether any layer has >1 child."""
     name = "branching_invariants"
     any_branching = any(len(lpl.child_layers) > 1 for lpl in ml.layer_list)
-    if ml.model_is_branching != any_branching:
+    if ml.is_branching != any_branching:
         raise MetadataInvariantError(
             name,
-            f"model_is_branching={ml.model_is_branching} but "
-            f"any layer has >1 child = {any_branching}",
+            f"is_branching={ml.is_branching} but any layer has >1 child = {any_branching}",
         )
 
 
@@ -567,7 +564,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
     Validates forward and reverse directions:
     - Forward: ModuleLog.all_layers labels exist in layer_logs; num_layers matches.
       ModulePassLog.layers labels exist; input/output_layers subset of layers.
-    - Reverse: each layer's containing_module_origin points to a valid module
+    - Reverse: each layer's containing_module points to a valid module
       that lists the layer in its all_layers.
     """
     name = "module_layer_containment"
@@ -627,18 +624,18 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
                         f"{sub_attr} has labels not in layers: {extra}",
                     )
 
-    # Reverse check: layer's containing_module_origin exists in modules
+    # Reverse check: layer's containing_module exists in modules
     for lpl in ml.layer_list:
-        cmo = lpl.containing_module_origin
+        cmo = lpl.containing_module
         if cmo:
-            # containing_module_origin may include pass suffix (e.g. 'fc:1')
+            # containing_module may include pass suffix (e.g. 'fc:1')
             cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
             try:
                 mod = mod_accessor[cmo_addr]
             except (KeyError, IndexError):
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' containing_module_origin='{cmo}' "
+                    f"Layer '{lpl.layer_label}' containing_module='{cmo}' "
                     f"(addr='{cmo_addr}') not found in module accessor",
                 )
             if lpl.layer_label_no_pass not in mod.all_layers:  # type: ignore[union-attr]
@@ -765,21 +762,21 @@ def _check_param_xrefs(ml: "ModelLog") -> None:
     """Check J: Param <-> Layer <-> Module cross-references.
 
     Validates:
-    - ParamLog.layer_log_entries labels are valid layer labels.
-    - computed_with_params == True implies parent_param_logs is non-empty.
-    - layers_computed_with_params values are valid layer labels.
+    - ParamLog.used_by_layers labels are valid layer labels.
+    - uses_params == True implies parent_param_logs is non-empty.
+    - layers_with_params values are valid layer labels.
     """
     name = "param_xrefs"
     label_set = set(ml.layer_labels)
     mod_accessor = ml.modules
 
     for param in ml.param_logs:
-        # layer_log_entries exist
-        for lbl in param.layer_log_entries:
+        # used_by_layers exist
+        for lbl in param.used_by_layers:
             if lbl not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"ParamLog '{param.address}' layer_log_entries contains "
+                    f"ParamLog '{param.address}' used_by_layers contains "
                     f"'{lbl}' not in layer_labels",
                 )
 
@@ -790,24 +787,23 @@ def _check_param_xrefs(ml: "ModelLog") -> None:
         except (KeyError, IndexError):
             pass  # Module was never invoked during forward pass
 
-    # computed_with_params forward check
+    # uses_params forward check
     for lpl in ml.layer_list:
-        if lpl.computed_with_params:
+        if lpl.uses_params:
             if not lpl.parent_param_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' has computed_with_params=True "
+                    f"Layer '{lpl.layer_label}' has uses_params=True "
                     f"but parent_param_logs is empty",
                 )
 
-    # layers_computed_with_params labels exist
-    for param_addr, layer_labels in ml.layers_computed_with_params.items():
+    # layers_with_params labels exist
+    for param_addr, layer_labels in ml.layers_with_params.items():
         for lbl in layer_labels:
             if lbl not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"layers_computed_with_params['{param_addr}'] contains "
-                    f"'{lbl}' not in layer_labels",
+                    f"layers_with_params['{param_addr}'] contains '{lbl}' not in layer_labels",
                 )
 
 
@@ -920,30 +916,30 @@ def _check_graph_ordering(ml: "ModelLog") -> None:
     """Check M: graph ordering invariants.
 
     Validates:
-    - realtime_tensor_num is unique across all layers and monotonically
+    - creation_order is unique across all layers and monotonically
       increasing in layer_list order.
     - operation_num is unique among computational layers (non-input, non-buffer,
       non-output).
-    - Topological order: every parent's realtime_tensor_num < child's.
+    - Topological order: every parent's creation_order < child's.
     - No raw labels (``l_\\d+``) survive postprocessing.
     """
     name = "graph_ordering"
 
-    # realtime_tensor_num uniqueness and monotonicity
+    # creation_order uniqueness and monotonicity
     seen_rt_nums: dict[int, str] = {}
     prev_rt = -1
     for lpl in ml.layer_list:
-        rt = lpl.realtime_tensor_num
+        rt = lpl.creation_order
         if rt in seen_rt_nums:
             raise MetadataInvariantError(
                 name,
-                f"Duplicate realtime_tensor_num={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
+                f"Duplicate creation_order={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
             )
         seen_rt_nums[rt] = lpl.layer_label
         if rt <= prev_rt:
             raise MetadataInvariantError(
                 name,
-                f"realtime_tensor_num not monotonically increasing: "
+                f"creation_order not monotonically increasing: "
                 f"{prev_rt} then {rt} at '{lpl.layer_label}'",
             )
         prev_rt = rt
@@ -966,15 +962,15 @@ def _check_graph_ordering(ml: "ModelLog") -> None:
                 )
             seen_op_nums[op] = label
 
-    # Topological order: parent.realtime_tensor_num < child.realtime_tensor_num
-    rt_map = {lpl.layer_label: lpl.realtime_tensor_num for lpl in ml.layer_list}
+    # Topological order: parent.creation_order < child.creation_order
+    rt_map = {lpl.layer_label: lpl.creation_order for lpl in ml.layer_list}
     for lpl in ml.layer_list:
         for p in lpl.parent_layers:
-            if rt_map.get(p, -1) >= lpl.realtime_tensor_num:
+            if rt_map.get(p, -1) >= lpl.creation_order:
                 raise MetadataInvariantError(
                     name,
                     f"Topological violation: parent '{p}' (rt={rt_map.get(p)}) "
-                    f">= child '{lpl.layer_label}' (rt={lpl.realtime_tensor_num})",
+                    f">= child '{lpl.layer_label}' (rt={lpl.creation_order})",
                 )
 
     # No raw labels survive postprocessing
@@ -989,20 +985,20 @@ def _check_graph_ordering(ml: "ModelLog") -> None:
 
 
 def _check_loop_detection_invariants(ml: "ModelLog") -> None:
-    """Check N: loop detection / same_layer_operations invariants.
+    """Check N: loop detection / recurrent_group invariants.
 
     Validates per-layer:
-    - same_layer_operations is non-empty and includes self.
+    - recurrent_group is non-empty and includes self.
     - Symmetry: all members agree on the same group.
     - All members share: layer_label_no_pass, operation_equivalence_type,
-      func_applied_name (for computational layers).
-    - layer_passes_total == len(same_layer_operations).
+      func_name (for computational layers).
+    - num_passes == len(recurrent_group).
     - Pass numbering within group is contiguous {1..N}.
 
     Validates cross-layer:
-    - Parameter sharing rule: layers with same (func_applied_name,
+    - Parameter sharing rule: layers with same (func_name,
       sorted(parent_param_barcodes)) must share layer_label_no_pass.
-    - Equivalence group consistency: all members of a same_layer_operations
+    - Equivalence group consistency: all members of a recurrent_group
       group belong to the same ModelLog.equivalent_operations set.
 
     Note: subgraph-level adjacency (Rule 3 from loop_detection.py) cannot
@@ -1011,24 +1007,24 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
     name = "loop_detection"
     label_set = set(ml.layer_labels)
 
-    # Build same-layer groups from the authoritative same_layer_operations lists
+    # Build same-layer groups from the authoritative recurrent_group lists
     # Key: frozenset of labels, Value: list of LayerPassLogs in the group
     groups_seen: dict[frozenset, list] = {}
 
     for lpl in ml.layer_list:
-        slo = lpl.same_layer_operations
+        slo = lpl.recurrent_group
         if not slo:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{lpl.layer_label}' has empty same_layer_operations",
+                f"Layer '{lpl.layer_label}' has empty recurrent_group",
             )
 
-        # All members in same_layer_operations must exist
+        # All members in recurrent_group must exist
         for member in slo:
             if member not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' same_layer_operations contains "
+                    f"Layer '{lpl.layer_label}' recurrent_group contains "
                     f"'{member}' not in layer_labels",
                 )
 
@@ -1036,18 +1032,18 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
         if lpl.layer_label not in slo:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{lpl.layer_label}' not in its own same_layer_operations",
+                f"Layer '{lpl.layer_label}' not in its own recurrent_group",
             )
 
         # Symmetry: all members agree on the group
         for member_label in slo:
             member = ml[member_label]
-            if set(member.same_layer_operations) != set(slo):
+            if set(member.recurrent_group) != set(slo):
                 raise MetadataInvariantError(
                     name,
-                    f"Asymmetric same_layer_operations: '{lpl.layer_label}' has "
+                    f"Asymmetric recurrent_group: '{lpl.layer_label}' has "
                     f"{sorted(slo)} but '{member_label}' has "
-                    f"{sorted(member.same_layer_operations)}",
+                    f"{sorted(member.recurrent_group)}",
                 )
 
         # All members share layer_label_no_pass
@@ -1056,7 +1052,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
             if member.layer_label_no_pass != lpl.layer_label_no_pass:
                 raise MetadataInvariantError(
                     name,
-                    f"same_layer_operations inconsistency: '{lpl.layer_label}' "
+                    f"recurrent_group inconsistency: '{lpl.layer_label}' "
                     f"(no_pass='{lpl.layer_label_no_pass}') and '{member_label}' "
                     f"(no_pass='{member.layer_label_no_pass}') differ",
                 )
@@ -1067,29 +1063,29 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
             if member.operation_equivalence_type != lpl.operation_equivalence_type:
                 raise MetadataInvariantError(
                     name,
-                    f"same_layer_operations type mismatch: '{lpl.layer_label}' "
+                    f"recurrent_group type mismatch: '{lpl.layer_label}' "
                     f"type='{lpl.operation_equivalence_type}' vs '{member_label}' "
                     f"type='{member.operation_equivalence_type}'",
                 )
 
-        # All members share func_applied_name (for computational layers)
+        # All members share func_name (for computational layers)
         if not (lpl.is_input_layer or lpl.is_buffer_layer or lpl.is_output_layer):
             for member_label in slo:
                 member = ml[member_label]
-                if member.func_applied_name != lpl.func_applied_name:
+                if member.func_name != lpl.func_name:
                     raise MetadataInvariantError(
                         name,
-                        f"same_layer_operations func mismatch: '{lpl.layer_label}' "
-                        f"func='{lpl.func_applied_name}' vs '{member_label}' "
-                        f"func='{member.func_applied_name}'",
+                        f"recurrent_group func mismatch: '{lpl.layer_label}' "
+                        f"func='{lpl.func_name}' vs '{member_label}' "
+                        f"func='{member.func_name}'",
                     )
 
-        # layer_passes_total == len(same_layer_operations)
-        if lpl.layer_passes_total != len(slo):
+        # num_passes == len(recurrent_group)
+        if lpl.num_passes != len(slo):
             raise MetadataInvariantError(
                 name,
-                f"Layer '{lpl.layer_label}': layer_passes_total={lpl.layer_passes_total} "
-                f"!= len(same_layer_operations)={len(slo)}",
+                f"Layer '{lpl.layer_label}': num_passes={lpl.num_passes} "
+                f"!= len(recurrent_group)={len(slo)}",
             )
 
         # Pass numbering: unique {1..N}
@@ -1109,15 +1105,15 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
             groups_seen[group_key] = slo
 
     # Rule 1: Parameter sharing invariant.
-    # Layers with the same func_applied_name AND identical sorted(parent_param_barcodes)
+    # Layers with the same func_name AND identical sorted(parent_param_barcodes)
     # must share the same layer_label_no_pass (they are the same "layer" across
-    # different passes).  The func_applied_name is included in the grouping key
+    # different passes).  The func_name is included in the grouping key
     # because different operations (e.g., isinf, expand, nantonum) can consume
     # the same parameter tensor without being the same logical layer.
     param_groups: dict[tuple, list] = defaultdict(list)
     for lpl in ml.layer_list:
-        if lpl.computed_with_params and lpl.parent_param_barcodes:
-            key = (lpl.func_applied_name, tuple(sorted(lpl.parent_param_barcodes)))
+        if lpl.uses_params and lpl.parent_param_barcodes:
+            key = (lpl.func_name, tuple(sorted(lpl.parent_param_barcodes)))
             param_groups[key].append(lpl)
 
     for param_key, layers in param_groups.items():
@@ -1131,7 +1127,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
                 )
 
     # Equivalence group ↔ same_layer consistency: all members of a
-    # same_layer_operations group must belong to the same equivalence set.
+    # recurrent_group group must belong to the same equivalence set.
     # Note: ModelLog.equivalent_operations keys use the pre-module-suffix type
     # (from loop_detection), while per-layer operation_equivalence_type has
     # a module suffix appended by control_flow.py. So we check group membership
@@ -1155,7 +1151,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
         if len(equiv_keys) > 1:
             raise MetadataInvariantError(
                 name,
-                f"same_layer_operations group {sorted(slo)} spans multiple "
+                f"recurrent_group group {sorted(slo)} spans multiple "
                 f"equivalence types: {equiv_keys}",
             )
 
@@ -1182,8 +1178,8 @@ def _check_distance_invariants(ml: "ModelLog") -> None:
     - Input layers have distance_from_input == 0.
     - Output layers have distance_from_output == 0.
     - has_input_ancestor <-> input_ancestors is non-empty.
-    - is_output_ancestor <-> output_descendents is non-empty.
-    - input_ancestors subset of input_layers; output_descendents subset of
+    - is_output_ancestor <-> output_descendants is non-empty.
+    - input_ancestors subset of input_layers; output_descendants subset of
       output_layers.
     """
     if not ml.mark_input_output_distances:
@@ -1241,13 +1237,13 @@ def _check_distance_invariants(ml: "ModelLog") -> None:
                 f"len(input_ancestors)={len(lpl.input_ancestors)}",
             )
 
-        # is_output_ancestor ↔ output_descendents non-empty
-        has_descendents = len(lpl.output_descendents) > 0
+        # is_output_ancestor ↔ output_descendants non-empty
+        has_descendents = len(lpl.output_descendants) > 0
         if lpl.is_output_ancestor != has_descendents:
             raise MetadataInvariantError(
                 name,
                 f"Layer '{label}': is_output_ancestor={lpl.is_output_ancestor} but "
-                f"len(output_descendents)={len(lpl.output_descendents)}",
+                f"len(output_descendants)={len(lpl.output_descendants)}",
             )
 
         # input_ancestors subset of input_layers
@@ -1259,12 +1255,12 @@ def _check_distance_invariants(ml: "ModelLog") -> None:
                 f"input_layers: {extra_ancestors}",
             )
 
-        # output_descendents subset of output_layers
-        extra_desc = lpl.output_descendents - output_set
+        # output_descendants subset of output_layers
+        extra_desc = lpl.output_descendants - output_set
         if extra_desc:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{label}': output_descendents contains labels not in "
+                f"Layer '{label}': output_descendants contains labels not in "
                 f"output_layers: {extra_desc}",
             )
 
@@ -1295,7 +1291,7 @@ def _check_graph_connectivity(ml: "ModelLog") -> None:
         if (
             label not in input_set
             and label not in buffer_set
-            and not lpl.initialized_inside_model
+            and not lpl.is_internally_initialized
             and not lpl.is_output_layer
             and len(lpl.parent_layers) == 0
         ):
@@ -1329,8 +1325,8 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
       without revisiting a node).
     - Root module 'self' has address_depth == 0; others have
       address_depth == addr.count('.') + 1.
-    - Per-layer containing_modules_origin_nested (call nesting stack):
-      - Last element matches containing_module_origin.
+    - Per-layer containing_modules (call nesting stack):
+      - Last element matches containing_module.
       - Every element is a known module address.
       - No duplicate addresses (can't be inside the same module twice).
     """
@@ -1377,21 +1373,21 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
                     f"!= expected {expected_depth} (addr.count('.')+1)",
                 )
 
-    # Per-layer: containing_modules_origin_nested path validity
+    # Per-layer: containing_modules path validity
     # Format after postprocessing: list of "addr:pass" strings, ordered from
     # outermost enclosing submodule to innermost. Does NOT include "self".
     for lpl in ml.layer_list:
-        nested = lpl.containing_modules_origin_nested
+        nested = lpl.containing_modules
         if not nested:
             continue
 
-        # Leaf consistency: last element matches containing_module_origin
-        if lpl.containing_module_origin is not None:
-            if nested[-1] != lpl.containing_module_origin:
+        # Leaf consistency: last element matches containing_module
+        if lpl.containing_module is not None:
+            if nested[-1] != lpl.containing_module:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{lpl.layer_label}': last nested module '{nested[-1]}' "
-                    f"!= containing_module_origin '{lpl.containing_module_origin}'",
+                    f"!= containing_module '{lpl.containing_module}'",
                 )
 
         # Path validity: each element must be a known module, and no

@@ -44,27 +44,27 @@ def test_general_info_fields(small_input):
 def test_model_structure_non_recurrent(small_input):
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, small_input)
-    assert mh.model_is_recurrent is False
-    assert mh.model_is_branching is False
+    assert mh.is_recurrent is False
+    assert mh.is_branching is False
 
 
 def test_model_structure_branching(small_input):
     model = example_models.SimpleBranching()
     mh = log_forward_pass(model, small_input)
-    assert mh.model_is_branching is True
+    assert mh.is_branching is True
 
 
 def test_model_structure_recurrent(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = log_forward_pass(model, input_2d)
-    assert mh.model_is_recurrent is True
+    assert mh.is_recurrent is True
 
 
 def test_model_structure_conditional():
     model = example_models.ConditionalBranching()
     model_input = -torch.ones(6, 3, 224, 224)
     mh = log_forward_pass(model, model_input)
-    assert mh.model_has_conditional_branching is True
+    assert mh.has_conditional_branching is True
 
 
 def test_layer_tracking_fields(small_input):
@@ -101,10 +101,10 @@ def test_tensor_info_fields(small_input):
     mh = log_forward_pass(model, small_input)
     assert isinstance(mh.num_tensors_total, int)
     assert mh.num_tensors_total > 0
-    assert isinstance(mh.tensor_fsize_total, (int, float))
-    assert mh.tensor_fsize_total > 0
-    assert isinstance(mh.tensor_fsize_total_nice, str)
-    assert len(mh.tensor_fsize_total_nice) > 0
+    assert isinstance(mh.total_activation_memory, (int, float))
+    assert mh.total_activation_memory > 0
+    assert isinstance(mh.total_activation_memory_str, str)
+    assert len(mh.total_activation_memory_str) > 0
 
 
 def test_param_info_fields(small_input):
@@ -133,12 +133,12 @@ def test_module_info_fields(small_input):
 def test_time_fields(small_input):
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, small_input)
-    assert isinstance(mh.elapsed_time_total, float)
-    assert mh.elapsed_time_total > 0
-    assert isinstance(mh.elapsed_time_setup, float)
-    assert isinstance(mh.elapsed_time_forward_pass, float)
-    assert isinstance(mh.elapsed_time_cleanup, float)
-    assert isinstance(mh.elapsed_time_torchlens_logging, float)
+    assert isinstance(mh.time_total, float)
+    assert mh.time_total > 0
+    assert isinstance(mh.time_setup, float)
+    assert isinstance(mh.time_forward_pass, float)
+    assert isinstance(mh.time_cleanup, float)
+    assert isinstance(mh.time_logging, float)
 
 
 def test_multi_input_layers():
@@ -224,8 +224,8 @@ def test_entry_tensor_info_fields(small_input):
     entry = mh[0]
     assert isinstance(entry.tensor_shape, (tuple, torch.Size))
     assert isinstance(entry.tensor_dtype, torch.dtype)
-    assert isinstance(entry.tensor_fsize, (int, float))
-    assert entry.tensor_contents is not None
+    assert isinstance(entry.tensor_memory, (int, float))
+    assert entry.activation is not None
 
 
 def test_function_call_fields(small_input):
@@ -238,9 +238,9 @@ def test_function_call_fields(small_input):
             non_input = e
             break
     assert non_input is not None
-    assert isinstance(non_input.func_applied_name, str)
-    assert len(non_input.func_applied_name) > 0
-    assert isinstance(non_input.func_time_elapsed, float)
+    assert isinstance(non_input.func_name, str)
+    assert len(non_input.func_name) > 0
+    assert isinstance(non_input.func_time, float)
 
 
 def test_graph_relationships(small_input):
@@ -263,11 +263,11 @@ def test_inplace_function_flag(small_input):
     mh = log_forward_pass(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert isinstance(entry.function_is_inplace, bool)
+        assert isinstance(entry.func_is_inplace, bool)
     found_relu_ = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.func_applied_name and entry.func_applied_name.endswith("_"):
+        if entry.func_name and entry.func_name.endswith("_"):
             found_relu_ = True
             break
     assert found_relu_, "InPlaceFuncs should have relu_ (inplace function name)"
@@ -279,7 +279,7 @@ def test_param_fields_with_params(small_input):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.computed_with_params:
+        if entry.uses_params:
             assert entry.num_params_total > 0
             found = True
             break
@@ -291,7 +291,7 @@ def test_param_fields_without_params(small_input):
     mh = log_forward_pass(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert entry.computed_with_params is False
+        assert entry.uses_params is False
 
 
 def test_module_fields(small_input):
@@ -301,7 +301,7 @@ def test_module_fields(small_input):
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.is_computed_inside_submodule:
-            assert isinstance(entry.containing_module_origin, str)
+            assert isinstance(entry.containing_module, str)
             assert isinstance(entry.module_nesting_depth, int)
             assert entry.module_nesting_depth > 0
             found = True
@@ -329,7 +329,7 @@ def test_internally_initialized_fields(small_input):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.initialized_inside_model:
+        if entry.is_internally_initialized:
             found = True
             break
     assert found, "SimpleInternallyGenerated should have internally init layers"
@@ -341,7 +341,7 @@ def test_sibling_spouse_fields(small_input):
     for label in mh.layer_labels:
         entry = mh[label]
         assert isinstance(entry.sibling_layers, list)
-        assert isinstance(entry.spouse_layers, list)
+        assert isinstance(entry.co_parent_layers, list)
 
 
 def test_conditional_fields():
@@ -392,7 +392,7 @@ def test_recurrent_layer_passes_total(input_2d):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.layer_passes_total > 1:
+        if entry.num_passes > 1:
             found = True
             break
     assert found, "Recurrent model should have layers with passes_total > 1"
@@ -404,10 +404,10 @@ def test_recurrent_same_layer_operations(input_2d):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.same_layer_operations and len(entry.same_layer_operations) > 0:
+        if entry.recurrent_group and len(entry.recurrent_group) > 0:
             found = True
             break
-    assert found, "Recurrent model should have same_layer_operations"
+    assert found, "Recurrent model should have recurrent_group"
 
 
 def test_layer_logs_fewer_than_layer_list(input_2d):
@@ -473,20 +473,20 @@ def test_layer_labels_properties(small_input):
 # =============================================================================
 
 
-def test_creation_args_populated(small_input):
+def test_captured_args_populated(small_input):
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, small_input, save_function_args=True)
     assert mh.save_function_args is True
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input_layer and entry.creation_args is not None:
+        if not entry.is_input_layer and entry.captured_args is not None:
             found = True
             break
-    assert found, "save_function_args=True should populate creation_args"
+    assert found, "save_function_args=True should populate captured_args"
 
 
-def test_creation_args_not_populated(small_input):
+def test_captured_args_not_populated(small_input):
     model = example_models.SimpleFF()
     mh = log_forward_pass(model, small_input)
     assert mh.save_function_args is False
@@ -502,8 +502,8 @@ def test_postfunc_applied(small_input):
     mh = log_forward_pass(model, small_input, activation_postfunc=torch.mean)
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.tensor_contents is not None:
-            assert entry.tensor_contents.dim() == 0, (
+        if entry.activation is not None:
+            assert entry.activation.dim() == 0, (
                 f"Layer {label} should be scalar after torch.mean postfunc"
             )
 
@@ -764,7 +764,7 @@ def test_flops_coverage_on_model():
 
 
 def test_module_training_modes_populated(small_input):
-    """ModuleLog.training_mode should capture the training flag."""
+    """ModuleLog.is_training should capture the training flag."""
     model = example_models.SimpleFF()
     model.train()
     mh = log_forward_pass(model, small_input)
@@ -781,13 +781,13 @@ def test_module_training_modes_train_vs_eval():
     mh_train = log_forward_pass(model, x)
     for ml in mh_train.modules:
         if ml.address != "self":
-            assert ml.training_mode is True, f"Module {ml.address} should be training=True"
+            assert ml.is_training is True, f"Module {ml.address} should be training=True"
 
     model.eval()
     mh_eval = log_forward_pass(model, x)
     for ml in mh_eval.modules:
         if ml.address != "self":
-            assert ml.training_mode is False, f"Module {ml.address} should be training=False"
+            assert ml.is_training is False, f"Module {ml.address} should be training=False"
 
 
 @pytest.mark.slow
@@ -893,7 +893,7 @@ def test_func_call_location_fields_populated(small_input):
     assert isinstance(loc.func_name, str)
     assert isinstance(loc.call_line, str)
     assert isinstance(loc.code_context, (list, type(None)))
-    assert isinstance(loc.code_context_str, str)
+    assert isinstance(loc.source_context, str)
     assert isinstance(loc.code_context_labeled, str)
     assert isinstance(loc.num_context_lines, int)
 
@@ -960,7 +960,7 @@ def test_repr_source_unavailable():
         func_docstring=None,
         call_line="",
         code_context=None,
-        code_context_str="None",
+        source_context="None",
         code_context_labeled="",
         num_context_lines=0,
     )
@@ -1063,7 +1063,7 @@ def valid_mh_and_ground_truth():
     model = example_models.SimpleFF()
     x = torch.rand(2, 3, 32, 32)
     mh = log_forward_pass(model, x, layers_to_save="all", save_function_args=True)
-    ground_truth = [mh[label].tensor_contents.clone() for label in mh.output_layers]
+    ground_truth = [mh[label].activation.clone() for label in mh.output_layers]
     return mh, ground_truth
 
 
@@ -1074,16 +1074,16 @@ def test_uncorrupted_passes(valid_mh_and_ground_truth):
 
 
 def test_corrupt_output_activations(valid_mh_and_ground_truth):
-    """Replacing the output layer's tensor_contents with random data should fail."""
+    """Replacing the output layer's activation with random data should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     output_label = mh.output_layers[0]
-    original = mh[output_label].tensor_contents
-    mh[output_label].tensor_contents = torch.randn_like(original)
+    original = mh[output_label].activation
+    mh[output_label].activation = torch.randn_like(original)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_corrupt_intermediate_activations(valid_mh_and_ground_truth):
-    """Replacing a non-output, non-input layer's tensor_contents should fail."""
+    """Replacing a non-output, non-input layer's activation should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     # Find an intermediate layer (not input, not output)
     intermediate = [
@@ -1093,83 +1093,83 @@ def test_corrupt_intermediate_activations(valid_mh_and_ground_truth):
     ]
     assert len(intermediate) > 0, "No intermediate layers found"
     target = intermediate[0]
-    original = mh[target].tensor_contents
-    mh[target].tensor_contents = torch.randn_like(original)
+    original = mh[target].activation
+    mh[target].activation = torch.randn_like(original)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_swap_two_layers_activations(valid_mh_and_ground_truth):
-    """Swapping tensor_contents between two non-output layers should fail."""
+    """Swapping activation between two non-output layers should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) >= 2, "Need at least 2 non-output layers to swap"
     a, b = non_output[0], non_output[1]
-    ta = mh[a].tensor_contents.clone()
-    tb = mh[b].tensor_contents.clone()
+    ta = mh[a].activation.clone()
+    tb = mh[b].activation.clone()
     # Only swap if they're different shapes or values — otherwise the swap is a no-op
     if ta.shape == tb.shape and torch.equal(ta, tb):
         pytest.skip("Layers have identical tensors; swap is invisible")
-    mh[a].tensor_contents = tb
-    mh[b].tensor_contents = ta
+    mh[a].activation = tb
+    mh[b].activation = ta
     assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_zero_out_activations(valid_mh_and_ground_truth):
-    """Zeroing out a layer's tensor_contents should fail."""
+    """Zeroing out a layer's activation should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) > 0
     target = non_output[0]
-    mh[target].tensor_contents = torch.zeros_like(mh[target].tensor_contents)
+    mh[target].activation = torch.zeros_like(mh[target].activation)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_add_noise_to_activations(valid_mh_and_ground_truth):
-    """Adding gaussian noise to a layer's tensor_contents should fail."""
+    """Adding gaussian noise to a layer's activation should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) > 0
     target = non_output[0]
-    original = mh[target].tensor_contents
-    mh[target].tensor_contents = original + torch.randn_like(original) * 0.1
+    original = mh[target].activation
+    mh[target].activation = original + torch.randn_like(original) * 0.1
     assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_scale_activations(valid_mh_and_ground_truth):
-    """Scaling a layer's tensor_contents by a large scalar should fail."""
+    """Scaling a layer's activation by a large scalar should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) > 0
     target = non_output[0]
-    mh[target].tensor_contents = mh[target].tensor_contents * 100.0
+    mh[target].activation = mh[target].activation * 100.0
     assert mh.validate_forward_pass(ground_truth) is False
 
 
 def test_wrong_shape_activations(valid_mh_and_ground_truth):
-    """Replacing tensor_contents with a wrong-shaped tensor should fail."""
+    """Replacing activation with a wrong-shaped tensor should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     output_label = mh.output_layers[0]
-    mh[output_label].tensor_contents = torch.randn(1, 1)
+    mh[output_label].activation = torch.randn(1, 1)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_corrupt_creation_args(valid_mh_and_ground_truth):
-    """Modifying saved function arguments (creation_args) should fail."""
+def test_corrupt_captured_args(valid_mh_and_ground_truth):
+    """Modifying saved function arguments (captured_args) should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
-    # Find a non-input layer that has creation_args with tensors
+    # Find a non-input layer that has captured_args with tensors
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.is_input_layer:
             continue
-        if entry.creation_args and any(isinstance(a, torch.Tensor) for a in entry.creation_args):
-            for i, arg in enumerate(entry.creation_args):
+        if entry.captured_args and any(isinstance(a, torch.Tensor) for a in entry.captured_args):
+            for i, arg in enumerate(entry.captured_args):
                 if isinstance(arg, torch.Tensor):
-                    corrupted_args = list(entry.creation_args)
+                    corrupted_args = list(entry.captured_args)
                     corrupted_args[i] = torch.randn_like(arg)
-                    entry.creation_args = tuple(corrupted_args)
+                    entry.captured_args = tuple(corrupted_args)
                     assert mh.validate_forward_pass(ground_truth) is False
                     return
-    pytest.skip("No layer with tensor creation_args found")
+    pytest.skip("No layer with tensor captured_args found")
 
 
 # =============================================================================
@@ -1334,7 +1334,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalNested()
         x = torch.rand(2, 3, 32, 32)
         mh = self._log(model, x)
-        assert mh.model_has_conditional_branching is True
+        assert mh.has_conditional_branching is True
 
     def test_multiple_branches_independent(self):
         """ConditionalMultipleBranches has 2 distinct branch starts."""
@@ -1353,7 +1353,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalWithModules()
         x = torch.rand(2, 5)
         mh = self._log(model, x)
-        assert mh.model_has_conditional_branching is True
+        assert mh.has_conditional_branching is True
 
     # --- Visualization integration tests ---
 
@@ -1370,8 +1370,8 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                save_only=True,
-                vis_opt="unrolled",
+                vis_save_only=True,
+                vis_mode="unrolled",
                 vis_outpath=outpath,
                 vis_fileformat="dot",
             )
@@ -1392,9 +1392,9 @@ class TestConditionalBranchDetection:
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
             mh.render_graph(
-                vis_opt="unrolled",
+                vis_mode="unrolled",
                 vis_outpath=outpath,
-                save_only=True,
+                vis_save_only=True,
                 vis_fileformat="dot",
             )
             dot_file = outpath + ".dot"
@@ -1418,8 +1418,8 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                save_only=True,
-                vis_opt="rolled",
+                vis_save_only=True,
+                vis_mode="rolled",
                 vis_outpath=outpath,
                 vis_fileformat="dot",
             )

@@ -35,6 +35,25 @@ except (ValueError, resource.error):
     pass
 
 
+def _available_memory_mb() -> int:
+    """Return available system memory in MB, or 0 if unknown."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024  # KB -> MB
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        pages = os.sysconf("SC_AVPHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        if pages > 0 and page_size > 0:
+            return (pages * page_size) // (1024 * 1024)
+    except (ValueError, OSError):
+        pass
+    return 0
+
+
 _ELK_NODE_THRESHOLD = 3500
 _ELK_TIMEOUT = 120  # seconds for Node.js subprocess
 _SFDP_TIMEOUT = 120  # seconds for sfdp/neato subprocess
@@ -52,6 +71,7 @@ const fs = require('fs');
 // flag for preventing "Maximum call stack size exceeded" in deeply recursive
 // ELK layout on large graphs (100k+ nodes).
 const stackMb = parseInt(process.env._TL_STACK_MB || '64', 10);
+const heapMb = parseInt(process.env._TL_HEAP_MB || '16384', 10);
 
 const workerCode = `
 const { parentPort, workerData } = require('worker_threads');
@@ -67,7 +87,11 @@ function runLayout(input) {
     const worker = new Worker(workerCode, {
         eval: true,
         workerData: input,
-        resourceLimits: { stackSizeMb: stackMb },
+        resourceLimits: {
+            stackSizeMb: stackMb,
+            maxOldGenerationSizeMb: heapMb,
+            maxYoungGenerationSizeMb: Math.min(2048, Math.floor(heapMb / 8)),
+        },
     });
     worker.on('message', (result) => {
         process.stdout.write(result);
@@ -212,7 +236,7 @@ def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = Fal
     from collections import defaultdict
 
     # Step 1: Collect all nodes and their module paths.
-    # module_path is containing_modules_origin_nested with pass info stripped.
+    # module_path is containing_modules with pass info stripped.
     node_module_map = {}  # node_label -> [module_addr, ...]
     node_labels = []
     edges = []
@@ -226,7 +250,7 @@ def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = Fal
 
         # Strip pass numbers from module addresses for grouping.
         modules = []
-        for mod in node.containing_modules_origin_nested:
+        for mod in node.containing_modules:
             addr = mod.split(":")[0]
             if addr not in modules:
                 modules.append(addr)
@@ -424,12 +448,19 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
     # Cap heap at 64GB — V8 only allocates what it actually needs, and
     # unbounded values (e.g. 5.6TB for 1M nodes) are nonsensical.
     heap_mb = min(65536, max(16384, graph_kb * 48))
+
+    # Further cap to available system memory (leave 4GB for Python + OS).
+    avail_mb = _available_memory_mb()
+    if avail_mb > 0:
+        heap_mb = min(heap_mb, max(4096, avail_mb - 4096))
+
     # Worker thread stack via resourceLimits.stackSizeMb (MB).
     # Floor of 4096 MB (matches CHANGELOG), cap at 8192 MB.
     stack_mb = min(8192, max(4096, graph_kb // 8))
 
     env = _node_env()
     env["_TL_STACK_MB"] = str(stack_mb)
+    env["_TL_HEAP_MB"] = str(heap_mb)
 
     # Write JSON to a temp file so Node.js reads from disk instead of stdin.
     # This lets us free the graph_json string before the subprocess runs,
@@ -473,7 +504,8 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
             if result.stderr
             else (
                 f"Node.js exited with code {result.returncode} (no stderr). "
-                f"Likely OOM — JSON was {graph_kb} KB, heap was {heap_mb} MB. "
+                f"Likely OOM — JSON was {graph_kb} KB, heap was {heap_mb} MB"
+                f"{f', system had {avail_mb} MB available' if avail_mb > 0 else ''}. "
                 f"Try reducing vis_nesting_depth to collapse modules."
             )
         )
@@ -549,7 +581,7 @@ def render_with_sfdp(
     source_path: str,
     vis_outpath: str,
     vis_fileformat: str,
-    save_only: bool = False,
+    vis_save_only: bool = False,
     timeout: Optional[int] = None,
 ) -> None:
     """Render a DOT source file using Graphviz sfdp engine.
@@ -558,7 +590,7 @@ def render_with_sfdp(
         source_path: Path to the DOT source file.
         vis_outpath: Output path (without extension).
         vis_fileformat: Output format (pdf, png, etc.).
-        save_only: If True, don't open viewer.
+        vis_save_only: If True, don't open viewer.
         timeout: Subprocess timeout in seconds.
     """
     import graphviz
@@ -569,7 +601,7 @@ def render_with_sfdp(
     rendered_path = f"{vis_outpath}.{vis_fileformat}"
     cmd = ["sfdp", f"-T{vis_fileformat}", "-Goverlap=prism", "-o", rendered_path, source_path]
     subprocess.run(cmd, timeout=timeout, check=True, capture_output=True)
-    if not save_only:
+    if not vis_save_only:
         graphviz.backend.viewing.view(rendered_path)
 
 
@@ -578,7 +610,7 @@ def render_with_elk(
     source_path: str,
     vis_outpath: str,
     vis_fileformat: str,
-    save_only: bool = False,
+    vis_save_only: bool = False,
     entries_to_plot=None,
     show_buffer_layers: bool = False,
 ) -> None:
@@ -589,7 +621,7 @@ def render_with_elk(
         source_path: Path where DOT source was saved.
         vis_outpath: Output path (without extension).
         vis_fileformat: Output format (pdf, png, etc.).
-        save_only: If True, don't open viewer.
+        vis_save_only: If True, don't open viewer.
         entries_to_plot: If provided, build hierarchical ELK graph with
             module grouping. Otherwise falls back to flat DOT parsing.
         show_buffer_layers: Whether to include buffer layers.
@@ -620,7 +652,7 @@ def render_with_elk(
     ]
     try:
         subprocess.run(cmd, timeout=_SFDP_TIMEOUT, check=True, capture_output=True)
-        if not save_only:
+        if not vis_save_only:
             graphviz.backend.viewing.view(rendered_path)
     finally:
         import os
@@ -763,13 +795,13 @@ def _dot_id(name: str) -> str:
 def render_elk_direct(
     model_log,
     entries_to_plot: dict,
-    vis_opt: str,
+    vis_mode: str,
     vis_nesting_depth: int,
     show_buffer_layers: bool,
     overrides,
     vis_outpath: str,
     vis_fileformat: str,
-    save_only: bool,
+    vis_save_only: bool,
     graph_caption: str,
     rankdir: str,
 ) -> str:
@@ -788,13 +820,13 @@ def render_elk_direct(
     Args:
         model_log: The ModelLog instance.
         entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog.
-        vis_opt: ``'unrolled'`` or ``'rolled'``.
+        vis_mode: ``'unrolled'`` or ``'rolled'``.
         vis_nesting_depth: Module nesting depth for collapsed modules.
         show_buffer_layers: Whether to include buffer layers.
         overrides: VisualizationOverrides instance.
         vis_outpath: Output file path (without extension).
         vis_fileformat: Output format (pdf, png, svg, etc.).
-        save_only: If True, don't open viewer.
+        vis_save_only: If True, don't open viewer.
         graph_caption: HTML label for the graph title.
         rankdir: Graphviz rank direction (BT, TB, LR).
 
@@ -841,10 +873,10 @@ def render_elk_direct(
     def _module_keys_for_node(node, is_collapsed_mod):
         """Get module hierarchy keys for a node."""
         if is_collapsed_mod:
-            mods = list(node.containing_modules_origin_nested[: vis_nesting_depth - 1])
+            mods = list(node.containing_modules[: vis_nesting_depth - 1])
         else:
-            mods = list(node.containing_modules_origin_nested)
-        if vis_opt == "rolled":
+            mods = list(node.containing_modules)
+        if vis_mode == "rolled":
             return list(dict.fromkeys(m.split(":")[0] for m in mods))
         return mods
 
@@ -868,10 +900,10 @@ def render_elk_direct(
         is_collapsed = _is_collapsed_module(node, vis_nesting_depth)
 
         if is_collapsed:
-            mod_w_pass = node.containing_modules_origin_nested[vis_nesting_depth - 1]
+            mod_w_pass = node.containing_modules[vis_nesting_depth - 1]
             mod_parts = mod_w_pass.rsplit(":", 1)
             mod_addr, pass_num = mod_parts
-            node_name = "pass".join(mod_parts) if vis_opt == "unrolled" else mod_addr
+            node_name = "pass".join(mod_parts) if vis_mode == "unrolled" else mod_addr
             elk_id = node.layer_label
 
             if node_name not in collapsed_set:
@@ -879,7 +911,7 @@ def render_elk_direct(
                 ml = model_log.modules[mod_addr]
                 mod_out = model_log[mod_w_pass]
 
-                if vis_opt == "unrolled":
+                if vis_mode == "unrolled":
                     mpl = model_log.modules[mod_w_pass]
                     n_tensors = mpl.num_layers
                     has_anc = any(model_log[la].has_input_ancestor for la in mpl.layers)
@@ -890,7 +922,7 @@ def render_elk_direct(
                 np_ = ml.num_passes
                 if np_ == 1:
                     title = f"<b>@{mod_addr}</b>"
-                elif vis_opt == "unrolled":
+                elif vis_mode == "unrolled":
                     title = f"<b>@{mod_addr}:{pass_num}</b>"
                 else:
                     title = f"<b>@{mod_addr} (x{np_})</b>"
@@ -929,7 +961,7 @@ def render_elk_direct(
                 ls = "solid" if has_anc else "dashed"
                 lbl = (
                     f"<{title}<br/>{ml.module_class_name}<br/>"
-                    f"{ss} ({mod_out.tensor_fsize_nice})<br/>"
+                    f"{ss} ({mod_out.tensor_memory_str})<br/>"
                     f"{n_tensors} layers total<br/>{pd}>"
                 )
                 attrs = {
@@ -962,7 +994,7 @@ def render_elk_direct(
             )
             bg = _get_node_bg_color(model_log, node)
             ls = "solid" if node.has_input_ancestor else "dashed"
-            lbl = _make_node_label(node, addr, vis_opt)
+            lbl = _make_node_label(node, addr, vis_mode)
 
             attrs = {
                 "label": lbl,
@@ -985,7 +1017,7 @@ def render_elk_direct(
 
         # ── Collect edges (this node → its children) ──
         for child_label in node.child_layers:
-            if vis_opt == "unrolled":
+            if vis_mode == "unrolled":
                 child_node = model_log.layer_dict_main_keys.get(child_label)
             else:
                 child_node = model_log.layer_logs.get(child_label)
@@ -1003,19 +1035,19 @@ def render_elk_direct(
             # Resolve head name
             child_is_collapsed = _is_collapsed_module(child_node, vis_nesting_depth)
             if child_is_collapsed:
-                c_mod_w_pass = child_node.containing_modules_origin_nested[vis_nesting_depth - 1]
+                c_mod_w_pass = child_node.containing_modules[vis_nesting_depth - 1]
                 c_parts = c_mod_w_pass.rsplit(":", 1)
-                head_name = "pass".join(c_parts) if vis_opt == "unrolled" else c_parts[0]
+                head_name = "pass".join(c_parts) if vis_mode == "unrolled" else c_parts[0]
             else:
                 head_name = child_node.layer_label.replace(":", "pass")
 
             # Intra-module skip for two collapsed nodes in the same module
             if is_collapsed and child_is_collapsed and tail_name != head_name:
-                p_mods = node.containing_modules_origin_nested[:]
-                c_mods = child_node.containing_modules_origin_nested[:]
-                if node.is_bottom_level_submodule_output:
+                p_mods = node.containing_modules[:]
+                c_mods = child_node.containing_modules[:]
+                if node.is_leaf_module_output:
                     p_mods = p_mods[:-1]
-                if child_node.is_bottom_level_submodule_output:
+                if child_node.is_leaf_module_output:
                     c_mods = c_mods[:-1]
                 if p_mods[:vis_nesting_depth] == c_mods[:vis_nesting_depth]:
                     continue
@@ -1165,9 +1197,9 @@ def render_elk_direct(
         mod_type = ml.module_class_name if ml else "Module"
         np_ = ml.num_passes if ml else 1
 
-        if vis_opt == "unrolled" and np_ > 1 and ":" in mod_key:
+        if vis_mode == "unrolled" and np_ > 1 and ":" in mod_key:
             title = mod_key
-        elif vis_opt == "rolled" and np_ > 1:
+        elif vis_mode == "rolled" and np_ > 1:
             title = f"{mod_addr} (x{np_})"
         else:
             title = mod_addr
@@ -1266,7 +1298,7 @@ def render_elk_direct(
             raise RuntimeError(
                 f"neato rendering failed (exit {result.returncode}):\n{result.stderr}"
             )
-        if not save_only:
+        if not vis_save_only:
             import graphviz
 
             graphviz.backend.viewing.view(rendered_path)

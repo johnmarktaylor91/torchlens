@@ -1740,7 +1740,7 @@ class ContextUnet(nn.Module):
 
 class ViewMutationUnsqueeze(nn.Module):
     """Mutation through unsqueeze view: y = x.unsqueeze(0); y.fill_(0); return x.
-    The fill_ mutates x's storage through the view, so x's tensor_contents at
+    The fill_ mutates x's storage through the view, so x's activation at
     logging time differs from what children actually receive."""
 
     def __init__(self):

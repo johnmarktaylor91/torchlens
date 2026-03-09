@@ -180,7 +180,7 @@ class TestModuleLogFields:
         log = log_forward_pass(model, _simple_input())
         for ml in log.modules:
             if ml.address != "self":
-                assert ml.training_mode is False
+                assert ml.is_training is False
 
     def test_hooks_detected_false(self):
         log = log_forward_pass(_make_simple_model(), _simple_input())
@@ -412,7 +412,7 @@ class TestModuleLogStringIndexing:
 
 
 class TestTupleStringNormalization:
-    """containing_modules_origin_nested should handle both tuple and string formats."""
+    """containing_modules should handle both tuple and string formats."""
 
     def test_module_hierarchy_with_nested_model(self):
         class Inner(nn.Module):
