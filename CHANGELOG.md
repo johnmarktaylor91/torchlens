@@ -1,6 +1,38 @@
 # CHANGELOG
 
 
+## v0.21.2 (2026-03-09)
+
+### Bug Fixes
+
+- **vis**: Avoid graphviz.Digraph memory bomb when ELK fails on large graphs
+  ([`f5563ee`](https://github.com/johnmarktaylor91/torchlens/commit/f5563eee457383772c9b148cca058b87e126b6b3))
+
+When ELK layout fails (OOM/timeout) on 1M+ node graphs, the fallback path previously built a
+  graphviz.Digraph in Python — nested subgraph body-list copies exploded memory and hung
+  indefinitely. Now render_elk_direct handles the failure internally: reuses already-collected Phase
+  1 data to generate DOT text without positions and renders directly with sfdp, bypassing
+  graphviz.Digraph entirely.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **vis**: Bypass ELK for large graphs — use Python topological layout
+  ([`37cce3a`](https://github.com/johnmarktaylor91/torchlens/commit/37cce3ab5607591f622b4fd7f5916bca16736d59))
+
+ELK's stress algorithm allocates TWO O(n²) distance matrices (n² × 16 bytes). At 100k nodes that's
+  160 GB, at 1M nodes it's 16 TB — the root cause of the std::bad_alloc. The old >150k stress switch
+  could never work.
+
+For graphs above 100k nodes, we now skip ELK entirely and compute a topological rank layout in
+  Python (Kahn's algorithm, O(n+m)). Module bounding boxes are computed from node positions. The
+  result feeds into the same neato -n rendering path, preserving cluster boxes.
+
+If ELK fails for smaller graphs, the Python layout is also used as a fallback instead of the old
+  sfdp path that built a graphviz.Digraph (which exploded on nested subgraph body-list copies).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.21.1 (2026-03-09)
 
 ### Bug Fixes
