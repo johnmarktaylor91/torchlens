@@ -290,7 +290,7 @@ def _build_shared_fields_dict(
     parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw")
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
-    fields_dict = {}
+    fields_dict: Dict[str, Any] = {}
 
     # General info
     fields_dict["layer_type"] = layer_type
@@ -329,12 +329,13 @@ def _build_shared_fields_dict(
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
 
     # Function config — lightweight hyperparameter extraction, always on.
+    param_shapes: Optional[List[Tuple]] = fields_dict.get("parent_param_shapes")
     fields_dict["func_config"] = extract_salient_args(
         layer_type,
         func_name,
         args,
         kwargs,
-        fields_dict.get("parent_param_shapes", []),
+        param_shapes,
     )
 
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_passes
