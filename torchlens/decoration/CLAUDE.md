@@ -8,8 +8,8 @@ and prepares models for logging by wrapping their forward methods and tagging mo
 
 | File | ~Lines | Purpose |
 |------|--------|---------|
-| `torch_funcs.py` | 490 | One-time decoration of ~2000 torch functions, sys.modules crawl, core interceptor |
-| `model_prep.py` | 685 | Model preparation (one-time + per-session), module forward decorator, buffer discovery |
+| `torch_funcs.py` | 748 | One-time decoration of ~2000 torch functions, sys.modules crawl, core interceptor, DeviceContext bypass |
+| `model_prep.py` | 962 | Model preparation (one-time + per-session), module forward decorator, buffer discovery |
 
 ## torch_funcs.py — Key Functions
 
@@ -24,10 +24,11 @@ Called at `import torchlens` time. Wraps each function in ORIG_TORCH_FUNCS with
 ### `torch_func_decorator(func)` — The Core Interceptor
 For each intercepted call:
 1. **Fast path**: `if not _logging_enabled: return func(...)` (one bool check)
-2. Extract tensor args, generate random barcode, execute original function
-3. **Barcode nesting detection**: If barcode unchanged → bottom-level function → log it
-4. **In-place detection**: `id(out) == id(args[0])` → safe_copy strips label → always logged
-5. Hand off to `capture/output_tensors.py` for logging
+2. Extract tensor args via `extract_tensors_and_params()` (O(1) ArgSpec lookup)
+3. Generate random barcode, execute original function
+4. **Barcode nesting detection**: If barcode unchanged → bottom-level function → log it
+5. **In-place detection**: `id(out) == id(args[0])` → safe_copy strips label → always logged
+6. Hand off to `capture/output_tensors.py` for logging
 
 ### `patch_detached_references()`
 4-level sys.modules crawl using `_orig_to_decorated`:
@@ -39,7 +40,11 @@ For each intercepted call:
 ### DeviceContext Bypass
 Python wrappers bypass C-level TorchFunctionMode dispatch. When `torch.device('meta')`
 context is active (e.g., HuggingFace `from_pretrained`), factory functions need manual
-device kwarg injection. Handled in wrapper fast path.
+device kwarg injection. Handled in wrapper fast path via `_maybe_inject_device_kwarg`.
+
+**Known bug (DEVICE-CONTEXT-LOGGING)**: `_maybe_inject_device_kwarg` only called at line 241
+(non-logging path). During active logging, factory functions don't get device injection.
+Breaks HuggingFace `from_pretrained` under active logging.
 
 ## model_prep.py — Key Functions
 
@@ -75,6 +80,7 @@ Restores `requires_grad`, removes session-scoped `tl_*` attributes.
 - Fast-path module decorator skips `_handle_module_entry` entirely — any state that
   needs to align between passes must be replicated manually
 - `_module_class_metadata_cache` cleared at session start to avoid stale data
+- Buffer auto-registration guard prevents re-registering already-labeled buffers
 
 ## Related
 - [capture/](../capture/CLAUDE.md) — Called by decorated wrappers to log operations

@@ -9,15 +9,15 @@ each forward pass. Entry point: `log_forward_pass()` in `user_funcs.py`.
 
 ```
 import torchlens  (ONE TIME)
-  ├─ decorate_all_once()      — wraps ~2000 torch functions
-  ├─ patch_detached_references() — patches `from torch import cos` style imports
-  │
+  |- decorate_all_once()      — wraps ~2000 torch functions
+  |- patch_detached_references() — patches `from torch import cos` style imports
+  |
 log_forward_pass(model, input)
-  ├─ decoration/model_prep.py  — prepare model (once + per-session)
-  ├─ capture/trace.py          — run forward pass with logging enabled
-  ├─ capture/output_tensors.py — log each tensor operation
-  ├─ postprocess/              — 18-step pipeline (graph, loops, labels, modules)
-  └─ Returns ModelLog with all logged data
+  |- decoration/model_prep.py  — prepare model (once + per-session)
+  |- capture/trace.py          — run forward pass with logging enabled
+  |- capture/output_tensors.py — log each tensor operation
+  |- postprocess/              — 18-step pipeline (graph, loops, labels, modules)
+  +- Returns ModelLog with all logged data
 ```
 
 Two-pass strategy: when `layers_to_save` is a specific list, Pass 1 runs exhaustive
@@ -25,12 +25,12 @@ Two-pass strategy: when `layers_to_save` is a specific list, Pass 1 runs exhaust
 
 ## Files in This Directory
 
-| File | Purpose |
-|------|---------|
-| `__init__.py` | Public API exports + import-time decoration trigger |
-| `_state.py` | Global toggle, session state, context managers. **No imports from other torchlens modules** (prevents circular deps) |
-| `constants.py` | Field-order lists (MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER), function discovery (ORIG_TORCH_FUNCS, IGNORED_FUNCS) |
-| `user_funcs.py` | User-facing API: `log_forward_pass`, `validate_forward_pass`, `show_model_graph`, `get_model_metadata` |
+| File | ~Lines | Purpose |
+|------|--------|---------|
+| `__init__.py` | 26 | Public API exports + import-time decoration trigger |
+| `_state.py` | 208 | Global toggle, session state, context managers, WeakSet, pre-computed mappings. **No imports from other torchlens modules** (prevents circular deps) |
+| `constants.py` | 645 | 7 FIELD_ORDER tuples, function discovery (~90 IGNORED_FUNCS, ORIG_TORCH_FUNCS) |
+| `user_funcs.py` | 664 | User-facing API: `log_forward_pass`, `validate_forward_pass`, `show_model_graph`, `get_model_metadata` |
 
 ## Key Concepts
 
@@ -54,13 +54,13 @@ match but preserves all fields (no stripping). When adding new fields, update bo
 class definition and the corresponding FIELD_ORDER in constants.py.
 
 ## Subpackages
-- **[capture/](capture/CLAUDE.md)** — Real-time tensor operation logging during forward pass
-- **[data_classes/](data_classes/CLAUDE.md)** — ModelLog, LayerLog, LayerPassLog, ModuleLog, ParamLog, etc.
-- **[decoration/](decoration/CLAUDE.md)** — One-time torch function wrapping + model preparation
-- **[postprocess/](postprocess/CLAUDE.md)** — 18-step pipeline: graph cleanup, loop detection, labeling
-- **[utils/](utils/CLAUDE.md)** — Arg handling, tensor ops, RNG, hashing, display helpers
-- **[validation/](validation/CLAUDE.md)** — Forward replay, perturbation checks, metadata invariants
-- **[visualization/](visualization/CLAUDE.md)** — Graphviz-based computational graph rendering
+- **[capture/](capture/CLAUDE.md)** — Real-time tensor operation logging during forward pass (7 files: trace, output_tensors, source_tensors, tensor_tracking, arg_positions, salient_args, flops)
+- **[data_classes/](data_classes/CLAUDE.md)** — ModelLog, LayerLog, LayerPassLog, ModuleLog, ParamLog, etc. (10 files)
+- **[decoration/](decoration/CLAUDE.md)** — One-time torch function wrapping + model preparation (2 files)
+- **[postprocess/](postprocess/CLAUDE.md)** — 18-step pipeline: graph cleanup, loop detection, labeling (6 files)
+- **[utils/](utils/CLAUDE.md)** — Arg handling, tensor ops, RNG, hashing, display helpers (7 files)
+- **[validation/](validation/CLAUDE.md)** — Forward replay, perturbation checks, metadata invariants (3 files)
+- **[visualization/](visualization/CLAUDE.md)** — Graphviz + ELK-based computational graph rendering (2 files)
 
 ## Critical Invariants
 1. `_state.py` must never import other torchlens modules
@@ -68,3 +68,4 @@ class definition and the corresponding FIELD_ORDER in constants.py.
 3. `pause_logging()` must wrap any internal torch ops during logging (safe_copy, activation_postfunc, get_tensor_memory_amount)
 4. Decorated wrappers are permanent — never undecorated
 5. Field-order constants and class definitions must stay in sync
+6. Step 6 module suffix mutation makes `_rebuild_pass_assignments` (Step 8) NECESSARY — not just defensive

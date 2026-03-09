@@ -5,13 +5,13 @@ All data structures for storing logged forward-pass information. Organized as a 
 
 ```
 ModelLog (top-level container)
-  ├─ LayerLog (aggregate per-layer, groups passes)
-  │   └─ LayerPassLog (per-pass tensor operation entry, ~80+ fields)
-  │       └─ BufferLog (extends LayerPassLog for buffer tensors)
-  ├─ ModuleLog (per module in model)
-  │   └─ ModulePassLog (per invocation of a module)
-  ├─ ParamLog (per model parameter)
-  └─ FuncCallLocation (structured call stack frame)
+  |- LayerLog (aggregate per-layer, groups passes)
+  |   +- LayerPassLog (per-pass tensor operation entry, ~85+ fields)
+  |       +- BufferLog (extends LayerPassLog for buffer tensors)
+  |- ModuleLog (per module in model)
+  |   +- ModulePassLog (per invocation of a module)
+  |- ParamLog (per model parameter)
+  +- FuncCallLocation (structured call stack frame)
 ```
 
 Each main class has a companion Accessor (LayerAccessor, ModuleAccessor, ParamAccessor,
@@ -21,34 +21,34 @@ BufferAccessor) providing dict-like indexing by name, index, or substring.
 
 | File | ~Lines | Purpose |
 |------|--------|---------|
-| `model_log.py` | 316 | ModelLog: top-level container, FLOPs properties, `_init_module_build_data()` |
-| `layer_pass_log.py` | 477 | LayerPassLog: per-pass entry (~80+ fields), `save_tensor_data()`, `copy()` |
-| `layer_log.py` | 553 | LayerLog: aggregate class, `__getattr__` delegation, LayerAccessor |
-| `buffer_log.py` | 108 | BufferLog(LayerPassLog): `name`/`module_address` computed properties, BufferAccessor |
-| `module_log.py` | 353 | ModuleLog, ModulePassLog, ModuleAccessor |
-| `param_log.py` | 196 | ParamLog (lazy grad via `_param_ref`), ParamAccessor |
-| `func_call_location.py` | 230 | FuncCallLocation: lazy source loading via linecache |
-| `internal_types.py` | 41 | FuncExecutionContext + VisualizationOverrides dataclasses |
-| `interface.py` | 430 | ModelLog query methods: `__getitem__`, `__str__`, `to_pandas()` |
-| `cleanup.py` | 157 | Post-session teardown: destroy entries, free GPU memory |
+| `model_log.py` | 497 | ModelLog: top-level container, 70+ attrs, FLOPs properties, `conditional_then_edges` |
+| `layer_pass_log.py` | 677 | LayerPassLog: per-pass entry (~85+ fields, 18 @properties), `cond_branch_then_children`, `func_config` |
+| `layer_log.py` | 671 | LayerLog: aggregate class, 13 direct + 38 @properties, `__getattr__` delegation |
+| `buffer_log.py` | 132 | BufferLog(LayerPassLog): `name`/`module_address` computed properties, BufferAccessor |
+| `module_log.py` | 525 | ModuleLog, ModulePassLog, ModuleAccessor, shared alias support, FLOPs aggregation |
+| `param_log.py` | 248 | ParamLog (lazy grad via `_param_ref`), `release_param_ref()` for GC, ParamAccessor |
+| `func_call_location.py` | 265 | FuncCallLocation: lazy properties via linecache, dual construction paths, `_SENTINEL` |
+| `internal_types.py` | 61 | FuncExecutionContext + VisualizationOverrides (`@dataclass(slots=True)`) |
+| `interface.py` | 508 | ModelLog query methods: `__getitem__`, `__str__`, `to_pandas()`, 7-step lookup cascade |
+| `cleanup.py` | 237 | Post-session teardown: O(N+M) batch removal, `conditional_then_edges` filtering, `release_param_refs` |
 
 ## Key Access Patterns
 
 ```python
 # ModelLog access
-log["conv2d_1_5"]      # → LayerLog (aggregate)
-log["conv2d_1_5:2"]    # → LayerPassLog (specific pass)
-log[3]                 # → LayerPassLog (by ordinal)
-log.layers             # → LayerAccessor (all LayerLogs)
-log.modules            # → ModuleAccessor
-log.params             # → ParamAccessor
-log.buffers            # → BufferAccessor
+log["conv2d_1_5"]      # -> LayerLog (aggregate)
+log["conv2d_1_5:2"]    # -> LayerPassLog (specific pass)
+log[3]                 # -> LayerPassLog (by ordinal)
+log.layers             # -> LayerAccessor (all LayerLogs)
+log.modules            # -> ModuleAccessor
+log.params             # -> ParamAccessor
+log.buffers            # -> BufferAccessor
 
 # LayerLog delegation
 layer = log.layers["conv2d_1_1"]
-layer.tensor_contents  # → delegates to passes[1] for single-pass layers
-layer.child_layers     # → union of no-pass labels across all passes
-layer.passes           # → Dict[int, LayerPassLog]
+layer.tensor_contents  # -> delegates to passes[1] for single-pass layers
+layer.child_layers     # -> union of no-pass labels across all passes
+layer.passes           # -> Dict[int, LayerPassLog]
 ```
 
 ## Design Decisions
@@ -73,14 +73,23 @@ Subclass of LayerPassLog. `name` and `module_address` live only on BufferLog, no
 LayerLog (too generic for the aggregate). Single-pass buffer LayerLogs access them
 via `__getattr__` delegation.
 
+### _build_layer_logs Multi-Pass Merge
+Only 3 fields merged across passes (has_input_ancestor OR, input_output_address char-merge,
+is_bottom_level_submodule_output OR). All other 78 fields use first-pass values.
+`cond_branch_start_children` and `cond_branch_then_children` use first pass only.
+
 ## Circular References (GC concern)
 ```
-ModelLog → LayerPassLog → source_model_log → ModelLog  (CYCLE)
-ModelLog → ModuleLog → _source_model_log → ModelLog    (CYCLE)
-ParamLog → _param_ref → nn.Parameter                   (PINS MODEL)
+ModelLog -> LayerPassLog -> source_model_log -> ModelLog  (CYCLE)
+ModelLog -> ModuleLog -> _source_model_log -> ModelLog    (CYCLE)
+ParamLog -> _param_ref -> nn.Parameter                   (PINS MODEL)
 ```
 All rely on Python's cyclic GC rather than ref-counting. `cleanup()` in cleanup.py
 can be called explicitly to break cycles.
+
+## Known Bugs
+- **TO-PANDAS-NEW-FIELDS**: `to_pandas()` missing `func_config` and `cond_branch_then_children` columns
+- **COND-THEN-MULTIPASS**: `cond_branch_then_children` not merged for multi-pass LayerLog (first pass only)
 
 ## Gotchas
 - Adding new fields: update class definition AND `constants.py` FIELD_ORDER
@@ -91,6 +100,8 @@ can be called explicitly to break cycles.
 - `equivalent_operations` per-LayerPassLog holds direct reference to ModelLog-level
   sets; becomes stale after rename step 11 (cosmetic, not read downstream)
 - `grad_contents` is a bare reference (no clone) — shared with parent tensor
+- `FuncCallLocation._frame_func_obj` set at construction but only released in
+  `_load_source()` (lazy property trigger) — leaks if properties never accessed
 
 ## Related
 - [capture/](../capture/CLAUDE.md) — Creates LayerPassLog entries during logging
