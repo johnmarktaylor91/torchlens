@@ -9,7 +9,7 @@ This package init has two responsibilities:
    first imported.  See the bottom of this file for details.
 """
 
-__version__ = "0.21.2"
+__version__ = "0.21.3"
 
 # ---- Public API: user-facing entry points --------------------------------
 

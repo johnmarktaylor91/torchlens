@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.21.3 (2026-03-11)
+
+### Bug Fixes
+
+- **tests**: Make SIGALRM signal safety test deterministic
+  ([`b3fc461`](https://github.com/johnmarktaylor91/torchlens/commit/b3fc46154f0942c829c3bbeb9b07f3d900471b79))
+
+Replace timer-based SIGALRM with direct os.kill() inside forward() so the signal always fires
+  mid-logging. Eliminates flaky skips when the forward pass completes before the timer.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.21.2 (2026-03-09)
 
 ### Bug Fixes
