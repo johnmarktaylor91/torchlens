@@ -6,6 +6,7 @@ JIT compatibility, and exception/interrupt safety.
 """
 
 import gc
+import os
 import signal
 import sys
 import types
@@ -746,37 +747,24 @@ class TestEdgeCases:
 
 class TestSignalSafety:
     def test_sigalrm_during_forward(self):
-        """Simulate an interrupt via SIGALRM during forward pass.
-        Toggle must be off after the signal handler raises."""
+        """SIGALRM during a forward pass must not leave the logging toggle stuck on."""
         if not hasattr(signal, "SIGALRM"):
             pytest.skip("SIGALRM not available on this platform")
 
-        class SlowModel(nn.Module):
+        class AlarmModel(nn.Module):
             def forward(self, x):
-                # Do enough work that the alarm fires mid-logging
-                for _ in range(50000):
-                    x = x + 0.001
-                return x
-
-        alarm_fired = False
+                x = x + 1.0  # at least one logged op before the signal
+                os.kill(os.getpid(), signal.SIGALRM)
+                return x + 1.0
 
         def alarm_handler(signum, frame):
-            nonlocal alarm_fired
-            alarm_fired = True
             raise TimeoutError("alarm fired")
 
         old_handler = signal.signal(signal.SIGALRM, alarm_handler)
         try:
-            signal.setitimer(signal.ITIMER_REAL, 0.05)  # 50ms — fires mid-forward
-            model = SlowModel()
-            try:
+            model = AlarmModel()
+            with pytest.raises(TimeoutError):
                 log_forward_pass(model, torch.randn(5))
-            except TimeoutError:
-                pass
-            signal.setitimer(signal.ITIMER_REAL, 0)  # cancel
-
-            if not alarm_fired:
-                pytest.skip("alarm didn't fire — forward pass too fast")
 
             # Toggle MUST be off
             assert _state._logging_enabled is False
@@ -787,7 +775,6 @@ class TestSignalSafety:
             assert y.shape == (1,)
         finally:
             signal.signal(signal.SIGALRM, old_handler)
-            signal.alarm(0)
 
     def test_active_logging_context_manager_exception_safety(self):
         """active_logging must restore state on any exception type."""
