@@ -205,8 +205,9 @@ def _display_label(entry, vis_mode: str) -> str:
     if vis_mode == "rolled":
         base = getattr(entry, "layer_label_no_pass", None) or getattr(entry, "layer_label", "")
         passes = int(getattr(entry, "num_passes", 1) or 1)
-        return f"{base} (x{passes})" if passes > 1 else base
-    return getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", "")
+        base_str = str(base)
+        return f"{base_str} (x{passes})" if passes > 1 else base_str
+    return str(getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", ""))
 
 
 def _shape_memory_line(entry) -> Optional[str]:

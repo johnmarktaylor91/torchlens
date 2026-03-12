@@ -101,7 +101,7 @@ def _get_active_device() -> Optional[str]:
 
         for mode in reversed(_get_current_function_mode_stack()):
             if isinstance(mode, _DeviceContext):
-                return mode.device  # type: ignore[return-value]
+                return mode.device
     except (ImportError, AttributeError):
         pass
     return None

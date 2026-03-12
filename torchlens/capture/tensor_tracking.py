@@ -247,13 +247,13 @@ def _process_parent_param_passes(
         if not hasattr(param, "tl_param_barcode"):
             # First time seeing this parameter — assign a unique barcode.
             param_barcode = make_random_barcode()
-            param.tl_param_barcode = param_barcode  # type: ignore[attr-defined]
-            param.tl_pass_num = 1  # type: ignore[attr-defined]
+            param.tl_param_barcode = param_barcode
+            param.tl_pass_num = 1
         else:
             # Same parameter seen again (loop iteration) — increment pass.
-            param_barcode = param.tl_param_barcode  # type: ignore[attr-defined]
-            param.tl_pass_num += 1  # type: ignore[attr-defined]
-        parent_param_passes[param_barcode] = param.tl_pass_num  # type: ignore[attr-defined]
+            param_barcode = param.tl_param_barcode
+            param.tl_pass_num += 1
+        parent_param_passes[param_barcode] = param.tl_pass_num
     return parent_param_passes
 
 

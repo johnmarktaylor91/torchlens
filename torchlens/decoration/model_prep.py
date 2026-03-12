@@ -319,7 +319,7 @@ def _get_class_metadata(module_class: type, save_source_context: bool = False) -
 
     meta: Dict[str, object] = {}
     meta["module_class_name"] = module_class.__name__
-    meta["class_docstring"] = module_class.__doc__  # type: ignore[assignment]
+    meta["class_docstring"] = module_class.__doc__
 
     # Cache user-defined methods from class __dict__ (same for all instances of this class).
     user_methods = []
@@ -337,24 +337,24 @@ def _get_class_metadata(module_class: type, save_source_context: bool = False) -
         try:
             meta["source_file"] = inspect.getfile(module_class)
         except (TypeError, OSError):
-            meta["source_file"] = None  # type: ignore[assignment]
+            meta["source_file"] = None
         try:
             _, line = inspect.getsourcelines(module_class)
-            meta["source_line"] = line  # type: ignore[assignment]
+            meta["source_line"] = line
         except (TypeError, OSError):
-            meta["source_line"] = None  # type: ignore[assignment]
+            meta["source_line"] = None
 
         try:
-            meta["init_signature"] = str(inspect.signature(module_class.__init__))  # type: ignore[misc]
+            meta["init_signature"] = str(inspect.signature(module_class.__init__))
         except (ValueError, TypeError):
-            meta["init_signature"] = None  # type: ignore[assignment]
-        meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)  # type: ignore[assignment, misc]
+            meta["init_signature"] = None
+        meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)
 
         try:
-            meta["forward_signature"] = str(inspect.signature(module_class.forward))  # type: ignore[attr-defined]
+            meta["forward_signature"] = str(inspect.signature(module_class.forward))
         except (ValueError, TypeError):
-            meta["forward_signature"] = None  # type: ignore[assignment]
-        meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)  # type: ignore[assignment, attr-defined]
+            meta["forward_signature"] = None
+        meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)
     else:
         meta["source_file"] = None
         meta["source_line"] = None
