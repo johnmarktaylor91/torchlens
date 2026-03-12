@@ -178,6 +178,8 @@ def log_forward_pass(
     vis_gradient_edge_overrides: Optional[Dict] = None,
     vis_module_overrides: Optional[Dict] = None,
     vis_node_placement: str = "auto",
+    vis_renderer: str = "graphviz",
+    vis_theme: str = "torchlens",
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
@@ -242,6 +244,8 @@ def log_forward_pass(
         vis_module_overrides: Graphviz subgraph (module cluster) attribute overrides.
         vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
             or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK/sfdp for large.
+        vis_renderer: Visualization backend: ``'graphviz'`` (default) or ``'dagua'``.
+        vis_theme: Named Dagua theme when ``vis_renderer='dagua'``.
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Lines of source context to capture per function call.
         optimizer: Optional optimizer to annotate which params are being optimized.
@@ -350,6 +354,8 @@ def log_forward_pass(
             vis_buffer_layers,
             vis_direction,
             vis_node_placement=vis_node_placement,
+            vis_renderer=vis_renderer,
+            vis_theme=vis_theme,
         )
 
     return model_log
@@ -402,6 +408,8 @@ def show_model_graph(
     vis_buffer_layers: bool = False,
     vis_direction: str = "bottomup",
     vis_node_placement: str = "auto",
+    vis_renderer: str = "graphviz",
+    vis_theme: str = "torchlens",
     random_seed: Optional[int] = None,
     detect_loops: bool = True,
     verbose: bool = False,
@@ -424,6 +432,8 @@ def show_model_graph(
         vis_fileformat: Image format (``'pdf'``, ``'png'``, ``'jpg'``, etc.).
         vis_buffer_layers: Include buffer layers in the visualization.
         vis_direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
+        vis_renderer: Visualization backend: ``'graphviz'`` (default) or ``'dagua'``.
+        vis_theme: Named Dagua theme when ``vis_renderer='dagua'``.
         random_seed: Fixed RNG seed for stochastic models.
 
     Returns:
@@ -467,6 +477,8 @@ def show_model_graph(
             vis_buffer_layers,
             vis_direction,
             vis_node_placement=vis_node_placement,
+            vis_renderer=vis_renderer,
+            vis_theme=vis_theme,
         )
     finally:
         model_log.cleanup()
