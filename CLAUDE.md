@@ -45,6 +45,9 @@ If there is no issue, omit the issue reference — but prefer having an issue fo
 - Smoke tests (~6s): `pytest tests/ -m smoke`
 - Skip slow tests: `pytest tests/ -m "not slow"`
 - Linting: `ruff format` + `ruff check --fix`
+- Dagua bridge tests: `pytest tests/test_dagua_theme.py`
+- TorchLens Dagua gallery builder:
+  - `python scripts/build_torchlens_theme_gallery.py`
 
 ## Project Structure
 
@@ -53,6 +56,35 @@ If there is no issue, omit the issue reference — but prefer having an issue fo
 - `scripts/` — development utilities ([see scripts docs](scripts/CLAUDE.md))
 - `.github/` — CI/CD workflows ([see CI docs](.github/CLAUDE.md))
 - `images/` — documentation images
+
+## Dagua Integration
+
+TorchLens now has an optional Dagua-based visualization path. Graphviz remains the
+default renderer.
+
+Key files:
+- `torchlens/visualization/dagua_bridge.py`
+  - `ModelLog -> DaguaGraph` semantic mapping
+  - field audit helpers
+  - Dagua rendering entrypoint
+- `torchlens/visualization/rendering.py`
+  - dispatches between Graphviz and Dagua
+- `torchlens/data_classes/model_log.py`
+  - exposes `to_dagua_graph`, `render_dagua_graph`, and `visualization_field_audit`
+- `scripts/build_torchlens_theme_gallery.py`
+  - builds the TorchLens Dagua reference gallery
+- `tests/test_dagua_theme.py`
+  - smoke coverage for the bridge and renderer
+
+Current policy:
+- `vis_renderer="graphviz"` is still the default
+- Dagua is opt-in
+- visual semantics are still under iteration; do not switch defaults casually
+
+Useful workflow:
+- generate a quick Dagua render through `show_model_graph(..., vis_renderer="dagua")`
+- inspect the `ModelLog -> DaguaGraph` mapping in `dagua_bridge.py`
+- use `tests/test_dagua_theme.py` as the minimum regression surface before refactors
 
 ## Architecture Quick Reference
 
@@ -69,3 +101,17 @@ log_forward_pass(model, input)
 Key packages: `capture/` (7 files), `data_classes/` (10 files), `decoration/` (2 files),
 `postprocess/` (6 files), `validation/` (3 files), `visualization/` (2 files: rendering.py + elk_layout.py),
 `utils/` (7 files).
+
+## Visualization Notes
+
+- Graphviz is still the stable/default end-user visualization path.
+- The Dagua path is valuable as infrastructure:
+  - semantic graph extraction from `ModelLog`
+  - theme iteration
+  - alternative rendering experiments
+  - future large-graph / cinematic workflows
+- When working on visualization, keep the distinction clear between:
+  - semantic mapping quality (`ModelLog -> graph structure`)
+  - layout quality
+  - rendering/theme quality
+  They regress independently and should be judged separately.
