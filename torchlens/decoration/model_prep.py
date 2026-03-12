@@ -344,17 +344,23 @@ def _get_class_metadata(module_class: type, save_source_context: bool = False) -
         except (TypeError, OSError):
             meta["source_line"] = None
 
+        init_method = getattr(module_class, "__init__", None)
         try:
-            meta["init_signature"] = str(inspect.signature(module_class.__init__))
+            meta["init_signature"] = (
+                str(inspect.signature(init_method)) if init_method is not None else None
+            )
         except (ValueError, TypeError):
             meta["init_signature"] = None
-        meta["init_docstring"] = getattr(module_class.__init__, "__doc__", None)
+        meta["init_docstring"] = getattr(init_method, "__doc__", None)
 
+        forward_method = getattr(module_class, "forward", None)
         try:
-            meta["forward_signature"] = str(inspect.signature(module_class.forward))
+            meta["forward_signature"] = (
+                str(inspect.signature(forward_method)) if forward_method is not None else None
+            )
         except (ValueError, TypeError):
             meta["forward_signature"] = None
-        meta["forward_docstring"] = getattr(module_class.forward, "__doc__", None)
+        meta["forward_docstring"] = getattr(forward_method, "__doc__", None)
     else:
         meta["source_file"] = None
         meta["source_line"] = None
