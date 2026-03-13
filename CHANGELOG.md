@@ -1,6 +1,40 @@
 # CHANGELOG
 
 
+## v0.22.0 (2026-03-13)
+
+### Chores
+
+- **types**: Remove stale typing noise
+  ([`5ba099d`](https://github.com/johnmarktaylor91/torchlens/commit/5ba099df82f789f308f86d78a66c82b1baf3751d))
+
+### Documentation
+
+- **maintenance**: Refresh maintainer notes
+  ([`685a358`](https://github.com/johnmarktaylor91/torchlens/commit/685a358caa12b3210de68e136c59959de4c3f94f))
+
+- **maintenance**: Split CLAUDE.md/AGENTS.md into architect vs implementation roles
+  ([`18f8ae9`](https://github.com/johnmarktaylor91/torchlens/commit/18f8ae9851e91be5ca7c335facb45209212f6d95))
+
+Break the symlink mirroring convention: CLAUDE.md now holds architect-level context (what, why, how
+  it connects) while AGENTS.md holds implementation-level context (conventions, gotchas, known bugs,
+  test commands). Pure-implementation subdirs (.github, scripts, tests, utils) get AGENTS.md only.
+  Also populates .project-context/ templates (architecture, conventions, gotchas, decisions).
+
+### Features
+
+- **decoration**: Add global undecorate override
+  ([`b0bafeb`](https://github.com/johnmarktaylor91/torchlens/commit/b0bafeb51fbf9b406bd34a84ed826cd4b9c607bb))
+
+- **viz**: Add dagua torchlens integration
+  ([`35d5bcd`](https://github.com/johnmarktaylor91/torchlens/commit/35d5bcdb976420b86be54048ab4503cbbc146763))
+
+### Refactoring
+
+- **types**: Finish package mypy cleanup
+  ([`6f9a3fe`](https://github.com/johnmarktaylor91/torchlens/commit/6f9a3fe423367c9bd9e32949cdf06945d90786ee))
+
+
 ## v0.21.3 (2026-03-11)
 
 ### Bug Fixes
