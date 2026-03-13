@@ -1,19 +1,23 @@
-"""Permanent-by-default torch function wrapping with optional global override.
+"""Lazy torch function wrapping with explicit wrap/unwrap lifecycle.
 
-This module implements the core interception mechanism for TorchLens. At ``import torchlens``
-time, every function listed in ``ORIG_TORCH_FUNCS`` is replaced with a thin wrapper that
-checks a single boolean (``_state._logging_enabled``) on each call:
+This module implements the core interception mechanism for TorchLens.  Torch
+functions are wrapped **lazily** — ``import torchlens`` has no side effects.
+Wrapping happens on the first call to ``log_forward_pass()`` (or any other
+entry point that needs logging) and stays in place afterward.  Users can
+explicitly control the lifecycle via ``wrap_torch()`` / ``unwrap_torch()`` /
+``wrapped()``.
+
+Every function listed in ``ORIG_TORCH_FUNCS`` is replaced with a thin wrapper
+that checks a single boolean (``_state._logging_enabled``) on each call:
 
   - **Logging off** (default): one branch check, near-zero overhead, original function called.
   - **Logging on**: all tensor outputs are captured into the active ``ModelLog``.
 
 Key design decisions:
 
-1. **Permanent decoration by default** avoids the fragility of repeatedly
-   patching/unpatching torch internals. The toggle makes this safe for production
-   use.  Advanced users can still call ``undecorate_all_globally()`` to restore
-   the original torch callables and ``redecorate_all_globally()`` to re-enable
-   TorchLens interception.
+1. **Lazy wrapping** — torch is clean after ``import torchlens``.  Wrapping is
+   triggered automatically on first use and persists until ``unwrap_torch()`` is
+   called.  The toggle makes persistent wrapping safe for production use.
 
 2. **Shared originals reuse wrappers**: If ``torch.cos`` and ``torch._VF.cos`` point to the
    same C builtin, only one wrapper is created and both namespaces point to it. This keeps
@@ -36,6 +40,7 @@ import sys
 import time
 import types
 import warnings
+from contextlib import contextmanager
 from functools import wraps
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple
 
@@ -437,7 +442,7 @@ def get_func_argnames(orig_func: Callable, func_name: str):
 
 
 def decorate_all_once():
-    """Decorate all torch functions permanently at import time.
+    """Decorate all torch functions (internal, called once by ``wrap_torch``).
 
     Iterates over every ``(namespace, func_name)`` pair in ``ORIG_TORCH_FUNCS``
     and replaces each function with a ``torch_func_decorator`` wrapper. Also:
@@ -448,8 +453,8 @@ def decorate_all_once():
     - Registers wrappers in ``torch.jit._builtins._builtin_table`` so JIT
       compilation recognizes wrapped functions as known ATen ops.
     - Collects ``_DEVICE_CONSTRUCTOR_NAMES`` for DeviceContext bypass.
-    - Installs ``torch.identity`` (a no-op that creates a new tensor entry
-      for module boundary tracking).
+    - Creates ``_state._decorated_identity`` (a no-op that forces new log
+      entries at module boundaries).
 
     **Shared-original deduplication**: Multiple torch namespaces can alias the
     same C builtin (e.g. ``torch.cos`` and ``torch._VF.cos``). When the same
@@ -579,12 +584,12 @@ def decorate_all_once():
     except (ImportError, AttributeError):
         pass
 
-    # Install torch.identity — a decorated no-op that creates a new tensor entry.
-    # Used at module boundaries: when nn.Identity is encountered or when an output
-    # tensor is the same object as an input tensor, torch.identity() forces a new
-    # log entry so the graph correctly shows the module boundary.
-    new_identity = torch_func_decorator(identity, "identity")
-    torch.identity = new_identity
+    # Create the decorated identity — a no-op that forces a new log entry at
+    # module boundaries (nn.Identity, pass-through outputs).  Stored on _state
+    # instead of monkey-patching torch.identity (which doesn't exist in PyTorch
+    # type stubs and causes mypy errors).
+    _state._decorated_identity = torch_func_decorator(identity, "identity")
+    _state._is_decorated = True
 
 
 def _replace_detached_references(mapping: Dict[int, Callable]) -> None:
@@ -642,21 +647,20 @@ def _replace_detached_references(mapping: Dict[int, Callable]) -> None:
                 _patch_function_defaults(attr_val, mapping)
 
 
-def undecorate_all_globally() -> None:
-    """Restore original torch callables globally.
+def unwrap_torch() -> None:
+    """Remove torchlens wrappers and restore original torch callables.
 
-    This is an explicit override for advanced users who want a clean PyTorch
-    environment after importing TorchLens. It restores torch namespace
-    attributes and reverses the detached-reference crawl so module globals,
-    class attributes, and function defaults point back at original callables.
+    After calling this, ``torch.cos``, ``torch.Tensor.__add__``, etc. are the
+    originals shipped by PyTorch.  TorchLens logging will not work until
+    ``wrap_torch()`` is called (or ``log_forward_pass`` auto-wraps).
 
-    TorchLens logging will not function until ``redecorate_all_globally()`` is
-    called again.
+    Safe to call multiple times — no-op if already unwrapped.
     """
     _state._logging_enabled = False
     _state._active_model_log = None
 
     if not _state._decorated_to_orig:
+        _state._is_decorated = False
         return
 
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
@@ -676,16 +680,29 @@ def undecorate_all_globally() -> None:
             pass
 
     _replace_detached_references(_state._decorated_to_orig)
-    torch.identity = identity
+    _state._is_decorated = False
 
 
-def redecorate_all_globally() -> None:
-    """Reinstall TorchLens wrappers after a prior global undecoration."""
+def wrap_torch() -> None:
+    """Install (or re-install) torchlens wrappers on all torch functions.
+
+    If this is the first call, performs full decoration (equivalent to
+    ``decorate_all_once`` + ``patch_detached_references``).  If wrappers were
+    previously removed via ``unwrap_torch()``, re-installs them from the
+    cached maps without re-creating wrapper objects.
+
+    Safe to call multiple times — no-op if already wrapped.
+    """
+    if _state._is_decorated:
+        return
+
     if not _state._orig_to_decorated:
+        # First time: full decoration
         decorate_all_once()
         patch_detached_references()
         return
 
+    # Re-install from existing maps (after a prior unwrap_torch)
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
         namespace_key = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch, namespace_key)
@@ -707,9 +724,32 @@ def redecorate_all_globally() -> None:
             pass
 
     _replace_detached_references(_state._orig_to_decorated)
-    new_identity = torch_func_decorator(identity, "identity")
-    new_identity.tl_is_decorated_function = True
-    torch.identity = new_identity
+    # Recreate decorated identity in case wrapper references shifted
+    _state._decorated_identity = torch_func_decorator(identity, "identity")
+    _state._is_decorated = True
+    patch_detached_references()
+
+
+@contextmanager
+def wrapped():
+    """Context manager: wrap torch on entry, unwrap on exit.
+
+    Usage::
+
+        with torchlens.wrapped():
+            log = torchlens.log_forward_pass(model, x)
+        # torch is clean again here
+    """
+    wrap_torch()
+    try:
+        yield
+    finally:
+        unwrap_torch()
+
+
+# Keep old names as private aliases for internal use
+undecorate_all_globally = unwrap_torch
+redecorate_all_globally = wrap_torch
 
 
 # ---------------------------------------------------------------------------
