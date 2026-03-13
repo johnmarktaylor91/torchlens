@@ -22,6 +22,8 @@ from torchlens.decoration.torch_funcs import (
     decorate_all_once,
     patch_detached_references,
     patch_model_instance,
+    redecorate_all_globally,
+    undecorate_all_globally,
 )
 
 
@@ -177,6 +179,33 @@ class TestToggleState:
             log_forward_pass(model, torch.randn(0))
         for name, param in model.named_parameters():
             assert param.requires_grad == orig_grads[name], f"{name} requires_grad changed"
+
+
+class TestGlobalUndecorate:
+    def test_undecorate_restores_original_torch_function(self):
+        """Users can globally strip TorchLens wrappers from torch callables."""
+        assert getattr(torch.cos, "tl_is_decorated_function", False)
+        undecorate_all_globally()
+        try:
+            assert not getattr(torch.cos, "tl_is_decorated_function", False)
+            x = torch.randn(4)
+            y = torch.cos(x)
+            assert y.shape == x.shape
+            assert not hasattr(y, "tl_tensor_label_raw")
+        finally:
+            redecorate_all_globally()
+
+    def test_redecorate_restores_logging_after_global_undecorate(self):
+        """Global undecoration is reversible for later TorchLens use."""
+        undecorate_all_globally()
+        try:
+            assert not getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        finally:
+            redecorate_all_globally()
+        assert getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        result = log_forward_pass(SimpleModel(), torch.randn(5))
+        relu_layers = [label for label in result.layer_labels if "relu" in label.lower()]
+        assert relu_layers
 
 
 # =========================================================================

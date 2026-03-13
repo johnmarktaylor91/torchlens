@@ -66,6 +66,8 @@ class definition and the corresponding FIELD_ORDER in constants.py.
 1. `_state.py` must never import other torchlens modules
 2. RNG state capture/restore must happen BEFORE `active_logging()` context
 3. `pause_logging()` must wrap any internal torch ops during logging (safe_copy, activation_postfunc, get_tensor_memory_amount)
-4. Decorated wrappers are permanent — never undecorated
+4. Decorated wrappers are permanent by default, but advanced users may call
+   `undecorate_all_globally()` / `redecorate_all_globally()` as an explicit
+   override when they need a clean PyTorch environment.
 5. Field-order constants and class definitions must stay in sync
 6. Step 6 module suffix mutation makes `_rebuild_pass_assignments` (Step 8) NECESSARY — not just defensive
