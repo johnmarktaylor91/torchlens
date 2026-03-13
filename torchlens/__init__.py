@@ -7,7 +7,7 @@ torch callables, call ``unwrap_torch()``.  To explicitly (re-)wrap, call
 ``wrap_torch()``.  The ``wrapped()`` context manager handles the full lifecycle.
 """
 
-__version__ = "0.22.0"
+__version__ = "1.0.0"
 
 # ---- Public API: user-facing entry points --------------------------------
 

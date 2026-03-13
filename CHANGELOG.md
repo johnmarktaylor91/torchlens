@@ -1,6 +1,46 @@
 # CHANGELOG
 
 
+## v1.0.0 (2026-03-13)
+
+### Bug Fixes
+
+- **decoration**: Cast mode.device to str for mypy return-value check
+  ([`45c0ff3`](https://github.com/johnmarktaylor91/torchlens/commit/45c0ff3be8586675817905dcb273e9bad7ac0519))
+
+CI mypy (stricter torch stubs) catches that mode.device returns torch.device, not str. Explicit
+  str() cast satisfies the Optional[str] return type annotation.
+
+### Features
+
+- **decoration**: Lazy wrapping — import torchlens has no side effects
+  ([`b5da8b8`](https://github.com/johnmarktaylor91/torchlens/commit/b5da8b8b15136f108534ba29022ab6579bdb9315))
+
+BREAKING CHANGE: torch functions are no longer wrapped at import time. Wrapping happens lazily on
+  first log_forward_pass() call and persists.
+
+Three changes:
+
+1. Lazy decoration: removed decorate_all_once() / patch_detached_references() calls from
+  __init__.py. _ensure_model_prepared() triggers wrapping on first use via wrap_torch().
+
+2. Public wrap/unwrap API: - torchlens.wrap_torch() — install wrappers (idempotent) -
+  torchlens.unwrap_torch() — restore original torch callables - torchlens.wrapped() — context
+  manager (wrap on enter, unwrap on exit) - log_forward_pass(unwrap_when_done=True) — one-shot
+  convenience Old names (undecorate_all_globally, redecorate_all_globally) kept as internal aliases.
+
+3. torch.identity fix: decorated identity function now stored on _state._decorated_identity instead
+  of monkey-patching torch.identity (which doesn't exist in PyTorch type stubs). Eliminates 2 mypy
+  errors.
+
+Tests updated: 75 pass including 12 new lifecycle tests.
+
+### Breaking Changes
+
+- **decoration**: Torch functions are no longer wrapped at import time. Wrapping happens lazily on
+  first log_forward_pass() call and persists.
+
+
 ## v0.22.0 (2026-03-13)
 
 ### Chores
