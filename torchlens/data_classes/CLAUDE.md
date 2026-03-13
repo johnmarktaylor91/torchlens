@@ -32,25 +32,6 @@ BufferAccessor) providing dict-like indexing by name, index, or substring.
 | `interface.py` | 508 | ModelLog query methods: `__getitem__`, `__str__`, `to_pandas()`, 7-step lookup cascade |
 | `cleanup.py` | 237 | Post-session teardown: O(N+M) batch removal, `conditional_then_edges` filtering, `release_param_refs` |
 
-## Key Access Patterns
-
-```python
-# ModelLog access
-log["conv2d_1_5"]      # -> LayerLog (aggregate)
-log["conv2d_1_5:2"]    # -> LayerPassLog (specific pass)
-log[3]                 # -> LayerPassLog (by ordinal)
-log.layers             # -> LayerAccessor (all LayerLogs)
-log.modules            # -> ModuleAccessor
-log.params             # -> ParamAccessor
-log.buffers            # -> BufferAccessor
-
-# LayerLog delegation
-layer = log.layers["conv2d_1_1"]
-layer.activation  # -> delegates to passes[1] for single-pass layers
-layer.child_layers     # -> union of no-pass labels across all passes
-layer.passes           # -> Dict[int, LayerPassLog]
-```
-
 ## Design Decisions
 
 ### LayerLog Delegation
@@ -76,7 +57,6 @@ via `__getattr__` delegation.
 ### _build_layer_logs Multi-Pass Merge
 Only 3 fields merged across passes (has_input_ancestor OR, io_role char-merge,
 is_leaf_module_output OR). All other 78 fields use first-pass values.
-`cond_branch_start_children` and `cond_branch_then_children` use first pass only.
 
 ## Circular References (GC concern)
 ```
@@ -84,26 +64,4 @@ ModelLog -> LayerPassLog -> source_model_log -> ModelLog  (CYCLE)
 ModelLog -> ModuleLog -> _source_model_log -> ModelLog    (CYCLE)
 ParamLog -> _param_ref -> nn.Parameter                   (PINS MODEL)
 ```
-All rely on Python's cyclic GC rather than ref-counting. `cleanup()` in cleanup.py
-can be called explicitly to break cycles.
-
-## Known Bugs
-- **TO-PANDAS-NEW-FIELDS**: `to_pandas()` missing `func_config` and `cond_branch_then_children` columns
-- **COND-THEN-MULTIPASS**: `cond_branch_then_children` not merged for multi-pass LayerLog (first pass only)
-
-## Gotchas
-- Adding new fields: update class definition AND `constants.py` FIELD_ORDER
-- `copy()` on LayerPassLog: shallow-copies 8 specific fields, deep-copies rest.
-  Safe only because downstream code uses assignment, not mutation.
-- `activation` for non-getitem output layers is a DIRECT REFERENCE to parent's
-  saved data — mutation affects both
-- `equivalent_operations` per-LayerPassLog holds direct reference to ModelLog-level
-  sets; becomes stale after rename step 11 (cosmetic, not read downstream)
-- `gradient` is a bare reference (no clone) — shared with parent tensor
-- `FuncCallLocation._frame_func_obj` set at construction but only released in
-  `_load_source()` (lazy property trigger) — leaks if properties never accessed
-
-## Related
-- [capture/](../capture/CLAUDE.md) — Creates LayerPassLog entries during logging
-- [postprocess/](../postprocess/CLAUDE.md) — Populates final fields, builds LayerLog/ModuleLog/ParamLog
-- `constants.py` — FIELD_ORDER definitions must stay in sync with classes
+All rely on Python's cyclic GC. `cleanup()` in cleanup.py can be called explicitly.

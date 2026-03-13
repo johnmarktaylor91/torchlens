@@ -26,10 +26,10 @@ the final data structures (ModuleLog, ParamLog, LayerLog).
 | 2 | `_find_output_ancestors` | DFS from outputs — marks `is_output_ancestor` |
 | 3 | `_remove_orphan_nodes` | Remove tensors not connected to any output |
 | 4 | `_mark_input_output_distances` | Flood distances from inputs/outputs (conditional on flag) |
-| 5 | `_mark_conditional_branches` | Find terminal booleans → backward-only flood (Bug #88 fix) + AST-based THEN detection |
+| 5 | `_mark_conditional_branches` | Find terminal booleans → backward-only flood + AST-based THEN detection |
 | 6 | `_fix_modules_for_internal_tensors` | Infer module assignments for internally-initialized tensors |
 | 7 | `_fix_buffer_layers` | Deduplicate buffers, reconnect graph edges |
-| 8 | `_detect_and_label_loops` | **Loop detection** — group repeating operations into layers |
+| 8 | `_detect_and_label_loops` | Loop detection — group repeating operations into layers |
 | 9 | `_map_raw_labels_to_final_labels` | Generate human-readable labels |
 | 10 | `_log_final_info_for_all_layers` | Rename internal fields (raw→final labels) |
 | 11 | `_rename_model_history_layer_names` | Replace raw labels in ModelLog-level fields |
@@ -42,25 +42,13 @@ the final data structures (ModuleLog, ParamLog, LayerLog).
 | 17 | `_build_module_logs` | Create ModuleLog/ModulePassLog/ModuleAccessor |
 | 18 | `_set_pass_finished` | Mark ModelLog as complete |
 
-## Step 5: Conditional Branch Detection (control_flow.py)
-
-**Bug #88 fix**: `_mark_conditional_branches` floods **backward-only** (parent_layers only),
-not bidirectional. Prevents non-conditional nodes' children from being falsely marked.
-
-**THEN detection** (when `save_source_context=True`): AST-based. Finds terminal bool's
-`ast.If` node via func_call_stack, checks if children's source lines fall in if-body range.
-Post-validation only clears IF markings when no `ast.If` found (bool not used for control flow).
-
-New fields: `cond_branch_then_children` (LayerPassLog), `conditional_then_edges` (ModelLog).
-
 ## Loop Detection (Step 8) — The Most Complex Step
 
 Algorithm groups operations into "layers" (e.g., 8 iterations of sin → 1 layer, 8 passes):
 
 1. **BFS expansion**: All nodes with same `operation_equivalence_type` start in one iso group.
    BFS explores children/parents, finding isomorphic matches across subgraphs.
-2. **Iso group refinement**: Splits groups using direction-aware neighbor connectivity
-   (prevents false merging of structurally different operations sharing same equiv type).
+2. **Iso group refinement**: Splits groups using direction-aware neighbor connectivity.
 3. **Layer assignment**: Groups merged if subgraphs share parameter equiv types OR are
    adjacent (connected via equivalent operation chains).
 4. **Rebuild pass assignments**: Safety net — rebuilds `recurrent_group`, `pass_num`,
@@ -68,34 +56,8 @@ Algorithm groups operations into "layers" (e.g., 8 iterations of sin → 1 layer
 
 **Core invariant**: Two operations → same layer ONLY if subgraphs share params OR are adjacent.
 
-## Critical Ordering Dependencies
-- Step 5 backward-only flood must complete before Step 6 module fixing
-- Step 6 appends module addresses to `operation_equivalence_type` → affects Step 8 grouping
-- Step 10 renames LayerPassLog internal fields → Step 12 builds lookup dicts with final labels
-- Step 12 converts module tuples → strings in `containing_modules`
-- Steps 16-17 build LayerLog/ModuleLog from finalized data — must run after all renaming
+## How It Connects
 
-## Step 6 Module Suffix
-`control_flow.py:82-86` appends ALL module addresses to every tensor's
-`operation_equivalence_type`. Intentionally prevents operations in different modules
-from being loop-grouped (e.g., `linear1.relu` != `linear2.relu`). Side effect: same
-equiv group gets processed multiple times in Step 8 due to distinct suffixes.
-`_rebuild_pass_assignments` handles the resulting stale references.
-
-## Fast-Mode Postprocess
-`postprocess_fast()` in `__init__.py`: minimal processing for the second pass.
-Skips most steps — reuses graph structure from exhaustive pass, only updates
-tensor contents for saved layers.
-
-## Gotchas
-- `_build_layer_logs` multi-pass merge: only 3 fields merged (has_input_ancestor OR,
-  io_role char-merge, is_leaf_module_output OR). All other
-  78 fields use first-pass values.
-- `_build_module_logs` must NOT be called in `postprocess_fast` — `_module_build_data`
-  isn't populated in fast mode.
-- `_pass_finished` not reset between passes — intentional for fast-path lookups.
-
-## Related
-- [capture/](../capture/CLAUDE.md) — Produces the raw graph this package processes
-- [data_classes/](../data_classes/CLAUDE.md) — LayerLog, ModuleLog, ParamLog built here
-- `constants.py` — FIELD_ORDER used by Step 12
+Receives raw graph from `capture/`. Produces finalized ModelLog with LayerLog/ModuleLog/ParamLog
+that `visualization/` renders and `validation/` checks. The pipeline is strictly sequential —
+no parallelism within a single postprocess run.
