@@ -653,12 +653,12 @@ def _handle_module_exit(model_log, module, out, input_tensor_labels, input_tenso
     output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
     for t in output_tensors:
         # nn.Identity modules and pass-through tensors (output is same object
-        # as input) need torch.identity() to create a distinct log entry so
-        # the graph correctly shows the module boundary.
+        # as input) need _decorated_identity() to create a distinct log entry
+        # so the graph correctly shows the module boundary.
         if (module.tl_module_type.lower() == "identity") or (
             hasattr(t, "tl_tensor_label_raw") and t.tl_tensor_label_raw in input_tensor_labels
         ):
-            t = torch.identity(t)
+            t = _state._decorated_identity(t)
         layer_entry = model_log._raw_layer_dict[t.tl_tensor_label_raw]
         layer_entry.is_submodule_output = True
         layer_entry.is_leaf_module_output = _is_bottom_level_submodule_exit(model_log, t, module)
@@ -747,13 +747,13 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
             }
             output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
-                # Force torch.identity() for nn.Identity modules and pass-throughs
+                # Force _decorated_identity() for nn.Identity modules and pass-throughs
                 # to create a new tensor entry, matching what exhaustive mode does.
                 if (module.tl_module_type.lower() == "identity") or (
                     hasattr(t, "tl_tensor_label_raw")
                     and t.tl_tensor_label_raw in input_tensor_labels
                 ):
-                    t = torch.identity(t)
+                    t = _state._decorated_identity(t)
             return out
 
         # ---- Exhaustive mode: full entry → forward → exit ----
@@ -943,15 +943,16 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     Called at the start of every ``log_forward_pass``. Each step is individually
     idempotent or incremental:
 
-    1. ``decorate_all_once()`` — Wraps all torch functions (no-op after first call).
+    1. ``wrap_torch()`` — Ensures torch functions are wrapped (no-op if already wrapped,
+       re-wraps after ``unwrap_torch()``, first-time decoration on first call).
     2. ``_prepare_model_once(model)`` — Phase 1 model prep (cached per instance).
     3. ``patch_detached_references()`` — Crawl sys.modules for stale refs
        (incremental: only scans newly-imported modules).
     4. ``patch_model_instance(model)`` — Level 4 crawl on model instance attrs.
     """
-    from .torch_funcs import decorate_all_once, patch_detached_references, patch_model_instance
+    from .torch_funcs import wrap_torch, patch_detached_references, patch_model_instance
 
-    decorate_all_once()  # idempotent — no-op after first call
+    wrap_torch()  # idempotent — no-op if already wrapped; auto-rewraps after unwrap
     already_prepared = model in _state._prepared_models
     _prepare_model_once(model)  # idempotent — cached in _state._prepared_models
     patch_detached_references()  # incremental — only new sys.modules entries

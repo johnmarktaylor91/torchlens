@@ -1,8 +1,9 @@
-"""Tests for permanent toggle-gated decoration architecture.
+"""Tests for lazy toggle-gated decoration architecture.
 
-Covers: toggle state, detached imports, sys.modules crawl, permanent model
-preparation, pause_logging, functools.wraps transparency, torch.identity,
-JIT compatibility, and exception/interrupt safety.
+Covers: lazy wrapping lifecycle, toggle state, detached imports, sys.modules
+crawl, permanent model preparation, pause_logging, functools.wraps
+transparency, decorated identity, JIT compatibility, wrap/unwrap, and
+exception/interrupt safety.
 """
 
 import gc
@@ -22,8 +23,9 @@ from torchlens.decoration.torch_funcs import (
     decorate_all_once,
     patch_detached_references,
     patch_model_instance,
-    redecorate_all_globally,
-    undecorate_all_globally,
+    wrap_torch,
+    unwrap_torch,
+    wrapped,
 )
 
 
@@ -96,7 +98,7 @@ class NestedModuleModel(nn.Module):
 
 
 class IdentityModuleModel(nn.Module):
-    """Model with nn.Identity — tests torch.identity injection."""
+    """Model with nn.Identity — tests decorated identity injection."""
 
     def __init__(self):
         super().__init__()
@@ -108,11 +110,116 @@ class IdentityModuleModel(nn.Module):
 
 
 # =========================================================================
+# 0. Lazy Decoration Lifecycle
+# =========================================================================
+
+
+class TestLazyDecoration:
+    @pytest.fixture(autouse=True)
+    def _clean_state(self):
+        """Unwrap before each test, re-wrap after for other test classes."""
+        unwrap_torch()
+        yield
+        wrap_torch()
+
+    @pytest.mark.smoke
+    def test_import_does_not_decorate(self):
+        """After import torchlens (with unwrapped state), torch functions are originals."""
+        assert _state._is_decorated is False
+        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+
+    @pytest.mark.smoke
+    def test_log_forward_pass_triggers_wrapping(self):
+        """First log_forward_pass should auto-wrap torch functions."""
+        assert _state._is_decorated is False
+        model = SimpleModel()
+        log_forward_pass(model, torch.randn(5))
+        assert _state._is_decorated is True
+        assert getattr(torch.cos, "tl_is_decorated_function", False)
+
+    def test_stays_wrapped_after_log_forward_pass(self):
+        """After log_forward_pass, torch stays wrapped for subsequent calls."""
+        model = SimpleModel()
+        log_forward_pass(model, torch.randn(5))
+        assert _state._is_decorated is True
+
+        # Second call should also work without issues
+        log_forward_pass(model, torch.randn(5))
+        assert _state._is_decorated is True
+
+    def test_unwrap_when_done_parameter(self):
+        """log_forward_pass(unwrap_when_done=True) restores originals after."""
+        model = SimpleModel()
+        result = log_forward_pass(model, torch.randn(5), unwrap_when_done=True)
+        assert result is not None
+        assert len(result.output_layers) > 0
+        assert _state._is_decorated is False
+        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+
+    def test_wrapped_context_manager(self):
+        """wrapped() context manager wraps on entry, unwraps on exit."""
+        assert _state._is_decorated is False
+        with wrapped():
+            assert _state._is_decorated is True
+            model = SimpleModel()
+            result = log_forward_pass(model, torch.randn(5))
+            assert len(result.output_layers) > 0
+        assert _state._is_decorated is False
+
+    def test_wrapped_context_manager_exception_safety(self):
+        """wrapped() must unwrap even if body raises."""
+        assert _state._is_decorated is False
+        with pytest.raises(RuntimeError):
+            with wrapped():
+                assert _state._is_decorated is True
+                raise RuntimeError("test error")
+        assert _state._is_decorated is False
+
+    def test_wrap_unwrap_cycle(self):
+        """Multiple wrap/unwrap cycles should work correctly."""
+        for _ in range(3):
+            wrap_torch()
+            assert _state._is_decorated is True
+            assert getattr(torch.cos, "tl_is_decorated_function", False)
+            unwrap_torch()
+            assert _state._is_decorated is False
+            assert not getattr(torch.cos, "tl_is_decorated_function", False)
+
+    def test_log_forward_pass_after_unwrap(self):
+        """log_forward_pass after explicit unwrap should auto-rewrap and work."""
+        wrap_torch()
+        unwrap_torch()
+        assert _state._is_decorated is False
+
+        model = SimpleModel()
+        result = log_forward_pass(model, torch.randn(5))
+        assert _state._is_decorated is True
+        assert len(result.output_layers) > 0
+
+    def test_unwrap_is_idempotent(self):
+        """Calling unwrap_torch multiple times should not crash."""
+        unwrap_torch()
+        unwrap_torch()
+        assert _state._is_decorated is False
+
+    def test_wrap_is_idempotent(self):
+        """Calling wrap_torch multiple times should not crash."""
+        wrap_torch()
+        wrap_torch()
+        assert _state._is_decorated is True
+
+
+# =========================================================================
 # 1. Toggle State
 # =========================================================================
 
 
 class TestToggleState:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     @pytest.mark.smoke
     def test_toggle_off_by_default(self):
         """After import, logging toggle should be off."""
@@ -181,27 +288,29 @@ class TestToggleState:
             assert param.requires_grad == orig_grads[name], f"{name} requires_grad changed"
 
 
-class TestGlobalUndecorate:
-    def test_undecorate_restores_original_torch_function(self):
-        """Users can globally strip TorchLens wrappers from torch callables."""
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
-        undecorate_all_globally()
-        try:
-            assert not getattr(torch.cos, "tl_is_decorated_function", False)
-            x = torch.randn(4)
-            y = torch.cos(x)
-            assert y.shape == x.shape
-            assert not hasattr(y, "tl_tensor_label_raw")
-        finally:
-            redecorate_all_globally()
+class TestWrapUnwrap:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Start wrapped, ensure wrapped on exit."""
+        wrap_torch()
+        yield
+        wrap_torch()
 
-    def test_redecorate_restores_logging_after_global_undecorate(self):
-        """Global undecoration is reversible for later TorchLens use."""
-        undecorate_all_globally()
-        try:
-            assert not getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
-        finally:
-            redecorate_all_globally()
+    def test_unwrap_restores_original_torch_function(self):
+        """unwrap_torch strips TorchLens wrappers from torch callables."""
+        assert getattr(torch.cos, "tl_is_decorated_function", False)
+        unwrap_torch()
+        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        x = torch.randn(4)
+        y = torch.cos(x)
+        assert y.shape == x.shape
+        assert not hasattr(y, "tl_tensor_label_raw")
+
+    def test_wrap_restores_logging_after_unwrap(self):
+        """wrap_torch after unwrap_torch re-enables logging."""
+        unwrap_torch()
+        assert not getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        wrap_torch()
         assert getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
         result = log_forward_pass(SimpleModel(), torch.randn(5))
         relu_layers = [label for label in result.layer_labels if "relu" in label.lower()]
@@ -214,6 +323,11 @@ class TestGlobalUndecorate:
 
 
 class TestPassthroughWhenOff:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_basic_ops_produce_correct_results(self):
         """Decorated torch functions must produce identical results when off."""
         x = torch.tensor([1.0, 2.0, 3.0])
@@ -254,6 +368,11 @@ class TestPassthroughWhenOff:
 
 
 class TestDetachedImports:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_module_level_import_patched(self):
         """A 'from torch import cos' at module level should be patched."""
         # Create a synthetic module that simulates 'from torch import cos'
@@ -375,6 +494,11 @@ class TestDetachedImports:
 
 
 class TestPermanentModelPrep:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_model_prepared_once(self):
         """Same model instance should only be prepared once."""
         model = TwoLayerModel()
@@ -475,6 +599,11 @@ class TestPermanentModelPrep:
 
 
 class TestPauseLogging:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_pause_restores_state(self):
         """pause_logging should restore previous _logging_enabled value."""
         _state._logging_enabled = True
@@ -543,6 +672,11 @@ class TestPauseLogging:
 
 
 class TestWrapperTransparency:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_wrapped_function_name(self):
         """Decorated functions should preserve __name__."""
         assert torch.cos.__name__ == "cos"
@@ -567,26 +701,45 @@ class TestWrapperTransparency:
 
 
 # =========================================================================
-# 7. torch.identity
+# 7. Decorated Identity (via _state._decorated_identity)
 # =========================================================================
 
 
-class TestTorchIdentity:
-    def test_torch_identity_exists(self):
-        assert hasattr(torch, "identity")
-        assert callable(torch.identity)
+class TestDecoratedIdentity:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
 
-    def test_torch_identity_passthrough(self):
+    def test_decorated_identity_exists(self):
+        """_state._decorated_identity should be set after wrapping."""
+        assert _state._decorated_identity is not None
+        assert callable(_state._decorated_identity)
+
+    def test_decorated_identity_passthrough(self):
+        """_decorated_identity should return the input unchanged."""
         x = torch.randn(3, 4)
-        y = torch.identity(x)
+        y = _state._decorated_identity(x)
         assert torch.equal(x, y)
 
-    def test_torch_identity_in_graph(self):
-        """torch.identity should appear in graphs for nn.Identity modules."""
+    def test_identity_not_on_torch(self):
+        """torch.identity should NOT exist — we don't monkey-patch torch."""
+        assert not hasattr(torch, "identity")
+
+    def test_identity_in_graph(self):
+        """nn.Identity modules should produce identity entries in the graph."""
         model = IdentityModuleModel()
         result = log_forward_pass(model, torch.randn(5))
         identity_layers = [lbl for lbl in result.layer_labels if "identity" in lbl.lower()]
         assert len(identity_layers) > 0
+
+    def test_decorated_identity_cleared_on_unwrap(self):
+        """After unwrap_torch, _decorated_identity should still be callable
+        (the wrapper object persists) but _is_decorated should be False."""
+        unwrap_torch()
+        assert _state._is_decorated is False
+        # Re-wrap for other tests
+        wrap_torch()
 
 
 # =========================================================================
@@ -595,6 +748,11 @@ class TestTorchIdentity:
 
 
 class TestJITCompat:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_jit_builtin_table_has_decorated(self):
         """Decorated functions should be in the JIT builtin table."""
         import torch.jit._builtins as _jit_builtins
@@ -627,8 +785,13 @@ class TestJITCompat:
 
 
 class TestDecorationConsistency:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_orig_to_decorated_populated(self):
-        """_orig_to_decorated should have been populated at import time."""
+        """_orig_to_decorated should be populated after wrapping."""
         assert len(_state._orig_to_decorated) > 1000
 
     def test_decorated_to_orig_populated(self):
@@ -676,6 +839,11 @@ class TestDecorationConsistency:
 
 
 class TestInPlaceOps:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_inplace_ops_logged(self):
         """In-place operations should appear in the logged graph."""
         model = InplaceModel()
@@ -699,6 +867,11 @@ class TestInPlaceOps:
 
 
 class TestPropertyDescriptors:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_tensor_real_access(self):
         """Accessing .real should work and be logged."""
         x = torch.randn(3)
@@ -717,6 +890,11 @@ class TestPropertyDescriptors:
 
 
 class TestEdgeCases:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_model_with_no_torch_ops(self):
         """A model that just returns input should not crash."""
 
@@ -775,6 +953,11 @@ class TestEdgeCases:
 
 
 class TestSignalSafety:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_sigalrm_during_forward(self):
         """SIGALRM during a forward pass must not leave the logging toggle stuck on."""
         if not hasattr(signal, "SIGALRM"):
@@ -829,6 +1012,11 @@ class TestSignalSafety:
 
 
 class TestSessionIsolation:
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Ensure torch functions are wrapped for these tests."""
+        wrap_torch()
+
     def test_no_cross_session_leakage(self):
         """Tensors from one session should not leak tl_ attrs into the next."""
         model = TwoLayerModel()

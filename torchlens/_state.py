@@ -2,7 +2,7 @@
 
 This module is the single source of truth for all mutable state that controls
 whether decorated torch wrappers log or pass through.  It also stores
-pre-computed lookup tables populated once at import time by ``decorate_all_once``.
+pre-computed lookup tables populated by ``decorate_all_once``.
 
 WARNING — No torchlens imports at module level:
     Every other torchlens module imports from here.  If this module imported
@@ -11,12 +11,13 @@ WARNING — No torchlens imports at module level:
     because they are never evaluated at runtime.
 
 Design rationale:
-    The "toggle architecture" means every torch function is permanently wrapped
-    at ``import torchlens`` time.  Wrappers check ``_logging_enabled`` (a single
-    bool) on every call — when False, the wrapper is a one-branch-check no-op.
-    This avoids the cost of re-wrapping / un-wrapping on every ``log_forward_pass``
-    call.  All shared state lives here so wrappers never need to import heavy
-    torchlens modules just to check the toggle.
+    The "toggle architecture" means every torch function is wrapped once (on first
+    use of ``log_forward_pass`` or related API) and stays wrapped afterward.
+    Wrappers check ``_logging_enabled`` (a single bool) on every call — when
+    False, the wrapper is a one-branch-check no-op.  This avoids the cost of
+    re-wrapping / un-wrapping on every ``log_forward_pass`` call.  All shared
+    state lives here so wrappers never need to import heavy torchlens modules
+    just to check the toggle.
 """
 
 import weakref
@@ -53,7 +54,29 @@ logging session.
 """
 
 # ---------------------------------------------------------------------------
-# Pre-computed at import time (populated once by decorate_all_once, immutable after)
+# Decoration state — tracks whether torch functions are currently wrapped
+# ---------------------------------------------------------------------------
+
+_is_decorated: bool = False
+"""True when torch functions are currently wrapped with torchlens interceptors.
+
+Set to True at the end of ``decorate_all_once()`` / ``wrap_torch()``, and
+to False at the end of ``unwrap_torch()``.  Checked by ``_ensure_decorated()``
+to decide whether (re-)decoration is needed before a logging session.
+"""
+
+_decorated_identity: Optional[Callable] = None
+"""Decorated version of the ``identity`` no-op, used at module boundaries.
+
+When ``nn.Identity`` is encountered or a module's output tensor is the same
+object as its input, ``_decorated_identity(t)`` forces a new log entry so the
+graph correctly shows the module boundary.  Stored here instead of on
+``torch.identity`` to avoid monkey-patching an attribute that doesn't exist
+in PyTorch's type stubs.
+"""
+
+# ---------------------------------------------------------------------------
+# Pre-computed lookup tables (populated once by decorate_all_once, immutable after)
 # ---------------------------------------------------------------------------
 # These dicts are written exactly once during ``decorate_all_once()`` and are
 # treated as read-only afterward.  They exist here (not in decoration/) so that

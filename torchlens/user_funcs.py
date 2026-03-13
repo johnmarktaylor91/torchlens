@@ -184,6 +184,7 @@ def log_forward_pass(
     num_context_lines: int = 7,
     optimizer=None,
     detect_loops: bool = True,
+    unwrap_when_done: bool = False,
     verbose: bool = False,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
@@ -192,6 +193,10 @@ def log_forward_pass(
     tensor-producing operation during ``model.forward()``, records metadata and
     (optionally) saves activations, then returns a ``ModelLog`` that provides
     dict-like access to every layer's data.
+
+    Torch functions are automatically wrapped on the first call and stay wrapped
+    afterward.  Pass ``unwrap_when_done=True`` to restore the original torch
+    callables after logging completes.
 
     **Layer selection** (``layers_to_save``):
 
@@ -249,6 +254,9 @@ def log_forward_pass(
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Lines of source context to capture per function call.
         optimizer: Optional optimizer to annotate which params are being optimized.
+        detect_loops: If True (default), run full isomorphic subgraph expansion.
+        unwrap_when_done: If True, restore original torch callables after logging.
+            Default False — torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
 
     Returns:
@@ -357,6 +365,11 @@ def log_forward_pass(
             vis_renderer=vis_renderer,
             vis_theme=vis_theme,
         )
+
+    if unwrap_when_done:
+        from .decoration import unwrap_torch
+
+        unwrap_torch()
 
     return model_log
 

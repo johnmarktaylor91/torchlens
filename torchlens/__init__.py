@@ -1,12 +1,10 @@
 """TorchLens — extract activations and metadata from PyTorch models.
 
-This package init has two responsibilities:
-
-1. **Public API surface** — re-export user-facing functions and data classes
-   so users can write ``from torchlens import log_forward_pass`` etc.
-2. **Import-time side effects** — permanently decorate every torch function
-   with toggle-gated wrappers.  This happens exactly once, when torchlens is
-   first imported.  See the bottom of this file for details.
+Importing torchlens has **no side effects** on the torch namespace.  Torch
+functions are wrapped lazily on the first call to ``log_forward_pass()`` (or
+any other entry point) and stay wrapped afterward.  To restore the original
+torch callables, call ``unwrap_torch()``.  To explicitly (re-)wrap, call
+``wrap_torch()``.  The ``wrapped()`` context manager handles the full lifecycle.
 """
 
 __version__ = "0.22.0"
@@ -30,24 +28,7 @@ from .data_classes.layer_log import LayerLog, LayerAccessor
 from .data_classes.layer_pass_log import LayerPassLog, TensorLog
 from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog
 from .visualization import build_render_audit, model_log_to_dagua_graph, render_model_log_with_dagua
-from .decoration import redecorate_all_globally, undecorate_all_globally
 
-# ---- Import-time decoration (side effects) --------------------------------
-#
-# decorate_all_once() walks the torch namespace and wraps every callable with a
-# thin wrapper that checks ``_state._logging_enabled``.  When the toggle is
-# False (the normal state), the wrapper is a single branch-check pass-through
-# with negligible overhead.  The wrappers are also registered in
-# ``torch.jit._builtins._builtin_table`` so ``torch.jit.script`` still works.
-#
-# patch_detached_references() crawls ``sys.modules`` to find "detached"
-# references to original torch functions — e.g. code that did
-# ``from torch import cos`` before torchlens was imported.  It replaces those
-# module-level attributes with the decorated versions so they are captured too.
-#
-# Both functions are idempotent: calling them again is a no-op.
+# ---- Public API: decoration lifecycle ------------------------------------
 
-from .decoration.torch_funcs import decorate_all_once, patch_detached_references
-
-decorate_all_once()
-patch_detached_references()
+from .decoration import wrap_torch, unwrap_torch, wrapped
