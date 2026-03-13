@@ -128,3 +128,16 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /tests/test_outputs/
+
+# Architect-Worker system: ephemeral task state
+.project-context/tasks/
+
+# Python
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/

@@ -57,6 +57,11 @@ from ..capture.trace import run_and_log_inputs_through_model
 from ..validation import validate_saved_activations
 from ..validation import check_metadata_invariants
 from ..visualization.rendering import render_graph
+from ..visualization.dagua_bridge import (
+    build_render_audit,
+    model_log_to_dagua_graph,
+    render_model_log_with_dagua,
+)
 
 
 def _init_module_build_data() -> dict:
@@ -483,6 +488,9 @@ class ModelLog:
     # own module (visualization, validation, capture, etc.).
 
     render_graph = render_graph
+    render_dagua_graph = render_model_log_with_dagua
+    to_dagua_graph = model_log_to_dagua_graph
+    visualization_field_audit = build_render_audit
     print_all_fields = print_all_fields
     to_pandas = to_pandas
     save_new_activations = save_new_activations

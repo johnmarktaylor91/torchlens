@@ -436,7 +436,7 @@ def _check_perturbation_exemptions(
 
     # Registry 4: custom per-op exemption checks.
     if func_name in CUSTOM_EXEMPTION_CHECKS:
-        if CUSTOM_EXEMPTION_CHECKS[func_name](self, layer, layers_to_perturb):  # type: ignore[misc]
+        if CUSTOM_EXEMPTION_CHECKS[func_name](self, layer, layers_to_perturb):
             return True
 
     return False

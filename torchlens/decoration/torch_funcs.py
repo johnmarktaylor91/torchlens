@@ -1,4 +1,4 @@
-"""Permanent torch function wrapping: decorates all torch ops at import time with toggle-gated wrappers.
+"""Permanent-by-default torch function wrapping with optional global override.
 
 This module implements the core interception mechanism for TorchLens. At ``import torchlens``
 time, every function listed in ``ORIG_TORCH_FUNCS`` is replaced with a thin wrapper that
@@ -9,8 +9,11 @@ checks a single boolean (``_state._logging_enabled``) on each call:
 
 Key design decisions:
 
-1. **Permanent decoration** avoids the fragility of repeatedly patching/unpatching torch
-   internals. The toggle makes this safe for production use.
+1. **Permanent decoration by default** avoids the fragility of repeatedly
+   patching/unpatching torch internals. The toggle makes this safe for production
+   use.  Advanced users can still call ``undecorate_all_globally()`` to restore
+   the original torch callables and ``redecorate_all_globally()`` to re-enable
+   TorchLens interception.
 
 2. **Shared originals reuse wrappers**: If ``torch.cos`` and ``torch._VF.cos`` point to the
    same C builtin, only one wrapper is created and both namespaces point to it. This keeps
@@ -101,7 +104,7 @@ def _get_active_device() -> Optional[str]:
 
         for mode in reversed(_get_current_function_mode_stack()):
             if isinstance(mode, _DeviceContext):
-                return mode.device  # type: ignore[return-value]
+                return mode.device
     except (ImportError, AttributeError):
         pass
     return None
@@ -581,6 +584,131 @@ def decorate_all_once():
     # tensor is the same object as an input tensor, torch.identity() forces a new
     # log entry so the graph correctly shows the module boundary.
     new_identity = torch_func_decorator(identity, "identity")
+    torch.identity = new_identity
+
+
+def _replace_detached_references(mapping: Dict[int, Callable]) -> None:
+    """Crawl ``sys.modules`` and replace callable references using ``mapping``.
+
+    ``mapping`` may be either original->decorated or decorated->original. This
+    keeps the sys.modules crawl logic symmetric so ``undecorate`` can reverse
+    the same module/class/default-arg patching done during normal decoration.
+    """
+    if not mapping:
+        return
+
+    for mod in list(sys.modules.values()):
+        if mod is None:
+            continue
+        if hasattr(mod, "__name__") and getattr(mod, "__name__", "").startswith("torchlens"):
+            continue
+
+        try:
+            mod_dict = vars(mod)
+        except TypeError:
+            continue
+
+        for attr_name, attr_val in list(mod_dict.items()):
+            if id(attr_val) in mapping:
+                try:
+                    mod_dict[attr_name] = mapping[id(attr_val)]
+                except (TypeError, KeyError):
+                    pass
+                continue
+
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    is_type = isinstance(attr_val, type)
+            except Exception:
+                is_type = False
+            if is_type:
+                try:
+                    cls_dict = vars(attr_val)
+                except TypeError:
+                    continue
+                for cls_attr_name, cls_attr_val in list(cls_dict.items()):
+                    if id(cls_attr_val) in mapping:
+                        try:
+                            setattr(attr_val, cls_attr_name, mapping[id(cls_attr_val)])
+                        except (AttributeError, TypeError):
+                            pass
+
+            try:
+                is_callable = callable(attr_val) and not is_type
+            except Exception:
+                is_callable = False
+            if is_callable:
+                _patch_function_defaults(attr_val, mapping)
+
+
+def undecorate_all_globally() -> None:
+    """Restore original torch callables globally.
+
+    This is an explicit override for advanced users who want a clean PyTorch
+    environment after importing TorchLens. It restores torch namespace
+    attributes and reverses the detached-reference crawl so module globals,
+    class attributes, and function defaults point back at original callables.
+
+    TorchLens logging will not function until ``redecorate_all_globally()`` is
+    called again.
+    """
+    _state._logging_enabled = False
+    _state._active_model_log = None
+
+    if not _state._decorated_to_orig:
+        return
+
+    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+        namespace_key = namespace_name.replace("torch.", "")
+        local_func_namespace = nested_getattr(torch, namespace_key)
+        if not hasattr(local_func_namespace, func_name):
+            continue
+        current = getattr(local_func_namespace, func_name)
+        orig = _state._decorated_to_orig.get(id(current))
+        if orig is None:
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                setattr(local_func_namespace, func_name, orig)
+        except (AttributeError, TypeError):
+            pass
+
+    _replace_detached_references(_state._decorated_to_orig)
+    torch.identity = identity
+
+
+def redecorate_all_globally() -> None:
+    """Reinstall TorchLens wrappers after a prior global undecoration."""
+    if not _state._orig_to_decorated:
+        decorate_all_once()
+        patch_detached_references()
+        return
+
+    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+        namespace_key = namespace_name.replace("torch.", "")
+        local_func_namespace = nested_getattr(torch, namespace_key)
+        if not hasattr(local_func_namespace, func_name):
+            continue
+        current = getattr(local_func_namespace, func_name)
+        decorated = None
+        if id(current) in _state._orig_to_decorated:
+            decorated = _state._orig_to_decorated[id(current)]
+        elif id(current) in _state._decorated_to_orig:
+            decorated = current
+        if decorated is None:
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                setattr(local_func_namespace, func_name, decorated)
+        except (AttributeError, TypeError):
+            pass
+
+    _replace_detached_references(_state._orig_to_decorated)
+    new_identity = torch_func_decorator(identity, "identity")
+    new_identity.tl_is_decorated_function = True
     torch.identity = new_identity
 
 

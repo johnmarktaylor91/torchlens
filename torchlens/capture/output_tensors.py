@@ -298,29 +298,29 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self.output_device
 
     # Grad info
-    fields_dict["gradient"] = None  # type: ignore[assignment]
+    fields_dict["gradient"] = None
     fields_dict["save_gradients"] = self.save_gradients
-    fields_dict["has_gradient"] = False  # type: ignore[assignment]
-    fields_dict["grad_shape"] = None  # type: ignore[assignment]
-    fields_dict["grad_dtype"] = None  # type: ignore[assignment]
-    fields_dict["grad_memory"] = 0  # type: ignore[assignment]
+    fields_dict["has_gradient"] = False
+    fields_dict["grad_shape"] = None
+    fields_dict["grad_dtype"] = None
+    fields_dict["grad_memory"] = 0
 
     # Function call info
-    fields_dict["func_applied"] = func  # type: ignore[assignment]
+    fields_dict["func_applied"] = func
     fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = (
-        _get_func_call_stack(self.num_context_lines) if self.save_source_context else []  # type: ignore[assignment]
+        _get_func_call_stack(self.num_context_lines) if self.save_source_context else []
     )
-    fields_dict["func_time"] = exec_ctx.time_elapsed  # type: ignore[assignment]
-    fields_dict["func_rng_states"] = exec_ctx.rng_states  # type: ignore[assignment]
-    fields_dict["func_autocast_state"] = exec_ctx.autocast_state  # type: ignore[assignment]
-    fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())  # type: ignore[assignment]
-    fields_dict["num_args"] = len(args) + len(kwargs)  # type: ignore[assignment]
-    fields_dict["num_positional_args"] = len(args)  # type: ignore[assignment]
-    fields_dict["num_keyword_args"] = len(kwargs)  # type: ignore[assignment]
-    fields_dict["func_positional_args_non_tensor"] = non_tensor_args  # type: ignore[assignment]
-    fields_dict["func_kwargs_non_tensor"] = non_tensor_kwargs  # type: ignore[assignment]
-    fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())  # type: ignore[assignment]
+    fields_dict["func_time"] = exec_ctx.time_elapsed
+    fields_dict["func_rng_states"] = exec_ctx.rng_states
+    fields_dict["func_autocast_state"] = exec_ctx.autocast_state
+    fields_dict["func_argnames"] = _st._func_argnames.get(func_name.strip("_"), ())
+    fields_dict["num_args"] = len(args) + len(kwargs)
+    fields_dict["num_positional_args"] = len(args)
+    fields_dict["num_keyword_args"] = len(kwargs)
+    fields_dict["func_positional_args_non_tensor"] = non_tensor_args
+    fields_dict["func_kwargs_non_tensor"] = non_tensor_kwargs
+    fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
 
     _build_graph_relationship_fields(
         self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig

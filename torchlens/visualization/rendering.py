@@ -83,6 +83,8 @@ def render_graph(
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
     vis_node_placement: str = "auto",
+    vis_renderer: str = "graphviz",
+    vis_theme: str = "torchlens",
 ) -> str:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -120,6 +122,23 @@ def render_graph(
         ValueError: If ``_all_layers_logged`` is False (layers were discarded
             by ``keep_unsaved_layers=False``).
     """
+    if vis_renderer == "dagua":
+        from .dagua_bridge import render_model_log_with_dagua
+
+        return render_model_log_with_dagua(
+            self,
+            vis_mode=vis_mode,
+            vis_nesting_depth=vis_nesting_depth,
+            vis_outpath=vis_outpath,
+            vis_save_only=vis_save_only,
+            vis_fileformat=vis_fileformat,
+            vis_buffer_layers=show_buffer_layers,
+            vis_direction=direction,
+            vis_theme=vis_theme,
+        )
+    if vis_renderer not in {"graphviz", "dagua"}:
+        raise ValueError("vis_renderer must be 'graphviz' or 'dagua'")
+
     overrides = VisualizationOverrides(
         graph=vis_graph_overrides or {},
         node=vis_node_overrides or {},
