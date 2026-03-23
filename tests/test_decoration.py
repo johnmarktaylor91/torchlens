@@ -318,6 +318,99 @@ class TestWrapUnwrap:
 
 
 # =========================================================================
+# 1b. Sequence Slot Fix (sq_item pollution from __getitem__ wrapping)
+# =========================================================================
+
+
+class TestSequenceSlotFix:
+    """Wrapping Tensor.__getitem__ pollutes CPython's sq_item C slot, making
+    PySequence_Check(tensor) return True.  This breaks torch.tensor() on lists
+    of 0-d tensors.  These tests verify the fix holds across all lifecycle paths.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _ensure_wrapped(self):
+        """Start wrapped, ensure wrapped on exit."""
+        wrap_torch()
+        yield
+        wrap_torch()
+
+    @staticmethod
+    def _check_tensor_from_0d(msg: str = "") -> None:
+        """Assert torch.tensor([0-d, 0-d]) works without TypeError."""
+        D = torch.randn(3, 3)
+        result = torch.tensor([D[0, 0], D[1, 1]])
+        assert result.shape == (2,), f"wrong shape {msg}"
+        assert torch.allclose(result, torch.stack([D[0, 0], D[1, 1]])), msg
+
+    @pytest.mark.smoke
+    def test_tensor_from_0d_while_wrapped(self):
+        """torch.tensor([0-d, 0-d]) must work while decoration is active."""
+        self._check_tensor_from_0d("while wrapped")
+
+    @pytest.mark.smoke
+    def test_tensor_from_0d_after_unwrap(self):
+        """torch.tensor([0-d, 0-d]) must work after unwrap_torch()."""
+        unwrap_torch()
+        self._check_tensor_from_0d("after unwrap")
+
+    def test_tensor_from_0d_after_wrap_unwrap_cycle(self):
+        """torch.tensor([0-d, 0-d]) survives multiple wrap/unwrap cycles."""
+        for i in range(3):
+            unwrap_torch()
+            self._check_tensor_from_0d(f"unwrap cycle {i}")
+            wrap_torch()
+            self._check_tensor_from_0d(f"wrap cycle {i}")
+
+    def test_tensor_from_0d_wrapped_context_manager(self):
+        """torch.tensor([0-d, 0-d]) works inside and after wrapped()."""
+        unwrap_torch()
+        with wrapped():
+            self._check_tensor_from_0d("inside wrapped()")
+        self._check_tensor_from_0d("after wrapped() exit")
+
+    def test_tensor_from_0d_after_forward_pass(self):
+        """torch.tensor([0-d, 0-d]) works after a real forward pass."""
+        model = SimpleModel()
+        log_forward_pass(model, torch.randn(5))
+        self._check_tensor_from_0d("after forward pass")
+
+    def test_tensor_from_0d_after_unwrap_when_done(self):
+        """torch.tensor([0-d, 0-d]) works after log_forward_pass(unwrap_when_done=True)."""
+        model = SimpleModel()
+        log_forward_pass(model, torch.randn(5), unwrap_when_done=True)
+        self._check_tensor_from_0d("after unwrap_when_done")
+
+    def test_tensor_from_0d_nested_list(self):
+        """torch.tensor with nested lists of 0-d tensors also works."""
+        D = torch.randn(2, 2)
+        result = torch.tensor([[D[0, 0], D[0, 1]], [D[1, 0], D[1, 1]]])
+        assert result.shape == (2, 2)
+        assert torch.allclose(result, D)
+
+    def test_tensor_indexing_still_works(self):
+        """Clearing sq_item must not break normal tensor indexing."""
+        x = torch.randn(3, 4, 5)
+        assert x[0].shape == (4, 5)
+        assert x[0, 1].shape == (5,)
+        assert x[0, 1, 2].shape == ()
+        assert x[:, 1:3].shape == (3, 2, 5)
+        assert x[torch.tensor([0, 2])].shape == (2, 4, 5)
+
+    def test_sequence_check_false_for_tensors(self):
+        """PySequence_Check must return False for tensors after decoration."""
+        import ctypes
+
+        if sys.implementation.name != "cpython":
+            pytest.skip("ctypes slot check only works on CPython")
+        check = ctypes.pythonapi.PySequence_Check
+        check.argtypes = [ctypes.py_object]
+        check.restype = ctypes.c_int
+        t = torch.tensor(0.5)
+        assert check(t) == 0, "PySequence_Check(tensor) should be False"
+
+
+# =========================================================================
 # 2. Torch Functions Normal When Toggle Off
 # =========================================================================
 
