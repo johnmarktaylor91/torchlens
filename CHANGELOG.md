@@ -1,6 +1,34 @@
 # CHANGELOG
 
 
+## v1.0.1 (2026-03-23)
+
+### Bug Fixes
+
+- **decoration**: Clear stale sq_item C slot after wrapping Tensor.__getitem__
+  ([`b2c6085`](https://github.com/johnmarktaylor91/torchlens/commit/b2c6085e31695b973b8d11c23c773af837a846cc))
+
+When __getitem__ is replaced on a C extension type with a Python function, CPython sets the sq_item
+  slot in tp_as_sequence. This makes PySequence_Check(tensor) return True (was False in clean
+  PyTorch), causing torch.tensor([0-d_tensor, ...]) to iterate elements as sequences and call len()
+  -- which raises TypeError for 0-d tensors. The slot is never cleared by restoring the original
+  wrapper_descriptor or by delattr.
+
+Fix: null sq_item via ctypes after every decoration/undecoration cycle (decorate_all_once,
+  unwrap_torch, wrap_torch). Safe because tensor indexing uses mp_subscript (mapping protocol), not
+  sq_item (sequence protocol). Verified via tp_name guard; fails silently on non-CPython.
+
+Adds 9 regression tests covering all lifecycle paths.
+
+### Chores
+
+- Add secret detection pre-commit hooks
+  ([`0e2889a`](https://github.com/johnmarktaylor91/torchlens/commit/0e2889ae90f822840895d9331e912a570d2a9acf))
+
+Add detect-private-key (pre-commit-hooks) and detect-secrets (Yelp) to catch leaked keys, tokens,
+  and high-entropy strings before they hit the repo.
+
+
 ## v1.0.0 (2026-03-13)
 
 ### Bug Fixes
