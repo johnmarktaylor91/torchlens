@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v1.0.2 (2026-04-05)
+
+### Bug Fixes
+
+- **decoration**: Python 3.14 compat -- two-pass decoration + TypeError catch
+  ([#138](https://github.com/johnmarktaylor91/torchlens/pull/138),
+  [`e6f0f9a`](https://github.com/johnmarktaylor91/torchlens/commit/e6f0f9a33ba31504d6e402c117aac4a87ef46cb5))
+
+Python 3.14 (PEP 649) evaluates annotations lazily. During decorate_all_once(), wrapping Tensor.bool
+  before inspecting Tensor.dim_order caused inspect.signature() to resolve `bool` in `bool |
+  list[torch.memory_format]` to the wrapper function instead of the builtin type, raising TypeError
+  on first call only.
+
+Three fixes: - Catch TypeError alongside ValueError in get_func_argnames (safety net) - Split
+  decorate_all_once() into two passes: collect argnames from pristine namespace first, then decorate
+  (eliminates root cause) - Replace _orig_to_decorated idempotency guard with _is_decorated flag so
+  partial decoration failure allows retry instead of locking in incomplete state
+
+6 new tests, gotchas.md updated.
+
+
 ## v1.0.1 (2026-03-23)
 
 ### Bug Fixes
