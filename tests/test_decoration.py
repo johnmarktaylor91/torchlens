@@ -7,6 +7,7 @@ exception/interrupt safety.
 """
 
 import gc
+import inspect
 import os
 import signal
 import sys
@@ -18,9 +19,11 @@ import torch
 from torch import nn
 
 import torchlens
+from torchlens.decoration import torch_funcs as torch_funcs_module
 from torchlens import _state, log_forward_pass
 from torchlens.decoration.torch_funcs import (
     decorate_all_once,
+    get_func_argnames,
     patch_detached_references,
     patch_model_instance,
     wrap_torch,
@@ -875,6 +878,82 @@ class TestJITCompat:
 # =========================================================================
 # 9. Decoration Mapping Consistency
 # =========================================================================
+
+
+class TestFuncArgnames:
+    def test_get_func_argnames_tolerates_bad_annotations(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_func_argnames should tolerate ``inspect.signature`` TypeErrors. #138"""
+
+        def fake_func(x: object, *, flag: bool = False) -> None:
+            """fake_func(x, *, flag=False)"""
+
+        original_signature = torch_funcs_module.inspect.signature
+
+        def failing_signature(target: object) -> inspect.Signature:
+            """Raise the simulated PEP 649 failure for the fake function only."""
+            if target is fake_func:
+                raise TypeError("simulated PEP 649 failure")
+            return original_signature(target)
+
+        monkeypatch.setattr(torch_funcs_module.inspect, "signature", failing_signature)
+        _state._func_argnames.pop("fake_func", None)
+
+        get_func_argnames(fake_func, "fake_func")
+
+        assert _state._func_argnames["fake_func"] == ("x", "flag")
+
+    def test_argnames_collected_before_decoration(self) -> None:
+        """Argnames must be collected before decoration mutates torch names. #138"""
+        wrap_torch()
+
+        assert len(_state._func_argnames) > 500
+        assert len(_state._orig_to_decorated) > 1000
+
+
+class TestPartialDecorationRecovery:
+    """Guard against partial decoration leaving the system in an inconsistent
+    state.  The idempotency check in ``decorate_all_once`` must use
+    ``_is_decorated`` (completion flag), NOT ``_orig_to_decorated`` (non-empty
+    dict), so that a midway failure allows retry. #138"""
+
+    def test_is_decorated_false_before_wrapping(self) -> None:
+        """Before any wrapping, _is_decorated must be False."""
+        unwrap_torch()
+        assert _state._is_decorated is False
+
+    def test_is_decorated_true_after_wrapping(self) -> None:
+        """After successful wrapping, _is_decorated must be True."""
+        wrap_torch()
+        assert _state._is_decorated is True
+
+    def test_is_decorated_distinguishes_partial_from_complete(self) -> None:
+        """_is_decorated must be False when _orig_to_decorated is non-empty
+        but decoration was not completed (simulated partial failure)."""
+        wrap_torch()
+        # Simulate partial state: decorated flag cleared, but maps remain
+        _state._is_decorated = False
+        assert len(_state._orig_to_decorated) > 0
+        assert _state._is_decorated is False
+        # decorate_all_once should NOT early-return on non-empty dict
+        decorate_all_once()
+        assert _state._is_decorated is True
+        # Restore clean state
+        wrap_torch()
+
+    def test_unwrap_clears_is_decorated_but_keeps_maps(self) -> None:
+        """unwrap_torch sets _is_decorated=False but preserves maps for
+        re-installation.  This is the legitimate non-empty-dict case."""
+        wrap_torch()
+        assert _state._is_decorated is True
+        unwrap_torch()
+        assert _state._is_decorated is False
+        assert len(_state._orig_to_decorated) > 0
+        assert len(_state._decorated_to_orig) > 0
+        # Re-wrap should succeed via the re-install path
+        wrap_torch()
+        assert _state._is_decorated is True
 
 
 class TestDecorationConsistency:

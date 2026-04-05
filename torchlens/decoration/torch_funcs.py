@@ -501,7 +501,11 @@ def get_func_argnames(orig_func: Callable, func_name: str):
                 argnames.append(name)
         _state._func_argnames[storage_key] = tuple(argnames)
         return
-    except ValueError:
+    except (ValueError, TypeError):
+        # TypeError: Python 3.14+ deferred annotation evaluation (PEP 649)
+        # can fail when class-level names (e.g. Tensor.bool) shadow builtins
+        # during inspect.signature() annotation resolution. Falls back to
+        # docstring parsing below.
         pass
 
     # Fallback: parse argument names from the docstring's first line.
@@ -553,8 +557,12 @@ def decorate_all_once():
 
     Idempotent: returns immediately if already decorated.
     """
-    if _state._orig_to_decorated:
-        return  # already decorated
+    if _state._is_decorated:
+        return  # already fully decorated
+    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty here.
+    # A prior partial failure may have populated the dict without completing
+    # decoration. Using _is_decorated (set at end of this function) ensures
+    # retry after partial failure (#138).
 
     # Pre-compute type objects for efficient isinstance-like checks below.
     function_class = type(lambda: 0)  # <class 'function'>
@@ -563,6 +571,22 @@ def decorate_all_once():
     wrapper_class = type(torch.Tensor.__getitem__)  # <class 'method-wrapper'>
     getset_class = type(torch.Tensor.real)  # <class 'getset_descriptor'> (properties)
 
+    # --- Pass 1: Collect argument names before any decoration ---
+    # inspect.signature() must run against the pristine torch namespace.
+    # Python 3.14+ (PEP 649) evaluates annotations lazily; if we decorate
+    # Tensor.bool first, then inspect Tensor.dim_order, the annotation
+    # bool | list[...] resolves bool to our wrapper -> TypeError (#138).
+    for namespace_name, func_name in ORIG_TORCH_FUNCS:
+        if func_name.strip("_") in _state._func_argnames:
+            continue
+        namespace_key = namespace_name.replace("torch.", "")
+        local_func_namespace = nested_getattr(torch, namespace_key)
+        if not hasattr(local_func_namespace, func_name):
+            continue
+        orig_func = getattr(local_func_namespace, func_name)
+        get_func_argnames(orig_func, func_name)
+
+    # --- Pass 2: Decorate all functions ---
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
         namespace_key = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch, namespace_key)
@@ -573,10 +597,6 @@ def decorate_all_once():
         # Guard against double-decoration (ORIG_TORCH_FUNCS may list duplicates).
         if getattr(orig_func, "tl_is_decorated_function", False):
             continue
-
-        # Pre-compute argnames for metadata capture during logging.
-        if func_name.strip("_") not in _state._func_argnames:
-            get_func_argnames(orig_func, func_name)
 
         if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
             # --- Shared-original deduplication ---

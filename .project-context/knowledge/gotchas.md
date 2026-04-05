@@ -29,3 +29,6 @@
 - [visualization] ELK stress layout allocates O(n^2) memory — NEVER use for >100k nodes
 - [utils] `get_tensor_memory_amount()` MUST use `pause_logging()` — `nelement()`/`element_size()` are decorated
 - [utils] Clean function imports (`clean_clone`, `clean_to`) must happen at module load time, before `decorate_all_once()`
+- [decoration] NEVER mutate a namespace while introspecting it -- `inspect.signature()` evaluates annotations lazily (PEP 649, Python 3.14+), so decorated names (e.g. `Tensor.bool`) can shadow builtins in annotation resolution. Collect all introspection data in a separate pass BEFORE decoration begins (#138)
+- [decoration] `decorate_all_once()` idempotency guard must use `_is_decorated` (completion flag), NOT `_orig_to_decorated` (non-empty dict). Partial failure populates the dict without completing decoration; dict-based guard prevents retry and locks in incomplete state (#138)
+- [decoration] `get_func_argnames` must catch both `ValueError` AND `TypeError` from `inspect.signature()` -- TypeError occurs on Python 3.14+ when deferred annotation evaluation resolves class-level names to wrapper functions instead of builtins (#138)
