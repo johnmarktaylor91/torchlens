@@ -167,6 +167,7 @@ class TestRandomGraphModel:
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
+    @pytest.mark.rare
     def test_validation_50k(self):
         """Validation passes for 50k-node random model."""
         model = RandomGraphModel(target_nodes=50000, seed=42)
