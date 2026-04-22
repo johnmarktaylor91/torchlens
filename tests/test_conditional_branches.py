@@ -106,11 +106,16 @@ class MultilinePredicateModel(nn.Module):
         torch.Tensor
             Branch-selected output tensor.
         """
-        if x.mean() > 0 and x.std() > 0:
+        # fmt: off
+        if (
+            x.mean() > 0
+            and x.std() > 0
+        ):
             y = torch.relu(x)
         else:
             y = torch.sigmoid(x)
         return y
+        # fmt: on
 
 
 class BranchUsesOnlyParameterModel(nn.Module):
