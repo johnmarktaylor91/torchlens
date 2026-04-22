@@ -36,6 +36,22 @@ from torchlens.data_classes.layer_pass_log import LayerPassLog
 from torchlens.data_classes.model_log import ConditionalEvent, ModelLog
 
 
+@pytest.fixture(autouse=True)
+def _isolate_ast_and_linecache() -> None:
+    """Reset AST index cache and linecache before each test.
+
+    Conditional tests depend on fresh parses of this file and ``example_models``.
+    Earlier test runs can populate ``linecache`` with stale content or leave the
+    ast_branches file cache holding entries whose observable behaviour differs
+    from the current on-disk source (e.g., when pytest fixtures temporarily
+    rewrite a module). Clearing both at the start of every test makes the
+    suite order-independent.
+    """
+
+    ast_branches.invalidate_cache()
+    linecache.clearcache()
+
+
 class NestedIfThenIfModel(nn.Module):
     """Model with an inner ``if`` nested inside the outer THEN arm."""
 
