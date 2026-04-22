@@ -1,8 +1,9 @@
 """FuncCallLocation: lightweight record for a single frame in a user-visible call stack.
 
 Each FuncCallLocation captures one stack frame where a torch function was
-invoked, including the source file, line number, function name, surrounding
-source context, and (optionally) the function's signature and docstring.
+invoked, including the source file, line number, function name, code object
+identity fields, surrounding source context, and (optionally) the function's
+signature and docstring.
 
 **Dual construction paths**:
 
@@ -14,9 +15,10 @@ source context, and (optionally) the function's signature and docstring.
    redundant disk reads).  After loading, ``_frame_func_obj`` is released
    to avoid retaining a reference to the frame's function object.
 
-2. **Legacy path** (direct construction, e.g. from tests): All 10 keyword
-   arguments are passed directly and stored immediately.  No lazy loading
-   occurs (``_source_loaded`` is True from init).
+2. **Legacy path** (direct construction, e.g. from tests): The legacy
+   source-context keyword arguments are passed directly and stored
+   immediately.  No lazy loading occurs (``_source_loaded`` is True from
+   init).
 
 The sentinel object ``_SENTINEL`` distinguishes "not yet loaded" from an
 actual ``None`` value in the lazy-loading placeholders.
@@ -43,8 +45,9 @@ class FuncCallLocation:
     ``_frame_func_obj``.  Source context and signature/docstring are loaded
     lazily on first access.
 
-    **Legacy path** (direct construction, e.g. tests): pass all 10 original
-    keyword arguments.  Values are stored directly with no lazy loading.
+    **Legacy path** (direct construction, e.g. tests): pass the legacy
+    source-context keyword arguments directly. Values are stored directly
+    with no lazy loading.
     """
 
     def __init__(
@@ -63,15 +66,30 @@ class FuncCallLocation:
         source_context: str = _SENTINEL,
         code_context_labeled: str = _SENTINEL,
         num_context_lines: int = _SENTINEL,
-    ):
+        code_firstlineno: int = _SENTINEL,
+        code_qualname: Optional[str] = None,
+        col_offset: Optional[int] = None,
+        source_loading_enabled: bool = True,
+    ) -> None:
         self.file = file
         self.line_number = line_number
         self.func_name = func_name
+        self.code_firstlineno = line_number if code_firstlineno is _SENTINEL else code_firstlineno
+        self.code_qualname = code_qualname
+        self.col_offset = col_offset
+        self.source_loading_enabled = source_loading_enabled
 
         # Detect which construction path: if func_signature was explicitly
         # passed, we're on the legacy path (direct construction from tests
         # or serialized data).  Otherwise, we're on the new path with lazy loading.
         legacy = func_signature is not _SENTINEL
+
+        if not self.source_loading_enabled:
+            self._num_context_lines_requested = 0
+            self._frame_func_obj = None
+            self._source_loaded = True
+            self._initialize_no_source_state()
+            return
 
         if legacy:
             # Legacy path: store all values directly, no lazy loading needed.
@@ -104,7 +122,22 @@ class FuncCallLocation:
             self._func_signature = _SENTINEL
             self._func_docstring = _SENTINEL
 
-    def _load_source(self):
+    def _initialize_no_source_state(self) -> None:
+        """Populate the canonical no-source state used when source is unavailable."""
+        self._code_context = None
+        self._source_context = "None"
+        self._code_context_labeled = ""
+        self._call_line = ""
+        self._num_context_lines = 0
+        self._func_signature = None
+        self._func_docstring = None
+
+    def _ensure_source_loaded(self) -> None:
+        """Load source metadata on first access when source loading is enabled."""
+        if not self._source_loaded:
+            self._load_source()
+
+    def _load_source(self) -> None:
         """Load source context and function metadata from disk (one-shot).
 
         Uses ``linecache.getlines()`` which caches file contents per-path,
@@ -146,11 +179,7 @@ class FuncCallLocation:
                     labeled_lines.append(f"        {line.rstrip()}")
             self._code_context_labeled = "\n".join(labeled_lines)
         else:
-            self._code_context = None
-            self._source_context = "None"
-            self._call_line = ""
-            self._code_context_labeled = ""
-            self._num_context_lines = 0
+            self._initialize_no_source_state()
 
         # Resolve function signature and docstring from stored func object
         func_obj = self._frame_func_obj
@@ -174,7 +203,7 @@ class FuncCallLocation:
 
     @property
     def code_context(self) -> Optional[List[str]]:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._code_context
 
     @code_context.setter
@@ -183,7 +212,7 @@ class FuncCallLocation:
 
     @property
     def source_context(self) -> str:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._source_context
 
     @source_context.setter
@@ -192,7 +221,7 @@ class FuncCallLocation:
 
     @property
     def code_context_labeled(self) -> str:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._code_context_labeled
 
     @code_context_labeled.setter
@@ -201,7 +230,7 @@ class FuncCallLocation:
 
     @property
     def call_line(self) -> str:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._call_line
 
     @call_line.setter
@@ -210,7 +239,7 @@ class FuncCallLocation:
 
     @property
     def num_context_lines(self) -> int:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._num_context_lines
 
     @num_context_lines.setter
@@ -219,7 +248,7 @@ class FuncCallLocation:
 
     @property
     def func_signature(self) -> Optional[str]:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._func_signature
 
     @func_signature.setter
@@ -228,7 +257,7 @@ class FuncCallLocation:
 
     @property
     def func_docstring(self) -> Optional[str]:
-        self._load_source()
+        self._ensure_source_loaded()
         return self._func_docstring
 
     @func_docstring.setter
