@@ -1,9 +1,12 @@
 """Steps 5-7: Conditional branches, module annotation fixes, buffer layer fixes.
 
-Step 5 (_mark_conditional_branches): Starting from terminal boolean tensors,
-    backtracks through parent_layers only to find where conditional branches
-    diverge from the main graph. Optionally detects THEN branches via AST
-    analysis when save_source_context=True.
+Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
+    5a. Build AST file indexes for files referenced by terminal scalar bools.
+    5b. Classify terminal bools into branch/non-branch contexts.
+    5c. Materialize dense conditional events from structural AST keys.
+    5d. Backward-flood IF edges from branch-participating bools only.
+    5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
+    5f. Materialize derived compatibility views from the new primary structures.
 Step 6 (_fix_modules_for_internal_tensors): Internally-generated tensors
     (constants, arange, etc.) don't know their containing module. This infers
     module containment by tracing backward from known input-descendant tensors.
@@ -14,250 +17,485 @@ Step 7 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
     buffers (same module, same value, same parent), and assigns buffer pass numbers.
 """
 
-import ast
+from __future__ import annotations
+
 from collections import defaultdict
+from itertools import chain
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 import torch
 
-from ..utils.display import identity
 from ..data_classes.layer_pass_log import LayerPassLog
+from ..utils.display import identity
+from . import ast_branches
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import ConditionalEvent, ModelLog
 
 
-def _mark_conditional_branches(self) -> None:
-    """Step 5: Detect conditional branches by backtracking from terminal booleans.
+_BRANCH_CONTEXT_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
 
-    Conditional branches in PyTorch models (e.g., ``if x > 0:``) produce boolean
-    tensors that are consumed by Python control flow but never reach an output.
-    These boolean tensors are identified as "internally terminated bool layers"
-    during Step 3 (orphan removal).
 
-    Starting from these terminal booleans, this function floods **backward only**
-    through parent_layers. When it encounters a node that IS an output ancestor
-    (is_output_ancestor=True), that node is the "branch start" — the point where
-    the conditional branch diverges from the main computation graph. All
-    non-output-ancestor nodes traversed are marked as ``in_cond_branch=True``.
+def _mark_conditional_branches(self: "ModelLog") -> None:
+    """Step 5: Classify bools, materialize events, and attribute conditional edges.
 
-    Bug #88 fix: The original algorithm flooded bidirectionally (parents + children),
-    which caused non-conditional children of output-ancestor nodes to be falsely
-    marked as in_cond_branch. The fix restricts flooding to parent_layers only.
+    The public Step 5 entry point is preserved for the postprocess orchestrator,
+    but the implementation now delegates to six internal phases:
 
-    After IF detection, if save_source_context is enabled, THEN branches are
-    detected via AST analysis of the source file containing the ``if`` statement.
+    1. Build AST file indexes for all files touched by terminal scalar bools.
+    2. Classify terminal bools and collect observed structural conditional keys.
+    3. Materialize dense ``ConditionalEvent`` records from those keys.
+    4. Backward-flood IF edges from branch-participating bools only.
+    5. Attribute executed ops and forward edges to conditional branch arms.
+    6. Rebuild compatibility views derived from the new primary structures.
     """
-    terminal_bool_nodes = self.internally_terminated_bool_layers[:]
+
+    file_indexes = _build_file_indexes(self)
+    conditional_keys, bool_classifications = _classify_bool_layers(self)
+    events_by_key = _materialize_conditional_events(
+        self,
+        file_indexes,
+        conditional_keys,
+        bool_classifications,
+    )
+    _mark_conditional_branches_if_backward_flood(self, bool_classifications)
+    _attribute_branches_forward(self, events_by_key)
+    _materialize_derived_views(self)
+
+
+def _build_file_indexes(
+    self: "ModelLog",
+) -> Dict[str, Optional[ast_branches.FileIndex]]:
+    """Phase 5a: Build cached AST indexes for files touched by terminal bools.
+
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
+
+    Returns
+    -------
+    Dict[str, Optional[ast_branches.FileIndex]]
+        Mapping from filename to the cached AST index, or ``None`` when the
+        file could not be parsed or loaded.
+    """
+
+    file_indexes: Dict[str, Optional[ast_branches.FileIndex]] = {}
+    for bool_label in _iter_terminal_scalar_bool_labels(self):
+        bool_layer = self[bool_label]
+        for frame in bool_layer.func_call_stack:
+            if frame.file in file_indexes:
+                continue
+            file_indexes[frame.file] = ast_branches.get_file_index(frame.file)
+    return file_indexes
+
+
+def _classify_bool_layers(
+    self: "ModelLog",
+) -> Tuple[List[ast_branches.ConditionalKey], Dict[str, ast_branches.BoolClassification]]:
+    """Phase 5b: Classify terminal scalar bools and collect observed conditionals.
+
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
+
+    Returns
+    -------
+    Tuple[List[ast_branches.ConditionalKey], Dict[str, ast_branches.BoolClassification]]
+        First-seen ordered conditional keys plus per-bool classification results
+        keyed by raw layer label.
+    """
+
+    bool_classifications: Dict[str, ast_branches.BoolClassification] = {}
+    ordered_conditional_keys: Dict[ast_branches.ConditionalKey, None] = {}
+
+    for bool_label in _iter_terminal_scalar_bool_labels(self):
+        bool_layer = self[bool_label]
+        classification = ast_branches.BoolClassification("unknown", None, None, None)
+        for frame in reversed(bool_layer.func_call_stack):
+            frame_classification = ast_branches.classify_bool(
+                frame.file,
+                frame.line_number,
+                frame.col_offset,
+            )
+            if frame_classification.kind == "unknown":
+                continue
+            classification = frame_classification
+            break
+
+        bool_is_branch = (
+            classification.kind in _BRANCH_CONTEXT_KINDS
+            and classification.conditional_key is not None
+        )
+        bool_layer.bool_context_kind = classification.kind
+        bool_layer.bool_wrapper_kind = classification.wrapper_kind
+        bool_layer.bool_is_branch = bool_is_branch
+        bool_layer.bool_conditional_id = None
+        bool_classifications[bool_label] = classification
+
+        if bool_is_branch:
+            conditional_key = classification.conditional_key
+            if conditional_key is None:
+                raise ValueError("Branch-participating bool classification must include a key.")
+            assert conditional_key is not None  # mypy narrowing
+            ordered_conditional_keys.setdefault(conditional_key, None)
+
+    return list(ordered_conditional_keys.keys()), bool_classifications
+
+
+def _materialize_conditional_events(
+    self: "ModelLog",
+    file_indexes: Dict[str, Optional[ast_branches.FileIndex]],
+    conditional_keys: List[ast_branches.ConditionalKey],
+    bool_classifications: Dict[str, ast_branches.BoolClassification],
+) -> Dict[ast_branches.ConditionalKey, "ConditionalEvent"]:
+    """Phase 5c: Materialize dense conditional events and translate bool keys.
+
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
+    file_indexes:
+        Cached AST file indexes from phase 5a.
+    conditional_keys:
+        Ordered structural conditional keys observed in phase 5b.
+    bool_classifications:
+        Per-bool classifications keyed by raw layer label.
+
+    Returns
+    -------
+    Dict[ast_branches.ConditionalKey, ConditionalEvent]
+        Mapping from structural conditional key to the dense event object.
+    """
+
+    from ..data_classes.model_log import ConditionalEvent
+
+    record_lookup = _build_conditional_record_lookup(file_indexes)
+    self.conditional_events = []
+
+    events_by_key: Dict[ast_branches.ConditionalKey, ConditionalEvent] = {}
+    for conditional_id, conditional_key in enumerate(conditional_keys):
+        if conditional_key not in record_lookup:
+            raise ValueError(
+                f"Observed conditional key was not found in the AST index: {conditional_key!r}"
+            )
+        record, function_qualname = record_lookup[conditional_key]
+        event = ConditionalEvent(
+            id=conditional_id,
+            kind=record.kind,
+            source_file=record.source_file,
+            function_qualname=function_qualname,
+            function_span=record.function_span,
+            if_stmt_span=record.if_stmt_span,
+            test_span=record.test_span,
+            branch_ranges=record.branch_ranges,
+            branch_test_spans=record.branch_test_spans,
+            nesting_depth=record.nesting_depth,
+            parent_conditional_id=None,
+            parent_branch_kind=record.parent_branch_kind,
+        )
+        events_by_key[conditional_key] = event
+        self.conditional_events.append(event)
+
+    for conditional_key in conditional_keys:
+        record, _function_qualname = record_lookup[conditional_key]
+        event = events_by_key[conditional_key]
+        parent_conditional_key = record.parent_conditional_key
+        if parent_conditional_key is not None and parent_conditional_key in events_by_key:
+            event.parent_conditional_id = events_by_key[parent_conditional_key].id
+
+    for bool_label, classification in bool_classifications.items():
+        bool_layer = self[bool_label]
+        bool_conditional_key: Optional[ast_branches.ConditionalKey] = classification.conditional_key
+        if bool_conditional_key is None or bool_conditional_key not in events_by_key:
+            bool_layer.bool_conditional_id = None
+            continue
+        event = events_by_key[bool_conditional_key]
+        bool_layer.bool_conditional_id = event.id
+        event.bool_layers.append(bool_label)
+
+    for bool_label in _iter_terminal_scalar_bool_labels(self):
+        assert not hasattr(self[bool_label], "_bool_conditional_key")
+
+    return events_by_key
+
+
+def _mark_conditional_branches_if_backward_flood(
+    self: "ModelLog",
+    bool_classifications: Dict[str, ast_branches.BoolClassification],
+) -> None:
+    """Phase 5d: Backward-flood IF edges from branch-participating bools only.
+
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
+    bool_classifications:
+        Per-bool classifications keyed by raw layer label.
+    """
+
+    self.conditional_branch_edges = []
+    for layer in self:
+        layer.cond_branch_start_children = []
+        layer.in_cond_branch = False
+
+    branch_bool_labels = [
+        bool_label
+        for bool_label in _iter_terminal_scalar_bool_labels(self)
+        if bool_classifications[bool_label].conditional_key is not None
+        and self[bool_label].bool_is_branch
+    ]
 
     nodes_seen: Set[str] = set()
-    node_stack = terminal_bool_nodes.copy()
-    while len(node_stack) > 0:
+    node_stack = branch_bool_labels.copy()
+    while node_stack:
         node_label = node_stack.pop()
         node = self[node_label]
         if node_label in nodes_seen:
             continue
-        for next_tensor_label in node.parent_layers:  # backward only (Bug #88 fix)
-            next_node = self[next_tensor_label]
-            if next_node.is_output_ancestor:  # we found the beginning of a conditional branch
-                next_node.cond_branch_start_children.append(node_label)
-                next_node.in_cond_branch = False
-                nodes_seen.add(next_tensor_label)
-                self.conditional_branch_edges.append((next_tensor_label, node_label))
+        for parent_label in node.parent_layers:
+            parent_layer = self[parent_label]
+            if parent_layer.is_output_ancestor:
+                parent_layer.cond_branch_start_children.append(node_label)
+                parent_layer.in_cond_branch = False
+                nodes_seen.add(parent_label)
+                self.conditional_branch_edges.append((parent_label, node_label))
             else:
-                if next_tensor_label in nodes_seen:
+                if parent_label in nodes_seen:
                     continue
-                next_node.in_cond_branch = True
-                node_stack.append(next_tensor_label)
+                parent_layer.in_cond_branch = True
+                node_stack.append(parent_label)
 
         nodes_seen.add(node_label)
 
-    # THEN branch detection (requires source context for AST analysis)
-    if self.save_source_context:
-        _detect_then_branches(self, terminal_bool_nodes)
 
+def _attribute_branches_forward(
+    self: "ModelLog",
+    events_by_key: Dict[ast_branches.ConditionalKey, "ConditionalEvent"],
+) -> None:
+    """Phase 5e: Attribute executed ops and forward edges to conditional arms.
 
-def _detect_then_branches(self, terminal_bool_nodes: List[str]) -> None:
-    """Detect THEN branches by matching branch-start children to AST ``if`` body ranges.
-
-    For each branch-start node (node with cond_branch_start_children), finds a
-    terminal boolean in its condition chain, uses that boolean's func_call_stack
-    to locate the ``if`` statement in source, parses the AST to get the if-body
-    line range, then checks each output-ancestor child of the branch-start to see
-    if its source line falls within that range.
-
-    Args:
-        terminal_bool_nodes: Labels of terminal boolean nodes (the condition tensors).
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
+    events_by_key:
+        Structural-to-dense conditional event lookup created in phase 5c.
     """
-    ast_cache: Dict[str, Optional[ast.Module]] = {}
-    terminal_bool_set = set(terminal_bool_nodes)
-    # Track which branch starts have a confirmed ast.If (i.e., the bool IS
-    # used for control flow). Branch starts without an ast.If match have their
-    # IF markings cleared in post-validation.
-    branch_starts_with_ast_if: Set[str] = set()
 
-    for start_label in self._raw_layer_labels_list:
-        start_node = self[start_label]
-        if not start_node.cond_branch_start_children:
-            continue
+    conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = defaultdict(list)
+    conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
 
-        # Find a terminal boolean reachable from this branch start's condition chain.
-        # DFS through the IF children (cond_branch_start_children) and their
-        # non-output-ancestor children to find a terminal bool with a call stack.
-        terminal_bool = _find_terminal_bool_in_chain(
-            self, start_node.cond_branch_start_children, terminal_bool_set
+    for layer_label in self._raw_layer_labels_list:
+        layer = self[layer_label]
+        layer.conditional_branch_stack = _translate_conditional_stack(
+            layer.func_call_stack,
+            events_by_key,
         )
-        if terminal_bool is None:
-            continue
+        layer.conditional_branch_depth = len(layer.conditional_branch_stack)
+        layer.in_cond_branch = layer.conditional_branch_depth > 0
+        layer.cond_branch_children_by_cond = {}
 
-        # Get the terminal boolean's source location
-        if not terminal_bool.func_call_stack:
-            continue
-        user_frame = terminal_bool.func_call_stack[0]
-        file_b = user_frame.file
-        line_b = user_frame.line_number
+    for parent_label in self._raw_layer_labels_list:
+        parent_layer = self[parent_label]
+        for child_label in parent_layer.child_layers:
+            child_layer = self[child_label]
+            gained_entries = _get_gained_branch_entries(
+                parent_layer.conditional_branch_stack,
+                child_layer.conditional_branch_stack,
+            )
+            for conditional_id, branch_kind in gained_entries:
+                parent_layer.cond_branch_children_by_cond.setdefault(conditional_id, {}).setdefault(
+                    branch_kind, []
+                ).append(child_label)
+                conditional_arm_edges[(conditional_id, branch_kind)].append(
+                    (parent_layer.tensor_label_raw, child_layer.tensor_label_raw)
+                )
+                conditional_edge_passes[
+                    (
+                        parent_layer.tensor_label_raw.split(":", 1)[0],
+                        child_layer.tensor_label_raw.split(":", 1)[0],
+                        conditional_id,
+                        branch_kind,
+                    )
+                ].append(parent_layer.pass_num)
 
-        # Parse AST for this file (cached)
-        if file_b not in ast_cache:
-            try:
-                with open(file_b, "r") as f:
-                    source = f.read()
-                ast_cache[file_b] = ast.parse(source)
-            except Exception:
-                ast_cache[file_b] = None
-
-        tree = ast_cache[file_b]
-        if tree is None:
-            continue
-
-        # Find the ast.If node at or near line_b
-        if_node = _find_if_node_near_line(tree, line_b)
-        if if_node is None:
-            continue
-
-        # The bool IS used in an actual if-statement — keep IF markings even
-        # if no THEN children found (e.g., else branch executed instead).
-        branch_starts_with_ast_if.add(start_label)
-
-        # Get the if-body line range
-        body_start = if_node.body[0].lineno
-        body_end = _get_end_lineno(if_node.body[-1])
-
-        # Check each output-ancestor child that is NOT already an IF child
-        if_children_set = set(start_node.cond_branch_start_children)
-        for child_label in start_node.child_layers:
-            if child_label in if_children_set:
-                continue
-            child_node = self[child_label]
-            if not child_node.is_output_ancestor:
-                continue
-            # Check if this child's source line falls within the if-body
-            if not child_node.func_call_stack:
-                continue
-            child_frame = _find_frame_in_file(child_node.func_call_stack, file_b)
-            if child_frame is None:
-                continue
-            if body_start <= child_frame.line_number <= body_end:
-                start_node.cond_branch_then_children.append(child_label)
-                self.conditional_then_edges.append((start_label, child_label))
-
-    # Post-validation: clear IF markings for branch-starts where no ast.If was
-    # found (the bool was computed but not used for control flow). Branch-starts
-    # WITH a confirmed ast.If keep their IF markings even if THEN is empty
-    # (e.g., else branch executed — ELSE detection is a future TODO).
-    for label in self._raw_layer_labels_list:
-        node = self[label]
-        if not node.cond_branch_start_children:
-            continue
-        if label in branch_starts_with_ast_if:
-            continue  # confirmed if-statement — keep IF markings
-        # No ast.If found — clear false IF markings
-        seen: Set[str] = set()
-        stack = list(node.cond_branch_start_children)
-        while stack:
-            cond_label = stack.pop()
-            if cond_label in seen:
-                continue
-            seen.add(cond_label)
-            cond_node = self[cond_label]
-            cond_node.in_cond_branch = False
-            for parent_label in cond_node.parent_layers:
-                parent = self[parent_label]
-                if parent.in_cond_branch:
-                    stack.append(parent_label)
-        # Clear branch-start fields
-        self.conditional_branch_edges = [
-            edge for edge in self.conditional_branch_edges if edge[0] != label
-        ]
-        node.cond_branch_start_children.clear()
+    self.conditional_arm_edges = dict(conditional_arm_edges)
+    self.conditional_edge_passes = dict(conditional_edge_passes)
 
 
-def _find_if_node_near_line(tree: ast.Module, target_line: int) -> Optional[ast.If]:
-    """Find the ast.If node whose test covers the target line number.
+def _materialize_derived_views(self: "ModelLog") -> None:
+    """Phase 5f: Rebuild compatibility views derived from primary conditional data.
 
-    Walks the entire AST looking for If nodes where the test expression's line
-    range contains the target line, or the If node itself is on the target line.
-    Returns the most specific (deepest nested) match.
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
     """
-    best: Optional[ast.If] = None
-    for node in ast.walk(tree):
-        if isinstance(node, ast.If):
-            test_start = node.test.lineno
-            test_end = getattr(node.test, "end_lineno", test_start)
-            # The if statement itself or its test expression covers the target line
-            if test_start <= target_line <= test_end or node.lineno == target_line:
-                # Prefer deeper (later-found in walk order, or more specific)
-                if best is None or node.lineno >= best.lineno:
-                    best = node
-    return best
+
+    self.conditional_then_edges = [
+        (parent_label, child_label)
+        for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items()
+        if branch_kind == "then"
+        for parent_label, child_label in edge_list
+    ]
+    self.conditional_elif_edges = [
+        (conditional_id, int(branch_kind.split("_")[1]), parent_label, child_label)
+        for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items()
+        if branch_kind.startswith("elif_")
+        for parent_label, child_label in edge_list
+    ]
+    self.conditional_else_edges = [
+        (conditional_id, parent_label, child_label)
+        for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items()
+        if branch_kind == "else"
+        for parent_label, child_label in edge_list
+    ]
+    self.conditional_edge_passes = {
+        key: sorted(set(pass_nums)) for key, pass_nums in self.conditional_edge_passes.items()
+    }
+
+    for layer_label in self._raw_layer_labels_list:
+        layer = self[layer_label]
+        layer.cond_branch_then_children = sorted(
+            set(
+                chain.from_iterable(
+                    branch_children.get("then", [])
+                    for branch_children in layer.cond_branch_children_by_cond.values()
+                )
+            )
+        )
+
+        elif_children: Dict[int, Set[str]] = defaultdict(set)
+        for branch_children in layer.cond_branch_children_by_cond.values():
+            for branch_kind, child_labels in branch_children.items():
+                if not branch_kind.startswith("elif_"):
+                    continue
+                elif_index = int(branch_kind.split("_", 1)[1])
+                elif_children[elif_index].update(child_labels)
+        layer.cond_branch_elif_children = {
+            elif_index: sorted(child_labels)
+            for elif_index, child_labels in sorted(elif_children.items())
+        }
+
+        layer.cond_branch_else_children = sorted(
+            set(
+                chain.from_iterable(
+                    branch_children.get("else", [])
+                    for branch_children in layer.cond_branch_children_by_cond.values()
+                )
+            )
+        )
 
 
-def _get_end_lineno(node: ast.AST) -> int:
-    """Get the end line number of an AST node, handling nested blocks."""
-    end = getattr(node, "end_lineno", None)
-    if end is not None:
-        return end
-    # Fallback: walk children to find the maximum line number
-    max_line = getattr(node, "lineno", 0)
-    for child in ast.walk(node):
-        child_end = getattr(child, "end_lineno", getattr(child, "lineno", 0))
-        if child_end > max_line:
-            max_line = child_end
-    return max_line
+def _iter_terminal_scalar_bool_labels(self: "ModelLog") -> List[str]:
+    """Return terminal scalar bool labels in deterministic execution order.
 
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
 
-def _find_terminal_bool_in_chain(
-    self, if_children: List[str], terminal_bool_set: Set[str]
-) -> Optional[LayerPassLog]:
-    """Find a terminal boolean node reachable from the given IF children.
-
-    DFS through IF children and their non-output-ancestor children (the condition
-    chain) to find a node in ``terminal_bool_set`` that has a func_call_stack.
+    Returns
+    -------
+    List[str]
+        Raw tensor labels for terminal scalar bool layers, ordered by first-seen
+        execution order in the model log.
     """
-    seen: Set[str] = set()
-    stack = list(if_children)
-    while stack:
-        label = stack.pop()
-        if label in seen:
+
+    terminal_bool_labels = set(self.internally_terminated_bool_layers)
+    return [
+        layer_label
+        for layer_label in self._raw_layer_labels_list
+        if layer_label in terminal_bool_labels and self[layer_label].is_scalar_bool
+    ]
+
+
+def _build_conditional_record_lookup(
+    file_indexes: Dict[str, Optional[ast_branches.FileIndex]],
+) -> Dict[ast_branches.ConditionalKey, Tuple[ast_branches.ConditionalRecord, str]]:
+    """Build a structural-key lookup for materializing dense conditional events.
+
+    Parameters
+    ----------
+    file_indexes:
+        Cached file indexes produced in phase 5a.
+
+    Returns
+    -------
+    Dict[ast_branches.ConditionalKey, Tuple[ast_branches.ConditionalRecord, str]]
+        Mapping from structural conditional key to its record and owning
+        function qualname.
+    """
+
+    record_lookup: Dict[
+        ast_branches.ConditionalKey, Tuple[ast_branches.ConditionalRecord, str]
+    ] = {}
+    for file_index in file_indexes.values():
+        if file_index is None:
             continue
-        seen.add(label)
-        node = self[label]
-        if label in terminal_bool_set and node.func_call_stack:
-            return node
-        # Follow children that are part of the condition chain (not output ancestors)
-        for child_label in node.child_layers:
-            child = self[child_label]
-            if not child.is_output_ancestor and child_label not in seen:
-                stack.append(child_label)
-    return None
+        for scope in file_index.scopes:
+            for conditional_record in scope.conditionals:
+                record_lookup[conditional_record.key] = (conditional_record, scope.qualname)
+    return record_lookup
 
 
-def _find_frame_in_file(func_call_stack, target_file: str):
-    """Find the first FuncCallLocation in the stack that matches the target file."""
-    for frame in func_call_stack:
-        if frame.file == target_file:
-            return frame
-    return None
+def _translate_conditional_stack(
+    func_call_stack: List,
+    events_by_key: Dict[ast_branches.ConditionalKey, "ConditionalEvent"],
+) -> List[Tuple[int, str]]:
+    """Translate a structural AST branch stack into dense conditional IDs.
+
+    Parameters
+    ----------
+    func_call_stack:
+        Captured runtime call stack for one operation.
+    events_by_key:
+        Structural-to-dense conditional event lookup created in phase 5c.
+
+    Returns
+    -------
+    List[Tuple[int, str]]
+        Dense ``(conditional_id, branch_kind)`` pairs ordered outer-to-inner.
+        Structural keys that were never materialized are dropped.
+    """
+
+    translated_stack: List[Tuple[int, str]] = []
+    for conditional_key, branch_kind in ast_branches.attribute_op(func_call_stack):
+        if conditional_key not in events_by_key:
+            continue
+        translated_stack.append((events_by_key[conditional_key].id, branch_kind))
+    return translated_stack
+
+
+def _get_gained_branch_entries(
+    parent_stack: List[Tuple[int, str]],
+    child_stack: List[Tuple[int, str]],
+) -> List[Tuple[int, str]]:
+    """Return child stack entries gained across one forward edge.
+
+    Parameters
+    ----------
+    parent_stack:
+        Parent operation branch stack, ordered outer-to-inner.
+    child_stack:
+        Child operation branch stack, ordered outer-to-inner.
+
+    Returns
+    -------
+    List[Tuple[int, str]]
+        Entries present in the child's stack beyond the shared prefix with the
+        parent, preserving outer-to-inner order.
+    """
+
+    shared_prefix_len = 0
+    max_shared = min(len(parent_stack), len(child_stack))
+    while shared_prefix_len < max_shared:
+        if parent_stack[shared_prefix_len] != child_stack[shared_prefix_len]:
+            break
+        shared_prefix_len += 1
+    return child_stack[shared_prefix_len:]
 
 
 def _fix_modules_for_internal_tensors(self) -> None:
