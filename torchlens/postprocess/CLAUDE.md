@@ -13,7 +13,7 @@ the final data structures (ModuleLog, ParamLog, LayerLog).
 |------|-------|--------|---------|
 | `__init__.py` | orchestrator | 228 | Dispatches to submodules, fast-mode postprocess |
 | `graph_traversal.py` | 1-4 | 414 | Output layers, ancestor marking, orphan removal, distance flood |
-| `control_flow.py` | 5-7 | 504 | Conditional branches (Bug #88 fix + THEN detection), module fixing, buffer cleanup |
+| `control_flow.py` | 5-7 | 504 | Six-phase conditional attribution, module fixing, buffer cleanup |
 | `loop_detection.py` | 8 | 826 | Isomorphic subgraph expansion, loop detection, layer assignment |
 | `labeling.py` | 9-12 | 599 | Label generation, rename, trim/reorder, lookup keys |
 | `finalization.py` | 13-18 | 608 | Undecorate, ParamLog, ModuleLog, LayerLog, mark complete |
@@ -26,7 +26,7 @@ the final data structures (ModuleLog, ParamLog, LayerLog).
 | 2 | `_find_output_ancestors` | DFS from outputs — marks `is_output_ancestor` |
 | 3 | `_remove_orphan_nodes` | Remove tensors not connected to any output |
 | 4 | `_mark_input_output_distances` | Flood distances from inputs/outputs (conditional on flag) |
-| 5 | `_mark_conditional_branches` | Find terminal booleans → backward-only flood + AST-based THEN detection |
+| 5 | `_mark_conditional_branches` | Six-phase conditional attribution: AST indexing, bool classification, dense event IDs, branch-edge attribution |
 | 6 | `_fix_modules_for_internal_tensors` | Infer module assignments for internally-initialized tensors |
 | 7 | `_fix_buffer_layers` | Deduplicate buffers, reconnect graph edges |
 | 8 | `_detect_and_label_loops` | Loop detection — group repeating operations into layers |
@@ -41,6 +41,51 @@ the final data structures (ModuleLog, ParamLog, LayerLog).
 | 16.5 | `_build_layer_logs` | Group LayerPassLogs into LayerLog aggregates |
 | 17 | `_build_module_logs` | Create ModuleLog/ModulePassLog/ModuleAccessor |
 | 18 | `_set_pass_finished` | Mark ModelLog as complete |
+
+## Step 5: Conditional Branch Attribution (control_flow.py)
+
+Step 5 is a six-phase pipeline:
+
+1. **5a: Build file indexes.** Parse source files once and cache AST indexes used for
+   bool classification and per-op attribution.
+2. **5b: Classify terminal bools.** Walk `func_call_stack` frames and classify each
+   terminal scalar bool by AST context (`if_test`, `elif_test`, `ifexp`, non-branch kinds).
+   This stage produces structural `ConditionalKey`s only.
+3. **5c: Materialize events and dense IDs.** `ModelLog.conditional_events` is built in
+   first-seen order, dense `cond_id`s are assigned once, and temporary bool keys are
+   rewritten to ints. This is the sole key-to-id translation stage.
+4. **5d: Backward IF flood.** Starting from branch-participating bools only, flood
+   backward through `parent_layers` to mark `cond_branch_start_children` and
+   `conditional_branch_edges`. This preserves the PR #127 backward-only fix.
+5. **5e: Forward attribution and arm edges.** Attribute each op to its enclosing branch
+   stack and diff parent/child stacks across every forward edge. Gained arms populate
+   `ModelLog.conditional_arm_edges` and per-node `cond_branch_children_by_cond`.
+6. **5f: Derived views and rolled-pass metadata.** Legacy THEN/ELIF/ELSE views are derived
+   from the primary cond-id-aware structures, and `ModelLog.conditional_edge_passes`
+   records which passes used each rolled arm edge.
+
+Primary conditional structures:
+- `ModelLog.conditional_events`: dense event table for `if` / `elif` / `else` chains and
+  ternaries (`IfExp`).
+- `ModelLog.conditional_arm_edges`: `(cond_id, branch_kind) -> [(parent, child)]`.
+- `ModelLog.conditional_edge_passes`: `(parent_no_pass, child_no_pass, cond_id, branch_kind)
+  -> [pass_num, ...]` for rolled-mode divergence.
+- `cond_branch_children_by_cond` on `LayerPassLog` / `LayerLog`: per-node child mapping keyed
+  by condition id, preserving multi-arm entry.
+
+User-visible behavior:
+- Graphviz uses the conditional structures to render `THEN`, `ELIF`, and `ELSE` edge labels.
+- Ternary attribution is first-class; `col_offset` is load-bearing when both ternary arms
+  share a source line.
+- `save_source_context=False` does **not** disable conditional attribution. Identity fields on
+  `FuncCallLocation` are still captured; only rich source-text accessors stay empty.
+
+Deferred in this sprint:
+- `dagua_bridge.py` conditional-edge integration
+- `elk_layout.py` conditional rendering
+- While-loop body attribution
+
+Reference: `.project-context/plans/if-else-attribution/plan.md` (v7).
 
 ## Loop Detection (Step 8) — The Most Complex Step
 

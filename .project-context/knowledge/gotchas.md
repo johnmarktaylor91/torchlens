@@ -32,3 +32,8 @@
 - [decoration] NEVER mutate a namespace while introspecting it -- `inspect.signature()` evaluates annotations lazily (PEP 649, Python 3.14+), so decorated names (e.g. `Tensor.bool`) can shadow builtins in annotation resolution. Collect all introspection data in a separate pass BEFORE decoration begins (#138)
 - [decoration] `decorate_all_once()` idempotency guard must use `_is_decorated` (completion flag), NOT `_orig_to_decorated` (non-empty dict). Partial failure populates the dict without completing decoration; dict-based guard prevents retry and locks in incomplete state (#138)
 - [decoration] `get_func_argnames` must catch both `ValueError` AND `TypeError` from `inspect.signature()` -- TypeError occurs on Python 3.14+ when deferred annotation evaluation resolves class-level names to wrapper functions instead of builtins (#138)
+- [data_classes] Under `save_source_context=False`, `FuncCallLocation` must clear `_frame_func_obj` at construction time; retaining nested/local function objects until lazy load makes pickling fragile (D17)
+- [postprocess] Ternary (`IfExp`) attribution is same-line for both arms, so `col_offset` is load-bearing; Python 3.9/3.10 lack that signal and must fail closed on ambiguous ternaries
+- [postprocess] Python AST represents `elif` as nested `If` in `orelse`; always flatten the chain before materializing `ConditionalEvent`s or arm labels drift
+- [postprocess] A single forward edge can legitimately enter multiple conditional arms at once (for example parameter/buffer deps inside nested `if` blocks); do not collapse arm-entry edges to one label
+- [visualization] Rolled edges can belong to different arms on different passes; renderer labels must consult `conditional_edge_passes`, not only pass-stripped edge membership

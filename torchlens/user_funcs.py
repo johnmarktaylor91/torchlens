@@ -228,9 +228,17 @@ def log_forward_pass(
         save_function_args: Store non-tensor args for each function call (needed for
             ``validate_saved_activations``).
         save_gradients: Capture gradients during a subsequent backward pass.
-        save_source_context: If True, record the Python call stack for each
-            tensor operation and capture module source code (file, line, signatures).
-            Default False for speed; enable for debugging and code inspection.
+        save_source_context: Python call-stack identity is always recorded for each
+            tensor operation. If True, also capture rich source-text fields on each
+            ``FuncCallLocation`` (``source_context``, ``code_context``, etc.) plus
+            module source metadata. If False, identity fields (``file``,
+            ``line_number``, ``func_name``, ``code_firstlineno``,
+            ``code_qualname``, ``col_offset``) are still captured; only the
+            source-text properties return the existing empty-placeholder values.
+            Full ``if``/``elif``/``else`` and ternary branch attribution
+            (``conditional_events``, ``conditional_arm_edges``,
+            ``conditional_edge_passes``, etc.) works regardless of this flag
+            because it relies only on those identity fields.
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
