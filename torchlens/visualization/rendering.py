@@ -981,29 +981,20 @@ def _add_edges_for_node(
             "labelfontsize": "8",
         }
 
-        # Mark with "IF" in the case edge starts a cond branch
-        cond_children = parent_node.cond_branch_start_children
-        if vis_mode == "rolled":
-            cond_children = [label.split(":")[0] for label in cond_children]
-        if (child_layer_label in cond_children) and (not child_is_collapsed_module):
-            edge_dict["label"] = '<<FONT POINT-SIZE="18"><b><u>IF</u></b></FONT>>'
+        if not child_is_collapsed_module:
+            edge_label = _compute_edge_label(parent_node, child_node, self, vis_mode)
+            if edge_label is not None:
+                edge_dict["label"] = edge_label
 
-        # Mark with "THEN" for THEN branch children
-        then_children = parent_node.cond_branch_then_children
+        # Annotate passes for rolled node edge if it varies across passes
         if vis_mode == "rolled":
-            then_children = [label.split(":")[0] for label in then_children]
-        if (child_layer_label in then_children) and (not child_is_collapsed_module):
-            edge_dict["label"] = '<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>'
+            _label_rolled_pass_nums(child_node, parent_node, edge_dict)  # type: ignore[arg-type]
 
         # Label the arguments to the next node if multiple inputs
         if not child_is_collapsed_module:
             _label_node_arguments_if_needed(
                 self, parent_node, child_node, edge_dict, show_buffer_layers
             )
-
-        # Annotate passes for rolled node edge if it varies across passes
-        if vis_mode == "rolled":
-            _label_rolled_pass_nums(child_node, parent_node, edge_dict)  # type: ignore[arg-type]
 
         for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
             if callable(arg_val):
@@ -1046,6 +1037,430 @@ def _add_edges_for_node(
             )
 
 
+def _compute_edge_label(
+    parent_node: Union["LayerPassLog", "LayerLog"],
+    child_node: Union["LayerPassLog", "LayerLog"],
+    model_log: "ModelLog",
+    vis_mode: str,
+) -> Optional[str]:
+    """Return the highest-priority semantic label for an edge.
+
+    Precedence matches the Phase 7 conditional rendering spec:
+
+    1. Arm-entry labels from ``ModelLog.conditional_arm_edges`` /
+       ``ModelLog.conditional_edge_passes``.
+    2. ``IF`` labels from ``ModelLog.conditional_branch_edges``.
+    3. ``None`` when the edge has no branch semantics.
+
+    Args:
+        parent_node:
+            Source node for the edge.
+        child_node:
+            Destination node for the edge.
+        model_log:
+            Owning model log containing conditional metadata.
+        vis_mode:
+            ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    Optional[str]
+        Graphviz HTML label string, or ``None`` if no semantic label applies.
+    """
+    arm_label = _compute_arm_entry_edge_label(parent_node, child_node, model_log, vis_mode)
+    if arm_label is not None:
+        return _format_branch_edge_label_html(arm_label)
+
+    if _edge_is_conditional_branch(parent_node, child_node, model_log, vis_mode):
+        return _format_branch_edge_label_html("IF")
+
+    return None
+
+
+def _compute_arm_entry_edge_label(
+    parent_node: Union["LayerPassLog", "LayerLog"],
+    child_node: Union["LayerPassLog", "LayerLog"],
+    model_log: "ModelLog",
+    vis_mode: str,
+) -> Optional[str]:
+    """Return the arm-entry text for an edge, without Graphviz HTML wrapping.
+
+    Args:
+        parent_node:
+            Source node for the edge.
+        child_node:
+            Destination node for the edge.
+        model_log:
+            Owning model log containing conditional metadata.
+        vis_mode:
+            ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    Optional[str]
+        Plain-text arm label, or ``None`` if the edge is not an arm-entry edge.
+    """
+    arm_entries = _get_arm_edge_entries(parent_node, child_node, model_log, vis_mode)
+    if not arm_entries:
+        return None
+
+    if vis_mode == "rolled":
+        return _format_rolled_arm_entry_label(arm_entries, model_log)
+
+    if len(arm_entries) == 1:
+        conditional_id, branch_kind, _ = arm_entries[0]
+        return _format_arm_entry_text(conditional_id, branch_kind, model_log)
+
+    return " · ".join(
+        [
+            _format_arm_entry_text(
+                conditional_id,
+                branch_kind,
+                model_log,
+                include_conditional_reference=True,
+            )
+            for conditional_id, branch_kind, _ in arm_entries
+        ]
+    )
+
+
+def _get_arm_edge_entries(
+    parent_node: Union["LayerPassLog", "LayerLog"],
+    child_node: Union["LayerPassLog", "LayerLog"],
+    model_log: "ModelLog",
+    vis_mode: str,
+) -> List[Tuple[int, str, Optional[Tuple[int, ...]]]]:
+    """Collect conditional-arm metadata for one rendered edge.
+
+    Args:
+        parent_node:
+            Source node for the edge.
+        child_node:
+            Destination node for the edge.
+        model_log:
+            Owning model log containing conditional metadata.
+        vis_mode:
+            ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    List[Tuple[int, str, Optional[Tuple[int, ...]]]]
+        Sorted ``(conditional_id, branch_kind, pass_nums)`` tuples. Unrolled
+        edges use ``pass_nums=None``.
+    """
+    arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]] = []
+    if vis_mode == "unrolled":
+        edge_key = (parent_node.layer_label, child_node.layer_label)
+        for (conditional_id, branch_kind), edge_list in model_log.conditional_arm_edges.items():
+            if edge_key in edge_list:
+                arm_entries.append((conditional_id, branch_kind, None))
+    elif vis_mode == "rolled":
+        parent_no_pass = parent_node.layer_label_no_pass
+        child_no_pass = child_node.layer_label_no_pass
+        for (
+            edge_parent,
+            edge_child,
+            conditional_id,
+            branch_kind,
+        ), pass_nums in model_log.conditional_edge_passes.items():
+            if (edge_parent, edge_child) == (parent_no_pass, child_no_pass):
+                arm_entries.append((conditional_id, branch_kind, tuple(pass_nums)))
+    else:
+        raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
+
+    return sorted(arm_entries, key=lambda entry: _arm_entry_sort_key(entry[0], entry[1], model_log))
+
+
+def _format_rolled_arm_entry_label(
+    arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]],
+    model_log: "ModelLog",
+) -> str:
+    """Format a rolled-mode arm-entry label with pass-awareness.
+
+    Args:
+        arm_entries:
+            Sorted ``(conditional_id, branch_kind, pass_nums)`` tuples for one
+            rolled edge.
+        model_log:
+            Owning model log containing conditional metadata.
+
+    Returns
+    -------
+    str
+        Plain-text arm label for the rolled edge.
+    """
+    if len(arm_entries) == 1:
+        conditional_id, branch_kind, _ = arm_entries[0]
+        return _format_arm_entry_text(conditional_id, branch_kind, model_log)
+
+    pass_sets = [set(pass_nums or ()) for _, _, pass_nums in arm_entries]
+    if pass_sets and len({tuple(sorted(pass_set)) for pass_set in pass_sets}) == 1:
+        return " · ".join(
+            [
+                _format_arm_entry_text(
+                    conditional_id,
+                    branch_kind,
+                    model_log,
+                    include_conditional_reference=True,
+                )
+                for conditional_id, branch_kind, _ in arm_entries
+            ]
+        )
+
+    pass_counts: Dict[int, int] = defaultdict(int)
+    for _, _, pass_nums in arm_entries:
+        for pass_num in pass_nums or ():
+            pass_counts[pass_num] += 1
+
+    if pass_counts and all(pass_count == 1 for pass_count in pass_counts.values()):
+        return " / ".join(
+            [
+                _format_rolled_pass_arm_text(
+                    conditional_id,
+                    branch_kind,
+                    pass_nums,
+                    model_log,
+                    include_conditional_reference=_rolled_labels_need_disambiguation(arm_entries),
+                )
+                for conditional_id, branch_kind, pass_nums in arm_entries
+            ]
+        )
+
+    return "mixed"
+
+
+def _rolled_labels_need_disambiguation(
+    arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]],
+) -> bool:
+    """Return True when rolled branch labels need conditional disambiguation.
+
+    Args:
+        arm_entries:
+            Sorted ``(conditional_id, branch_kind, pass_nums)`` tuples for one
+            rolled edge.
+
+    Returns
+    -------
+    bool
+        True when multiple entries would otherwise share the same branch label.
+    """
+    base_labels = [_format_branch_kind_text(branch_kind) for _, branch_kind, _ in arm_entries]
+    return len(base_labels) != len(set(base_labels))
+
+
+def _format_rolled_pass_arm_text(
+    conditional_id: int,
+    branch_kind: str,
+    pass_nums: Optional[Tuple[int, ...]],
+    model_log: "ModelLog",
+    include_conditional_reference: bool,
+) -> str:
+    """Format one rolled arm label with its pass list.
+
+    Args:
+        conditional_id:
+            Dense conditional id.
+        branch_kind:
+            Branch kind such as ``"then"`` or ``"elif_2"``.
+        pass_nums:
+            Sorted pass numbers for this rolled edge/arm tuple.
+        model_log:
+            Owning model log containing conditional metadata.
+        include_conditional_reference:
+            Whether to append a conditional line-number reference.
+
+    Returns
+    -------
+    str
+        Plain-text label like ``"THEN(1,3)"``.
+    """
+    branch_text = _format_arm_entry_text(
+        conditional_id,
+        branch_kind,
+        model_log,
+        include_conditional_reference=include_conditional_reference,
+    )
+    if not pass_nums:
+        return branch_text
+    return f"{branch_text}({int_list_to_compact_str(list(pass_nums))})"
+
+
+def _format_arm_entry_text(
+    conditional_id: int,
+    branch_kind: str,
+    model_log: "ModelLog",
+    include_conditional_reference: bool = False,
+) -> str:
+    """Format one arm-entry label as plain text.
+
+    Args:
+        conditional_id:
+            Dense conditional id.
+        branch_kind:
+            Branch kind such as ``"then"`` or ``"elif_2"``.
+        model_log:
+            Owning model log containing conditional metadata.
+        include_conditional_reference:
+            Whether to append ``@L...`` to identify the conditional event.
+
+    Returns
+    -------
+    str
+        Plain-text arm label.
+    """
+    branch_text = _format_branch_kind_text(branch_kind)
+    if not include_conditional_reference:
+        return branch_text
+    return f"{branch_text}@{_get_conditional_reference_text(conditional_id, model_log)}"
+
+
+def _format_branch_kind_text(branch_kind: str) -> str:
+    """Format a branch-kind token as display text.
+
+    Args:
+        branch_kind:
+            Stored branch kind such as ``"then"``, ``"elif_1"``, or ``"else"``.
+
+    Returns
+    -------
+    str
+        Display label such as ``"THEN"`` or ``"ELIF 1"``.
+
+    Raises
+    ------
+    ValueError
+        If ``branch_kind`` is not recognized.
+    """
+    if branch_kind == "then":
+        return "THEN"
+    if branch_kind == "else":
+        return "ELSE"
+    if branch_kind.startswith("elif_"):
+        return f"ELIF {int(branch_kind.split('_', 1)[1])}"
+    raise ValueError(f"Unrecognized branch kind: {branch_kind}")
+
+
+def _get_conditional_reference_text(conditional_id: int, model_log: "ModelLog") -> str:
+    """Return a readable conditional identifier for composite edge labels.
+
+    Args:
+        conditional_id:
+            Dense conditional id.
+        model_log:
+            Owning model log containing conditional metadata.
+
+    Returns
+    -------
+    str
+        Line-based conditional reference when available, otherwise ``"C{id}"``.
+    """
+    for conditional_event in model_log.conditional_events:
+        if conditional_event.id == conditional_id:
+            return f"L{conditional_event.if_stmt_span[0]}"
+    return f"C{conditional_id}"
+
+
+def _arm_entry_sort_key(
+    conditional_id: int,
+    branch_kind: str,
+    model_log: "ModelLog",
+) -> Tuple[int, int, int]:
+    """Return a stable sort key for multi-arm edge labels.
+
+    Args:
+        conditional_id:
+            Dense conditional id.
+        branch_kind:
+            Branch kind such as ``"then"`` or ``"elif_2"``.
+        model_log:
+            Owning model log containing conditional metadata.
+
+    Returns
+    -------
+    Tuple[int, int, int]
+        Sort key ordered by source line, branch rank, then conditional id.
+    """
+    source_line = 10**9
+    for conditional_event in model_log.conditional_events:
+        if conditional_event.id == conditional_id:
+            source_line = conditional_event.if_stmt_span[0]
+            break
+    return (source_line, _branch_kind_sort_key(branch_kind), conditional_id)
+
+
+def _branch_kind_sort_key(branch_kind: str) -> int:
+    """Return an ordering key for branch kinds.
+
+    Args:
+        branch_kind:
+            Stored branch kind such as ``"then"``, ``"elif_1"``, or ``"else"``.
+
+    Returns
+    -------
+    int
+        Sort rank for the branch kind.
+    """
+    if branch_kind == "then":
+        return 0
+    if branch_kind.startswith("elif_"):
+        return int(branch_kind.split("_", 1)[1])
+    if branch_kind == "else":
+        return 10**6
+    return 10**9
+
+
+def _edge_is_conditional_branch(
+    parent_node: Union["LayerPassLog", "LayerLog"],
+    child_node: Union["LayerPassLog", "LayerLog"],
+    model_log: "ModelLog",
+    vis_mode: str,
+) -> bool:
+    """Return True when an edge is an ``IF`` branch-entry edge.
+
+    Args:
+        parent_node:
+            Source node for the edge.
+        child_node:
+            Destination node for the edge.
+        model_log:
+            Owning model log containing conditional metadata.
+        vis_mode:
+            ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    bool
+        True when the edge appears in ``conditional_branch_edges``.
+    """
+    if vis_mode == "unrolled":
+        return (
+            parent_node.layer_label,
+            child_node.layer_label,
+        ) in model_log.conditional_branch_edges
+    if vis_mode == "rolled":
+        edge_key = (parent_node.layer_label_no_pass, child_node.layer_label_no_pass)
+        return any(
+            (branch_parent.split(":")[0], branch_child.split(":")[0]) == edge_key
+            for branch_parent, branch_child in model_log.conditional_branch_edges
+        )
+    raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
+
+
+def _format_branch_edge_label_html(label_text: str) -> str:
+    """Wrap plain branch-label text in the Graphviz HTML used by TorchLens.
+
+    Args:
+        label_text:
+            Plain text to display on the edge.
+
+    Returns
+    -------
+    str
+        Graphviz HTML edge-label string.
+    """
+    return f'<<FONT POINT-SIZE="18"><b><u>{label_text}</u></b></FONT>>'
+
+
 def _label_node_arguments_if_needed(
     self: "ModelLog",
     parent_node: Union["LayerPassLog", "LayerLog"],
@@ -1068,7 +1483,8 @@ def _label_node_arguments_if_needed(
     Args:
         parent_node: The parent node whose edge is being labeled.
         child_node: The child node receiving the edge.
-        edge_dict: Mutable dict of edge attributes; ``"label"`` may be added/appended.
+        edge_dict: Mutable dict of edge attributes; ``"headlabel"`` or ``"xlabel"``
+            may be added.
         show_buffer_layers: Whether buffer layers are visible (affects parent count).
     """
     if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers):
@@ -1084,10 +1500,27 @@ def _label_node_arguments_if_needed(
     if not arg_labels:
         return
     arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_labels}</b></FONT>>"
-    if "label" not in edge_dict:
-        edge_dict["label"] = arg_label
-    else:
-        edge_dict["label"] = edge_dict["label"][:-1] + "<br/>" + arg_label[1:]
+    _set_argument_edge_label(edge_dict, arg_label)
+
+
+def _set_argument_edge_label(edge_dict: Dict, arg_label: str) -> None:
+    """Attach an argument-position label without overwriting semantic edge labels.
+
+    Args:
+        edge_dict:
+            Mutable Graphviz edge attribute dict.
+        arg_label:
+            HTML label string describing edge argument positions.
+    """
+    if "headlabel" not in edge_dict:
+        edge_dict["headlabel"] = arg_label
+        return
+    if "xlabel" not in edge_dict:
+        edge_dict["xlabel"] = arg_label
+        return
+    if edge_dict["xlabel"] == arg_label:
+        return
+    edge_dict["xlabel"] = edge_dict["xlabel"][:-1] + "<br/>" + arg_label[1:]
 
 
 def _should_mark_arguments_on_edge(
