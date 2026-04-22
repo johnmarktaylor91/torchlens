@@ -16,10 +16,15 @@ through to ``__getattr__``.  Using ``ValueError`` avoids this trap and gives
 the user a clear error message.
 
 **_build_layer_logs merge rules** (in postprocess/layer_log.py):
-When merging multiple passes into one LayerLog, only 3 fields are merged:
+When merging multiple passes into one LayerLog, these aggregate fields are merged:
   - ``has_input_ancestor``: OR across passes
   - ``io_role``: character-level merge of "I", "O", "IO" strings
   - ``is_leaf_module_output``: OR across passes
+  - ``in_cond_branch``: OR across passes
+  - ``conditional_branch_stacks`` / ``conditional_branch_stack_passes``:
+    unique per-pass stack signatures and their pass numbers
+  - ``cond_branch_children_by_cond`` and derived child views:
+    pass-stripped ordered unions across passes
 All other 78+ fields use the first pass's values only.
 ``modules_exited`` / ``module_passes_exited`` are NOT updated across passes
 (correct because same-layer grouping requires identical structural position).
@@ -127,6 +132,7 @@ class LayerLog:
         self.is_terminal_bool_layer = first_pass.is_terminal_bool_layer
         self.is_scalar_bool = first_pass.is_scalar_bool
         self.scalar_bool_value = first_pass.scalar_bool_value
+        self.in_cond_branch = first_pass.in_cond_branch
         self.conditional_branch_stacks: List[List[Tuple[int, str]]] = []
         self.conditional_branch_stack_passes: Dict[Tuple[Tuple[int, str], ...], List[int]] = {}
         self.cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]] = {}

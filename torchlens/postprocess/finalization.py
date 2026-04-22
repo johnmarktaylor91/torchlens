@@ -7,9 +7,9 @@ Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall p
 Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
     linked_params), num_passes, and clears Parameter tensor references.
 Step 16.5 (_build_layer_logs): Groups LayerPassLog entries by layer_label_no_pass to
-    create aggregate LayerLog objects. Only 3 fields are merged across passes
-    (has_input_ancestor, io_role, is_leaf_module_output);
-    all other 78+ fields use first-pass values only.
+    create aggregate LayerLog objects. Static identity fields still use first-pass
+    values, while aggregate fields merge across passes, including conditional
+    branch signatures, pass maps, and pass-stripped child views.
 Step 17 (_build_module_logs): Builds structured ModuleLog/ModulePassLog objects from
     _module_build_data and _module_metadata. MUST NOT run in fast mode — _module_build_data
     isn't repopulated in fast mode (Step 10 is skipped). Existing module logs from the
@@ -20,7 +20,7 @@ Step 18 (_set_pass_finished): Marks ModelLog and all LayerPassLogs as finished, 
 
 import time
 from collections import defaultdict, deque
-from typing import Optional, Dict, NamedTuple, TYPE_CHECKING
+from typing import Dict, List, NamedTuple, Optional, TYPE_CHECKING, Tuple
 
 import torch
 
@@ -29,6 +29,8 @@ from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
+    from ..data_classes.layer_log import LayerLog
+    from ..data_classes.layer_pass_log import LayerPassLog
     from ..data_classes.model_log import ModelLog
 
 
@@ -214,6 +216,166 @@ def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None
                 module_dict[child_addr].nesting_depth = depth
                 visited[child_addr] = depth
                 queue.append(child_addr)
+
+
+def _append_unique_child_label(child_labels: List[str], child_label: str) -> None:
+    """Append a child label if it has not been seen yet.
+
+    Parameters
+    ----------
+    child_labels:
+        Ordered list being accumulated.
+    child_label:
+        Child label to append.
+    """
+    if child_label not in child_labels:
+        child_labels.append(child_label)
+
+
+def _strip_pass_suffix(layer_label: str) -> str:
+    """Strip the ``:pass_num`` suffix from a layer label.
+
+    Parameters
+    ----------
+    layer_label:
+        Pass-qualified or pass-free layer label.
+
+    Returns
+    -------
+    str
+        Layer label without any pass suffix.
+    """
+    return layer_label.split(":", 1)[0]
+
+
+def _merge_layer_log_conditional_fields(
+    layer_log: "LayerLog",
+    pass_log: "LayerPassLog",
+) -> None:
+    """Merge one pass's conditional metadata into an aggregate ``LayerLog``.
+
+    Parameters
+    ----------
+    layer_log:
+        Aggregate layer entry being updated.
+    pass_log:
+        Per-pass layer entry contributing conditional metadata.
+    """
+    if pass_log.in_cond_branch:
+        layer_log.in_cond_branch = True
+
+    stack_signature = tuple(pass_log.conditional_branch_stack)
+    if stack_signature not in layer_log.conditional_branch_stack_passes:
+        layer_log.conditional_branch_stacks.append(list(pass_log.conditional_branch_stack))
+        layer_log.conditional_branch_stack_passes[stack_signature] = []
+
+    signature_passes = layer_log.conditional_branch_stack_passes[stack_signature]
+    if pass_log.pass_num not in signature_passes:
+        signature_passes.append(pass_log.pass_num)
+        signature_passes.sort()
+
+    for conditional_id, branch_children in pass_log.cond_branch_children_by_cond.items():
+        merged_branch_children = layer_log.cond_branch_children_by_cond.setdefault(
+            conditional_id,
+            {},
+        )
+        for branch_kind, child_labels in branch_children.items():
+            merged_child_labels = merged_branch_children.setdefault(branch_kind, [])
+            for child_label in child_labels:
+                _append_unique_child_label(
+                    merged_child_labels,
+                    _strip_pass_suffix(child_label),
+                )
+
+
+def _rebuild_layer_log_conditional_views(layer_log: "LayerLog") -> None:
+    """Recompute aggregate conditional compatibility views for one ``LayerLog``.
+
+    Parameters
+    ----------
+    layer_log:
+        Aggregate layer entry whose derived conditional fields are refreshed.
+    """
+    layer_log.in_cond_branch = any(
+        len(branch_stack) > 0 for branch_stack in layer_log.conditional_branch_stacks
+    )
+
+    cond_branch_start_children: List[str] = []
+    for pass_num in sorted(layer_log.passes):
+        pass_log = layer_log.passes[pass_num]
+        for child_label in pass_log.cond_branch_start_children:
+            _append_unique_child_label(
+                cond_branch_start_children,
+                _strip_pass_suffix(child_label),
+            )
+    layer_log.cond_branch_start_children = cond_branch_start_children
+
+    cond_branch_then_children: List[str] = []
+    cond_branch_elif_children: Dict[int, List[str]] = {}
+    cond_branch_else_children: List[str] = []
+    for branch_children in layer_log.cond_branch_children_by_cond.values():
+        for child_label in branch_children.get("then", []):
+            _append_unique_child_label(cond_branch_then_children, child_label)
+        for branch_kind, child_labels in branch_children.items():
+            if not branch_kind.startswith("elif_"):
+                continue
+            elif_index = int(branch_kind.split("_", 1)[1])
+            elif_children = cond_branch_elif_children.setdefault(elif_index, [])
+            for child_label in child_labels:
+                _append_unique_child_label(elif_children, child_label)
+        for child_label in branch_children.get("else", []):
+            _append_unique_child_label(cond_branch_else_children, child_label)
+
+    layer_log.cond_branch_then_children = cond_branch_then_children
+    layer_log.cond_branch_elif_children = cond_branch_elif_children
+    layer_log.cond_branch_else_children = cond_branch_else_children
+
+
+def _rebuild_conditional_edge_passes(self: "ModelLog") -> None:
+    """Recompute rolled conditional edge-pass metadata from arm-entry edges.
+
+    Parameters
+    ----------
+    self:
+        Model log being finalized.
+    """
+    conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
+    for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items():
+        for parent_label, child_label in edge_list:
+            parent_no_pass = _strip_pass_suffix(parent_label)
+            child_no_pass = _strip_pass_suffix(child_label)
+            child_pass_num = _get_label_pass_num(child_label)
+            edge_key = (
+                parent_no_pass,
+                child_no_pass,
+                conditional_id,
+                branch_kind,
+            )
+            if child_pass_num not in conditional_edge_passes[edge_key]:
+                conditional_edge_passes[edge_key].append(child_pass_num)
+
+    self.conditional_edge_passes = {
+        edge_key: sorted(pass_nums) for edge_key, pass_nums in conditional_edge_passes.items()
+    }
+
+
+def _get_label_pass_num(layer_label: str) -> int:
+    """Extract the pass number encoded in a layer label.
+
+    Parameters
+    ----------
+    layer_label:
+        Layer label that may include a ``:pass_num`` suffix.
+
+    Returns
+    -------
+    int
+        Parsed pass number, or ``1`` for pass-free labels.
+    """
+    label_parts = layer_label.rsplit(":", 1)
+    if len(label_parts) == 2 and label_parts[1].isdigit():
+        return int(label_parts[1])
+    return 1
 
 
 def _build_submodule_pass_logs(
@@ -540,11 +702,19 @@ def _build_layer_logs(self: "ModelLog") -> None:
     each unique layer. For single-pass layers, the LayerLog is a thin wrapper
     delegating attribute access to the sole LayerPassLog.
 
-    MERGE RULES for multi-pass layers (only 3 fields are merged):
+    MERGE RULES for multi-pass layers:
     1. has_input_ancestor: OR across passes (True if ANY pass has an input ancestor).
     2. io_role: Character-wise merge with '*' for differing characters
        (e.g., "output.0" + "output.1" -> "output.*").
     3. is_leaf_module_output: OR across passes.
+    4. in_cond_branch: OR across passes.
+    5. conditional_branch_stacks / conditional_branch_stack_passes:
+       unique stack signatures in first-seen order plus sorted pass maps.
+    6. cond_branch_children_by_cond: pass-stripped union across passes with
+       insertion-order preservation.
+
+    Derived aggregate views (cond_branch_then/elif/else/start_children) are
+    recomputed after the merge from the cond-id-aware primary structures.
 
     All other 78+ fields use first-pass values only. This is correct because
     same-layer grouping requires same structural position, so module containment,
@@ -594,8 +764,13 @@ def _build_layer_logs(self: "ModelLog") -> None:
         layer_log.passes[pass_log.pass_num] = pass_log
         layer_log.pass_labels.append(pass_log.layer_label)
         pass_log.parent_layer_log = layer_log  # type: ignore[assignment]
+        _merge_layer_log_conditional_fields(layer_log, pass_log)
+
+    for layer_log in layer_logs.values():
+        _rebuild_layer_log_conditional_views(layer_log)
 
     self.layer_logs = layer_logs
+    _rebuild_conditional_edge_passes(self)
 
 
 def _set_pass_finished(self) -> None:
