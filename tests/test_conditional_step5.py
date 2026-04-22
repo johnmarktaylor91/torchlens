@@ -305,9 +305,7 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     relu_layer = _find_single_layer(positive_log, "relu")
     sigmoid_layer = _find_single_layer(negative_log, "sigmoid")
     assert relu_layer.conditional_branch_stack == [(0, "then")]
-    assert relu_layer.in_cond_branch is True
     assert sigmoid_layer.conditional_branch_stack == [(0, "else")]
-    assert sigmoid_layer.in_cond_branch is True
 
     assert all(pass_nums == [1] for pass_nums in positive_log.conditional_edge_passes.values())
     assert all(pass_nums == [1] for pass_nums in negative_log.conditional_edge_passes.values())
@@ -383,6 +381,5 @@ def test_save_source_context_false_still_attributes_branches() -> None:
     assert bool_layers[0].bool_conditional_id == 0
     assert (0, "then") in model_log.conditional_arm_edges
     assert relu_layer.conditional_branch_stack == [(0, "then")]
-    assert relu_layer.in_cond_branch is True
 
     _assert_derived_views_consistent(model_log)
