@@ -101,6 +101,28 @@ def _strip_pass_suffix(layer_label: str) -> str:
     return layer_label.split(":", 1)[0]
 
 
+def _label_for_reference_removal(log_entry: LayerPassLog, pass_finished: bool) -> str:
+    """Return the label namespace currently used by graph-level references.
+
+    Parameters
+    ----------
+    log_entry:
+        Entry being removed.
+    pass_finished:
+        Whether postprocessing has fully completed.
+
+    Returns
+    -------
+    str
+        Final layer label when available, otherwise the raw tensor label.
+    """
+    if pass_finished:
+        return log_entry.layer_label
+    if getattr(log_entry, "layer_label", None):
+        return log_entry.layer_label
+    return log_entry.tensor_label_raw
+
+
 def _filter_cond_branch_children_by_cond(
     cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]],
     labels_to_remove: Set[str],
@@ -331,10 +353,7 @@ def _remove_log_entry(self, log_entry: LayerPassLog, remove_references: bool = T
     # The label used to find references depends on whether postprocessing
     # has run: after postprocessing, layers are keyed by their final
     # human-readable label; during the pass, by the raw internal barcode.
-    if self._pass_finished:
-        tensor_label = log_entry.layer_label
-    else:
-        tensor_label = log_entry.tensor_label_raw
+    tensor_label = _label_for_reference_removal(log_entry, self._pass_finished)
     if remove_references:
         _remove_log_entry_references(self, tensor_label)
     _clear_entry_attributes(log_entry)
@@ -374,10 +393,7 @@ def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool =
     # Build a set of labels for O(1) membership testing, then clear each entry.
     labels_to_remove = set()
     for entry in entries_to_remove:
-        if self._pass_finished:
-            labels_to_remove.add(entry.layer_label)
-        else:
-            labels_to_remove.add(entry.tensor_label_raw)
+        labels_to_remove.add(_label_for_reference_removal(entry, self._pass_finished))
         _clear_entry_attributes(entry)
 
     if not remove_references:
