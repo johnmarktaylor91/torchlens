@@ -31,7 +31,8 @@ Key design patterns:
 
 import copy
 from collections import OrderedDict, defaultdict
-from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
@@ -88,6 +89,25 @@ def _init_module_build_data() -> dict:
         "module_layer_argnames": defaultdict(list),
         "module_training_modes": {},
     }
+
+
+@dataclass
+class ConditionalEvent:
+    """Structured metadata for one conditional event in user source code."""
+
+    id: int
+    kind: Literal["if_chain", "ifexp"]
+    source_file: str
+    function_qualname: str
+    function_span: Tuple[int, int]
+    if_stmt_span: Tuple[int, int]
+    test_span: Tuple[int, int, int, int]
+    branch_ranges: Dict[str, Tuple[int, int, int, int]]
+    branch_test_spans: Dict[str, Tuple[int, int, int, int]]
+    nesting_depth: int
+    parent_conditional_id: Optional[int]
+    parent_branch_kind: Optional[str]
+    bool_layers: List[str] = field(default_factory=list)
 
 
 class ModelLog:
@@ -214,6 +234,11 @@ class ModelLog:
         self.internally_terminated_bool_layers: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []
         self.conditional_then_edges: List[Tuple[str, str]] = []
+        self.conditional_elif_edges: List[Tuple[int, int, str, str]] = []
+        self.conditional_else_edges: List[Tuple[int, str, str]] = []
+        self.conditional_events: List[ConditionalEvent] = []
+        self.conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
+        self.conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = {}
         self.layers_with_saved_activations: List[str] = []
         self.orphan_layers: List[str] = []
         self.unlogged_layers: List[str] = []
@@ -308,6 +333,36 @@ class ModelLog:
             return iter(self.layer_list)
         else:
             return iter(list(self._raw_layer_dict.values()))
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with non-picklable weakref-backed accessors stripped."""
+        state = self.__dict__.copy()
+        state["_module_logs"] = None
+        state["_buffer_accessor"] = None
+        state["_module_build_data"] = None
+        state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state and rebuild weakref-backed links."""
+        self.__dict__.update(state)
+        if self.__dict__.get("_module_logs") is None:
+            self._module_logs = ModuleAccessor({})
+        if "_buffer_accessor" not in self.__dict__:
+            self._buffer_accessor = None
+        if self.__dict__.get("_module_build_data") is None:
+            self._module_build_data = _init_module_build_data()
+
+        for layer_log in self.layer_logs.values():
+            layer_log.source_model_log = self
+            for layer_pass in layer_log.passes.values():
+                layer_pass.source_model_log = self
+                layer_pass.parent_layer_log = layer_log
+        for layer_pass in self.layer_list:
+            layer_pass.source_model_log = self
+            parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
+            if parent_layer_log is not None:
+                layer_pass.parent_layer_log = parent_layer_log
 
     # ********************************************
     # ********** Computed Properties *************

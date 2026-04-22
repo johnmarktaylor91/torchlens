@@ -23,7 +23,7 @@ Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (un
 
 import weakref
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import Dict, List, TYPE_CHECKING
 
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
@@ -223,9 +223,51 @@ _LIST_FIELDS_TO_RENAME = [
     "internally_initialized_ancestors",
     "cond_branch_start_children",
     "cond_branch_then_children",
+    "cond_branch_else_children",
     "equivalent_operations",
     "recurrent_group",
 ]
+
+
+def _rename_elif_children(
+    cond_branch_elif_children: Dict[int, List[str]],
+    mapping: Dict[str, str],
+) -> Dict[int, List[str]]:
+    """Rename labels inside ``cond_branch_elif_children``.
+
+    Args:
+        cond_branch_elif_children: Mapping from elif index to child labels.
+        mapping: Raw-to-final layer-label mapping.
+
+    Returns:
+        A new dict with all child labels rewritten.
+    """
+    return {
+        elif_ix: [mapping[layer_label] for layer_label in child_labels]
+        for elif_ix, child_labels in cond_branch_elif_children.items()
+    }
+
+
+def _rename_children_by_cond(
+    cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]],
+    mapping: Dict[str, str],
+) -> Dict[int, Dict[str, List[str]]]:
+    """Rename labels inside ``cond_branch_children_by_cond``.
+
+    Args:
+        cond_branch_children_by_cond: ``cond_id -> branch_kind -> child labels``.
+        mapping: Raw-to-final layer-label mapping.
+
+    Returns:
+        A new dict with every nested child label rewritten.
+    """
+    return {
+        cond_id: {
+            branch_kind: [mapping[layer_label] for layer_label in child_labels]
+            for branch_kind, child_labels in branch_children.items()
+        }
+        for cond_id, branch_children in cond_branch_children_by_cond.items()
+    }
 
 
 def _replace_layer_names_for_layer_entry(self, layer_entry: LayerPassLog) -> None:
@@ -266,6 +308,14 @@ def _replace_layer_names_for_layer_entry(self, layer_entry: LayerPassLog) -> Non
         d["children_tensor_versions"] = {
             mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()
         }
+
+    elif_children = d.get("cond_branch_elif_children")
+    if elif_children:
+        d["cond_branch_elif_children"] = _rename_elif_children(elif_children, mapping)
+
+    children_by_cond = d.get("cond_branch_children_by_cond")
+    if children_by_cond:
+        d["cond_branch_children_by_cond"] = _rename_children_by_cond(children_by_cond, mapping)
 
 
 def _log_module_hierarchy_info_for_layer(
@@ -387,9 +437,9 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
             self.unlogged_layers.append(layer_entry.layer_label)
             self._unsaved_layers_lookup_keys.update(layer_entry.lookup_keys)
 
-    # Remove unused entries.
-    for layer_entry in layers_to_remove:
-        self._remove_log_entry(layer_entry, remove_references=False)
+    # Remove unused entries and scrub any label-bearing references they left behind.
+    if layers_to_remove:
+        self._batch_remove_log_entries(layers_to_remove, remove_references=True)
 
     if (self.num_tensors_saved == len(self)) or self.keep_unsaved_layers:
         self._all_layers_logged = True
@@ -560,6 +610,48 @@ def _rename_model_history_layer_names(self) -> None:
             self._raw_to_final_layer_labels[parent],
             self._raw_to_final_layer_labels[child],
         )
+
+    for t, (cond_id, elif_ix, parent, child) in enumerate(self.conditional_elif_edges):
+        self.conditional_elif_edges[t] = (
+            cond_id,
+            elif_ix,
+            self._raw_to_final_layer_labels[parent],
+            self._raw_to_final_layer_labels[child],
+        )
+
+    for t, (cond_id, parent, child) in enumerate(self.conditional_else_edges):
+        self.conditional_else_edges[t] = (
+            cond_id,
+            self._raw_to_final_layer_labels[parent],
+            self._raw_to_final_layer_labels[child],
+        )
+
+    self.conditional_arm_edges = {
+        (cond_id, branch_kind): [
+            (
+                self._raw_to_final_layer_labels[parent],
+                self._raw_to_final_layer_labels[child],
+            )
+            for parent, child in arm_edges
+        ]
+        for (cond_id, branch_kind), arm_edges in self.conditional_arm_edges.items()
+    }
+
+    self.conditional_edge_passes = {
+        (
+            self._raw_to_final_layer_labels[parent],
+            self._raw_to_final_layer_labels[child],
+            cond_id,
+            branch_kind,
+        ): pass_nums
+        for (parent, child, cond_id, branch_kind), pass_nums in self.conditional_edge_passes.items()
+    }
+
+    for conditional_event in self.conditional_events:
+        conditional_event.bool_layers = [
+            self._raw_to_final_layer_labels[layer_label]
+            for layer_label in conditional_event.bool_layers
+        ]
 
     mla = self._module_build_data["module_layer_argnames"]
     for module_pass, arglist in mla.items():

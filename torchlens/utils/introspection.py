@@ -5,7 +5,10 @@ type) from arbitrarily nested model inputs/outputs, plus utilities for
 nested attribute traversal and call-stack capture.
 """
 
+import dis
+import sys
 import warnings
+from types import FrameType
 from typing import Any, Callable, List, Optional, Set, Type
 
 import numpy as np
@@ -370,7 +373,7 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
-def _get_func_call_stack(num_context_lines: int = 7) -> List:
+def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: bool = True) -> List:
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
@@ -385,12 +388,13 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
         num_context_lines: Number of source lines to show on each side of
             the call line.  The total context window is
             ``2 * num_context_lines + 1``.
+        source_loading_enabled: Whether each ``FuncCallLocation`` should
+            lazily load source text and function metadata on demand.
 
     Returns:
         List[FuncCallLocation] ordered shallow-to-deep.
     """
     import os
-    import sys
 
     from ..data_classes import FuncCallLocation
 
@@ -400,6 +404,28 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
 
     def _is_torchlens_internal(filename: str) -> bool:
         return filename.startswith(_TORCHLENS_PKG_DIR)
+
+    def _get_code_qualname(frame: FrameType) -> Optional[str]:
+        """Return ``co_qualname`` when available on this Python version."""
+        if sys.version_info < (3, 11):
+            return None
+        return getattr(frame.f_code, "co_qualname", None)
+
+    def _get_col_offset(frame: FrameType) -> Optional[int]:
+        """Return the current instruction's column offset when available."""
+        if sys.version_info < (3, 11):
+            return None
+        try:
+            for instruction in dis.get_instructions(frame.f_code):
+                if instruction.offset != frame.f_lasti:
+                    continue
+                positions = instruction.positions
+                if positions is None:
+                    return None
+                return positions.col_offset
+        except (TypeError, ValueError):
+            return None
+        return None
 
     # Phase 1: Collect lightweight frame data — only co_filename, co_name, f_lineno.
     # Do NOT do f_locals/f_globals dict lookups yet (expensive, ~50/call).
@@ -411,6 +437,9 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
                 frame.f_code.co_filename,
                 frame.f_code.co_name,
                 frame.f_lineno,
+                frame.f_code.co_firstlineno,
+                _get_code_qualname(frame),
+                _get_col_offset(frame),
                 frame,  # keep reference for phase 2 func_obj lookup
             )
         )
@@ -425,7 +454,7 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
     filtered_indices = []
 
     for idx in range(len(raw_frames) - 1, -1, -1):
-        filename, func_name, lineno, frame_ref = raw_frames[idx]
+        filename, func_name, lineno, _, _, _, frame_ref = raw_frames[idx]
 
         # Skip torchlens internals and PyTorch _call_impl
         if _is_torchlens_internal(filename):
@@ -437,7 +466,7 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
             tracking = True
             # Look for the user-script frame that called log_forward_pass
             for j in range(idx + 1, len(raw_frames)):
-                j_filename, j_func_name, _, _ = raw_frames[j]
+                j_filename, j_func_name, _, _, _, _, _ = raw_frames[j]
                 if not _is_torchlens_internal(j_filename) and "_call_impl" not in j_func_name:
                     pre_forward_frame_idx = j
                     break
@@ -453,14 +482,23 @@ def _get_func_call_stack(num_context_lines: int = 7) -> List:
     # Do the expensive f_locals/f_globals dict lookup only here.
     result = []
     for idx in filtered_indices:
-        filename, func_name, lineno, frame_ref = raw_frames[idx]
-        func_obj = frame_ref.f_locals.get(func_name) or frame_ref.f_globals.get(func_name)
+        filename, func_name, lineno, code_firstlineno, code_qualname, col_offset, frame_ref = (
+            raw_frames[idx]
+        )
         loc = FuncCallLocation(
             file=filename,
             line_number=lineno,
             func_name=func_name,
             num_context_lines_requested=num_context_lines,
-            _frame_func_obj=func_obj,
+            _frame_func_obj=(
+                frame_ref.f_locals.get(func_name) or frame_ref.f_globals.get(func_name)
+                if source_loading_enabled
+                else None
+            ),
+            code_firstlineno=code_firstlineno,
+            code_qualname=code_qualname,
+            col_offset=col_offset,
+            source_loading_enabled=source_loading_enabled,
         )
         result.append(loc)
 

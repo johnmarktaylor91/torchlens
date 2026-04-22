@@ -166,9 +166,9 @@ def log_source_tensor_exhaustive(
         # Function call info:
         "func_applied": None,
         "func_name": "none",
-        "func_call_stack": _get_func_call_stack(self.num_context_lines)
-        if self.save_source_context
-        else [],
+        "func_call_stack": _get_func_call_stack(
+            self.num_context_lines, source_loading_enabled=self.save_source_context
+        ),
         "func_time": 0,
         "flops_forward": 0,
         "flops_backward": 0,
@@ -229,11 +229,20 @@ def log_source_tensor_exhaustive(
         "is_internally_terminated": False,
         # Conditional info:
         "is_terminal_bool_layer": False,
+        "bool_is_branch": False,
+        "bool_context_kind": None,
+        "bool_wrapper_kind": None,
+        "bool_conditional_id": None,
         "is_scalar_bool": False,
         "scalar_bool_value": None,
         "in_cond_branch": False,
+        "conditional_branch_stack": [],
+        "conditional_branch_depth": 0,
         "cond_branch_start_children": [],
         "cond_branch_then_children": [],
+        "cond_branch_elif_children": {},
+        "cond_branch_else_children": [],
+        "cond_branch_children_by_cond": {},
         # Module info:
         "containing_module": None,
         "containing_modules": [],

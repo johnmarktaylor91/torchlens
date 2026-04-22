@@ -60,6 +60,7 @@ def _recursive_safe_copy(val):
 
 if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
+    from .layer_log import LayerLog
     from .param_log import ParamLog
     from .model_log import ModelLog
 
@@ -233,11 +234,20 @@ class LayerPassLog:
 
         # Conditional info
         self.is_terminal_bool_layer = fields_dict["is_terminal_bool_layer"]
+        self.bool_is_branch = fields_dict["bool_is_branch"]
+        self.bool_context_kind = fields_dict["bool_context_kind"]
+        self.bool_wrapper_kind = fields_dict["bool_wrapper_kind"]
+        self.bool_conditional_id = fields_dict["bool_conditional_id"]
         self.is_scalar_bool = fields_dict["is_scalar_bool"]
         self.scalar_bool_value = fields_dict["scalar_bool_value"]
         self.in_cond_branch = fields_dict["in_cond_branch"]
+        self.conditional_branch_stack = fields_dict["conditional_branch_stack"]
+        self.conditional_branch_depth = fields_dict["conditional_branch_depth"]
         self.cond_branch_start_children = fields_dict["cond_branch_start_children"]
         self.cond_branch_then_children = fields_dict["cond_branch_then_children"]
+        self.cond_branch_elif_children = fields_dict["cond_branch_elif_children"]
+        self.cond_branch_else_children = fields_dict["cond_branch_else_children"]
+        self.cond_branch_children_by_cond = fields_dict["cond_branch_children_by_cond"]
 
         # Module info
         self.containing_module = fields_dict["containing_module"]
@@ -260,7 +270,7 @@ class LayerPassLog:
         # this layer.  Set during postprocessing by _build_layer_logs — NOT
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
-        self.parent_layer_log = None
+        self.parent_layer_log: Optional["LayerLog"] = None
 
     @property
     def macs_forward(self) -> Optional[int]:
@@ -376,6 +386,16 @@ class LayerPassLog:
     @source_model_log.setter
     def source_model_log(self, value):
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
+
+    def __getstate__(self) -> Dict:
+        """Return pickle state with weakrefs stripped."""
+        state = self.__dict__.copy()
+        state["_source_model_log_ref"] = None
+        return state
+
+    def __setstate__(self, state: Dict) -> None:
+        """Restore pickle state produced by ``__getstate__``."""
+        self.__dict__.update(state)
 
     # ********************************************
     # *********** User-Facing Functions **********

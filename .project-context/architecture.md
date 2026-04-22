@@ -36,8 +36,9 @@ Real-time tensor operation logging during forward pass.
 ### `torchlens/postprocess/` (6 files, ~3,179 lines)
 18-step pipeline. Order is critical — many steps depend on prior output.
 - `graph_traversal.py` — Steps 1-4: output layers, ancestor marking, orphan removal, distance flood
-- `control_flow.py` — Steps 5-7: conditional branches (backward-only flood + AST THEN detection),
-  module fixing, buffer cleanup
+- `control_flow.py` — Steps 5-7: six-phase conditional attribution (AST indexing, bool
+  classification, event materialization, backward flood, forward arm attribution, derived
+  views), module fixing, buffer cleanup
 - `loop_detection.py` — Step 8: isomorphic subgraph expansion, layer assignment
 - `labeling.py` — Steps 9-12: label generation, rename, trim/reorder, lookup keys
 - `finalization.py` — Steps 13-18: undecorate, ParamLog, ModuleLog, LayerLog, mark complete
@@ -85,7 +86,7 @@ log_forward_pass(model, input)
   →       OR log_function_output_tensors_fast()     # reuses prior graph structure
   → postprocess(model_log)       # 18-step pipeline
   →   Steps 1-4: graph cleanup (outputs, ancestors, orphans, distances)
-  →   Steps 5-7: control flow (conditionals, module fixing, buffer dedup)
+  →   Steps 5-7: control flow (Step 5a-5f conditional attribution, module fixing, buffer dedup)
   →   Step 8: loop detection (isomorphic subgraph expansion)
   →   Steps 9-12: labeling (raw→final labels, rename, reorder, lookup keys)
   →   Steps 13-18: finalization (undecorate, ParamLog, ModuleLog, LayerLog)
@@ -109,6 +110,28 @@ one branch check, negligible overhead. No re-wrapping/un-wrapping per forward pa
 When user requests specific layers (not "all"/"none"), Pass 1 runs exhaustive to discover full
 graph structure, Pass 2 runs fast saving only requested activations. Counter alignment between
 passes maintained via identical increment logic.
+
+### Conditional Branch Attribution (Step 5)
+Step 5 now runs as six ordered phases:
+1. 5a builds AST file indexes for source files referenced by terminal bool frames.
+2. 5b classifies terminal scalar bools and records structural `ConditionalKey`s.
+3. 5c materializes dense `ModelLog.conditional_events` IDs and rewrites bool metadata.
+4. 5d runs the backward-only flood that marks branch-start parents.
+5. 5e attributes ops and forward edges to branch arms, populating
+   `conditional_arm_edges` and `cond_branch_children_by_cond`.
+6. 5f derives legacy THEN/ELIF/ELSE views and records `conditional_edge_passes` for
+   rolled-mode divergence.
+
+Primary branch metadata is cond-id-aware:
+- `ModelLog.conditional_events` stores the canonical event records.
+- `ModelLog.conditional_arm_edges` stores arm-entry edges keyed by `(cond_id, branch_kind)`.
+- `ModelLog.conditional_edge_passes` stores pass numbers for rolled edges whose arm labels
+  vary across passes.
+- `cond_branch_children_by_cond` on `LayerPassLog` / `LayerLog` stores per-node branch children.
+
+Legacy `conditional_then_edges`, `conditional_elif_edges`, `conditional_else_edges`,
+`cond_branch_then_children`, `cond_branch_elif_children`, and `cond_branch_else_children`
+are derived views computed from those primary structures.
 
 ### Barcode Nesting Detection
 Random 8-char barcodes detect bottom-level vs wrapper functions. Barcode set on tensor before
@@ -158,6 +181,36 @@ algorithm with O(n^2) memory (NEVER use for >100k nodes), Kahn's topological sor
 ### Circular References (data_classes/)
 ModelLog ↔ LayerPassLog ↔ ModelLog cycles. ModuleLog ↔ ModelLog cycles. ParamLog pins
 nn.Parameter. All rely on Python's cyclic GC. Explicit `cleanup()` available.
+
+## Conditional Attribution Limits
+
+Fully attributed in eager Python `forward()`:
+- `if` / `elif` / `else` chains
+- Ternary `IfExp` (`x if cond else y`)
+
+Classified only, not branch-attributed:
+- `assert`
+- standalone `bool(x)`
+- comprehension filters
+- `while`
+- `match` guards
+
+Documented false negatives:
+- pure Python predicates such as `if self.training:` or `if python_bool:`
+- `if tensor.item() > 0:`
+- shape/metadata predicates such as `if x.shape[0] > 0:`
+- functional conditionals such as `torch.where`
+
+Unsupported / source-unavailable cases:
+- Jupyter or REPL cells, `exec`, `eval`
+- `torch.compile`, `torch.jit.script`, `torch.jit.trace`
+- `nn.DataParallel` / `DistributedDataParallel`
+- monkey-patched `forward` implementations
+
+Deferred:
+- dagua conditional-edge rendering
+- ELK conditional rendering
+- while-loop body attribution
 
 ### DeviceContext Bypass (decoration/torch_funcs.py)
 Python wrappers bypass C-level TorchFunctionMode dispatch. Factory functions need manual

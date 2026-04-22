@@ -169,9 +169,18 @@ def _build_graph_relationship_fields(
     fields_dict["internally_initialized_ancestors"] = internally_initialized_ancestors
     fields_dict["is_internally_terminated"] = False
     fields_dict["is_terminal_bool_layer"] = False
+    fields_dict["bool_is_branch"] = False
+    fields_dict["bool_context_kind"] = None
+    fields_dict["bool_wrapper_kind"] = None
+    fields_dict["bool_conditional_id"] = None
     fields_dict["in_cond_branch"] = False
+    fields_dict["conditional_branch_stack"] = []
+    fields_dict["conditional_branch_depth"] = 0
     fields_dict["cond_branch_start_children"] = []
     fields_dict["cond_branch_then_children"] = []
+    fields_dict["cond_branch_elif_children"] = {}
+    fields_dict["cond_branch_else_children"] = []
+    fields_dict["cond_branch_children_by_cond"] = {}
 
     is_part_of_iterable_output = any(
         issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]
@@ -308,8 +317,8 @@ def _build_shared_fields_dict(
     # Function call info
     fields_dict["func_applied"] = func
     fields_dict["func_name"] = func_name
-    fields_dict["func_call_stack"] = (
-        _get_func_call_stack(self.num_context_lines) if self.save_source_context else []
+    fields_dict["func_call_stack"] = _get_func_call_stack(
+        self.num_context_lines, source_loading_enabled=self.save_source_context
     )
     fields_dict["func_time"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states

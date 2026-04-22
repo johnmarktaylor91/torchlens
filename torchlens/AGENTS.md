@@ -29,3 +29,10 @@ class definition and the corresponding FIELD_ORDER in constants.py.
    override when they need a clean PyTorch environment.
 5. Field-order constants and class definitions must stay in sync
 6. Step 6 module suffix mutation makes `_rebuild_pass_assignments` (Step 8) NECESSARY — not just defensive
+
+## Conditional Branch Attribution
+- Postprocess Step 5 is a six-phase pipeline: 5a build AST file indexes, 5b classify terminal bools to structural keys, 5c materialize `conditional_events` and assign dense `cond_id`s, 5d run the backward IF flood, 5e attribute ops and forward edges to branch arms, 5f derive legacy views and populate `conditional_edge_passes`.
+- Primary structures are `ModelLog.conditional_events`, `ModelLog.conditional_arm_edges`, `ModelLog.conditional_edge_passes`, and `cond_branch_children_by_cond` on `LayerPassLog` / `LayerLog`. Legacy `conditional_then_edges` / `conditional_elif_edges` / `conditional_else_edges` and `cond_branch_then_children` / `cond_branch_elif_children` / `cond_branch_else_children` are derived views.
+- A single forward edge may enter multiple arms simultaneously; rolled edges may map to different arms on different passes. Use `conditional_edge_passes` for accurate rolled-mode labels.
+- User-visible effects: Graphviz renders `THEN` / `ELIF` / `ELSE` edge labels, and ternary (`IfExp`) attribution is first-class on Python 3.11+ via `col_offset`. Python 3.9/3.10 fail closed for same-line ternary ambiguity.
+- Deferred in this sprint: dagua bridge wiring, ELK conditional rendering, and while-loop body attribution. Reference: `.project-context/plans/if-else-attribution/plan.md` (v7).
