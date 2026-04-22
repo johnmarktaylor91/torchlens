@@ -1,6 +1,213 @@
 # CHANGELOG
 
 
+## v1.1.0 (2026-04-22)
+
+### Bug Fixes
+
+- **conditionals**: Make MultilinePredicateModel predicate genuinely multi-line
+  ([`597e075`](https://github.com/johnmarktaylor91/torchlens/commit/597e0757d5d794871ac6eff0d68d1080ad2dea5a))
+
+test_multiline_predicate_model_tracks_multiline_if_event asserts that the conditional's test_span
+  covers multiple lines, but the model's predicate was single-line (and ruff-format would collapse
+  any naive re-wrap back to one line since it fits under 100 chars). Use `# fmt: off` / `# fmt: on`
+  to preserve the genuinely multi-line predicate structure.
+
+Final tier-2: 966 passed, 12 skipped, 0 failed.
+
+### Documentation
+
+- **conditionals**: Update user_funcs + AGENTS + architecture + limitations (Phase 9/10)
+  ([`6d1814e`](https://github.com/johnmarktaylor91/torchlens/commit/6d1814e5c7f716fb3f54e0ed2e0f00c02402c8ff))
+
+### Features
+
+- **conditionals**: 13 consistency invariants for conditional metadata (Phase 6/10)
+  ([`4236c24`](https://github.com/johnmarktaylor91/torchlens/commit/4236c2419570fae084b38c450c9880181db58d8d))
+
+- **conditionals**: Ast_branches module for bool classification + op attribution (Phase 2/10)
+  ([`21eabe8`](https://github.com/johnmarktaylor91/torchlens/commit/21eabe88e53bc8ae833a31ace8251f5744c1c662))
+
+New module torchlens/postprocess/ast_branches.py with public API: - get_file_index(filename) ->
+  Optional[FileIndex] - classify_bool(filename, line, col=None) -> BoolClassification -
+  attribute_op(func_call_stack) -> List[Tuple[ConditionalKey, str]] -
+  invalidate_cache(filename=None)
+
+Internal structures: FileIndex, ScopeEntry, ConditionalRecord (if_chain + ifexp), BoolConsumer
+  index, branch interval trees, mtime-keyed file cache. Elif flattening, IfExp first-class support,
+  (line, col) point lookup, D14 scope resolution with fail-closed ambiguity handling, D18
+  col-degraded mode fail-closed.
+
+Tests: 19 passing unit tests on synthetic source snippets covering all 9 bool-context kinds, wrapper
+  bool_cast nesting, multi-line if-tests, nested ifs, ternary attribution, ternary same-line
+  col=None fail-closed, elif flattening, scope resolution, ambiguous scope fail-closed, cache
+  invalidation.
+
+Quality gates: pytest ast_branches (19/19), smoke (22/22), mypy clean, ruff clean.
+
+No changes to postprocess/control_flow.py (Phase 4) or any other torchlens module.
+
+- **conditionals**: Foundation for if/elif/else attribution (Phase 1/10)
+  ([`ced5a06`](https://github.com/johnmarktaylor91/torchlens/commit/ced5a0675612ee3a443535a706dd3730938b394d))
+
+Add Phase 1 conditional foundation fields across LayerPassLog, LayerLog, ModelLog, and
+  FuncCallLocation. Ungate func_call_stack capture while keeping source text lazily disabled via
+  source_loading_enabled. Add metadata coverage for save_source_context=False, including
+  disabled-source accessors and pickle round-trip.
+
+Assumption: legacy direct FuncCallLocation construction defaults code_firstlineno to line_number
+  when the new field is omitted.
+
+- **conditionals**: Full integration test matrix (Phase 8/10)
+  ([`f97f19d`](https://github.com/johnmarktaylor91/torchlens/commit/f97f19dc4f882b9f7e3b0fbd3df90bd618ab42ac))
+
+Add ~64 new integration tests covering every remaining scenario in plan.md's Test Matrix that was
+  not already covered by Phases 4-7. Two test files: - tests/test_conditional_integration.py (31
+  atomic tests per matrix row) - tests/test_conditional_branches.py (33 cross-cutting tests that
+  combine invariants + rendering + lifecycle checks on the same model)
+
+Categories covered (missing from earlier phases): - Nested branches: NestedIfThenIfModel,
+  NestedInElseModel, MultilinePredicateModel - Branch-entry via non-predicate ancestors, wrapped
+  bool, reconvergence, scope resolution, false positives, compound/negation/walrus, ternary
+  variants, false negatives, lifecycle, save_source_context=False gating.
+
+Also extract _label_for_reference_removal helper in cleanup.py to consolidate the pass_finished
+  label-namespace selection logic (required for consistent behavior across Phase 8 lifecycle tests).
+
+Quality gates: 81+ conditional tests pass, smoke (26/26), tier-2 (929/929), mypy clean, ruff clean.
+
+- **conditionals**: Graphviz rendering with THEN/ELIF/ELSE labels (Phase 7/10)
+  ([`11e408c`](https://github.com/johnmarktaylor91/torchlens/commit/11e408c46f650147c21733dea2818d4fe2ae8e10))
+
+Refactor torchlens/visualization/rendering.py edge-label logic into a precedence function
+  (_compute_edge_label) per plan.md "Label precedence rules": 1. Arm-entry label (highest): THEN /
+  ELIF N / ELSE, composite for multi-arm or mixed-pass rolled edges. 2. IF label (secondary): for
+  condition-chain edges only. 3. Arg labels move from edge_dict["label"] to
+  edge_dict["headlabel"]/xlabel so they do not compete with branch labels.
+
+Covers if/elif/else ladders, ternary (ifexp) THEN/ELSE, multi-arm-entry edges (D13), rolled
+  mixed-pass composite labels (D15 conditional_edge_passes), and branch-entry edge + arg label
+  collision avoidance.
+
+Tests (tests/test_conditional_rendering.py, 5 passing): -
+  test_simple_if_else_graphviz_labels_then_and_else_edges -
+  test_elif_ladder_graphviz_labels_elif_and_else_edges -
+  test_basic_ternary_graphviz_labels_then_and_else_edges -
+  test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate -
+  test_rolled_mixed_arm_graphviz_shows_composite_pass_label
+
+Dagua bridge and ELK remain deferred per user direction.
+
+Quality gates: rendering tests (5/5), mypy clean, ruff clean.
+
+- **conditionals**: Lifecycle wiring for new fields (Phase 3/10)
+  ([`f4c59c1`](https://github.com/johnmarktaylor91/torchlens/commit/f4c59c15da3ce014567944219861eca15a5b6d90))
+
+Modified files: - torchlens/postprocess/labeling.py - torchlens/data_classes/cleanup.py -
+  torchlens/data_classes/interface.py - tests/test_conditional_lifecycle.py
+
+Summary: - rewired Step 11 rename coverage for cond_branch_children_by_cond, conditional_arm_edges,
+  conditional_edge_passes, conditional_events.bool_layers, and the derived elif/else views -
+  scrubbed the same conditional surfaces during label removal, including keep_unsaved_layers=False
+  pruning via the shared batch cleanup path - exported the new conditional lifecycle fields through
+  to_pandas, including a compact conditional_branch_stack string and the missing derived child
+  columns - added Phase 3 integration tests for rename, cleanup, and to_pandas
+
+Assumption: - the spec's reference to _rename_raw_labels_in_place maps to the current Step 11
+  helpers _replace_layer_names_for_layer_entry and _rename_model_history_layer_names in this branch
+
+- **conditionals**: Multi-pass LayerLog aggregation (Phase 5/10)
+  ([`7eb3baa`](https://github.com/johnmarktaylor91/torchlens/commit/7eb3baa34b5170465e745c553271f54ac7ec9e75))
+
+Add ordered multi-pass LayerLog aggregation for conditional branch stacks, stack-to-pass maps, and
+  pass-stripped cond-id child unions. Recompute aggregate LayerLog conditional compatibility views
+  after merge, and rebuild rolled conditional_edge_passes from arm-entry edges with no-pass labels
+  and sorted child-pass lists.\n\nCover the new behavior with dedicated multi-pass tests for
+  alternating recurrent branches, mixed-arm rolled edges, looped alternating branches, and a
+  non-conditional recurrent regression case.
+
+- **conditionals**: Step 5 restructure into 5a-5f with AST-based classification and attribution
+  (Phase 4/10)
+  ([`c04fe8b`](https://github.com/johnmarktaylor91/torchlens/commit/c04fe8b8fd7c6d5a1dff8ebdd968911bed411fe0))
+
+Restructure Step 5 in torchlens/postprocess/control_flow.py into the 5a-5f pipeline while preserving
+  the _mark_conditional_branches entry point: build AST file indexes, classify terminal scalar
+  bools, materialize dense ConditionalEvent records, run the IF backward flood, attribute forward
+  arm-entry edges, and rebuild derived compatibility views.
+
+Add Phase 4 integration coverage in tests/test_conditional_step5.py for simple if/else, elif
+  ladders, assert classification, and save_source_context=False attribution.
+
+Regression surface verified: - pytest tests/ -m smoke -x --tb=short -q - pytest
+  tests/test_conditional_step5.py -x --tb=short - pytest tests/test_toy_models.py -k
+  'conditional_branching or nested_conditional_loop or conditional_vae' -x --tb=short - pytest
+  tests/ -m "not slow" -x --tb=short - mypy torchlens/ - ruff check . --fix
+
+Conservative compatibility choice: preserve the existing in_cond_branch condition-chain semantics
+  for public metadata/tests while treating conditional_branch_stack/conditional_arm_edges as the new
+  primary executed-arm attribution. Also add a narrow decorated-function scope fallback in
+  control_flow.py when attribute_op() fails closed on decorator-line co_firstlineno offsets, without
+  modifying frozen ast_branches.py.
+
+- **conditionals**: Step 5 six-phase restructure + Phase 4 integration tests (Phase 4/10)
+  ([`71f976c`](https://github.com/johnmarktaylor91/torchlens/commit/71f976c89a9ec762f333c8d54e4e901fdb6b7f7b))
+
+Restructure torchlens/postprocess/control_flow.py::_mark_conditional_branches into six sub-phases
+  per plan.md: 5a. Build AST file indexes for files referenced by terminal scalar bools. 5b.
+  Classify terminal bools into branch/non-branch contexts (via ast_branches). 5c. Materialize dense
+  ConditionalEvent records from structural keys (sole key->id step). 5d. Backward-flood IF edges
+  from branch-participating bools only. 5e. Forward branch attribution across every forward edge
+  (D13 multi-entry) + cond-id-aware primary structures (conditional_arm_edges,
+  cond_branch_children_by_cond). 5f. Materialize derived compatibility views (legacy
+  cond_branch_*_children and conditional_*_edges fields).
+
+Integration tests (tests/test_conditional_step5.py): SimpleIfElseModel, ElifLadderModel,
+  AssertNotBranchModel, SaveSourceContextOffStillAttributes. All 4 pass on real models.
+
+Quality gates: step5 tests (4/4), smoke (22/22), mypy clean, ruff clean.
+
+Notes: - Old post-validation (D12) removed; pre-classification obsoletes it. - conditional_events
+  dense IDs assigned deterministically (first-seen order). - Backward compat:
+  conditional_branch_edges, conditional_then_edges, etc. still populated via derived views from
+  primary structures.
+
+### Testing
+
+- Mark test_validation_250k as slow
+  ([`a960cb2`](https://github.com/johnmarktaylor91/torchlens/commit/a960cb27c2bbd36340367f5e0dc20f18c7336f64))
+
+250k-node validation takes too long for Tier 2 runs and was not excluded by `-m "not slow"` despite
+  being marked rare.
+
+- Mark test_validation_50k as rare
+  ([`8070f8e`](https://github.com/johnmarktaylor91/torchlens/commit/8070f8eed80216b0bb07f4c38be94367ce405ce6))
+
+Times out on slower machines even with 600s per-test limit. Validation of 50k-node random graph is
+  too heavy for default runs.
+
+- Skip test_validation_250k unconditionally
+  ([`bd756b2`](https://github.com/johnmarktaylor91/torchlens/commit/bd756b2c679ee19f1f03bf1b0335f298ef91f089))
+
+250k-node validation OOMs or hangs for hours on most machines. Slow/rare markers weren't enough --
+  needs an explicit skip so `pytest tests/` (full run) doesn't block on it. Run manually with
+  --no-skip when needed.
+
+- **conditionals**: Isolate AST cache + linecache per test (Phase 10/10 prep)
+  ([`eb00a71`](https://github.com/johnmarktaylor91/torchlens/commit/eb00a712292fc3a255d1868566dc16f59d050227))
+
+Autouse fixture invalidates torchlens.postprocess.ast_branches file cache and Python linecache at
+  the start of each test in test_conditional_branches.py.
+
+Without this, test ordering dependencies surface in the full tier-2 suite:
+  test_multiline_predicate_model_tracks_multiline_if_event fails when a prior test run populates
+  stale state that the multi-line predicate assertion then reads. Running the file in isolation or
+  with any smaller prefix passes cleanly; the full suite flakes depending on pytest's collection
+  order.
+
+Gates: ruff + mypy clean; smoke 28/28; tier-2 966 passed, 12 skipped, 0 failures (vs 1 failure
+  pre-fixture under same collection order).
+
+
 ## v1.0.2 (2026-04-05)
 
 ### Bug Fixes
