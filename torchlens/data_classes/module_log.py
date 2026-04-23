@@ -24,13 +24,31 @@ This matches each accessor's natural granularity.
 
 import pandas as pd
 import weakref
+from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from .param_log import ParamAccessor
+
+
+def _module_pass_log_to_row(module_pass_log: "ModulePassLog") -> Dict[str, Any]:
+    """Convert a ModulePassLog into one DataFrame row.
+
+    Parameters
+    ----------
+    module_pass_log:
+        Module-pass metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value.
+    """
+    return {field: getattr(module_pass_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
 
 
 class ModulePassLog:
@@ -53,6 +71,8 @@ class ModulePassLog:
         "output_layers": FieldPolicy.KEEP,
         "forward_args": FieldPolicy.BLOB_RECURSIVE,
         "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "forward_args_summary": FieldPolicy.KEEP,
+        "forward_kwargs_summary": FieldPolicy.KEEP,
         "call_parent": FieldPolicy.KEEP,
         "call_children": FieldPolicy.KEEP,
         "all_module_addresses": FieldPolicy.KEEP,
@@ -71,7 +91,7 @@ class ModulePassLog:
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
         all_module_addresses: Optional[List[str]] = None,
-    ):
+    ) -> None:
         self.module_address = module_address
         self.pass_num = pass_num
         self.pass_label = pass_label  # e.g. "features.0:1"
@@ -80,6 +100,8 @@ class ModulePassLog:
         self.output_layers = output_layers
         self.forward_args = forward_args
         self.forward_kwargs = forward_kwargs
+        self.forward_args_summary = ""
+        self.forward_kwargs_summary = ""
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
         self.all_module_addresses = (
@@ -114,6 +136,65 @@ class ModulePassLog:
         """Return the number of layers in this pass."""
         return self.num_layers
 
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this module pass as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            Single-row DataFrame ordered by ``MODULE_PASS_LOG_FIELD_ORDER``.
+        """
+        row = _module_pass_log_to_row(self)
+        return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module-pass row to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module-pass row to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "pyarrow is required for parquet export; install with 'pip install torchlens[io]'."
+            ) from exc
+        self.to_pandas().to_parquet(filepath, index=False, **kwargs)
+
+    def to_json(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module-pass row to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        kwargs.setdefault("orient", "records")
+        self.to_pandas().to_json(filepath, **kwargs)
+
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state annotated with the current I/O format version."""
         state = self.__dict__.copy()
@@ -123,7 +204,14 @@ class ModulePassLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state with version-aware default filling."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(state, defaults={"all_module_addresses": [state["module_address"]]})
+        default_fill_state(
+            state,
+            defaults={
+                "all_module_addresses": [state["module_address"]],
+                "forward_args_summary": "",
+                "forward_kwargs_summary": "",
+            },
+        )
         self.__dict__.update(state)
 
 

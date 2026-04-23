@@ -33,6 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff", "pytest", "pytest-cov", "mypy", "pip-audit", "pre-commit"]
+io = ["pyarrow"]
 test = [
     "lightning",
     "pillow",

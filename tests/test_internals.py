@@ -26,12 +26,13 @@ from torchlens.utils.arg_handling import _safe_copy_arg
 # ---------------------------------------------------------------------------
 
 from torchlens.constants import (
-    MODEL_LOG_FIELD_ORDER,
+    BUFFER_LOG_FIELD_ORDER,
+    FUNC_CALL_LOCATION_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
+    MODEL_LOG_FIELD_ORDER,
     MODULE_LOG_FIELD_ORDER,
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
-    FUNC_CALL_LOCATION_FIELD_ORDER,
 )
 
 
@@ -61,6 +62,7 @@ class TestFieldOrderSync:
             (MODULE_LOG_FIELD_ORDER, "MODULE_LOG_FIELD_ORDER"),
             (MODULE_PASS_LOG_FIELD_ORDER, "MODULE_PASS_LOG_FIELD_ORDER"),
             (PARAM_LOG_FIELD_ORDER, "PARAM_LOG_FIELD_ORDER"),
+            (BUFFER_LOG_FIELD_ORDER, "BUFFER_LOG_FIELD_ORDER"),
             (FUNC_CALL_LOCATION_FIELD_ORDER, "FUNC_CALL_LOCATION_FIELD_ORDER"),
         ],
     )
