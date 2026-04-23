@@ -20,7 +20,7 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
 from os import PathLike
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import pandas as pd
 import torch
@@ -350,19 +350,26 @@ class ParamAccessor:
             import pyarrow  # noqa: F401
         except ImportError as exc:
             raise ImportError(
-                "pyarrow is required for parquet export; install with 'pip install torchlens[io]'."
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, index=False, **kwargs)
+        self.to_pandas().to_parquet(filepath, **kwargs)
 
-    def to_json(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
         """Write the parameter table to JSON.
 
         Parameters
         ----------
         filepath:
             Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
         **kwargs:
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
-        kwargs.setdefault("orient", "records")
-        self.to_pandas().to_json(filepath, **kwargs)
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)

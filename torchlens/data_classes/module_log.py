@@ -25,7 +25,7 @@ This matches each accessor's natural granularity.
 import pandas as pd
 import weakref
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
@@ -178,22 +178,29 @@ class ModulePassLog:
             import pyarrow  # noqa: F401
         except ImportError as exc:
             raise ImportError(
-                "pyarrow is required for parquet export; install with 'pip install torchlens[io]'."
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, index=False, **kwargs)
+        self.to_pandas().to_parquet(filepath, **kwargs)
 
-    def to_json(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
         """Write this module-pass row to JSON.
 
         Parameters
         ----------
         filepath:
             Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
         **kwargs:
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
-        kwargs.setdefault("orient", "records")
-        self.to_pandas().to_json(filepath, **kwargs)
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state annotated with the current I/O format version."""
@@ -565,6 +572,13 @@ class ModuleLog:
         return iter(self._source_model_log[label] for label in self.all_layers)
 
     def to_pandas(self) -> "pd.DataFrame":
+        """Export this module's layers as a pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per layer belonging to this module.
+        """
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot build DataFrame.")
         rows = []
@@ -581,6 +595,61 @@ class ModuleLog:
                 }
             )
         return pd.DataFrame(rows)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module's layer table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module's layer table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write this module's layer table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
 
 class ModuleAccessor:
@@ -669,6 +738,13 @@ class ModuleAccessor:
         return f"ModuleAccessor({len(self)} modules):\n{inner}"
 
     def to_pandas(self) -> "pd.DataFrame":
+        """Export module metadata as a pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per module in address order.
+        """
         rows = []
         for ml in self._list:
             rows.append(
@@ -683,6 +759,61 @@ class ModuleAccessor:
                 }
             )
         return pd.DataFrame(rows)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the module table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the module table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write the module table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
     def summary(self) -> str:
         if len(self) == 0:

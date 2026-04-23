@@ -48,6 +48,9 @@ from .interface import (
     _getitem_during_pass,
     _str_after_pass,
     _str_during_pass,
+    to_csv,
+    to_json,
+    to_parquet,
     to_pandas,
     print_all_fields,
 )
@@ -662,6 +665,9 @@ class ModelLog:
     visualization_field_audit = build_render_audit
     print_all_fields = print_all_fields
     to_pandas = to_pandas
+    to_csv = to_csv
+    to_parquet = to_parquet
+    to_json = to_json
     save_new_activations = save_new_activations
     validate_saved_activations = validate_saved_activations
     validate_forward_pass = validate_saved_activations  # user-facing alias
