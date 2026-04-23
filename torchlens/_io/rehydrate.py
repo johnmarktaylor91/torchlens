@@ -4,19 +4,20 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import torch
 from safetensors.torch import load_file
 
 from . import BlobRef, FieldPolicy, TorchLensIOError
 from .accessor_rebuild import rebuild_model_log_accessors
+from .manifest import Manifest, TensorEntry
 from ..data_classes.model_log import ModelLog
 
 
 def rehydrate_model_log(
     scrubbed_state: dict[str, Any],
-    manifest: dict[str, Any],
+    manifest: Manifest | dict[str, Any],
     bundle_path: str | Path,
     *,
     lazy: bool,
@@ -74,8 +75,13 @@ def rehydrate_model_log(
     return model_log
 
 
-def _build_manifest_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _build_manifest_index(
+    manifest: Manifest | dict[str, Any],
+) -> Mapping[str, dict[str, Any] | TensorEntry]:
     """Index manifest tensor entries by blob id."""
+
+    if isinstance(manifest, Manifest):
+        return {entry.blob_id: entry for entry in manifest.tensors}
 
     tensors = manifest.get("tensors", [])
     if not isinstance(tensors, list):
@@ -92,7 +98,7 @@ def _build_manifest_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]
 def _rehydrate_object(
     value: Any,
     *,
-    manifest_index: dict[str, dict[str, Any]],
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     lazy: bool,
     map_location: str | torch.device,
@@ -231,7 +237,7 @@ def _rehydrate_object(
 def _materialize_recursive_blob_refs(
     value: Any,
     *,
-    manifest_index: dict[str, dict[str, Any]],
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     map_location: str | torch.device,
 ) -> Any:
@@ -307,7 +313,7 @@ def _materialize_recursive_blob_refs(
 
 def _materialize_blob_ref(
     blob_ref: BlobRef,
-    manifest_index: dict[str, dict[str, Any]],
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     map_location: str | torch.device,
 ) -> torch.Tensor:
@@ -316,10 +322,16 @@ def _materialize_blob_ref(
     if blob_ref.blob_id not in manifest_index:
         raise TorchLensIOError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
     entry = manifest_index[blob_ref.blob_id]
-    relative_path = entry.get("relative_path", f"blobs/{blob_ref.blob_id}.safetensors")
+    relative_path = (
+        entry.relative_path
+        if isinstance(entry, TensorEntry)
+        else entry.get("relative_path", f"blobs/{blob_ref.blob_id}.safetensors")
+    )
     blob_path = bundle_path / relative_path
     if not blob_path.exists():
         raise TorchLensIOError(f"Tensor blob not found at {blob_path}.")
+    # TODO(io-s6): replace direct blob materialization with LazyActivationRef
+    # placeholders when lazy=True so activation/gradient loads can be deferred.
     tensor_map = load_file(blob_path, device=_normalize_map_location(map_location))
     if len(tensor_map) != 1:
         raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")

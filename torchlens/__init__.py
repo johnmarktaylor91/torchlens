@@ -20,6 +20,7 @@ from .user_funcs import (
     validate_batch_of_models_and_inputs,
 )
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
+from ._io.bundle import save, load, cleanup_tmp
 
 # ---- Public API: data classes users interact with ------------------------
 
