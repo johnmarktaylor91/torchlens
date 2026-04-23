@@ -42,6 +42,29 @@ from .exemptions import (
 MAX_PERTURB_ATTEMPTS = 100
 
 
+def _raise_if_portable_bundle_log(self: Any) -> None:
+    """Reject validation on portable-loaded model logs.
+
+    Parameters
+    ----------
+    self:
+        Model log being validated.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the log was loaded from a portable bundle.
+    """
+
+    if bool(getattr(self, "_loaded_from_bundle", False)):
+        from .._io import TorchLensIOError
+
+        raise TorchLensIOError(
+            "validate_forward_pass requires live func_applied callables; portable bundles "
+            "drop them. Run validation before saving or use plain pickle instead."
+        )
+
+
 def validate_saved_activations(
     self,
     ground_truth_output_tensors: List[torch.Tensor],
@@ -72,13 +95,7 @@ def validate_saved_activations(
     Returns:
         True if all checks pass, False otherwise.
     """
-    if bool(getattr(self, "_loaded_from_bundle", False)):
-        from .._io import TorchLensIOError
-
-        raise TorchLensIOError(
-            "validate_forward_pass requires live func_applied callables; portable bundles "
-            "drop them. Run validation before saving or use plain pickle instead."
-        )
+    _raise_if_portable_bundle_log(self)
 
     # Phase 0: verify logged outputs match a fresh forward pass (no tolerance).
     for i, output_layer_label in enumerate(self.output_layers):

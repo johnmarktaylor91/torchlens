@@ -218,6 +218,7 @@ class LayerPassLog:
         "module_entry_exit_thread_output": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
         "activation_ref": FieldPolicy.DROP,
+        "gradient_ref": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
         "parent_layer_log": FieldPolicy.DROP,
     }
@@ -408,6 +409,7 @@ class LayerPassLog:
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
         self.activation_ref: Optional["LazyActivationRef"] = None
+        self.gradient_ref: Optional["LazyActivationRef"] = None
         self._pending_blob_id: Optional[str] = None
         self.parent_layer_log: Optional["LayerLog"] = None
 
@@ -546,6 +548,66 @@ class LayerPassLog:
     def source_model_log(self, value):
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
+    def materialize_activation(
+        self,
+        *,
+        map_location: str | torch.device = "cpu",
+    ) -> torch.Tensor:
+        """Materialize this layer's saved activation from a lazy bundle ref.
+
+        Parameters
+        ----------
+        map_location:
+            Target device for the materialized tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Materialized activation tensor.
+
+        Raises
+        ------
+        TorchLensIOError
+            If no activation ref is available for this layer.
+        """
+
+        if isinstance(self.activation, torch.Tensor):
+            return self.activation
+        if self.activation_ref is None:
+            raise TorchLensIOError("no activation_ref to materialize from")
+        self.activation = self.activation_ref.materialize(map_location=map_location)
+        return self.activation
+
+    def materialize_gradient(
+        self,
+        *,
+        map_location: str | torch.device = "cpu",
+    ) -> torch.Tensor:
+        """Materialize this layer's saved gradient from a lazy bundle ref.
+
+        Parameters
+        ----------
+        map_location:
+            Target device for the materialized tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Materialized gradient tensor.
+
+        Raises
+        ------
+        TorchLensIOError
+            If no gradient ref is available for this layer.
+        """
+
+        if isinstance(self.gradient, torch.Tensor):
+            return self.gradient
+        if self.gradient_ref is None:
+            raise TorchLensIOError("no gradient_ref to materialize from")
+        self.gradient = self.gradient_ref.materialize(map_location=map_location)
+        return self.gradient
+
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
@@ -562,6 +624,7 @@ class LayerPassLog:
                 "_source_model_log_ref": None,
                 "parent_layer_log": None,
                 "activation_ref": None,
+                "gradient_ref": None,
                 "_pending_blob_id": None,
             },
         )

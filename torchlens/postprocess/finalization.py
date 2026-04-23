@@ -28,6 +28,7 @@ import torch
 from .._io import BlobRef, TorchLensIOError
 from .._io.accessor_rebuild import rebuild_model_log_accessors
 from .._io.lazy import LazyActivationRef
+from .._io.manifest import sha256_of_file
 from .._io.streaming import BundleStreamWriter
 from ..data_classes._summary import format_call_arg
 from ..data_classes.module_log import ModuleLog, ModulePassLog
@@ -824,6 +825,12 @@ def _finalize_streamed_bundle(self: "ModelLog") -> None:
     final_path = writer.finalize(
         scrubbed_state=scrubbed_state, blob_specs=blob_specs, unsupported=[]
     )
+    setattr(self, "_source_bundle_path", Path(final_path))
+    setattr(
+        self,
+        "_source_bundle_manifest_sha256",
+        sha256_of_file(Path(final_path) / "manifest.json"),
+    )
     _attach_streamed_activation_refs(
         self, scrubbed_state=scrubbed_state, writer=writer, final_path=final_path
     )
@@ -931,6 +938,7 @@ def _attach_streamed_activation_refs(
             dtype=_dtype_from_manifest_string(manifest_entry.dtype),
             device_at_save=manifest_entry.device_at_save,
             source_bundle_path=Path(final_path),
+            relative_path=manifest_entry.relative_path,
             kind="activation",
             expected_sha256=manifest_entry.sha256,
         )

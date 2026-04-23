@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict, defaultdict
+from dataclasses import dataclass
 import os
 import platform
 import pickle
@@ -16,7 +18,8 @@ from typing import Any
 import torch
 from safetensors.torch import load_file, save_file
 
-from . import BlobRef, IO_FORMAT_VERSION, TorchLensIOError
+from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
+from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
 from .rehydrate import rehydrate_model_log
 from .scrub import scrub_for_save
@@ -27,6 +30,28 @@ from ..data_classes.model_log import ModelLog
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
+
+
+@dataclass(frozen=True)
+class _FastCopySpec:
+    """One lazily-backed direct tensor field that can be copied into a new bundle.
+
+    Parameters
+    ----------
+    blob_id:
+        New blob id allocated for the destination bundle.
+    kind:
+        Logical tensor kind recorded in the destination manifest.
+    label:
+        Human-readable label stored alongside the destination manifest entry.
+    source_ref:
+        Lazy source blob reference from the current in-memory ``ModelLog``.
+    """
+
+    blob_id: str
+    kind: str
+    label: str
+    source_ref: LazyActivationRef
 
 
 def save(
@@ -70,6 +95,7 @@ def save(
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
     _validate_activation_postfunc_outputs(model_log, include_activations=include_activations)
+    _raise_for_unmaterialized_nested_blob_refs(model_log)
 
     backup_path: Path | None = None
     tmp_path = _make_tmp_bundle_path(bundle_path)
@@ -91,6 +117,13 @@ def save(
             include_captured_args=include_captured_args,
             include_rng_states=include_rng_states,
         )
+        fast_copy_specs = _attach_fast_copy_specs(
+            model_log,
+            scrubbed_state=scrubbed_state,
+            blob_specs=blob_specs,
+            include_activations=include_activations,
+            include_gradients=include_gradients,
+        )
 
         tensor_entries: list[TensorEntry] = []
         unsupported_tensors: list[dict[str, str]] = []
@@ -111,6 +144,21 @@ def save(
                 )
             unsupported_tensors.append({"label": label, "kind": kind, "reason": decision.text})
             skipped_blob_ids.add(blob_id)
+
+        source_manifest_cache: dict[Path, dict[str, TensorEntry]] = {}
+        for fast_copy_spec in fast_copy_specs:
+            manifest_index = _load_and_verify_fast_copy_source(
+                model_log,
+                fast_copy_spec.source_ref.source_bundle_path,
+                cache=source_manifest_cache,
+            )
+            tensor_entries.append(
+                _fast_copy_tensor_blob(
+                    tmp_path=tmp_path,
+                    fast_copy_spec=fast_copy_spec,
+                    manifest_index=manifest_index,
+                )
+            )
 
         if skipped_blob_ids:
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
@@ -216,6 +264,7 @@ def load(
     )
     setattr(model_log, "_loaded_from_bundle", True)
     setattr(model_log, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
+    setattr(model_log, "_source_bundle_path", bundle_path)
     return model_log
 
 
@@ -291,7 +340,11 @@ def _scrub_model_log_for_bundle(
     """
 
     transient_attrs = {}
-    for attr_name in ("_loaded_from_bundle", "_source_bundle_manifest_sha256"):
+    for attr_name in (
+        "_loaded_from_bundle",
+        "_source_bundle_manifest_sha256",
+        "_source_bundle_path",
+    ):
         if hasattr(model_log, attr_name):
             transient_attrs[attr_name] = getattr(model_log, attr_name)
             delattr(model_log, attr_name)
@@ -353,6 +406,257 @@ def _write_tensor_blob(
         layout=str(contiguous_tensor.layout).replace("torch.", ""),
         bytes=int(contiguous_tensor.numel() * contiguous_tensor.element_size()),
         sha256=sha256_of_file(blob_path),
+    )
+
+
+def _attach_fast_copy_specs(
+    model_log: ModelLog,
+    *,
+    scrubbed_state: dict[str, Any],
+    blob_specs: list[tuple[str, torch.Tensor, str, str]],
+    include_activations: bool,
+    include_gradients: bool,
+) -> list[_FastCopySpec]:
+    """Attach direct-field blob refs for lazily-backed tensors that can be fast-copied.
+
+    Parameters
+    ----------
+    model_log:
+        Live model log being saved.
+    scrubbed_state:
+        Scrubbed metadata state returned by ``scrub_for_save``.
+    blob_specs:
+        Existing eager-write blob specs.
+    include_activations:
+        Whether activation fields should be persisted.
+    include_gradients:
+        Whether gradient fields should be persisted.
+
+    Returns
+    -------
+    list[_FastCopySpec]
+        Lazily-backed direct tensor fields that should be copied from their source
+        bundles into the new bundle.
+    """
+
+    scrubbed_layers = scrubbed_state.get("layer_list")
+    if not isinstance(scrubbed_layers, list):
+        return []
+
+    used_blob_ids = {blob_id for blob_id, _, _, _ in blob_specs}
+    fast_copy_specs: list[_FastCopySpec] = []
+    for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
+        if include_activations:
+            fast_copy_spec = _maybe_make_fast_copy_spec(
+                live_layer=live_layer,
+                scrubbed_layer=scrubbed_layer,
+                tensor_field="activation",
+                ref_field="activation_ref",
+                kind="activation",
+                has_field="has_saved_activations",
+                used_blob_ids=used_blob_ids,
+            )
+            if fast_copy_spec is not None:
+                fast_copy_specs.append(fast_copy_spec)
+        if include_gradients:
+            fast_copy_spec = _maybe_make_fast_copy_spec(
+                live_layer=live_layer,
+                scrubbed_layer=scrubbed_layer,
+                tensor_field="gradient",
+                ref_field="gradient_ref",
+                kind="gradient",
+                has_field="has_gradient",
+                used_blob_ids=used_blob_ids,
+            )
+            if fast_copy_spec is not None:
+                fast_copy_specs.append(fast_copy_spec)
+    return fast_copy_specs
+
+
+def _maybe_make_fast_copy_spec(
+    *,
+    live_layer: Any,
+    scrubbed_layer: Any,
+    tensor_field: str,
+    ref_field: str,
+    kind: str,
+    has_field: str,
+    used_blob_ids: set[str],
+) -> _FastCopySpec | None:
+    """Create one fast-copy spec for a lazily-backed direct tensor field.
+
+    Parameters
+    ----------
+    live_layer:
+        Live ``LayerPassLog`` instance being saved.
+    scrubbed_layer:
+        Scrubbed ``LayerPassLog`` counterpart that will be pickled.
+    tensor_field:
+        Direct tensor field name, for example ``"activation"``.
+    ref_field:
+        Matching lazy-ref field name.
+    kind:
+        Logical manifest tensor kind.
+    has_field:
+        Boolean field indicating whether the tensor is expected to exist.
+    used_blob_ids:
+        Set of blob ids already allocated for the destination bundle.
+
+    Returns
+    -------
+    _FastCopySpec | None
+        Fast-copy spec when the field should be copied from its source bundle,
+        otherwise ``None``.
+    """
+
+    if not bool(getattr(live_layer, has_field, False)):
+        return None
+    if getattr(scrubbed_layer, tensor_field, None) is not None:
+        return None
+    if getattr(live_layer, tensor_field, None) is not None:
+        return None
+
+    source_ref = getattr(live_layer, ref_field, None)
+    if not isinstance(source_ref, LazyActivationRef):
+        return None
+
+    blob_id = _next_bundle_blob_id(used_blob_ids)
+    setattr(scrubbed_layer, tensor_field, BlobRef(blob_id=blob_id, kind=kind))
+    return _FastCopySpec(
+        blob_id=blob_id,
+        kind=kind,
+        label=str(getattr(live_layer, "_streaming_label")),
+        source_ref=source_ref,
+    )
+
+
+def _next_bundle_blob_id(used_blob_ids: set[str]) -> str:
+    """Allocate the next monotonically increasing bundle blob id.
+
+    Parameters
+    ----------
+    used_blob_ids:
+        Set of blob ids already reserved for the destination bundle.
+
+    Returns
+    -------
+    str
+        Newly-allocated zero-padded blob id.
+    """
+
+    next_id = max((int(blob_id) for blob_id in used_blob_ids), default=0) + 1
+    blob_id = f"{next_id:010d}"
+    used_blob_ids.add(blob_id)
+    return blob_id
+
+
+def _load_and_verify_fast_copy_source(
+    model_log: ModelLog,
+    source_bundle_path: Path,
+    *,
+    cache: dict[Path, dict[str, TensorEntry]],
+) -> dict[str, TensorEntry]:
+    """Load and drift-verify one source bundle used for lazy fast-copy.
+
+    Parameters
+    ----------
+    model_log:
+        Model log being resaved.
+    source_bundle_path:
+        Source bundle directory referenced by one lazy tensor ref.
+    cache:
+        Per-save cache keyed by source bundle path.
+
+    Returns
+    -------
+    dict[str, TensorEntry]
+        Source manifest entries indexed by blob id.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the source manifest is missing or has changed since the refs were loaded.
+    """
+
+    if source_bundle_path in cache:
+        return cache[source_bundle_path]
+
+    manifest_path = source_bundle_path / "manifest.json"
+    _reject_symlink_path(manifest_path, context="source manifest")
+    if not manifest_path.exists():
+        raise TorchLensIOError(f"Source bundle manifest not found at {manifest_path}.")
+
+    expected_manifest_sha256 = getattr(model_log, "_source_bundle_manifest_sha256", None)
+    if not isinstance(expected_manifest_sha256, str):
+        raise TorchLensIOError(
+            "source bundle manifest fingerprint is unavailable; materialize refs and retry"
+        )
+    observed_manifest_sha256 = sha256_of_file(manifest_path)
+    if observed_manifest_sha256 != expected_manifest_sha256:
+        raise TorchLensIOError(
+            "source bundle manifest has changed since load; materialize refs and retry"
+        )
+
+    manifest = Manifest.read(manifest_path)
+    manifest_index = {entry.blob_id: entry for entry in manifest.tensors}
+    cache[source_bundle_path] = manifest_index
+    return manifest_index
+
+
+def _fast_copy_tensor_blob(
+    *,
+    tmp_path: Path,
+    fast_copy_spec: _FastCopySpec,
+    manifest_index: dict[str, TensorEntry],
+) -> TensorEntry:
+    """Copy one lazily-backed tensor blob into a new bundle without decoding it.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary destination bundle directory.
+    fast_copy_spec:
+        Fast-copy instruction for the destination field.
+    manifest_index:
+        Source manifest entries indexed by blob id.
+
+    Returns
+    -------
+    TensorEntry
+        Destination manifest entry for the copied blob.
+    """
+
+    source_entry = manifest_index.get(fast_copy_spec.source_ref.blob_id)
+    if source_entry is None:
+        raise TorchLensIOError(f"Manifest is missing blob_id={fast_copy_spec.source_ref.blob_id}.")
+
+    source_blob_path = fast_copy_spec.source_ref.blob_path()
+    _reject_symlink_path(source_blob_path, context="source blob")
+    if not source_blob_path.exists():
+        raise TorchLensIOError(f"Tensor blob not found at {source_blob_path}.")
+
+    observed_sha256 = sha256_of_file(source_blob_path)
+    if observed_sha256 != fast_copy_spec.source_ref.expected_sha256:
+        raise TorchLensIOError(
+            f"blob at {source_blob_path} sha256 mismatch; expected "
+            f"{fast_copy_spec.source_ref.expected_sha256} got {observed_sha256}"
+        )
+
+    relative_path = Path("blobs") / f"{fast_copy_spec.blob_id}.safetensors"
+    destination_blob_path = tmp_path / relative_path
+    shutil.copy2(source_blob_path, destination_blob_path)
+    return TensorEntry(
+        blob_id=fast_copy_spec.blob_id,
+        kind=fast_copy_spec.kind,
+        label=fast_copy_spec.label,
+        relative_path=relative_path.as_posix(),
+        backend=source_entry.backend,
+        shape=list(source_entry.shape),
+        dtype=source_entry.dtype,
+        device_at_save=source_entry.device_at_save,
+        layout=source_entry.layout,
+        bytes=source_entry.bytes,
+        sha256=source_entry.sha256,
     )
 
 
@@ -526,6 +830,109 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
         if field_name == "gradient" and replaced_value is None and hasattr(value, "has_gradient"):
             value.has_gradient = False
     return value
+
+
+def _raise_for_unmaterialized_nested_blob_refs(model_log: ModelLog) -> None:
+    """Reject resave attempts that still contain nested lazy ``BlobRef`` objects.
+
+    Parameters
+    ----------
+    model_log:
+        Model log about to be scrubbed for portable save.
+
+    Raises
+    ------
+    TorchLensIOError
+        If any nested portable blob refs remain in blob-recursive fields.
+    """
+
+    if _contains_nested_blob_refs(model_log, seen=set()):
+        raise TorchLensIOError(
+            "ModelLog contains unmaterialized nested blob references. "
+            "Call torchlens.rehydrate_nested(model_log) before saving."
+        )
+
+
+def _contains_nested_blob_refs(value: Any, *, seen: set[int]) -> bool:
+    """Return whether any blob-recursive field still contains live ``BlobRef`` values.
+
+    Parameters
+    ----------
+    value:
+        Object graph node to inspect.
+    seen:
+        Identity set used to avoid infinite recursion on shared objects.
+
+    Returns
+    -------
+    bool
+        ``True`` when a nested ``BlobRef`` is still present in a blob-recursive field.
+    """
+
+    if isinstance(value, (str, int, float, bool, type(None), torch.dtype, torch.device)):
+        return False
+    if isinstance(value, BlobRef):
+        return False
+    if isinstance(value, list):
+        return any(_contains_nested_blob_refs(item, seen=seen) for item in value)
+    if isinstance(value, tuple):
+        return any(_contains_nested_blob_refs(item, seen=seen) for item in value)
+    if isinstance(value, OrderedDict):
+        return any(_contains_nested_blob_refs(item, seen=seen) for item in value.values())
+    if isinstance(value, defaultdict):
+        return any(_contains_nested_blob_refs(item, seen=seen) for item in value.values())
+    if isinstance(value, dict):
+        return any(_contains_nested_blob_refs(item, seen=seen) for item in value.values())
+    if isinstance(value, set):
+        return any(_contains_nested_blob_refs(item, seen=seen) for item in value)
+
+    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    if spec is None:
+        return False
+
+    obj_id = id(value)
+    if obj_id in seen:
+        return False
+    seen.add(obj_id)
+
+    for field_name, field_value in vars(value).items():
+        policy = spec.get(field_name)
+        if policy == FieldPolicy.BLOB_RECURSIVE and _container_contains_blob_ref(field_value):
+            return True
+        if policy == FieldPolicy.KEEP and _contains_nested_blob_refs(field_value, seen=seen):
+            return True
+    return False
+
+
+def _container_contains_blob_ref(value: Any) -> bool:
+    """Return whether a nested container still contains a ``BlobRef`` leaf.
+
+    Parameters
+    ----------
+    value:
+        Nested container or leaf value to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when any descendant is a ``BlobRef``.
+    """
+
+    if isinstance(value, BlobRef):
+        return True
+    if isinstance(value, list):
+        return any(_container_contains_blob_ref(item) for item in value)
+    if isinstance(value, tuple):
+        return any(_container_contains_blob_ref(item) for item in value)
+    if isinstance(value, OrderedDict):
+        return any(_container_contains_blob_ref(item) for item in value.values())
+    if isinstance(value, defaultdict):
+        return any(_container_contains_blob_ref(item) for item in value.values())
+    if isinstance(value, dict):
+        return any(_container_contains_blob_ref(item) for item in value.values())
+    if isinstance(value, set):
+        return any(_container_contains_blob_ref(item) for item in value)
+    return False
 
 
 def _check_unknown_blob_entries(manifest: Manifest, blobs_path: Path) -> None:

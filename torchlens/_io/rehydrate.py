@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 import torch
 from safetensors.torch import load_file
@@ -12,7 +12,7 @@ from safetensors.torch import load_file
 from . import BlobRef, FieldPolicy, TorchLensIOError
 from .accessor_rebuild import rebuild_model_log_accessors
 from .lazy import LazyActivationRef
-from .manifest import Manifest, TensorEntry
+from .manifest import Manifest, TensorEntry, sha256_of_file
 from ..data_classes.model_log import ModelLog
 
 
@@ -200,14 +200,16 @@ def _rehydrate_object(
         policy = spec[field_name]
         if policy == FieldPolicy.BLOB:
             if isinstance(field_value, BlobRef):
-                if field_name == "activation":
-                    activation_ref = _build_lazy_activation_ref(
+                ref_field_name = _lazy_ref_field_name(field_name)
+                if ref_field_name is not None:
+                    tensor_ref = _build_lazy_tensor_ref(
                         field_value,
                         manifest_index,
                         bundle_path,
+                        kind=field_name,
                     )
-                    if activation_ref is not None:
-                        setattr(value, "activation_ref", activation_ref)
+                    if tensor_ref is not None:
+                        setattr(value, ref_field_name, tensor_ref)
                     if lazy:
                         setattr(value, field_name, None)
                     else:
@@ -342,7 +344,33 @@ def _materialize_blob_ref(
     bundle_path: Path,
     map_location: str | torch.device,
 ) -> torch.Tensor:
-    """Load one tensor blob from disk using safetensors."""
+    """Load one tensor blob from disk using safetensors.
+
+    Parameters
+    ----------
+    blob_ref:
+        Portable blob reference to materialize.
+    manifest_index:
+        Manifest tensor entries indexed by blob id.
+    bundle_path:
+        Root bundle directory containing the blob files.
+    map_location:
+        Target device for decoded tensors.
+
+    Returns
+    -------
+    torch.Tensor
+        Materialized tensor.
+    """
+
+    tensor_ref = _build_lazy_tensor_ref(
+        blob_ref,
+        manifest_index,
+        bundle_path,
+        kind=_lazy_ref_kind(blob_ref.kind),
+    )
+    if tensor_ref is not None:
+        return tensor_ref.materialize(map_location=map_location)
 
     if blob_ref.blob_id not in manifest_index:
         raise TorchLensIOError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
@@ -355,16 +383,23 @@ def _materialize_blob_ref(
     blob_path = bundle_path / relative_path
     if not blob_path.exists():
         raise TorchLensIOError(f"Tensor blob not found at {blob_path}.")
-    tensor_map = load_file(blob_path, device=_normalize_map_location(map_location))
-    if len(tensor_map) != 1:
-        raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
-    return next(iter(tensor_map.values()))
+
+    observed_sha256 = sha256_of_file(blob_path)
+    expected_sha256 = entry.sha256 if isinstance(entry, TensorEntry) else entry.get("sha256")
+    if expected_sha256 is not None and observed_sha256 != expected_sha256:
+        raise TorchLensIOError(
+            f"blob at {blob_path} sha256 mismatch; expected {expected_sha256} got {observed_sha256}"
+        )
+
+    return _load_safetensors_tensor(blob_path, map_location)
 
 
-def _build_lazy_activation_ref(
+def _build_lazy_tensor_ref(
     blob_ref: BlobRef,
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
+    *,
+    kind: Literal["activation", "gradient"],
 ) -> LazyActivationRef | None:
     """Build a ``LazyActivationRef`` from one manifest entry.
 
@@ -376,6 +411,8 @@ def _build_lazy_activation_ref(
         Manifest tensor entries indexed by blob id.
     bundle_path:
         Root bundle directory.
+    kind:
+        Logical tensor kind for the lazy ref.
 
     Returns
     -------
@@ -393,9 +430,50 @@ def _build_lazy_activation_ref(
         dtype=_dtype_from_manifest_string(entry.dtype),
         device_at_save=entry.device_at_save,
         source_bundle_path=bundle_path,
-        kind="activation",
+        relative_path=entry.relative_path,
+        kind=kind,
         expected_sha256=entry.sha256,
     )
+
+
+def _lazy_ref_field_name(field_name: str) -> str | None:
+    """Return the corresponding lazy-ref field for a direct blob field.
+
+    Parameters
+    ----------
+    field_name:
+        Direct blob field name on the owning data class.
+
+    Returns
+    -------
+    str | None
+        Matching lazy-ref field name, or ``None`` when not applicable.
+    """
+
+    if field_name == "activation":
+        return "activation_ref"
+    if field_name == "gradient":
+        return "gradient_ref"
+    return None
+
+
+def _lazy_ref_kind(blob_kind: str) -> Literal["activation", "gradient"]:
+    """Normalize a blob kind into a lazy direct-tensor kind.
+
+    Parameters
+    ----------
+    blob_kind:
+        Blob kind stored in the portable manifest.
+
+    Returns
+    -------
+    str
+        Direct tensor kind expected by ``LazyActivationRef``.
+    """
+
+    if blob_kind == "gradient":
+        return "gradient"
+    return "activation"
 
 
 def _manifest_entry_for_blob_ref(
@@ -471,3 +549,254 @@ def _normalize_map_location(map_location: str | torch.device) -> str:
     """Normalize ``map_location`` to the string form expected by safetensors."""
 
     return str(map_location)
+
+
+def _load_safetensors_tensor(
+    blob_path: Path,
+    map_location: str | torch.device,
+) -> torch.Tensor:
+    """Load a single tensor from one safetensors blob.
+
+    Parameters
+    ----------
+    blob_path:
+        Blob file path to decode.
+    map_location:
+        Target device for the decoded tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Decoded tensor payload.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the blob does not contain exactly one tensor.
+    """
+
+    try:
+        tensor_map = load_file(blob_path, device=_normalize_map_location(map_location))
+    except ImportError as exc:
+        raise TorchLensIOError(
+            "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
+        ) from exc
+    except (OSError, ValueError) as exc:
+        raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+
+    if len(tensor_map) != 1:
+        raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
+    return next(iter(tensor_map.values()))
+
+
+def rehydrate_nested(
+    model_log: ModelLog,
+    *,
+    map_location: str | torch.device = "cpu",
+) -> None:
+    """Materialize nested portable blob refs in place on a loaded ``ModelLog``.
+
+    Parameters
+    ----------
+    model_log:
+        Model log loaded from a portable bundle.
+    map_location:
+        Target device for the materialized tensors.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the source bundle is unavailable or has drifted since load.
+    """
+
+    bundle_path = _source_bundle_path_for_model_log(model_log)
+    manifest_path = bundle_path / "manifest.json"
+    if not manifest_path.exists():
+        raise TorchLensIOError(f"Source bundle manifest not found at {manifest_path}.")
+
+    expected_manifest_sha256 = getattr(model_log, "_source_bundle_manifest_sha256", None)
+    if expected_manifest_sha256 is not None:
+        observed_manifest_sha256 = sha256_of_file(manifest_path)
+        if observed_manifest_sha256 != expected_manifest_sha256:
+            raise TorchLensIOError(
+                "source bundle manifest has changed since load; materialize refs and retry"
+            )
+
+    manifest = Manifest.read(manifest_path)
+    manifest_index = _build_manifest_index(manifest)
+    _rehydrate_nested_object(
+        model_log,
+        manifest_index=manifest_index,
+        bundle_path=bundle_path,
+        map_location=map_location,
+        seen=set(),
+    )
+
+
+def _rehydrate_nested_object(
+    value: Any,
+    *,
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
+    bundle_path: Path,
+    map_location: str | torch.device,
+    seen: set[int],
+) -> Any:
+    """Walk an object graph and materialize only nested ``BlobRef`` fields.
+
+    Parameters
+    ----------
+    value:
+        Object graph node to inspect.
+    manifest_index:
+        Manifest tensor entries indexed by blob id.
+    bundle_path:
+        Root bundle directory containing the blob files.
+    map_location:
+        Target device for decoded tensors.
+    seen:
+        Identity set used to avoid infinite recursion on shared objects.
+
+    Returns
+    -------
+    Any
+        Original value, potentially with nested fields replaced in place.
+    """
+
+    if isinstance(value, (str, int, float, bool, type(None), torch.dtype, torch.device, BlobRef)):
+        return value
+    if isinstance(value, tuple):
+        return tuple(
+            _rehydrate_nested_object(
+                item,
+                manifest_index=manifest_index,
+                bundle_path=bundle_path,
+                map_location=map_location,
+                seen=seen,
+            )
+            for item in value
+        )
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            value[index] = _rehydrate_nested_object(
+                item,
+                manifest_index=manifest_index,
+                bundle_path=bundle_path,
+                map_location=map_location,
+                seen=seen,
+            )
+        return value
+    if isinstance(value, OrderedDict):
+        for key, item in list(value.items()):
+            value[key] = _rehydrate_nested_object(
+                item,
+                manifest_index=manifest_index,
+                bundle_path=bundle_path,
+                map_location=map_location,
+                seen=seen,
+            )
+        return value
+    if isinstance(value, defaultdict):
+        for key, item in list(value.items()):
+            value[key] = _rehydrate_nested_object(
+                item,
+                manifest_index=manifest_index,
+                bundle_path=bundle_path,
+                map_location=map_location,
+                seen=seen,
+            )
+        return value
+    if isinstance(value, dict):
+        for key, item in list(value.items()):
+            value[key] = _rehydrate_nested_object(
+                item,
+                manifest_index=manifest_index,
+                bundle_path=bundle_path,
+                map_location=map_location,
+                seen=seen,
+            )
+        return value
+    if isinstance(value, set):
+        return {
+            _rehydrate_nested_object(
+                item,
+                manifest_index=manifest_index,
+                bundle_path=bundle_path,
+                map_location=map_location,
+                seen=seen,
+            )
+            for item in value
+        }
+
+    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    if spec is None:
+        return value
+
+    obj_id = id(value)
+    if obj_id in seen:
+        return value
+    seen.add(obj_id)
+
+    for field_name, field_value in list(vars(value).items()):
+        if field_name not in spec:
+            continue
+        policy = spec[field_name]
+        if policy == FieldPolicy.BLOB_RECURSIVE:
+            setattr(
+                value,
+                field_name,
+                _materialize_recursive_blob_refs(
+                    field_value,
+                    manifest_index=manifest_index,
+                    bundle_path=bundle_path,
+                    map_location=map_location,
+                ),
+            )
+        elif policy == FieldPolicy.KEEP:
+            setattr(
+                value,
+                field_name,
+                _rehydrate_nested_object(
+                    field_value,
+                    manifest_index=manifest_index,
+                    bundle_path=bundle_path,
+                    map_location=map_location,
+                    seen=seen,
+                ),
+            )
+    return value
+
+
+def _source_bundle_path_for_model_log(model_log: ModelLog) -> Path:
+    """Resolve the source bundle path recorded on a portable-loaded ``ModelLog``.
+
+    Parameters
+    ----------
+    model_log:
+        Model log whose source bundle should be resolved.
+
+    Returns
+    -------
+    Path
+        Source bundle directory.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the model log does not retain a source bundle reference.
+    """
+
+    bundle_path = getattr(model_log, "_source_bundle_path", None)
+    if isinstance(bundle_path, Path):
+        return bundle_path
+
+    for layer in getattr(model_log, "layer_list", []):
+        activation_ref = getattr(layer, "activation_ref", None)
+        if isinstance(activation_ref, LazyActivationRef):
+            return activation_ref.source_bundle_path
+        gradient_ref = getattr(layer, "gradient_ref", None)
+        if isinstance(gradient_ref, LazyActivationRef):
+            return gradient_ref.source_bundle_path
+
+    raise TorchLensIOError(
+        "ModelLog does not retain a source bundle path for nested blob rehydration."
+    )

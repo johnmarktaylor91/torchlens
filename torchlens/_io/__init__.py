@@ -12,6 +12,8 @@ import warnings
 from enum import Enum
 from typing import Any, NamedTuple
 
+import torch
+
 IO_FORMAT_VERSION = 1
 
 
@@ -59,7 +61,7 @@ def read_io_format_version(state: dict[str, Any], *, cls_name: str) -> int:
         is not an integer.
     """
 
-    version = state.get("io_format_version")
+    version = state.pop("io_format_version", None)
     if version is None:
         warnings.warn(
             f"{cls_name} pickle state predates TorchLens portable I/O versioning; "
@@ -95,3 +97,19 @@ def default_fill_state(state: dict[str, Any], *, defaults: dict[str, Any]) -> No
     for field_name, default_value in defaults.items():
         if field_name not in state:
             state[field_name] = copy.deepcopy(default_value)
+
+
+def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu") -> None:
+    """Materialize nested portable blob refs on a loaded model log.
+
+    Parameters
+    ----------
+    model_log:
+        Model log loaded from a portable bundle.
+    map_location:
+        Target device for the materialized nested tensors.
+    """
+
+    from .rehydrate import rehydrate_nested as _rehydrate_nested
+
+    _rehydrate_nested(model_log, map_location=map_location)

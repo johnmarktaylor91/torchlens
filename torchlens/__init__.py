@@ -21,6 +21,7 @@ from .user_funcs import (
 )
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from ._io.bundle import save, load, cleanup_tmp
+from ._io import rehydrate_nested
 
 # ---- Public API: data classes users interact with ------------------------
 
