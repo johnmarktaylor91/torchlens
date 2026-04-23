@@ -11,6 +11,7 @@ from safetensors.torch import load_file
 
 from . import BlobRef, FieldPolicy, TorchLensIOError
 from .accessor_rebuild import rebuild_model_log_accessors
+from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry
 from ..data_classes.model_log import ModelLog
 
@@ -198,12 +199,36 @@ def _rehydrate_object(
             continue
         policy = spec[field_name]
         if policy == FieldPolicy.BLOB:
-            if isinstance(field_value, BlobRef) and not lazy:
-                setattr(
-                    value,
-                    field_name,
-                    _materialize_blob_ref(field_value, manifest_index, bundle_path, map_location),
-                )
+            if isinstance(field_value, BlobRef):
+                if field_name == "activation":
+                    activation_ref = _build_lazy_activation_ref(
+                        field_value,
+                        manifest_index,
+                        bundle_path,
+                    )
+                    if activation_ref is not None:
+                        setattr(value, "activation_ref", activation_ref)
+                    if lazy:
+                        setattr(value, field_name, None)
+                    else:
+                        setattr(
+                            value,
+                            field_name,
+                            _materialize_blob_ref(
+                                field_value,
+                                manifest_index,
+                                bundle_path,
+                                map_location,
+                            ),
+                        )
+                elif not lazy:
+                    setattr(
+                        value,
+                        field_name,
+                        _materialize_blob_ref(
+                            field_value, manifest_index, bundle_path, map_location
+                        ),
+                    )
         elif policy == FieldPolicy.BLOB_RECURSIVE:
             if lazy and not materialize_nested:
                 continue
@@ -330,12 +355,116 @@ def _materialize_blob_ref(
     blob_path = bundle_path / relative_path
     if not blob_path.exists():
         raise TorchLensIOError(f"Tensor blob not found at {blob_path}.")
-    # TODO(io-s6): replace direct blob materialization with LazyActivationRef
-    # placeholders when lazy=True so activation/gradient loads can be deferred.
     tensor_map = load_file(blob_path, device=_normalize_map_location(map_location))
     if len(tensor_map) != 1:
         raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
     return next(iter(tensor_map.values()))
+
+
+def _build_lazy_activation_ref(
+    blob_ref: BlobRef,
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
+    bundle_path: Path,
+) -> LazyActivationRef | None:
+    """Build a ``LazyActivationRef`` from one manifest entry.
+
+    Parameters
+    ----------
+    blob_ref:
+        Activation blob reference from scrubbed metadata.
+    manifest_index:
+        Manifest tensor entries indexed by blob id.
+    bundle_path:
+        Root bundle directory.
+
+    Returns
+    -------
+    LazyActivationRef | None
+        Lazy activation placeholder, or ``None`` when the manifest entry uses the
+        older minimal schema that does not include enough metadata yet.
+    """
+
+    entry = _manifest_entry_for_blob_ref(blob_ref, manifest_index)
+    if entry is None:
+        return None
+    return LazyActivationRef(
+        blob_id=entry.blob_id,
+        shape=tuple(entry.shape),
+        dtype=_dtype_from_manifest_string(entry.dtype),
+        device_at_save=entry.device_at_save,
+        source_bundle_path=bundle_path,
+        kind="activation",
+        expected_sha256=entry.sha256,
+    )
+
+
+def _manifest_entry_for_blob_ref(
+    blob_ref: BlobRef,
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
+) -> TensorEntry | None:
+    """Return the manifest entry corresponding to one ``BlobRef``.
+
+    Parameters
+    ----------
+    blob_ref:
+        Blob reference to resolve.
+    manifest_index:
+        Manifest tensor entries indexed by blob id.
+
+    Returns
+    -------
+    TensorEntry | None
+        Resolved manifest entry, or ``None`` when the manifest only contains the
+        older minimal tensor schema.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the blob id is missing from the manifest.
+    """
+
+    if blob_ref.blob_id not in manifest_index:
+        raise TorchLensIOError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
+    entry = manifest_index[blob_ref.blob_id]
+    if isinstance(entry, TensorEntry):
+        return entry
+    required_fields = {
+        "backend",
+        "shape",
+        "dtype",
+        "device_at_save",
+        "layout",
+        "bytes",
+        "sha256",
+    }
+    if not required_fields.issubset(entry.keys()):
+        return None
+    return TensorEntry.from_dict(entry)
+
+
+def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
+    """Resolve a manifest dtype string into a ``torch.dtype``.
+
+    Parameters
+    ----------
+    dtype_name:
+        Manifest dtype name without the ``torch.`` prefix.
+
+    Returns
+    -------
+    torch.dtype
+        Resolved dtype object.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the dtype string is unknown to the runtime.
+    """
+
+    dtype_obj = getattr(torch, dtype_name, None)
+    if not isinstance(dtype_obj, torch.dtype):
+        raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
+    return dtype_obj
 
 
 def _normalize_map_location(map_location: str | torch.device) -> str:

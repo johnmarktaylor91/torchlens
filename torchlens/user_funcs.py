@@ -19,6 +19,7 @@ two-pass path (save specific layers).
 import collections.abc
 import os
 import random
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -30,6 +31,8 @@ from .utils.introspection import get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
 from .utils.display import warn_parallel, _vprint
 from .utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
+from ._io import TorchLensIOError
+from ._io.streaming import BundleStreamWriter
 from .data_classes.model_log import (
     ModelLog,
 )
@@ -83,6 +86,9 @@ def _run_model_and_save_specified_activations(
     save_source_context: bool = False,
     save_rng_states: bool = False,
     detect_loops: bool = True,
+    save_activations_to: str | Path | None = None,
+    keep_activations_in_memory: bool = True,
+    activation_sink: Callable[[str, torch.Tensor], None] | None = None,
     verbose: bool = False,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
@@ -113,6 +119,11 @@ def _run_model_and_save_specified_activations(
         detect_loops: If True (default), run full isomorphic subgraph expansion to
             detect repeated patterns (loops). If False, only group operations that
             share the same parameters — much faster for very large graphs.
+        save_activations_to: Optional portable bundle directory for streaming activation save.
+        keep_activations_in_memory: Whether streamed activations should remain in memory
+            after finalization.
+        activation_sink: Optional callback invoked with ``(label, tensor)`` for each
+            saved activation.
         verbose: If True, print timed progress messages at each major pipeline stage.
 
     Returns:
@@ -144,9 +155,22 @@ def _run_model_and_save_specified_activations(
         detect_loops,
         verbose,
     )
-    model_log._run_and_log_inputs_through_model(
-        model, input_args, input_kwargs, layers_to_save, random_seed
-    )
+    model_log._activation_sink = activation_sink
+    model_log._keep_activations_in_memory = keep_activations_in_memory
+    model_log._in_exhaustive_pass = True
+    if save_activations_to is not None:
+        model_log._activation_writer = BundleStreamWriter(save_activations_to)
+    try:
+        model_log._run_and_log_inputs_through_model(
+            model, input_args, input_kwargs, layers_to_save, random_seed
+        )
+    except TorchLensIOError:
+        raise
+    except Exception as exc:
+        if model_log._activation_writer is not None:
+            model_log._activation_writer.abort(str(exc))
+            raise TorchLensIOError("Streaming activation save failed during forward pass.") from exc
+        raise
     return model_log
 
 
@@ -184,6 +208,9 @@ def log_forward_pass(
     num_context_lines: int = 7,
     optimizer=None,
     detect_loops: bool = True,
+    save_activations_to: str | Path | None = None,
+    keep_activations_in_memory: bool = True,
+    activation_sink: Callable[[str, torch.Tensor], None] | None = None,
     unwrap_when_done: bool = False,
     verbose: bool = False,
 ) -> ModelLog:
@@ -263,6 +290,11 @@ def log_forward_pass(
         num_context_lines: Lines of source context to capture per function call.
         optimizer: Optional optimizer to annotate which params are being optimized.
         detect_loops: If True (default), run full isomorphic subgraph expansion.
+        save_activations_to: Optional portable bundle directory for streaming activation save.
+        keep_activations_in_memory: Whether streamed activations should remain in memory
+            after finalization.
+        activation_sink: Optional callback invoked with ``(label, tensor)`` for each
+            saved activation.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False — torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
@@ -279,6 +311,8 @@ def log_forward_pass(
 
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
+    if save_activations_to is not None and activation_sink is not None:
+        raise ValueError("save_activations_to and activation_sink are mutually exclusive.")
 
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
@@ -304,6 +338,9 @@ def log_forward_pass(
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
             detect_loops=detect_loops,
+            save_activations_to=save_activations_to,
+            keep_activations_in_memory=keep_activations_in_memory,
+            activation_sink=activation_sink,
             verbose=verbose,
         )
     else:
@@ -331,6 +368,9 @@ def log_forward_pass(
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
             detect_loops=detect_loops,
+            save_activations_to=save_activations_to,
+            keep_activations_in_memory=keep_activations_in_memory,
+            activation_sink=activation_sink,
             verbose=verbose,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested

@@ -84,6 +84,7 @@ def save_new_activations(
     """
     # Switch to fast mode: reuse graph structure, only capture new activations.
     self.logging_mode = "fast"
+    self._in_exhaustive_pass = False
 
     # Clear all existing activations from the previous pass.
     for layer_log_entry in self:

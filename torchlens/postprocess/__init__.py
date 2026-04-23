@@ -1,7 +1,7 @@
 """Postprocessing pipeline for cleaning up the model log after the forward pass.
 
 After the forward pass captures raw tensor metadata into a ModelLog, this pipeline
-transforms the raw graph into its user-facing form. The full pipeline has 18 steps,
+transforms the raw graph into its user-facing form. The full pipeline has 20 steps,
 split into thematic submodules:
 
 - graph_traversal (Steps 1-4): Add output nodes, trace ancestry, remove orphans,
@@ -12,8 +12,9 @@ split into thematic submodules:
   same-layer groupings via BFS isomorphic subgraph expansion.
 - labeling (Steps 9-12): Generate final human-readable labels, rename all internal
   references, trim/reorder fields, build lookup keys.
-- finalization (Steps 13-18): Undecorate saved tensors, log timing, finalize
-  ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished.
+- finalization (Steps 13-20): Undecorate saved tensors, log timing, finalize
+  ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished, then
+  finalize any streamed bundle and optionally evict in-memory activations.
 
 Step ordering invariants:
 - Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
@@ -47,6 +48,8 @@ from .control_flow import (
 from .finalization import (
     _build_layer_logs,
     _build_module_logs,
+    _evict_streamed_activations,
+    _finalize_streamed_bundle,
     _finalize_param_logs,
     _log_time_elapsed,
     _set_pass_finished,
@@ -193,6 +196,15 @@ def postprocess(
     with _vtimed(self, "  Step 18: Mark pass finished"):
         _set_pass_finished(self)
 
+    should_finalize_streaming = self._activation_writer is not None
+    if should_finalize_streaming:
+        with _vtimed(self, "  Step 19: Finalize streamed bundle"):
+            _finalize_streamed_bundle(self)
+
+    if should_finalize_streaming and not self._keep_activations_in_memory:
+        with _vtimed(self, "  Step 20: Evict streamed activations"):
+            _evict_streamed_activations(self)
+
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
 
@@ -245,3 +257,9 @@ def postprocess_fast(self: "ModelLog") -> None:
     # doesn't change between passes and _module_build_data isn't repopulated
     # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
     _set_pass_finished(self)
+
+    should_finalize_streaming = self._activation_writer is not None
+    if should_finalize_streaming:
+        _finalize_streamed_bundle(self)
+    if should_finalize_streaming and not self._keep_activations_in_memory:
+        _evict_streamed_activations(self)

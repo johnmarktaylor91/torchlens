@@ -35,7 +35,10 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
+import torch
+
 if TYPE_CHECKING:
+    from .._io.streaming import BundleStreamWriter
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
 
@@ -213,6 +216,10 @@ class ModelLog:
         "_module_forward_args": FieldPolicy.DROP,
         "_param_logs_by_module": FieldPolicy.DROP,
         "_pre_forward_rng_states": FieldPolicy.DROP,
+        "_activation_writer": FieldPolicy.DROP,
+        "_keep_activations_in_memory": FieldPolicy.DROP,
+        "_activation_sink": FieldPolicy.DROP,
+        "_in_exhaustive_pass": FieldPolicy.DROP,
         "pass_start_time": FieldPolicy.KEEP,
         "pass_end_time": FieldPolicy.KEEP,
         "time_setup": FieldPolicy.KEEP,
@@ -292,6 +299,10 @@ class ModelLog:
         self.verbose = verbose
         self.has_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
+        self._activation_writer: Optional["BundleStreamWriter"] = None
+        self._keep_activations_in_memory: bool = True
+        self._activation_sink: Optional[Callable[[str, torch.Tensor], None]] = None
+        self._in_exhaustive_pass: bool = True
 
         # Model structure info (computed @properties: is_recurrent,
         # max_recurrent_loops, is_branching, has_conditional_branching)
@@ -498,6 +509,10 @@ class ModelLog:
                 "_buffer_accessor": None,
                 "_module_logs": None,
                 "_module_build_data": None,
+                "_activation_writer": None,
+                "_keep_activations_in_memory": True,
+                "_activation_sink": None,
+                "_in_exhaustive_pass": False,
             },
         )
         self.__dict__.update(state)

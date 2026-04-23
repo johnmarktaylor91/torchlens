@@ -39,7 +39,13 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Un
 
 import torch
 
-from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from .._io import (
+    FieldPolicy,
+    IO_FORMAT_VERSION,
+    TorchLensIOError,
+    default_fill_state,
+    read_io_format_version,
+)
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
@@ -60,6 +66,7 @@ def _recursive_safe_copy(val):
 
 
 if TYPE_CHECKING:
+    from .._io.lazy import LazyActivationRef
     from .func_call_location import FuncCallLocation
     from .layer_log import LayerLog
     from .param_log import ParamLog
@@ -210,6 +217,8 @@ class LayerPassLog:
         "module_entry_exit_threads_inputs": FieldPolicy.KEEP,
         "module_entry_exit_thread_output": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
+        "activation_ref": FieldPolicy.DROP,
+        "_pending_blob_id": FieldPolicy.DROP,
         "parent_layer_log": FieldPolicy.DROP,
     }
 
@@ -398,6 +407,8 @@ class LayerPassLog:
         # this layer.  Set during postprocessing by _build_layer_logs — NOT
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
+        self.activation_ref: Optional["LazyActivationRef"] = None
+        self._pending_blob_id: Optional[str] = None
         self.parent_layer_log: Optional["LayerLog"] = None
 
     @property
@@ -501,6 +512,26 @@ class LayerPassLog:
         return human_readable_size(self.params_memory)
 
     @property
+    def _streaming_label(self) -> str:
+        """Best available label for sink/writer callbacks during or after postprocess.
+
+        Returns
+        -------
+        str
+            Pass-qualified label when available, otherwise the current layer label.
+        """
+
+        for candidate in (
+            self.layer_label_w_pass,
+            self.layer_label,
+            self.layer_label_raw,
+            self.tensor_label_raw,
+        ):
+            if candidate is not None:
+                return str(candidate)
+        return "<unknown>"
+
+    @property
     def source_model_log(self) -> "ModelLog":
         """Back-reference to the owning ModelLog (stored as weakref)."""
         ref = self.__dict__.get("_source_model_log_ref")
@@ -527,7 +558,12 @@ class LayerPassLog:
         read_io_format_version(state, cls_name=type(self).__name__)
         default_fill_state(
             state,
-            defaults={"_source_model_log_ref": None, "parent_layer_log": None},
+            defaults={
+                "_source_model_log_ref": None,
+                "parent_layer_log": None,
+                "activation_ref": None,
+                "_pending_blob_id": None,
+            },
         )
         self.__dict__.update(state)
 
@@ -593,7 +629,7 @@ class LayerPassLog:
         t_kwargs: Dict,
         save_function_args: bool,
         activation_postfunc: Optional[Callable] = None,
-    ):
+    ) -> None:
         """Save the output tensor (and optionally args) for this operation.
 
         Flow:
@@ -612,18 +648,43 @@ class LayerPassLog:
             activation_postfunc: Optional transform applied to the tensor
                 before storing (e.g. detach, to-numpy, normalize).
         """
-        # Clone the tensor, optionally detaching from autograd graph.
-        self.activation = safe_copy(t, self.detach_saved_tensor)
-        # Move to the user-requested output device if needed.
-        if self.output_device not in [str(self.activation.device), "same"]:
-            self.activation = safe_to(self.activation, self.output_device)
-        # Apply user's postfunc with logging paused so postfunc's own ops
-        # (e.g. .mean(), .float()) don't get logged as model operations.
-        if activation_postfunc is not None:
-            with pause_logging():
-                self.activation = activation_postfunc(self.activation)
+        model_log = self.source_model_log
+        writer = getattr(model_log, "_activation_writer", None) if model_log is not None else None
+        try:
+            # Clone the tensor, optionally detaching from autograd graph.
+            self.activation = safe_copy(t, self.detach_saved_tensor)
+            # Move to the user-requested output device if needed.
+            if self.output_device not in [str(self.activation.device), "same"]:
+                self.activation = safe_to(self.activation, self.output_device)
+            # Apply user's postfunc with logging paused so postfunc's own ops
+            # (e.g. .mean(), .float()) don't get logged as model operations.
+            if activation_postfunc is not None:
+                with pause_logging():
+                    self.activation = activation_postfunc(self.activation)
+        except Exception as exc:
+            if writer is not None:
+                writer.abort(f"Failed while saving activation for {self._streaming_label}: {exc}")
+                raise TorchLensIOError(
+                    f"Streaming activation save failed for {self._streaming_label}."
+                ) from exc
+            raise
 
         self.has_saved_activations = True
+
+        if model_log is not None:
+            activation_sink = getattr(model_log, "_activation_sink", None)
+            if activation_sink is not None and isinstance(self.activation, torch.Tensor):
+                activation_sink(self._streaming_label, self.activation)
+
+            if writer is not None and getattr(model_log, "_in_exhaustive_pass", False):
+                blob_id = writer.next_blob_id()
+                self._pending_blob_id = blob_id
+                writer.write_blob(
+                    blob_id,
+                    self.activation,
+                    kind="activation",
+                    label=self._streaming_label,
+                )
 
         # Tensor args and kwargs:
         if save_function_args:
