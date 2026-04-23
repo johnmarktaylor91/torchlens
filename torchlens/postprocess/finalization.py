@@ -25,6 +25,7 @@ from typing import Dict, List, NamedTuple, Optional, TYPE_CHECKING, Tuple
 import torch
 
 from ..data_classes.buffer_log import BufferAccessor
+from ..data_classes._summary import format_call_arg
 from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from ..utils.introspection import get_vars_of_type_from_obj
 
@@ -691,6 +692,8 @@ def _build_module_logs(self: "ModelLog") -> None:
     # GC-11: Clear forward_args/kwargs from ModulePassLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
     for pass_log in pass_dict.values():
+        pass_log.forward_args_summary = format_call_arg(pass_log.forward_args)
+        pass_log.forward_kwargs_summary = format_call_arg(pass_log.forward_kwargs)
         pass_log.forward_args = None
         pass_log.forward_kwargs = None
 

@@ -13,10 +13,30 @@ can access these fields via ``__getattr__`` delegation.
 """
 
 import weakref
-from typing import Dict, List, Optional, Union
+from os import PathLike
+from typing import Any, Dict, List, Optional, Union
 
-from .layer_pass_log import LayerPassLog
+import pandas as pd
+
+from ..constants import BUFFER_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+from .layer_pass_log import LayerPassLog
+
+
+def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
+    """Convert a BufferLog into one DataFrame row.
+
+    Parameters
+    ----------
+    buffer_log:
+        Buffer metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value.
+    """
+    return {field: getattr(buffer_log, field) for field in BUFFER_LOG_FIELD_ORDER}
 
 
 class BufferLog(LayerPassLog):
@@ -130,3 +150,62 @@ class BufferAccessor:
             items.append(f"'{bl.buffer_address}': BufferLog {shape_str} {dtype_str}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export buffer metadata as a pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per buffer, ordered by ``BUFFER_LOG_FIELD_ORDER``.
+        """
+        rows = [_buffer_log_to_row(buffer_log) for buffer_log in self._list]
+        return pd.DataFrame(rows, columns=BUFFER_LOG_FIELD_ORDER)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the buffer table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the buffer table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "pyarrow is required for parquet export; install with 'pip install torchlens[io]'."
+            ) from exc
+        self.to_pandas().to_parquet(filepath, index=False, **kwargs)
+
+    def to_json(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the buffer table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        kwargs.setdefault("orient", "records")
+        self.to_pandas().to_json(filepath, **kwargs)
