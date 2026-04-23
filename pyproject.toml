@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "torchlens"
 version = "1.1.0"
-description = "A package for extracting activations from PyTorch models"
+description = "A package for extracting activations from PyTorch models and saving portable bundles"
 readme = "README.md"
 license = "GPL-3.0-only"
 requires-python = ">=3.9"
 authors = [
     {name = "JohnMark Taylor", email = "johnmarkedwardtaylor@gmail.com"},
 ]
-keywords = ["torch", "torchlens", "features"]
+keywords = ["torch", "torchlens", "activations", "features", "io"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -97,7 +97,7 @@ python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
-# Lenient for now — tighten as annotations improve
+# Lenient for now - tighten as annotations improve
 check_untyped_defs = false
 disallow_untyped_defs = false
 

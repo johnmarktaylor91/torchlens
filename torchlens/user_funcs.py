@@ -1,15 +1,15 @@
 """Public API entry points for TorchLens.
 
 This module contains every user-facing function:
-  - ``log_forward_pass``  — the main entry point (runs model, returns ModelLog)
-  - ``validate_forward_pass`` — replay-based correctness check
-  - ``show_model_graph`` — visualization convenience wrapper
-  - ``get_model_metadata`` — metadata-only convenience wrapper (deprecated path)
-  - ``validate_batch_of_models_and_inputs`` — bulk validation harness
+  - ``log_forward_pass``  - the main entry point (runs model, returns ModelLog)
+  - ``validate_forward_pass`` - replay-based correctness check
+  - ``show_model_graph`` - visualization convenience wrapper
+  - ``get_model_metadata`` - metadata-only convenience wrapper (deprecated path)
+  - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Two-pass strategy** (``log_forward_pass`` with selective layers):
 When the user requests specific layers (not "all" or "none"), TorchLens must
-first run an exhaustive pass to discover the full graph structure — only then can
+first run an exhaustive pass to discover the full graph structure - only then can
 it resolve user-friendly layer names/indices to internal layer numbers.  A second
 fast pass replays the model, saving only the requested activations.  This is why
 ``log_forward_pass`` has two branches: the simple path (save all/none) and the
@@ -108,17 +108,17 @@ def _run_model_and_save_specified_activations(
         activation_postfunc: Optional transform applied to each activation before storage
             (e.g., channel-wise averaging to reduce memory).
         mark_input_output_distances: Compute BFS distances from input/output layers.
-            Expensive for large graphs — off by default.
+            Expensive for large graphs - off by default.
         detach_saved_tensors: If True, saved tensors are detached from the autograd graph.
         save_function_args: If True, store the non-tensor arguments to each function call.
             Required for validation replay (``validate_saved_activations``).
         save_gradients: If True, register backward hooks to capture gradients.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
-        optimizer: Optional optimizer — used to tag which parameters have optimizers attached.
+        optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         detect_loops: If True (default), run full isomorphic subgraph expansion to
             detect repeated patterns (loops). If False, only group operations that
-            share the same parameters — much faster for very large graphs.
+            share the same parameters - much faster for very large graphs.
         save_activations_to: Optional portable bundle directory for streaming activation save.
         keep_activations_in_memory: Whether streamed activations should remain in memory
             after finalization.
@@ -227,8 +227,8 @@ def log_forward_pass(
 
     **Layer selection** (``layers_to_save``):
 
-    - ``'all'`` (default) — save activations for every layer.
-    - ``'none'`` / ``None`` / ``[]`` — save no activations (metadata only).
+    - ``'all'`` (default) - save activations for every layer.
+    - ``'none'`` / ``None`` / ``[]`` - save no activations (metadata only).
     - A list containing any mix of:
       1. Layer name, e.g. ``'conv2d_1_1'`` (all passes).
       2. Pass-qualified label, e.g. ``'conv2d_1_1:2'`` (second pass only).
@@ -290,19 +290,28 @@ def log_forward_pass(
         num_context_lines: Lines of source context to capture per function call.
         optimizer: Optional optimizer to annotate which params are being optimized.
         detect_loops: If True (default), run full isomorphic subgraph expansion.
-        save_activations_to: Optional portable bundle directory for streaming activation save.
-        keep_activations_in_memory: Whether streamed activations should remain in memory
-            after finalization.
+        save_activations_to: Optional portable bundle directory for streaming activation
+            save. When set, TorchLens writes each saved activation to disk during the
+            forward pass and finalizes a directory bundle at the end. Streaming is
+            always strict, requires ``safetensors``, and is mutually exclusive with
+            ``activation_sink``.
+        keep_activations_in_memory: Only applies when ``save_activations_to`` is set.
+            If True (default), the returned log keeps the in-memory tensors and also
+            attaches ``activation_ref`` handles to the finalized bundle. If False,
+            activations are evicted after finalization and must be materialized back
+            from disk on demand.
         activation_sink: Optional callback invoked with ``(label, tensor)`` for each
-            saved activation.
+            saved activation instead of writing a portable bundle. This is useful for
+            custom streaming consumers and cannot be combined with
+            ``save_activations_to``.
         unwrap_when_done: If True, restore original torch callables after logging.
-            Default False — torch stays wrapped for subsequent calls.
+            Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
 
     Returns:
         A ``ModelLog`` containing layer activations (if requested) and full metadata.
     """
-    # DataParallel is not supported — unwrap and warn if present.
+    # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     model = _unwrap_data_parallel(model)
 
@@ -347,7 +356,7 @@ def log_forward_pass(
         # --- TWO-PASS path ---
         # Pass 1 (exhaustive): Run with layers_to_save=None and keep_unsaved_layers=True
         # so the full graph is discovered and all layer labels are assigned.  No
-        # activations are saved yet — this pass is purely for metadata/structure.
+        # activations are saved yet - this pass is purely for metadata/structure.
         if verbose:
             print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
         model_log = _run_model_and_save_specified_activations(
@@ -430,7 +439,7 @@ def get_model_metadata(
     """Return model metadata without saving any activations.
 
     Equivalent to ``log_forward_pass(model, input_args, input_kwargs, layers_to_save=None,
-    mark_input_output_distances=True)``.  Prefer using ``log_forward_pass`` directly —
+    mark_input_output_distances=True)``.  Prefer using ``log_forward_pass`` directly -
     this wrapper exists for backward compatibility and may be removed in a future release.
 
     Args:
@@ -625,7 +634,7 @@ def validate_forward_pass(
     model.load_state_dict(state_dict)
 
     # Step 2: Run the model *through* TorchLens, saving all activations.
-    # save_function_args=True is essential — the replay needs each function's
+    # save_function_args=True is essential - the replay needs each function's
     # non-tensor arguments to re-execute the computation from saved activations.
     model_log = _run_model_and_save_specified_activations(
         model=model,

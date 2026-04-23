@@ -1,4 +1,12 @@
-"""Streaming bundle writer used during forward-pass activation capture."""
+"""Streaming bundle writer used during forward-pass activation capture.
+
+This module implements the strict streaming writer behind
+``log_forward_pass(save_activations_to=...)``. It writes one safetensors blob
+per saved activation into a temporary bundle during the forward pass, then
+finalizes ``manifest.json`` and ``metadata.pkl`` at postprocess time so the
+returned log can stay memory-backed or disk-backed with the same on-disk
+bundle.
+"""
 
 from __future__ import annotations
 

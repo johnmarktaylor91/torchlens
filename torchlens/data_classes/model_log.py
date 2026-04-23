@@ -7,7 +7,7 @@ bookkeeping.
 
 Key design patterns:
 
-* **_pass_finished behavioural switch** — Many methods (``__len__``, ``__getitem__``,
+* **_pass_finished behavioural switch** - Many methods (``__len__``, ``__getitem__``,
   ``__str__``, ``__iter__``) behave differently during logging vs after
   postprocessing.  While logging is active (``_pass_finished=False``), the
   model's tensors are keyed by their raw internal barcodes in
@@ -17,13 +17,13 @@ Key design patterns:
   persists across the fast pass on purpose: fast-path postprocessing
   relies on the fully-populated lookup dicts from the exhaustive pass.
 
-* **Method importation** — Several heavy methods (``render_graph``,
+* **Method importation** - Several heavy methods (``render_graph``,
   ``save_new_activations``, ``validate_saved_activations``, etc.) are
   defined in other modules and bound to ModelLog as class attributes at
   the bottom of this file.  This keeps the class body small while giving
   users ``model_log.render_graph(...)`` syntax.
 
-* **_module_build_data** — A transient dict that accumulates module hierarchy
+* **_module_build_data** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
   (postprocessing step 17) and then cleared.  Initialised via
   ``_init_module_build_data()``.
@@ -264,7 +264,7 @@ class ModelLog:
                 have optimizers attached.
             verbose: If True, print timed progress messages at each major pipeline stage.
         """
-        # Callables are effectively immutable — deepcopy is unnecessary.
+        # Callables are effectively immutable - deepcopy is unnecessary.
 
         # General info
         self.model_name = model_name
@@ -307,7 +307,7 @@ class ModelLog:
         # Model structure info (computed @properties: is_recurrent,
         # max_recurrent_loops, is_branching, has_conditional_branching)
 
-        # Tensor Tracking — post-processed (populated after _pass_finished=True):
+        # Tensor Tracking - post-processed (populated after _pass_finished=True):
         self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
         self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()  # primary label -> entry
         self.layer_dict_all_keys: Dict[str, LayerPassLog] = (
@@ -318,7 +318,7 @@ class ModelLog:
         self.layer_labels_w_pass: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels_no_pass: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self.layer_num_passes: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
-        # Tensor Tracking — raw (populated during the forward pass, before postprocessing):
+        # Tensor Tracking - raw (populated during the forward pass, before postprocessing):
         self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()  # raw barcode -> entry
         self._raw_layer_labels_list: List[str] = []
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
@@ -379,7 +379,7 @@ class ModelLog:
 
         # Session-scoped per-module tracking dicts (keyed by id(module)).
         # These replace the old tl_* attrs that were set directly on nn.Module
-        # instances. Lives on ModelLog so they're GC'd with the log — no cleanup
+        # instances. Lives on ModelLog so they're GC'd with the log - no cleanup
         # iteration over modules needed.
         self._mod_pass_num: Dict[int, int] = {}  # id(module) -> pass count
         self._mod_pass_labels: Dict[int, list] = {}  # id(module) -> [(addr, pass_num), ...]
@@ -449,15 +449,7 @@ class ModelLog:
             return iter(list(self._raw_layer_dict.values()))
 
     def save(self, path: str | Path, **kwargs: Any) -> None:
-        """Persist this log via ``torchlens.save``.
-
-        Parameters
-        ----------
-        path:
-            Output bundle directory path.
-        **kwargs:
-            Keyword arguments forwarded to ``torchlens.save``.
-        """
+        """Call :func:`torchlens.save` for this model log."""
 
         from .._io.bundle import save as save_bundle
 
@@ -465,20 +457,7 @@ class ModelLog:
 
     @classmethod
     def load(cls, path: str | Path, **kwargs: Any) -> "ModelLog":
-        """Load a portable bundle via ``torchlens.load``.
-
-        Parameters
-        ----------
-        path:
-            Input bundle directory path.
-        **kwargs:
-            Keyword arguments forwarded to ``torchlens.load``.
-
-        Returns
-        -------
-        ModelLog
-            Loaded model log.
-        """
+        """Call :func:`torchlens.load` and return the loaded model log."""
 
         from .._io.bundle import load as load_bundle
 

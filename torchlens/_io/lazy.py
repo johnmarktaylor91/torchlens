@@ -1,4 +1,10 @@
-"""Lazy activation reference placeholders for portable TorchLens bundles."""
+"""Lazy activation reference placeholders for portable TorchLens bundles.
+
+This module defines the lightweight references attached to lazy-loaded
+activations and gradients. Each ref stores the bundle path, tensor metadata,
+and expected checksum so materialization can open a blob file on demand,
+verify integrity, return a tensor, and close the file immediately.
+"""
 
 from __future__ import annotations
 
