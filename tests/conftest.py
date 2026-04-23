@@ -1,10 +1,15 @@
 import os
+import sys
 from os.path import join as opj
 
 import pytest
 import torch
 
-from torchlens import _state
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from torchlens import _state  # noqa: E402
 
 # Deterministic seeding
 torch.manual_seed(0)

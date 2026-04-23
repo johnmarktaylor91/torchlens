@@ -22,15 +22,33 @@ ModuleLog vs ModulePassLog label convention:
 This matches each accessor's natural granularity.
 """
 
-import weakref
-from typing import Dict, List, Optional, Tuple, Union, TYPE_CHECKING
-
-from ..utils.display import human_readable_size
-
 import pandas as pd
+import weakref
+from os import PathLike
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
+
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from ..constants import MODULE_PASS_LOG_FIELD_ORDER
+from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from .param_log import ParamAccessor
+
+
+def _module_pass_log_to_row(module_pass_log: "ModulePassLog") -> Dict[str, Any]:
+    """Convert a ModulePassLog into one DataFrame row.
+
+    Parameters
+    ----------
+    module_pass_log:
+        Module-pass metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value.
+    """
+    return {field: getattr(module_pass_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
 
 
 class ModulePassLog:
@@ -43,6 +61,22 @@ class ModulePassLog:
     ``layers`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
     that resolve to individual LayerPassLog entries.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "module_address": FieldPolicy.KEEP,
+        "pass_num": FieldPolicy.KEEP,
+        "pass_label": FieldPolicy.KEEP,
+        "layers": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "forward_args": FieldPolicy.BLOB_RECURSIVE,
+        "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "forward_args_summary": FieldPolicy.KEEP,
+        "forward_kwargs_summary": FieldPolicy.KEEP,
+        "call_parent": FieldPolicy.KEEP,
+        "call_children": FieldPolicy.KEEP,
+        "all_module_addresses": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,
@@ -57,7 +91,7 @@ class ModulePassLog:
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
         all_module_addresses: Optional[List[str]] = None,
-    ):
+    ) -> None:
         self.module_address = module_address
         self.pass_num = pass_num
         self.pass_label = pass_label  # e.g. "features.0:1"
@@ -66,6 +100,8 @@ class ModulePassLog:
         self.output_layers = output_layers
         self.forward_args = forward_args
         self.forward_kwargs = forward_kwargs
+        self.forward_args_summary = ""
+        self.forward_kwargs_summary = ""
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
         self.all_module_addresses = (
@@ -100,6 +136,91 @@ class ModulePassLog:
         """Return the number of layers in this pass."""
         return self.num_layers
 
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this module pass as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            Single-row DataFrame ordered by ``MODULE_PASS_LOG_FIELD_ORDER``.
+        """
+        row = _module_pass_log_to_row(self)
+        return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module-pass row to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module-pass row to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write this module-pass row to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state annotated with the current I/O format version."""
+        state = self.__dict__.copy()
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state with version-aware default filling."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={
+                "all_module_addresses": [state["module_address"]],
+                "forward_args_summary": "",
+                "forward_kwargs_summary": "",
+            },
+        )
+        self.__dict__.update(state)
+
 
 class ModuleLog:
     """Aggregate metadata for one nn.Module across all its invocations.
@@ -116,6 +237,44 @@ class ModuleLog:
     ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
     directly via ``_single_pass_or_error()`` delegation to ``passes[1]``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "address": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
+        "module_class_name": FieldPolicy.KEEP,
+        "source_file": FieldPolicy.KEEP,
+        "source_line": FieldPolicy.KEEP,
+        "class_docstring": FieldPolicy.KEEP,
+        "init_signature": FieldPolicy.KEEP,
+        "init_docstring": FieldPolicy.KEEP,
+        "forward_signature": FieldPolicy.KEEP,
+        "forward_docstring": FieldPolicy.KEEP,
+        "address_parent": FieldPolicy.KEEP,
+        "address_children": FieldPolicy.KEEP,
+        "address_depth": FieldPolicy.KEEP,
+        "call_parent": FieldPolicy.KEEP,
+        "call_children": FieldPolicy.KEEP,
+        "nesting_depth": FieldPolicy.KEEP,
+        "num_passes": FieldPolicy.KEEP,
+        "passes": FieldPolicy.KEEP,
+        "pass_labels": FieldPolicy.KEEP,
+        "all_layers": FieldPolicy.KEEP,
+        "params": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
+        "num_params_trainable": FieldPolicy.KEEP,
+        "num_params_frozen": FieldPolicy.KEEP,
+        "params_memory": FieldPolicy.KEEP,
+        "requires_grad": FieldPolicy.KEEP,
+        "buffer_layers": FieldPolicy.KEEP,
+        "_buffer_accessor": FieldPolicy.DROP,
+        "is_training": FieldPolicy.KEEP,
+        "has_forward_hooks": FieldPolicy.KEEP,
+        "has_backward_hooks": FieldPolicy.KEEP,
+        "extra_attributes": FieldPolicy.BLOB_RECURSIVE,
+        "methods": FieldPolicy.KEEP,
+        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+    }
 
     def __init__(
         self,
@@ -241,6 +400,22 @@ class ModuleLog:
     @_source_model_log.setter
     def _source_model_log(self, value):
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with weakrefs stripped."""
+        state = self.__dict__.copy()
+        state["_source_model_log_ref"] = None
+        state["_buffer_accessor"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state without touching disk."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state, defaults={"_buffer_accessor": None, "_source_model_log_ref": None}
+        )
+        self.__dict__.update(state)
 
     # --- Per-call delegating properties ---
     # Mirror the LayerLog delegation pattern: single-pass modules transparently
@@ -397,6 +572,13 @@ class ModuleLog:
         return iter(self._source_model_log[label] for label in self.all_layers)
 
     def to_pandas(self) -> "pd.DataFrame":
+        """Export this module's layers as a pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per layer belonging to this module.
+        """
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot build DataFrame.")
         rows = []
@@ -414,6 +596,61 @@ class ModuleLog:
             )
         return pd.DataFrame(rows)
 
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module's layer table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write this module's layer table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write this module's layer table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+
 
 class ModuleAccessor:
     """Dict-like accessor for ModuleLog objects.
@@ -427,6 +664,13 @@ class ModuleAccessor:
 
     Available as ``model_log.modules``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_pass_dict": FieldPolicy.KEEP,
+        "_alias_dict": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,
@@ -494,6 +738,13 @@ class ModuleAccessor:
         return f"ModuleAccessor({len(self)} modules):\n{inner}"
 
     def to_pandas(self) -> "pd.DataFrame":
+        """Export module metadata as a pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per module in address order.
+        """
         rows = []
         for ml in self._list:
             rows.append(
@@ -508,6 +759,61 @@ class ModuleAccessor:
                 }
             )
         return pd.DataFrame(rows)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the module table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the module table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write the module table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
     def summary(self) -> str:
         if len(self) == 0:

@@ -7,7 +7,7 @@ bookkeeping.
 
 Key design patterns:
 
-* **_pass_finished behavioural switch** — Many methods (``__len__``, ``__getitem__``,
+* **_pass_finished behavioural switch** - Many methods (``__len__``, ``__getitem__``,
   ``__str__``, ``__iter__``) behave differently during logging vs after
   postprocessing.  While logging is active (``_pass_finished=False``), the
   model's tensors are keyed by their raw internal barcodes in
@@ -17,13 +17,13 @@ Key design patterns:
   persists across the fast pass on purpose: fast-path postprocessing
   relies on the fully-populated lookup dicts from the exhaustive pass.
 
-* **Method importation** — Several heavy methods (``render_graph``,
+* **Method importation** - Several heavy methods (``render_graph``,
   ``save_new_activations``, ``validate_saved_activations``, etc.) are
   defined in other modules and bound to ModelLog as class attributes at
   the bottom of this file.  This keeps the class body small while giving
   users ``model_log.render_graph(...)`` syntax.
 
-* **_module_build_data** — A transient dict that accumulates module hierarchy
+* **_module_build_data** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
   (postprocessing step 17) and then cleared.  Initialised via
   ``_init_module_build_data()``.
@@ -31,13 +31,18 @@ Key design patterns:
 
 import copy
 from collections import OrderedDict, defaultdict
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
+import torch
+
 if TYPE_CHECKING:
+    from .._io.streaming import BundleStreamWriter
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
 
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup, release_param_refs
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
@@ -47,6 +52,9 @@ from .interface import (
     _getitem_during_pass,
     _str_after_pass,
     _str_during_pass,
+    to_csv,
+    to_json,
+    to_parquet,
     to_pandas,
     print_all_fields,
 )
@@ -122,6 +130,104 @@ class ModelLog:
     integer index, layer label, module address, or substring.
     """
 
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "model_name": FieldPolicy.KEEP,
+        "num_context_lines": FieldPolicy.KEEP,
+        "_optimizer": FieldPolicy.DROP,
+        "io_format_version": FieldPolicy.KEEP,
+        "_pass_finished": FieldPolicy.KEEP,
+        "logging_mode": FieldPolicy.KEEP,
+        "_all_layers_logged": FieldPolicy.KEEP,
+        "_all_layers_saved": FieldPolicy.KEEP,
+        "keep_unsaved_layers": FieldPolicy.KEEP,
+        "activation_postfunc": FieldPolicy.DROP,
+        "activation_postfunc_repr": FieldPolicy.KEEP,
+        "current_function_call_barcode": FieldPolicy.KEEP,
+        "random_seed_used": FieldPolicy.KEEP,
+        "output_device": FieldPolicy.KEEP,
+        "detach_saved_tensors": FieldPolicy.KEEP,
+        "save_function_args": FieldPolicy.KEEP,
+        "save_gradients": FieldPolicy.KEEP,
+        "save_source_context": FieldPolicy.KEEP,
+        "save_rng_states": FieldPolicy.KEEP,
+        "detect_loops": FieldPolicy.KEEP,
+        "verbose": FieldPolicy.KEEP,
+        "has_gradients": FieldPolicy.KEEP,
+        "mark_input_output_distances": FieldPolicy.KEEP,
+        "layer_list": FieldPolicy.KEEP,
+        "layer_dict_main_keys": FieldPolicy.KEEP,
+        "layer_dict_all_keys": FieldPolicy.KEEP,
+        "layer_logs": FieldPolicy.KEEP,
+        "layer_labels": FieldPolicy.KEEP,
+        "layer_labels_w_pass": FieldPolicy.KEEP,
+        "layer_labels_no_pass": FieldPolicy.KEEP,
+        "layer_num_passes": FieldPolicy.KEEP,
+        "_raw_layer_dict": FieldPolicy.KEEP,
+        "_raw_layer_labels_list": FieldPolicy.KEEP,
+        "_layer_nums_to_save": FieldPolicy.KEEP,
+        "_layer_counter": FieldPolicy.KEEP,
+        "num_operations": FieldPolicy.KEEP,
+        "_raw_layer_type_counter": FieldPolicy.KEEP,
+        "_unsaved_layers_lookup_keys": FieldPolicy.KEEP,
+        "_raw_to_final_layer_labels": FieldPolicy.KEEP,
+        "_final_to_raw_layer_labels": FieldPolicy.KEEP,
+        "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
+        "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "buffer_layers": FieldPolicy.KEEP,
+        "buffer_num_passes": FieldPolicy.KEEP,
+        "_buffer_accessor": FieldPolicy.DROP,
+        "internally_initialized_layers": FieldPolicy.KEEP,
+        "_layers_where_internal_branches_merge_with_input": FieldPolicy.KEEP,
+        "internally_terminated_layers": FieldPolicy.KEEP,
+        "internally_terminated_bool_layers": FieldPolicy.KEEP,
+        "conditional_branch_edges": FieldPolicy.KEEP,
+        "conditional_then_edges": FieldPolicy.KEEP,
+        "conditional_elif_edges": FieldPolicy.KEEP,
+        "conditional_else_edges": FieldPolicy.KEEP,
+        "conditional_events": FieldPolicy.KEEP,
+        "conditional_arm_edges": FieldPolicy.KEEP,
+        "conditional_edge_passes": FieldPolicy.KEEP,
+        "layers_with_saved_activations": FieldPolicy.KEEP,
+        "orphan_layers": FieldPolicy.KEEP,
+        "unlogged_layers": FieldPolicy.KEEP,
+        "layers_with_saved_gradients": FieldPolicy.KEEP,
+        "_saved_gradients_set": FieldPolicy.DROP,
+        "layers_with_params": FieldPolicy.KEEP,
+        "equivalent_operations": FieldPolicy.KEEP,
+        "total_activation_memory": FieldPolicy.KEEP,
+        "num_tensors_saved": FieldPolicy.KEEP,
+        "saved_activation_memory": FieldPolicy.KEEP,
+        "param_logs": FieldPolicy.KEEP,
+        "total_param_tensors": FieldPolicy.KEEP,
+        "total_param_layers": FieldPolicy.KEEP,
+        "total_params": FieldPolicy.KEEP,
+        "total_params_trainable": FieldPolicy.KEEP,
+        "total_params_frozen": FieldPolicy.KEEP,
+        "total_params_memory": FieldPolicy.KEEP,
+        "_mod_pass_num": FieldPolicy.DROP,
+        "_mod_pass_labels": FieldPolicy.DROP,
+        "_mod_entered": FieldPolicy.DROP,
+        "_mod_exited": FieldPolicy.DROP,
+        "_module_build_data": FieldPolicy.DROP,
+        "_module_logs": FieldPolicy.DROP,
+        "_module_metadata": FieldPolicy.DROP,
+        "_module_forward_args": FieldPolicy.DROP,
+        "_param_logs_by_module": FieldPolicy.DROP,
+        "_pre_forward_rng_states": FieldPolicy.DROP,
+        "_activation_writer": FieldPolicy.DROP,
+        "_keep_activations_in_memory": FieldPolicy.DROP,
+        "_activation_sink": FieldPolicy.DROP,
+        "_in_exhaustive_pass": FieldPolicy.DROP,
+        "pass_start_time": FieldPolicy.KEEP,
+        "pass_end_time": FieldPolicy.KEEP,
+        "time_setup": FieldPolicy.KEEP,
+        "time_forward_pass": FieldPolicy.KEEP,
+        "time_cleanup": FieldPolicy.KEEP,
+        "time_function_calls": FieldPolicy.KEEP,
+    }
+
     def __init__(
         self,
         model_name: str,
@@ -158,12 +264,13 @@ class ModelLog:
                 have optimizers attached.
             verbose: If True, print timed progress messages at each major pipeline stage.
         """
-        # Callables are effectively immutable — deepcopy is unnecessary.
+        # Callables are effectively immutable - deepcopy is unnecessary.
 
         # General info
         self.model_name = model_name
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
+        self.io_format_version = IO_FORMAT_VERSION
         # _pass_finished is the master behavioural switch: False during logging,
         # True after postprocessing.  Many methods (len, getitem, str, iter)
         # branch on this flag to choose raw-barcode vs final-label access.
@@ -177,6 +284,9 @@ class ModelLog:
         self._all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
         self.activation_postfunc = activation_postfunc
+        self.activation_postfunc_repr = (
+            repr(activation_postfunc) if activation_postfunc is not None else None
+        )
         self.current_function_call_barcode = None
         self.random_seed_used = None
         self.output_device = output_device
@@ -189,11 +299,15 @@ class ModelLog:
         self.verbose = verbose
         self.has_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
+        self._activation_writer: Optional["BundleStreamWriter"] = None
+        self._keep_activations_in_memory: bool = True
+        self._activation_sink: Optional[Callable[[str, torch.Tensor], None]] = None
+        self._in_exhaustive_pass: bool = True
 
         # Model structure info (computed @properties: is_recurrent,
         # max_recurrent_loops, is_branching, has_conditional_branching)
 
-        # Tensor Tracking — post-processed (populated after _pass_finished=True):
+        # Tensor Tracking - post-processed (populated after _pass_finished=True):
         self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
         self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()  # primary label -> entry
         self.layer_dict_all_keys: Dict[str, LayerPassLog] = (
@@ -204,7 +318,7 @@ class ModelLog:
         self.layer_labels_w_pass: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels_no_pass: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self.layer_num_passes: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
-        # Tensor Tracking — raw (populated during the forward pass, before postprocessing):
+        # Tensor Tracking - raw (populated during the forward pass, before postprocessing):
         self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()  # raw barcode -> entry
         self._raw_layer_labels_list: List[str] = []
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
@@ -265,7 +379,7 @@ class ModelLog:
 
         # Session-scoped per-module tracking dicts (keyed by id(module)).
         # These replace the old tl_* attrs that were set directly on nn.Module
-        # instances. Lives on ModelLog so they're GC'd with the log — no cleanup
+        # instances. Lives on ModelLog so they're GC'd with the log - no cleanup
         # iteration over modules needed.
         self._mod_pass_num: Dict[int, int] = {}  # id(module) -> pass count
         self._mod_pass_labels: Dict[int, list] = {}  # id(module) -> [(addr, pass_num), ...]
@@ -334,6 +448,34 @@ class ModelLog:
         else:
             return iter(list(self._raw_layer_dict.values()))
 
+    def save(self, path: str | Path, **kwargs: Any) -> None:
+        """Call :func:`torchlens.save` for this model log.
+
+        Warning
+        -------
+        Portable bundles contain a pickle file. Only load bundles from trusted
+        sources. Loading an untrusted bundle can execute arbitrary code.
+        """
+
+        from .._io.bundle import save as save_bundle
+
+        save_bundle(self, path, **kwargs)
+
+    @classmethod
+    def load(cls, path: str | Path, **kwargs: Any) -> "ModelLog":
+        """Call :func:`torchlens.load` and return the loaded model log.
+
+        Warning
+        -------
+        Portable bundles contain a pickle file. Only load bundles from trusted
+        sources. Loading an untrusted bundle can execute arbitrary code.
+        """
+
+        from .._io.bundle import load as load_bundle
+
+        loaded = load_bundle(path, **kwargs)
+        return loaded
+
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with non-picklable weakref-backed accessors stripped."""
         state = self.__dict__.copy()
@@ -341,10 +483,29 @@ class ModelLog:
         state["_buffer_accessor"] = None
         state["_module_build_data"] = None
         state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
+        state["activation_postfunc_repr"] = (
+            repr(self.activation_postfunc) if self.activation_postfunc is not None else None
+        )
+        state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state and rebuild weakref-backed links."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={
+                "io_format_version": IO_FORMAT_VERSION,
+                "activation_postfunc_repr": None,
+                "_buffer_accessor": None,
+                "_module_logs": None,
+                "_module_build_data": None,
+                "_activation_writer": None,
+                "_keep_activations_in_memory": True,
+                "_activation_sink": None,
+                "_in_exhaustive_pass": False,
+            },
+        )
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
@@ -548,6 +709,9 @@ class ModelLog:
     visualization_field_audit = build_render_audit
     print_all_fields = print_all_fields
     to_pandas = to_pandas
+    to_csv = to_csv
+    to_parquet = to_parquet
+    to_json = to_json
     save_new_activations = save_new_activations
     validate_saved_activations = validate_saved_activations
     validate_forward_pass = validate_saved_activations  # user-facing alias

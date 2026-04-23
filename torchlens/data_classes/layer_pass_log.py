@@ -11,34 +11,41 @@ aggregate view across passes is provided by :class:`LayerLog`.
 
 Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 
-1. **General info** — raw/final labels, operation numbering, back-reference
+1. **General info** - raw/final labels, operation numbering, back-reference
    to the owning ModelLog.
-2. **Label info** — human-readable labels in various formats (with/without
+2. **Label info** - human-readable labels in various formats (with/without
    pass qualifier, short form, etc.).
-3. **Saved tensor info** — the tensor contents, shape, dtype, size, device
+3. **Saved tensor info** - the tensor contents, shape, dtype, size, device
    transfer settings, activation postfunc, and function arguments.
-4. **Child tensor variations** — tracks per-child input values for
+4. **Child tensor variations** - tracks per-child input values for
    validation replay (``children_tensor_versions`` stores RAW values
    because validation compares against ``captured_args``).
-5. **Gradient info** — gradient tensor and metadata (stored as a bare
+5. **Gradient info** - gradient tensor and metadata (stored as a bare
    reference via ``log_tensor_grad``, not deep-copied).
-6. **Function call info** — the applied function, call stack, timing,
+6. **Function call info** - the applied function, call stack, timing,
    FLOPs, RNG state, arg metadata, grad_fn, inplace flag.
-7. **Param info** — which parameters were used, their shapes and sizes.
-8. **Equivalence info** — loop-detection equivalence type and groups.
-9. **Graph info** — parent/child/sibling/spouse edges, input/output
+7. **Param info** - which parameters were used, their shapes and sizes.
+8. **Equivalence info** - loop-detection equivalence type and groups.
+9. **Graph info** - parent/child/sibling/spouse edges, input/output
    ancestry, distances, buffer/internal-init status.
-10. **Conditional info** — boolean branching metadata.
-11. **Module info** — module entry/exit tracking, nesting depth,
+10. **Conditional info** - boolean branching metadata.
+11. **Module info** - module entry/exit tracking, nesting depth,
     bottom-level submodule output status.
 """
 
 import copy
 import weakref
-from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
+from .._io import (
+    FieldPolicy,
+    IO_FORMAT_VERSION,
+    TorchLensIOError,
+    default_fill_state,
+    read_io_format_version,
+)
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
@@ -59,6 +66,7 @@ def _recursive_safe_copy(val):
 
 
 if TYPE_CHECKING:
+    from .._io.lazy import LazyActivationRef
     from .func_call_location import FuncCallLocation
     from .layer_log import LayerLog
     from .param_log import ParamLog
@@ -84,6 +92,136 @@ class LayerPassLog:
       that owns this pass.  It is set *outside* fields_dict during
       ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "tensor_label_raw": FieldPolicy.KEEP,
+        "layer_label_raw": FieldPolicy.KEEP,
+        "operation_num": FieldPolicy.KEEP,
+        "creation_order": FieldPolicy.KEEP,
+        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+        "_pass_finished": FieldPolicy.KEEP,
+        "layer_label": FieldPolicy.KEEP,
+        "layer_label_short": FieldPolicy.KEEP,
+        "layer_label_w_pass": FieldPolicy.KEEP,
+        "layer_label_w_pass_short": FieldPolicy.KEEP,
+        "layer_label_no_pass": FieldPolicy.KEEP,
+        "layer_label_no_pass_short": FieldPolicy.KEEP,
+        "layer_type": FieldPolicy.KEEP,
+        "layer_type_num": FieldPolicy.KEEP,
+        "layer_total_num": FieldPolicy.KEEP,
+        "pass_num": FieldPolicy.KEEP,
+        "num_passes": FieldPolicy.KEEP,
+        "lookup_keys": FieldPolicy.KEEP,
+        "activation": FieldPolicy.BLOB,
+        "has_saved_activations": FieldPolicy.KEEP,
+        "output_device": FieldPolicy.KEEP,
+        "activation_postfunc": FieldPolicy.DROP,
+        "detach_saved_tensor": FieldPolicy.KEEP,
+        "args_captured": FieldPolicy.KEEP,
+        "captured_args": FieldPolicy.BLOB_RECURSIVE,
+        "captured_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "tensor_shape": FieldPolicy.KEEP,
+        "tensor_dtype": FieldPolicy.KEEP,
+        "tensor_memory": FieldPolicy.KEEP,
+        "has_child_tensor_variations": FieldPolicy.KEEP,
+        "children_tensor_versions": FieldPolicy.BLOB_RECURSIVE,
+        "gradient": FieldPolicy.BLOB,
+        "save_gradients": FieldPolicy.KEEP,
+        "has_gradient": FieldPolicy.KEEP,
+        "grad_shape": FieldPolicy.KEEP,
+        "grad_dtype": FieldPolicy.KEEP,
+        "grad_memory": FieldPolicy.KEEP,
+        "func_applied": FieldPolicy.DROP,
+        "func_name": FieldPolicy.KEEP,
+        "func_call_stack": FieldPolicy.KEEP,
+        "func_time": FieldPolicy.KEEP,
+        "flops_forward": FieldPolicy.KEEP,
+        "flops_backward": FieldPolicy.KEEP,
+        "func_rng_states": FieldPolicy.BLOB_RECURSIVE,
+        "func_autocast_state": FieldPolicy.KEEP,
+        "func_argnames": FieldPolicy.KEEP,
+        "num_args": FieldPolicy.KEEP,
+        "num_positional_args": FieldPolicy.KEEP,
+        "num_keyword_args": FieldPolicy.KEEP,
+        "func_positional_args_non_tensor": FieldPolicy.KEEP,
+        "func_kwargs_non_tensor": FieldPolicy.KEEP,
+        "func_non_tensor_args": FieldPolicy.KEEP,
+        "func_is_inplace": FieldPolicy.KEEP,
+        "grad_fn_name": FieldPolicy.KEEP,
+        "is_part_of_iterable_output": FieldPolicy.KEEP,
+        "iterable_output_index": FieldPolicy.KEEP,
+        "parent_params": FieldPolicy.KEEP,
+        "parent_param_barcodes": FieldPolicy.KEEP,
+        "parent_param_passes": FieldPolicy.KEEP,
+        "parent_param_logs": FieldPolicy.KEEP,
+        "parent_param_shapes": FieldPolicy.KEEP,
+        "num_params_total": FieldPolicy.KEEP,
+        "num_params_trainable": FieldPolicy.KEEP,
+        "num_params_frozen": FieldPolicy.KEEP,
+        "params_memory": FieldPolicy.KEEP,
+        "operation_equivalence_type": FieldPolicy.KEEP,
+        "equivalent_operations": FieldPolicy.KEEP,
+        "recurrent_group": FieldPolicy.KEEP,
+        "parent_layers": FieldPolicy.KEEP,
+        "parent_layer_arg_locs": FieldPolicy.KEEP,
+        "root_ancestors": FieldPolicy.KEEP,
+        "child_layers": FieldPolicy.KEEP,
+        "has_children": FieldPolicy.KEEP,
+        "is_input_layer": FieldPolicy.KEEP,
+        "has_input_ancestor": FieldPolicy.KEEP,
+        "input_ancestors": FieldPolicy.KEEP,
+        "min_distance_from_input": FieldPolicy.KEEP,
+        "max_distance_from_input": FieldPolicy.KEEP,
+        "is_output_layer": FieldPolicy.KEEP,
+        "feeds_output": FieldPolicy.KEEP,
+        "is_final_output": FieldPolicy.KEEP,
+        "is_output_ancestor": FieldPolicy.KEEP,
+        "output_descendants": FieldPolicy.KEEP,
+        "min_distance_from_output": FieldPolicy.KEEP,
+        "max_distance_from_output": FieldPolicy.KEEP,
+        "io_role": FieldPolicy.KEEP,
+        "is_buffer_layer": FieldPolicy.KEEP,
+        "buffer_address": FieldPolicy.KEEP,
+        "buffer_pass": FieldPolicy.KEEP,
+        "buffer_parent": FieldPolicy.KEEP,
+        "is_internally_initialized": FieldPolicy.KEEP,
+        "has_internally_initialized_ancestor": FieldPolicy.KEEP,
+        "internally_initialized_parents": FieldPolicy.KEEP,
+        "internally_initialized_ancestors": FieldPolicy.KEEP,
+        "is_internally_terminated": FieldPolicy.KEEP,
+        "is_terminal_bool_layer": FieldPolicy.KEEP,
+        "bool_is_branch": FieldPolicy.KEEP,
+        "bool_context_kind": FieldPolicy.KEEP,
+        "bool_wrapper_kind": FieldPolicy.KEEP,
+        "bool_conditional_id": FieldPolicy.KEEP,
+        "is_scalar_bool": FieldPolicy.KEEP,
+        "scalar_bool_value": FieldPolicy.KEEP,
+        "in_cond_branch": FieldPolicy.KEEP,
+        "conditional_branch_stack": FieldPolicy.KEEP,
+        "conditional_branch_depth": FieldPolicy.KEEP,
+        "cond_branch_start_children": FieldPolicy.KEEP,
+        "cond_branch_then_children": FieldPolicy.KEEP,
+        "cond_branch_elif_children": FieldPolicy.KEEP,
+        "cond_branch_else_children": FieldPolicy.KEEP,
+        "cond_branch_children_by_cond": FieldPolicy.KEEP,
+        "containing_module": FieldPolicy.KEEP,
+        "containing_modules": FieldPolicy.KEEP,
+        "modules_entered": FieldPolicy.KEEP,
+        "modules_entered_argnames": FieldPolicy.KEEP,
+        "module_passes_entered": FieldPolicy.KEEP,
+        "modules_exited": FieldPolicy.KEEP,
+        "module_passes_exited": FieldPolicy.KEEP,
+        "is_submodule_output": FieldPolicy.KEEP,
+        "is_leaf_module_output": FieldPolicy.KEEP,
+        "leaf_module_pass": FieldPolicy.KEEP,
+        "module_entry_exit_threads_inputs": FieldPolicy.KEEP,
+        "module_entry_exit_thread_output": FieldPolicy.KEEP,
+        "func_config": FieldPolicy.BLOB_RECURSIVE,
+        "activation_ref": FieldPolicy.DROP,
+        "gradient_ref": FieldPolicy.DROP,
+        "_pending_blob_id": FieldPolicy.DROP,
+        "parent_layer_log": FieldPolicy.DROP,
+    }
 
     def __init__(self, fields_dict: Dict):
         """Initialise from a complete fields dictionary.
@@ -144,13 +282,13 @@ class LayerPassLog:
         self.tensor_dtype = fields_dict["tensor_dtype"]
         self.tensor_memory = fields_dict["tensor_memory"]
 
-        # Child tensor variation tracking — stores the raw tensor values that
+        # Child tensor variation tracking - stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
         # postprocessed) because validation compares these against captured_args.
         self.has_child_tensor_variations = fields_dict["has_child_tensor_variations"]
         self.children_tensor_versions = fields_dict["children_tensor_versions"]
 
-        # Saved gradient info — gradient is stored as a bare clone (not deep-copied)
+        # Saved gradient info - gradient is stored as a bare clone (not deep-copied)
         # via log_tensor_grad().  gradient is populated by a backward hook.
         self.gradient = fields_dict["gradient"]
         self.save_gradients = fields_dict["save_gradients"]
@@ -263,13 +401,16 @@ class LayerPassLog:
         self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
         self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
-        # Function config — lightweight hyperparameters always captured.
+        # Function config - lightweight hyperparameters always captured.
         self.func_config = fields_dict["func_config"]
 
         # Back-reference to the aggregate LayerLog that groups all passes of
-        # this layer.  Set during postprocessing by _build_layer_logs — NOT
+        # this layer.  Set during postprocessing by _build_layer_logs - NOT
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
+        self.activation_ref: Optional["LazyActivationRef"] = None
+        self.gradient_ref: Optional["LazyActivationRef"] = None
+        self._pending_blob_id: Optional[str] = None
         self.parent_layer_log: Optional["LayerLog"] = None
 
     @property
@@ -373,6 +514,26 @@ class LayerPassLog:
         return human_readable_size(self.params_memory)
 
     @property
+    def _streaming_label(self) -> str:
+        """Best available label for sink/writer callbacks during or after postprocess.
+
+        Returns
+        -------
+        str
+            Pass-qualified label when available, otherwise the current layer label.
+        """
+
+        for candidate in (
+            self.layer_label_w_pass,
+            self.layer_label,
+            self.layer_label_raw,
+            self.tensor_label_raw,
+        ):
+            if candidate is not None:
+                return str(candidate)
+        return "<unknown>"
+
+    @property
     def source_model_log(self) -> "ModelLog":
         """Back-reference to the owning ModelLog (stored as weakref)."""
         ref = self.__dict__.get("_source_model_log_ref")
@@ -387,14 +548,102 @@ class LayerPassLog:
     def source_model_log(self, value):
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
-    def __getstate__(self) -> Dict:
+    def materialize_activation(
+        self,
+        *,
+        map_location: str | torch.device = "cpu",
+    ) -> torch.Tensor:
+        """Materialize this layer's saved activation from a lazy bundle ref.
+
+        Parameters
+        ----------
+        map_location:
+            Target device for the materialized tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Materialized activation tensor.
+
+        Raises
+        ------
+        TorchLensIOError
+            If no activation ref is available for this layer.
+
+        Examples
+        --------
+        >>> import torchlens as tl
+        >>> model_log = tl.load("demo_bundle", lazy=True)
+        >>> tensor = model_log["linear_1_1"].materialize_activation()
+        >>> tensor.shape
+        torch.Size([2, 3])
+        """
+
+        if isinstance(self.activation, torch.Tensor):
+            return self.activation
+        if self.activation_ref is None:
+            raise TorchLensIOError("no activation_ref to materialize from")
+        self.activation = self.activation_ref.materialize(map_location=map_location)
+        return self.activation
+
+    def materialize_gradient(
+        self,
+        *,
+        map_location: str | torch.device = "cpu",
+    ) -> torch.Tensor:
+        """Materialize this layer's saved gradient from a lazy bundle ref.
+
+        Parameters
+        ----------
+        map_location:
+            Target device for the materialized tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Materialized gradient tensor.
+
+        Raises
+        ------
+        TorchLensIOError
+            If no gradient ref is available for this layer.
+
+        Examples
+        --------
+        >>> import torchlens as tl
+        >>> model_log = tl.load("demo_bundle", lazy=True)
+        >>> grad = model_log["linear_1_1"].materialize_gradient()
+        >>> grad.shape
+        torch.Size([2, 3])
+        """
+
+        if isinstance(self.gradient, torch.Tensor):
+            return self.gradient
+        if self.gradient_ref is None:
+            raise TorchLensIOError("no gradient_ref to materialize from")
+        self.gradient = self.gradient_ref.materialize(map_location=map_location)
+        return self.gradient
+
+    def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
         state["_source_model_log_ref"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
-    def __setstate__(self, state: Dict) -> None:
+    def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={
+                "_source_model_log_ref": None,
+                "parent_layer_log": None,
+                "activation_ref": None,
+                "gradient_ref": None,
+                "_pending_blob_id": None,
+            },
+        )
         self.__dict__.update(state)
 
     # ********************************************
@@ -420,13 +669,13 @@ class LayerPassLog:
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
         However, certain fields are shallow-copied (shared by reference) because:
 
-        * ``func_applied``, ``grad_fn_name`` — function objects, immutable/shared.
-        * ``source_model_log`` — must point to the same ModelLog instance.
-        * ``func_rng_states`` — large state dicts, not mutated after capture.
-        * ``captured_args``, ``captured_kwargs`` — may contain large tensors;
+        * ``func_applied``, ``grad_fn_name`` - function objects, immutable/shared.
+        * ``source_model_log`` - must point to the same ModelLog instance.
+        * ``func_rng_states`` - large state dicts, not mutated after capture.
+        * ``captured_args``, ``captured_kwargs`` - may contain large tensors;
           deep-copying them is expensive and unnecessary.
-        * ``parent_params`` — references to nn.Parameters, must stay shared.
-        * ``activation``, ``children_tensor_versions`` — large tensors;
+        * ``parent_params`` - references to nn.Parameters, must stay shared.
+        * ``activation``, ``children_tensor_versions`` - large tensors;
           shared references are safe since they're replaced (not mutated).
 
         Returns:
@@ -459,7 +708,7 @@ class LayerPassLog:
         t_kwargs: Dict,
         save_function_args: bool,
         activation_postfunc: Optional[Callable] = None,
-    ):
+    ) -> None:
         """Save the output tensor (and optionally args) for this operation.
 
         Flow:
@@ -478,18 +727,43 @@ class LayerPassLog:
             activation_postfunc: Optional transform applied to the tensor
                 before storing (e.g. detach, to-numpy, normalize).
         """
-        # Clone the tensor, optionally detaching from autograd graph.
-        self.activation = safe_copy(t, self.detach_saved_tensor)
-        # Move to the user-requested output device if needed.
-        if self.output_device not in [str(self.activation.device), "same"]:
-            self.activation = safe_to(self.activation, self.output_device)
-        # Apply user's postfunc with logging paused so postfunc's own ops
-        # (e.g. .mean(), .float()) don't get logged as model operations.
-        if activation_postfunc is not None:
-            with pause_logging():
-                self.activation = activation_postfunc(self.activation)
+        model_log = self.source_model_log
+        writer = getattr(model_log, "_activation_writer", None) if model_log is not None else None
+        try:
+            # Clone the tensor, optionally detaching from autograd graph.
+            self.activation = safe_copy(t, self.detach_saved_tensor)
+            # Move to the user-requested output device if needed.
+            if self.output_device not in [str(self.activation.device), "same"]:
+                self.activation = safe_to(self.activation, self.output_device)
+            # Apply user's postfunc with logging paused so postfunc's own ops
+            # (e.g. .mean(), .float()) don't get logged as model operations.
+            if activation_postfunc is not None:
+                with pause_logging():
+                    self.activation = activation_postfunc(self.activation)
+        except Exception as exc:
+            if writer is not None:
+                writer.abort(f"Failed while saving activation for {self._streaming_label}: {exc}")
+                raise TorchLensIOError(
+                    f"Streaming activation save failed for {self._streaming_label}."
+                ) from exc
+            raise
 
         self.has_saved_activations = True
+
+        if model_log is not None:
+            activation_sink = getattr(model_log, "_activation_sink", None)
+            if activation_sink is not None and isinstance(self.activation, torch.Tensor):
+                activation_sink(self._streaming_label, self.activation)
+
+            if writer is not None and getattr(model_log, "_in_exhaustive_pass", False):
+                blob_id = writer.next_blob_id()
+                self._pending_blob_id = blob_id
+                writer.write_blob(
+                    blob_id,
+                    self.activation,
+                    kind="activation",
+                    label=self._streaming_label,
+                )
 
         # Tensor args and kwargs:
         if save_function_args:
@@ -504,7 +778,7 @@ class LayerPassLog:
         """Save the gradient tensor for this layer's output.
 
         Called by the backward hook registered during the forward pass.
-        The gradient is ``detach().clone()``'d — a bare copy, not deep-copied —
+        The gradient is ``detach().clone()``'d - a bare copy, not deep-copied -
         so it's independent of the autograd graph but cheap to store.
 
         Args:

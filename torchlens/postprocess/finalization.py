@@ -20,12 +20,18 @@ Step 18 (_set_pass_finished): Marks ModelLog and all LayerPassLogs as finished, 
 
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, TYPE_CHECKING, Tuple
 
 import torch
 
-from ..data_classes.buffer_log import BufferAccessor
-from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
+from .._io import BlobRef, TorchLensIOError
+from .._io.accessor_rebuild import rebuild_model_log_accessors
+from .._io.lazy import LazyActivationRef
+from .._io.manifest import sha256_of_file
+from .._io.streaming import BundleStreamWriter
+from ..data_classes._summary import format_call_arg
+from ..data_classes.module_log import ModuleLog, ModulePassLog
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
@@ -668,17 +674,7 @@ def _build_module_logs(self: "ModelLog") -> None:
     # --- Compute nesting depths ---
     _compute_nesting_depths(module_dict, root_module)
 
-    # Build the user-facing ModuleAccessor (supports log.modules[address] access).
-    self._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
-
-    # Build BufferAccessor for log.buffers[address] access.
-    buffer_dict = {}
-    for label in self.buffer_layers:
-        if label in self.layer_dict_all_keys:
-            entry = self.layer_dict_all_keys[label]
-            if entry.buffer_address is not None:
-                buffer_dict[entry.buffer_address] = entry
-    self._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=self)  # type: ignore[assignment, arg-type]
+    rebuild_model_log_accessors(self, module_dict, module_order, pass_dict)
 
     # Clean up temporary build state to free memory. These dicts are only
     # needed during construction and are not part of the user-facing API.
@@ -691,6 +687,8 @@ def _build_module_logs(self: "ModelLog") -> None:
     # GC-11: Clear forward_args/kwargs from ModulePassLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
     for pass_log in pass_dict.values():
+        pass_log.forward_args_summary = format_call_arg(pass_log.forward_args)
+        pass_log.forward_kwargs_summary = format_call_arg(pass_log.forward_kwargs)
         pass_log.forward_args = None
         pass_log.forward_kwargs = None
 
@@ -789,3 +787,183 @@ def _set_pass_finished(self) -> None:
         tensor = self.layer_dict_main_keys[layer_label]
         tensor._pass_finished = True
     self._pass_finished = True
+
+
+def _finalize_streamed_bundle(self: "ModelLog") -> None:
+    """Step 19: Finalize any in-progress streamed activation bundle.
+
+    Parameters
+    ----------
+    self:
+        Model log whose streamed bundle should be finalized.
+
+    Raises
+    ------
+    TorchLensIOError
+        If portable scrubbing or bundle finalization fails.
+    """
+
+    writer = self._activation_writer
+    if writer is None:
+        return
+
+    from .._io.scrub import scrub_for_save
+
+    scrubbed_state, blob_specs = scrub_for_save(
+        self,
+        include_activations=True,
+        include_gradients=self.save_gradients,
+        include_captured_args=self.save_function_args,
+        include_rng_states=self.save_rng_states,
+    )
+    scrubbed_state, blob_specs = _reuse_streamed_activation_blob_ids(
+        self,
+        scrubbed_state=scrubbed_state,
+        blob_specs=blob_specs,
+        writer=writer,
+    )
+    final_path = writer.finalize(
+        scrubbed_state=scrubbed_state, blob_specs=blob_specs, unsupported=[]
+    )
+    setattr(self, "_source_bundle_path", Path(final_path))
+    setattr(
+        self,
+        "_source_bundle_manifest_sha256",
+        sha256_of_file(Path(final_path) / "manifest.json"),
+    )
+    _attach_streamed_activation_refs(
+        self, scrubbed_state=scrubbed_state, writer=writer, final_path=final_path
+    )
+    self._activation_writer = None
+
+
+def _evict_streamed_activations(self: "ModelLog") -> None:
+    """Step 20: Drop in-memory activations once streaming refs have been attached.
+
+    Parameters
+    ----------
+    self:
+        Model log whose streamed activations should be evicted.
+    """
+
+    for layer_entry in self.layer_list:
+        if getattr(layer_entry, "activation_ref", None) is not None:
+            layer_entry.activation = None
+
+
+def _reuse_streamed_activation_blob_ids(
+    model_log: "ModelLog",
+    *,
+    scrubbed_state: dict,
+    blob_specs: list[tuple[str, torch.Tensor, str, str]],
+    writer: BundleStreamWriter,
+) -> tuple[dict, list[tuple[str, torch.Tensor, str, str]]]:
+    """Patch scrubbed activation refs to reuse blob ids written during capture.
+
+    Parameters
+    ----------
+    model_log:
+        Live model log containing pending streamed blob ids.
+    scrubbed_state:
+        Scrubbed portable metadata state produced by ``scrub_for_save``.
+    blob_specs:
+        Scrub-generated blob specs.
+    writer:
+        Streaming writer holding already-written activation entries.
+
+    Returns
+    -------
+    tuple[dict, list[tuple[str, torch.Tensor, str, str]]]
+        Patched scrubbed state and the filtered blob spec list.
+    """
+
+    scrubbed_layers = scrubbed_state.get("layer_list")
+    if not isinstance(scrubbed_layers, list):
+        raise TorchLensIOError(
+            "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
+        )
+
+    skipped_blob_ids: set[str] = set()
+    for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
+        activation_blob = getattr(scrubbed_layer, "activation", None)
+        if not isinstance(activation_blob, BlobRef):
+            continue
+        pending_blob_id = getattr(live_layer, "_pending_blob_id", None)
+        if pending_blob_id is None:
+            continue
+        skipped_blob_ids.add(activation_blob.blob_id)
+        scrubbed_layer.activation = BlobRef(blob_id=pending_blob_id, kind=activation_blob.kind)
+        writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
+
+    filtered_blob_specs = [spec for spec in blob_specs if spec[0] not in skipped_blob_ids]
+    return scrubbed_state, filtered_blob_specs
+
+
+def _attach_streamed_activation_refs(
+    model_log: "ModelLog",
+    *,
+    scrubbed_state: dict,
+    writer: BundleStreamWriter,
+    final_path: str | Path,
+) -> None:
+    """Attach ``LazyActivationRef`` placeholders for persisted activation blobs.
+
+    Parameters
+    ----------
+    model_log:
+        Live model log receiving the refs.
+    scrubbed_state:
+        Scrubbed metadata state whose activation ``BlobRef`` values now match the
+        final persisted blob ids.
+    writer:
+        Streaming writer containing manifest entries for all saved blobs.
+    final_path:
+        Final bundle directory path after the temp-dir rename.
+    """
+
+    scrubbed_layers = scrubbed_state.get("layer_list")
+    if not isinstance(scrubbed_layers, list):
+        raise TorchLensIOError(
+            "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
+        )
+
+    for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
+        activation_blob = getattr(scrubbed_layer, "activation", None)
+        if not isinstance(activation_blob, BlobRef):
+            continue
+        manifest_entry = writer.get_entry(activation_blob.blob_id)
+        live_layer.activation_ref = LazyActivationRef(
+            blob_id=manifest_entry.blob_id,
+            shape=tuple(manifest_entry.shape),
+            dtype=_dtype_from_manifest_string(manifest_entry.dtype),
+            device_at_save=manifest_entry.device_at_save,
+            source_bundle_path=Path(final_path),
+            relative_path=manifest_entry.relative_path,
+            kind="activation",
+            expected_sha256=manifest_entry.sha256,
+        )
+
+
+def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
+    """Resolve a manifest dtype string back into a ``torch.dtype``.
+
+    Parameters
+    ----------
+    dtype_name:
+        Manifest dtype name without the ``torch.`` prefix.
+
+    Returns
+    -------
+    torch.dtype
+        Resolved dtype object.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the dtype name is unknown to the current runtime.
+    """
+
+    dtype_obj = getattr(torch, dtype_name, None)
+    if not isinstance(dtype_obj, torch.dtype):
+        raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
+    return dtype_obj

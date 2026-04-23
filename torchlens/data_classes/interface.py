@@ -23,7 +23,8 @@ For slice keys: returns a list slice of ``layer_list``.
 """
 
 import random
-from typing import List, Tuple, TYPE_CHECKING, Union
+from os import PathLike
+from typing import TYPE_CHECKING, Any, List, Literal, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -539,3 +540,61 @@ def to_pandas(self) -> pd.DataFrame:
     model_df["bool_conditional_id"] = model_df["bool_conditional_id"].astype("Int64")
 
     return model_df
+
+
+def to_csv(self: "ModelLog", filepath: str | PathLike[str], **kwargs: Any) -> None:
+    """Write the layer table to CSV.
+
+    Parameters
+    ----------
+    filepath:
+        Output CSV path.
+    **kwargs:
+        Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+    """
+    self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+
+def to_parquet(self: "ModelLog", filepath: str | PathLike[str], **kwargs: Any) -> None:
+    """Write the layer table to Parquet.
+
+    Parameters
+    ----------
+    filepath:
+        Output Parquet path.
+    **kwargs:
+        Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+    Raises
+    ------
+    ImportError
+        If ``pyarrow`` is unavailable.
+    """
+    try:
+        import pyarrow  # noqa: F401
+    except ImportError as exc:
+        raise ImportError(
+            "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+        ) from exc
+    self.to_pandas().to_parquet(filepath, **kwargs)
+
+
+def to_json(
+    self: "ModelLog",
+    filepath: str | PathLike[str],
+    *,
+    orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+    **kwargs: Any,
+) -> None:
+    """Write the layer table to JSON.
+
+    Parameters
+    ----------
+    filepath:
+        Output JSON path.
+    orient:
+        JSON orientation passed to ``DataFrame.to_json``.
+    **kwargs:
+        Additional keyword arguments forwarded to ``DataFrame.to_json``.
+    """
+    self.to_pandas().to_json(filepath, orient=orient, **kwargs)

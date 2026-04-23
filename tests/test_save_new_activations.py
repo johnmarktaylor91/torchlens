@@ -153,6 +153,22 @@ def test_save_new_activations_layers_to_save():
     log.cleanup()
 
 
+def test_save_new_activations_fast_path_does_not_attach_streaming_refs() -> None:
+    """The fast-path re-extraction flow should not create streaming bundle refs."""
+
+    model = _SimpleFF()
+    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    output_label = log.output_layers[0]
+
+    log.save_new_activations(
+        model, torch.randn(2, 5), random_seed=42, layers_to_save=[output_label]
+    )
+
+    assert getattr(log, "_activation_writer", None) is None
+    assert all(getattr(layer, "activation_ref", None) is None for layer in log.layer_list)
+    log.cleanup()
+
+
 # =============================================================================
 # Known failure: torchvision models with identity-propagated ops
 # =============================================================================

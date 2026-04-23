@@ -33,6 +33,7 @@ from torch.overrides import get_ignored_functions, get_testing_overrides
 MODEL_LOG_FIELD_ORDER = [
     # General info
     "model_name",
+    "io_format_version",
     "_pass_finished",
     "logging_mode",
     "_all_layers_logged",
@@ -51,6 +52,7 @@ MODEL_LOG_FIELD_ORDER = [
     "verbose",
     "has_gradients",
     "activation_postfunc",
+    "activation_postfunc_repr",
     "mark_input_output_distances",
     # Model structure info (is_recurrent, max_recurrent_loops,
     # is_branching, has_conditional_branching are computed @properties)
@@ -379,6 +381,30 @@ PARAM_LOG_FIELD_ORDER = [
     "grad_shape",
     "grad_dtype",
     "grad_memory",
+    "grad_memory_str",
+]
+
+# Per-buffer metadata exported by BufferAccessor (one row per buffer address).
+BUFFER_LOG_FIELD_ORDER = [
+    "buffer_address",
+    "name",
+    "module_address",
+    "buffer_pass",
+    "layer_label",
+    "pass_num",
+    "tensor_shape",
+    "tensor_dtype",
+    "tensor_memory",
+    "tensor_memory_str",
+    "has_saved_activations",
+    "has_gradient",
+    "grad_shape",
+    "grad_dtype",
+    "grad_memory",
+    "grad_memory_str",
+    "buffer_parent",
+    "containing_module",
+    "containing_modules",
 ]
 
 # Per-pass module execution data (one ModulePassLog per forward call to a module).
@@ -392,6 +418,8 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "num_layers",
     "input_layers",
     "output_layers",
+    "forward_args_summary",
+    "forward_kwargs_summary",
     "forward_args",
     "forward_kwargs",
     "call_parent",

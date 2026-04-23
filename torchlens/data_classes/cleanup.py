@@ -43,8 +43,9 @@ def cleanup(self) -> None:
     """Delete all log entries, break circular references, and free GPU memory.
 
     Called explicitly by the user or automatically at the end of a logging
-    session.  After cleanup, the ModelLog is effectively empty and should
-    not be used further.
+    session. After cleanup, the ModelLog is effectively empty and should
+    not be used further. No long-lived safetensors handles need to be
+    closed here because lazy materialization opens and closes files per call.
     """
     # GC-1: Release parameter references to allow model GC.
     if hasattr(self, "param_logs"):
@@ -77,6 +78,9 @@ def cleanup(self) -> None:
         "layer_dict_main_keys",
         "orphan_layers",
         "unlogged_layers",
+        "_loaded_from_bundle",
+        "_source_bundle_manifest_sha256",
+        "_source_bundle_path",
     ]:
         if hasattr(self, attr):
             delattr(self, attr)
@@ -85,6 +89,10 @@ def cleanup(self) -> None:
 
 def _clear_entry_attributes(log_entry: LayerPassLog) -> None:
     """Clear all instance attributes from a LayerPassLog entry."""
+    if hasattr(log_entry, "activation_ref"):
+        log_entry.activation_ref = None
+    if hasattr(log_entry, "gradient_ref"):
+        log_entry.gradient_ref = None
     for attr in list(log_entry.__dict__):
         delattr(log_entry, attr)
 

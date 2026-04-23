@@ -11,8 +11,8 @@
 
 *TorchLens* is a package for doing exactly two things:
 
-1) Easily extracting the activations from every single intermediate operation in a PyTorch model—no
-   modifications needed—in one line of code. "Every operation" means every operation; "one line" means one line.
+1) Easily extracting the activations from every single intermediate operation in a PyTorch model, with no
+   modifications needed, in one line of code. "Every operation" means every operation; "one line" means one line.
 2) Understanding the model's computational structure via an intuitive automatic visualization and extensive
    metadata ([partial list here](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf))
    about the network's computational graph.
@@ -201,6 +201,51 @@ print(model_history.layer_labels)
 ['conv2d_3_7', 'maxpool2d_3_13', 'linear_1_17', 'dropout_2_19', 'linear_2_20', 'linear_3_22']
 '''
 ```
+
+### Saving and Loading
+
+```python
+import torch
+import torch.nn as nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+x = torch.randn(2, 4)
+model_log = tl.log_forward_pass(model, x, layers_to_save="all")
+tl.save(model_log, "demo_bundle")
+
+lazy_log = tl.load("demo_bundle", lazy=True)
+activation = lazy_log["linear_1_1"].materialize_activation()
+print(activation.shape)
+```
+
+You can also stream activations directly to disk during capture:
+
+```python
+streamed_log = tl.log_forward_pass(
+    model,
+    x,
+    layers_to_save="all",
+    save_activations_to="stream_bundle",
+    keep_activations_in_memory=False,
+)
+```
+
+## Security
+
+Portable bundles contain a pickle file in `metadata.pkl`. Only load bundles
+from trusted sources. Loading an untrusted bundle with `tl.load()` or
+`ModelLog.load()` can execute arbitrary code.
+
+Export options:
+- `to_pandas()` on model, layer, module, parameter, and buffer surfaces
+- `to_csv(...)`, `to_parquet(...)`, and `to_json(...)` on those same surfaces
+- `to_parquet(...)` requires `pyarrow`
+
+Caveats:
+- Portable bundles do not support `validate_forward_pass()` or replay-oriented validation.
+- Streaming capture is always strict; unsupported tensors abort the save instead of being skipped.
+- Portable bundle save/load requires `safetensors`.
 
 The main function of *TorchLens* is `log_forward_pass`; the remaining functions are:
 

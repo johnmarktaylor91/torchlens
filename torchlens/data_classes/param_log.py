@@ -19,11 +19,31 @@ after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
-from typing import Dict, List, Optional, Tuple, Union
+from os import PathLike
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+import pandas as pd
 import torch
 
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from ..constants import PARAM_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+
+
+def _param_log_to_row(param_log: "ParamLog") -> Dict[str, Any]:
+    """Convert a ParamLog into one DataFrame row.
+
+    Parameters
+    ----------
+    param_log:
+        Parameter metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value.
+    """
+    return {field: getattr(param_log, field) for field in PARAM_LOG_FIELD_ORDER}
 
 
 class ParamLog:
@@ -33,6 +53,29 @@ class ParamLog:
     and links to the module that owns it.  Does NOT store the parameter tensor
     itself -- only a ``_param_ref`` reference for lazy gradient access.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "address": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
+        "shape": FieldPolicy.KEEP,
+        "dtype": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
+        "memory": FieldPolicy.KEEP,
+        "trainable": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
+        "module_type": FieldPolicy.KEEP,
+        "barcode": FieldPolicy.KEEP,
+        "has_optimizer": FieldPolicy.KEEP,
+        "_param_ref": FieldPolicy.DROP,
+        "num_passes": FieldPolicy.KEEP,
+        "used_by_layers": FieldPolicy.KEEP,
+        "linked_params": FieldPolicy.KEEP,
+        "_has_grad": FieldPolicy.KEEP,
+        "_grad_shape": FieldPolicy.KEEP,
+        "_grad_dtype": FieldPolicy.KEEP,
+        "_grad_memory": FieldPolicy.KEEP,
+        "_grad_memory_str": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,
@@ -187,6 +230,19 @@ class ParamLog:
         """Return the number of scalar elements in this parameter."""
         return self.num_params
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with live parameter references stripped."""
+        state = self.__dict__.copy()
+        state["_param_ref"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state without reviving live parameter references."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(state, defaults={"_param_ref": None})
+        self.__dict__.update(state)
+
 
 class ParamAccessor:
     """Dict-like accessor for ParamLog objects.
@@ -198,6 +254,11 @@ class ParamAccessor:
 
     Available as ``model_log.params``, ``layer_log.params``, ``module_log.params``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+    }
 
     def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
         self._dict = param_logs  # address -> ParamLog
@@ -246,3 +307,69 @@ class ParamAccessor:
             items.append(f"'{pl.address}': ParamLog {pl.shape} {pl.dtype} {status}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export parameter metadata as a pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per parameter, ordered by ``PARAM_LOG_FIELD_ORDER``.
+        """
+        rows = [_param_log_to_row(param_log) for param_log in self._list]
+        return pd.DataFrame(rows, columns=PARAM_LOG_FIELD_ORDER)
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the parameter table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the parameter table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write the parameter table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
