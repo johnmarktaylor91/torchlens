@@ -1,6 +1,69 @@
 # CHANGELOG
 
 
+## v1.2.0 (2026-04-23)
+
+### Bug Fixes
+
+- **io**: Io-s9 path-traversal hardening + two-pass streaming rejection + docs security warning +
+  preflight/reader cleanup
+  ([`42c047f`](https://github.com/johnmarktaylor91/torchlens/commit/42c047fef95c126caca9069b40140df384f2ca4d))
+
+### Chores
+
+- **io-sprint**: Add plan and research docs
+  ([`9bd8272`](https://github.com/johnmarktaylor91/torchlens/commit/9bd827241a80ee7a0a621081cd61128846346e9d))
+
+Plan v6 (Round 8, GREEN) at .project-context/plans/io-sprint/plan.md. Audits and review rounds 1-8
+  archived alongside.
+
+### Documentation
+
+- **io**: Io-s8 docstrings + README section + architecture doc
+  ([`ddb8981`](https://github.com/johnmarktaylor91/torchlens/commit/ddb898126bb6590e999260fbfeb7732115b482b0))
+
+- **io-sprint**: Phase 5 dual-review records
+  ([`806868a`](https://github.com/johnmarktaylor91/torchlens/commit/806868a154d14cd9b93dadb429ada0dcd1e93e13))
+
+### Features
+
+- **io**: Io-s1 pickle hardening + PORTABLE_STATE_SPEC + rehydrate loader
+  ([`b49c748`](https://github.com/johnmarktaylor91/torchlens/commit/b49c748439837b19e65daba8c09417facf8e937f))
+
+- **io**: Io-s2 Param/Buffer/ModulePass DataFrames + summary fields
+  ([`4512a64`](https://github.com/johnmarktaylor91/torchlens/commit/4512a64f7161b838c4e1a618cfc306fae6859fd0))
+
+- **io**: Io-s3 export wrappers (csv/parquet/json) on all DataFrame surfaces
+  ([`7686ec4`](https://github.com/johnmarktaylor91/torchlens/commit/7686ec4b61b419863532bf423d0ee955bb289bd6))
+
+Add to_csv / to_parquet / to_json to ModelLog, LayerAccessor, ModuleAccessor, ModuleLog. Normalize
+  wrapper signatures on the four S2 surfaces (ParamAccessor, BufferAccessor, ModulePassLog) to match
+  the shared spec.
+
+- **io**: Io-s4 bundle save/load with manifest + integrity + tensor policy
+  ([`380d3f5`](https://github.com/johnmarktaylor91/torchlens/commit/380d3f5b530ec4eb88b0be7c97bffdc12af93f92))
+
+Adds torchlens.save, torchlens.load, torchlens.cleanup_tmp. Adds ModelLog.save / ModelLog.load
+  sugar. Adds safetensors as required dep. Enforces Fork F version policy, Fork G exception
+  wrapping, Fork J symlink rejection, Fork L replay-not-supported-on-portable guard.
+
+- **io**: Io-s5 streaming-save during forward pass + postprocess steps 19/20
+  ([`7a172a9`](https://github.com/johnmarktaylor91/torchlens/commit/7a172a9ef326ab41dd3f03dc40976fa6eb7f2e64))
+
+- **io**: Io-s6 lazy activation refs + drift detection + rehydrate_nested
+  ([`1c870ce`](https://github.com/johnmarktaylor91/torchlens/commit/1c870cee22ea35ccaa5158a7d7058d344fb5192c))
+
+### Testing
+
+- **io**: Io-s7 integration + corruption + plain-pickle regression suite
+  ([`3fba0c0`](https://github.com/johnmarktaylor91/torchlens/commit/3fba0c0430d61fe0dfb71e57d43cf41aad7849db))
+
+Add the IO-S7 integration, corruption, and plain-pickle regression coverage.
+
+While adding the corruption battery, wrap safetensors corruption read failures in TorchLensIOError
+  so truncated blobs stay inside the portable I/O exception contract.
+
+
 ## v1.1.0 (2026-04-22)
 
 ### Bug Fixes
