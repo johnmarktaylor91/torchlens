@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
 from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
@@ -1070,6 +1071,8 @@ def _load_safetensors_file(
         raise TorchLensIOError(
             "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
         ) from exc
+    except (OSError, SafetensorError, ValueError) as exc:
+        raise TorchLensIOError(f"Failed to read safetensors blob at {blob_path}.") from exc
 
 
 def _reject_symlink_path(path: Path, *, context: str) -> None:

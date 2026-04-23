@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import torch
+from safetensors import SafetensorError
 from safetensors.torch import load_file
 
 from . import TorchLensIOError
@@ -93,7 +94,7 @@ class LazyActivationRef:
             raise TorchLensIOError(
                 "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
             ) from exc
-        except (OSError, ValueError) as exc:
+        except (OSError, SafetensorError, ValueError) as exc:
             raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
 
         if len(tensor_map) != 1:
