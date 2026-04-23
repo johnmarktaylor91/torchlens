@@ -13,8 +13,9 @@ can access these fields via ``__getattr__`` delegation.
 """
 
 import weakref
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
+from .._io import FieldPolicy
 from .layer_pass_log import LayerPassLog
 from ..utils.display import human_readable_size
 
@@ -31,6 +32,8 @@ class BufferLog(LayerPassLog):
     from the ``buffer_address`` field in the fields_dict passed to
     the parent ``LayerPassLog.__init__``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(LayerPassLog.PORTABLE_STATE_SPEC)
 
     @property
     def name(self) -> str:
@@ -68,6 +71,14 @@ class BufferLog(LayerPassLog):
             lines.append(f"  layer_label: {self.layer_label}")
         return "\n".join(lines)
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state for this buffer log."""
+        return super().__getstate__()
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state for this buffer log."""
+        super().__setstate__(state)
+
 
 class BufferAccessor:
     """Dict-like accessor for BufferLog objects.
@@ -79,6 +90,12 @@ class BufferAccessor:
 
     Available as ``model_log.buffers`` and ``module_log.buffers``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
 
     def __init__(
         self,

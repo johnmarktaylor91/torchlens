@@ -22,12 +22,12 @@ ModuleLog vs ModulePassLog label convention:
 This matches each accessor's natural granularity.
 """
 
-import weakref
-from typing import Dict, List, Optional, Tuple, Union, TYPE_CHECKING
-
-from ..utils.display import human_readable_size
-
 import pandas as pd
+import weakref
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from .param_log import ParamAccessor
@@ -43,6 +43,20 @@ class ModulePassLog:
     ``layers`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
     that resolve to individual LayerPassLog entries.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "module_address": FieldPolicy.KEEP,
+        "pass_num": FieldPolicy.KEEP,
+        "pass_label": FieldPolicy.KEEP,
+        "layers": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "forward_args": FieldPolicy.BLOB_RECURSIVE,
+        "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "call_parent": FieldPolicy.KEEP,
+        "call_children": FieldPolicy.KEEP,
+        "all_module_addresses": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,
@@ -100,6 +114,18 @@ class ModulePassLog:
         """Return the number of layers in this pass."""
         return self.num_layers
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state annotated with the current I/O format version."""
+        state = self.__dict__.copy()
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state with version-aware default filling."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(state, defaults={"all_module_addresses": [state["module_address"]]})
+        self.__dict__.update(state)
+
 
 class ModuleLog:
     """Aggregate metadata for one nn.Module across all its invocations.
@@ -116,6 +142,44 @@ class ModuleLog:
     ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
     directly via ``_single_pass_or_error()`` delegation to ``passes[1]``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "address": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
+        "module_class_name": FieldPolicy.KEEP,
+        "source_file": FieldPolicy.KEEP,
+        "source_line": FieldPolicy.KEEP,
+        "class_docstring": FieldPolicy.KEEP,
+        "init_signature": FieldPolicy.KEEP,
+        "init_docstring": FieldPolicy.KEEP,
+        "forward_signature": FieldPolicy.KEEP,
+        "forward_docstring": FieldPolicy.KEEP,
+        "address_parent": FieldPolicy.KEEP,
+        "address_children": FieldPolicy.KEEP,
+        "address_depth": FieldPolicy.KEEP,
+        "call_parent": FieldPolicy.KEEP,
+        "call_children": FieldPolicy.KEEP,
+        "nesting_depth": FieldPolicy.KEEP,
+        "num_passes": FieldPolicy.KEEP,
+        "passes": FieldPolicy.KEEP,
+        "pass_labels": FieldPolicy.KEEP,
+        "all_layers": FieldPolicy.KEEP,
+        "params": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
+        "num_params_trainable": FieldPolicy.KEEP,
+        "num_params_frozen": FieldPolicy.KEEP,
+        "params_memory": FieldPolicy.KEEP,
+        "requires_grad": FieldPolicy.KEEP,
+        "buffer_layers": FieldPolicy.KEEP,
+        "_buffer_accessor": FieldPolicy.DROP,
+        "is_training": FieldPolicy.KEEP,
+        "has_forward_hooks": FieldPolicy.KEEP,
+        "has_backward_hooks": FieldPolicy.KEEP,
+        "extra_attributes": FieldPolicy.BLOB_RECURSIVE,
+        "methods": FieldPolicy.KEEP,
+        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+    }
 
     def __init__(
         self,
@@ -241,6 +305,22 @@ class ModuleLog:
     @_source_model_log.setter
     def _source_model_log(self, value):
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with weakrefs stripped."""
+        state = self.__dict__.copy()
+        state["_source_model_log_ref"] = None
+        state["_buffer_accessor"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state without touching disk."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state, defaults={"_buffer_accessor": None, "_source_model_log_ref": None}
+        )
+        self.__dict__.update(state)
 
     # --- Per-call delegating properties ---
     # Mirror the LayerLog delegation pattern: single-pass modules transparently
@@ -427,6 +507,13 @@ class ModuleAccessor:
 
     Available as ``model_log.modules``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_pass_dict": FieldPolicy.KEEP,
+        "_alias_dict": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,

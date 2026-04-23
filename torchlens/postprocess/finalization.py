@@ -24,8 +24,8 @@ from typing import Dict, List, NamedTuple, Optional, TYPE_CHECKING, Tuple
 
 import torch
 
-from ..data_classes.buffer_log import BufferAccessor
-from ..data_classes.module_log import ModuleAccessor, ModuleLog, ModulePassLog
+from .._io.accessor_rebuild import rebuild_model_log_accessors
+from ..data_classes.module_log import ModuleLog, ModulePassLog
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
@@ -668,17 +668,7 @@ def _build_module_logs(self: "ModelLog") -> None:
     # --- Compute nesting depths ---
     _compute_nesting_depths(module_dict, root_module)
 
-    # Build the user-facing ModuleAccessor (supports log.modules[address] access).
-    self._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
-
-    # Build BufferAccessor for log.buffers[address] access.
-    buffer_dict = {}
-    for label in self.buffer_layers:
-        if label in self.layer_dict_all_keys:
-            entry = self.layer_dict_all_keys[label]
-            if entry.buffer_address is not None:
-                buffer_dict[entry.buffer_address] = entry
-    self._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=self)  # type: ignore[assignment, arg-type]
+    rebuild_model_log_accessors(self, module_dict, module_order, pass_dict)
 
     # Clean up temporary build state to free memory. These dicts are only
     # needed during construction and are not part of the user-facing API.

@@ -35,10 +35,11 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 
 import copy
 import weakref
-from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
@@ -84,6 +85,133 @@ class LayerPassLog:
       that owns this pass.  It is set *outside* fields_dict during
       ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "tensor_label_raw": FieldPolicy.KEEP,
+        "layer_label_raw": FieldPolicy.KEEP,
+        "operation_num": FieldPolicy.KEEP,
+        "creation_order": FieldPolicy.KEEP,
+        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+        "_pass_finished": FieldPolicy.KEEP,
+        "layer_label": FieldPolicy.KEEP,
+        "layer_label_short": FieldPolicy.KEEP,
+        "layer_label_w_pass": FieldPolicy.KEEP,
+        "layer_label_w_pass_short": FieldPolicy.KEEP,
+        "layer_label_no_pass": FieldPolicy.KEEP,
+        "layer_label_no_pass_short": FieldPolicy.KEEP,
+        "layer_type": FieldPolicy.KEEP,
+        "layer_type_num": FieldPolicy.KEEP,
+        "layer_total_num": FieldPolicy.KEEP,
+        "pass_num": FieldPolicy.KEEP,
+        "num_passes": FieldPolicy.KEEP,
+        "lookup_keys": FieldPolicy.KEEP,
+        "activation": FieldPolicy.BLOB,
+        "has_saved_activations": FieldPolicy.KEEP,
+        "output_device": FieldPolicy.KEEP,
+        "activation_postfunc": FieldPolicy.DROP,
+        "detach_saved_tensor": FieldPolicy.KEEP,
+        "args_captured": FieldPolicy.KEEP,
+        "captured_args": FieldPolicy.BLOB_RECURSIVE,
+        "captured_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "tensor_shape": FieldPolicy.KEEP,
+        "tensor_dtype": FieldPolicy.KEEP,
+        "tensor_memory": FieldPolicy.KEEP,
+        "has_child_tensor_variations": FieldPolicy.KEEP,
+        "children_tensor_versions": FieldPolicy.BLOB_RECURSIVE,
+        "gradient": FieldPolicy.BLOB,
+        "save_gradients": FieldPolicy.KEEP,
+        "has_gradient": FieldPolicy.KEEP,
+        "grad_shape": FieldPolicy.KEEP,
+        "grad_dtype": FieldPolicy.KEEP,
+        "grad_memory": FieldPolicy.KEEP,
+        "func_applied": FieldPolicy.DROP,
+        "func_name": FieldPolicy.KEEP,
+        "func_call_stack": FieldPolicy.KEEP,
+        "func_time": FieldPolicy.KEEP,
+        "flops_forward": FieldPolicy.KEEP,
+        "flops_backward": FieldPolicy.KEEP,
+        "func_rng_states": FieldPolicy.BLOB_RECURSIVE,
+        "func_autocast_state": FieldPolicy.KEEP,
+        "func_argnames": FieldPolicy.KEEP,
+        "num_args": FieldPolicy.KEEP,
+        "num_positional_args": FieldPolicy.KEEP,
+        "num_keyword_args": FieldPolicy.KEEP,
+        "func_positional_args_non_tensor": FieldPolicy.KEEP,
+        "func_kwargs_non_tensor": FieldPolicy.KEEP,
+        "func_non_tensor_args": FieldPolicy.KEEP,
+        "func_is_inplace": FieldPolicy.KEEP,
+        "grad_fn_name": FieldPolicy.KEEP,
+        "is_part_of_iterable_output": FieldPolicy.KEEP,
+        "iterable_output_index": FieldPolicy.KEEP,
+        "parent_params": FieldPolicy.KEEP,
+        "parent_param_barcodes": FieldPolicy.KEEP,
+        "parent_param_passes": FieldPolicy.KEEP,
+        "parent_param_logs": FieldPolicy.KEEP,
+        "parent_param_shapes": FieldPolicy.KEEP,
+        "num_params_total": FieldPolicy.KEEP,
+        "num_params_trainable": FieldPolicy.KEEP,
+        "num_params_frozen": FieldPolicy.KEEP,
+        "params_memory": FieldPolicy.KEEP,
+        "operation_equivalence_type": FieldPolicy.KEEP,
+        "equivalent_operations": FieldPolicy.KEEP,
+        "recurrent_group": FieldPolicy.KEEP,
+        "parent_layers": FieldPolicy.KEEP,
+        "parent_layer_arg_locs": FieldPolicy.KEEP,
+        "root_ancestors": FieldPolicy.KEEP,
+        "child_layers": FieldPolicy.KEEP,
+        "has_children": FieldPolicy.KEEP,
+        "is_input_layer": FieldPolicy.KEEP,
+        "has_input_ancestor": FieldPolicy.KEEP,
+        "input_ancestors": FieldPolicy.KEEP,
+        "min_distance_from_input": FieldPolicy.KEEP,
+        "max_distance_from_input": FieldPolicy.KEEP,
+        "is_output_layer": FieldPolicy.KEEP,
+        "feeds_output": FieldPolicy.KEEP,
+        "is_final_output": FieldPolicy.KEEP,
+        "is_output_ancestor": FieldPolicy.KEEP,
+        "output_descendants": FieldPolicy.KEEP,
+        "min_distance_from_output": FieldPolicy.KEEP,
+        "max_distance_from_output": FieldPolicy.KEEP,
+        "io_role": FieldPolicy.KEEP,
+        "is_buffer_layer": FieldPolicy.KEEP,
+        "buffer_address": FieldPolicy.KEEP,
+        "buffer_pass": FieldPolicy.KEEP,
+        "buffer_parent": FieldPolicy.KEEP,
+        "is_internally_initialized": FieldPolicy.KEEP,
+        "has_internally_initialized_ancestor": FieldPolicy.KEEP,
+        "internally_initialized_parents": FieldPolicy.KEEP,
+        "internally_initialized_ancestors": FieldPolicy.KEEP,
+        "is_internally_terminated": FieldPolicy.KEEP,
+        "is_terminal_bool_layer": FieldPolicy.KEEP,
+        "bool_is_branch": FieldPolicy.KEEP,
+        "bool_context_kind": FieldPolicy.KEEP,
+        "bool_wrapper_kind": FieldPolicy.KEEP,
+        "bool_conditional_id": FieldPolicy.KEEP,
+        "is_scalar_bool": FieldPolicy.KEEP,
+        "scalar_bool_value": FieldPolicy.KEEP,
+        "in_cond_branch": FieldPolicy.KEEP,
+        "conditional_branch_stack": FieldPolicy.KEEP,
+        "conditional_branch_depth": FieldPolicy.KEEP,
+        "cond_branch_start_children": FieldPolicy.KEEP,
+        "cond_branch_then_children": FieldPolicy.KEEP,
+        "cond_branch_elif_children": FieldPolicy.KEEP,
+        "cond_branch_else_children": FieldPolicy.KEEP,
+        "cond_branch_children_by_cond": FieldPolicy.KEEP,
+        "containing_module": FieldPolicy.KEEP,
+        "containing_modules": FieldPolicy.KEEP,
+        "modules_entered": FieldPolicy.KEEP,
+        "modules_entered_argnames": FieldPolicy.KEEP,
+        "module_passes_entered": FieldPolicy.KEEP,
+        "modules_exited": FieldPolicy.KEEP,
+        "module_passes_exited": FieldPolicy.KEEP,
+        "is_submodule_output": FieldPolicy.KEEP,
+        "is_leaf_module_output": FieldPolicy.KEEP,
+        "leaf_module_pass": FieldPolicy.KEEP,
+        "module_entry_exit_threads_inputs": FieldPolicy.KEEP,
+        "module_entry_exit_thread_output": FieldPolicy.KEEP,
+        "func_config": FieldPolicy.BLOB_RECURSIVE,
+        "parent_layer_log": FieldPolicy.DROP,
+    }
 
     def __init__(self, fields_dict: Dict):
         """Initialise from a complete fields dictionary.
@@ -387,14 +515,20 @@ class LayerPassLog:
     def source_model_log(self, value):
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
-    def __getstate__(self) -> Dict:
+    def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
         state["_source_model_log_ref"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
-    def __setstate__(self, state: Dict) -> None:
+    def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={"_source_model_log_ref": None, "parent_layer_log": None},
+        )
         self.__dict__.update(state)
 
     # ********************************************

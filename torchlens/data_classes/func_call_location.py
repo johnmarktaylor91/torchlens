@@ -26,7 +26,9 @@ actual ``None`` value in the lazy-loading placeholders.
 
 import inspect
 import linecache
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
 # Used as the default for lazy-loading placeholders so we can tell the
@@ -49,6 +51,27 @@ class FuncCallLocation:
     source-context keyword arguments directly. Values are stored directly
     with no lazy loading.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "file": FieldPolicy.KEEP,
+        "line_number": FieldPolicy.KEEP,
+        "func_name": FieldPolicy.KEEP,
+        "code_firstlineno": FieldPolicy.KEEP,
+        "code_qualname": FieldPolicy.KEEP,
+        "col_offset": FieldPolicy.KEEP,
+        "source_loading_enabled": FieldPolicy.KEEP,
+        "_num_context_lines_requested": FieldPolicy.KEEP,
+        "_frame_func_obj": FieldPolicy.DROP,
+        "_source_loaded": FieldPolicy.KEEP,
+        "_code_context": FieldPolicy.KEEP,
+        "_source_context": FieldPolicy.KEEP,
+        "_code_context_labeled": FieldPolicy.KEEP,
+        "_call_line": FieldPolicy.KEEP,
+        "_num_context_lines": FieldPolicy.KEEP,
+        "_func_signature": FieldPolicy.KEEP,
+        "_func_docstring": FieldPolicy.KEEP,
+        "_linecache_entry": FieldPolicy.DROP,
+    }
 
     def __init__(
         self,
@@ -290,3 +313,16 @@ class FuncCallLocation:
         if self.code_context is None:
             return 0
         return len(self.code_context)
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with live frame references stripped."""
+        state = self.__dict__.copy()
+        state["_frame_func_obj"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state without reviving frame references."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(state, defaults={"_frame_func_obj": None})
+        self.__dict__.update(state)

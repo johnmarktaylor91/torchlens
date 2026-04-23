@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
 
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup, release_param_refs
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
@@ -122,6 +123,100 @@ class ModelLog:
     integer index, layer label, module address, or substring.
     """
 
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "model_name": FieldPolicy.KEEP,
+        "num_context_lines": FieldPolicy.KEEP,
+        "_optimizer": FieldPolicy.DROP,
+        "io_format_version": FieldPolicy.KEEP,
+        "_pass_finished": FieldPolicy.KEEP,
+        "logging_mode": FieldPolicy.KEEP,
+        "_all_layers_logged": FieldPolicy.KEEP,
+        "_all_layers_saved": FieldPolicy.KEEP,
+        "keep_unsaved_layers": FieldPolicy.KEEP,
+        "activation_postfunc": FieldPolicy.DROP,
+        "activation_postfunc_repr": FieldPolicy.KEEP,
+        "current_function_call_barcode": FieldPolicy.KEEP,
+        "random_seed_used": FieldPolicy.KEEP,
+        "output_device": FieldPolicy.KEEP,
+        "detach_saved_tensors": FieldPolicy.KEEP,
+        "save_function_args": FieldPolicy.KEEP,
+        "save_gradients": FieldPolicy.KEEP,
+        "save_source_context": FieldPolicy.KEEP,
+        "save_rng_states": FieldPolicy.KEEP,
+        "detect_loops": FieldPolicy.KEEP,
+        "verbose": FieldPolicy.KEEP,
+        "has_gradients": FieldPolicy.KEEP,
+        "mark_input_output_distances": FieldPolicy.KEEP,
+        "layer_list": FieldPolicy.KEEP,
+        "layer_dict_main_keys": FieldPolicy.KEEP,
+        "layer_dict_all_keys": FieldPolicy.KEEP,
+        "layer_logs": FieldPolicy.KEEP,
+        "layer_labels": FieldPolicy.KEEP,
+        "layer_labels_w_pass": FieldPolicy.KEEP,
+        "layer_labels_no_pass": FieldPolicy.KEEP,
+        "layer_num_passes": FieldPolicy.KEEP,
+        "_raw_layer_dict": FieldPolicy.KEEP,
+        "_raw_layer_labels_list": FieldPolicy.KEEP,
+        "_layer_nums_to_save": FieldPolicy.KEEP,
+        "_layer_counter": FieldPolicy.KEEP,
+        "num_operations": FieldPolicy.KEEP,
+        "_raw_layer_type_counter": FieldPolicy.KEEP,
+        "_unsaved_layers_lookup_keys": FieldPolicy.KEEP,
+        "_raw_to_final_layer_labels": FieldPolicy.KEEP,
+        "_final_to_raw_layer_labels": FieldPolicy.KEEP,
+        "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
+        "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "buffer_layers": FieldPolicy.KEEP,
+        "buffer_num_passes": FieldPolicy.KEEP,
+        "_buffer_accessor": FieldPolicy.DROP,
+        "internally_initialized_layers": FieldPolicy.KEEP,
+        "_layers_where_internal_branches_merge_with_input": FieldPolicy.KEEP,
+        "internally_terminated_layers": FieldPolicy.KEEP,
+        "internally_terminated_bool_layers": FieldPolicy.KEEP,
+        "conditional_branch_edges": FieldPolicy.KEEP,
+        "conditional_then_edges": FieldPolicy.KEEP,
+        "conditional_elif_edges": FieldPolicy.KEEP,
+        "conditional_else_edges": FieldPolicy.KEEP,
+        "conditional_events": FieldPolicy.KEEP,
+        "conditional_arm_edges": FieldPolicy.KEEP,
+        "conditional_edge_passes": FieldPolicy.KEEP,
+        "layers_with_saved_activations": FieldPolicy.KEEP,
+        "orphan_layers": FieldPolicy.KEEP,
+        "unlogged_layers": FieldPolicy.KEEP,
+        "layers_with_saved_gradients": FieldPolicy.KEEP,
+        "_saved_gradients_set": FieldPolicy.DROP,
+        "layers_with_params": FieldPolicy.KEEP,
+        "equivalent_operations": FieldPolicy.KEEP,
+        "total_activation_memory": FieldPolicy.KEEP,
+        "num_tensors_saved": FieldPolicy.KEEP,
+        "saved_activation_memory": FieldPolicy.KEEP,
+        "param_logs": FieldPolicy.KEEP,
+        "total_param_tensors": FieldPolicy.KEEP,
+        "total_param_layers": FieldPolicy.KEEP,
+        "total_params": FieldPolicy.KEEP,
+        "total_params_trainable": FieldPolicy.KEEP,
+        "total_params_frozen": FieldPolicy.KEEP,
+        "total_params_memory": FieldPolicy.KEEP,
+        "_mod_pass_num": FieldPolicy.DROP,
+        "_mod_pass_labels": FieldPolicy.DROP,
+        "_mod_entered": FieldPolicy.DROP,
+        "_mod_exited": FieldPolicy.DROP,
+        "_module_build_data": FieldPolicy.DROP,
+        "_module_logs": FieldPolicy.DROP,
+        "_module_metadata": FieldPolicy.DROP,
+        "_module_forward_args": FieldPolicy.DROP,
+        "_param_logs_by_module": FieldPolicy.DROP,
+        "_pre_forward_rng_states": FieldPolicy.DROP,
+        "pass_start_time": FieldPolicy.KEEP,
+        "pass_end_time": FieldPolicy.KEEP,
+        "time_setup": FieldPolicy.KEEP,
+        "time_forward_pass": FieldPolicy.KEEP,
+        "time_cleanup": FieldPolicy.KEEP,
+        "time_function_calls": FieldPolicy.KEEP,
+    }
+
     def __init__(
         self,
         model_name: str,
@@ -164,6 +259,7 @@ class ModelLog:
         self.model_name = model_name
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
+        self.io_format_version = IO_FORMAT_VERSION
         # _pass_finished is the master behavioural switch: False during logging,
         # True after postprocessing.  Many methods (len, getitem, str, iter)
         # branch on this flag to choose raw-barcode vs final-label access.
@@ -177,6 +273,9 @@ class ModelLog:
         self._all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
         self.activation_postfunc = activation_postfunc
+        self.activation_postfunc_repr = (
+            repr(activation_postfunc) if activation_postfunc is not None else None
+        )
         self.current_function_call_barcode = None
         self.random_seed_used = None
         self.output_device = output_device
@@ -341,10 +440,25 @@ class ModelLog:
         state["_buffer_accessor"] = None
         state["_module_build_data"] = None
         state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
+        state["activation_postfunc_repr"] = (
+            repr(self.activation_postfunc) if self.activation_postfunc is not None else None
+        )
+        state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state and rebuild weakref-backed links."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={
+                "io_format_version": IO_FORMAT_VERSION,
+                "activation_postfunc_repr": None,
+                "_buffer_accessor": None,
+                "_module_logs": None,
+                "_module_build_data": None,
+            },
+        )
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})

@@ -33,6 +33,7 @@ from torch.overrides import get_ignored_functions, get_testing_overrides
 MODEL_LOG_FIELD_ORDER = [
     # General info
     "model_name",
+    "io_format_version",
     "_pass_finished",
     "logging_mode",
     "_all_layers_logged",
@@ -51,6 +52,7 @@ MODEL_LOG_FIELD_ORDER = [
     "verbose",
     "has_gradients",
     "activation_postfunc",
+    "activation_postfunc_repr",
     "mark_input_output_distances",
     # Model structure info (is_recurrent, max_recurrent_loops,
     # is_branching, has_conditional_branching are computed @properties)

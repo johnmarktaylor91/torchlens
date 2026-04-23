@@ -19,10 +19,11 @@ after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..utils.display import human_readable_size
 
 
@@ -33,6 +34,29 @@ class ParamLog:
     and links to the module that owns it.  Does NOT store the parameter tensor
     itself -- only a ``_param_ref`` reference for lazy gradient access.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "address": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
+        "shape": FieldPolicy.KEEP,
+        "dtype": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
+        "memory": FieldPolicy.KEEP,
+        "trainable": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
+        "module_type": FieldPolicy.KEEP,
+        "barcode": FieldPolicy.KEEP,
+        "has_optimizer": FieldPolicy.KEEP,
+        "_param_ref": FieldPolicy.DROP,
+        "num_passes": FieldPolicy.KEEP,
+        "used_by_layers": FieldPolicy.KEEP,
+        "linked_params": FieldPolicy.KEEP,
+        "_has_grad": FieldPolicy.KEEP,
+        "_grad_shape": FieldPolicy.KEEP,
+        "_grad_dtype": FieldPolicy.KEEP,
+        "_grad_memory": FieldPolicy.KEEP,
+        "_grad_memory_str": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,
@@ -187,6 +211,19 @@ class ParamLog:
         """Return the number of scalar elements in this parameter."""
         return self.num_params
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Return pickle state with live parameter references stripped."""
+        state = self.__dict__.copy()
+        state["_param_ref"] = None
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Restore pickle state without reviving live parameter references."""
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(state, defaults={"_param_ref": None})
+        self.__dict__.update(state)
+
 
 class ParamAccessor:
     """Dict-like accessor for ParamLog objects.
@@ -198,6 +235,11 @@ class ParamAccessor:
 
     Available as ``model_log.params``, ``layer_log.params``, ``module_log.params``.
     """
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+    }
 
     def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
         self._dict = param_logs  # address -> ParamLog
