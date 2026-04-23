@@ -26,6 +26,7 @@ dependencies = [
     "numpy",
     "pandas",
     "torch",
+    "safetensors>=0.4",
     "tqdm",
     "ipython",
     "graphviz",

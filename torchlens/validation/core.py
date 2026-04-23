@@ -72,6 +72,14 @@ def validate_saved_activations(
     Returns:
         True if all checks pass, False otherwise.
     """
+    if bool(getattr(self, "_loaded_from_bundle", False)):
+        from .._io import TorchLensIOError
+
+        raise TorchLensIOError(
+            "validate_forward_pass requires live func_applied callables; portable bundles "
+            "drop them. Run validation before saving or use plain pickle instead."
+        )
+
     # Phase 0: verify logged outputs match a fresh forward pass (no tolerance).
     for i, output_layer_label in enumerate(self.output_layers):
         output_layer = self[output_layer_label]

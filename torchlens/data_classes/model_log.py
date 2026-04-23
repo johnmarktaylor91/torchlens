@@ -31,6 +31,7 @@ Key design patterns:
 
 import copy
 from collections import OrderedDict, defaultdict
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
@@ -435,6 +436,43 @@ class ModelLog:
             return iter(self.layer_list)
         else:
             return iter(list(self._raw_layer_dict.values()))
+
+    def save(self, path: str | Path, **kwargs: Any) -> None:
+        """Persist this log via ``torchlens.save``.
+
+        Parameters
+        ----------
+        path:
+            Output bundle directory path.
+        **kwargs:
+            Keyword arguments forwarded to ``torchlens.save``.
+        """
+
+        from .._io.bundle import save as save_bundle
+
+        save_bundle(self, path, **kwargs)
+
+    @classmethod
+    def load(cls, path: str | Path, **kwargs: Any) -> "ModelLog":
+        """Load a portable bundle via ``torchlens.load``.
+
+        Parameters
+        ----------
+        path:
+            Input bundle directory path.
+        **kwargs:
+            Keyword arguments forwarded to ``torchlens.load``.
+
+        Returns
+        -------
+        ModelLog
+            Loaded model log.
+        """
+
+        from .._io.bundle import load as load_bundle
+
+        loaded = load_bundle(path, **kwargs)
+        return loaded
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with non-picklable weakref-backed accessors stripped."""
