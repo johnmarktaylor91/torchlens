@@ -1,4 +1,10 @@
-"""Portable state rehydration for TorchLens model logs."""
+"""Portable state rehydration for TorchLens model logs.
+
+This module restores scrubbed portable metadata into working TorchLens object
+graphs. It rebuilds eager or lazy tensor fields from ``BlobRef`` placeholders,
+reconstructs accessors, and supports the expert nested-materialization flow
+used by ``torchlens.load(..., materialize_nested=False)``.
+"""
 
 from __future__ import annotations
 

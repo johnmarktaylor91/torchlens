@@ -1,4 +1,10 @@
-"""Rebuild weakref-backed model accessors after finalization or rehydrate."""
+"""Rebuild weakref-backed model accessors after finalization or rehydrate.
+
+Portable loads intentionally avoid rebuilding every weakref-backed accessor in
+``__setstate__``. This module centralizes the post-load repair step that
+reconnects module and buffer accessors to the owning ``ModelLog`` once the
+rehydrated object graph is ready for normal user access.
+"""
 
 from __future__ import annotations
 

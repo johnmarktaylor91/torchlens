@@ -1,4 +1,11 @@
-"""Portable bundle manifest schema and compatibility policy."""
+"""Portable bundle manifest schema and compatibility policy.
+
+This module defines the authoritative ``manifest.json`` structure for
+TorchLens bundles, along with version and integrity helpers used by both save
+and load paths. It records bundle-level metadata, one entry per persisted
+tensor blob, and the compatibility checks that run before ``metadata.pkl`` is
+trusted.
+"""
 
 from __future__ import annotations
 

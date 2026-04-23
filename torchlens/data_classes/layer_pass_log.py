@@ -11,25 +11,25 @@ aggregate view across passes is provided by :class:`LayerLog`.
 
 Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 
-1. **General info** — raw/final labels, operation numbering, back-reference
+1. **General info** - raw/final labels, operation numbering, back-reference
    to the owning ModelLog.
-2. **Label info** — human-readable labels in various formats (with/without
+2. **Label info** - human-readable labels in various formats (with/without
    pass qualifier, short form, etc.).
-3. **Saved tensor info** — the tensor contents, shape, dtype, size, device
+3. **Saved tensor info** - the tensor contents, shape, dtype, size, device
    transfer settings, activation postfunc, and function arguments.
-4. **Child tensor variations** — tracks per-child input values for
+4. **Child tensor variations** - tracks per-child input values for
    validation replay (``children_tensor_versions`` stores RAW values
    because validation compares against ``captured_args``).
-5. **Gradient info** — gradient tensor and metadata (stored as a bare
+5. **Gradient info** - gradient tensor and metadata (stored as a bare
    reference via ``log_tensor_grad``, not deep-copied).
-6. **Function call info** — the applied function, call stack, timing,
+6. **Function call info** - the applied function, call stack, timing,
    FLOPs, RNG state, arg metadata, grad_fn, inplace flag.
-7. **Param info** — which parameters were used, their shapes and sizes.
-8. **Equivalence info** — loop-detection equivalence type and groups.
-9. **Graph info** — parent/child/sibling/spouse edges, input/output
+7. **Param info** - which parameters were used, their shapes and sizes.
+8. **Equivalence info** - loop-detection equivalence type and groups.
+9. **Graph info** - parent/child/sibling/spouse edges, input/output
    ancestry, distances, buffer/internal-init status.
-10. **Conditional info** — boolean branching metadata.
-11. **Module info** — module entry/exit tracking, nesting depth,
+10. **Conditional info** - boolean branching metadata.
+11. **Module info** - module entry/exit tracking, nesting depth,
     bottom-level submodule output status.
 """
 
@@ -282,13 +282,13 @@ class LayerPassLog:
         self.tensor_dtype = fields_dict["tensor_dtype"]
         self.tensor_memory = fields_dict["tensor_memory"]
 
-        # Child tensor variation tracking — stores the raw tensor values that
+        # Child tensor variation tracking - stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
         # postprocessed) because validation compares these against captured_args.
         self.has_child_tensor_variations = fields_dict["has_child_tensor_variations"]
         self.children_tensor_versions = fields_dict["children_tensor_versions"]
 
-        # Saved gradient info — gradient is stored as a bare clone (not deep-copied)
+        # Saved gradient info - gradient is stored as a bare clone (not deep-copied)
         # via log_tensor_grad().  gradient is populated by a backward hook.
         self.gradient = fields_dict["gradient"]
         self.save_gradients = fields_dict["save_gradients"]
@@ -401,11 +401,11 @@ class LayerPassLog:
         self.module_entry_exit_threads_inputs = fields_dict["module_entry_exit_threads_inputs"]
         self.module_entry_exit_thread_output = fields_dict["module_entry_exit_thread_output"]
 
-        # Function config — lightweight hyperparameters always captured.
+        # Function config - lightweight hyperparameters always captured.
         self.func_config = fields_dict["func_config"]
 
         # Back-reference to the aggregate LayerLog that groups all passes of
-        # this layer.  Set during postprocessing by _build_layer_logs — NOT
+        # this layer.  Set during postprocessing by _build_layer_logs - NOT
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
         self.activation_ref: Optional["LazyActivationRef"] = None
@@ -569,6 +569,14 @@ class LayerPassLog:
         ------
         TorchLensIOError
             If no activation ref is available for this layer.
+
+        Examples
+        --------
+        >>> import torchlens as tl
+        >>> model_log = tl.load("demo_bundle", lazy=True)
+        >>> tensor = model_log["linear_1_1"].materialize_activation()
+        >>> tensor.shape
+        torch.Size([2, 3])
         """
 
         if isinstance(self.activation, torch.Tensor):
@@ -599,6 +607,14 @@ class LayerPassLog:
         ------
         TorchLensIOError
             If no gradient ref is available for this layer.
+
+        Examples
+        --------
+        >>> import torchlens as tl
+        >>> model_log = tl.load("demo_bundle", lazy=True)
+        >>> grad = model_log["linear_1_1"].materialize_gradient()
+        >>> grad.shape
+        torch.Size([2, 3])
         """
 
         if isinstance(self.gradient, torch.Tensor):
@@ -653,13 +669,13 @@ class LayerPassLog:
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
         However, certain fields are shallow-copied (shared by reference) because:
 
-        * ``func_applied``, ``grad_fn_name`` — function objects, immutable/shared.
-        * ``source_model_log`` — must point to the same ModelLog instance.
-        * ``func_rng_states`` — large state dicts, not mutated after capture.
-        * ``captured_args``, ``captured_kwargs`` — may contain large tensors;
+        * ``func_applied``, ``grad_fn_name`` - function objects, immutable/shared.
+        * ``source_model_log`` - must point to the same ModelLog instance.
+        * ``func_rng_states`` - large state dicts, not mutated after capture.
+        * ``captured_args``, ``captured_kwargs`` - may contain large tensors;
           deep-copying them is expensive and unnecessary.
-        * ``parent_params`` — references to nn.Parameters, must stay shared.
-        * ``activation``, ``children_tensor_versions`` — large tensors;
+        * ``parent_params`` - references to nn.Parameters, must stay shared.
+        * ``activation``, ``children_tensor_versions`` - large tensors;
           shared references are safe since they're replaced (not mutated).
 
         Returns:
@@ -762,7 +778,7 @@ class LayerPassLog:
         """Save the gradient tensor for this layer's output.
 
         Called by the backward hook registered during the forward pass.
-        The gradient is ``detach().clone()``'d — a bare copy, not deep-copied —
+        The gradient is ``detach().clone()``'d - a bare copy, not deep-copied -
         so it's independent of the autograd graph but cheap to store.
 
         Args:

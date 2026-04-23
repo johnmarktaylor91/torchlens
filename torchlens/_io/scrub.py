@@ -1,4 +1,11 @@
-"""Portable state scrubbing for TorchLens model logs."""
+"""Portable state scrubbing for TorchLens model logs.
+
+This module converts a live ``ModelLog`` object graph into portable metadata
+plus a list of tensor blob specs. It is the save-side counterpart to
+rehydration: every class-specific ``PORTABLE_STATE_SPEC`` is applied here so
+tensor payloads become ``BlobRef`` placeholders and non-portable live objects
+are dropped or stringified before writing ``metadata.pkl``.
+"""
 
 from __future__ import annotations
 

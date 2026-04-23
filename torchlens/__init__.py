@@ -1,10 +1,12 @@
-"""TorchLens — extract activations and metadata from PyTorch models.
+"""TorchLens - extract activations and metadata from PyTorch models.
 
 Importing torchlens has **no side effects** on the torch namespace.  Torch
 functions are wrapped lazily on the first call to ``log_forward_pass()`` (or
 any other entry point) and stay wrapped afterward.  To restore the original
 torch callables, call ``unwrap_torch()``.  To explicitly (re-)wrap, call
 ``wrap_torch()``.  The ``wrapped()`` context manager handles the full lifecycle.
+The top-level package also exports portable bundle helpers: ``save()``,
+``load()``, ``cleanup_tmp()``, and ``rehydrate_nested()``.
 """
 
 __version__ = "1.1.0"

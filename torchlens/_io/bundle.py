@@ -1,4 +1,11 @@
-"""Portable directory-bundle save/load helpers for TorchLens model logs."""
+"""Portable directory-bundle save/load helpers for TorchLens model logs.
+
+This module owns the high-level bundle lifecycle for TorchLens portable I/O:
+save a completed ``ModelLog`` into a directory bundle, load that bundle back
+eagerly or lazily, and clean up interrupted ``.tmp.*`` directories left behind
+by partial saves. The bundle format is intentionally a plain directory with
+``manifest.json``, ``metadata.pkl``, and one ``safetensors`` file per blob.
+"""
 
 from __future__ import annotations
 
@@ -90,6 +97,19 @@ def save(
     ------
     TorchLensIOError
         If the bundle cannot be created or contains unsupported state.
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torch.nn as nn
+    >>> import torchlens as tl
+    >>> model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> x = torch.randn(2, 4)
+    >>> model_log = tl.log_forward_pass(model, x, layers_to_save="all")
+    >>> tl.save(model_log, "demo_bundle", overwrite=True)
+    >>> loaded = tl.load("demo_bundle")
+    >>> loaded["linear_1_1"].activation.shape
+    torch.Size([2, 3])
     """
 
     bundle_path = Path(path)
@@ -217,6 +237,17 @@ def load(
     ------
     TorchLensIOError
         If the bundle is invalid, corrupt, or incompatible with this runtime.
+
+    Examples
+    --------
+    >>> import torchlens as tl
+    >>> model_log = tl.load("demo_bundle", lazy=True)
+    >>> layer = model_log["linear_1_1"]
+    >>> layer.activation is None
+    True
+    >>> activation = layer.materialize_activation()
+    >>> activation.shape
+    torch.Size([2, 3])
     """
 
     bundle_path = Path(path)
@@ -287,6 +318,16 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     ------
     TorchLensIOError
         If the requested target path or candidate temp dirs are symlinks.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> import torchlens as tl
+    >>> partial = Path("demo_bundle.tmp.partial")
+    >>> partial.mkdir(exist_ok=True)
+    >>> (partial / "PARTIAL").write_text("", encoding="ascii")
+    >>> tl.cleanup_tmp("demo_bundle")
+    [PosixPath('demo_bundle.tmp.partial')]
     """
 
     bundle_path = Path(path)

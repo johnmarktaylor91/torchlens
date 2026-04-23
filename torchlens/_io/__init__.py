@@ -1,8 +1,14 @@
 """Portable I/O primitives for TorchLens model logs.
 
-This module defines the shared versioning, field-policy, and compatibility
-helpers used by the portable scrub/rehydrate path introduced in the I/O
-sprint.
+The ``torchlens._io`` package implements TorchLens' portable save/load path:
+it scrubs a ``ModelLog`` into metadata plus tensor blobs, writes directory
+bundles backed by ``safetensors``, and rehydrates those bundles into eager or
+lazy model logs. Portable bundles are for archival and analysis, not replay:
+``validate_forward_pass()`` is unsupported after ``torchlens.load()`` (Fork L),
+expert ``lazy=True, materialize_nested=False`` loads must call
+``torchlens.rehydrate_nested()`` before re-save (Fork M), and lazy refs open,
+verify, and close blob files per materialization instead of sharing handles
+(Fork K).
 """
 
 from __future__ import annotations
@@ -108,6 +114,13 @@ def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu"
         Model log loaded from a portable bundle.
     map_location:
         Target device for the materialized nested tensors.
+
+    Examples
+    --------
+    >>> import torchlens as tl
+    >>> model_log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
+    >>> tl.rehydrate_nested(model_log)
+    >>> model_log.save("demo_bundle_copy")
     """
 
     from .rehydrate import rehydrate_nested as _rehydrate_nested
