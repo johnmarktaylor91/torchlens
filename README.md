@@ -231,6 +231,12 @@ streamed_log = tl.log_forward_pass(
 )
 ```
 
+## Security
+
+Portable bundles contain a pickle file in `metadata.pkl`. Only load bundles
+from trusted sources. Loading an untrusted bundle with `tl.load()` or
+`ModelLog.load()` can execute arbitrary code.
+
 Export options:
 - `to_pandas()` on model, layer, module, parameter, and buffer surfaces
 - `to_csv(...)`, `to_parquet(...)`, and `to_json(...)` on those same surfaces

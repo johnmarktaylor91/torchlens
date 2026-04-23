@@ -90,7 +90,13 @@ Supported `kind` values this sprint: `activation`, `gradient`, `captured_arg`,
 | Manifest unparseable | Raise `TorchLensIOError` |
 | Manifest blob id missing on disk | Raise `TorchLensIOError` listing missing blobs |
 | Blob checksum mismatch | Raise `TorchLensIOError` naming the blob id |
-| Unknown extra files in `blobs/` | Warn and continue |
+| Unknown extra files in `blobs/` | Warn and continue unless an extra file sha256 matches a manifest entry, then raise `TorchLensIOError` |
+
+## Security
+
+Portable bundles contain a pickle payload in `metadata.pkl`. Only load bundles
+from trusted sources. Loading an untrusted bundle through `torchlens.load()`
+or `ModelLog.load()` can execute arbitrary code.
 
 ## Fork Callouts
 

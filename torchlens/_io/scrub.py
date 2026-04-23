@@ -259,6 +259,8 @@ def _blobify_recursive_value(
 ) -> Any:
     """Blobify tensors recursively inside nested containers."""
 
+    if isinstance(value, BlobRef):
+        return value
     if isinstance(value, torch.Tensor):
         return _blobify_tensor_field(owner, field_name, value, blob_specs, blob_counter)
     if isinstance(value, list):

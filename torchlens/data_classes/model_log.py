@@ -449,7 +449,13 @@ class ModelLog:
             return iter(list(self._raw_layer_dict.values()))
 
     def save(self, path: str | Path, **kwargs: Any) -> None:
-        """Call :func:`torchlens.save` for this model log."""
+        """Call :func:`torchlens.save` for this model log.
+
+        Warning
+        -------
+        Portable bundles contain a pickle file. Only load bundles from trusted
+        sources. Loading an untrusted bundle can execute arbitrary code.
+        """
 
         from .._io.bundle import save as save_bundle
 
@@ -457,7 +463,13 @@ class ModelLog:
 
     @classmethod
     def load(cls, path: str | Path, **kwargs: Any) -> "ModelLog":
-        """Call :func:`torchlens.load` and return the loaded model log."""
+        """Call :func:`torchlens.load` and return the loaded model log.
+
+        Warning
+        -------
+        Portable bundles contain a pickle file. Only load bundles from trusted
+        sources. Loading an untrusted bundle can execute arbitrary code.
+        """
 
         from .._io.bundle import load as load_bundle
 

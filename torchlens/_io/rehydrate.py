@@ -20,6 +20,7 @@ from . import BlobRef, FieldPolicy, TorchLensIOError
 from .accessor_rebuild import rebuild_model_log_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
+from .paths import resolve_bundle_blob_path
 from ..data_classes.model_log import ModelLog
 
 
@@ -387,7 +388,7 @@ def _materialize_blob_ref(
         if isinstance(entry, TensorEntry)
         else entry.get("relative_path", f"blobs/{blob_ref.blob_id}.safetensors")
     )
-    blob_path = bundle_path / relative_path
+    blob_path = resolve_bundle_blob_path(bundle_path, relative_path)
     if not blob_path.exists():
         raise TorchLensIOError(f"Tensor blob not found at {blob_path}.")
 
@@ -601,7 +602,17 @@ def rehydrate_nested(
     *,
     map_location: str | torch.device = "cpu",
 ) -> None:
-    """Materialize nested portable blob refs in place on a loaded ``ModelLog``.
+    """Replace any remaining nested ``BlobRef`` objects with materialized tensors.
+
+    This function is a no-op unless the ``ModelLog`` was loaded with
+    ``lazy=True, materialize_nested=False``. In the default load mode, nested
+    tensors are already materialized.
+
+    Typical workflow:
+
+    >>> import torchlens as tl
+    >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
+    >>> tl.rehydrate_nested(log)
 
     Parameters
     ----------

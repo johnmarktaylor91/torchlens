@@ -29,6 +29,7 @@ from safetensors.torch import load_file, save_file
 from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
+from .paths import resolve_bundle_blob_path
 from .rehydrate import rehydrate_model_log
 from .scrub import scrub_for_save
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
@@ -111,12 +112,16 @@ def save(
     >>> loaded = tl.load("demo_bundle")
     >>> loaded["linear_1_1"].activation.shape
     torch.Size([2, 3])
+
+    Warnings
+    --------
+    Portable bundles contain a pickle file. Only load bundles from trusted
+    sources. Loading an untrusted bundle can execute arbitrary code.
     """
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
     _validate_activation_postfunc_outputs(model_log, include_activations=include_activations)
-    _raise_for_unmaterialized_nested_blob_refs(model_log)
 
     backup_path: Path | None = None
     tmp_path = _make_tmp_bundle_path(bundle_path)
@@ -137,6 +142,10 @@ def save(
             include_gradients=include_gradients,
             include_captured_args=include_captured_args,
             include_rng_states=include_rng_states,
+        )
+        _raise_for_unmaterialized_nested_blob_refs(
+            scrubbed_state,
+            allowed_blob_ids={blob_id for blob_id, _, _, _ in blob_specs},
         )
         fast_copy_specs = _attach_fast_copy_specs(
             model_log,
@@ -249,6 +258,11 @@ def load(
     >>> activation = layer.materialize_activation()
     >>> activation.shape
     torch.Size([2, 3])
+
+    Warnings
+    --------
+    Portable bundles contain a pickle file. Only load bundles from trusted
+    sources. Loading an untrusted bundle can execute arbitrary code.
     """
 
     bundle_path = Path(path)
@@ -263,8 +277,8 @@ def load(
     try:
         manifest = Manifest.read(manifest_path)
         enforce_version_policy(manifest)
-        _check_unknown_blob_entries(manifest, blobs_path)
         _validate_manifest_blob_paths(manifest, bundle_path)
+        _check_unknown_blob_entries(manifest, blobs_path)
         if not lazy:
             _eager_verify_blob_payloads(manifest, bundle_path, map_location)
 
@@ -672,7 +686,10 @@ def _fast_copy_tensor_blob(
     if source_entry is None:
         raise TorchLensIOError(f"Manifest is missing blob_id={fast_copy_spec.source_ref.blob_id}.")
 
-    source_blob_path = fast_copy_spec.source_ref.blob_path()
+    source_blob_path = resolve_bundle_blob_path(
+        fast_copy_spec.source_ref.source_bundle_path,
+        source_entry.relative_path,
+    )
     _reject_symlink_path(source_blob_path, context="source blob")
     if not source_blob_path.exists():
         raise TorchLensIOError(f"Tensor blob not found at {source_blob_path}.")
@@ -874,13 +891,21 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
     return value
 
 
-def _raise_for_unmaterialized_nested_blob_refs(model_log: ModelLog) -> None:
+def _raise_for_unmaterialized_nested_blob_refs(
+    value: Any,
+    *,
+    allowed_blob_ids: set[str],
+) -> None:
     """Reject resave attempts that still contain nested lazy ``BlobRef`` objects.
 
     Parameters
     ----------
-    model_log:
-        Model log about to be scrubbed for portable save.
+    value:
+        Scrubbed portable state about to be written.
+    allowed_blob_ids:
+        Blob ids created during the current scrub pass. Any surviving nested
+        ``BlobRef`` outside this set came from a prior lazy load and must be
+        materialized before resave.
 
     Raises
     ------
@@ -888,14 +913,19 @@ def _raise_for_unmaterialized_nested_blob_refs(model_log: ModelLog) -> None:
         If any nested portable blob refs remain in blob-recursive fields.
     """
 
-    if _contains_nested_blob_refs(model_log, seen=set()):
+    if _contains_nested_blob_refs(value, seen=set(), allowed_blob_ids=allowed_blob_ids):
         raise TorchLensIOError(
             "ModelLog contains unmaterialized nested blob references. "
             "Call torchlens.rehydrate_nested(model_log) before saving."
         )
 
 
-def _contains_nested_blob_refs(value: Any, *, seen: set[int]) -> bool:
+def _contains_nested_blob_refs(
+    value: Any,
+    *,
+    seen: set[int],
+    allowed_blob_ids: set[str],
+) -> bool:
     """Return whether any blob-recursive field still contains live ``BlobRef`` values.
 
     Parameters
@@ -914,19 +944,37 @@ def _contains_nested_blob_refs(value: Any, *, seen: set[int]) -> bool:
     if isinstance(value, (str, int, float, bool, type(None), torch.dtype, torch.device)):
         return False
     if isinstance(value, BlobRef):
-        return False
+        return value.blob_id not in allowed_blob_ids
     if isinstance(value, list):
-        return any(_contains_nested_blob_refs(item, seen=seen) for item in value)
+        return any(
+            _contains_nested_blob_refs(item, seen=seen, allowed_blob_ids=allowed_blob_ids)
+            for item in value
+        )
     if isinstance(value, tuple):
-        return any(_contains_nested_blob_refs(item, seen=seen) for item in value)
+        return any(
+            _contains_nested_blob_refs(item, seen=seen, allowed_blob_ids=allowed_blob_ids)
+            for item in value
+        )
     if isinstance(value, OrderedDict):
-        return any(_contains_nested_blob_refs(item, seen=seen) for item in value.values())
+        return any(
+            _contains_nested_blob_refs(item, seen=seen, allowed_blob_ids=allowed_blob_ids)
+            for item in value.values()
+        )
     if isinstance(value, defaultdict):
-        return any(_contains_nested_blob_refs(item, seen=seen) for item in value.values())
+        return any(
+            _contains_nested_blob_refs(item, seen=seen, allowed_blob_ids=allowed_blob_ids)
+            for item in value.values()
+        )
     if isinstance(value, dict):
-        return any(_contains_nested_blob_refs(item, seen=seen) for item in value.values())
+        return any(
+            _contains_nested_blob_refs(item, seen=seen, allowed_blob_ids=allowed_blob_ids)
+            for item in value.values()
+        )
     if isinstance(value, set):
-        return any(_contains_nested_blob_refs(item, seen=seen) for item in value)
+        return any(
+            _contains_nested_blob_refs(item, seen=seen, allowed_blob_ids=allowed_blob_ids)
+            for item in value
+        )
 
     spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
     if spec is None:
@@ -939,14 +987,21 @@ def _contains_nested_blob_refs(value: Any, *, seen: set[int]) -> bool:
 
     for field_name, field_value in vars(value).items():
         policy = spec.get(field_name)
-        if policy == FieldPolicy.BLOB_RECURSIVE and _container_contains_blob_ref(field_value):
+        if policy == FieldPolicy.BLOB_RECURSIVE and _container_contains_blob_ref(
+            field_value,
+            allowed_blob_ids=allowed_blob_ids,
+        ):
             return True
-        if policy == FieldPolicy.KEEP and _contains_nested_blob_refs(field_value, seen=seen):
+        if policy == FieldPolicy.KEEP and _contains_nested_blob_refs(
+            field_value,
+            seen=seen,
+            allowed_blob_ids=allowed_blob_ids,
+        ):
             return True
     return False
 
 
-def _container_contains_blob_ref(value: Any) -> bool:
+def _container_contains_blob_ref(value: Any, *, allowed_blob_ids: set[str]) -> bool:
     """Return whether a nested container still contains a ``BlobRef`` leaf.
 
     Parameters
@@ -961,19 +1016,34 @@ def _container_contains_blob_ref(value: Any) -> bool:
     """
 
     if isinstance(value, BlobRef):
-        return True
+        return value.blob_id not in allowed_blob_ids
     if isinstance(value, list):
-        return any(_container_contains_blob_ref(item) for item in value)
+        return any(
+            _container_contains_blob_ref(item, allowed_blob_ids=allowed_blob_ids) for item in value
+        )
     if isinstance(value, tuple):
-        return any(_container_contains_blob_ref(item) for item in value)
+        return any(
+            _container_contains_blob_ref(item, allowed_blob_ids=allowed_blob_ids) for item in value
+        )
     if isinstance(value, OrderedDict):
-        return any(_container_contains_blob_ref(item) for item in value.values())
+        return any(
+            _container_contains_blob_ref(item, allowed_blob_ids=allowed_blob_ids)
+            for item in value.values()
+        )
     if isinstance(value, defaultdict):
-        return any(_container_contains_blob_ref(item) for item in value.values())
+        return any(
+            _container_contains_blob_ref(item, allowed_blob_ids=allowed_blob_ids)
+            for item in value.values()
+        )
     if isinstance(value, dict):
-        return any(_container_contains_blob_ref(item) for item in value.values())
+        return any(
+            _container_contains_blob_ref(item, allowed_blob_ids=allowed_blob_ids)
+            for item in value.values()
+        )
     if isinstance(value, set):
-        return any(_container_contains_blob_ref(item) for item in value)
+        return any(
+            _container_contains_blob_ref(item, allowed_blob_ids=allowed_blob_ids) for item in value
+        )
     return False
 
 
@@ -995,6 +1065,23 @@ def _check_unknown_blob_entries(manifest: Manifest, blobs_path: Path) -> None:
             raise TorchLensIOError(f"Refusing to load symlinked blob path {child}.")
         actual_names.add(child.name)
     extra_names = sorted(actual_names - expected_names)
+    if not extra_names:
+        return
+
+    expected_sha256s = {entry.sha256 for entry in manifest.tensors}
+    colliding_extra_names: list[str] = []
+    for extra_name in extra_names:
+        extra_path = blobs_path / extra_name
+        extra_sha256 = sha256_of_file(extra_path)
+        if extra_sha256 in expected_sha256s:
+            colliding_extra_names.append(extra_name)
+
+    if colliding_extra_names:
+        raise TorchLensIOError(
+            "Bundle contains unreferenced blob files whose sha256 matches a manifest entry: "
+            f"{', '.join(colliding_extra_names)}."
+        )
+
     if extra_names:
         warnings.warn(
             f"Bundle contains unreferenced extra files in blobs/: {', '.join(extra_names)}.",
@@ -1021,7 +1108,7 @@ def _validate_manifest_blob_paths(manifest: Manifest, bundle_path: Path) -> None
 
     missing_blob_ids: list[str] = []
     for entry in manifest.tensors:
-        blob_path = bundle_path / entry.relative_path
+        blob_path = resolve_bundle_blob_path(bundle_path, entry.relative_path)
         if blob_path.is_symlink():
             raise TorchLensIOError(f"Refusing to load symlinked blob path {blob_path}.")
         if not blob_path.exists():
@@ -1051,7 +1138,7 @@ def _eager_verify_blob_payloads(
     """
 
     for entry in manifest.tensors:
-        blob_path = bundle_path / entry.relative_path
+        blob_path = resolve_bundle_blob_path(bundle_path, entry.relative_path)
         observed_sha256 = sha256_of_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise TorchLensIOError(f"Checksum mismatch for blob_id={entry.blob_id} at {blob_path}.")

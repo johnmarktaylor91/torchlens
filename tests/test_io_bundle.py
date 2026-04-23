@@ -268,52 +268,61 @@ def test_bundle_save_strict_false_records_unsupported_tensors(tmp_path: Path) ->
 
 
 @pytest.mark.parametrize(
-    ("scenario", "mutate_manifest", "expectation"),
+    ("scenario", "mutate_manifest", "expectation", "expected_text"),
     [
         (
             "io_format_newer",
             lambda manifest: manifest.__setitem__("io_format_version", IO_FORMAT_VERSION + 1),
             "raise",
+            str(IO_FORMAT_VERSION + 1),
         ),
         (
             "io_format_older",
             lambda manifest: manifest.__setitem__("io_format_version", IO_FORMAT_VERSION - 1),
             "deprecation_warning",
+            str(IO_FORMAT_VERSION - 1),
         ),
         (
             "io_format_equal",
             lambda manifest: manifest.__setitem__("io_format_version", IO_FORMAT_VERSION),
             "ok",
+            None,
         ),
         (
             "torch_major_mismatch",
             lambda manifest: manifest.__setitem__("torch_version", "999.0.0"),
             "raise",
+            "999.0.0",
         ),
         (
             "torch_minor_mismatch",
             lambda manifest: manifest.__setitem__("torch_version", _torch_minor_mismatch_version()),
             "warning",
+            lambda: _torch_minor_mismatch_version(),
         ),
         (
             "torchlens_newer",
             lambda manifest: manifest.__setitem__("torchlens_version", "999.0.0"),
             "warning",
+            "999.0.0",
         ),
         (
             "torchlens_older",
             lambda manifest: manifest.__setitem__("torchlens_version", "0.0.1"),
             "info_log",
+            "0.0.1",
         ),
         (
             "python_major_mismatch",
             lambda manifest: manifest.__setitem__("python_version", "999.0.0"),
             "python_major_mismatch",
+            "999.0.0",
         ),
         (
             "unknown_extra_blob_file",
             lambda manifest: manifest,
             "extra_blob_warning",
+            None,
         ),
     ],
 )
@@ -324,6 +333,7 @@ def test_bundle_version_policy_rows(
     scenario: str,
     mutate_manifest: Callable[[dict[str, Any]], Any],
     expectation: str,
+    expected_text: str | Callable[[], str] | None,
 ) -> None:
     """Fork F version and integrity policy rows should behave as specified."""
 
@@ -331,6 +341,7 @@ def test_bundle_version_policy_rows(
     manifest = _read_manifest(bundle_path)
     mutate_manifest(manifest)
     _write_manifest(bundle_path, manifest)
+    resolved_expected_text = expected_text() if callable(expected_text) else expected_text
 
     if expectation == "python_major_mismatch":
         (bundle_path / "metadata.pkl").write_bytes(b"not a pickle")
@@ -346,18 +357,18 @@ def test_bundle_version_policy_rows(
         return
 
     if expectation == "raise":
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(TorchLensIOError, match=resolved_expected_text or ""):
             load(bundle_path)
         return
 
     if expectation == "deprecation_warning":
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(DeprecationWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
         assert loaded.model_name == "_ConvBundleModel"
         return
 
     if expectation == "warning":
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
         assert loaded.model_name == "_ConvBundleModel"
         return
@@ -366,6 +377,8 @@ def test_bundle_version_policy_rows(
         with caplog.at_level(logging.INFO, logger="torchlens._io.manifest"):
             loaded = load(bundle_path)
         assert loaded.model_name == "_ConvBundleModel"
+        assert resolved_expected_text is not None
+        assert resolved_expected_text in caplog.text
         assert "older than runtime torchlens_version" in caplog.text
         return
 

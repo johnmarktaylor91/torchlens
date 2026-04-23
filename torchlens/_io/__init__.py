@@ -106,7 +106,11 @@ def default_fill_state(state: dict[str, Any], *, defaults: dict[str, Any]) -> No
 
 
 def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu") -> None:
-    """Materialize nested portable blob refs on a loaded model log.
+    """Replace any remaining nested portable blob refs on a loaded model log.
+
+    This function is a no-op unless the model log was loaded with
+    ``lazy=True, materialize_nested=False``. In the default load mode, nested
+    tensors are already materialized.
 
     Parameters
     ----------
@@ -118,9 +122,9 @@ def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu"
     Examples
     --------
     >>> import torchlens as tl
-    >>> model_log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.rehydrate_nested(model_log)
-    >>> model_log.save("demo_bundle_copy")
+    >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
+    >>> tl.rehydrate_nested(log)
+    >>> log.save("demo_bundle_copy")
     """
 
     from .rehydrate import rehydrate_nested as _rehydrate_nested

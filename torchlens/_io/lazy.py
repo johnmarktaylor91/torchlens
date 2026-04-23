@@ -9,15 +9,19 @@ verify integrity, return a tensor, and close the file immediately.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
 import torch
 from safetensors import SafetensorError
-from safetensors.torch import load_file
+from safetensors.torch import load, load_file
 
 from . import TorchLensIOError
 from .manifest import sha256_of_file
+from .paths import resolve_bundle_blob_path
+
+_INLINE_LOAD_MAX_BYTES = 500 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -62,7 +66,7 @@ class LazyActivationRef:
             Absolute safetensors blob path.
         """
 
-        return self.source_bundle_path / self.relative_path
+        return resolve_bundle_blob_path(self.source_bundle_path, self.relative_path)
 
     def materialize(self, *, map_location: str | torch.device = "cpu") -> torch.Tensor:
         """Materialize the referenced tensor from disk.
@@ -84,25 +88,57 @@ class LazyActivationRef:
         """
 
         blob_path = self.blob_path()
-        if not blob_path.exists():
-            raise TorchLensIOError(f"Tensor blob not found at {blob_path}.")
-
-        observed_sha256 = sha256_of_file(blob_path)
-        if observed_sha256 != self.expected_sha256:
-            raise TorchLensIOError(
-                f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
-                f"got {observed_sha256}"
-            )
 
         try:
-            tensor_map = load_file(blob_path, device=str(map_location))
-        except ImportError as exc:
-            raise TorchLensIOError(
-                "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
-            ) from exc
-        except (OSError, SafetensorError, ValueError) as exc:
-            raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+            blob_size = blob_path.stat().st_size
+        except FileNotFoundError as exc:
+            raise TorchLensIOError(f"Tensor blob not found at {blob_path}.") from exc
+        except OSError as exc:
+            raise TorchLensIOError(f"Failed to access blob at {blob_path}.") from exc
+
+        if blob_size <= _INLINE_LOAD_MAX_BYTES:
+            try:
+                blob_bytes = blob_path.read_bytes()
+            except FileNotFoundError as exc:
+                raise TorchLensIOError(f"Tensor blob not found at {blob_path}.") from exc
+            except OSError as exc:
+                raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+
+            observed_sha256 = sha256(blob_bytes).hexdigest()
+            if observed_sha256 != self.expected_sha256:
+                raise TorchLensIOError(
+                    f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
+                    f"got {observed_sha256}"
+                )
+
+            try:
+                tensor_map = load(blob_bytes)
+            except ImportError as exc:
+                raise TorchLensIOError(
+                    "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
+                ) from exc
+            except (OSError, SafetensorError, ValueError) as exc:
+                raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+        else:
+            observed_sha256 = sha256_of_file(blob_path)
+            if observed_sha256 != self.expected_sha256:
+                raise TorchLensIOError(
+                    f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
+                    f"got {observed_sha256}"
+                )
+
+            try:
+                tensor_map = load_file(blob_path, device=str(map_location))
+            except ImportError as exc:
+                raise TorchLensIOError(
+                    "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
+                ) from exc
+            except (OSError, SafetensorError, ValueError) as exc:
+                raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
 
         if len(tensor_map) != 1:
             raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
-        return next(iter(tensor_map.values()))
+        tensor = next(iter(tensor_map.values()))
+        if blob_size <= _INLINE_LOAD_MAX_BYTES:
+            return tensor.to(map_location)
+        return tensor

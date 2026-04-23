@@ -15,6 +15,7 @@ pytest.importorskip("safetensors")
 
 from torchlens import cleanup_tmp, log_forward_pass
 from torchlens._io import TorchLensIOError
+from torchlens._io.manifest import Manifest
 from torchlens.data_classes.model_log import ModelLog
 
 
@@ -153,6 +154,9 @@ def test_step_19_finalizes_bundle_and_keeps_activations_in_memory(tmp_path: Path
         assert layer.activation_ref.source_bundle_path == bundle_path
         assert ".tmp." not in str(layer.activation_ref.source_bundle_path)
 
+    manifest = Manifest.read(bundle_path / "manifest.json")
+    assert manifest.tensors
+
 
 def test_step_20_evicts_streamed_activations_when_requested(tmp_path: Path) -> None:
     """Step 20 should drop in-memory activations after refs are attached."""
@@ -268,6 +272,41 @@ def test_activation_sink_receives_saved_tensors_and_is_mutually_exclusive(
             save_activations_to=tmp_path / "stream_bundle.tl",
             activation_sink=_sink,
         )
+
+
+def test_selective_streaming_save_is_rejected(tmp_path: Path) -> None:
+    """Selective streaming-to-bundle should fail instead of producing an empty bundle."""
+
+    bundle_path = tmp_path / "selective_stream_bundle.tl"
+    model, inputs = _make_streaming_model()
+
+    with pytest.raises(TorchLensIOError, match='layers_to_save="all"'):
+        log_forward_pass(
+            model,
+            inputs,
+            layers_to_save="linear",
+            save_activations_to=bundle_path,
+            keep_activations_in_memory=False,
+        )
+
+    assert not bundle_path.exists()
+
+
+def test_selective_activation_sink_still_works() -> None:
+    """Selective activation sinks should still use the supported two-pass path."""
+
+    received: list[tuple[str, torch.Tensor]] = []
+
+    def _sink(label: str, tensor: torch.Tensor) -> None:
+        received.append((label, tensor))
+
+    model, inputs = _make_streaming_model()
+    model_log = log_forward_pass(model, inputs, activation_sink=_sink, layers_to_save="linear")
+
+    capture_time_layers = [layer for layer in _saved_layers(model_log) if not layer.is_output_layer]
+    assert capture_time_layers
+    assert len(received) == len(capture_time_layers)
+    assert all("linear" in label for label, _ in received)
 
 
 def test_cleanup_tmp_removes_partial_dirs_and_rejects_symlinks(tmp_path: Path) -> None:

@@ -49,6 +49,7 @@ def _build_log(
     *,
     seed: int = 0,
     save_function_args: bool = False,
+    save_rng_states: bool = False,
 ) -> ModelLog:
     """Build a deterministic ``ModelLog`` for lazy I/O tests.
 
@@ -58,6 +59,8 @@ def _build_log(
         Random seed used for model initialization and inputs.
     save_function_args:
         Whether function arguments should be captured in the log.
+    save_rng_states:
+        Whether RNG state tensors should be captured in the log.
 
     Returns
     -------
@@ -73,6 +76,7 @@ def _build_log(
         inputs,
         layers_to_save="all",
         save_function_args=save_function_args,
+        save_rng_states=save_rng_states,
         random_seed=seed,
     )
 
@@ -82,7 +86,9 @@ def _save_bundle(
     *,
     seed: int = 0,
     save_function_args: bool = False,
+    save_rng_states: bool = False,
     include_captured_args: bool = False,
+    include_rng_states: bool = False,
     path_name: str = "bundle.tl",
 ) -> tuple[Path, ModelLog]:
     """Save a deterministic bundle and return the path plus source log.
@@ -95,8 +101,12 @@ def _save_bundle(
         Random seed used for model initialization and inputs.
     save_function_args:
         Whether function arguments should be captured in the source log.
+    save_rng_states:
+        Whether RNG state tensors should be captured in the source log.
     include_captured_args:
         Whether nested captured args should be persisted in the bundle.
+    include_rng_states:
+        Whether nested RNG-state tensors should be persisted in the bundle.
     path_name:
         Bundle directory name.
 
@@ -106,9 +116,18 @@ def _save_bundle(
         Saved bundle path and the original live log.
     """
 
-    model_log = _build_log(seed=seed, save_function_args=save_function_args)
+    model_log = _build_log(
+        seed=seed,
+        save_function_args=save_function_args,
+        save_rng_states=save_rng_states,
+    )
     bundle_path = tmp_path / path_name
-    save(model_log, bundle_path, include_captured_args=include_captured_args)
+    save(
+        model_log,
+        bundle_path,
+        include_captured_args=include_captured_args,
+        include_rng_states=include_rng_states,
+    )
     return bundle_path, model_log
 
 
@@ -347,6 +366,33 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
         match="Call torchlens.rehydrate_nested\\(model_log\\) before saving",
     ):
         save(lazy_log, tmp_path / "resaved.tl", include_captured_args=True)
+
+
+def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
+    tmp_path: Path,
+) -> None:
+    """Excluded nested BlobRef fields should not block a portable resave."""
+
+    bundle_path, _ = _save_bundle(
+        tmp_path,
+        save_function_args=True,
+        save_rng_states=True,
+        include_captured_args=True,
+        include_rng_states=True,
+        path_name="captured_args_and_rng.tl",
+    )
+    lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
+    resaved_path = tmp_path / "resaved_without_nested_fields.tl"
+
+    save(
+        lazy_log,
+        resaved_path,
+        include_captured_args=False,
+        include_rng_states=False,
+    )
+    restored = load(resaved_path, lazy=False)
+
+    assert restored.model_name == lazy_log.model_name
 
 
 @pytest.mark.parametrize("lazy", [False, True])

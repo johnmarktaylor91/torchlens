@@ -326,7 +326,16 @@ def log_forward_pass(
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
 
-    if layers_to_save in ["all", "none", None, []]:
+    uses_two_pass = layers_to_save not in ["all", "none", None, []]
+    if save_activations_to is not None and uses_two_pass:
+        raise TorchLensIOError(
+            'save_activations_to is only supported with layers_to_save="all" in this '
+            "release. For selective streaming use activation_sink=callable, or capture "
+            'with layers_to_save="all" and filter post-hoc with '
+            "torchlens.save(..., include_activations=True)."
+        )
+
+    if not uses_two_pass:
         # --- SINGLE-PASS path ---
         # "all" or "none": no name resolution needed, so one pass suffices.
         model_log = _run_model_and_save_specified_activations(
