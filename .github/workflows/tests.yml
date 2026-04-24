@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: "${{ github.head_ref || github.ref }}-tests"
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke (torch ${{ matrix.torch }}, py ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cover the declared floor (2.4) and a recent version.
+        # Keeping two entries keeps CI minutes under control while still
+        # flagging regressions against both ends of the support window.
+        include:
+          - python: "3.10"
+            torch: "2.4.*"
+          - python: "3.11"
+            torch: "2.7.*"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install torch (${{ matrix.torch }}, CPU wheel)
+        run: |
+          uv pip install --system "torch==${{ matrix.torch }}" \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install torchlens (with test extras)
+        run: |
+          uv pip install --system -e ".[dev]"
+
+      - name: Run smoke tests
+        run: |
+          pytest tests/ -m smoke -x --tb=short -q

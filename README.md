@@ -299,6 +299,18 @@ FuncCallLocation:
 '''
 ```
 
+## Known limitations / unsupported contexts
+
+TorchLens is not compatible with `torch.compile`'d models, TorchScript, or
+`torch.export` (the forward pass doesn't run as ordinary Python, so our
+wrappers never see the ops). It also has specific behaviors around FSDP,
+sparse tensors, meta tensors, quantization, and `torch.func.vmap`. In
+each case `log_forward_pass` either raises a clear error or emits a
+targeted warning so you never get silent wrong results.
+
+See **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** for the full matrix:
+what fails, what works, and the recommended workaround for each context.
+
 ## Planned Features
 
 1) In the further future, I am considering adding functionality to not just save activations,
