@@ -55,9 +55,50 @@ from .utils.rng import set_random_seed
 
 
 def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
-    """Unwrap nn.DataParallel to get the underlying module."""
+    """Return the underlying ``nn.Module`` if ``model`` is a data-parallel wrapper.
+
+    Handles:
+      * ``nn.DataParallel``              -> unwrap via ``.module``
+      * ``nn.parallel.DistributedDataParallel`` -> unwrap via ``.module``
+      * ``torch.distributed.fsdp.FullyShardedDataParallel`` -> raise
+
+    FSDP cannot be unwrapped the same way: its parameters are sharded across
+    ranks, so there is no single unsharded module to log. Users who want to
+    log an FSDP-wrapped model should ``log_forward_pass`` a rank-local
+    *un-wrapped* copy of the underlying module instead.
+
+    The function is kept under its original name to avoid churn at call sites;
+    the historical ``_unwrap_data_parallel`` now covers the full data-parallel
+    family.
+    """
+    # FSDP: fail loudly rather than silently mis-attributing sharded params.
+    try:
+        from torch.distributed.fsdp import FullyShardedDataParallel
+    except ImportError:
+        pass
+    else:
+        if isinstance(model, FullyShardedDataParallel):
+            raise RuntimeError(
+                "torchlens.log_forward_pass does not support "
+                "FullyShardedDataParallel (FSDP): parameters are sharded "
+                "across ranks and there is no unsharded module to log. "
+                "Run log_forward_pass on a rank-local copy of the underlying "
+                "module (before FSDP wrapping) instead."
+            )
+
+    # DistributedDataParallel: unwrap via ``.module`` (same layout as DataParallel).
+    try:
+        from torch.nn.parallel import DistributedDataParallel
+    except ImportError:
+        pass
+    else:
+        if isinstance(model, DistributedDataParallel):
+            return model.module
+
+    # DataParallel: the original case this helper covered.
     if isinstance(model, nn.DataParallel):
         return model.module
+
     return model
 
 
