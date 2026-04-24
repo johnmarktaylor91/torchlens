@@ -175,6 +175,23 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
         return 0
 
 
+def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
+    """Best-effort memory format probe — returns ``preserve_format`` on any error.
+
+    ``is_contiguous(memory_format=...)`` is the recommended query; it is
+    undefined for some exotic layouts (sparse, meta), so we wrap in a
+    try/except and fall back to ``preserve_format`` (clone's default).
+    """
+    try:
+        if t.is_contiguous(memory_format=torch.channels_last):
+            return torch.channels_last
+        if t.is_contiguous(memory_format=torch.channels_last_3d):
+            return torch.channels_last_3d
+    except (RuntimeError, TypeError, AttributeError):
+        pass
+    return torch.preserve_format
+
+
 def safe_copy(x, detach_tensor: bool = False):
     """Copy a tensor (or parameter) without triggering torchlens logging.
 
@@ -201,19 +218,31 @@ def safe_copy(x, detach_tensor: bool = False):
 
     if isinstance(x, (torch.Tensor, torch.nn.Parameter)):
         with pause_logging():
+            # Preserve memory_format (channels_last, channels_last_3d, etc.) so
+            # downstream layout-sensitive ops see the same layout they would
+            # see without TorchLens. Falls back to ``preserve_format`` which is
+            # ``clone()``'s default but spelled explicitly for clarity.
+            mem_fmt = _safe_get_memory_format(x)
             if not detach_tensor:
-                return x.clone()
+                try:
+                    return x.clone(memory_format=mem_fmt)
+                except (TypeError, RuntimeError):
+                    # Some tensor variants (sparse, some subclasses) reject the
+                    # memory_format kwarg; fall back to a plain clone.
+                    return x.clone()
             # Detach path: use pure-torch ops — no numpy round-trip.
             # This avoids crashes on sparse, quantized, complex32, meta, float8, etc.
             try:
-                vals_tensor = x.detach().clone()
-            except Exception:
-                # Fallback for exotic dtypes that can't clone directly
+                vals_tensor = x.detach().clone(memory_format=mem_fmt)
+            except (TypeError, RuntimeError):
                 try:
-                    vals_tensor = x.data.cpu().clone()
+                    vals_tensor = x.detach().clone()
                 except Exception:
-                    # Last resort: return shape-preserving zero tensor
-                    vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
+                    try:
+                        vals_tensor = x.data.cpu().clone()
+                    except Exception:
+                        # Last resort: return shape-preserving zero tensor
+                        vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
             # Preserve the raw label so postprocessing can map this tensor
             # back to its ModelLog entry.
             if hasattr(x, "tl_tensor_label_raw"):
