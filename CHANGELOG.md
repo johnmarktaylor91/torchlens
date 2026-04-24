@@ -1,6 +1,65 @@
 # CHANGELOG
 
 
+## v1.7.0 (2026-04-24)
+
+### Features
+
+- **robustness**: Pr4 opaque-wrapper guards + LIMITATIONS.md + CI matrix
+  ([`9db5b2e`](https://github.com/johnmarktaylor91/torchlens/commit/9db5b2e11b30b0f72d2a19b1e19b9514d0e897e6))
+
+Final wave of the robustness sprint. Adds the remaining must-fail-loudly guards for wrappers whose
+  forward pass is not ordinary Python, adds a user-facing limitations doc, wires in a lean
+  torch-version CI matrix, and links the doc from the README.
+
+### Opaque-wrapper guards (new) torchlens/user_funcs.py now ships _reject_opaque_wrappers(model),
+  called immediately before _unwrap_data_parallel at every log entry point (log_forward_pass,
+  get_model_metadata, show_model_graph, validate_forward_pass). It raises RuntimeError with a
+  pointer to docs/LIMITATIONS.md for:
+
+- torch.compile'd models (OptimizedModule) — dynamo replaces the forward with a compiled graph; our
+  Python-level wrappers are optimized away or bypassed depending on the backend. -
+  torch.jit.ScriptModule (script + trace) — the forward runs on the TorchScript interpreter, not
+  Python; wrappers never fire. - torch.export.ExportedProgram — a serialised IR, not a callable
+  nn.Module. Detected defensively since ExportedProgram isn't an nn.Module in the first place.
+
+For every case the message tells the user to call log_forward_pass on the original un-wrapped model.
+
+### docs/LIMITATIONS.md (new) Canonical one-page matrix + per-context explanation of every
+  limitation surfaced by the robustness sprint. Sections:
+
+- At-a-glance matrix (what TorchLens does / workaround) - Per-context detail: compile / jit / export
+  / FSDP / meta / sparse / SymInt / quantized / vmap / multiprocess / nested / partial-support -
+  "Reporting a new failure" instructions
+
+### README pointer (new) A "Known limitations / unsupported contexts" section right before "Planned
+  Features" links to docs/LIMITATIONS.md with a one-line summary so users can find it without
+  reading the source.
+
+### CI torch-version matrix (new) .github/workflows/tests.yml runs smoke tests on two points in the
+  support window: python 3.10 + torch 2.4.* (declared floor) and python 3.11 + torch 2.7.*.
+  fail-fast is off so both rows report independently. Kept lean (smoke-only, two entries) so CI
+  minutes stay under control.
+
+### Tests (tests/test_robustness_pr4.py, 11 cases) - torch.compile'd model raises with
+  "torch.compile" in the message - Logging the un-compiled original still works after compilation -
+  torch.jit.script raises with "ScriptModule" - torch.jit.trace raises with "ScriptModule" - Logging
+  the un-scripted original still works after scripting - torch.export.ExportedProgram fails loudly
+  at entry - _reject_opaque_wrappers is a no-op on a bare nn.Module - _reject_opaque_wrappers raises
+  on ScriptModule at the helper level - docs/LIMITATIONS.md exists and is long enough to be
+  meaningful - README links to docs/LIMITATIONS.md - docs/LIMITATIONS.md mentions every context with
+  a runtime guard (staleness regression guard)
+
+### Verification - pytest tests/ -m smoke: 35/35 ✅ (up from 32) - pytest targeted regression + PR4:
+  470/470 ✅ (3m47s) - ruff check . ✅ / ruff format ✅ - mypy: 67 source files clean ✅
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+
 ## v1.6.0 (2026-04-24)
 
 ### Features
