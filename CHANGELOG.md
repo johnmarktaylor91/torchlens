@@ -1,21 +1,137 @@
 # CHANGELOG
 
 
-## v1.3.0 (unreleased)
+## v1.3.0 (2026-04-24)
 
 ### Documentation
 
-- **ux**: Default-value audit doc clarifications only; no entry-point defaults changed in Wave 4c.
+- **ux-sprint**: Clarify defaults in docstrings + add regression guard
+  ([`46a8555`](https://github.com/johnmarktaylor91/torchlens/commit/46a85556643ace08b66b236a64a8a187a10b111e))
 
-Clarify that `keep_unsaved_layers=True` still allows a full discovery pass before selective-layer
-replay, that `save_source_context=False` still captures the identity fields needed for branch
-attribution, and that `detect_loops=True` should be flipped off manually for very large (>1M-op)
-graphs when postprocessing speed matters.
+Wave 4c of the defaults audit. No defaults changed (all rows in defaults-table.md marked change: no,
+  because the public wrappers already put fast+informative defaults in the right place and expensive
+  paths are opt-in).
+
+Documentation-only improvements: - log_forward_pass / show_model_graph docstrings for detect_loops /
+  detect_recurrent_patterns now include the \">1M operations\" speedup guidance users want to find
+  when postprocessing gets slow. - save_source_context docstring now explicitly separates the
+  always-captured identity fields (file, line, func_name, etc.) from the opt-in rich source text, so
+  users understand branch attribution works regardless of this flag. - keep_unsaved_layers docstring
+  now shows the typical memory-conscious usage pattern (layers_to_save=[...],
+  keep_unsaved_layers=False).
+
+New regression guard: - tests/test_defaults.py — 7 tests locking in the current resolved defaults on
+  log_forward_pass, show_model_graph, log_model_metadata, torchlens.summary, and
+  validate_forward_pass. Tests the wrapper behavior (which routes through MISSING sentinels + option
+  groups) rather than raw signature defaults.
+
+Follow-up noted in wave4c-issues.md: ModelLog.__init__ still defaults
+  mark_input_output_distances=True while the public wrapper resolves to False. Not user-visible in
+  this sprint; would need a separate constructor parity pass.
+
+CHANGELOG.md: new v1.3.0 (unreleased) documentation stub covering the whole UX sprint.
+
+Gates: - ruff check: clean - mypy torchlens/: no issues (66 source files) - pytest smoke (28):
+  passed - pytest test_defaults.py (7 new): passed - pytest not-slow full (1144 passed, 21 skipped):
+  passed
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
 
 ### Features
 
-- **summary**: Add `ModelLog.summary()`, compact `ModelLog.__repr__`, and the
-  top-level `torchlens.summary()` convenience wrapper.
+- **ux-sprint**: Add ModelLog.summary, compact __repr__, torchlens.summary
+  ([`6a64cf1`](https://github.com/johnmarktaylor91/torchlens/commit/6a64cf1b4da2380c1f61fd44a8e3f771909474ff))
+
+Implements the Wave 4a deliverables from summary-api.md:
+
+- ModelLog.summary(level=..., fields=..., show_ops=..., ...) renders a preset-driven textual
+  summary. Presets: overview (default, Keras-style), graph (hybrid module+op), memory (tensor-size
+  accounting), control_flow (conditionals + recurrence), cost (params + FLOPs + MACs + time). -
+  ModelLog.__repr__ replaced with a concise 1-2 line identity card. - torchlens.summary(model,
+  input_args, input_kwargs=None, **kw) top-level convenience: runs a metadata-only forward pass,
+  renders the summary, cleans up, returns the string. - New package torchlens/_summary/
+  (underscore-prefixed to avoid collision with the public torchlens.summary function) holds the
+  builder + preset logic in 1169 LOC. - tests/test_summary.py: 11 new tests covering each preset,
+  __repr__ brevity, truncation markers, pre-postprocess ModelLog, fidelity against claims we cannot
+  keep (no peak-memory, no per-op device column).
+
+Gates: - ruff check: clean - mypy torchlens/: no issues (63 source files) - pytest smoke (28 tests):
+  passed - pytest test_summary.py (11 new): passed
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+- **ux-sprint**: Api renames + VisualizationOptions/StreamingOptions groups
+  ([`1d737b7`](https://github.com/johnmarktaylor91/torchlens/commit/1d737b739279747d4d074a5467952101cb355310))
+
+Implements Wave 4b deliverables (rename-table.md + option-groups.md):
+
+Renames (additive, old names remain working with DeprecationWarning): - top-level get_model_metadata
+  -> log_model_metadata - kwarg num_context_lines -> source_context_lines - kwarg
+  mark_input_output_distances -> compute_input_output_distances - kwarg detect_loops ->
+  detect_recurrent_patterns - ModelLog.validate_saved_activations -> ModelLog.validate_forward_pass
+
+Option groups (new dataclasses, flat kwargs remain as deprecated aliases): -
+  torchlens.VisualizationOptions — 16 fields, replaces vis_* sprawl. Per-function defaults:
+  log_forward_pass uses mode=none, show_model_graph uses mode=unrolled. Mixing flat+grouped same
+  field raises TypeError; mixing flat+grouped DIFFERENT fields merges. - torchlens.StreamingOptions
+  — 3 fields for bundle_path + retain_in_memory + activation_callback.
+
+Shared plumbing: - torchlens/_deprecations.py — warn_deprecated_alias dedup + MISSING sentinel +
+  kwarg-resolution helper. - torchlens/_literals.py — Literal type aliases for autocomplete:
+  OutputDeviceLiteral, VisModeLiteral, VisDirectionLiteral, VisNodePlacementLiteral,
+  VisRendererLiteral. - torchlens/options.py — 496 LOC, option-group dataclasses +
+  resolve_visualization_options / resolve_streaming_options / render kwarg translation.
+
+Tests: - tests/test_api_renames.py — 61 new tests covering each alias, DeprecationWarning firing,
+  flat+grouped mixing rules, per-function VisualizationOptions defaults, StreamingOptions migration.
+
+Gates: - ruff check: clean - mypy torchlens/: no issues - pytest smoke (28): passed - pytest
+  test_api_renames.py (61): passed - pytest not-slow full (1137 passed, 21 skipped): passed
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+### Refactoring
+
+- **ux-sprint**: Inline ModelLog cross-file method bindings
+  ([`b82f176`](https://github.com/johnmarktaylor91/torchlens/commit/b82f176f4f130be493e6f38e5f01fcba0a999bec))
+
+Step 1 of the refactor-list.md plan: convert all 19 class-body attribute rebindings at
+  model_log.py:706-724 into explicit `def X(self, ...)` methods on ModelLog. Implementation helpers
+  remain in their feature modules (visualization/, validation/, capture/, postprocess/); the class
+  body now has real method definitions that delegate via local imports where needed to avoid
+  circular-import regressions.
+
+Step 2: extract `_give_user_feedback_about_lookup_key` and `_get_lookup_help_str` from
+  `data_classes/interface.py` into a new `data_classes/_lookup_keys.py` so `capture/trace.py` no
+  longer needs to import from the former helper module. This unblocks any future collapse of
+  interface.py / cleanup.py.
+
+Step 3 intentionally SKIPPED this sprint (design marked it optional). interface.py and cleanup.py
+  remain as legitimate helper modules with non-method-pack utilities.
+
+Also added `tests/test_cross_file_refactor.py` with an AST-based guard that fails if anyone
+  reintroduces `X = imported_X` class-body rebindings on ModelLog.
+
+Gates: - ruff check: clean - mypy torchlens/: no issues - pytest smoke (28 tests): passed - pytest
+  not-slow (1065 passed, 21 skipped): passed
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
 
 
 ## v1.2.0 (2026-04-23)
