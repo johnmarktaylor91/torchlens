@@ -469,6 +469,48 @@ def get_model_metadata(
     return model_log
 
 
+def summary(
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+    input_kwargs: Optional[Dict[Any, Any]] = None,
+    **summary_kwargs: Any,
+) -> str:
+    """Run a metadata-only forward pass and return a rendered summary string.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to inspect.
+    input_args:
+        Positional args for ``model.forward()``.
+    input_kwargs:
+        Keyword args for ``model.forward()``.
+    **summary_kwargs:
+        Forwarded to ``ModelLog.summary``.
+
+    Returns
+    -------
+    str
+        Rendered summary text.
+    """
+    model = _unwrap_data_parallel(model)
+    if input_kwargs is None:
+        input_kwargs = {}
+
+    model_log = _run_model_and_save_specified_activations(
+        model=model,
+        input_args=input_args,  # type: ignore[arg-type]
+        input_kwargs=input_kwargs,
+        layers_to_save=None,
+        keep_unsaved_layers=True,
+        detect_loops=True,
+    )
+    try:
+        return model_log.summary(**summary_kwargs)
+    finally:
+        model_log.cleanup()
+
+
 def show_model_graph(
     model: nn.Module,
     input_args: Union[torch.Tensor, List, Tuple],

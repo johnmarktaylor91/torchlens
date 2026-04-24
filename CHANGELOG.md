@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v1.3.0 (unreleased)
+
+### Features
+
+- **summary**: Add `ModelLog.summary()`, compact `ModelLog.__repr__`, and the
+  top-level `torchlens.summary()` convenience wrapper.
+
+
 ## v1.2.0 (2026-04-23)
 
 ### Bug Fixes

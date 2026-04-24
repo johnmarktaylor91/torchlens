@@ -433,8 +433,10 @@ class ModelLog:
             return _str_during_pass(self)
 
     def __repr__(self) -> str:
-        """Same as __str__."""
-        return self.__str__()
+        """Short identity-card representation for REPL display."""
+        from .._summary import format_model_repr
+
+        return format_model_repr(self)
 
     def __iter__(self):
         """Loops through all tensors in the log."""
@@ -747,6 +749,67 @@ class ModelLog:
             vis_node_placement=vis_node_placement,
             vis_renderer=vis_renderer,
             vis_theme=vis_theme,
+        )
+
+    def summary(
+        self,
+        level: Literal[
+            "overview", "graph", "memory", "control_flow", "compute", "cost"
+        ] = "overview",
+        *,
+        fields: Optional[List[str]] = None,
+        mode: Literal["auto", "rolled", "unrolled"] = "auto",
+        show_ops: bool = False,
+        preset: Optional[
+            Literal["overview", "graph", "memory", "control_flow", "compute", "cost"]
+        ] = None,
+        columns: Optional[List[str]] = None,
+        include_ops: Optional[bool] = None,
+        max_rows: Optional[int] = 200,
+        print_to: Optional[Callable[[str], None]] = None,
+    ) -> str:
+        """Render a concise text summary of the logged model.
+
+        Parameters
+        ----------
+        level:
+            Summary level to render.
+        fields:
+            Explicit column selection for the primary table.
+        mode:
+            Operation aggregation mode. ``"rolled"`` uses aggregate layer rows,
+            while ``"unrolled"`` uses per-pass operation rows.
+        show_ops:
+            Whether to append an operation table.
+        preset:
+            Alias for ``level`` retained for compatibility with the design spec.
+        columns:
+            Alias for ``fields``.
+        include_ops:
+            Alias for ``show_ops`` retained for compatibility with the design spec.
+        max_rows:
+            Maximum number of rows to render per table. ``None`` disables truncation.
+        print_to:
+            Optional callable that receives the rendered summary text.
+
+        Returns
+        -------
+        str
+            Rendered summary string.
+        """
+        from .._summary import render_model_summary
+
+        return render_model_summary(
+            self,
+            level=level,
+            preset=preset,
+            fields=fields,
+            columns=columns,
+            mode=mode,
+            show_ops=show_ops,
+            include_ops=include_ops,
+            max_rows=max_rows,
+            print_to=print_to,
         )
 
     def render_dagua_graph(

@@ -15,6 +15,7 @@ __version__ = "1.2.0"
 
 from .user_funcs import (
     log_forward_pass,
+    summary,
     show_model_graph,
     get_model_metadata,
     validate_forward_pass,
