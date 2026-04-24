@@ -1,6 +1,54 @@
 # CHANGELOG
 
 
+## v1.5.0 (2026-04-24)
+
+### Features
+
+- **robustness**: Pr2 tensor-variant pre-flight guard + channels_last fix
+  ([`0f1367d`](https://github.com/johnmarktaylor91/torchlens/commit/0f1367d2f678881873dcceb6e2ced31c056f55de))
+
+Wave 2 of the robustness sprint. Centralises detection of tensor variants TorchLens cannot handle
+  and adds a channels_last preservation fix to safe_copy.
+
+### Pre-flight variant guard New module torchlens/_robustness.py: - UnsupportedTensorVariantError
+  (subclass of RuntimeError) with a clear bullet-listed message + pointer to docs/LIMITATIONS.md. -
+  check_model_and_input_variants(model, input_args, input_kwargs) walks model params/buffers and the
+  input tensor tree and: - RAISES for meta tensors (no backing storage — activation capture can't
+  produce usable values), sparse tensors (safe_copy/print paths assume dense strided layouts),
+  symbolic-shaped tensors (torch.SymInt dims break counter alignment and flops). - WARNS for
+  quantized modules (logging works, FLOPs are wrong).
+
+Wired into four entry points in user_funcs.py (log_forward_pass, get_model_metadata / summary,
+  show_model_graph, validate_forward_pass), in each case right after _unwrap_data_parallel. Failures
+  happen up front with a clear message instead of partway through the 18-step postprocess pipeline.
+
+### channels_last preservation in safe_copy torchlens/utils/tensor_utils.py: - New
+  _safe_get_memory_format(t) probes channels_last / channels_last_3d via
+  is_contiguous(memory_format=...), falling back to preserve_format on exotic layouts. - safe_copy
+  now calls clone(memory_format=...) on both the attached and detached paths. If a tensor variant
+  rejects the memory_format kwarg (some sparse/subclass paths), we fall back to a plain clone. -
+  Previous behavior silently converted channels_last activations to channels_first on copy, which
+  could produce silent wrong results for layout-sensitive downstream ops.
+
+### Tests tests/test_robustness_pr2.py (16 cases): - Meta tensor inputs + meta params raise
+  UnsupportedTensorVariantError - Sparse COO and CSR inputs raise with a layout-mentioning message -
+  Quantized models emit exactly one UserWarning and logging keeps going - safe_copy preserves
+  channels_last / channels_last_3d; detach path also preserves memory format - Standard forward pass
+  still logs (golden-path regression) - CUDA channels_last + CUDA forward pass smoke tests (skipped
+  if no GPU) - Internal helpers (_is_meta_tensor, _is_sparse_tensor) covered
+
+### Verification - pytest tests/ -m smoke: 32/32 ✅ (up from 30; 2 new smoke) - pytest targeted
+  regression + PR2: 475/475 ✅ (3m44s) - ruff check . ✅ / ruff format ✅ - mypy: 67 source files clean
+  ✅
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+
 ## v1.4.0 (2026-04-24)
 
 ### Features
