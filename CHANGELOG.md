@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v1.4.0 (2026-04-24)
+
+### Features
+
+- **robustness**: Pr1 correctness guards + torch floor pin
+  ([`f6efc9b`](https://github.com/johnmarktaylor91/torchlens/commit/f6efc9ba84142fe209323782041f52e72d637a40))
+
+Wave 1 of the robustness sprint. Correctness-critical hardening only; no behavior change for
+  non-pathological forward passes.
+
+- _state.active_logging(): raise RuntimeError on nested entry instead of silently overwriting
+  _active_model_log and clearing it on inner exit (which corrupted the outer ModelLog mid-pass). The
+  docstring already declared the context non-nestable; now the runtime enforces it. The realistic
+  trigger is a user forward-hook or activation pipeline that calls log_forward_pass on a sub-model.
+  - torch_func_decorator: when a functorch/vmap/grad transform is active, TorchLens continues to
+  skip logging inside the transform (internal ops like safe_copy lack vmap batching rules), but now
+  emits a one-shot UserWarning per forward pass so users know the resulting ModelLog omits whatever
+  ran inside the transform. Flag lives in _state and resets at the top of every active_logging()
+  session. - pyproject: pin torch>=2.4. TorchLens already calls
+  torch.is_autocast_enabled(device_type) and torch.get_autocast_dtype(device_type) (rng.py), both of
+  which require a device argument only from torch 2.4+. The bare 'torch' dep was permitting installs
+  that would fail at runtime. - pyproject: advertise Python 3.13 classifier (stable since 2024-10,
+  supported by torch 2.5+).
+
+New tests (tests/test_robustness_pr1.py, 8 cases): - direct active_logging nesting raises with the
+  non-re-entrant message - a forward-hook that re-enters log_forward_pass raises and the outer
+  session state is cleaned up cleanly afterward - a vmap-containing forward pass emits exactly one
+  functorch warning per session, and the flag resets between sessions - non-vmap passes emit no
+  functorch warning - pyproject torch dep pins >=2.4 and Python 3.13 is a classifier
+
+All 30 smoke tests and 209 targeted regression tests pass. ruff, mypy clean.
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+
 ## v1.3.0 (2026-04-24)
 
 ### Documentation
