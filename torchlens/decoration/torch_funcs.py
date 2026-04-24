@@ -344,7 +344,21 @@ def torch_func_decorator(func: Callable, func_name: str):
         # Skip logging inside vmap/functorch transforms — internal TorchLens
         # operations (safe_copy, torch.equal, .item()) don't have vmap batching
         # rules and will crash. The original function is already vmap-compatible.
+        # Warn once per forward pass so the user knows their ModelLog is
+        # missing whatever runs inside the transform.
         if _is_inside_functorch_transform():
+            if not _state._functorch_warning_emitted:
+                _state._functorch_warning_emitted = True
+                import warnings
+
+                warnings.warn(
+                    "TorchLens detected a functorch/vmap/grad/jacfwd transform "
+                    "during this forward pass. Operations that run inside the "
+                    "transform are not logged. The returned ModelLog will only "
+                    "contain operations that ran OUTSIDE the transform.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.

@@ -149,6 +149,11 @@ _collect_usage_stats: bool = False
 ``_function_call_counts`` during logged forward passes.  Used by the
 test suite to verify ArgSpec lookup table coverage."""
 
+_functorch_warning_emitted: bool = False
+"""True if a warning about skipped functorch/vmap ops has been emitted for
+the current logging session.  Reset to False at the start of every
+``active_logging()`` context so each forward pass gets at most one warning."""
+
 _function_call_counts: Dict[str, int] = {}
 """func_name -> total calls across all logged forward passes."""
 
@@ -193,12 +198,25 @@ def active_logging(model_log: "ModelLog"):
         - On exit: clear the toggle *before* the model_log, for the same reason.
 
     This context manager is NOT nestable.  Only one forward pass may be logged
-    at a time (single-threaded design).
+    at a time (single-threaded design).  Entering a second ``active_logging``
+    while another is already active raises ``RuntimeError`` — silently
+    corrupting the outer log (overwriting ``_active_model_log`` and then
+    clearing it on inner exit) is worse than failing loudly.
     """
-    global _logging_enabled, _active_model_log
+    global _logging_enabled, _active_model_log, _functorch_warning_emitted
+    if _logging_enabled:
+        raise RuntimeError(
+            "torchlens.log_forward_pass / active_logging is not re-entrant: "
+            "another forward pass is already being logged. Nested logging "
+            "would silently corrupt the outer ModelLog. If you need to log a "
+            "model's forward pass from inside another log_forward_pass call "
+            "(e.g., a custom activation_postfunc), first drop out with "
+            "torchlens.pause_logging()."
+        )
     # Model log must be visible before the toggle flips — wrappers will
     # immediately read _active_model_log once _logging_enabled is True.
     _active_model_log = model_log
+    _functorch_warning_emitted = False
     _logging_enabled = True
     try:
         yield

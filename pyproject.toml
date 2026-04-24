@@ -21,11 +21,15 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "numpy",
     "pandas",
-    "torch",
+    # torch>=2.4 required: torch.is_autocast_enabled(device_type) and
+    # torch.get_autocast_dtype(device_type) (used in torchlens/utils/rng.py)
+    # only accept a device_type argument on torch 2.4+.
+    "torch>=2.4",
     "safetensors>=0.4",
     "tqdm",
     "ipython",
