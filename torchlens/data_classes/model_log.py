@@ -17,11 +17,10 @@ Key design patterns:
   persists across the fast pass on purpose: fast-path postprocessing
   relies on the fully-populated lookup dicts from the exhaustive pass.
 
-* **Method importation** - Several heavy methods (``render_graph``,
-  ``save_new_activations``, ``validate_saved_activations``, etc.) are
-  defined in other modules and bound to ModelLog as class attributes at
-  the bottom of this file.  This keeps the class body small while giving
-  users ``model_log.render_graph(...)`` syntax.
+* **Explicit ModelLog methods** - Public methods are defined directly on
+  ``ModelLog``. Heavier implementations may delegate into subpackages
+  through local imports, but users still call them as
+  ``model_log.render_graph(...)`` or ``model_log.validate_forward_pass(...)``.
 
 * **_module_build_data** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
@@ -31,46 +30,42 @@ Key design patterns:
 
 import copy
 from collections import OrderedDict, defaultdict
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
+from os import PathLike
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
+import numpy as np
+import pandas as pd
 import torch
 
 if TYPE_CHECKING:
     from .._io.streaming import BundleStreamWriter
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
+    from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
-from .cleanup import _remove_log_entry, _batch_remove_log_entries, cleanup, release_param_refs
+from .cleanup import (
+    _LIST_FIELDS_TO_CLEAN,
+    _clear_entry_attributes,
+    _label_for_reference_removal,
+    _remove_log_entry_references,
+    _scrub_conditional_fields_after_removal,
+    cleanup,
+)
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
 from ..utils.display import human_readable_size
 from .interface import (
+    _format_conditional_branch_stack,
     _getitem_after_pass,
     _getitem_during_pass,
     _str_after_pass,
     _str_during_pass,
-    to_csv,
-    to_json,
-    to_parquet,
-    to_pandas,
-    print_all_fields,
 )
-from ..capture.trace import save_new_activations
-from ..postprocess import postprocess
 from .layer_log import LayerLog
 from .layer_pass_log import LayerPassLog, TensorLog
-from ..capture.trace import run_and_log_inputs_through_model
-from ..validation import validate_saved_activations
-from ..validation import check_metadata_invariants
-from ..visualization.rendering import render_graph
-from ..visualization.dagua_bridge import (
-    build_render_audit,
-    model_log_to_dagua_graph,
-    render_model_log_with_dagua,
-)
 
 
 def _init_module_build_data() -> dict:
@@ -695,30 +690,589 @@ class ModelLog:
         return self._buffer_accessor  # type: ignore[return-value]
 
     # ********************************************
-    # ******** Assign Imported Methods ***********
+    # ******** Public Convenience Methods ********
     # ********************************************
-    # These are functions defined in other modules, bound here as class
-    # attributes so they can be called as instance methods
-    # (e.g. ``model_log.render_graph(...)``).  This pattern keeps the
-    # ModelLog class body small while co-locating heavy logic in its
-    # own module (visualization, validation, capture, etc.).
 
-    render_graph = render_graph
-    render_dagua_graph = render_model_log_with_dagua
-    to_dagua_graph = model_log_to_dagua_graph
-    visualization_field_audit = build_render_audit
-    print_all_fields = print_all_fields
-    to_pandas = to_pandas
-    to_csv = to_csv
-    to_parquet = to_parquet
-    to_json = to_json
-    save_new_activations = save_new_activations
-    validate_saved_activations = validate_saved_activations
-    validate_forward_pass = validate_saved_activations  # user-facing alias
-    check_metadata_invariants = check_metadata_invariants
-    cleanup = cleanup
-    release_param_refs = release_param_refs
-    _postprocess = postprocess
-    _run_and_log_inputs_through_model = run_and_log_inputs_through_model
-    _remove_log_entry = _remove_log_entry
-    _batch_remove_log_entries = _batch_remove_log_entries
+    def render_graph(
+        self,
+        vis_mode: str = "unrolled",
+        vis_nesting_depth: int = 1000,
+        vis_outpath: str = "modelgraph",
+        vis_graph_overrides: Optional[Dict] = None,
+        vis_node_overrides: Optional[Dict] = None,
+        vis_nested_node_overrides: Optional[Dict] = None,
+        vis_edge_overrides: Optional[Dict] = None,
+        vis_gradient_edge_overrides: Optional[Dict] = None,
+        vis_module_overrides: Optional[Dict] = None,
+        vis_save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        show_buffer_layers: bool = False,
+        direction: str = "bottomup",
+        vis_node_placement: str = "auto",
+        vis_renderer: str = "graphviz",
+        vis_theme: str = "torchlens",
+    ) -> str:
+        """Render the computational graph for this model log.
+
+        Parameters
+        ----------
+        vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, vis_node_overrides, \
+        vis_nested_node_overrides, vis_edge_overrides, vis_gradient_edge_overrides, \
+        vis_module_overrides, vis_save_only, vis_fileformat, show_buffer_layers, direction, \
+        vis_node_placement, vis_renderer, vis_theme:
+            Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source or renderer-specific output.
+        """
+        from ..visualization.rendering import render_graph as _impl
+
+        return _impl(
+            self,
+            vis_mode=vis_mode,
+            vis_nesting_depth=vis_nesting_depth,
+            vis_outpath=vis_outpath,
+            vis_graph_overrides=vis_graph_overrides,
+            vis_node_overrides=vis_node_overrides,
+            vis_nested_node_overrides=vis_nested_node_overrides,
+            vis_edge_overrides=vis_edge_overrides,
+            vis_gradient_edge_overrides=vis_gradient_edge_overrides,
+            vis_module_overrides=vis_module_overrides,
+            vis_save_only=vis_save_only,
+            vis_fileformat=vis_fileformat,
+            show_buffer_layers=show_buffer_layers,
+            direction=direction,
+            vis_node_placement=vis_node_placement,
+            vis_renderer=vis_renderer,
+            vis_theme=vis_theme,
+        )
+
+    def render_dagua_graph(
+        self,
+        vis_mode: str = "unrolled",
+        vis_nesting_depth: int = 1000,
+        vis_outpath: str = "graph.gv",
+        vis_save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        vis_buffer_layers: bool = False,
+        vis_direction: str = "bottomup",
+        vis_theme: str = "torchlens",
+    ) -> str:
+        """Render this model log with the Dagua backend.
+
+        Parameters
+        ----------
+        vis_mode, vis_nesting_depth, vis_outpath, vis_save_only, vis_fileformat, \
+        vis_buffer_layers, vis_direction, vis_theme:
+            Forwarded unchanged to
+            :func:`torchlens.visualization.dagua_bridge.render_model_log_with_dagua`.
+
+        Returns
+        -------
+        str
+            Serialized Dagua graph output or the rendered artifact path.
+        """
+        from ..visualization.dagua_bridge import render_model_log_with_dagua as _impl
+
+        return _impl(
+            self,
+            vis_mode=vis_mode,
+            vis_nesting_depth=vis_nesting_depth,
+            vis_outpath=vis_outpath,
+            vis_save_only=vis_save_only,
+            vis_fileformat=vis_fileformat,
+            vis_buffer_layers=vis_buffer_layers,
+            vis_direction=vis_direction,
+            vis_theme=vis_theme,
+        )
+
+    def to_dagua_graph(
+        self,
+        vis_mode: str = "unrolled",
+        vis_nesting_depth: int = 1000,
+        show_buffer_layers: bool = False,
+        direction: str = "bottomup",
+        include_gradient_edges: Optional[bool] = None,
+    ) -> Any:
+        """Translate this model log into a Dagua graph.
+
+        Parameters
+        ----------
+        vis_mode, vis_nesting_depth, show_buffer_layers, direction, include_gradient_edges:
+            Forwarded unchanged to
+            :func:`torchlens.visualization.dagua_bridge.model_log_to_dagua_graph`.
+
+        Returns
+        -------
+        Any
+            Dagua graph object.
+        """
+        from ..visualization.dagua_bridge import model_log_to_dagua_graph as _impl
+
+        return _impl(
+            self,
+            vis_mode=vis_mode,
+            vis_nesting_depth=vis_nesting_depth,
+            show_buffer_layers=show_buffer_layers,
+            direction=direction,
+            include_gradient_edges=include_gradient_edges,
+        )
+
+    def visualization_field_audit(self) -> "TorchLensRenderAudit":
+        """Return the visualization field-usage audit for this model log.
+
+        Returns
+        -------
+        TorchLensRenderAudit
+            Audit of used and unused fields in the visualization bridge.
+        """
+        from ..visualization.dagua_bridge import build_render_audit as _impl
+
+        return _impl(self)
+
+    def print_all_fields(self) -> None:
+        """Print all public non-callable fields on this model log.
+
+        Returns
+        -------
+        None
+            This method prints directly to stdout.
+        """
+        fields_to_exclude = [
+            "layer_list",
+            "layer_dict_main_keys",
+            "layer_dict_all_keys",
+            "raw_layer_dict",
+            "decorated_to_orig_funcs_dict",
+        ]
+
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+            if not any([attr_name.startswith("_"), attr_name in fields_to_exclude, callable(attr)]):
+                print(f"{attr_name}: {attr}")
+
+    def to_pandas(self) -> pd.DataFrame:
+        """Return a dataframe containing one row per layer pass.
+
+        Returns
+        -------
+        pd.DataFrame
+            Layer-pass table for this model log.
+
+        Raises
+        ------
+        RuntimeError
+            If called before the forward pass has completed.
+        """
+        if not self._pass_finished:
+            raise RuntimeError(
+                "to_pandas() cannot be called before the forward pass is complete. "
+                "Please wait until log_forward_pass has returned."
+            )
+        fields_for_df = [
+            "layer_label",
+            "layer_label_w_pass",
+            "layer_label_no_pass",
+            "layer_label_short",
+            "layer_label_w_pass_short",
+            "layer_label_no_pass_short",
+            "layer_type",
+            "layer_type_num",
+            "layer_total_num",
+            "num_passes",
+            "pass_num",
+            "operation_num",
+            "tensor_shape",
+            "tensor_dtype",
+            "tensor_memory",
+            "tensor_memory_str",
+            "func_name",
+            "func_config",
+            "func_time",
+            "func_is_inplace",
+            "grad_fn_name",
+            "is_input_layer",
+            "is_output_layer",
+            "is_buffer_layer",
+            "is_part_of_iterable_output",
+            "iterable_output_index",
+            "parent_layers",
+            "has_parents",
+            "root_ancestors",
+            "child_layers",
+            "has_children",
+            "output_descendants",
+            "sibling_layers",
+            "has_siblings",
+            "co_parent_layers",
+            "has_co_parents",
+            "is_internally_initialized",
+            "min_distance_from_input",
+            "max_distance_from_input",
+            "min_distance_from_output",
+            "max_distance_from_output",
+            "uses_params",
+            "num_params_total",
+            "parent_param_shapes",
+            "params_memory",
+            "params_memory_str",
+            "modules_entered",
+            "modules_exited",
+            "is_submodule_input",
+            "is_submodule_output",
+            "containing_module",
+            "containing_modules",
+            "conditional_branch_depth",
+            "bool_is_branch",
+            "bool_context_kind",
+            "bool_wrapper_kind",
+            "bool_conditional_id",
+            "conditional_branch_stack",
+            "cond_branch_then_children",
+            "cond_branch_elif_children",
+            "cond_branch_else_children",
+        ]
+
+        fields_to_change_type = {
+            "layer_type_num": int,
+            "layer_total_num": int,
+            "num_passes": int,
+            "pass_num": int,
+            "operation_num": int,
+            "func_is_inplace": bool,
+            "is_input_layer": bool,
+            "is_output_layer": bool,
+            "is_buffer_layer": bool,
+            "is_part_of_iterable_output": bool,
+            "has_parents": bool,
+            "has_children": bool,
+            "has_siblings": bool,
+            "has_co_parents": bool,
+            "uses_params": bool,
+            "num_params_total": int,
+            "params_memory": int,
+            "tensor_memory": int,
+            "is_submodule_input": bool,
+            "is_submodule_output": bool,
+            "conditional_branch_depth": int,
+            "bool_is_branch": bool,
+        }
+
+        model_df_dictlist = []
+        for layer_entry in self.layer_list:
+            layer_dict = {}
+            for field_name in fields_for_df:
+                if field_name == "conditional_branch_stack":
+                    layer_dict[field_name] = _format_conditional_branch_stack(
+                        layer_entry.conditional_branch_stack
+                    )
+                else:
+                    layer_dict[field_name] = getattr(layer_entry, field_name)
+            model_df_dictlist.append(layer_dict)
+        model_df = pd.DataFrame(model_df_dictlist)
+
+        for column_name in fields_to_change_type:
+            model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
+        model_df["bool_conditional_id"] = model_df["bool_conditional_id"].astype("Int64")
+
+        return model_df
+
+    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the layer table to CSV.
+
+        Parameters
+        ----------
+        filepath:
+            Output CSV path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
+        """
+        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+
+    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
+        """Write the layer table to Parquet.
+
+        Parameters
+        ----------
+        filepath:
+            Output Parquet path.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
+
+        Raises
+        ------
+        ImportError
+            If ``pyarrow`` is unavailable.
+        """
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+            ) from exc
+        self.to_pandas().to_parquet(filepath, **kwargs)
+
+    def to_json(
+        self,
+        filepath: str | PathLike[str],
+        *,
+        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
+        **kwargs: Any,
+    ) -> None:
+        """Write the layer table to JSON.
+
+        Parameters
+        ----------
+        filepath:
+            Output JSON path.
+        orient:
+            JSON orientation passed to ``DataFrame.to_json``.
+        **kwargs:
+            Additional keyword arguments forwarded to ``DataFrame.to_json``.
+        """
+        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+
+    def save_new_activations(
+        self,
+        model: torch.nn.Module,
+        input_args: torch.Tensor | List[Any],
+        input_kwargs: Optional[Dict[Any, Any]] = None,
+        layers_to_save: str | List = "all",
+        random_seed: Optional[int] = None,
+    ) -> None:
+        """Re-run the model with new inputs, saving only activations.
+
+        Parameters
+        ----------
+        model, input_args, input_kwargs, layers_to_save, random_seed:
+            Forwarded unchanged to
+            :func:`torchlens.capture.trace.save_new_activations`.
+        """
+        from ..capture.trace import save_new_activations as _impl
+
+        return _impl(
+            self,
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save=layers_to_save,
+            random_seed=random_seed,
+        )
+
+    def validate_saved_activations(
+        self,
+        ground_truth_output_tensors: List[torch.Tensor],
+        verbose: bool = False,
+        validate_metadata: bool = True,
+    ) -> bool:
+        """Validate saved activations against ground-truth model outputs.
+
+        Parameters
+        ----------
+        ground_truth_output_tensors, verbose, validate_metadata:
+            Forwarded unchanged to
+            :func:`torchlens.validation.core.validate_saved_activations`.
+
+        Returns
+        -------
+        bool
+            ``True`` if validation succeeds.
+        """
+        from ..validation.core import validate_saved_activations as _impl
+
+        return _impl(
+            self,
+            ground_truth_output_tensors=ground_truth_output_tensors,
+            verbose=verbose,
+            validate_metadata=validate_metadata,
+        )
+
+    def validate_forward_pass(
+        self,
+        ground_truth_output_tensors: List[torch.Tensor],
+        verbose: bool = False,
+        validate_metadata: bool = True,
+    ) -> bool:
+        """Alias for :meth:`validate_saved_activations`.
+
+        Parameters
+        ----------
+        ground_truth_output_tensors, verbose, validate_metadata:
+            Forwarded unchanged to :meth:`validate_saved_activations`.
+
+        Returns
+        -------
+        bool
+            ``True`` if validation succeeds.
+        """
+        from ..validation.core import validate_saved_activations as _impl
+
+        return _impl(
+            self,
+            ground_truth_output_tensors=ground_truth_output_tensors,
+            verbose=verbose,
+            validate_metadata=validate_metadata,
+        )
+
+    def check_metadata_invariants(self) -> bool:
+        """Run metadata invariant checks on this completed model log.
+
+        Returns
+        -------
+        bool
+            ``True`` if all invariants pass.
+        """
+        from ..validation.invariants import check_metadata_invariants as _impl
+
+        return _impl(self)
+
+    def cleanup(self) -> None:
+        """Delete log data, break cycles, and free cached GPU memory.
+
+        Returns
+        -------
+        None
+            This method mutates the model log in place.
+        """
+        return cleanup(self)
+
+    def release_param_refs(self) -> None:
+        """Release live ``nn.Parameter`` references held by ParamLogs.
+
+        Returns
+        -------
+        None
+            This method mutates ParamLogs in place.
+        """
+        for param_log in self.param_logs:
+            param_log.release_param_ref()
+
+    def _postprocess(
+        self,
+        output_tensors: List[torch.Tensor],
+        output_tensor_addresses: List[str],
+    ) -> None:
+        """Run postprocessing on a completed raw capture pass.
+
+        Parameters
+        ----------
+        output_tensors:
+            Output tensors returned by the model.
+        output_tensor_addresses:
+            Hierarchical addresses for those outputs.
+        """
+        from ..postprocess import postprocess as _impl
+
+        return _impl(
+            self,
+            output_tensors=output_tensors,
+            output_tensor_addresses=output_tensor_addresses,
+        )
+
+    def _run_and_log_inputs_through_model(
+        self,
+        model: torch.nn.Module,
+        input_args: torch.Tensor | List[Any],
+        input_kwargs: Optional[Dict[Any, Any]] = None,
+        layers_to_save: Optional[str | List[str | int]] = "all",
+        random_seed: Optional[int] = None,
+    ) -> None:
+        """Run a forward pass and capture it into this model log.
+
+        Parameters
+        ----------
+        model, input_args, input_kwargs, layers_to_save, random_seed:
+            Forwarded unchanged to
+            :func:`torchlens.capture.trace.run_and_log_inputs_through_model`.
+        """
+        from ..capture.trace import run_and_log_inputs_through_model as _impl
+
+        return _impl(
+            self,
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save=layers_to_save,
+            random_seed=random_seed,
+        )
+
+    def _remove_log_entry(
+        self,
+        log_entry: LayerPassLog,
+        remove_references: bool = True,
+    ) -> None:
+        """Remove a single layer-pass entry and scrub graph references.
+
+        Parameters
+        ----------
+        log_entry:
+            Entry to remove.
+        remove_references:
+            Whether to scrub all graph references to the removed entry.
+        """
+        tensor_label = _label_for_reference_removal(log_entry, self._pass_finished)
+        if remove_references:
+            _remove_log_entry_references(self, tensor_label)
+        _clear_entry_attributes(log_entry)
+
+    def _batch_remove_log_entries(
+        self,
+        entries_to_remove: Iterable[LayerPassLog],
+        remove_references: bool = True,
+    ) -> None:
+        """Remove multiple layer-pass entries using single-pass filtering.
+
+        Parameters
+        ----------
+        entries_to_remove:
+            Entries to remove.
+        remove_references:
+            Whether to scrub all graph references to the removed entries.
+        """
+        entries_to_remove = list(entries_to_remove)
+        surviving_entries = [entry for entry in self if entry not in entries_to_remove]
+
+        labels_to_remove = set()
+        for entry in entries_to_remove:
+            labels_to_remove.add(_label_for_reference_removal(entry, self._pass_finished))
+            _clear_entry_attributes(entry)
+
+        if not remove_references:
+            return
+
+        _scrub_conditional_fields_after_removal(self, labels_to_remove, surviving_entries)
+
+        for field_name in _LIST_FIELDS_TO_CLEAN:
+            collection = getattr(self, field_name)
+            collection[:] = [label for label in collection if label not in labels_to_remove]
+
+        self.conditional_branch_edges = [
+            edge
+            for edge in self.conditional_branch_edges
+            if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
+        ]
+        self.conditional_then_edges = [
+            edge
+            for edge in self.conditional_then_edges
+            if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
+        ]
+
+        for param_group, tensor_labels in list(self.layers_with_params.items()):
+            self.layers_with_params[param_group] = [
+                label for label in tensor_labels if label not in labels_to_remove
+            ]
+        self.layers_with_params = {
+            param_group: tensor_labels
+            for param_group, tensor_labels in self.layers_with_params.items()
+            if len(tensor_labels) > 0
+        }
+
+        for equiv_group, equivalent_label_set in list(self.equivalent_operations.items()):
+            equivalent_label_set -= labels_to_remove
+        self.equivalent_operations = {
+            equiv_group: equivalent_label_set
+            for equiv_group, equivalent_label_set in self.equivalent_operations.items()
+            if len(equivalent_label_set) > 0
+        }

@@ -48,7 +48,7 @@ from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from .source_tensors import log_source_tensor
-from ..data_classes.interface import _give_user_feedback_about_lookup_key
+from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _vprint, _vtimed
 
 
