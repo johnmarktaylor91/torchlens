@@ -15,12 +15,15 @@ __version__ = "1.2.0"
 
 from .user_funcs import (
     log_forward_pass,
+    summary,
     show_model_graph,
+    log_model_metadata,
     get_model_metadata,
     validate_forward_pass,
     validate_saved_activations,
     validate_batch_of_models_and_inputs,
 )
+from .options import StreamingOptions, VisualizationOptions
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from ._io.bundle import save, load, cleanup_tmp
 from ._io import rehydrate_nested

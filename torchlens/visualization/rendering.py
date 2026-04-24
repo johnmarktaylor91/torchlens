@@ -38,6 +38,12 @@ from typing import Any, Optional, Dict, List, Set, TYPE_CHECKING, Tuple, Union
 
 import graphviz
 
+from .._literals import (
+    VisDirectionLiteral,
+    VisModeLiteral,
+    VisNodePlacementLiteral,
+    VisRendererLiteral,
+)
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
@@ -69,7 +75,7 @@ COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
 def render_graph(
     self: "ModelLog",
-    vis_mode: str = "unrolled",
+    vis_mode: VisModeLiteral = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
     vis_graph_overrides: Optional[Dict] = None,
@@ -81,9 +87,9 @@ def render_graph(
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
     show_buffer_layers: bool = False,
-    direction: str = "bottomup",
-    vis_node_placement: str = "auto",
-    vis_renderer: str = "graphviz",
+    direction: VisDirectionLiteral = "bottomup",
+    vis_node_placement: VisNodePlacementLiteral = "auto",
+    vis_renderer: VisRendererLiteral = "graphviz",
     vis_theme: str = "torchlens",
 ) -> str:
     """Render the computational graph as a Graphviz Digraph.

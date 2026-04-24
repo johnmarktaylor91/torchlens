@@ -1,6 +1,6 @@
-"""ModelLog cleanup: removing individual log entries and post-session teardown.
+"""ModelLog cleanup helpers and post-session teardown.
 
-This module provides three levels of cleanup:
+This module provides the helper stack behind ModelLog cleanup operations:
 
 1. **cleanup()** — full teardown: deletes all LayerPassLog attributes, then
    deletes all ModelLog attributes (both FIELD_ORDER and internal containers).
@@ -8,15 +8,14 @@ This module provides three levels of cleanup:
    LayerLog <-> LayerPassLog.parent_layer_log, ModuleLog <-> _source_model_log).
    Also frees GPU memory via ``torch.cuda.empty_cache()``.
 
-2. **_remove_log_entry()** — removes a single LayerPassLog and all references
-   to it from ModelLog's list/dict fields (used by orphan removal).
+2. **_remove_log_entry_references()** — removes a single layer label from all
+   ModelLog list/dict fields that hold graph references.
 
-3. **_batch_remove_log_entries()** — removes multiple entries at once using
-   set-based filtering (O(N+M) instead of O(N*M) for N entries in M lists).
+3. **_scrub_conditional_fields_after_removal()** — repairs conditional metadata
+   after one or more labels are removed.
 
-Both _remove_log_entry and _batch_remove_log_entries must clean the same
-set of fields — if you add a new list/dict field to ModelLog that holds
-layer labels, add it to both.
+4. **_LIST_FIELDS_TO_CLEAN** — canonical list fields that must stay aligned
+   with the removal helpers.
 """
 
 from typing import Dict, Iterable, List, Set, Tuple
@@ -26,17 +25,6 @@ import torch
 from ..constants import MODEL_LOG_FIELD_ORDER
 from ..utils.collections import remove_entry_from_list
 from .layer_pass_log import LayerPassLog
-
-
-def release_param_refs(self) -> None:
-    """Release nn.Parameter references from all ParamLogs.
-
-    After calling this, gradients already cached are still accessible,
-    but new gradients won't be detected. The model's parameters can be
-    garbage collected independently of the ModelLog.
-    """
-    for pl in self.param_logs:
-        pl.release_param_ref()
 
 
 def cleanup(self) -> None:
@@ -348,25 +336,6 @@ def _scrub_conditional_fields_after_removal(
         ]
 
 
-def _remove_log_entry(self, log_entry: LayerPassLog, remove_references: bool = True) -> None:
-    """Remove a single LayerPassLog and scrub all references to it.
-
-    Used by orphan removal and other graph-pruning operations.
-
-    Args:
-        log_entry: The LayerPassLog to destroy.
-        remove_references: If True, also remove the entry's label from
-            every list/dict field on the ModelLog.
-    """
-    # The label used to find references depends on whether postprocessing
-    # has run: after postprocessing, layers are keyed by their final
-    # human-readable label; during the pass, by the raw internal barcode.
-    tensor_label = _label_for_reference_removal(log_entry, self._pass_finished)
-    if remove_references:
-        _remove_log_entry_references(self, tensor_label)
-    _clear_entry_attributes(log_entry)
-
-
 # List fields on ModelLog that hold tensor labels and need filtering during
 # entry removal.  Must stay in sync between _batch_remove_log_entries and
 # _remove_log_entry_references — if you add a new label-holding list field
@@ -382,69 +351,6 @@ _LIST_FIELDS_TO_CLEAN = [
     "layers_with_saved_gradients",
     "_layers_where_internal_branches_merge_with_input",
 ]
-
-
-def _batch_remove_log_entries(self, entries_to_remove, remove_references: bool = True) -> None:
-    """Remove multiple LayerPassLog entries at once using set-based filtering.
-
-    More efficient than calling ``_remove_log_entry`` in a loop: builds a
-    set of labels to remove, then does a single pass over each list/dict
-    field (O(N+M) instead of O(N*M) where N=entries, M=list length).
-
-    Args:
-        entries_to_remove: Iterable of LayerPassLog objects to remove.
-        remove_references: Whether to also remove references from ModelLog list/dict fields.
-    """
-    entries_to_remove = list(entries_to_remove)
-    surviving_entries = [entry for entry in self if entry not in entries_to_remove]
-
-    # Build a set of labels for O(1) membership testing, then clear each entry.
-    labels_to_remove = set()
-    for entry in entries_to_remove:
-        labels_to_remove.add(_label_for_reference_removal(entry, self._pass_finished))
-        _clear_entry_attributes(entry)
-
-    if not remove_references:
-        return
-
-    _scrub_conditional_fields_after_removal(self, labels_to_remove, surviving_entries)
-
-    # Single-pass filter on each list field (replaces N x remove_entry_from_list calls).
-    for field in _LIST_FIELDS_TO_CLEAN:
-        collection = getattr(self, field)
-        collection[:] = [label for label in collection if label not in labels_to_remove]
-
-    self.conditional_branch_edges = [
-        edge
-        for edge in self.conditional_branch_edges
-        if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
-    ]
-    self.conditional_then_edges = [
-        edge
-        for edge in self.conditional_then_edges
-        if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
-    ]
-
-    # Single-pass filter on dict fields:
-    # layers_with_params: param_barcode -> [layer_labels]
-    for param_group, tensor_labels in list(self.layers_with_params.items()):
-        self.layers_with_params[param_group] = [
-            label for label in tensor_labels if label not in labels_to_remove
-        ]
-    self.layers_with_params = {
-        param_group: tensor_labels
-        for param_group, tensor_labels in self.layers_with_params.items()
-        if len(tensor_labels) > 0
-    }
-
-    # equivalent_operations: equiv_type -> set(layer_labels)
-    for equiv_group, tensor_labels in list(self.equivalent_operations.items()):
-        tensor_labels -= labels_to_remove
-    self.equivalent_operations = {
-        equiv_group: tensor_labels
-        for equiv_group, tensor_labels in self.equivalent_operations.items()
-        if len(tensor_labels) > 0
-    }
 
 
 def _remove_log_entry_references(self, layer_to_remove: str) -> None:

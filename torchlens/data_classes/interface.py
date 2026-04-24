@@ -1,8 +1,4 @@
-"""ModelLog query and display methods: __getitem__, __str__, to_pandas, print_all_fields.
-
-These functions are defined here to keep ModelLog's class body small. They
-are bound to ModelLog as class attributes via assignment at the bottom of
-model_log.py (the "method importation" pattern).
+"""ModelLog query and display helpers used by ``ModelLog`` methods.
 
 **__getitem__ lookup logic** (``_getitem_after_pass``):
 
@@ -22,16 +18,14 @@ For integer keys: direct index into ``layer_list`` (supports negative indexing).
 For slice keys: returns a list slice of ``layer_list``.
 """
 
-import random
-from os import PathLike
-from typing import TYPE_CHECKING, Any, List, Literal, Tuple, Union
+from typing import TYPE_CHECKING, List, Tuple
 
 import numpy as np
-import pandas as pd
 
 if TYPE_CHECKING:
     from .model_log import ModelLog
 
+from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .layer_pass_log import LayerPassLog
 
 
@@ -122,52 +116,6 @@ def _getitem_after_pass(self, ix):
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
-
-
-def _give_user_feedback_about_lookup_key(self, key: Union[int, str], mode: str):
-    """For __getitem__ and get_op_nums_from_user_labels, gives the user feedback about the user key
-    they entered if it doesn't yield any matches.
-
-    Args:
-        key: Lookup key used by the user.
-        mode: Either "get_one_item" (raise error if key not found) or
-            "query_multiple" (return empty list if no matches).
-    """
-    if (type(key) == int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
-        raise ValueError(
-            f"You specified the layer with index {key}, but there are only {len(self.layer_list)} "
-            f"layers; please specify an index in the range "
-            f"-{len(self.layer_list)} - {len(self.layer_list) - 1}."
-        )
-
-    if type(key) != str:
-        raise ValueError(_get_lookup_help_str(self, key, mode))
-
-    if hasattr(self, "_module_logs") and key.rsplit(":", 1)[0] in self._module_logs:
-        module, pass_num = key.rsplit(":", 1)
-        module_num_passes = self._module_logs[module].num_passes
-        raise ValueError(
-            f"You specified module {module} pass {pass_num}, but {module} only has "
-            f"{module_num_passes} passes; specify a lower number."
-        )
-
-    if key in self.layer_labels_no_pass:
-        layer_num_passes = self.layer_num_passes.get(key, 1)
-        if layer_num_passes > 1:
-            raise ValueError(
-                f"You specified output of layer {key}, but it has {layer_num_passes} passes; "
-                f"please specify e.g. {key}:2 for the second pass of {key}."
-            )
-
-    if key.rsplit(":", 1)[0] in self.layer_labels_no_pass:
-        layer_label, pass_num = key.rsplit(":", 1)
-        layer_num_passes = self.layer_num_passes.get(layer_label, "unknown")
-        raise ValueError(
-            f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
-            f"{layer_num_passes} passes. Specify a lower number."
-        )
-
-    raise ValueError(_get_lookup_help_str(self, key, mode))
 
 
 def _str_after_pass(self) -> str:
@@ -290,50 +238,6 @@ def _format_list_with_line_breaks(lst, indent_chars: str, line_break_every=5) ->
     return s
 
 
-def _get_lookup_help_str(self, layer_label: Union[int, str], mode: str) -> str:
-    """Generates a help string to be used in error messages when indexing fails."""
-    if not self.layer_labels_w_pass:
-        sample_layer1 = "conv2d_1_1:1"
-        sample_layer2 = "conv2d_1_1"
-    else:
-        sample_layer1 = random.choice(self.layer_labels_w_pass)
-        sample_layer2 = random.choice(self.layer_labels_no_pass)
-    module_addrs = [ml.address for ml in self.modules if ml.address != "self"]
-    if len(module_addrs) > 0:
-        sample_module1 = random.choice(module_addrs)
-        all_pass_labels = [
-            pl for ml in self.modules for pl in ml.pass_labels if ml.address != "self"
-        ]
-        sample_module2 = random.choice(all_pass_labels) if all_pass_labels else "features.4:2"
-    else:
-        sample_module1 = "features.3"
-        sample_module2 = "features.4:2"
-    module_str = f"(e.g., {sample_module1}, {sample_module2})"
-    if mode == "get_one_item":
-        msg = (
-            "e.g., 'pool' will grab the maxpool2d or avgpool2d layer, 'maxpool' will grab the 'maxpool2d' "
-            "layer, etc., but there must be only one such matching layer"
-        )
-    elif mode == "query_multiple":
-        msg = (
-            "e.g., 'pool' will grab all maxpool2d or avgpool2d layers, 'maxpool' will grab all 'maxpool2d' "
-            "layers, etc."
-        )
-    else:
-        raise ValueError("mode must be either get_one_item or query_multiple")
-    help_str = (
-        f"Layer {layer_label} not recognized; please specify either "
-        f"\n\n\t1) an integer giving the ordinal position of the layer "
-        f"(e.g. 2 for 3rd layer, -4 for fourth-to-last), "
-        f"\n\t2) the layer label (e.g., {sample_layer1}, {sample_layer2}), "
-        f"\n\t3) the module address {module_str}"
-        f"\n\t4) A substring of any desired layer label ({msg})."
-        f"\n\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer, "
-        f"and fourth layer overall in the model.)"
-    )
-    return help_str
-
-
 def _module_hierarchy_str(self) -> str:
     """Build a tree-formatted string of the module call hierarchy.
 
@@ -388,22 +292,6 @@ def _module_hierarchy_str_recursive(self, module_pass, level) -> str:
     return s
 
 
-def print_all_fields(self) -> None:
-    """Print all data fields for ModelLog."""
-    fields_to_exclude = [
-        "layer_list",
-        "layer_dict_main_keys",
-        "layer_dict_all_keys",
-        "raw_layer_dict",
-        "decorated_to_orig_funcs_dict",
-    ]
-
-    for field in dir(self):
-        attr = getattr(self, field)
-        if not any([field.startswith("_"), field in fields_to_exclude, callable(attr)]):
-            print(f"{field}: {attr}")
-
-
 def _format_conditional_branch_stack(conditional_branch_stack: List[Tuple[int, str]]) -> str:
     """Render a compact string form for a conditional branch stack.
 
@@ -417,184 +305,3 @@ def _format_conditional_branch_stack(conditional_branch_stack: List[Tuple[int, s
         f"cond_{conditional_id}:{branch_kind}"
         for conditional_id, branch_kind in conditional_branch_stack
     )
-
-
-def to_pandas(self) -> pd.DataFrame:
-    """Returns a pandas dataframe with info about each layer.
-
-    Returns:
-        Pandas dataframe with info about each layer.
-
-    Raises:
-        RuntimeError: If called before the forward pass is complete.
-    """
-    if not self._pass_finished:
-        raise RuntimeError(
-            "to_pandas() cannot be called before the forward pass is complete. "
-            "Please wait until log_forward_pass has returned."
-        )
-    fields_for_df = [
-        "layer_label",
-        "layer_label_w_pass",
-        "layer_label_no_pass",
-        "layer_label_short",
-        "layer_label_w_pass_short",
-        "layer_label_no_pass_short",
-        "layer_type",
-        "layer_type_num",
-        "layer_total_num",
-        "num_passes",
-        "pass_num",
-        "operation_num",
-        "tensor_shape",
-        "tensor_dtype",
-        "tensor_memory",
-        "tensor_memory_str",
-        "func_name",
-        "func_config",
-        "func_time",
-        "func_is_inplace",
-        "grad_fn_name",
-        "is_input_layer",
-        "is_output_layer",
-        "is_buffer_layer",
-        "is_part_of_iterable_output",
-        "iterable_output_index",
-        "parent_layers",
-        "has_parents",
-        "root_ancestors",
-        "child_layers",
-        "has_children",
-        "output_descendants",
-        "sibling_layers",
-        "has_siblings",
-        "co_parent_layers",
-        "has_co_parents",
-        "is_internally_initialized",
-        "min_distance_from_input",
-        "max_distance_from_input",
-        "min_distance_from_output",
-        "max_distance_from_output",
-        "uses_params",
-        "num_params_total",
-        "parent_param_shapes",
-        "params_memory",
-        "params_memory_str",
-        "modules_entered",
-        "modules_exited",
-        "is_submodule_input",
-        "is_submodule_output",
-        "containing_module",
-        "containing_modules",
-        "conditional_branch_depth",
-        "bool_is_branch",
-        "bool_context_kind",
-        "bool_wrapper_kind",
-        "bool_conditional_id",
-        "conditional_branch_stack",
-        "cond_branch_then_children",
-        "cond_branch_elif_children",
-        "cond_branch_else_children",
-    ]
-
-    fields_to_change_type = {
-        "layer_type_num": int,
-        "layer_total_num": int,
-        "num_passes": int,
-        "pass_num": int,
-        "operation_num": int,
-        "func_is_inplace": bool,
-        "is_input_layer": bool,
-        "is_output_layer": bool,
-        "is_buffer_layer": bool,
-        "is_part_of_iterable_output": bool,
-        "has_parents": bool,
-        "has_children": bool,
-        "has_siblings": bool,
-        "has_co_parents": bool,
-        "uses_params": bool,
-        "num_params_total": int,
-        "params_memory": int,
-        "tensor_memory": int,
-        "is_submodule_input": bool,
-        "is_submodule_output": bool,
-        "conditional_branch_depth": int,
-        "bool_is_branch": bool,
-    }
-
-    model_df_dictlist = []
-    for layer_entry in self.layer_list:
-        layer_dict = {}
-        for field_name in fields_for_df:
-            if field_name == "conditional_branch_stack":
-                layer_dict[field_name] = _format_conditional_branch_stack(
-                    layer_entry.conditional_branch_stack
-                )
-            else:
-                layer_dict[field_name] = getattr(layer_entry, field_name)
-        model_df_dictlist.append(layer_dict)
-    model_df = pd.DataFrame(model_df_dictlist)
-
-    for field in fields_to_change_type:
-        model_df[field] = model_df[field].astype(fields_to_change_type[field])
-    model_df["bool_conditional_id"] = model_df["bool_conditional_id"].astype("Int64")
-
-    return model_df
-
-
-def to_csv(self: "ModelLog", filepath: str | PathLike[str], **kwargs: Any) -> None:
-    """Write the layer table to CSV.
-
-    Parameters
-    ----------
-    filepath:
-        Output CSV path.
-    **kwargs:
-        Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-    """
-    self.to_pandas().to_csv(filepath, index=False, **kwargs)
-
-
-def to_parquet(self: "ModelLog", filepath: str | PathLike[str], **kwargs: Any) -> None:
-    """Write the layer table to Parquet.
-
-    Parameters
-    ----------
-    filepath:
-        Output Parquet path.
-    **kwargs:
-        Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-    Raises
-    ------
-    ImportError
-        If ``pyarrow`` is unavailable.
-    """
-    try:
-        import pyarrow  # noqa: F401
-    except ImportError as exc:
-        raise ImportError(
-            "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-        ) from exc
-    self.to_pandas().to_parquet(filepath, **kwargs)
-
-
-def to_json(
-    self: "ModelLog",
-    filepath: str | PathLike[str],
-    *,
-    orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-    **kwargs: Any,
-) -> None:
-    """Write the layer table to JSON.
-
-    Parameters
-    ----------
-    filepath:
-        Output JSON path.
-    orient:
-        JSON orientation passed to ``DataFrame.to_json``.
-    **kwargs:
-        Additional keyword arguments forwarded to ``DataFrame.to_json``.
-    """
-    self.to_pandas().to_json(filepath, orient=orient, **kwargs)
