@@ -62,6 +62,67 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
     return model
 
 
+def _reject_opaque_wrappers(model: nn.Module) -> None:
+    """Raise a clear error if ``model`` is one of the opaque wrappers TorchLens cannot trace.
+
+    TorchLens logs a model by wrapping every torch callable and running an
+    ordinary Python forward pass.  The following wrappers all replace that
+    Python execution with a traced / scripted / exported graph — by design,
+    our wrappers don't see the original ops, so the ModelLog would be
+    empty or misleading:
+
+    * ``torch._dynamo.eval_frame.OptimizedModule`` (``torch.compile(model)``)
+      — dynamo replaces the forward with a compiled graph; our wrappers are
+      optimized away or bypassed depending on the backend.
+    * ``torch.jit.ScriptModule`` / ``torch.jit.RecursiveScriptModule``
+      (``torch.jit.script`` / ``torch.jit.trace``) — the forward runs on the
+      TorchScript interpreter, not Python, so no Python-level decoration fires.
+    * ``torch.export.ExportedProgram`` — a serialised IR, not a callable
+      ``nn.Module`` that can be re-executed in Python.
+
+    In all three cases the fix is the same: call ``log_forward_pass`` on the
+    *un-wrapped* model before compiling / scripting / exporting.
+    """
+    # torch.compile -> torch._dynamo.eval_frame.OptimizedModule
+    try:
+        from torch._dynamo.eval_frame import OptimizedModule
+    except ImportError:
+        pass
+    else:
+        if isinstance(model, OptimizedModule):
+            raise RuntimeError(
+                "torchlens.log_forward_pass does not support torch.compile'd "
+                "models: dynamo replaces the Python forward with a compiled "
+                "graph that bypasses TorchLens' function wrappers. "
+                "Call log_forward_pass on the original (un-compiled) model."
+            )
+
+    # torch.jit.script / torch.jit.trace -> ScriptModule
+    if isinstance(model, torch.jit.ScriptModule):
+        raise RuntimeError(
+            "torchlens.log_forward_pass does not support torch.jit ScriptModule "
+            "or traced models: the forward runs on the TorchScript interpreter "
+            "rather than Python, so TorchLens' function wrappers don't fire. "
+            "Call log_forward_pass on the original (un-scripted / un-traced) "
+            "model."
+        )
+
+    # torch.export.ExportedProgram
+    try:
+        from torch.export import ExportedProgram
+    except ImportError:
+        pass
+    else:
+        if isinstance(model, ExportedProgram):
+            raise RuntimeError(
+                "torchlens.log_forward_pass does not support "
+                "torch.export.ExportedProgram: the exported IR is not a "
+                "callable nn.Module that can be re-executed in Python. "
+                "Call log_forward_pass on the original nn.Module before "
+                "export."
+            )
+
+
 def _move_tensors_to_device(obj, device):
     """Recursively move tensors in a nested structure (lists, tuples, dicts) to *device*.
 
@@ -350,6 +411,7 @@ def log_forward_pass(
     """
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
+    _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
@@ -575,6 +637,7 @@ def summary(
     str
         Rendered summary text.
     """
+    _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
     if input_kwargs is None:
         input_kwargs = {}
@@ -662,6 +725,7 @@ def show_model_graph(
     Returns:
         None.
     """
+    _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
@@ -757,6 +821,7 @@ def validate_forward_pass(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
+    _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
