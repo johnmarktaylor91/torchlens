@@ -1,6 +1,55 @@
 # CHANGELOG
 
 
+## v1.6.0 (2026-04-24)
+
+### Features
+
+- **robustness**: Pr3 parallel-wrapper unwrap + framework I/O guards
+  ([`c80c21d`](https://github.com/johnmarktaylor91/torchlens/commit/c80c21d9a4399194bb59fe6497d75540beff2411))
+
+Wave 3 of the robustness sprint. Extends parallel-wrapper handling and adds regression coverage for
+  HuggingFace-style dict-subclass inputs and dataclass outputs.
+
+### DistributedDataParallel unwrap Previously _unwrap_data_parallel only handled nn.DataParallel.
+  DDP and DataParallel share the same .module attribute but the isinstance check excluded DDP, so
+  users of the much more common DDP got silently wrong layer addressing (parameter barcodes pointing
+  at the wrapper's module hierarchy instead of the real model tree).
+
+Fix: isinstance check extended to DistributedDataParallel. Guarded by ImportError so torch installs
+  without torch.distributed still work.
+
+### FullyShardedDataParallel clear-error FSDP parameters are sharded across ranks — there is no
+  single unsharded module to log. Silently unwrapping via .module yields a model whose parameters
+  are FlatParameter shards, which produces misleading layer metadata and breaks loop detection's
+  param-sharing heuristic.
+
+Fix: raise RuntimeError at unwrap time with a message explaining the sharding issue and pointing to
+  "run log_forward_pass on a rank-local copy of the underlying module (before FSDP wrapping)".
+
+### Framework I/O regression tests No code change here — these tests lock in the current behavior so
+  future refactors don't silently break HuggingFace use cases:
+
+- Dict-subclass inputs (BatchEncoding-shaped UserDict) flow through _move_tensors_to_device
+  correctly and logging completes. - Dataclass-style outputs (ModelOutput-shaped dataclass) don't
+  crash the output-extraction BFS crawl; at minimum the inner ops are logged.
+
+### Tests (tests/test_robustness_pr3.py, 7 cases) - DataParallel unwrap still works (regression
+  guard for pre-existing behavior) - DistributedDataParallel isinstance -> unwrap via .module - FSDP
+  isinstance -> raise with clear message (both at the helper level and at log_forward_pass entry) -
+  UserDict-based BatchEncoding-like input logs (smoke) - ModelOutput-like dataclass output doesn't
+  crash and Linear is logged - Standard model still logs (golden-path regression)
+
+### Verification - pytest tests/ -m smoke: 32/32 ✅ - pytest targeted regression + PR3: 466/466 ✅
+  (3m47s) - ruff check . ✅ / ruff format ✅ - mypy: 66 source files clean ✅
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+
 ## v1.5.0 (2026-04-24)
 
 ### Features
