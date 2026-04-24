@@ -119,7 +119,12 @@ def _run_model_and_save_specified_activations(
         input_args: Positional arguments to model.forward(); a single tensor or list.
         input_kwargs: Keyword arguments to model.forward().
         layers_to_save: Which layers to save activations for ('all', 'none'/None, or a list).
-        keep_unsaved_layers: If False, layers without saved activations are pruned from the log.
+        keep_unsaved_layers: If False, layers without saved activations are pruned from the
+            final log. When ``layers_to_save`` is a specific subset, TorchLens still runs the
+            initial exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
+            names before the fast replay. Example: use
+            ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
+            requested saved activations in the returned log.
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
         activation_postfunc: Optional transform applied to each activation before storage
             (e.g., channel-wise averaging to reduce memory).
@@ -133,8 +138,10 @@ def _run_model_and_save_specified_activations(
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         detect_loops: If True (default), run full isomorphic subgraph expansion to
-            detect repeated patterns (loops). If False, only group operations that
-            share the same parameters - much faster for very large graphs.
+            detect repeated patterns (loops). Set this to False when the forward pass has
+            more than about 1M operations and postprocessing speed matters; the False path
+            skips the expensive expansion step and only groups operations that share the
+            same parameters.
         save_activations_to: Optional portable bundle directory for streaming activation save.
         keep_activations_in_memory: Whether streamed activations should remain in memory
             after finalization.
@@ -268,7 +275,12 @@ def log_forward_pass(
         input_kwargs: Keyword args for ``model.forward()``.
         layers_to_save: Which layers to save activations for (see above).
         keep_unsaved_layers: If False, layers without saved activations are removed from
-            the returned ModelLog (they still exist during processing).
+            the returned ModelLog (they still exist during processing). When
+            ``layers_to_save`` is a specific subset, TorchLens still does an initial
+            exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
+            names before the fast replay. Example: use
+            ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
+            requested saved activations in the final log.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
         activation_postfunc: Optional function applied to each activation before saving.
         mark_input_output_distances: Deprecated alias for
@@ -278,16 +290,16 @@ def log_forward_pass(
             ``validate_forward_pass``).
         save_gradients: Capture gradients during a subsequent backward pass.
         save_source_context: Python call-stack identity is always recorded for each
-            tensor operation. If True, also capture rich source-text fields on each
-            ``FuncCallLocation`` (``source_context``, ``code_context``, etc.) plus
-            module source metadata. If False, identity fields (``file``,
+            tensor operation. If False (default), identity fields such as ``file``,
             ``line_number``, ``func_name``, ``code_firstlineno``,
-            ``code_qualname``, ``col_offset``) are still captured; only the
-            source-text properties return the existing empty-placeholder values.
+            ``code_qualname``, and ``col_offset`` are still captured, but the rich
+            source-text properties return their existing empty-placeholder values.
+            If True, TorchLens also captures source text on each ``FuncCallLocation``
+            (``source_context``, ``code_context``, etc.) plus module source metadata.
             Full ``if``/``elif``/``else`` and ternary branch attribution
             (``conditional_events``, ``conditional_arm_edges``,
-            ``conditional_edge_passes``, etc.) works regardless of this flag
-            because it relies only on those identity fields.
+            ``conditional_edge_passes``, etc.) works regardless of this flag because it
+            relies only on the always-captured identity fields.
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
@@ -324,8 +336,10 @@ def log_forward_pass(
         compute_input_output_distances: Compute BFS distances from inputs/outputs
             (expensive).
         detect_recurrent_patterns: If True (default), run full isomorphic
-            subgraph expansion. If False, only group operations that share the
-            same parameters.
+            subgraph expansion. Set this to False when the forward pass has more than
+            about 1M operations and postprocessing speed matters; the False path skips
+            the expensive expansion step and only groups operations that share the same
+            parameters.
         visualization: Grouped visualization options. When omitted,
             ``log_forward_pass`` defaults to ``VisualizationOptions(mode="none")``.
         streaming: Grouped streaming-save options.
@@ -635,7 +649,10 @@ def show_model_graph(
         random_seed: Fixed RNG seed for stochastic models.
         detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
         detect_recurrent_patterns: If True (default), run full isomorphic
-            subgraph expansion.
+            subgraph expansion. Set this to False when the forward pass has more than
+            about 1M operations and postprocessing speed matters; the False path skips
+            the expensive expansion step and only groups operations that share the same
+            parameters.
         visualization: Grouped visualization options. When omitted,
             ``show_model_graph`` defaults to ``VisualizationOptions(mode="unrolled")``.
 

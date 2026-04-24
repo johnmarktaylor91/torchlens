@@ -3,6 +3,15 @@
 
 ## v1.3.0 (unreleased)
 
+### Documentation
+
+- **ux**: Default-value audit doc clarifications only; no entry-point defaults changed in Wave 4c.
+
+Clarify that `keep_unsaved_layers=True` still allows a full discovery pass before selective-layer
+replay, that `save_source_context=False` still captures the identity fields needed for branch
+attribution, and that `detect_loops=True` should be flipped off manually for very large (>1M-op)
+graphs when postprocessing speed matters.
+
 ### Features
 
 - **summary**: Add `ModelLog.summary()`, compact `ModelLog.__repr__`, and the
