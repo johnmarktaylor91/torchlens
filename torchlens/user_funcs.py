@@ -4,7 +4,8 @@ This module contains every user-facing function:
   - ``log_forward_pass``  - the main entry point (runs model, returns ModelLog)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
-  - ``get_model_metadata`` - metadata-only convenience wrapper (deprecated path)
+  - ``log_model_metadata`` - metadata-only convenience wrapper
+  - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Two-pass strategy** (``log_forward_pass`` with selective layers):
@@ -27,15 +28,30 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from .utils.introspection import get_vars_of_type_from_obj
-from .utils.rng import set_random_seed
-from .utils.display import warn_parallel, _vprint
-from .utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
+from ._deprecations import MISSING, MissingType, resolve_renamed_kwarg, warn_deprecated_alias
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
+from ._literals import (
+    OutputDeviceLiteral,
+    VisDirectionLiteral,
+    VisModeLiteral,
+    VisNodePlacementLiteral,
+    VisRendererLiteral,
+)
 from .data_classes.model_log import (
     ModelLog,
 )
+from .options import (
+    StreamingOptions,
+    VisualizationOptions,
+    merge_streaming_options,
+    merge_visualization_options,
+    visualization_to_render_kwargs,
+)
+from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_kwargs
+from .utils.display import _vprint, warn_parallel
+from .utils.introspection import get_vars_of_type_from_obj
+from .utils.rng import set_random_seed
 
 
 def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
@@ -74,7 +90,7 @@ def _run_model_and_save_specified_activations(
     input_kwargs: Dict[Any, Any],
     layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
     keep_unsaved_layers: bool = True,
-    output_device: str = "same",
+    output_device: OutputDeviceLiteral = "same",
     activation_postfunc: Optional[Callable] = None,
     mark_input_output_distances: bool = False,
     detach_saved_tensors: bool = False,
@@ -180,39 +196,44 @@ def log_forward_pass(
     input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Optional[Union[str, List]] = "all",
     keep_unsaved_layers: bool = True,
-    output_device: str = "same",
+    output_device: OutputDeviceLiteral = "same",
     activation_postfunc: Optional[Callable] = None,
-    mark_input_output_distances: bool = False,
+    mark_input_output_distances: bool | MissingType = MISSING,
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
     save_gradients: bool = False,
     save_source_context: bool = False,
     save_rng_states: bool = False,
-    vis_mode: str = "none",
-    vis_nesting_depth: int = 1000,
-    vis_outpath: str = "graph.gv",
-    vis_save_only: bool = False,
-    vis_fileformat: str = "pdf",
-    vis_buffer_layers: bool = False,
-    vis_direction: str = "bottomup",
-    vis_graph_overrides: Optional[Dict] = None,
-    vis_node_overrides: Optional[Dict] = None,
-    vis_nested_node_overrides: Optional[Dict] = None,
-    vis_edge_overrides: Optional[Dict] = None,
-    vis_gradient_edge_overrides: Optional[Dict] = None,
-    vis_module_overrides: Optional[Dict] = None,
-    vis_node_placement: str = "auto",
-    vis_renderer: str = "graphviz",
-    vis_theme: str = "torchlens",
+    vis_mode: VisModeLiteral | MissingType = MISSING,
+    vis_nesting_depth: int | MissingType = MISSING,
+    vis_outpath: str | MissingType = MISSING,
+    vis_save_only: bool | MissingType = MISSING,
+    vis_fileformat: str | MissingType = MISSING,
+    vis_buffer_layers: bool | MissingType = MISSING,
+    vis_direction: VisDirectionLiteral | MissingType = MISSING,
+    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_node_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_nested_node_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
+    vis_renderer: VisRendererLiteral | MissingType = MISSING,
+    vis_theme: str | MissingType = MISSING,
     random_seed: Optional[int] = None,
-    num_context_lines: int = 7,
+    num_context_lines: int | MissingType = MISSING,
     optimizer=None,
-    detect_loops: bool = True,
-    save_activations_to: str | Path | None = None,
-    keep_activations_in_memory: bool = True,
-    activation_sink: Callable[[str, torch.Tensor], None] | None = None,
+    detect_loops: bool | MissingType = MISSING,
+    save_activations_to: str | Path | None | MissingType = MISSING,
+    keep_activations_in_memory: bool | MissingType = MISSING,
+    activation_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     unwrap_when_done: bool = False,
     verbose: bool = False,
+    source_context_lines: int | MissingType = MISSING,
+    compute_input_output_distances: bool | MissingType = MISSING,
+    detect_recurrent_patterns: bool | MissingType = MISSING,
+    visualization: VisualizationOptions | None = None,
+    streaming: StreamingOptions | None = None,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -250,10 +271,11 @@ def log_forward_pass(
             the returned ModelLog (they still exist during processing).
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
         activation_postfunc: Optional function applied to each activation before saving.
-        mark_input_output_distances: Compute BFS distances from inputs/outputs (expensive).
+        mark_input_output_distances: Deprecated alias for
+            ``compute_input_output_distances``.
         detach_saved_tensors: If True, detach saved tensors from the autograd graph.
         save_function_args: Store non-tensor args for each function call (needed for
-            ``validate_saved_activations``).
+            ``validate_forward_pass``).
         save_gradients: Capture gradients during a subsequent backward pass.
         save_source_context: Python call-stack identity is always recorded for each
             tensor operation. If True, also capture rich source-text fields on each
@@ -269,44 +291,44 @@ def log_forward_pass(
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
-        vis_mode: ``'none'`` (default), ``'rolled'``, or ``'unrolled'`` visualization.
-        vis_nesting_depth: Max module nesting depth shown in visualization.
-        vis_outpath: Output file path for the graph visualization.
-        vis_save_only: If True, save the visualization file without displaying it.
-        vis_fileformat: Image format (``'pdf'``, ``'png'``, ``'jpg'``, etc.).
-        vis_buffer_layers: Include buffer layers in the visualization.
-        vis_direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
-        vis_graph_overrides: Graphviz graph-level attribute overrides.
-        vis_node_overrides: Graphviz node attribute overrides.
-        vis_nested_node_overrides: Graphviz attribute overrides for nested (module) nodes.
-        vis_edge_overrides: Graphviz edge attribute overrides.
-        vis_gradient_edge_overrides: Graphviz attribute overrides for gradient edges.
-        vis_module_overrides: Graphviz subgraph (module cluster) attribute overrides.
-        vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
-            or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK/sfdp for large.
-        vis_renderer: Visualization backend: ``'graphviz'`` (default) or ``'dagua'``.
-        vis_theme: Named Dagua theme when ``vis_renderer='dagua'``.
+        vis_mode: Deprecated alias for ``visualization.mode``.
+        vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
+        vis_outpath: Deprecated alias for ``visualization.output_path``.
+        vis_save_only: Deprecated alias for ``visualization.save_only``.
+        vis_fileformat: Deprecated alias for ``visualization.file_format``.
+        vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
+        vis_direction: Deprecated alias for ``visualization.direction``.
+        vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
+        vis_node_overrides: Deprecated alias for ``visualization.node_overrides``.
+        vis_nested_node_overrides: Deprecated alias for
+            ``visualization.nested_node_overrides``.
+        vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
+        vis_gradient_edge_overrides: Deprecated alias for
+            ``visualization.gradient_edge_overrides``.
+        vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
+        vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
+        vis_renderer: Deprecated alias for ``visualization.renderer``.
+        vis_theme: Deprecated alias for ``visualization.theme``.
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
-        num_context_lines: Lines of source context to capture per function call.
+        num_context_lines: Deprecated alias for ``source_context_lines``.
         optimizer: Optional optimizer to annotate which params are being optimized.
-        detect_loops: If True (default), run full isomorphic subgraph expansion.
-        save_activations_to: Optional portable bundle directory for streaming activation
-            save. When set, TorchLens writes each saved activation to disk during the
-            forward pass and finalizes a directory bundle at the end. Streaming is
-            always strict, requires ``safetensors``, and is mutually exclusive with
-            ``activation_sink``.
-        keep_activations_in_memory: Only applies when ``save_activations_to`` is set.
-            If True (default), the returned log keeps the in-memory tensors and also
-            attaches ``activation_ref`` handles to the finalized bundle. If False,
-            activations are evicted after finalization and must be materialized back
-            from disk on demand.
-        activation_sink: Optional callback invoked with ``(label, tensor)`` for each
-            saved activation instead of writing a portable bundle. This is useful for
-            custom streaming consumers and cannot be combined with
-            ``save_activations_to``.
+        detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
+        save_activations_to: Deprecated alias for ``streaming.bundle_path``.
+        keep_activations_in_memory: Deprecated alias for
+            ``streaming.retain_in_memory``.
+        activation_sink: Deprecated alias for ``streaming.activation_callback``.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
+        source_context_lines: Lines of source context to capture per function call.
+        compute_input_output_distances: Compute BFS distances from inputs/outputs
+            (expensive).
+        detect_recurrent_patterns: If True (default), run full isomorphic
+            subgraph expansion. If False, only group operations that share the
+            same parameters.
+        visualization: Grouped visualization options. When omitted,
+            ``log_forward_pass`` defaults to ``VisualizationOptions(mode="none")``.
+        streaming: Grouped streaming-save options.
 
     Returns:
         A ``ModelLog`` containing layer activations (if requested) and full metadata.
@@ -315,19 +337,70 @@ def log_forward_pass(
     warn_parallel()
     model = _unwrap_data_parallel(model)
 
-    if vis_mode not in ["none", "rolled", "unrolled"]:
+    source_context_lines = resolve_renamed_kwarg(
+        old_name="num_context_lines",
+        new_name="source_context_lines",
+        old_value=num_context_lines,
+        new_value=source_context_lines,
+        default=7,
+    )
+    compute_input_output_distances = resolve_renamed_kwarg(
+        old_name="mark_input_output_distances",
+        new_name="compute_input_output_distances",
+        old_value=mark_input_output_distances,
+        new_value=compute_input_output_distances,
+        default=False,
+    )
+    detect_recurrent_patterns = resolve_renamed_kwarg(
+        old_name="detect_loops",
+        new_name="detect_recurrent_patterns",
+        old_value=detect_loops,
+        new_value=detect_recurrent_patterns,
+        default=True,
+    )
+    visualization_options = merge_visualization_options(
+        function_default_mode="none",
+        visualization=visualization,
+        vis_mode=vis_mode,
+        vis_nesting_depth=vis_nesting_depth,
+        vis_outpath=vis_outpath,
+        vis_save_only=vis_save_only,
+        vis_fileformat=vis_fileformat,
+        vis_buffer_layers=vis_buffer_layers,
+        vis_direction=vis_direction,
+        vis_graph_overrides=vis_graph_overrides,
+        vis_node_overrides=vis_node_overrides,
+        vis_nested_node_overrides=vis_nested_node_overrides,
+        vis_edge_overrides=vis_edge_overrides,
+        vis_gradient_edge_overrides=vis_gradient_edge_overrides,
+        vis_module_overrides=vis_module_overrides,
+        vis_node_placement=vis_node_placement,
+        vis_renderer=vis_renderer,
+        vis_theme=vis_theme,
+    )
+    streaming_options = merge_streaming_options(
+        streaming=streaming,
+        save_activations_to=save_activations_to,
+        keep_activations_in_memory=keep_activations_in_memory,
+        activation_sink=activation_sink,
+    )
+
+    if visualization_options.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
-    if save_activations_to is not None and activation_sink is not None:
+    if (
+        streaming_options.bundle_path is not None
+        and streaming_options.activation_callback is not None
+    ):
         raise ValueError("save_activations_to and activation_sink are mutually exclusive.")
 
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
 
     uses_two_pass = layers_to_save not in ["all", "none", None, []]
-    if save_activations_to is not None and uses_two_pass:
+    if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
             'save_activations_to is only supported with layers_to_save="all" in this '
             "release. For selective streaming use activation_sink=callable, or capture "
@@ -346,19 +419,19 @@ def log_forward_pass(
             keep_unsaved_layers=keep_unsaved_layers,
             output_device=output_device,
             activation_postfunc=activation_postfunc,
-            mark_input_output_distances=mark_input_output_distances,
+            mark_input_output_distances=compute_input_output_distances,
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,
             save_gradients=save_gradients,
             random_seed=random_seed,
-            num_context_lines=num_context_lines,
+            num_context_lines=source_context_lines,
             optimizer=optimizer,
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
-            detect_loops=detect_loops,
-            save_activations_to=save_activations_to,
-            keep_activations_in_memory=keep_activations_in_memory,
-            activation_sink=activation_sink,
+            detect_loops=detect_recurrent_patterns,
+            save_activations_to=streaming_options.bundle_path,
+            keep_activations_in_memory=streaming_options.retain_in_memory,
+            activation_sink=streaming_options.activation_callback,
             verbose=verbose,
         )
     else:
@@ -376,19 +449,19 @@ def log_forward_pass(
             keep_unsaved_layers=True,
             output_device=output_device,
             activation_postfunc=activation_postfunc,
-            mark_input_output_distances=mark_input_output_distances,
+            mark_input_output_distances=compute_input_output_distances,
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,
             save_gradients=save_gradients,
             random_seed=random_seed,
-            num_context_lines=num_context_lines,
+            num_context_lines=source_context_lines,
             optimizer=optimizer,
             save_source_context=save_source_context,
             save_rng_states=save_rng_states,
-            detect_loops=detect_loops,
-            save_activations_to=save_activations_to,
-            keep_activations_in_memory=keep_activations_in_memory,
-            activation_sink=activation_sink,
+            detect_loops=detect_recurrent_patterns,
+            save_activations_to=streaming_options.bundle_path,
+            keep_activations_in_memory=streaming_options.retain_in_memory,
+            activation_sink=streaming_options.activation_callback,
             verbose=verbose,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
@@ -412,25 +485,8 @@ def log_forward_pass(
     )
 
     # Visualize if desired.
-    if vis_mode != "none":
-        model_log.render_graph(
-            vis_mode,
-            vis_nesting_depth,
-            vis_outpath,
-            vis_graph_overrides,
-            vis_node_overrides,
-            vis_nested_node_overrides,
-            vis_edge_overrides,
-            vis_gradient_edge_overrides,
-            vis_module_overrides,
-            vis_save_only,
-            vis_fileformat,
-            vis_buffer_layers,
-            vis_direction,
-            vis_node_placement=vis_node_placement,
-            vis_renderer=vis_renderer,
-            vis_theme=vis_theme,
-        )
+    if visualization_options.mode != "none":
+        model_log.render_graph(**visualization_to_render_kwargs(visualization_options))
 
     if unwrap_when_done:
         from .decoration import unwrap_torch
@@ -440,7 +496,7 @@ def log_forward_pass(
     return model_log
 
 
-def get_model_metadata(
+def log_model_metadata(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
     input_kwargs: Optional[Dict[Any, Any]] = None,
@@ -448,8 +504,7 @@ def get_model_metadata(
     """Return model metadata without saving any activations.
 
     Equivalent to ``log_forward_pass(model, input_args, input_kwargs, layers_to_save=None,
-    mark_input_output_distances=True)``.  Prefer using ``log_forward_pass`` directly -
-    this wrapper exists for backward compatibility and may be removed in a future release.
+    compute_input_output_distances=True)``.
 
     Args:
         model: PyTorch model to inspect.
@@ -464,9 +519,20 @@ def get_model_metadata(
         input_args,
         input_kwargs,
         layers_to_save=None,
-        mark_input_output_distances=True,
+        compute_input_output_distances=True,
     )
     return model_log
+
+
+def get_model_metadata(
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+    input_kwargs: Optional[Dict[Any, Any]] = None,
+) -> ModelLog:
+    """Deprecated alias for :func:`log_model_metadata`."""
+
+    warn_deprecated_alias("get_model_metadata", "log_model_metadata")
+    return log_model_metadata(model, input_args, input_kwargs)
 
 
 def summary(
@@ -515,25 +581,27 @@ def show_model_graph(
     model: nn.Module,
     input_args: Union[torch.Tensor, List, Tuple],
     input_kwargs: Optional[Dict[Any, Any]] = None,
-    vis_mode: str = "unrolled",
-    vis_nesting_depth: int = 1000,
-    vis_outpath: str = "graph.gv",
-    vis_graph_overrides: Optional[Dict] = None,
-    vis_node_overrides: Optional[Dict] = None,
-    vis_nested_node_overrides: Optional[Dict] = None,
-    vis_edge_overrides: Optional[Dict] = None,
-    vis_gradient_edge_overrides: Optional[Dict] = None,
-    vis_module_overrides: Optional[Dict] = None,
-    vis_save_only: bool = False,
-    vis_fileformat: str = "pdf",
-    vis_buffer_layers: bool = False,
-    vis_direction: str = "bottomup",
-    vis_node_placement: str = "auto",
-    vis_renderer: str = "graphviz",
-    vis_theme: str = "torchlens",
+    vis_mode: VisModeLiteral | MissingType = MISSING,
+    vis_nesting_depth: int | MissingType = MISSING,
+    vis_outpath: str | MissingType = MISSING,
+    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_node_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_nested_node_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_save_only: bool | MissingType = MISSING,
+    vis_fileformat: str | MissingType = MISSING,
+    vis_buffer_layers: bool | MissingType = MISSING,
+    vis_direction: VisDirectionLiteral | MissingType = MISSING,
+    vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
+    vis_renderer: VisRendererLiteral | MissingType = MISSING,
+    vis_theme: str | MissingType = MISSING,
     random_seed: Optional[int] = None,
-    detect_loops: bool = True,
+    detect_loops: bool | MissingType = MISSING,
     verbose: bool = False,
+    detect_recurrent_patterns: bool | MissingType = MISSING,
+    visualization: VisualizationOptions | None = None,
 ) -> None:
     """Convenience wrapper: visualize the computational graph without saving activations.
 
@@ -546,16 +614,30 @@ def show_model_graph(
         model: PyTorch model.
         input_args: Positional args for ``model.forward()``.
         input_kwargs: Keyword args for ``model.forward()``.
-        vis_mode: ``'rolled'`` or ``'unrolled'`` (``'none'`` is accepted but a no-op).
-        vis_nesting_depth: Max module nesting depth shown (default 1000 = all).
-        vis_outpath: Output file path for the visualization.
-        vis_save_only: If True, save without displaying.
-        vis_fileformat: Image format (``'pdf'``, ``'png'``, ``'jpg'``, etc.).
-        vis_buffer_layers: Include buffer layers in the visualization.
-        vis_direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
-        vis_renderer: Visualization backend: ``'graphviz'`` (default) or ``'dagua'``.
-        vis_theme: Named Dagua theme when ``vis_renderer='dagua'``.
+        vis_mode: Deprecated alias for ``visualization.mode``.
+        vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
+        vis_outpath: Deprecated alias for ``visualization.output_path``.
+        vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
+        vis_node_overrides: Deprecated alias for ``visualization.node_overrides``.
+        vis_nested_node_overrides: Deprecated alias for
+            ``visualization.nested_node_overrides``.
+        vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
+        vis_gradient_edge_overrides: Deprecated alias for
+            ``visualization.gradient_edge_overrides``.
+        vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
+        vis_save_only: Deprecated alias for ``visualization.save_only``.
+        vis_fileformat: Deprecated alias for ``visualization.file_format``.
+        vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
+        vis_direction: Deprecated alias for ``visualization.direction``.
+        vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
+        vis_renderer: Deprecated alias for ``visualization.renderer``.
+        vis_theme: Deprecated alias for ``visualization.theme``.
         random_seed: Fixed RNG seed for stochastic models.
+        detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
+        detect_recurrent_patterns: If True (default), run full isomorphic
+            subgraph expansion.
+        visualization: Grouped visualization options. When omitted,
+            ``show_model_graph`` defaults to ``VisualizationOptions(mode="unrolled")``.
 
     Returns:
         None.
@@ -564,7 +646,35 @@ def show_model_graph(
     if not input_kwargs:
         input_kwargs = {}
 
-    if vis_mode not in ["none", "rolled", "unrolled"]:
+    detect_recurrent_patterns = resolve_renamed_kwarg(
+        old_name="detect_loops",
+        new_name="detect_recurrent_patterns",
+        old_value=detect_loops,
+        new_value=detect_recurrent_patterns,
+        default=True,
+    )
+    visualization_options = merge_visualization_options(
+        function_default_mode="unrolled",
+        visualization=visualization,
+        vis_mode=vis_mode,
+        vis_nesting_depth=vis_nesting_depth,
+        vis_outpath=vis_outpath,
+        vis_save_only=vis_save_only,
+        vis_fileformat=vis_fileformat,
+        vis_buffer_layers=vis_buffer_layers,
+        vis_direction=vis_direction,
+        vis_graph_overrides=vis_graph_overrides,
+        vis_node_overrides=vis_node_overrides,
+        vis_nested_node_overrides=vis_nested_node_overrides,
+        vis_edge_overrides=vis_edge_overrides,
+        vis_gradient_edge_overrides=vis_gradient_edge_overrides,
+        vis_module_overrides=vis_module_overrides,
+        vis_node_placement=vis_node_placement,
+        vis_renderer=vis_renderer,
+        vis_theme=vis_theme,
+    )
+
+    if visualization_options.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     model_log = _run_model_and_save_specified_activations(
@@ -577,30 +687,13 @@ def show_model_graph(
         detach_saved_tensors=False,
         save_gradients=False,
         random_seed=random_seed,
-        detect_loops=detect_loops,
+        detect_loops=detect_recurrent_patterns,
         verbose=verbose,
     )
     # Render in a try/finally so temporary tl_ attributes on the model are
     # always cleaned up, even if Graphviz rendering raises.
     try:
-        model_log.render_graph(
-            vis_mode,
-            vis_nesting_depth,
-            vis_outpath,
-            vis_graph_overrides,
-            vis_node_overrides,
-            vis_nested_node_overrides,
-            vis_edge_overrides,
-            vis_gradient_edge_overrides,
-            vis_module_overrides,
-            vis_save_only,
-            vis_fileformat,
-            vis_buffer_layers,
-            vis_direction,
-            vis_node_placement=vis_node_placement,
-            vis_renderer=vis_renderer,
-            vis_theme=vis_theme,
-        )
+        model_log.render_graph(**visualization_to_render_kwargs(visualization_options))
     finally:
         model_log.cleanup()
 
@@ -620,7 +713,7 @@ def validate_forward_pass(
     1. Run model.forward() *without* TorchLens to get ground-truth output tensors.
     2. Run ``log_forward_pass`` with ``save_function_args=True`` and ``layers_to_save='all'``
        to capture every activation and its creating function's arguments.
-    3. Call ``ModelLog.validate_saved_activations`` which replays the forward pass
+    3. Call ``ModelLog.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved activations, checking that the output matches
        ground truth.  It also injects random activations and verifies the output
        changes (proving the saved activations are actually used, not just ignored).
@@ -703,7 +796,7 @@ def validate_forward_pass(
     )
     # Step 3: Validate by replaying the forward pass from saved activations.
     try:
-        activations_are_valid = model_log.validate_saved_activations(
+        activations_are_valid = model_log.validate_forward_pass(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
     finally:
@@ -718,17 +811,18 @@ def validate_saved_activations(
     input_kwargs: Optional[Dict[Any, Any]] = None,
     random_seed: Union[int, None] = None,
     verbose: bool = False,
+    validate_metadata: bool = True,
 ) -> bool:
-    """Deprecated: use ``validate_forward_pass`` instead."""
-    import warnings
+    """Deprecated alias for :func:`validate_forward_pass`."""
 
-    warnings.warn(
-        "validate_saved_activations is deprecated, use validate_forward_pass instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    warn_deprecated_alias("validate_saved_activations", "validate_forward_pass")
     return validate_forward_pass(
-        model, input_args, input_kwargs, random_seed=random_seed, verbose=verbose
+        model,
+        input_args,
+        input_kwargs,
+        random_seed=random_seed,
+        verbose=verbose,
+        validate_metadata=validate_metadata,
     )
 
 

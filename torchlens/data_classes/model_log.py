@@ -45,6 +45,13 @@ if TYPE_CHECKING:
     from .layer_log import LayerAccessor
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
+from .._deprecations import warn_deprecated_alias
+from .._literals import (
+    VisDirectionLiteral,
+    VisModeLiteral,
+    VisNodePlacementLiteral,
+    VisRendererLiteral,
+)
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
@@ -697,7 +704,7 @@ class ModelLog:
 
     def render_graph(
         self,
-        vis_mode: str = "unrolled",
+        vis_mode: VisModeLiteral = "unrolled",
         vis_nesting_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: Optional[Dict] = None,
@@ -709,9 +716,9 @@ class ModelLog:
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
         show_buffer_layers: bool = False,
-        direction: str = "bottomup",
-        vis_node_placement: str = "auto",
-        vis_renderer: str = "graphviz",
+        direction: VisDirectionLiteral = "bottomup",
+        vis_node_placement: VisNodePlacementLiteral = "auto",
+        vis_renderer: VisRendererLiteral = "graphviz",
         vis_theme: str = "torchlens",
     ) -> str:
         """Render the computational graph for this model log.
@@ -1130,23 +1137,23 @@ class ModelLog:
         verbose: bool = False,
         validate_metadata: bool = True,
     ) -> bool:
-        """Validate saved activations against ground-truth model outputs.
+        """Deprecated alias for :meth:`validate_forward_pass`.
 
         Parameters
         ----------
         ground_truth_output_tensors, verbose, validate_metadata:
-            Forwarded unchanged to
-            :func:`torchlens.validation.core.validate_saved_activations`.
+            Forwarded unchanged to :meth:`validate_forward_pass`.
 
         Returns
         -------
         bool
             ``True`` if validation succeeds.
         """
-        from ..validation.core import validate_saved_activations as _impl
-
-        return _impl(
-            self,
+        warn_deprecated_alias(
+            "ModelLog.validate_saved_activations",
+            "ModelLog.validate_forward_pass",
+        )
+        return self.validate_forward_pass(
             ground_truth_output_tensors=ground_truth_output_tensors,
             verbose=verbose,
             validate_metadata=validate_metadata,
@@ -1158,12 +1165,13 @@ class ModelLog:
         verbose: bool = False,
         validate_metadata: bool = True,
     ) -> bool:
-        """Alias for :meth:`validate_saved_activations`.
+        """Validate saved activations against ground-truth model outputs.
 
         Parameters
         ----------
         ground_truth_output_tensors, verbose, validate_metadata:
-            Forwarded unchanged to :meth:`validate_saved_activations`.
+            Forwarded unchanged to
+            :func:`torchlens.validation.core.validate_saved_activations`.
 
         Returns
         -------
