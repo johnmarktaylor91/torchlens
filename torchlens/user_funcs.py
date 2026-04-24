@@ -48,6 +48,7 @@ from .options import (
     merge_visualization_options,
     visualization_to_render_kwargs,
 )
+from ._robustness import check_model_and_input_variants
 from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_kwargs
 from .utils.display import _vprint, warn_parallel
 from .utils.introspection import get_vars_of_type_from_obj
@@ -350,6 +351,7 @@ def log_forward_pass(
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     model = _unwrap_data_parallel(model)
+    check_model_and_input_variants(model, input_args, input_kwargs)
 
     source_context_lines = resolve_renamed_kwarg(
         old_name="num_context_lines",
@@ -576,6 +578,7 @@ def summary(
     model = _unwrap_data_parallel(model)
     if input_kwargs is None:
         input_kwargs = {}
+    check_model_and_input_variants(model, input_args, input_kwargs)
 
     model_log = _run_model_and_save_specified_activations(
         model=model,
@@ -662,6 +665,7 @@ def show_model_graph(
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
+    check_model_and_input_variants(model, input_args, input_kwargs)
 
     detect_recurrent_patterns = resolve_renamed_kwarg(
         old_name="detect_loops",
@@ -754,6 +758,7 @@ def validate_forward_pass(
     """
     warn_parallel()
     model = _unwrap_data_parallel(model)
+    check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).
     if random_seed is None:
