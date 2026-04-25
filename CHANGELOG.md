@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v2.2.0 (2026-04-25)
+
+### Features
+
+- **visualization**: Side-by-side code panel
+  ([`6d3101e`](https://github.com/johnmarktaylor91/torchlens/commit/6d3101e72c1b66c4c02ca90a8b9085d2f43f1e26))
+
+
 ## v2.1.0 (2026-04-25)
 
 ### Features
