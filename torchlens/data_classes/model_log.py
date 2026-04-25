@@ -708,8 +708,10 @@ class ModelLog:
         vis_nesting_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: Optional[Dict] = None,
-        vis_node_overrides: Optional[Dict] = None,
-        vis_nested_node_overrides: Optional[Dict] = None,
+        node_spec_fn: Optional[Callable] = None,
+        collapsed_node_spec_fn: Optional[Callable] = None,
+        collapse_fn: Optional[Callable] = None,
+        skip_fn: Optional[Callable] = None,
         vis_edge_overrides: Optional[Dict] = None,
         vis_gradient_edge_overrides: Optional[Dict] = None,
         vis_module_overrides: Optional[Dict] = None,
@@ -725,10 +727,10 @@ class ModelLog:
 
         Parameters
         ----------
-        vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, vis_node_overrides, \
-        vis_nested_node_overrides, vis_edge_overrides, vis_gradient_edge_overrides, \
-        vis_module_overrides, vis_save_only, vis_fileformat, show_buffer_layers, direction, \
-        vis_node_placement, vis_renderer, vis_theme:
+        vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, node_spec_fn, \
+        collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
+        vis_gradient_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
+        show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
 
         Returns
@@ -744,8 +746,10 @@ class ModelLog:
             vis_nesting_depth=vis_nesting_depth,
             vis_outpath=vis_outpath,
             vis_graph_overrides=vis_graph_overrides,
-            vis_node_overrides=vis_node_overrides,
-            vis_nested_node_overrides=vis_nested_node_overrides,
+            node_spec_fn=node_spec_fn,
+            collapsed_node_spec_fn=collapsed_node_spec_fn,
+            collapse_fn=collapse_fn,
+            skip_fn=skip_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_gradient_edge_overrides=vis_gradient_edge_overrides,
             vis_module_overrides=vis_module_overrides,

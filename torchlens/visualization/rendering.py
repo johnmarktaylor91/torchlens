@@ -34,7 +34,20 @@ Key mechanisms:
 import subprocess
 import warnings
 from collections import defaultdict
-from typing import Any, Optional, Dict, List, Set, TYPE_CHECKING, Tuple, Union
+from dataclasses import dataclass
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 import graphviz
 
@@ -48,9 +61,17 @@ from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
+from .node_spec import NodeSpec, render_lines_to_html
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
+    from ..data_classes.module_log import ModuleLog
+
+GraphNode = Union["LayerPassLog", "LayerLog"]
+NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]
+CollapsedNodeSpecFn = Callable[["ModuleLog", NodeSpec], NodeSpec | None]
+CollapseFn = Callable[["ModuleLog"], bool]
+SkipFn = Callable[["LayerLog"], bool]
 
 # -- Color palette for node types --
 INPUT_COLOR = "#98FB98"  # Light green
@@ -73,14 +94,33 @@ PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
 
+@dataclass(frozen=True)
+class RenderEdge:
+    """Skip-aware edge between two rendered graph nodes.
+
+    Attributes
+    ----------
+    target:
+        Non-skipped edge target.
+    metadata_child:
+        Original first child edge to use for labels and override callbacks. ``None``
+        means multiple skipped paths disagreed, so optional labels are dropped.
+    """
+
+    target: GraphNode
+    metadata_child: Optional[GraphNode]
+
+
 def render_graph(
     self: "ModelLog",
     vis_mode: VisModeLiteral = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
     vis_graph_overrides: Optional[Dict] = None,
-    vis_node_overrides: Optional[Dict] = None,
-    vis_nested_node_overrides: Optional[Dict] = None,
+    node_spec_fn: NodeSpecFn | None = None,
+    collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
+    collapse_fn: CollapseFn | None = None,
+    skip_fn: SkipFn | None = None,
     vis_edge_overrides: Optional[Dict] = None,
     vis_gradient_edge_overrides: Optional[Dict] = None,
     vis_module_overrides: Optional[Dict] = None,
@@ -108,8 +148,15 @@ def render_graph(
             Use 0 to show all layers without collapsing.
         vis_outpath: Output file path (extension auto-stripped).
         vis_graph_overrides: Graphviz graph-level attribute overrides.
-        vis_node_overrides: Overrides for standard (non-collapsed) nodes.
-        vis_nested_node_overrides: Overrides for collapsed module nodes.
+        node_spec_fn: Optional callback receiving ``(layer_log, default_spec)``.
+            In unrolled mode, ``layer_log`` is the parent aggregate LayerLog for
+            the rendered LayerPassLog.
+        collapsed_node_spec_fn: Optional callback receiving
+            ``(module_log, default_spec)`` for collapsed module nodes.
+        collapse_fn: Optional predicate receiving a ModuleLog. When provided,
+            it replaces ``vis_nesting_depth`` collapse decisions.
+        skip_fn: Optional predicate receiving a LayerLog. Skipped nodes are
+            elided and edges are chained through them.
         vis_edge_overrides: Overrides for forward edges.
         vis_gradient_edge_overrides: Overrides for backward (gradient) edges.
         vis_module_overrides: Overrides for module subgraph boxes.
@@ -147,8 +194,6 @@ def render_graph(
 
     overrides = VisualizationOverrides(
         graph=vis_graph_overrides or {},
-        node=vis_node_overrides or {},
-        nested_node=vis_nested_node_overrides or {},
         edge=vis_edge_overrides or {},
         gradient_edge=vis_gradient_edge_overrides or {},
         module=vis_module_overrides or {},
@@ -201,7 +246,14 @@ def render_graph(
     # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
     from .elk_layout import get_node_placement_engine
 
-    num_nodes = len(entries_to_plot)
+    edge_map, skipped_labels = _build_skip_filtered_edge_map(
+        self,
+        entries_to_plot,
+        vis_mode=vis_mode,
+        show_buffer_layers=show_buffer_layers,
+        skip_fn=skip_fn,
+    )
+    num_nodes = len(entries_to_plot) - len(skipped_labels)
     engine = get_node_placement_engine(vis_node_placement, num_nodes)
     _vprint(self, f"Rendering {vis_mode} graph ({num_nodes} nodes, format={vis_fileformat})")
     _vprint(self, f"Layout engine: {engine}")
@@ -241,6 +293,12 @@ def render_graph(
             vis_nesting_depth,
             show_buffer_layers,
             overrides,
+            node_spec_fn,
+            collapsed_node_spec_fn,
+            collapse_fn,
+            skip_fn,
+            edge_map,
+            skipped_labels,
             vis_outpath,
             vis_fileformat,
             vis_save_only,
@@ -291,6 +349,8 @@ def render_graph(
     edges_used: Set[str] = set()
 
     for node_barcode, node in entries_to_plot.items():
+        if node.layer_label in skipped_labels:
+            continue
         if node.is_buffer_layer and not show_buffer_layers:
             continue
         _add_node_to_graphviz(
@@ -304,6 +364,10 @@ def render_graph(
             vis_nesting_depth,
             show_buffer_layers,
             overrides,
+            node_spec_fn,
+            collapsed_node_spec_fn,
+            collapse_fn,
+            edge_map,
         )
 
     # Finally, set up the subgraphs.
@@ -347,9 +411,184 @@ def render_graph(
     return dot.source
 
 
+def _build_skip_filtered_edge_map(
+    model_log: "ModelLog",
+    entries_to_plot: Mapping[str, GraphNode],
+    *,
+    vis_mode: str,
+    show_buffer_layers: bool,
+    skip_fn: SkipFn | None,
+) -> tuple[dict[str, list[RenderEdge]], set[str]]:
+    """Build skip-aware outgoing edges for each rendered node.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    entries_to_plot:
+        Candidate nodes for the current visualization mode.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    show_buffer_layers:
+        Whether buffer nodes are visible.
+    skip_fn:
+        Optional user predicate receiving aggregate LayerLog objects.
+
+    Returns
+    -------
+    tuple[dict[str, list[RenderEdge]], set[str]]
+        Outgoing edge map and skipped node labels.
+    """
+
+    visible_entries = {
+        label: node
+        for label, node in entries_to_plot.items()
+        if show_buffer_layers or not node.is_buffer_layer
+    }
+    skipped_labels: set[str] = set()
+    if skip_fn is not None:
+        for node in visible_entries.values():
+            layer_log = _layer_log_for_node(model_log, node)
+            if not skip_fn(layer_log):
+                continue
+            if layer_log.is_input_layer or layer_log.is_output_layer:
+                raise ValueError(
+                    f"skip_fn cannot skip input or output layer '{layer_log.layer_label}'."
+                )
+            skipped_labels.add(node.layer_label)
+
+    edge_map: dict[str, list[RenderEdge]] = {}
+    for node in visible_entries.values():
+        if node.layer_label in skipped_labels:
+            continue
+        edge_map[node.layer_label] = _expand_edges_through_skipped(
+            model_log,
+            node,
+            visible_entries,
+            skipped_labels,
+            vis_mode,
+        )
+    return edge_map, skipped_labels
+
+
+def _expand_edges_through_skipped(
+    model_log: "ModelLog",
+    parent_node: GraphNode,
+    visible_entries: dict[str, GraphNode],
+    skipped_labels: set[str],
+    vis_mode: str,
+) -> list[RenderEdge]:
+    """Expand one node's outgoing edges through skipped successor chains.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    parent_node:
+        Source node whose outgoing edges should be expanded.
+    visible_entries:
+        Visible nodes before applying ``skip_fn``.
+    skipped_labels:
+        Labels elided by ``skip_fn``.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    list[RenderEdge]
+        Deduplicated non-skipped targets.
+    """
+
+    by_target: dict[str, RenderEdge] = {}
+    for child_label in parent_node.child_layers:
+        child_node = visible_entries.get(child_label)
+        if child_node is None:
+            continue
+        reached = _walk_skipped_successors(
+            model_log,
+            child_node,
+            visible_entries,
+            skipped_labels,
+            vis_mode,
+            seen={parent_node.layer_label},
+        )
+        for target_node in reached:
+            first_child = child_node
+            existing = by_target.get(target_node.layer_label)
+            if existing is None:
+                by_target[target_node.layer_label] = RenderEdge(target_node, first_child)
+            elif existing.metadata_child is not first_child:
+                by_target[target_node.layer_label] = RenderEdge(target_node, None)
+    return list(by_target.values())
+
+
+def _walk_skipped_successors(
+    model_log: "ModelLog",
+    node: GraphNode,
+    visible_entries: dict[str, GraphNode],
+    skipped_labels: set[str],
+    vis_mode: str,
+    seen: set[str],
+) -> list[GraphNode]:
+    """Return non-skipped descendants reached through skipped chains.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    node:
+        Current node in the traversal.
+    visible_entries:
+        Visible nodes before applying ``skip_fn``.
+    skipped_labels:
+        Labels elided by ``skip_fn``.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    seen:
+        Labels already visited on this traversal branch.
+
+    Returns
+    -------
+    list[GraphNode]
+        Non-skipped reachable nodes.
+    """
+
+    if node.layer_label in seen:
+        return []
+    seen.add(node.layer_label)
+    if node.layer_label not in skipped_labels:
+        return [node]
+    reached: list[GraphNode] = []
+    for child_label in node.child_layers:
+        child_node = visible_entries.get(child_label)
+        if child_node is None:
+            continue
+        reached.extend(
+            _walk_skipped_successors(
+                model_log,
+                child_node,
+                visible_entries,
+                skipped_labels,
+                vis_mode,
+                seen=set(seen),
+            )
+        )
+    return reached
+
+
+def _get_node_by_label(model_log: "ModelLog", label: str, vis_mode: str) -> GraphNode:
+    """Return a render node by label for the active visualization mode."""
+
+    if vis_mode == "unrolled":
+        return model_log.layer_dict_main_keys[label]
+    if vis_mode == "rolled":
+        return model_log.layer_logs[label]
+    raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
+
+
 def _add_node_to_graphviz(
     self: "ModelLog",
-    node: Union["LayerPassLog", "LayerLog"],
+    node: GraphNode,
     graphviz_graph,
     module_edge_dict: Dict,
     edges_used: Set,
@@ -358,6 +597,10 @@ def _add_node_to_graphviz(
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
     overrides: Optional[VisualizationOverrides] = None,
+    node_spec_fn: NodeSpecFn | None = None,
+    collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
+    collapse_fn: CollapseFn | None = None,
+    edge_map: Optional[dict[str, list[RenderEdge]]] = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -371,7 +614,13 @@ def _add_node_to_graphviz(
         show_buffer_layers: Whether to show the buffer layers
         overrides: Graphviz attribute overrides for nodes, edges, etc.
     """
-    is_collapsed_module = _is_collapsed_module(node, vis_nesting_depth)
+    collapse_address = _collapse_module_address_for_node(
+        self,
+        node,
+        collapse_fn=collapse_fn,
+        max_module_depth=vis_nesting_depth,
+    )
+    is_collapsed_module = collapse_address is not None
 
     if is_collapsed_module:
         _build_collapsed_module_node(
@@ -381,7 +630,9 @@ def _add_node_to_graphviz(
             collapsed_modules,
             vis_mode,
             vis_nesting_depth,
+            collapse_address,
             overrides,  # type: ignore[arg-type]
+            collapsed_node_spec_fn,
         )
         node_color = "black"
     else:
@@ -392,6 +643,7 @@ def _add_node_to_graphviz(
             show_buffer_layers,
             vis_mode,
             overrides,  # type: ignore[arg-type]
+            node_spec_fn,
         )
 
     _add_edges_for_node(
@@ -406,10 +658,95 @@ def _add_node_to_graphviz(
         vis_mode,
         show_buffer_layers,
         overrides,
+        collapse_fn,
+        edge_map,
     )
 
 
-def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
+def _should_collapse_module(
+    module_log: "ModuleLog",
+    *,
+    collapse_fn: CollapseFn | None,
+    max_module_depth: int,
+) -> bool:
+    """Return whether ``module_log`` should render as a collapsed module node.
+
+    Parameters
+    ----------
+    module_log:
+        Module metadata to check.
+    collapse_fn:
+        Optional user predicate. When supplied, it overrides depth logic.
+    max_module_depth:
+        Legacy nesting-depth threshold.
+
+    Returns
+    -------
+    bool
+        True if the module should be collapsed.
+    """
+
+    if collapse_fn is not None:
+        return bool(collapse_fn(module_log))
+    if max_module_depth == 0:
+        return False
+    return module_log.address_depth >= max_module_depth
+
+
+def _collapse_module_address_for_node(
+    model_log: "ModelLog",
+    node: GraphNode,
+    *,
+    collapse_fn: CollapseFn | None,
+    max_module_depth: int,
+) -> Optional[str]:
+    """Return the module-pass address that should absorb ``node``, if any.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    node:
+        Layer node being rendered.
+    collapse_fn:
+        Optional user collapse predicate.
+    max_module_depth:
+        Legacy nesting-depth threshold.
+
+    Returns
+    -------
+    Optional[str]
+        Pass-qualified module address for unrolled lookup, or ``None``.
+    """
+
+    containing_modules = list(node.containing_modules)
+    if getattr(node, "is_leaf_module_output", False):
+        containing_modules = containing_modules[:-1]
+    if not containing_modules:
+        return None
+
+    if collapse_fn is None:
+        if max_module_depth == 0 or len(containing_modules) < max_module_depth:
+            return None
+        return containing_modules[max_module_depth - 1]
+
+    for module_address_w_pass in containing_modules:
+        module_address = module_address_w_pass.rsplit(":", 1)[0]
+        if _should_collapse_module(
+            cast("ModuleLog", model_log.modules[module_address]),
+            collapse_fn=collapse_fn,
+            max_module_depth=max_module_depth,
+        ):
+            return module_address_w_pass
+    return None
+
+
+def _is_collapsed_module(
+    node: GraphNode,
+    vis_nesting_depth: int,
+    model_log: Optional["ModelLog"] = None,
+    collapse_fn: CollapseFn | None = None,
+) -> bool:
     """THE IndexError guard for collapsed module rendering.
 
     Returns True if the node is nested deep enough to be rendered as a
@@ -430,6 +767,16 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
         node: The LayerPassLog or LayerLog node to check.
         vis_nesting_depth: Maximum nesting depth before collapsing into a module box.
     """
+    if model_log is not None:
+        return (
+            _collapse_module_address_for_node(
+                model_log,
+                node,
+                collapse_fn=collapse_fn,
+                max_module_depth=vis_nesting_depth,
+            )
+            is not None
+        )
     if vis_nesting_depth == 0:
         return False  # #94: depth 0 means show all layers, never collapse
 
@@ -447,11 +794,12 @@ def _is_collapsed_module(node, vis_nesting_depth: int) -> bool:
 
 def _build_layer_node(
     self: "ModelLog",
-    node,
+    node: GraphNode,
     graphviz_graph,
-    show_buffer_layers,
-    vis_mode,
+    show_buffer_layers: bool,
+    vis_mode: str,
     overrides: VisualizationOverrides,
+    node_spec_fn: NodeSpecFn | None = None,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
@@ -477,33 +825,26 @@ def _build_layer_node(
     else:
         line_style = "dashed"
 
-    # Get the text for the node label:
-
-    node_label = _make_node_label(node, node_address, vis_mode)
+    default_spec = NodeSpec(
+        lines=compute_default_node_lines(node, node_address, vis_mode),
+        shape=node_shape,
+        fillcolor=node_bg_color,
+        fontcolor=node_color,
+        style=f"filled,{line_style}",
+        color=node_color,
+        extra_attrs={"ordering": "out"},
+    )
+    spec = _apply_node_spec_fn(self, node, default_spec, node_spec_fn)
 
     # Graphviz node names can't contain colons (used for port syntax), so
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
-    node_args = {
-        "name": node.layer_label.replace(":", "pass"),
-        "label": node_label,
-        "fontcolor": node_color,
-        "color": node_color,
-        "style": f"filled,{line_style}",
-        "fillcolor": node_bg_color,
-        "shape": node_shape,
-        "ordering": "out",
-    }
+    node_args = _node_spec_to_graphviz_args(spec)
+    node_args["name"] = node.layer_label.replace(":", "pass")
     # Colon in bg_color means it's a gradient fill (e.g.,
     # "#D9D9D9:#B0B0B0" for mixed trainable/frozen params).
     # Graphviz requires gradientangle to render gradients.
-    if ":" in node_bg_color:
+    if spec.fillcolor is not None and ":" in spec.fillcolor:
         node_args["gradientangle"] = "0"
-
-    for arg_name, arg_val in overrides.node.items():  # type: ignore[union-attr]
-        if callable(arg_val):
-            node_args[arg_name] = str(arg_val(self, node))
-        else:
-            node_args[arg_name] = str(arg_val)
 
     graphviz_graph.node(**node_args)
 
@@ -517,12 +858,14 @@ def _build_layer_node(
 
 def _build_collapsed_module_node(
     self: "ModelLog",
-    node,
+    node: GraphNode,
     graphviz_graph,
     collapsed_modules,
-    vis_mode,
-    vis_nesting_depth,
+    vis_mode: str,
+    vis_nesting_depth: int,
+    collapse_address: str | None,
     overrides: VisualizationOverrides,
+    collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -536,7 +879,11 @@ def _build_collapsed_module_node(
     """
     # Access the module at the collapse threshold depth.  This index is safe
     # because _is_collapsed_module already verified the node is deep enough.
-    module_address_w_pass = node.containing_modules[vis_nesting_depth - 1]
+    module_address_w_pass = (
+        collapse_address
+        if collapse_address is not None
+        else node.containing_modules[vis_nesting_depth - 1]
+    )
     # rsplit with maxsplit=1 handles module names containing colons (#104).
     module_tuple = module_address_w_pass.rsplit(":", 1)
     module_output_layer = self[module_address_w_pass]
@@ -611,32 +958,31 @@ def _build_collapsed_module_node(
             f"{module_nparams_frozen} frozen)"
         )
 
-    node_label = (
-        f"<{node_title}<br/>"
-        f"{module_type}<br/>"
-        f"{tensor_shape_str} ({module_output_fsize})<br/>"
-        f"{module_num_tensors} layers total<br/>"
-        f"{param_detail}>"
+    default_spec = NodeSpec(
+        lines=[
+            node_title.replace("<b>", "").replace("</b>", ""),
+            module_type,
+            f"{tensor_shape_str} ({module_output_fsize})",
+            f"{module_num_tensors} layers total",
+            param_detail,
+        ],
+        shape="box3d",
+        fillcolor=bg_color,
+        fontcolor="black",
+        color="black",
+        style=f"filled,{line_style}",
+        extra_attrs={"ordering": "out"},
     )
+    if collapsed_node_spec_fn is not None:
+        result = collapsed_node_spec_fn(ml, default_spec)  # type: ignore[arg-type]
+        spec = default_spec if result is None else result
+    else:
+        spec = default_spec
 
-    node_args = {
-        "name": node_name,
-        "label": node_label,
-        "fontcolor": "black",
-        "color": "black",
-        "style": f"filled,{line_style}",
-        "fillcolor": bg_color,
-        "shape": "box3d",
-        "ordering": "out",
-    }
-    if ":" in bg_color:
+    node_args = _node_spec_to_graphviz_args(spec)
+    node_args["name"] = node_name
+    if spec.fillcolor is not None and ":" in spec.fillcolor:
         node_args["gradientangle"] = "0"
-
-    for arg_name, arg_val in overrides.nested_node.items():  # type: ignore[union-attr]
-        if callable(arg_val):
-            node_args[arg_name] = str(arg_val(self, node))
-        else:
-            node_args[arg_name] = str(arg_val)
 
     graphviz_graph.node(**node_args)
     collapsed_modules.add(node_name)
@@ -779,6 +1125,152 @@ def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]
     return bg_color
 
 
+def _apply_node_spec_fn(
+    model_log: "ModelLog",
+    node: GraphNode,
+    default_spec: NodeSpec,
+    node_spec_fn: NodeSpecFn | None,
+) -> NodeSpec:
+    """Apply a layer node callback to a default spec.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    node:
+        Rendered LayerPassLog or LayerLog.
+    default_spec:
+        Default node spec.
+    node_spec_fn:
+        Optional user callback. Unrolled nodes are represented to the callback
+        by their parent LayerLog.
+
+    Returns
+    -------
+    NodeSpec
+        Callback result, or ``default_spec`` when the callback returns ``None``.
+    """
+
+    if node_spec_fn is None:
+        return default_spec
+    layer_log = _layer_log_for_node(model_log, node)
+    result = node_spec_fn(layer_log, default_spec)
+    return default_spec if result is None else result
+
+
+def _layer_log_for_node(model_log: "ModelLog", node: GraphNode) -> "LayerLog":
+    """Return the aggregate LayerLog for ``node``.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    node:
+        LayerPassLog or LayerLog.
+
+    Returns
+    -------
+    LayerLog
+        Aggregate layer log for callbacks.
+    """
+
+    if isinstance(node, LayerLog):
+        return node
+    if node.parent_layer_log is not None:
+        return node.parent_layer_log
+    return model_log.layer_logs[node.layer_label_no_pass]
+
+
+def _node_spec_to_graphviz_args(spec: NodeSpec) -> dict[str, str]:
+    """Convert a ``NodeSpec`` to Graphviz node keyword arguments.
+
+    Parameters
+    ----------
+    spec:
+        Node spec to convert.
+
+    Returns
+    -------
+    dict[str, str]
+        Graphviz keyword arguments except for ``name``.
+    """
+
+    node_args: dict[str, str] = {
+        "label": render_lines_to_html(spec.lines),
+        "shape": spec.shape,
+        "style": spec.style,
+    }
+    optional_attrs: dict[str, object | None] = {
+        "fillcolor": spec.fillcolor,
+        "fontcolor": spec.fontcolor,
+        "color": spec.color,
+        "penwidth": spec.penwidth,
+        "tooltip": spec.tooltip,
+    }
+    for attr_name, attr_value in optional_attrs.items():
+        if attr_value is not None:
+            node_args[attr_name] = str(attr_value)
+    node_args.update(spec.extra_attrs)
+    return node_args
+
+
+def compute_default_node_lines(
+    layer_log: GraphNode,
+    node_address: str = "",
+    vis_mode: str = "unrolled",
+) -> list[str]:
+    """Build default plain-text rows for a layer node.
+
+    Parameters
+    ----------
+    layer_log:
+        LayerPassLog or LayerLog to render.
+    node_address:
+        Existing address suffix from TorchLens node address logic.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    list[str]
+        Plain-text rows for ``NodeSpec.lines``.
+    """
+
+    if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
+        pass_label = f":{layer_log.pass_num}"
+    elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
+        pass_label = f" (x{layer_log.num_passes})"
+    else:
+        pass_label = ""
+
+    if layer_log.layer_type in ["input", "output", "buffer"]:
+        title = f"{layer_log.layer_type}_{layer_log.layer_type_num}{pass_label}"
+    else:
+        title = (
+            f"{layer_log.layer_type}_{layer_log.layer_type_num}_"
+            f"{layer_log.layer_total_num}{pass_label}"
+        )
+
+    lines: list[str] = []
+    if layer_log.is_terminal_bool_layer:
+        lines.append(str(layer_log.scalar_bool_value).upper())
+    lines.append(title)
+    lines.append(f"{_format_shape_str(layer_log.tensor_shape)} ({layer_log.tensor_memory_str})")
+
+    important_args = _format_important_args(layer_log)
+    if important_args:
+        lines.append(important_args)
+
+    param_line = _make_param_line(layer_log)
+    if param_line:
+        lines.append(param_line)
+
+    address_line = node_address.replace("<br/>", "")
+    if address_line:
+        lines.append(address_line)
+    return lines
+
+
 def _make_node_label(
     node: Union["LayerPassLog", "LayerLog"],
     node_address: str,
@@ -867,9 +1359,179 @@ def _make_param_label(node: Union["LayerPassLog", "LayerLog"]) -> str:
     return param_label
 
 
+def _make_param_line(node: GraphNode) -> str:
+    """Make a plain-text parameter summary row for a node label.
+
+    Parameters
+    ----------
+    node:
+        Node being rendered.
+
+    Returns
+    -------
+    str
+        Plain-text parameter summary, or ``""`` when no parameters are used.
+    """
+
+    if node.num_param_tensors == 0:
+        return ""
+
+    param_logs = getattr(node, "parent_param_logs", [])
+    if param_logs:
+        parts = []
+        for param_log in param_logs:
+            shape_str = _format_shape_str(param_log.shape)
+            wrapper = ("(", ")") if param_log.trainable else ("[", "]")
+            parts.append(f"{param_log.name}: {wrapper[0]}{shape_str}{wrapper[1]}")
+        return "params: " + ", ".join(parts)
+
+    each_param_shape = [_format_shape_str(shape) for shape in node.parent_param_shapes]
+    return "params: " + ", ".join(each_param_shape)
+
+
+def _format_important_args(node: GraphNode) -> str:
+    """Format a compact important-argument row for known operation types.
+
+    Parameters
+    ----------
+    node:
+        Node whose ``func_config`` should be summarized.
+
+    Returns
+    -------
+    str
+        Compact argument summary, or ``""`` for unrecognized/no-op configs.
+    """
+
+    config = getattr(node, "func_config", {}) or {}
+    layer_type = node.layer_type.lower().replace("_", "")
+    if layer_type in {
+        "conv1d",
+        "conv2d",
+        "conv3d",
+        "convolution",
+        "convtranspose1d",
+        "convtranspose2d",
+        "convtranspose3d",
+    }:
+        return _format_config_fields(
+            config,
+            [
+                ("kernel_size", "k", None),
+                ("stride", "s", 1),
+                ("padding", "p", 0),
+                ("dilation", "d", 1),
+                ("groups", "g", 1),
+            ],
+        )
+    if layer_type == "linear":
+        return _format_config_fields(
+            config,
+            [("in_features", "in", None), ("out_features", "out", None)],
+        )
+    if "pool" in layer_type:
+        return _format_config_fields(
+            config,
+            [
+                ("kernel_size", "k", None),
+                ("stride", "s", None),
+                ("padding", "p", 0),
+                ("output_size", "out", None),
+            ],
+        )
+    if layer_type == "layernorm":
+        return _format_config_fields(config, [("normalized_shape", "shape", None)])
+    if "batchnorm" in layer_type or "instancenorm" in layer_type:
+        num_features = _num_features_from_params(node)
+        if num_features is None:
+            return ""
+        return f"features={num_features}"
+    if layer_type == "groupnorm":
+        return _format_config_fields(config, [("num_groups", "groups", None)])
+    if "multiheadattention" in layer_type or layer_type == "scaleddotproductattention":
+        return _format_config_fields(
+            config,
+            [
+                ("num_heads", "heads", None),
+                ("embed_dim", "dim", None),
+                ("dropout", "dropout", 0),
+                ("dropout_p", "dropout", 0),
+            ],
+        )
+    if "dropout" in layer_type:
+        return _format_config_fields(config, [("p", "p", 0)])
+    if layer_type == "embedding":
+        return _format_config_fields(
+            config,
+            [("num_embeddings", "n", None), ("embedding_dim", "dim", None)],
+        )
+    return ""
+
+
+def _format_config_fields(
+    config: dict[str, Any],
+    fields: list[tuple[str, str, Any]],
+) -> str:
+    """Format selected config fields with short display names.
+
+    Parameters
+    ----------
+    config:
+        Function config captured for a node.
+    fields:
+        ``(field_name, display_name, default_value)`` tuples.
+
+    Returns
+    -------
+    str
+        Space-separated compact summary.
+    """
+
+    parts = []
+    for key, display, default in fields:
+        if key not in config:
+            continue
+        value = config[key]
+        if default is not None and _value_matches_default(value, default):
+            continue
+        parts.append(f"{display}={_format_config_value(value)}")
+    return " ".join(parts)
+
+
+def _value_matches_default(value: Any, default: Any) -> bool:
+    """Return whether ``value`` equals a scalar default, including repeated tuples."""
+
+    if value == default:
+        return True
+    if isinstance(value, tuple) and all(item == default for item in value):
+        return True
+    return False
+
+
+def _format_config_value(value: Any) -> str:
+    """Format a captured config value compactly for a node label."""
+
+    if isinstance(value, tuple):
+        if len(value) > 0 and all(item == value[0] for item in value):
+            return str(value[0])
+        return "x".join(str(item) for item in value)
+    return str(value)
+
+
+def _num_features_from_params(node: GraphNode) -> Optional[int]:
+    """Infer normalization feature count from parameter shape metadata."""
+
+    if not node.parent_param_shapes:
+        return None
+    first_shape = node.parent_param_shapes[0]
+    if len(first_shape) == 0:
+        return None
+    return int(first_shape[0])
+
+
 def _add_edges_for_node(
     self: "ModelLog",
-    parent_node: Union["LayerPassLog", "LayerLog"],
+    parent_node: GraphNode,
     parent_is_collapsed_module: bool,
     vis_nesting_depth: int,
     node_color: str,
@@ -879,6 +1541,8 @@ def _add_edges_for_node(
     vis_mode: str = "unrolled",
     show_buffer_layers: bool = False,
     overrides: Optional[VisualizationOverrides] = None,
+    collapse_fn: CollapseFn | None = None,
+    edge_map: Optional[dict[str, list[RenderEdge]]] = None,
 ) -> None:
     """Add forward (and optionally gradient) edges from a parent node to all its children.
 
@@ -912,13 +1576,19 @@ def _add_edges_for_node(
         show_buffer_layers: Whether buffer layers are shown.
         overrides: Graphviz attribute overrides.
     """
-    for child_layer_label in parent_node.child_layers:
-        if vis_mode == "unrolled":
-            child_node = self.layer_dict_main_keys[child_layer_label]
-        elif vis_mode == "rolled":
-            child_node = self.layer_logs[child_layer_label]  # type: ignore[assignment]
-        else:
-            raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
+    if edge_map is None:
+        render_edges = [
+            RenderEdge(
+                target=_get_node_by_label(self, child_layer_label, vis_mode), metadata_child=None
+            )
+            for child_layer_label in parent_node.child_layers
+        ]
+    else:
+        render_edges = edge_map.get(parent_node.layer_label, [])
+
+    for render_edge in render_edges:
+        child_node = render_edge.target
+        metadata_child = render_edge.metadata_child
 
         if child_node.is_buffer_layer and not show_buffer_layers:
             continue
@@ -929,7 +1599,14 @@ def _add_edges_for_node(
             edge_style = "dashed"
 
         if parent_is_collapsed_module:
-            module_name_w_pass = parent_node.containing_modules[vis_nesting_depth - 1]
+            module_name_w_pass = _collapse_module_address_for_node(
+                self,
+                parent_node,
+                collapse_fn=collapse_fn,
+                max_module_depth=vis_nesting_depth,
+            )
+            if module_name_w_pass is None:
+                continue
             module_tuple = module_name_w_pass.split(":")
             if vis_mode == "unrolled":
                 tail_name = "pass".join(module_tuple)
@@ -938,10 +1615,18 @@ def _add_edges_for_node(
         else:
             tail_name = parent_node.layer_label.replace(":", "pass")
 
-        child_is_collapsed_module = _is_collapsed_module(child_node, vis_nesting_depth)
+        child_collapse_address = _collapse_module_address_for_node(
+            self,
+            child_node,
+            collapse_fn=collapse_fn,
+            max_module_depth=vis_nesting_depth,
+        )
+        child_is_collapsed_module = child_collapse_address is not None
 
         if child_is_collapsed_module:
-            module_name_w_pass = child_node.containing_modules[vis_nesting_depth - 1]
+            module_name_w_pass = child_collapse_address
+            if module_name_w_pass is None:
+                continue
             module_tuple = module_name_w_pass.split(":")
             if vis_mode == "unrolled":
                 head_name = "pass".join(module_tuple)
@@ -973,6 +1658,8 @@ def _add_edges_for_node(
 
         # Edge deduplication: multiple layers mapping to the same collapsed
         # module node would produce duplicate edges without this check.
+        if tail_name == head_name and metadata_child is not child_node:
+            continue
         if (tail_name, head_name) in edges_used:
             continue
         edges_used.add((tail_name, head_name))
@@ -988,23 +1675,27 @@ def _add_edges_for_node(
         }
 
         if not child_is_collapsed_module:
-            edge_label = _compute_edge_label(parent_node, child_node, self, vis_mode)
+            edge_label = (
+                _compute_edge_label(parent_node, metadata_child, self, vis_mode)
+                if metadata_child is not None
+                else None
+            )
             if edge_label is not None:
                 edge_dict["label"] = edge_label
 
         # Annotate passes for rolled node edge if it varies across passes
-        if vis_mode == "rolled":
-            _label_rolled_pass_nums(child_node, parent_node, edge_dict)  # type: ignore[arg-type]
+        if vis_mode == "rolled" and metadata_child is not None:
+            _label_rolled_pass_nums(metadata_child, parent_node, edge_dict)  # type: ignore[arg-type]
 
         # Label the arguments to the next node if multiple inputs
-        if not child_is_collapsed_module:
+        if not child_is_collapsed_module and metadata_child is not None:
             _label_node_arguments_if_needed(
-                self, parent_node, child_node, edge_dict, show_buffer_layers
+                self, parent_node, metadata_child, edge_dict, show_buffer_layers
             )
 
         for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
             if callable(arg_val):
-                edge_dict[arg_name] = str(arg_val(self, parent_node, child_node))
+                edge_dict[arg_name] = str(arg_val(self, parent_node, metadata_child or child_node))
             else:
                 edge_dict[arg_name] = str(arg_val)
 

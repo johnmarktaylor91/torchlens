@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Final, Mapping, cast
+from typing import TYPE_CHECKING, Any, Callable, Final, Mapping, cast
 
 import torch
 
@@ -15,6 +15,11 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from .visualization.node_spec import NodeSpec
+
+if TYPE_CHECKING:
+    from .data_classes.layer_log import LayerLog
+    from .data_classes.module_log import ModuleLog
 
 _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "mode",
@@ -25,8 +30,10 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "show_buffers",
     "direction",
     "graph_overrides",
-    "node_overrides",
-    "nested_node_overrides",
+    "node_spec_fn",
+    "collapsed_node_spec_fn",
+    "collapse_fn",
+    "skip_fn",
     "edge_overrides",
     "gradient_edge_overrides",
     "module_overrides",
@@ -48,8 +55,6 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "vis_buffer_layers": "show_buffers",
     "vis_direction": "direction",
     "vis_graph_overrides": "graph_overrides",
-    "vis_node_overrides": "node_overrides",
-    "vis_nested_node_overrides": "nested_node_overrides",
     "vis_edge_overrides": "edge_overrides",
     "vis_gradient_edge_overrides": "gradient_edge_overrides",
     "vis_module_overrides": "module_overrides",
@@ -107,8 +112,10 @@ class VisualizationOptions:
     show_buffers: bool = False
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
-    node_overrides: dict[str, Any] | None = None
-    nested_node_overrides: dict[str, Any] | None = None
+    node_spec_fn: Callable[["LayerLog", NodeSpec], NodeSpec | None] | None = None
+    collapsed_node_spec_fn: Callable[["ModuleLog", NodeSpec], NodeSpec | None] | None = None
+    collapse_fn: Callable[["ModuleLog"], bool] | None = None
+    skip_fn: Callable[["LayerLog"], bool] | None = None
     edge_overrides: dict[str, Any] | None = None
     gradient_edge_overrides: dict[str, Any] | None = None
     module_overrides: dict[str, Any] | None = None
@@ -132,8 +139,14 @@ class VisualizationOptions:
         show_buffers: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-        node_overrides: dict[str, Any] | None | MissingType = MISSING,
-        nested_node_overrides: dict[str, Any] | None | MissingType = MISSING,
+        node_spec_fn: (
+            Callable[["LayerLog", NodeSpec], NodeSpec | None] | None | MissingType
+        ) = MISSING,
+        collapsed_node_spec_fn: (
+            Callable[["ModuleLog", NodeSpec], NodeSpec | None] | None | MissingType
+        ) = MISSING,
+        collapse_fn: Callable[["ModuleLog"], bool] | None | MissingType = MISSING,
+        skip_fn: Callable[["LayerLog"], bool] | None | MissingType = MISSING,
         edge_overrides: dict[str, Any] | None | MissingType = MISSING,
         gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
         module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -146,8 +159,9 @@ class VisualizationOptions:
         Parameters
         ----------
         mode, max_module_depth, output_path, save_only, file_format, show_buffers, direction,
-        graph_overrides, node_overrides, nested_node_overrides, edge_overrides,
-        gradient_edge_overrides, module_overrides, layout_engine, renderer, theme:
+        graph_overrides, node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn,
+        edge_overrides, gradient_edge_overrides, module_overrides, layout_engine,
+        renderer, theme:
             Visualization option values. Explicitly supplied fields are tracked so
             deprecated flat kwargs can detect same-field conflicts later.
         """
@@ -186,15 +200,27 @@ class VisualizationOptions:
                 None,
                 specified_fields,
             ),
-            "node_overrides": _resolve_option_value(
-                "node_overrides",
-                node_overrides,
+            "node_spec_fn": _resolve_option_value(
+                "node_spec_fn",
+                node_spec_fn,
                 None,
                 specified_fields,
             ),
-            "nested_node_overrides": _resolve_option_value(
-                "nested_node_overrides",
-                nested_node_overrides,
+            "collapsed_node_spec_fn": _resolve_option_value(
+                "collapsed_node_spec_fn",
+                collapsed_node_spec_fn,
+                None,
+                specified_fields,
+            ),
+            "collapse_fn": _resolve_option_value(
+                "collapse_fn",
+                collapse_fn,
+                None,
+                specified_fields,
+            ),
+            "skip_fn": _resolve_option_value(
+                "skip_fn",
+                skip_fn,
                 None,
                 specified_fields,
             ),
@@ -342,8 +368,6 @@ def merge_visualization_options(
     vis_buffer_layers: bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_nested_node_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -361,8 +385,8 @@ def merge_visualization_options(
     visualization:
         Caller-supplied grouped visualization options, if any.
     vis_mode, vis_nesting_depth, vis_outpath, vis_save_only, vis_fileformat,
-    vis_buffer_layers, vis_direction, vis_graph_overrides, vis_node_overrides,
-    vis_nested_node_overrides, vis_edge_overrides, vis_gradient_edge_overrides,
+    vis_buffer_layers, vis_direction, vis_graph_overrides, vis_edge_overrides,
+    vis_gradient_edge_overrides,
     vis_module_overrides, vis_node_placement, vis_renderer, vis_theme:
         Deprecated flat visualization kwargs. Presence is tracked with
         ``MISSING`` so explicit default-valued calls still count as supplied.
@@ -396,8 +420,6 @@ def merge_visualization_options(
         "vis_buffer_layers": vis_buffer_layers,
         "vis_direction": vis_direction,
         "vis_graph_overrides": vis_graph_overrides,
-        "vis_node_overrides": vis_node_overrides,
-        "vis_nested_node_overrides": vis_nested_node_overrides,
         "vis_edge_overrides": vis_edge_overrides,
         "vis_gradient_edge_overrides": vis_gradient_edge_overrides,
         "vis_module_overrides": vis_module_overrides,
@@ -487,8 +509,10 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "vis_nesting_depth": visualization.max_module_depth,
         "vis_outpath": visualization.output_path,
         "vis_graph_overrides": visualization.graph_overrides,
-        "vis_node_overrides": visualization.node_overrides,
-        "vis_nested_node_overrides": visualization.nested_node_overrides,
+        "node_spec_fn": visualization.node_spec_fn,
+        "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
+        "collapse_fn": visualization.collapse_fn,
+        "skip_fn": visualization.skip_fn,
         "vis_edge_overrides": visualization.edge_overrides,
         "vis_gradient_edge_overrides": visualization.gradient_edge_overrides,
         "vis_module_overrides": visualization.module_overrides,

@@ -9,8 +9,9 @@ layout engine for large graphs, and an optional dagua renderer. Called via
 
 | File | ~Lines | Purpose |
 |------|--------|---------|
-| `rendering.py` | 1501 | Graphviz rendering: nodes, edges, module subgraphs, IF/THEN labels, override system |
-| `elk_layout.py` | 1276 | ELK-based layout engine for large graphs (150k+ nodes), Worker thread, sfdp fallback |
+| `rendering.py` | 1900+ | Graphviz rendering: nodes, skip-aware edges, module subgraphs, IF/THEN labels, NodeSpec callbacks |
+| `elk_layout.py` | 1300+ | ELK-based layout engine for large graphs (150k+ nodes), Worker thread, sfdp fallback |
+| `node_spec.py` | — | Public NodeSpec dataclass and HTML-label row renderer |
 | `dagua_bridge.py` | — | ModelLog → DaguaGraph conversion for dagua renderer (opt-in) |
 
 ## How It Connects
@@ -34,9 +35,25 @@ with Graphviz using an optional ELK layout backend for large graphs.
 | Collapsed modules | box3d shape |
 
 ## Override System
-All visual properties overridable via dicts or callables:
-`vis_graph_overrides`, `vis_node_overrides`, `vis_nested_node_overrides`,
-`vis_edge_overrides`, `vis_gradient_edge_overrides`, `vis_module_overrides`.
+Node labels and node-level attributes use the callable NodeSpec API:
+
+- `VisualizationOptions.node_spec_fn`: receives `(layer_log, default_spec)` and
+  returns a `NodeSpec` or `None`. In unrolled mode the callback still receives
+  the parent aggregate `LayerLog`, not the per-pass `LayerPassLog`.
+- `VisualizationOptions.collapsed_node_spec_fn`: receives
+  `(module_log, default_spec)` for collapsed module nodes.
+- `NodeSpec.lines` are plain text rows; `render_lines_to_html()` is the only
+  place that converts them to Graphviz HTML-like table labels.
+
+Graph, edge, gradient-edge, and module styling remain dict/callable based:
+`vis_graph_overrides`, `vis_edge_overrides`, `vis_gradient_edge_overrides`,
+`vis_module_overrides`.
+
+`VisualizationOptions.collapse_fn` receives a `ModuleLog` and replaces the
+legacy `max_module_depth`/`vis_nesting_depth` collapse decision when supplied.
+`VisualizationOptions.skip_fn` receives a `LayerLog`, may not skip input or
+output layers, and chains edges through skipped nodes before both Graphviz and
+ELK layout consume the graph.
 
 ## ELK Layout Engine
 - Worker thread runs Node.js ELK subprocess (prevents stack overflow)

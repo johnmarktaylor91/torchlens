@@ -322,8 +322,6 @@ def log_forward_pass(
     vis_buffer_layers: bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_nested_node_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -414,9 +412,6 @@ def log_forward_pass(
         vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
         vis_direction: Deprecated alias for ``visualization.direction``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
-        vis_node_overrides: Deprecated alias for ``visualization.node_overrides``.
-        vis_nested_node_overrides: Deprecated alias for
-            ``visualization.nested_node_overrides``.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
         vis_gradient_edge_overrides: Deprecated alias for
             ``visualization.gradient_edge_overrides``.
@@ -488,8 +483,6 @@ def log_forward_pass(
         vis_buffer_layers=vis_buffer_layers,
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
-        vis_node_overrides=vis_node_overrides,
-        vis_nested_node_overrides=vis_nested_node_overrides,
         vis_edge_overrides=vis_edge_overrides,
         vis_gradient_edge_overrides=vis_gradient_edge_overrides,
         vis_module_overrides=vis_module_overrides,
@@ -706,8 +699,6 @@ def show_model_graph(
     vis_nesting_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_nested_node_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -739,9 +730,6 @@ def show_model_graph(
         vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
         vis_outpath: Deprecated alias for ``visualization.output_path``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
-        vis_node_overrides: Deprecated alias for ``visualization.node_overrides``.
-        vis_nested_node_overrides: Deprecated alias for
-            ``visualization.nested_node_overrides``.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
         vis_gradient_edge_overrides: Deprecated alias for
             ``visualization.gradient_edge_overrides``.
@@ -790,8 +778,6 @@ def show_model_graph(
         vis_buffer_layers=vis_buffer_layers,
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
-        vis_node_overrides=vis_node_overrides,
-        vis_nested_node_overrides=vis_nested_node_overrides,
         vis_edge_overrides=vis_edge_overrides,
         vis_gradient_edge_overrides=vis_gradient_edge_overrides,
         vis_module_overrides=vis_module_overrides,

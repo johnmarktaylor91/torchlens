@@ -218,7 +218,12 @@ def get_node_placement_engine(vis_node_placement: str, num_nodes: int) -> str:
     return "sfdp"
 
 
-def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = False) -> dict:
+def build_elk_graph_hierarchical(
+    entries_to_plot,
+    show_buffer_layers: bool = False,
+    edge_map: Optional[dict] = None,
+    skipped_labels: Optional[set[str]] = None,
+) -> dict:
     """Build an ELK JSON graph with module hierarchy from model entries.
 
     Creates nested ELK compound nodes that mirror the module containment
@@ -229,6 +234,8 @@ def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = Fal
         entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog
             (same as used by render_graph).
         show_buffer_layers: Whether to include buffer layers.
+        edge_map: Optional skip-filtered outgoing edge map.
+        skipped_labels: Labels elided by ``skip_fn``.
 
     Returns:
         ELK graph dict with hierarchical children, ready for ``run_elk_layout``.
@@ -241,8 +248,11 @@ def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = Fal
     node_labels = []
     edges = []
     edge_id = 0
+    skipped_labels = skipped_labels or set()
 
     for node_barcode, node in entries_to_plot.items():
+        if node.layer_label in skipped_labels:
+            continue
         if node.is_buffer_layer and not show_buffer_layers:
             continue
         label = node.layer_label
@@ -256,10 +266,19 @@ def build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers: bool = Fal
                 modules.append(addr)
         node_module_map[label] = modules
 
-        # Collect edges from parent layers.
-        for parent_label in node.parent_layers:
-            edges.append((parent_label, label, f"e{edge_id}"))
-            edge_id += 1
+        if edge_map is None:
+            # Collect edges from parent layers.
+            for parent_label in node.parent_layers:
+                edges.append((parent_label, label, f"e{edge_id}"))
+                edge_id += 1
+
+    if edge_map is not None:
+        for source_label, render_edges in edge_map.items():
+            if source_label in skipped_labels:
+                continue
+            for render_edge in render_edges:
+                edges.append((source_label, render_edge.target.layer_label, f"e{edge_id}"))
+                edge_id += 1
 
     # Step 2: Build module tree structure.
     # Each module becomes an ELK compound node containing its direct children.
@@ -957,6 +976,12 @@ def render_elk_direct(
     vis_nesting_depth: int,
     show_buffer_layers: bool,
     overrides,
+    node_spec_fn,
+    collapsed_node_spec_fn,
+    collapse_fn,
+    skip_fn,
+    edge_map,
+    skipped_labels,
     vis_outpath: str,
     vis_fileformat: str,
     vis_save_only: bool,
@@ -999,10 +1024,12 @@ def render_elk_direct(
 
     # Late imports to avoid circular dependency
     from .rendering import (
-        _is_collapsed_module,
+        _collapse_module_address_for_node,
         _get_node_address_shape_color,
         _get_node_bg_color,
-        _make_node_label,
+        _apply_node_spec_fn,
+        _node_spec_to_graphviz_args,
+        compute_default_node_lines,
         TRAINABLE_PARAMS_BG_COLOR,
         FROZEN_PARAMS_BG_COLOR,
         DEFAULT_BG_COLOR,
@@ -1010,6 +1037,7 @@ def render_elk_direct(
         MIN_MODULE_PENWIDTH,
         PENWIDTH_RANGE,
     )
+    from .node_spec import NodeSpec
 
     # ── Phase 1: Collect node styling, module assignments, and edges ──
 
@@ -1052,13 +1080,23 @@ def render_elk_direct(
             root_node_names.append(node_name)
 
     for _barcode, node in entries_to_plot.items():
+        if node.layer_label in skipped_labels:
+            continue
         if node.is_buffer_layer and not show_buffer_layers:
             continue
 
-        is_collapsed = _is_collapsed_module(node, vis_nesting_depth)
+        collapse_address = _collapse_module_address_for_node(
+            model_log,
+            node,
+            collapse_fn=collapse_fn,
+            max_module_depth=vis_nesting_depth,
+        )
+        is_collapsed = collapse_address is not None
 
         if is_collapsed:
-            mod_w_pass = node.containing_modules[vis_nesting_depth - 1]
+            mod_w_pass = collapse_address
+            if mod_w_pass is None:
+                continue
             mod_parts = mod_w_pass.rsplit(":", 1)
             mod_addr, pass_num = mod_parts
             node_name = "pass".join(mod_parts) if vis_mode == "unrolled" else mod_addr
@@ -1117,25 +1155,29 @@ def render_elk_direct(
                     pd = f"{npar} params ({npt} trainable, {npf} frozen)"
 
                 ls = "solid" if has_anc else "dashed"
-                lbl = (
-                    f"<{title}<br/>{ml.module_class_name}<br/>"
-                    f"{ss} ({mod_out.tensor_memory_str})<br/>"
-                    f"{n_tensors} layers total<br/>{pd}>"
+                default_spec = NodeSpec(
+                    lines=[
+                        title.replace("<b>", "").replace("</b>", ""),
+                        ml.module_class_name,
+                        f"{ss} ({mod_out.tensor_memory_str})",
+                        f"{n_tensors} layers total",
+                        pd,
+                    ],
+                    shape="box3d",
+                    fillcolor=bg,
+                    fontcolor="black",
+                    color="black",
+                    style=f"filled,{ls}",
+                    extra_attrs={"ordering": "out"},
                 )
-                attrs = {
-                    "label": lbl,
-                    "fontcolor": "black",
-                    "color": "black",
-                    "style": f"filled,{ls}",
-                    "fillcolor": bg,
-                    "shape": "box3d",
-                    "ordering": "out",
-                }
-                if ":" in bg:
+                if collapsed_node_spec_fn is not None:
+                    result = collapsed_node_spec_fn(ml, default_spec)
+                    spec = default_spec if result is None else result
+                else:
+                    spec = default_spec
+                attrs = _node_spec_to_graphviz_args(spec)
+                if spec.fillcolor is not None and ":" in spec.fillcolor:
                     attrs["gradientangle"] = "0"
-
-                for k, v in (overrides.nested_node or {}).items():
-                    attrs[k] = str(v(model_log, node)) if callable(v) else str(v)
 
                 node_data[node_name] = {"attrs": attrs, "elk_id": elk_id}
                 mod_keys = _module_keys_for_node(node, True)
@@ -1152,35 +1194,28 @@ def render_elk_direct(
             )
             bg = _get_node_bg_color(model_log, node)
             ls = "solid" if node.has_input_ancestor else "dashed"
-            lbl = _make_node_label(node, addr, vis_mode)
-
-            attrs = {
-                "label": lbl,
-                "fontcolor": node_color,
-                "color": node_color,
-                "style": f"filled,{ls}",
-                "fillcolor": bg,
-                "shape": shape,
-                "ordering": "out",
-            }
-            if ":" in bg:
+            default_spec = NodeSpec(
+                lines=compute_default_node_lines(node, addr, vis_mode),
+                shape=shape,
+                fillcolor=bg,
+                fontcolor=node_color,
+                color=node_color,
+                style=f"filled,{ls}",
+                extra_attrs={"ordering": "out"},
+            )
+            spec = _apply_node_spec_fn(model_log, node, default_spec, node_spec_fn)
+            attrs = _node_spec_to_graphviz_args(spec)
+            if spec.fillcolor is not None and ":" in spec.fillcolor:
                 attrs["gradientangle"] = "0"
-
-            for k, v in (overrides.node or {}).items():
-                attrs[k] = str(v(model_log, node)) if callable(v) else str(v)
 
             node_data[node_name] = {"attrs": attrs, "elk_id": elk_id}
             mod_keys = _module_keys_for_node(node, False)
             _assign_to_hierarchy(node_name, mod_keys, node.has_input_ancestor)
 
-        # ── Collect edges (this node → its children) ──
-        for child_label in node.child_layers:
-            if vis_mode == "unrolled":
-                child_node = model_log.layer_dict_main_keys.get(child_label)
-            else:
-                child_node = model_log.layer_logs.get(child_label)
-            if child_node is None:
-                continue
+        # ── Collect edges (this node -> skip-filtered children) ──
+        for render_edge in edge_map.get(node.layer_label, []):
+            child_node = render_edge.target
+            metadata_child = render_edge.metadata_child
             if child_node.is_buffer_layer and not show_buffer_layers:
                 continue
 
@@ -1191,9 +1226,17 @@ def render_elk_direct(
                 tail_name = node.layer_label.replace(":", "pass")
 
             # Resolve head name
-            child_is_collapsed = _is_collapsed_module(child_node, vis_nesting_depth)
+            child_collapse_address = _collapse_module_address_for_node(
+                model_log,
+                child_node,
+                collapse_fn=collapse_fn,
+                max_module_depth=vis_nesting_depth,
+            )
+            child_is_collapsed = child_collapse_address is not None
             if child_is_collapsed:
-                c_mod_w_pass = child_node.containing_modules[vis_nesting_depth - 1]
+                c_mod_w_pass = child_collapse_address
+                if c_mod_w_pass is None:
+                    continue
                 c_parts = c_mod_w_pass.rsplit(":", 1)
                 head_name = "pass".join(c_parts) if vis_mode == "unrolled" else c_parts[0]
             else:
@@ -1212,6 +1255,8 @@ def render_elk_direct(
 
             if (tail_name, head_name) in edges_used:
                 continue
+            if tail_name == head_name and metadata_child is not child_node:
+                continue
             edges_used.add((tail_name, head_name))
 
             edge_style = "solid" if node.has_input_ancestor else "dashed"
@@ -1224,12 +1269,16 @@ def render_elk_direct(
             }
 
             # Arg labels for non-commutative ops with multiple parents
-            if not child_is_collapsed and child_node.layer_type not in COMMUTE_FUNCS:
-                _add_arg_label(node, child_node, edge, model_log, show_buffer_layers)
+            if (
+                not child_is_collapsed
+                and metadata_child is not None
+                and metadata_child.layer_type not in COMMUTE_FUNCS
+            ):
+                _add_arg_label(node, metadata_child, edge, model_log, show_buffer_layers)
 
             for k, v in (overrides.edge or {}).items():
                 if callable(v):
-                    edge[k] = str(v(model_log, node, child_node))
+                    edge[k] = str(v(model_log, node, metadata_child or child_node))
                 else:
                     edge[k] = str(v)
 
