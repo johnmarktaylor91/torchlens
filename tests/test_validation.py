@@ -23,6 +23,7 @@ from torchlens.validation.core import (
     _copy_validation_args,
     MAX_PERTURB_ATTEMPTS,
 )
+from torchlens.utils.tensor_utils import tensor_nanequal
 
 
 # =============================================================================
@@ -57,6 +58,17 @@ def test_model_log_check_metadata_method_bound():
     """ModelLog.check_metadata_invariants is callable."""
     assert hasattr(ModelLog, "check_metadata_invariants")
     assert callable(ModelLog.check_metadata_invariants)
+
+
+def test_tensor_nanequal_uses_relative_tolerance_for_replay() -> None:
+    """Validation replay should allow tiny relative floating-point drift."""
+    saved = torch.tensor([1.0, 100.0], dtype=torch.float32)
+    replayed = saved + torch.tensor([8e-6, 4e-3], dtype=torch.float32)
+    mismatched = saved + torch.tensor([1e-3, 1e-1], dtype=torch.float32)
+
+    assert not tensor_nanequal(saved, replayed, allow_tolerance=False)
+    assert tensor_nanequal(saved, replayed, allow_tolerance=True)
+    assert not tensor_nanequal(saved, mismatched, allow_tolerance=True)
 
 
 # =============================================================================

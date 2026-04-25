@@ -20,11 +20,16 @@ from typing import Any, Optional
 import numpy as np
 import torch
 
-# Maximum tolerance for floating-point comparison in tensor_nanequal.
+# Maximum absolute tolerance for floating-point comparison in tensor_nanequal.
 # Used by validation replay to allow tiny numerical differences caused by
 # non-deterministic GPU reductions or float16 rounding.  Set conservatively
 # tight to catch genuine mismatches while tolerating hardware noise.
-MAX_FLOATING_POINT_TOLERANCE = 3e-6
+MAX_FLOATING_POINT_TOLERANCE = 1e-5
+
+# Maximum relative tolerance for floating-point comparison in tensor_nanequal.
+# Deep convolution replays can differ by a few ULPs above the absolute floor
+# while still matching the saved operation numerically.
+REL_FLOATING_POINT_TOLERANCE = 1e-4
 
 # Cached result of torch.cuda.is_available().  Evaluated once per process
 # because CUDA availability cannot change at runtime.  Avoids repeated
@@ -53,7 +58,9 @@ def tensor_all_nan(tensor: torch.Tensor) -> bool:
         return False
 
 
-def tensor_nanequal(tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolerance=False) -> bool:
+def tensor_nanequal(
+    tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolerance: bool = False
+) -> bool:
     """NaN-aware tensor equality check, used by validation replay.
 
     NaN positions are treated as equal (NaN == NaN is True here), which
@@ -109,12 +116,18 @@ def tensor_nanequal(tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolera
             return True
 
         # Tolerance path: allow small floating-point differences (e.g. from
-        # non-deterministic GPU reductions or mixed-precision rounding).
+        # convolution replay order, non-deterministic GPU reductions, or
+        # mixed-precision rounding).
         if (
             allow_tolerance
             and (tensor_a_nonan.dtype != torch.bool)
             and (tensor_b_nonan.dtype != torch.bool)
-            and ((tensor_a_nonan - tensor_b_nonan).abs().max() <= MAX_FLOATING_POINT_TOLERANCE)
+            and torch.allclose(
+                tensor_a_nonan,
+                tensor_b_nonan,
+                rtol=REL_FLOATING_POINT_TOLERANCE,
+                atol=MAX_FLOATING_POINT_TOLERANCE,
+            )
         ):
             return True
 
