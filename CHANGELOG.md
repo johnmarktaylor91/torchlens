@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v2.2.1 (2026-04-25)
+
+### Bug Fixes
+
+- **validation**: Tolerate small replay drift
+  ([`8126fe2`](https://github.com/johnmarktaylor91/torchlens/commit/8126fe20808fa9cae5f61543c39d4b3301f688f3))
+
+Validation replay used a fixed absolute float tolerance, which was too tight for deep convolution
+  replays in timm models. Compare tolerated replay outputs with a small absolute floor plus relative
+  tolerance so numerically equivalent conv outputs validate while real mismatches still fail.
+
+
 ## v2.2.0 (2026-04-25)
 
 ### Features
