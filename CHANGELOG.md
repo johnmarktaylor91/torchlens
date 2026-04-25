@@ -1,6 +1,17 @@
 # CHANGELOG
 
 
+## v2.1.0 (2026-04-25)
+
+### Features
+
+- **visualization**: Node-mode presets (default, profiling, vision, attention)
+  ([`ddfdd34`](https://github.com/johnmarktaylor91/torchlens/commit/ddfdd34fad8e608bc4fce0b56ae4d2c42d1a074b))
+
+- **visualization**: Single-module focus (module= arg + ModuleLog.show_graph)
+  ([`155be75`](https://github.com/johnmarktaylor91/torchlens/commit/155be7585b4a4143b49cf80485d9b2836b252e43))
+
+
 ## v2.0.0 (2026-04-25)
 
 ### Features
