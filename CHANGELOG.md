@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v2.0.0 (2026-04-25)
+
+### Features
+
+- **visualization**: Nodespec callback + collapse_fn + skip_fn + default important args
+  ([`0697787`](https://github.com/johnmarktaylor91/torchlens/commit/06977876c670717737d8952ffce651e833a3d45e))
+
+BREAKING CHANGE: vis_node_overrides and vis_nested_node_overrides are removed.
+
+Use the new node_spec_fn / collapsed_node_spec_fn callbacks instead.
+
+See PR body for migration notes.
+
+### Breaking Changes
+
+- **visualization**: Vis_node_overrides and vis_nested_node_overrides are removed.
+
+
 ## v1.7.0 (2026-04-24)
 
 ### Features
