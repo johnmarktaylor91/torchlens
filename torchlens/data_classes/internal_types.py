@@ -37,7 +37,7 @@ class FuncExecutionContext:
 class VisualizationOverrides:
     """User-supplied graphviz attribute overrides for ``render_graph``.
 
-    Bundles the six override dicts accepted by the public ``render_graph``
+    Bundles the graph/edge/module override dicts accepted by the public ``render_graph``
     method and threads them to internal helpers (``_add_node_to_graphviz``,
     ``_add_edges_for_node``, etc.) as a single object.
 
@@ -46,16 +46,12 @@ class VisualizationOverrides:
 
     Attributes:
         graph: Overrides for the top-level graph (e.g. rankdir, bgcolor).
-        node: Overrides for regular layer nodes (e.g. shape, color).
-        nested_node: Overrides for nodes inside module clusters.
         edge: Overrides for data-flow edges.
         gradient_edge: Overrides for gradient-flow edges.
         module: Overrides for module subgraph clusters (e.g. label style).
     """
 
     graph: Optional[Dict] = None
-    node: Optional[Dict] = None
-    nested_node: Optional[Dict] = None
     edge: Optional[Dict] = None
     gradient_edge: Optional[Dict] = None
     module: Optional[Dict] = None

@@ -34,7 +34,13 @@ from .data_classes.model_log import ModelLog
 from .data_classes.layer_log import LayerLog, LayerAccessor
 from .data_classes.layer_pass_log import LayerPassLog, TensorLog
 from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog
-from .visualization import build_render_audit, model_log_to_dagua_graph, render_model_log_with_dagua
+from .visualization import (
+    NodeSpec,
+    build_render_audit,
+    model_log_to_dagua_graph,
+    render_lines_to_html,
+    render_model_log_with_dagua,
+)
 
 # ---- Public API: decoration lifecycle ------------------------------------
 
