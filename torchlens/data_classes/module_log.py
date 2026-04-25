@@ -32,6 +32,7 @@ from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
+    from .model_log import ModelLog
     from .param_log import ParamAccessor
 
 
@@ -570,6 +571,30 @@ class ModuleLog:
         if self._source_model_log is None:
             return iter(self.all_layers)
         return iter(self._source_model_log[label] for label in self.all_layers)
+
+    def show_graph(self, **kwargs: Any) -> str:
+        """Render this module's focused graph.
+
+        Parameters
+        ----------
+        **kwargs:
+            Keyword arguments forwarded to ``ModelLog.render_graph``.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source string.
+
+        Raises
+        ------
+        RuntimeError
+            If this ModuleLog is not bound to a ModelLog.
+        """
+
+        model_log: ModelLog | None = self._source_model_log
+        if model_log is None:
+            raise RuntimeError("ModuleLog not bound to a ModelLog")
+        return model_log.render_graph(module=self, **kwargs)
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.

@@ -25,6 +25,22 @@ with Graphviz using an optional ELK layout backend for large graphs.
 - **`vis_mode='unrolled'`**: Shows every pass separately (uses LayerPassLog entries)
 - **`vis_mode='rolled'`**: Collapses repeated layers into single nodes (uses LayerLog)
 
+## Module Focus
+`ModelLog.render_graph(module=...)` and `show_model_graph(..., module=...)` can
+render one module's subgraph in the same visual format as the full model.
+
+- `module=None`: render the whole model.
+- `module="block.address"`: focus the ModuleLog with that address.
+- `module=module_log`: focus that ModuleLog; it must belong to the rendered ModelLog.
+- `ModuleLog.show_graph(**kwargs)`: convenience wrapper for
+  `module_log._source_model_log.render_graph(module=module_log, **kwargs)`.
+
+The focus pass runs before `skip_fn` and `collapse_fn`. It keeps layers whose
+`containing_modules` path includes the target module address, drops outside
+layers, and inserts synthetic green/red boundary nodes for external upstreams
+and downstreams. Child module clusters inside the focused module are still
+available for normal collapse behavior.
+
 ## Node Mode Presets
 `VisualizationOptions.node_mode` applies a built-in NodeSpec preset before any
 user-supplied `node_spec_fn`, so user callbacks always win. Public flat alias:

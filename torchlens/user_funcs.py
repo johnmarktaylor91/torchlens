@@ -21,7 +21,7 @@ import collections.abc
 import os
 import random
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
@@ -54,6 +54,9 @@ from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_
 from .utils.display import _vprint, warn_parallel
 from .utils.introspection import get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
+
+if TYPE_CHECKING:
+    from .data_classes.module_log import ModuleLog
 
 
 def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
@@ -703,6 +706,7 @@ def show_model_graph(
     vis_nesting_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    module: "ModuleLog | str | None" = None,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -735,6 +739,8 @@ def show_model_graph(
         vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
         vis_outpath: Deprecated alias for ``visualization.output_path``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
+        module: Optional module focus. Pass a ModuleLog or module address string
+            to render only layers that ran inside that module.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
         vis_gradient_edge_overrides: Deprecated alias for
             ``visualization.gradient_edge_overrides``.
@@ -812,7 +818,12 @@ def show_model_graph(
     # Render in a try/finally so temporary tl_ attributes on the model are
     # always cleaned up, even if Graphviz rendering raises.
     try:
-        model_log.render_graph(**visualization_to_render_kwargs(visualization_options))
+        render_kwargs = visualization_to_render_kwargs(visualization_options)
+        if module is not None:
+            from .data_classes.module_log import ModuleLog
+
+            render_kwargs["module"] = module.address if isinstance(module, ModuleLog) else module
+        model_log.render_graph(**render_kwargs)
     finally:
         model_log.cleanup()
 
