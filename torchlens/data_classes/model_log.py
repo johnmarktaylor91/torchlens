@@ -33,14 +33,17 @@ from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
+import weakref
 from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
 
 if TYPE_CHECKING:
     from .._io.streaming import BundleStreamWriter
+    from ..visualization.code_panel import CodePanelOption
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
     from .module_log import ModuleLog
@@ -146,6 +149,8 @@ class ModelLog:
         "keep_unsaved_layers": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
         "activation_postfunc_repr": FieldPolicy.KEEP,
+        "_source_code_blob": FieldPolicy.KEEP,
+        "_source_model_ref": FieldPolicy.DROP,
         "current_function_call_barcode": FieldPolicy.KEEP,
         "random_seed_used": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
@@ -291,6 +296,8 @@ class ModelLog:
         self.activation_postfunc_repr = (
             repr(activation_postfunc) if activation_postfunc is not None else None
         )
+        self._source_code_blob: dict[str, str] = {}
+        self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
         self.current_function_call_barcode = None
         self.random_seed_used = None
         self.output_device = output_device
@@ -488,6 +495,7 @@ class ModelLog:
         state["_module_logs"] = None
         state["_buffer_accessor"] = None
         state["_module_build_data"] = None
+        state["_source_model_ref"] = None
         state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
         state["activation_postfunc_repr"] = (
             repr(self.activation_postfunc) if self.activation_postfunc is not None else None
@@ -510,6 +518,8 @@ class ModelLog:
                 "_keep_activations_in_memory": True,
                 "_activation_sink": None,
                 "_in_exhaustive_pass": False,
+                "_source_code_blob": {},
+                "_source_model_ref": None,
             },
         )
         self.__dict__.update(state)
@@ -726,6 +736,7 @@ class ModelLog:
         vis_node_placement: VisNodePlacementLiteral = "auto",
         vis_renderer: VisRendererLiteral = "graphviz",
         vis_theme: str = "torchlens",
+        code_panel: "CodePanelOption" = False,
     ) -> str:
         """Render the computational graph for this model log.
 
@@ -734,7 +745,7 @@ class ModelLog:
         vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, module, node_mode, \
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
         vis_gradient_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
-        show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme:
+        show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, code_panel:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
 
         Returns
@@ -766,6 +777,7 @@ class ModelLog:
             vis_node_placement=vis_node_placement,
             vis_renderer=vis_renderer,
             vis_theme=vis_theme,
+            code_panel=code_panel,
         )
 
     def summary(

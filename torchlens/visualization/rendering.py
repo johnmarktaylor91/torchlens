@@ -65,6 +65,7 @@ from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
 from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
 from .node_spec import NodeSpec, render_lines_to_html
+from .code_panel import CodePanelOption, render_code_panel_subgraph, resolve_code_panel_source
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
@@ -222,6 +223,7 @@ def render_graph(
     vis_node_placement: VisNodePlacementLiteral = "auto",
     vis_renderer: VisRendererLiteral = "graphviz",
     vis_theme: str = "torchlens",
+    code_panel: CodePanelOption = False,
 ) -> str:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -262,6 +264,9 @@ def render_graph(
         vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
             or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK (or sfdp
             fallback) for large ones.
+        code_panel: Optional source-code panel. ``True`` is equivalent to
+            ``"forward"``; callable values receive the live model object when
+            it is still available.
 
     Returns:
         The Graphviz DOT source string.
@@ -362,8 +367,18 @@ def render_graph(
         show_buffer_layers=show_buffer_layers,
         skip_fn=skip_fn,
     )
+    source_text = resolve_code_panel_source(
+        code_panel,
+        getattr(self, "_source_code_blob", {}),
+        getattr(self, "_source_model_ref", None),
+    )
     num_nodes = len(entries_to_plot) - len(skipped_labels)
     engine = get_node_placement_engine(vis_node_placement, num_nodes)
+    if source_text is not None and engine == "elk":
+        # The code panel is implemented in pure Graphviz so the graph and source
+        # remain in one output file. ELK's direct renderer bypasses Digraph
+        # construction, so panel renders stay on the Graphviz path.
+        engine = "dot"
     _vprint(self, f"Rendering {vis_mode} graph ({num_nodes} nodes, format={vis_fileformat})")
     _vprint(self, f"Layout engine: {engine}")
 
@@ -483,6 +498,8 @@ def render_graph(
 
     # Finally, set up the subgraphs.
     _setup_subgraphs(self, dot, vis_mode, module_cluster_dict, overrides)
+    if source_text is not None:
+        render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
         from IPython.display import display  # #72: lazy import
