@@ -54,6 +54,7 @@ import graphviz
 from .._literals import (
     VisDirectionLiteral,
     VisModeLiteral,
+    VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
@@ -61,6 +62,7 @@ from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
+from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
 from .node_spec import NodeSpec, render_lines_to_html
 
 if TYPE_CHECKING:
@@ -117,6 +119,7 @@ def render_graph(
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
     vis_graph_overrides: Optional[Dict] = None,
+    node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
@@ -148,6 +151,8 @@ def render_graph(
             Use 0 to show all layers without collapsing.
         vis_outpath: Output file path (extension auto-stripped).
         vis_graph_overrides: Graphviz graph-level attribute overrides.
+        node_mode: Preset applied to default ``NodeSpec`` objects before
+            user callbacks run.
         node_spec_fn: Optional callback receiving ``(layer_log, default_spec)``.
             In unrolled mode, ``layer_log`` is the parent aggregate LayerLog for
             the rendered LayerPassLog.
@@ -175,6 +180,11 @@ def render_graph(
         ValueError: If ``_all_layers_logged`` is False (layers were discarded
             by ``keep_unsaved_layers=False``).
     """
+    if node_mode not in MODE_REGISTRY:
+        raise ValueError(
+            "Visualization node_mode must be one of 'default', 'profiling', "
+            "'vision', or 'attention'."
+        )
     if vis_renderer == "dagua":
         from .dagua_bridge import render_model_log_with_dagua
 
@@ -293,6 +303,7 @@ def render_graph(
             vis_nesting_depth,
             show_buffer_layers,
             overrides,
+            node_mode,
             node_spec_fn,
             collapsed_node_spec_fn,
             collapse_fn,
@@ -364,6 +375,7 @@ def render_graph(
             vis_nesting_depth,
             show_buffer_layers,
             overrides,
+            node_mode,
             node_spec_fn,
             collapsed_node_spec_fn,
             collapse_fn,
@@ -597,6 +609,7 @@ def _add_node_to_graphviz(
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
     overrides: Optional[VisualizationOverrides] = None,
+    node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
@@ -632,6 +645,7 @@ def _add_node_to_graphviz(
             vis_nesting_depth,
             collapse_address,
             overrides,  # type: ignore[arg-type]
+            node_mode,
             collapsed_node_spec_fn,
         )
         node_color = "black"
@@ -643,6 +657,7 @@ def _add_node_to_graphviz(
             show_buffer_layers,
             vis_mode,
             overrides,  # type: ignore[arg-type]
+            node_mode,
             node_spec_fn,
         )
 
@@ -799,6 +814,7 @@ def _build_layer_node(
     show_buffer_layers: bool,
     vis_mode: str,
     overrides: VisualizationOverrides,
+    node_mode: VisNodeModeLiteral,
     node_spec_fn: NodeSpecFn | None = None,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
@@ -834,7 +850,7 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
-    spec = _apply_node_spec_fn(self, node, default_spec, node_spec_fn)
+    spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
 
     # Graphviz node names can't contain colons (used for port syntax), so
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
@@ -865,6 +881,7 @@ def _build_collapsed_module_node(
     vis_nesting_depth: int,
     collapse_address: str | None,
     overrides: VisualizationOverrides,
+    node_mode: VisNodeModeLiteral,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
@@ -973,11 +990,14 @@ def _build_collapsed_module_node(
         style=f"filled,{line_style}",
         extra_attrs={"ordering": "out"},
     )
+    mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
+    mode_result = mode_fn(ml, default_spec)  # type: ignore[arg-type]
+    mode_spec = default_spec if mode_result is None else mode_result
     if collapsed_node_spec_fn is not None:
-        result = collapsed_node_spec_fn(ml, default_spec)  # type: ignore[arg-type]
-        spec = default_spec if result is None else result
+        result = collapsed_node_spec_fn(ml, mode_spec)  # type: ignore[arg-type]
+        spec = mode_spec if result is None else result
     else:
-        spec = default_spec
+        spec = mode_spec
 
     node_args = _node_spec_to_graphviz_args(spec)
     node_args["name"] = node_name
@@ -1129,6 +1149,7 @@ def _apply_node_spec_fn(
     model_log: "ModelLog",
     node: GraphNode,
     default_spec: NodeSpec,
+    node_mode: VisNodeModeLiteral,
     node_spec_fn: NodeSpecFn | None,
 ) -> NodeSpec:
     """Apply a layer node callback to a default spec.
@@ -1141,6 +1162,8 @@ def _apply_node_spec_fn(
         Rendered LayerPassLog or LayerLog.
     default_spec:
         Default node spec.
+    node_mode:
+        Preset to apply before the optional user callback.
     node_spec_fn:
         Optional user callback. Unrolled nodes are represented to the callback
         by their parent LayerLog.
@@ -1151,11 +1174,14 @@ def _apply_node_spec_fn(
         Callback result, or ``default_spec`` when the callback returns ``None``.
     """
 
-    if node_spec_fn is None:
-        return default_spec
     layer_log = _layer_log_for_node(model_log, node)
-    result = node_spec_fn(layer_log, default_spec)
-    return default_spec if result is None else result
+    mode_fn = MODE_REGISTRY[node_mode]
+    mode_result = mode_fn(layer_log, default_spec)
+    mode_spec = default_spec if mode_result is None else mode_result
+    if node_spec_fn is None:
+        return mode_spec
+    result = node_spec_fn(layer_log, mode_spec)
+    return mode_spec if result is None else result
 
 
 def _layer_log_for_node(model_log: "ModelLog", node: GraphNode) -> "LayerLog":

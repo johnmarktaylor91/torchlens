@@ -12,6 +12,7 @@ from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._literals import (
     VisDirectionLiteral,
     VisModeLiteral,
+    VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
@@ -30,6 +31,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "show_buffers",
     "direction",
     "graph_overrides",
+    "node_mode",
     "node_spec_fn",
     "collapsed_node_spec_fn",
     "collapse_fn",
@@ -55,6 +57,7 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "vis_buffer_layers": "show_buffers",
     "vis_direction": "direction",
     "vis_graph_overrides": "graph_overrides",
+    "vis_node_mode": "node_mode",
     "vis_edge_overrides": "edge_overrides",
     "vis_gradient_edge_overrides": "gradient_edge_overrides",
     "vis_module_overrides": "module_overrides",
@@ -67,6 +70,27 @@ _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "keep_activations_in_memory": "retain_in_memory",
     "activation_sink": "activation_callback",
 }
+
+
+def _validate_node_mode(node_mode: VisNodeModeLiteral) -> None:
+    """Validate a visualization node-mode preset name.
+
+    Parameters
+    ----------
+    node_mode:
+        Candidate node-mode preset name.
+
+    Raises
+    ------
+    ValueError
+        If ``node_mode`` is not a registered public preset.
+    """
+
+    if node_mode not in {"default", "profiling", "vision", "attention"}:
+        raise ValueError(
+            "Visualization node_mode must be one of 'default', 'profiling', "
+            "'vision', or 'attention'."
+        )
 
 
 def _resolve_option_value(
@@ -112,6 +136,7 @@ class VisualizationOptions:
     show_buffers: bool = False
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
+    node_mode: VisNodeModeLiteral = "default"
     node_spec_fn: Callable[["LayerLog", NodeSpec], NodeSpec | None] | None = None
     collapsed_node_spec_fn: Callable[["ModuleLog", NodeSpec], NodeSpec | None] | None = None
     collapse_fn: Callable[["ModuleLog"], bool] | None = None
@@ -139,6 +164,7 @@ class VisualizationOptions:
         show_buffers: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+        node_mode: VisNodeModeLiteral | MissingType = MISSING,
         node_spec_fn: (
             Callable[["LayerLog", NodeSpec], NodeSpec | None] | None | MissingType
         ) = MISSING,
@@ -159,7 +185,7 @@ class VisualizationOptions:
         Parameters
         ----------
         mode, max_module_depth, output_path, save_only, file_format, show_buffers, direction,
-        graph_overrides, node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn,
+        graph_overrides, node_mode, node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn,
         edge_overrides, gradient_edge_overrides, module_overrides, layout_engine,
         renderer, theme:
             Visualization option values. Explicitly supplied fields are tracked so
@@ -198,6 +224,12 @@ class VisualizationOptions:
                 "graph_overrides",
                 graph_overrides,
                 None,
+                specified_fields,
+            ),
+            "node_mode": _resolve_option_value(
+                "node_mode",
+                node_mode,
+                "default",
                 specified_fields,
             ),
             "node_spec_fn": _resolve_option_value(
@@ -253,6 +285,7 @@ class VisualizationOptions:
         }
         for field_name in _VISUALIZATION_FIELDS:
             object.__setattr__(self, field_name, values[field_name])
+        _validate_node_mode(cast(VisNodeModeLiteral, values["node_mode"]))
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
     def as_dict(self) -> dict[str, Any]:
@@ -274,6 +307,7 @@ class VisualizationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
+        _validate_node_mode(cast(VisNodeModeLiteral, values["node_mode"]))
         for field_name in _VISUALIZATION_FIELDS:
             object.__setattr__(instance, field_name, values[field_name])
         object.__setattr__(instance, "_specified_fields", specified_fields)
@@ -368,6 +402,7 @@ def merge_visualization_options(
     vis_buffer_layers: bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -385,7 +420,7 @@ def merge_visualization_options(
     visualization:
         Caller-supplied grouped visualization options, if any.
     vis_mode, vis_nesting_depth, vis_outpath, vis_save_only, vis_fileformat,
-    vis_buffer_layers, vis_direction, vis_graph_overrides, vis_edge_overrides,
+    vis_buffer_layers, vis_direction, vis_graph_overrides, vis_node_mode, vis_edge_overrides,
     vis_gradient_edge_overrides,
     vis_module_overrides, vis_node_placement, vis_renderer, vis_theme:
         Deprecated flat visualization kwargs. Presence is tracked with
@@ -420,6 +455,7 @@ def merge_visualization_options(
         "vis_buffer_layers": vis_buffer_layers,
         "vis_direction": vis_direction,
         "vis_graph_overrides": vis_graph_overrides,
+        "vis_node_mode": vis_node_mode,
         "vis_edge_overrides": vis_edge_overrides,
         "vis_gradient_edge_overrides": vis_gradient_edge_overrides,
         "vis_module_overrides": vis_module_overrides,
@@ -435,6 +471,7 @@ def merge_visualization_options(
             raise TypeError(f"Do not pass both `{flat_name}` and `visualization.{group_name}`.")
         warn_deprecated_alias(flat_name, f"visualization.{group_name}")
         values[group_name] = flat_value
+        specified_fields = frozenset((*specified_fields, group_name))
     return VisualizationOptions.from_values(values, specified_fields)
 
 
@@ -509,6 +546,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "vis_nesting_depth": visualization.max_module_depth,
         "vis_outpath": visualization.output_path,
         "vis_graph_overrides": visualization.graph_overrides,
+        "node_mode": visualization.node_mode,
         "node_spec_fn": visualization.node_spec_fn,
         "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
         "collapse_fn": visualization.collapse_fn,

@@ -976,6 +976,7 @@ def render_elk_direct(
     vis_nesting_depth: int,
     show_buffer_layers: bool,
     overrides,
+    node_mode,
     node_spec_fn,
     collapsed_node_spec_fn,
     collapse_fn,
@@ -1007,6 +1008,7 @@ def render_elk_direct(
         vis_nesting_depth: Module nesting depth for collapsed modules.
         show_buffer_layers: Whether to include buffer layers.
         overrides: VisualizationOverrides instance.
+        node_mode: Node-mode preset name.
         vis_outpath: Output file path (without extension).
         vis_fileformat: Output format (pdf, png, svg, etc.).
         vis_save_only: If True, don't open viewer.
@@ -1037,6 +1039,7 @@ def render_elk_direct(
         MIN_MODULE_PENWIDTH,
         PENWIDTH_RANGE,
     )
+    from .modes import COLLAPSED_MODE_REGISTRY
     from .node_spec import NodeSpec
 
     # ── Phase 1: Collect node styling, module assignments, and edges ──
@@ -1170,11 +1173,14 @@ def render_elk_direct(
                     style=f"filled,{ls}",
                     extra_attrs={"ordering": "out"},
                 )
+                mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
+                mode_result = mode_fn(ml, default_spec)
+                mode_spec = default_spec if mode_result is None else mode_result
                 if collapsed_node_spec_fn is not None:
-                    result = collapsed_node_spec_fn(ml, default_spec)
-                    spec = default_spec if result is None else result
+                    result = collapsed_node_spec_fn(ml, mode_spec)
+                    spec = mode_spec if result is None else result
                 else:
-                    spec = default_spec
+                    spec = mode_spec
                 attrs = _node_spec_to_graphviz_args(spec)
                 if spec.fillcolor is not None and ":" in spec.fillcolor:
                     attrs["gradientangle"] = "0"
@@ -1203,7 +1209,7 @@ def render_elk_direct(
                 style=f"filled,{ls}",
                 extra_attrs={"ordering": "out"},
             )
-            spec = _apply_node_spec_fn(model_log, node, default_spec, node_spec_fn)
+            spec = _apply_node_spec_fn(model_log, node, default_spec, node_mode, node_spec_fn)
             attrs = _node_spec_to_graphviz_args(spec)
             if spec.fillcolor is not None and ":" in spec.fillcolor:
                 attrs["gradientangle"] = "0"

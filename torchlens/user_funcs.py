@@ -35,6 +35,7 @@ from ._literals import (
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisModeLiteral,
+    VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
@@ -322,6 +323,7 @@ def log_forward_pass(
     vis_buffer_layers: bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -412,6 +414,7 @@ def log_forward_pass(
         vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
         vis_direction: Deprecated alias for ``visualization.direction``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
+        vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
         vis_gradient_edge_overrides: Deprecated alias for
             ``visualization.gradient_edge_overrides``.
@@ -483,6 +486,7 @@ def log_forward_pass(
         vis_buffer_layers=vis_buffer_layers,
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
+        vis_node_mode=vis_node_mode,
         vis_edge_overrides=vis_edge_overrides,
         vis_gradient_edge_overrides=vis_gradient_edge_overrides,
         vis_module_overrides=vis_module_overrides,
@@ -709,6 +713,7 @@ def show_model_graph(
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
+    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     random_seed: Optional[int] = None,
     detect_loops: bool | MissingType = MISSING,
     verbose: bool = False,
@@ -741,6 +746,7 @@ def show_model_graph(
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
         vis_renderer: Deprecated alias for ``visualization.renderer``.
         vis_theme: Deprecated alias for ``visualization.theme``.
+        vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         random_seed: Fixed RNG seed for stochastic models.
         detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
         detect_recurrent_patterns: If True (default), run full isomorphic
@@ -778,6 +784,7 @@ def show_model_graph(
         vis_buffer_layers=vis_buffer_layers,
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
+        vis_node_mode=vis_node_mode,
         vis_edge_overrides=vis_edge_overrides,
         vis_gradient_edge_overrides=vis_gradient_edge_overrides,
         vis_module_overrides=vis_module_overrides,
