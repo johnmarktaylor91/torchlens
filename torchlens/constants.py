@@ -53,6 +53,8 @@ MODEL_LOG_FIELD_ORDER = [
     "has_gradients",
     "activation_postfunc",
     "activation_postfunc_repr",
+    "_source_code_blob",
+    "_source_model_ref",
     "mark_input_output_distances",
     # Model structure info (is_recurrent, max_recurrent_loops,
     # is_branching, has_conditional_branching are computed @properties)

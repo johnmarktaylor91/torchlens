@@ -11,6 +11,7 @@ layout engine for large graphs, and an optional dagua renderer. Called via
 |------|--------|---------|
 | `rendering.py` | 1900+ | Graphviz rendering: nodes, skip-aware edges, module subgraphs, IF/THEN labels, NodeSpec callbacks |
 | `elk_layout.py` | 1300+ | ELK-based layout engine for large graphs (150k+ nodes), Worker thread, sfdp fallback |
+| `code_panel.py` | n/a | Source-code capture and Graphviz side-panel rendering helpers |
 | `node_spec.py` | — | Public NodeSpec dataclass and HTML-label row renderer |
 | `modes.py` | — | NodeSpec preset registry for default/profiling/vision/attention node modes |
 | `dagua_bridge.py` | — | ModelLog → DaguaGraph conversion for dagua renderer (opt-in) |
@@ -20,6 +21,24 @@ layout engine for large graphs, and an optional dagua renderer. Called via
 Called by `user_funcs.py:show_model_graph()`. Reads LayerLog/LayerPassLog from ModelLog
 to build graph nodes and edges. Two independent rendering paths (Graphviz vs dagua),
 with Graphviz using an optional ELK layout backend for large graphs.
+
+## Code Panel
+`ModelLog.render_graph(code_panel=...)` and `show_model_graph(..., code_panel=...)`
+can add a right-side source-code panel next to the computational graph.
+
+- `False`: no panel.
+- `True` / `"forward"`: use captured `model.forward` source.
+- `"class"`: use captured full model class source.
+- `"init+forward"`: use captured `__init__` plus `forward` source.
+- Callable: called as `fn(model)` at render time. This only works while the
+  original model object is still alive; saved ModelLogs should use built-in modes.
+
+Built-in source snippets are captured at `log_forward_pass()` time and stored on
+`ModelLog._source_code_blob`. The panel is pure Graphviz: `code_panel.py` adds a
+`cluster_torchlens_code_panel` subgraph with an HTML-like monospace table label,
+expands tabs to 4 spaces, escapes `<`, `>`, and `&`, and truncates after
+`MAX_CODE_PANEL_LINES` lines. Because ELK direct rendering bypasses `Digraph`
+construction, code-panel renders stay on the Graphviz path.
 
 ## Visualization Modes
 - **`vis_mode='unrolled'`**: Shows every pass separately (uses LayerPassLog entries)

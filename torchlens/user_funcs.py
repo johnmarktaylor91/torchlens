@@ -54,6 +54,11 @@ from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_
 from .utils.display import _vprint, warn_parallel
 from .utils.introspection import get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
+from .visualization.code_panel import (
+    CodePanelOption,
+    capture_model_source_code,
+    make_weak_model_ref,
+)
 
 if TYPE_CHECKING:
     from .data_classes.module_log import ModuleLog
@@ -285,6 +290,8 @@ def _run_model_and_save_specified_activations(
         detect_loops,
         verbose,
     )
+    model_log._source_code_blob = capture_model_source_code(model)
+    model_log._source_model_ref = make_weak_model_ref(model)
     model_log._activation_sink = activation_sink
     model_log._keep_activations_in_memory = keep_activations_in_memory
     model_log._in_exhaustive_pass = True
@@ -718,6 +725,7 @@ def show_model_graph(
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
+    code_panel: CodePanelOption = False,
     random_seed: Optional[int] = None,
     detect_loops: bool | MissingType = MISSING,
     verbose: bool = False,
@@ -752,6 +760,10 @@ def show_model_graph(
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
         vis_renderer: Deprecated alias for ``visualization.renderer``.
         vis_theme: Deprecated alias for ``visualization.theme``.
+        code_panel: Optional source-code panel mode. ``True`` is equivalent to
+            ``"forward"``. Built-in modes use source captured at log time;
+            callable modes receive the live model object and are only available
+            while that object is still alive.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         random_seed: Fixed RNG seed for stochastic models.
         detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
@@ -823,6 +835,8 @@ def show_model_graph(
             from .data_classes.module_log import ModuleLog
 
             render_kwargs["module"] = module.address if isinstance(module, ModuleLog) else module
+        if code_panel is not False:
+            render_kwargs["code_panel"] = code_panel
         model_log.render_graph(**render_kwargs)
     finally:
         model_log.cleanup()

@@ -1349,7 +1349,14 @@ def test_generate_pdf_report():
 
 
 def _vis(
-    model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup", buffer_layers=False
+    model,
+    x,
+    filename,
+    vis_mode="unrolled",
+    depth=1000,
+    direction="bottomup",
+    buffer_layers=False,
+    code_panel=False,
 ):
     """Generate a single visualization PDF."""
     show_model_graph(
@@ -1362,6 +1369,7 @@ def _vis(
         vis_fileformat="pdf",
         vis_buffer_layers=buffer_layers,
         vis_direction=direction,
+        code_panel=code_panel,
         random_seed=42,
     )
 
@@ -1410,6 +1418,7 @@ def test_aesthetic_shared_module_visualizations():
     x = torch.rand(1, 8)
 
     _vis(model, x, "shared_unrolled")
+    _vis(model, x, "shared_code_panel", code_panel=True)
     _vis(model, x, "shared_rolled", vis_mode="rolled")
     _vis(model, x, "shared_rolled_depth1", vis_mode="rolled", depth=1)
 
