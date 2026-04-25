@@ -43,12 +43,14 @@ if TYPE_CHECKING:
     from .._io.streaming import BundleStreamWriter
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
+    from .module_log import ModuleLog
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._deprecations import warn_deprecated_alias
 from .._literals import (
     VisDirectionLiteral,
     VisModeLiteral,
+    VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
@@ -708,6 +710,8 @@ class ModelLog:
         vis_nesting_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: Optional[Dict] = None,
+        module: "ModuleLog | str | None" = None,
+        node_mode: VisNodeModeLiteral = "default",
         node_spec_fn: Optional[Callable] = None,
         collapsed_node_spec_fn: Optional[Callable] = None,
         collapse_fn: Optional[Callable] = None,
@@ -727,8 +731,8 @@ class ModelLog:
 
         Parameters
         ----------
-        vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, node_spec_fn, \
-        collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
+        vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, module, node_mode, \
+        node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
         vis_gradient_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
@@ -746,6 +750,8 @@ class ModelLog:
             vis_nesting_depth=vis_nesting_depth,
             vis_outpath=vis_outpath,
             vis_graph_overrides=vis_graph_overrides,
+            module=module,
+            node_mode=node_mode,
             node_spec_fn=node_spec_fn,
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             collapse_fn=collapse_fn,

@@ -31,10 +31,11 @@ Key mechanisms:
   reference absent layers.
 """
 
+import copy
 import subprocess
 import warnings
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -54,6 +55,7 @@ import graphviz
 from .._literals import (
     VisDirectionLiteral,
     VisModeLiteral,
+    VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
@@ -61,13 +63,100 @@ from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
+from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
 from .node_spec import NodeSpec, render_lines_to_html
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
     from ..data_classes.module_log import ModuleLog
 
-GraphNode = Union["LayerPassLog", "LayerLog"]
+BaseGraphNode = Union["LayerPassLog", "LayerLog"]
+
+
+@dataclass
+class FocusNode:
+    """Mutable render proxy for a focused LayerLog or LayerPassLog.
+
+    Parameters
+    ----------
+    original:
+        Source graph node whose metadata should be rendered.
+    parent_layers:
+        Focus-rewritten incoming labels.
+    child_layers:
+        Focus-rewritten outgoing labels.
+    containing_modules:
+        Copied module path for cluster placement.
+    """
+
+    original: BaseGraphNode
+    parent_layers: list[str]
+    child_layers: list[str]
+    containing_modules: list[str]
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate unknown attributes to the source node."""
+
+        return getattr(self.original, name)
+
+
+@dataclass
+class BoundaryNode:
+    """Synthetic node representing a focused module boundary.
+
+    Parameters
+    ----------
+    layer_label:
+        DOT-safe synthetic label.
+    display_label:
+        Human-readable label shown in the node.
+    boundary_kind:
+        ``"input"`` for external upstreams, ``"output"`` for external sinks.
+    child_layers:
+        Outgoing rendered labels.
+    parent_layers:
+        Incoming rendered labels.
+    containing_modules:
+        Module path used for cluster placement.
+    """
+
+    layer_label: str
+    display_label: str
+    boundary_kind: str
+    child_layers: list[str]
+    parent_layers: list[str]
+    containing_modules: list[str]
+    is_buffer_layer: bool = False
+    has_input_ancestor: bool = True
+    is_final_output: bool = False
+    is_leaf_module_output: bool = False
+    modules_exited: list[str] = field(default_factory=list)
+    is_input_layer: bool = False
+    is_output_layer: bool = False
+    is_terminal_bool_layer: bool = False
+    uses_params: bool = False
+    num_param_tensors: int = 0
+    parent_param_logs: list[Any] = field(default_factory=list)
+    parent_param_shapes: list[tuple[Any, ...]] = field(default_factory=list)
+    num_passes: int = 1
+    pass_num: int = 1
+    layer_type_num: int = 1
+    layer_total_num: int = 1
+    tensor_shape: tuple[Any, ...] = ()
+    tensor_memory_str: str = "0 B"
+    io_role: str = ""
+    layer_type: str = "input"
+
+    def __post_init__(self) -> None:
+        """Fill mutable defaults and role flags."""
+
+        self.is_input_layer = self.boundary_kind == "input"
+        self.is_output_layer = self.boundary_kind == "output"
+        self.layer_type = self.boundary_kind
+        self.io_role = self.boundary_kind
+
+
+GraphNode = Union[BaseGraphNode, BoundaryNode, FocusNode]
 NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]
 CollapsedNodeSpecFn = Callable[["ModuleLog", NodeSpec], NodeSpec | None]
 CollapseFn = Callable[["ModuleLog"], bool]
@@ -117,6 +206,8 @@ def render_graph(
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
     vis_graph_overrides: Optional[Dict] = None,
+    module: "ModuleLog | str | None" = None,
+    node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
@@ -148,6 +239,10 @@ def render_graph(
             Use 0 to show all layers without collapsing.
         vis_outpath: Output file path (extension auto-stripped).
         vis_graph_overrides: Graphviz graph-level attribute overrides.
+        module: Optional module focus. A ModuleLog focuses that module; a string
+            is interpreted as a module address.
+        node_mode: Preset applied to default ``NodeSpec`` objects before
+            user callbacks run.
         node_spec_fn: Optional callback receiving ``(layer_log, default_spec)``.
             In unrolled mode, ``layer_log`` is the parent aggregate LayerLog for
             the rendered LayerPassLog.
@@ -175,6 +270,11 @@ def render_graph(
         ValueError: If ``_all_layers_logged`` is False (layers were discarded
             by ``keep_unsaved_layers=False``).
     """
+    if node_mode not in MODE_REGISTRY:
+        raise ValueError(
+            "Visualization node_mode must be one of 'default', 'profiling', "
+            "'vision', or 'attention'."
+        )
     if vis_renderer == "dagua":
         from .dagua_bridge import render_model_log_with_dagua
 
@@ -228,11 +328,20 @@ def render_graph(
     # Rolled: iterate LayerLog objects (one node per logical layer, multi-pass
     # collapsed into a single node with edge annotations).
     if vis_mode == "unrolled":
-        entries_to_plot = self.layer_dict_main_keys
+        entries_to_plot: dict[str, GraphNode] = dict(self.layer_dict_main_keys)
     elif vis_mode == "rolled":
-        entries_to_plot = self.layer_logs  # type: ignore[assignment]
+        entries_to_plot = dict(self.layer_logs)
     else:
         raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
+
+    if module is not None:
+        target_module = _resolve_focus_module(self, module)
+        entries_to_plot = _build_module_focus_entries(
+            self,
+            entries_to_plot,
+            target_module,
+            vis_mode=vis_mode,
+        )
 
     if direction == "bottomup":
         rankdir = "BT"
@@ -293,6 +402,7 @@ def render_graph(
             vis_nesting_depth,
             show_buffer_layers,
             overrides,
+            node_mode,
             node_spec_fn,
             collapsed_node_spec_fn,
             collapse_fn,
@@ -364,6 +474,7 @@ def render_graph(
             vis_nesting_depth,
             show_buffer_layers,
             overrides,
+            node_mode,
             node_spec_fn,
             collapsed_node_spec_fn,
             collapse_fn,
@@ -448,6 +559,8 @@ def _build_skip_filtered_edge_map(
     skipped_labels: set[str] = set()
     if skip_fn is not None:
         for node in visible_entries.values():
+            if isinstance(node, BoundaryNode):
+                continue
             layer_log = _layer_log_for_node(model_log, node)
             if not skip_fn(layer_log):
                 continue
@@ -469,6 +582,245 @@ def _build_skip_filtered_edge_map(
             vis_mode,
         )
     return edge_map, skipped_labels
+
+
+def _resolve_focus_module(
+    model_log: "ModelLog",
+    module: "ModuleLog | str",
+) -> "ModuleLog":
+    """Resolve and validate a module focus argument.
+
+    Parameters
+    ----------
+    model_log:
+        Model log being rendered.
+    module:
+        ModuleLog instance or module address string.
+
+    Returns
+    -------
+    ModuleLog
+        Module to focus.
+
+    Raises
+    ------
+    ValueError
+        If the module cannot be found or belongs to a different ModelLog.
+    """
+
+    from ..data_classes.module_log import ModuleLog
+
+    if isinstance(module, str):
+        if module not in model_log.modules:
+            raise ValueError(f"Module address '{module}' was not found in this ModelLog.")
+        resolved = model_log.modules[module]
+        if not isinstance(resolved, ModuleLog):
+            raise ValueError(
+                f"Module address '{module}' resolved to a module pass, not a ModuleLog."
+            )
+        return resolved
+    if not isinstance(module, ModuleLog):
+        raise ValueError("module must be a ModuleLog, module address string, or None.")
+    if module._source_model_log is not model_log:
+        raise ValueError("ModuleLog focus must belong to the ModelLog being rendered.")
+    return module
+
+
+def _build_module_focus_entries(
+    model_log: "ModelLog",
+    entries_to_plot: Mapping[str, GraphNode],
+    target_module: "ModuleLog",
+    *,
+    vis_mode: str,
+) -> dict[str, GraphNode]:
+    """Return render entries focused on one module plus synthetic boundaries.
+
+    Parameters
+    ----------
+    model_log:
+        ModelLog being rendered.
+    entries_to_plot:
+        Original entries for the current render mode.
+    target_module:
+        Module whose internal forward operations should be shown.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+
+    Returns
+    -------
+    dict[str, GraphNode]
+        Focused entries with boundary nodes inserted.
+
+    Raises
+    ------
+    ValueError
+        If the module contains no rendered layers.
+    """
+
+    focus_labels = {
+        node.layer_label
+        for node in entries_to_plot.values()
+        if _node_is_inside_module(node, target_module.address)
+    }
+    if not focus_labels:
+        raise ValueError(
+            f"Module '{target_module.address}' has no layers to render. "
+            "Empty modules cannot be focused."
+        )
+
+    focused_entries: dict[str, GraphNode] = {
+        label: _copy_focus_node(node)
+        for label, node in entries_to_plot.items()
+        if node.layer_label in focus_labels
+    }
+    input_boundaries: dict[str, BoundaryNode] = {}
+    output_boundaries: dict[str, BoundaryNode] = {}
+
+    for render_node in list(focused_entries.values()):
+        node = cast(FocusNode, render_node)
+        new_parents: list[str] = []
+        for parent_label in node.parent_layers:
+            if parent_label in focus_labels:
+                new_parents.append(parent_label)
+                continue
+            parent_node = entries_to_plot.get(parent_label)
+            if parent_node is None:
+                continue
+            boundary = _get_or_create_boundary_node(
+                input_boundaries,
+                parent_node,
+                target_module,
+                vis_mode=vis_mode,
+                boundary_kind="input",
+                child_label=node.layer_label,
+            )
+            if node.layer_label not in boundary.child_layers:
+                boundary.child_layers.append(node.layer_label)
+            new_parents.append(boundary.layer_label)
+        node.parent_layers = new_parents
+
+        new_children: list[str] = []
+        for child_label in node.child_layers:
+            if child_label in focus_labels:
+                new_children.append(child_label)
+                continue
+            child_node = entries_to_plot.get(child_label)
+            if child_node is None:
+                continue
+            boundary = _get_or_create_boundary_node(
+                output_boundaries,
+                child_node,
+                target_module,
+                vis_mode=vis_mode,
+                boundary_kind="output",
+                parent_label=node.layer_label,
+            )
+            if node.layer_label not in boundary.parent_layers:
+                boundary.parent_layers.append(node.layer_label)
+            new_children.append(boundary.layer_label)
+        node.child_layers = new_children
+
+    _simplify_boundary_labels(input_boundaries, "input")
+    _simplify_boundary_labels(output_boundaries, "output")
+    for boundary_dict in (input_boundaries, output_boundaries):
+        for label, boundary in boundary_dict.items():
+            focused_entries[label] = boundary
+
+    return focused_entries
+
+
+def _node_is_inside_module(node: GraphNode, module_address: str) -> bool:
+    """Return whether ``node`` ran inside ``module_address``."""
+
+    return any(module.split(":", 1)[0] == module_address for module in node.containing_modules)
+
+
+def _unwrap_focus_node(node: GraphNode) -> GraphNode:
+    """Return the source node behind a focus proxy."""
+
+    if isinstance(node, FocusNode):
+        return node.original
+    return node
+
+
+def _base_node_for_metadata(node: GraphNode) -> BaseGraphNode:
+    """Return a non-boundary graph node for metadata helpers."""
+
+    unwrapped = _unwrap_focus_node(node)
+    if isinstance(unwrapped, BoundaryNode):
+        raise ValueError("Boundary nodes do not carry edge metadata.")
+    return cast(BaseGraphNode, unwrapped)
+
+
+def _copy_focus_node(node: GraphNode) -> GraphNode:
+    """Return a shallow render copy whose edge lists can be rewritten."""
+
+    if isinstance(node, BoundaryNode):
+        return copy.copy(node)
+    if isinstance(node, FocusNode):
+        original = node.original
+    else:
+        original = node
+    return FocusNode(
+        original=original,
+        parent_layers=list(node.parent_layers),
+        child_layers=list(node.child_layers),
+        containing_modules=list(node.containing_modules),
+    )
+
+
+def _get_or_create_boundary_node(
+    boundary_nodes: dict[str, BoundaryNode],
+    external_node: GraphNode,
+    target_module: "ModuleLog",
+    *,
+    vis_mode: str,
+    boundary_kind: str,
+    child_label: str | None = None,
+    parent_label: str | None = None,
+) -> BoundaryNode:
+    """Create or return a boundary node for one external layer."""
+
+    external_label = external_node.layer_label.replace(":", "pass")
+    boundary_label = f"__module_focus_{boundary_kind}_{external_label}"
+    boundary = boundary_nodes.get(boundary_label)
+    if boundary is not None:
+        return boundary
+
+    module_path = _boundary_module_path(target_module, vis_mode)
+    boundary = BoundaryNode(
+        layer_label=boundary_label,
+        display_label=f"ext: {external_node.layer_label}",
+        boundary_kind=boundary_kind,
+        child_layers=[] if child_label is None else [child_label],
+        parent_layers=[] if parent_label is None else [parent_label],
+        containing_modules=module_path,
+    )
+    boundary_nodes[boundary_label] = boundary
+    return boundary
+
+
+def _boundary_module_path(target_module: "ModuleLog", vis_mode: str) -> list[str]:
+    """Return a module path for focus boundary node cluster placement."""
+
+    module_path = []
+    parts = target_module.address.split(".") if target_module.address != "self" else ["self"]
+    for idx in range(len(parts)):
+        address = ".".join(parts[: idx + 1])
+        module_path.append(address if vis_mode == "rolled" else f"{address}:1")
+    return module_path
+
+
+def _simplify_boundary_labels(
+    boundary_nodes: dict[str, BoundaryNode],
+    fallback_label: str,
+) -> None:
+    """Use simple labels when a focus side has exactly one boundary."""
+
+    if len(boundary_nodes) != 1:
+        return
+    only_boundary = next(iter(boundary_nodes.values()))
+    only_boundary.display_label = fallback_label
 
 
 def _expand_edges_through_skipped(
@@ -597,6 +949,7 @@ def _add_node_to_graphviz(
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
     overrides: Optional[VisualizationOverrides] = None,
+    node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
@@ -632,6 +985,7 @@ def _add_node_to_graphviz(
             vis_nesting_depth,
             collapse_address,
             overrides,  # type: ignore[arg-type]
+            node_mode,
             collapsed_node_spec_fn,
         )
         node_color = "black"
@@ -643,6 +997,7 @@ def _add_node_to_graphviz(
             show_buffer_layers,
             vis_mode,
             overrides,  # type: ignore[arg-type]
+            node_mode,
             node_spec_fn,
         )
 
@@ -718,6 +1073,9 @@ def _collapse_module_address_for_node(
     Optional[str]
         Pass-qualified module address for unrolled lookup, or ``None``.
     """
+
+    if isinstance(node, BoundaryNode):
+        return None
 
     containing_modules = list(node.containing_modules)
     if getattr(node, "is_leaf_module_output", False):
@@ -799,6 +1157,7 @@ def _build_layer_node(
     show_buffer_layers: bool,
     vis_mode: str,
     overrides: VisualizationOverrides,
+    node_mode: VisNodeModeLiteral,
     node_spec_fn: NodeSpecFn | None = None,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
@@ -813,6 +1172,22 @@ def _build_layer_node(
     Returns:
         The node color string used for this node.
     """
+    if isinstance(node, BoundaryNode):
+        fillcolor = INPUT_COLOR if node.boundary_kind == "input" else OUTPUT_COLOR
+        spec = NodeSpec(
+            lines=[node.display_label],
+            shape="oval",
+            fillcolor=fillcolor,
+            fontcolor="black",
+            color="black",
+            style="filled,solid",
+            extra_attrs={"ordering": "out"},
+        )
+        node_args = _node_spec_to_graphviz_args(spec)
+        node_args["name"] = node.layer_label
+        graphviz_graph.node(**node_args)
+        return "black"
+
     # Get the address, shape, color, and line style:
 
     node_address, node_shape, node_color = _get_node_address_shape_color(
@@ -834,7 +1209,7 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
-    spec = _apply_node_spec_fn(self, node, default_spec, node_spec_fn)
+    spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
 
     # Graphviz node names can't contain colons (used for port syntax), so
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
@@ -865,6 +1240,7 @@ def _build_collapsed_module_node(
     vis_nesting_depth: int,
     collapse_address: str | None,
     overrides: VisualizationOverrides,
+    node_mode: VisNodeModeLiteral,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
@@ -973,11 +1349,14 @@ def _build_collapsed_module_node(
         style=f"filled,{line_style}",
         extra_attrs={"ordering": "out"},
     )
+    mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
+    mode_result = mode_fn(ml, default_spec)  # type: ignore[arg-type]
+    mode_spec = default_spec if mode_result is None else mode_result
     if collapsed_node_spec_fn is not None:
-        result = collapsed_node_spec_fn(ml, default_spec)  # type: ignore[arg-type]
-        spec = default_spec if result is None else result
+        result = collapsed_node_spec_fn(ml, mode_spec)  # type: ignore[arg-type]
+        spec = mode_spec if result is None else result
     else:
-        spec = default_spec
+        spec = mode_spec
 
     node_args = _node_spec_to_graphviz_args(spec)
     node_args["name"] = node_name
@@ -990,7 +1369,7 @@ def _build_collapsed_module_node(
 
 def _get_node_address_shape_color(
     self: "ModelLog",
-    node: Union["LayerPassLog", "LayerLog"],
+    node: GraphNode,
     show_buffer_layers: bool,
 ) -> Tuple[str, str, str]:
     """Gets the node shape, address, and color for the graphviz figure.
@@ -1003,13 +1382,16 @@ def _get_node_address_shape_color(
         node_shape: shape of the node
         node_color: color of the node
     """
+    source_node = _unwrap_focus_node(node)
+    if isinstance(source_node, BoundaryNode):
+        raise ValueError("Boundary nodes are rendered by the boundary path.")
     if not show_buffer_layers:
         only_non_buffer_layer = _is_only_non_buffer_in_module(self, node)
     else:
         only_non_buffer_layer = False
 
     if (node.is_leaf_module_output or only_non_buffer_layer) and (len(node.containing_modules) > 0):
-        if isinstance(node, LayerPassLog):
+        if isinstance(source_node, LayerPassLog):
             module_pass_exited = node.containing_modules[-1]
             module, _ = module_pass_exited.split(":")
             if self.modules[module].num_passes == 1:  # type: ignore[union-attr]
@@ -1025,12 +1407,12 @@ def _get_node_address_shape_color(
         node_shape = "box"
         node_color = "black"
     elif node.is_buffer_layer:
-        if (self.buffer_num_passes[node.buffer_address] == 1) or (
-            isinstance(node, LayerLog) and node.num_passes > 1
+        if (self.buffer_num_passes[source_node.buffer_address] == 1) or (
+            isinstance(source_node, LayerLog) and node.num_passes > 1
         ):
-            buffer_address = node.buffer_address
+            buffer_address = source_node.buffer_address
         else:
-            buffer_address = f"{node.buffer_address}:{node.buffer_pass}"
+            buffer_address = f"{source_node.buffer_address}:{source_node.buffer_pass}"
         node_address = "<br/>@" + buffer_address
         node_shape = "box"
         node_color = BUFFER_NODE_COLOR
@@ -1046,9 +1428,7 @@ def _get_node_address_shape_color(
     return node_address, node_shape, node_color
 
 
-def _is_only_non_buffer_in_module(
-    self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]
-) -> bool:
+def _is_only_non_buffer_in_module(self: "ModelLog", node: GraphNode) -> bool:
     """Returns True if a layer is the only non-buffer layer in a leaf module.
 
     Leaf modules are those with no child submodules. Container modules with
@@ -1075,7 +1455,10 @@ def _is_only_non_buffer_in_module(
     # If any aren't, return False.
 
     for parent_layer_label in node.parent_layers:
-        if isinstance(node, LayerPassLog):
+        if parent_layer_label.startswith("__module_focus_"):
+            continue
+        source_node = _unwrap_focus_node(node)
+        if isinstance(source_node, LayerPassLog):
             parent_layer = self[parent_layer_label]
         else:
             parent_layer = self.layer_logs[parent_layer_label]  # type: ignore[assignment]
@@ -1088,7 +1471,7 @@ def _is_only_non_buffer_in_module(
     return True
 
 
-def _get_node_bg_color(self: "ModelLog", node: Union["LayerPassLog", "LayerLog"]) -> str:
+def _get_node_bg_color(self: "ModelLog", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
     Maps node types to colors: input=green, output=red, boolean=orange,
@@ -1129,6 +1512,7 @@ def _apply_node_spec_fn(
     model_log: "ModelLog",
     node: GraphNode,
     default_spec: NodeSpec,
+    node_mode: VisNodeModeLiteral,
     node_spec_fn: NodeSpecFn | None,
 ) -> NodeSpec:
     """Apply a layer node callback to a default spec.
@@ -1141,6 +1525,8 @@ def _apply_node_spec_fn(
         Rendered LayerPassLog or LayerLog.
     default_spec:
         Default node spec.
+    node_mode:
+        Preset to apply before the optional user callback.
     node_spec_fn:
         Optional user callback. Unrolled nodes are represented to the callback
         by their parent LayerLog.
@@ -1151,11 +1537,14 @@ def _apply_node_spec_fn(
         Callback result, or ``default_spec`` when the callback returns ``None``.
     """
 
-    if node_spec_fn is None:
-        return default_spec
     layer_log = _layer_log_for_node(model_log, node)
-    result = node_spec_fn(layer_log, default_spec)
-    return default_spec if result is None else result
+    mode_fn = MODE_REGISTRY[node_mode]
+    mode_result = mode_fn(layer_log, default_spec)
+    mode_spec = default_spec if mode_result is None else mode_result
+    if node_spec_fn is None:
+        return mode_spec
+    result = node_spec_fn(layer_log, mode_spec)
+    return mode_spec if result is None else result
 
 
 def _layer_log_for_node(model_log: "ModelLog", node: GraphNode) -> "LayerLog":
@@ -1174,6 +1563,9 @@ def _layer_log_for_node(model_log: "ModelLog", node: GraphNode) -> "LayerLog":
         Aggregate layer log for callbacks.
     """
 
+    node = _unwrap_focus_node(node)
+    if isinstance(node, BoundaryNode):
+        raise ValueError("Synthetic boundary nodes do not have LayerLog metadata.")
     if isinstance(node, LayerLog):
         return node
     if node.parent_layer_log is not None:
@@ -1235,6 +1627,10 @@ def compute_default_node_lines(
     list[str]
         Plain-text rows for ``NodeSpec.lines``.
     """
+
+    layer_log = _unwrap_focus_node(layer_log)
+    if isinstance(layer_log, BoundaryNode):
+        return [layer_log.display_label]
 
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         pass_label = f":{layer_log.pass_num}"
@@ -1658,7 +2054,7 @@ def _add_edges_for_node(
 
         # Edge deduplication: multiple layers mapping to the same collapsed
         # module node would produce duplicate edges without this check.
-        if tail_name == head_name and metadata_child is not child_node:
+        if tail_name == head_name:
             continue
         if (tail_name, head_name) in edges_used:
             continue
@@ -1674,23 +2070,48 @@ def _add_edges_for_node(
             "labelfontsize": "8",
         }
 
-        if not child_is_collapsed_module:
+        edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
+            child_node, BoundaryNode
+        )
+
+        if not child_is_collapsed_module and not edge_has_boundary:
+            metadata_base = (
+                _base_node_for_metadata(metadata_child) if metadata_child is not None else None
+            )
             edge_label = (
-                _compute_edge_label(parent_node, metadata_child, self, vis_mode)
-                if metadata_child is not None
+                _compute_edge_label(
+                    _base_node_for_metadata(parent_node),
+                    metadata_base,
+                    self,
+                    vis_mode,
+                )
+                if metadata_base is not None
                 else None
             )
             if edge_label is not None:
                 edge_dict["label"] = edge_label
 
         # Annotate passes for rolled node edge if it varies across passes
-        if vis_mode == "rolled" and metadata_child is not None:
-            _label_rolled_pass_nums(metadata_child, parent_node, edge_dict)  # type: ignore[arg-type]
+        if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
+            metadata_base_for_pass = _base_node_for_metadata(metadata_child)
+            parent_base_for_pass = _base_node_for_metadata(parent_node)
+            if isinstance(metadata_base_for_pass, LayerLog) and isinstance(
+                parent_base_for_pass, LayerLog
+            ):
+                _label_rolled_pass_nums(
+                    metadata_base_for_pass,
+                    parent_base_for_pass,
+                    edge_dict,
+                )
 
         # Label the arguments to the next node if multiple inputs
-        if not child_is_collapsed_module and metadata_child is not None:
+        if not child_is_collapsed_module and metadata_child is not None and not edge_has_boundary:
             _label_node_arguments_if_needed(
-                self, parent_node, metadata_child, edge_dict, show_buffer_layers
+                self,
+                _base_node_for_metadata(parent_node),
+                _base_node_for_metadata(metadata_child),
+                edge_dict,
+                show_buffer_layers,
             )
 
         for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
@@ -1700,9 +2121,20 @@ def _add_edges_for_node(
                 edge_dict[arg_name] = str(arg_val)
 
         # Add it to the appropriate module cluster (most nested one containing both nodes)
-        containing_module = _get_lowest_containing_module_for_two_nodes(
-            parent_node, child_node, both_nodes_collapsed_modules, vis_nesting_depth
-        )
+        if edge_has_boundary:
+            containing_module = _get_lowest_containing_module_for_two_render_nodes(
+                parent_node,
+                child_node,
+                both_nodes_collapsed_modules,
+                vis_nesting_depth,
+            )
+        else:
+            containing_module = _get_lowest_containing_module_for_two_nodes(
+                _base_node_for_metadata(parent_node),
+                _base_node_for_metadata(child_node),
+                both_nodes_collapsed_modules,
+                vis_nesting_depth,
+            )
         if containing_module != -1:
             module_edge_dict[containing_module]["edges"].append(edge_dict)
             if parent_node.has_input_ancestor or child_node.has_input_ancestor:
@@ -1721,7 +2153,9 @@ def _add_edges_for_node(
             graphviz_graph.edge(**edge_dict)
 
         # Finally, add a backwards edge if both tensors have stored gradients.
-        if vis_mode == "unrolled":
+        if vis_mode == "unrolled" and not (
+            isinstance(parent_node, BoundaryNode) or isinstance(child_node, BoundaryNode)
+        ):
             _add_gradient_edge(
                 self,
                 parent_node,
@@ -2315,6 +2749,22 @@ def _label_rolled_pass_nums(
     # Mark the head label with the argument if need be:
     if child_node.edges_vary_across_passes:
         edge_dict["headlabel"] = f"  In {int_list_to_compact_str(child_pass_nums)}  "
+
+
+def _get_lowest_containing_module_for_two_render_nodes(
+    node1: GraphNode,
+    node2: GraphNode,
+    both_nodes_collapsed_modules: bool,
+    vis_nesting_depth: int,
+) -> Union[str, int]:
+    """Find the deepest module subgraph for render nodes including boundaries."""
+
+    return _get_lowest_containing_module_for_two_nodes(
+        cast(Union["LayerPassLog", "LayerLog"], node1),
+        cast(Union["LayerPassLog", "LayerLog"], node2),
+        both_nodes_collapsed_modules,
+        vis_nesting_depth,
+    )
 
 
 def _get_lowest_containing_module_for_two_nodes(
