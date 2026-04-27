@@ -236,7 +236,8 @@ def _prepare_model_session(
             model_log._mod_pass_labels[mod_id] = []
             model_log._mod_entered[mod_id] = []
             model_log._mod_exited[mod_id] = []
-    _create_session_param_logs(model_log, model, optimizer)
+    if model_log.logging_mode != "predicate":
+        _create_session_param_logs(model_log, model, optimizer)
     prepare_buffer_tensors(model_log, model)
 
 
@@ -755,6 +756,83 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
                 ):
                     t = _state._decorated_identity(t)
             return out
+
+        if model_log.logging_mode == "predicate":
+            from ..fastlog._predicate import _evaluate_keep_module
+            from ..fastlog._record_context import _build_record_context
+            from ..fastlog._state import get_active_recording_state
+            from ..fastlog.types import ActivationRecord, ModuleStackFrame
+
+            state = get_active_recording_state()
+            mod_id = id(module)
+            model_log._mod_pass_num[mod_id] += 1
+            frame = ModuleStackFrame(
+                module_address=module.tl_module_address,
+                module_type=module.tl_module_type,
+                module_id=mod_id,
+                pass_index=model_log._mod_pass_num[mod_id],
+            )
+            state.module_stack.append(frame)
+            state.event_index += 1
+            enter_ctx = _build_record_context(
+                kind="module_enter",
+                layer_pass_log_or_op_data={
+                    "label": f"{frame.module_address}:enter:{frame.pass_index}",
+                    "module_address": frame.module_address,
+                    "module_type": frame.module_type,
+                    "module_pass_index": frame.pass_index,
+                },
+                module_stack=state.module_stack,
+                history=tuple(state.history),
+                op_counts=state.op_counts,
+                pass_index=state.pass_index,
+                event_index=state.event_index,
+                op_index=None,
+                time_since_pass_start=0.0,
+                include_source_events=state.options.include_source_events,
+                sample_id=state.sample_id,
+            )
+            try:
+                enter_spec = _evaluate_keep_module(enter_ctx, state.options)
+                if enter_spec.save_activation or enter_spec.save_metadata:
+                    state.add_record(ActivationRecord(ctx=enter_ctx, spec=enter_spec))
+            except Exception as exc:
+                state.add_predicate_failure(enter_ctx, exc)
+                raise
+            finally:
+                state.append_context(enter_ctx)
+            try:
+                return orig_forward(*args, **kwargs)
+            finally:
+                state.event_index += 1
+                exit_ctx = _build_record_context(
+                    kind="module_exit",
+                    layer_pass_log_or_op_data={
+                        "label": f"{frame.module_address}:exit:{frame.pass_index}",
+                        "module_address": frame.module_address,
+                        "module_type": frame.module_type,
+                        "module_pass_index": frame.pass_index,
+                    },
+                    module_stack=state.module_stack,
+                    history=tuple(state.history),
+                    op_counts=state.op_counts,
+                    pass_index=state.pass_index,
+                    event_index=state.event_index,
+                    op_index=None,
+                    time_since_pass_start=0.0,
+                    include_source_events=state.options.include_source_events,
+                    sample_id=state.sample_id,
+                )
+                try:
+                    exit_spec = _evaluate_keep_module(exit_ctx, state.options)
+                    if exit_spec.save_activation or exit_spec.save_metadata:
+                        state.add_record(ActivationRecord(ctx=exit_ctx, spec=exit_spec))
+                except Exception as exc:
+                    state.add_predicate_failure(exit_ctx, exc)
+                    raise
+                finally:
+                    state.append_context(exit_ctx)
+                    state.module_stack.pop()
 
         # ---- Exhaustive mode: full entry → forward → exit ----
         input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
