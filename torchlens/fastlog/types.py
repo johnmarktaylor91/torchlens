@@ -6,7 +6,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import torch
 
@@ -36,6 +36,9 @@ class CaptureSpec:
     keep_grad: bool = False
     device: torch.device | str | None = None
     dtype: torch.dtype | None = None
+
+
+CaptureDecision = bool | CaptureSpec | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +90,24 @@ class RecordContext:
     time_since_pass_start: float
     sample_id: str | int | None = None
 
+    def __getattr__(self, name: str) -> Any:
+        """Raise a schema-specific error for unknown predicate fields.
+
+        Parameters
+        ----------
+        name:
+            Missing attribute name.
+
+        Raises
+        ------
+        RecordContextFieldError
+            Always raised for missing fields.
+        """
+
+        from .exceptions import RecordContextFieldError
+
+        raise RecordContextFieldError(name)
+
 
 @dataclass(frozen=True, slots=True)
 class ActivationRecord:
@@ -115,6 +136,7 @@ class RecordingTrace:
     """Predicate dry-run trace without retained tensor payloads."""
 
     contexts: tuple[RecordContext, ...]
+    decisions: tuple[bool, ...] = ()
     predicate_failures: tuple[PredicateFailure, ...] = ()
 
     @property
@@ -122,6 +144,77 @@ class RecordingTrace:
         """Return chronological dry-run events."""
 
         return self.contexts
+
+    def print_tree(self) -> str:
+        """Return a unicode-indented event tree for this trace."""
+
+        from ..visualization.fastlog_live import print_tree
+
+        return print_tree(self)
+
+    def to_pandas(self) -> Any:
+        """Return a pandas DataFrame representation of trace events."""
+
+        from ..visualization.fastlog_live import to_pandas
+
+        return to_pandas(self)
+
+    def show_graph(self, **kwargs: Any) -> str:
+        """Render a flat Graphviz graph of trace operation events."""
+
+        from ..visualization.fastlog_live import show_graph
+
+        return show_graph(self, **kwargs)
+
+    def summary(self) -> str:
+        """Return a concise human-readable dry-run summary."""
+
+        from ..visualization.fastlog_live import summary
+
+        return summary(self)
+
+    def timeline_html(self) -> Any:
+        """Return an IPython HTML timeline for this trace."""
+
+        from ..visualization.fastlog_live import timeline_html
+
+        return timeline_html(self)
+
+    def repredicate(
+        self,
+        other_keep_op: Callable[[RecordContext], CaptureDecision] | None = None,
+        other_keep_module: Callable[[RecordContext], CaptureDecision] | None = None,
+    ) -> "RecordingTrace":
+        """Return a new trace with decisions from new predicates.
+
+        Parameters
+        ----------
+        other_keep_op:
+            Predicate for op, input, and buffer events.
+        other_keep_module:
+            Predicate for module entry and exit events.
+
+        Returns
+        -------
+        RecordingTrace
+            New trace sharing the same event tuple and predicate failures.
+        """
+
+        from ._predicate import _normalize_capture_decision
+
+        decisions: list[bool] = []
+        for ctx in self.contexts:
+            predicate = (
+                other_keep_module if ctx.kind in {"module_enter", "module_exit"} else other_keep_op
+            )
+            result = predicate(ctx) if predicate is not None else False
+            spec = _normalize_capture_decision(result, ctx, False)
+            decisions.append(spec.save_activation or spec.save_metadata)
+        return RecordingTrace(
+            contexts=self.contexts,
+            decisions=tuple(decisions),
+            predicate_failures=self.predicate_failures,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,9 +285,21 @@ class Recording:
 
         return f"Recording(n_passes={self.n_passes}, n_records={len(self.records)})"
 
-    def enrich(self, steps: list[str]) -> "Recording":
-        """Return this recording after validating enrichment step names."""
+    def enrich(self, steps: list[str] | str) -> "Recording":
+        """Return a new recording with requested incremental enrichments.
 
-        if steps:
-            raise NotImplementedError("fastlog enrichment is implemented in a later step")
-        return self
+        Parameters
+        ----------
+        steps:
+            Enrichment names, or ``"all-feasible"`` for all currently computable
+            enrichments.
+
+        Returns
+        -------
+        Recording
+            New immutable recording value with enriched records.
+        """
+
+        from ..postprocess.incremental import enrich_recording
+
+        return enrich_recording(self, steps)

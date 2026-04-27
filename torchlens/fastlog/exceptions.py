@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -25,11 +24,20 @@ class BundleNotFinalizedError(RuntimeError):
     """Raised when loading a bundle that was not finalized cleanly."""
 
 
-@dataclass(frozen=True, slots=True)
 class RecordContextFieldError(AttributeError):
     """Raised when a predicate asks for a field outside the RecordContext schema."""
 
-    field: str
+    def __init__(self, field: str) -> None:
+        """Initialize a missing RecordContext field error.
+
+        Parameters
+        ----------
+        field:
+            Missing field name.
+        """
+
+        super().__init__(field)
+        self.field = field
 
     def __str__(self) -> str:
         """Return a concise field-access error message."""

@@ -780,6 +780,39 @@ class ModelLog:
             code_panel=code_panel,
         )
 
+    def preview_fastlog(
+        self,
+        predicate: Optional[Callable] = None,
+        keep_op: Optional[Callable] = None,
+        keep_module: Optional[Callable] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Render a fastlog predicate preview for this model graph.
+
+        Parameters
+        ----------
+        predicate, keep_op, keep_module:
+            Predicate callables that receive synthesized fastlog ``RecordContext``
+            objects.
+        **kwargs:
+            Forwarded to :func:`torchlens.visualization.fastlog_preview.preview_fastlog`.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source.
+        """
+
+        from ..visualization.fastlog_preview import preview_fastlog as _impl
+
+        return _impl(
+            self,
+            predicate=predicate,
+            keep_op=keep_op,
+            keep_module=keep_module,
+            **kwargs,
+        )
+
     def summary(
         self,
         level: Literal[

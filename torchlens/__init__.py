@@ -48,7 +48,20 @@ from .visualization import (
 from .decoration import wrap_torch, unwrap_torch, wrapped
 
 
-def preview_fastlog(model_log, *args, **kwargs):
-    """Delegate to ``model_log.preview_fastlog`` when the preview method is available."""
+def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
+    """Render a fastlog predicate preview for a model log.
+
+    Parameters
+    ----------
+    model_log:
+        ModelLog to render.
+    *args, **kwargs:
+        Forwarded to ``model_log.preview_fastlog``.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source.
+    """
 
     return model_log.preview_fastlog(*args, **kwargs)
