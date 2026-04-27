@@ -51,7 +51,7 @@ def _resolve_storage(
 
     if spec.keep_grad and intent.on_disk and not intent.in_ram:
         raise PredicateError("keep_grad=True is not valid for disk-only fastlog storage")
-    if spec.keep_grad and tensor.dtype in _INTEGER_DTYPES:
+    if spec.keep_grad and (tensor.dtype in _INTEGER_DTYPES or spec.dtype in _INTEGER_DTYPES):
         raise PredicateError("keep_grad=True is not valid for integer or bool tensors")
 
     ram_payload = None

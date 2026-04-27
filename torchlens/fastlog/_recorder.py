@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import TracebackType
-from typing import Any
+from typing import Any, cast
 
+import torch
 from torch import nn
 
 from .._deprecations import MISSING, MissingType
@@ -16,6 +18,80 @@ from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import PredicateErrorMode, PredicateFn, RecordingOptions, merge_recording_options
 from .types import CaptureSpec, Recording
+
+
+def _rank_prefixed_streaming_options(
+    streaming: StreamingOptions | None | MissingType,
+) -> StreamingOptions | None | MissingType:
+    """Return streaming options with a rank-local directory prefix.
+
+    Parameters
+    ----------
+    streaming:
+        Caller-supplied streaming options.
+
+    Returns
+    -------
+    StreamingOptions | None | MissingType
+        Options with ``bundle_path`` rewritten to include ``rank_NN`` when a
+        bundle path is configured.
+    """
+
+    if isinstance(streaming, MissingType) or streaming is None or streaming.bundle_path is None:
+        return streaming
+    rank = 0
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        rank = torch.distributed.get_rank()
+    bundle_path = Path(streaming.bundle_path)
+    return StreamingOptions(
+        bundle_path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
+        retain_in_memory=streaming.retain_in_memory,
+        activation_callback=streaming.activation_callback,
+    )
+
+
+def _unwrap_ddp_for_fastlog(
+    model: nn.Module,
+    streaming: StreamingOptions | None | MissingType,
+) -> tuple[nn.Module, StreamingOptions | None | MissingType]:
+    """Unwrap DDP/DataParallel wrappers for rank-local fastlog capture.
+
+    Parameters
+    ----------
+    model:
+        Candidate model supplied to fastlog.
+    streaming:
+        Caller-supplied streaming options.
+
+    Returns
+    -------
+    tuple[nn.Module, StreamingOptions | None | MissingType]
+        The model to execute and possibly rewritten streaming options.
+    """
+
+    try:
+        from torch.distributed.fsdp import FullyShardedDataParallel
+    except ImportError:
+        pass
+    else:
+        if isinstance(model, FullyShardedDataParallel):
+            raise RuntimeError(
+                "torchlens.fastlog does not support FullyShardedDataParallel (FSDP): "
+                "parameters are sharded across ranks and there is no unsharded module to log."
+            )
+
+    try:
+        from torch.nn.parallel import DistributedDataParallel
+    except ImportError:
+        distributed_data_parallel: type[nn.Module] | None = None
+    else:
+        distributed_data_parallel = DistributedDataParallel
+
+    if distributed_data_parallel is not None and isinstance(model, distributed_data_parallel):
+        return cast(nn.Module, model.module), _rank_prefixed_streaming_options(streaming)
+    if isinstance(model, nn.DataParallel):
+        return cast(nn.Module, model.module), _rank_prefixed_streaming_options(streaming)
+    return model, streaming
 
 
 class Recorder:
@@ -48,7 +124,8 @@ class Recorder:
             Fastlog recording options.
         """
 
-        self.model = model
+        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, streaming)
+        self.model = unwrapped_model
         self.options = merge_recording_options(
             recording=None,
             keep_op=keep_op,

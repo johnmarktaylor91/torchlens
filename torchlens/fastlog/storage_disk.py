@@ -182,11 +182,11 @@ class DiskStorageBackend:
         if (
             record.spec.device is not None
             and record.ctx.tensor_device is not None
-            and torch.device(record.spec.device) != record.ctx.tensor_device
             and not self._warned_device_move
         ):
             warnings.warn(
-                "fastlog keep_grad=True with a device move may make autograd expensive.",
+                "fastlog keep_grad=True with an explicit device target may make autograd "
+                "expensive.",
                 UserWarning,
                 stacklevel=2,
             )
