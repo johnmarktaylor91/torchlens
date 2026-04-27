@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from .._deprecations import MISSING, MissingType
+from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..decoration.model_prep import _ensure_model_prepared
 from ..options import StreamingOptions
 from ._orchestrator import _empty_recording, _run_predicate_pass
@@ -94,6 +95,30 @@ def _unwrap_ddp_for_fastlog(
     return model, streaming
 
 
+def _resolve_train_mode_default(
+    *,
+    field_name: str,
+    value: bool | CaptureSpec | MissingType,
+    train_mode: bool,
+) -> bool | CaptureSpec | MissingType:
+    """Resolve one default capture option for train-mode sugar."""
+
+    if train_mode and value is MISSING:
+        return CaptureSpec(keep_grad=True, save_activation=True, save_metadata=True)
+    if not train_mode or value is MISSING or value is False:
+        return value
+    if value is True:
+        raise TrainingModeConfigError(
+            f"train_mode=True conflicts with {field_name}=True because True uses "
+            "keep_grad=False; use CaptureSpec(keep_grad=True) or omit the default"
+        )
+    if isinstance(value, CaptureSpec) and not value.keep_grad:
+        raise TrainingModeConfigError(
+            f"train_mode=True conflicts with {field_name}=CaptureSpec(keep_grad=False)"
+        )
+    return value
+
+
 class Recorder:
     """Context manager for explicitly captured fastlog forwards."""
 
@@ -111,6 +136,7 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
+        train_mode: bool = False,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -122,9 +148,22 @@ class Recorder:
         include_source_events, max_predicate_failures, on_predicate_error, streaming,
         random_seed:
             Fastlog recording options.
+        train_mode:
+            If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
         """
 
+        reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
         unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, streaming)
+        default_op = _resolve_train_mode_default(
+            field_name="default_op",
+            value=default_op,
+            train_mode=train_mode,
+        )
+        default_module = _resolve_train_mode_default(
+            field_name="default_module",
+            value=default_module,
+            train_mode=train_mode,
+        )
         self.model = unwrapped_model
         self.options = merge_recording_options(
             recording=None,

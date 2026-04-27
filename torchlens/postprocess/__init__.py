@@ -238,7 +238,9 @@ def postprocess_fast(self: "ModelLog") -> None:
         parent_layer = self.layer_dict_main_keys[output_layer.parent_layers[0]]
         parent_contents = parent_layer.activation
         output_layer.activation = (
-            safe_copy(parent_contents, detach_tensor=True) if parent_contents is not None else None
+            safe_copy(parent_contents, detach_tensor=self.detach_saved_tensors)
+            if parent_contents is not None
+            else None
         )
         output_layer.tensor_memory = parent_layer.tensor_memory
         output_layer.has_saved_activations = parent_layer.has_saved_activations

@@ -32,6 +32,15 @@ Two-pass strategy: when `layers_to_save` is a specific list, Pass 1 runs exhaust
 Predicate strategy: `tl.fastlog` runs one or more explicit `Recorder.log()` passes and
 retains only events selected by predicates. It does not build a faithful `ModelLog`.
 
+Training-target mode: `train_mode=True` is the unified opt-in for losses built from
+saved activations. It is supported by `log_forward_pass()`,
+`ModelLog.save_new_activations()`, and `tl.fastlog`. Slow/replay training capture is
+RAM-only: disk activation saves are rejected before the forward. Fastlog may mirror to
+disk only when an attached RAM payload is retained. Training mode keeps saved floating
+tensors graph-connected, preserves user `requires_grad` settings, and rejects
+inference-mode or compiled-model contexts that cannot provide the expected autograd
+semantics.
+
 ## Key Concepts
 
 ### Toggle Architecture

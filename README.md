@@ -256,6 +256,36 @@ recording, many-rollout `Recorder` sessions, disk load/recovery, graph previews,
 `dry_run()` predicate iteration, downcasting with `CaptureSpec`, and the v1 support
 boundaries.
 
+## Training from saved activations
+
+Use `train_mode=True` when a saved activation is part of a loss that will feed
+`backward()`. TorchLens keeps saved floating tensors graph-connected in RAM, so you can
+train with auxiliary losses, frozen-backbone probes, multi-tap losses, or
+teacher-student activation distillation.
+
+```python
+model_log = tl.log_forward_pass(
+    model,
+    x,
+    layers_to_save=["block1"],
+    train_mode=True,
+)
+aux_loss = model_log["block1"].activation.square().mean()
+aux_loss.backward()
+```
+
+The same knob is available on `ModelLog.save_new_activations()` for same-graph replay
+and on `tl.fastlog.record()` / `tl.fastlog.Recorder()` for predicate-selected RAM
+captures. Slow/replay training capture rejects disk activation saves because detached
+disk payloads cannot carry autograd. For inspection persistence, capture in RAM first
+and then call `tl.save(model_log, path)` after the training use. Existing code that
+explicitly uses `detach_saved_tensors=False` continues to work, but `train_mode=True`
+adds training guardrails: frozen parameter settings are preserved, disk/inference
+misconfigurations fail early, and fastlog defaults can be promoted to keep-grad capture.
+
+See `notebooks/training_tutorial.ipynb` for executable examples of the supported
+training patterns and gotchas.
+
 ## Security
 
 Portable bundles contain a pickle file in `metadata.pkl`. Only load bundles

@@ -48,8 +48,12 @@ device kwarg injection when `torch.device('meta')` context is active.
 ### Two-Phase Model Preparation
 - `_prepare_model_once(model)` — Cached in WeakSet. Permanent attrs (`tl_module_address`,
   `tl_module_type`), forward wrappers, class metadata cache.
-- `_prepare_model_session(model)` — Per-call: `requires_grad=True` on all params, session
-  attrs, buffer discovery and tagging.
+- `_prepare_model_session(model)` — Per-call: session attrs, buffer discovery and
+  tagging, plus parameter logging through `_create_session_param_logs`.
+  In default capture, `_create_session_param_logs` temporarily forces parameters to
+  `requires_grad=True` and cleanup restores the original state. In `train_mode=True`,
+  it must preserve the user's `requires_grad` settings for frozen-backbone training
+  correctness while still recording ParamLog metadata.
 
 ### Module Forward Decorator
 - **Pre-forward**: tracks inputs, increments pass counters, tags buffers, records module entry

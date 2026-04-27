@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._deprecations import warn_deprecated_alias
+from .._training_validation import reject_compiled_model
 from .._literals import (
     VisDirectionLiteral,
     VisModeLiteral,
@@ -155,6 +156,7 @@ class ModelLog:
         "random_seed_used": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "detach_saved_tensors": FieldPolicy.KEEP,
+        "train_mode": FieldPolicy.DROP,
         "save_function_args": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
         "save_source_context": FieldPolicy.KEEP,
@@ -253,6 +255,7 @@ class ModelLog:
         save_rng_states: bool = False,
         detect_loops: bool = True,
         verbose: bool = False,
+        train_mode: bool = False,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -272,6 +275,8 @@ class ModelLog:
             optimizer: Optional torch optimizer, used to annotate which params
                 have optimizers attached.
             verbose: If True, print timed progress messages at each major pipeline stage.
+            train_mode: Session-time flag for training-compatible activation retention.
+                Portable bundle load restores the default ``False`` value.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -302,6 +307,7 @@ class ModelLog:
         self.random_seed_used = None
         self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
+        self.train_mode = train_mode
         self.save_function_args = save_function_args
         self.save_gradients = save_gradients
         self.save_source_context = save_source_context
@@ -520,8 +526,11 @@ class ModelLog:
                 "_in_exhaustive_pass": False,
                 "_source_code_blob": {},
                 "_source_model_ref": None,
+                "train_mode": False,
             },
         )
+        if state["train_mode"] is None:
+            state["train_mode"] = False
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
@@ -1166,16 +1175,20 @@ class ModelLog:
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: str | List = "all",
         random_seed: Optional[int] = None,
+        train_mode: bool | None = None,
     ) -> None:
         """Re-run the model with new inputs, saving only activations.
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, random_seed:
+        model, input_args, input_kwargs, layers_to_save, random_seed, train_mode:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.save_new_activations`.
         """
         from ..capture.trace import save_new_activations as _impl
+
+        if train_mode is True:
+            reject_compiled_model(model, api_name="ModelLog.save_new_activations")
 
         return _impl(
             self,
@@ -1184,6 +1197,7 @@ class ModelLog:
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             random_seed=random_seed,
+            train_mode=train_mode,
         )
 
     def validate_saved_activations(

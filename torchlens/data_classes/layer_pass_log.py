@@ -46,6 +46,7 @@ from .._io import (
     default_fill_state,
     read_io_format_version,
 )
+from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
@@ -740,6 +741,18 @@ class LayerPassLog:
             if activation_postfunc is not None:
                 with pause_logging():
                     self.activation = activation_postfunc(self.activation)
+            if (
+                getattr(model_log, "train_mode", False)
+                and not self.detach_saved_tensor
+                and isinstance(self.activation, torch.Tensor)
+                and self.activation.dtype in _NON_GRAD_DTYPES
+            ):
+                raise TrainingModeConfigError(
+                    f"train_mode=True with non-grad dtype {self.activation.dtype} "
+                    f"on layer {self.tensor_label_raw}. Integer and bool dtypes "
+                    "cannot propagate gradients. Drop train_mode for this layer "
+                    "or convert activation_postfunc to produce a floating dtype."
+                )
         except Exception as exc:
             if writer is not None:
                 writer.abort(f"Failed while saving activation for {self._streaming_label}: {exc}")

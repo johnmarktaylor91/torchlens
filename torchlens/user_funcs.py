@@ -39,6 +39,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._training_validation import validate_training_compatibility
 from .data_classes.model_log import (
     ModelLog,
 )
@@ -218,6 +219,7 @@ def _run_model_and_save_specified_activations(
     keep_activations_in_memory: bool = True,
     activation_sink: Callable[[str, torch.Tensor], None] | None = None,
     verbose: bool = False,
+    train_mode: bool = False,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
 
@@ -260,6 +262,7 @@ def _run_model_and_save_specified_activations(
         activation_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved activation.
         verbose: If True, print timed progress messages at each major pipeline stage.
+        train_mode: If True, keep saved activations attached to autograd for training.
 
     Returns:
         Fully-populated ModelLog.
@@ -289,6 +292,7 @@ def _run_model_and_save_specified_activations(
         save_rng_states,
         detect_loops,
         verbose,
+        train_mode,
     )
     model_log._source_code_blob = capture_model_source_code(model)
     model_log._source_model_ref = make_weak_model_ref(model)
@@ -354,6 +358,7 @@ def log_forward_pass(
     detect_recurrent_patterns: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
     streaming: StreamingOptions | None = None,
+    train_mode: bool = False,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -454,6 +459,8 @@ def log_forward_pass(
         visualization: Grouped visualization options. When omitted,
             ``log_forward_pass`` defaults to ``VisualizationOptions(mode="none")``.
         streaming: Grouped streaming-save options.
+        train_mode: If True, validate training-compatible settings and keep saved
+            activations attached to autograd.
 
     Returns:
         A ``ModelLog`` containing layer activations (if requested) and full metadata.
@@ -521,6 +528,12 @@ def log_forward_pass(
         and streaming_options.activation_callback is not None
     ):
         raise ValueError("save_activations_to and activation_sink are mutually exclusive.")
+    validate_training_compatibility(
+        train_mode=train_mode,
+        streaming=streaming_options,
+        detach_saved_tensors=detach_saved_tensors,
+        inference_mode_active=torch.is_inference_mode_enabled(),
+    )
 
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
@@ -559,6 +572,7 @@ def log_forward_pass(
             keep_activations_in_memory=streaming_options.retain_in_memory,
             activation_sink=streaming_options.activation_callback,
             verbose=verbose,
+            train_mode=train_mode,
         )
     else:
         # --- TWO-PASS path ---
@@ -589,6 +603,7 @@ def log_forward_pass(
             keep_activations_in_memory=streaming_options.retain_in_memory,
             activation_sink=streaming_options.activation_callback,
             verbose=verbose,
+            train_mode=train_mode,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
@@ -600,6 +615,7 @@ def log_forward_pass(
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
             random_seed=random_seed,
+            train_mode=train_mode,
         )
 
     # Print final summary.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
+from .._training_validation import TrainingModeConfigError, validate_training_compatibility
 from .exceptions import RecordingConfigError
 from .options import RecordingOptions
 from .types import CaptureSpec
@@ -82,6 +83,15 @@ def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
         ("default_module", options.default_module),
     ):
         if isinstance(default, CaptureSpec) and default.keep_grad:
+            try:
+                validate_training_compatibility(
+                    train_mode=True,
+                    streaming=options.streaming,
+                    detach_saved_tensors=False,
+                    inference_mode_active=False,
+                )
+            except TrainingModeConfigError:
+                pass
             raise RecordingConfigError(
                 f"{name} cannot use keep_grad=True with disk-only fastlog storage"
             )

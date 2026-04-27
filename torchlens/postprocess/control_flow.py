@@ -27,6 +27,7 @@ import torch
 
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..utils.display import identity
+from ..utils.tensor_utils import safe_copy
 from . import ast_branches
 
 if TYPE_CHECKING:
@@ -739,7 +740,9 @@ def _fix_buffer_layers(self) -> None:
             if (self[layer.buffer_parent].activation is not None) and (
                 layer.captured_args is not None
             ):
-                layer.captured_args.append(self[layer.buffer_parent].activation.detach().clone())
+                layer.captured_args.append(
+                    safe_copy(self[layer.buffer_parent].activation, detach_tensor=True)
+                )
 
         buffer_hash = (
             str(layer.containing_modules) + str(layer.buffer_parent) + layer.buffer_address

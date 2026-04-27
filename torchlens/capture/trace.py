@@ -59,7 +59,8 @@ def save_new_activations(
     input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Union[str, List] = "all",
     random_seed: Optional[int] = None,
-):
+    train_mode: bool | None = None,
+) -> None:
     """Re-run the model with new inputs, saving only activations (fast pass).
 
     This is the public API for refreshing activations without rebuilding the
@@ -78,10 +79,41 @@ def save_new_activations(
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
         random_seed: Which random seed to use for deterministic reproduction.
+        train_mode: Optional replay override. ``None`` inherits the existing
+            model log settings; explicit values temporarily override saved
+            tensor detachment for the whole replay.
 
     Returns:
         Nothing; mutates ``self`` in place with new activation values.
     """
+    if train_mode is not None:
+        model_detach_saved_tensors = self.detach_saved_tensors
+        model_train_mode = getattr(self, "train_mode", False)
+        layer_detach_saved_tensors = {
+            layer_log_entry: layer_log_entry.detach_saved_tensor for layer_log_entry in self
+        }
+        target_detach_saved_tensors = False if train_mode else self.detach_saved_tensors
+        try:
+            self.detach_saved_tensors = target_detach_saved_tensors
+            self.train_mode = train_mode
+            for layer_log_entry in layer_detach_saved_tensors:
+                layer_log_entry.detach_saved_tensor = target_detach_saved_tensors
+            save_new_activations(
+                self,
+                model=model,
+                input_args=input_args,
+                input_kwargs=input_kwargs,
+                layers_to_save=layers_to_save,
+                random_seed=random_seed,
+                train_mode=None,
+            )
+        finally:
+            self.detach_saved_tensors = model_detach_saved_tensors
+            self.train_mode = model_train_mode
+            for layer_log_entry, detach_saved_tensor in layer_detach_saved_tensors.items():
+                layer_log_entry.detach_saved_tensor = detach_saved_tensor
+        return
+
     # Switch to fast mode: reuse graph structure, only capture new activations.
     self.logging_mode = "fast"
     self._in_exhaustive_pass = False
