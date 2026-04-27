@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v2.6.0 (2026-04-27)
+
+### Features
+
+- **visualization**: Cylinder shape for buffer nodes; drop BUFFER_NODE_COLOR
+  ([`098acdc`](https://github.com/johnmarktaylor91/torchlens/commit/098acdc9113ccc68bc3886859a00dfd527523f2f))
+
+
 ## v2.5.0 (2026-04-27)
 
 ### Features
