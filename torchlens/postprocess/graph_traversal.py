@@ -65,7 +65,9 @@ def _add_output_layers(
         new_output_node.func_applied = identity
         new_output_node.func_name = "none"
         new_output_node.func_call_stack = _get_func_call_stack(
-            self.num_context_lines, source_loading_enabled=self.save_source_context
+            self.num_context_lines,
+            source_loading_enabled=self.save_source_context,
+            disable_col_offset=False,
         )
         new_output_node.func_time = 0
         new_output_node.func_rng_states = (

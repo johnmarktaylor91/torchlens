@@ -318,7 +318,9 @@ def _build_shared_fields_dict(
     fields_dict["func_applied"] = func
     fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = _get_func_call_stack(
-        self.num_context_lines, source_loading_enabled=self.save_source_context
+        self.num_context_lines,
+        source_loading_enabled=self.save_source_context,
+        disable_col_offset=False,
     )
     fields_dict["func_time"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
