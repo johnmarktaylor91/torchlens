@@ -24,6 +24,7 @@ from .user_funcs import (
     validate_batch_of_models_and_inputs,
 )
 from .options import StreamingOptions, VisualizationOptions
+from ._training_validation import TrainingModeConfigError
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from ._io.bundle import save, load, cleanup_tmp
 from ._io import rehydrate_nested
@@ -65,3 +66,44 @@ def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
     """
 
     return model_log.preview_fastlog(*args, **kwargs)
+
+
+__all__ = [
+    "FuncCallLocation",
+    "LayerAccessor",
+    "LayerLog",
+    "LayerPassLog",
+    "MetadataInvariantError",
+    "ModelLog",
+    "ModuleAccessor",
+    "ModuleLog",
+    "ModulePassLog",
+    "NodeSpec",
+    "ParamLog",
+    "StreamingOptions",
+    "TensorLog",
+    "TrainingModeConfigError",
+    "VisualizationOptions",
+    "build_render_audit",
+    "check_metadata_invariants",
+    "cleanup_tmp",
+    "fastlog",
+    "get_model_metadata",
+    "load",
+    "log_forward_pass",
+    "log_model_metadata",
+    "model_log_to_dagua_graph",
+    "preview_fastlog",
+    "rehydrate_nested",
+    "render_lines_to_html",
+    "render_model_log_with_dagua",
+    "save",
+    "show_model_graph",
+    "summary",
+    "unwrap_torch",
+    "validate_batch_of_models_and_inputs",
+    "validate_forward_pass",
+    "validate_saved_activations",
+    "wrap_torch",
+    "wrapped",
+]
