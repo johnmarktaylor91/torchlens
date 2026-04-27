@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._deprecations import warn_deprecated_alias
+from .._training_validation import reject_compiled_model
 from .._literals import (
     VisDirectionLiteral,
     VisModeLiteral,
@@ -1185,6 +1186,9 @@ class ModelLog:
             :func:`torchlens.capture.trace.save_new_activations`.
         """
         from ..capture.trace import save_new_activations as _impl
+
+        if train_mode is True:
+            reject_compiled_model(model, api_name="ModelLog.save_new_activations")
 
         return _impl(
             self,

@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 from .._deprecations import MISSING, MissingType
-from .._training_validation import TrainingModeConfigError
+from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..decoration.model_prep import _ensure_model_prepared
 from ..options import StreamingOptions
 from ._orchestrator import _empty_recording, _run_predicate_pass
@@ -152,6 +152,7 @@ class Recorder:
             If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
         """
 
+        reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
         unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, streaming)
         default_op = _resolve_train_mode_default(
             field_name="default_op",

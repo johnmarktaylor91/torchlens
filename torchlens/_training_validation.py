@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from torch import nn
 
 _NON_GRAD_DTYPES = {
     torch.int8,
@@ -27,6 +28,44 @@ class TrainingModeConfigError(ValueError):
     both are ``ValueError`` subclasses for user configuration mistakes, but
     this class specifically covers autograd-retaining training captures.
     """
+
+
+def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
+    """Reject ``torch.compile`` wrappers for training-mode capture APIs.
+
+    Parameters
+    ----------
+    model:
+        Candidate model supplied by the user.
+    api_name:
+        Public API name used in the error message.
+
+    Raises
+    ------
+    RuntimeError
+        If ``model`` is a compiled ``OptimizedModule`` wrapper.
+    """
+
+    try:
+        from torch._dynamo.eval_frame import OptimizedModule
+    except ImportError:
+        optimized_module_type: type[nn.Module] | None = None
+    else:
+        optimized_module_type = OptimizedModule
+
+    is_optimized_module = optimized_module_type is not None and isinstance(
+        model, optimized_module_type
+    )
+    if not is_optimized_module:
+        is_optimized_module = model.__class__.__name__ == "OptimizedModule"
+
+    if is_optimized_module:
+        raise RuntimeError(
+            f"{api_name} does not support torch.compile'd models in train_mode: "
+            "dynamo replaces the Python forward with a compiled graph that "
+            "bypasses TorchLens' function wrappers. Call the API on the "
+            "original un-compiled model."
+        )
 
 
 def validate_training_compatibility(

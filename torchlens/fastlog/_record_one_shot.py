@@ -7,6 +7,7 @@ from typing import Any
 from torch import nn
 
 from .._deprecations import MISSING, MissingType
+from .._training_validation import reject_compiled_model
 from ..options import StreamingOptions
 from ._recorder import Recorder
 from ._validation import validate_postprocess
@@ -60,6 +61,7 @@ def record(
         Fastlog recording, optionally with the model output.
     """
 
+    reject_compiled_model(model, api_name="torchlens.fastlog.record")
     validate_postprocess(postprocess)
     with Recorder(
         model,
