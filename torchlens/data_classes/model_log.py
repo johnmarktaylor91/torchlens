@@ -152,6 +152,7 @@ class ModelLog:
         "keep_unsaved_layers": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
         "activation_postfunc_repr": FieldPolicy.KEEP,
+        "input_metadata": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
         "current_function_call_barcode": FieldPolicy.KEEP,
@@ -320,6 +321,7 @@ class ModelLog:
         self.activation_postfunc_repr = (
             repr(activation_postfunc) if activation_postfunc is not None else None
         )
+        self.input_metadata: Dict[str, Any] = {}
         self.gradient_postfunc = gradient_postfunc
         self.gradient_postfunc_repr = (
             repr(gradient_postfunc) if gradient_postfunc is not None else None
@@ -551,6 +553,7 @@ class ModelLog:
             defaults={
                 "io_format_version": IO_FORMAT_VERSION,
                 "activation_postfunc_repr": None,
+                "input_metadata": {},
                 "gradient_postfunc": None,
                 "gradient_postfunc_repr": None,
                 "gradients_to_save": "all",

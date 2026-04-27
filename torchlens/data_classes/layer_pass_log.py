@@ -117,6 +117,7 @@ class LayerPassLog:
         "has_saved_activations": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
+        "extra_data": FieldPolicy.KEEP,
         "detach_saved_tensor": FieldPolicy.KEEP,
         "args_captured": FieldPolicy.KEEP,
         "captured_args": FieldPolicy.BLOB_RECURSIVE,
@@ -290,6 +291,7 @@ class LayerPassLog:
         self.has_saved_activations = fields_dict["has_saved_activations"]
         self.output_device = fields_dict["output_device"]
         self.activation_postfunc = fields_dict["activation_postfunc"]
+        self.extra_data: Dict[str, Any] = fields_dict["extra_data"]
         self.detach_saved_tensor = fields_dict["detach_saved_tensor"]
         self.args_captured = fields_dict["args_captured"]
         self.captured_args = fields_dict["captured_args"]
@@ -664,6 +666,7 @@ class LayerPassLog:
                 "gradient_ref": None,
                 "_pending_blob_id": None,
                 "_pending_gradient_blob_id": None,
+                "extra_data": {},
             },
         )
         self.__dict__.update(state)
