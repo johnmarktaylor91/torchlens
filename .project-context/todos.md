@@ -6,6 +6,55 @@
 
 ## Improvements (Nice-to-Have)
 
+### Multi-trace V2 (deferred from 2026-04-27 sprint design)
+
+These were scoped OUT of the multi-trace MVP (TraceBundle + TraceOverlay)
+but are natural follow-ons. Pick up after MVP ships.
+
+- **Branch-divergence detection.** Soft version of "counterfactual
+  tracing." Given a TraceOverlay, surface "branch-divergence nodes"
+  where execution paths split, expose as a queryable list. NOT true
+  forced-branch enumeration -- just detection of where forward paths
+  diverged across the bundled inputs.
+
+- **True counterfactual branch enumeration** (forced-branch execution).
+  Programmatically force both arms of every Python `if` in a dynamic
+  network. Hard problem -- requires either symbolic tracing
+  (incompatible with TorchLens's runtime model), bytecode hacking
+  (fragile), or an intervention API where the user explicitly drives
+  forced inputs to coax branches. Defer indefinitely; the
+  branch-divergence detection above is the practical 80% solution.
+
+- **Streaming aggregate over a dataloader.** `tl.aggregate(model,
+  dataloader, metrics=[...])` -- consumes traces from a generator,
+  computes running per-node statistics (mean, var, RDM,
+  dimensionality), discards raw activations. For "10K images through
+  ResNet50" workflows where holding traces is impractical. Function,
+  not a class.
+
+- **Interactive viewer for bundles/overlays.** D3.js or anywidget-based
+  Jupyter widget. Pan/zoom, hover tooltips, click-to-expand node
+  visualizations, path highlighting, export to standalone HTML. After
+  graphviz MVP is stable.
+
+- **Custom node visualizations.** Pluggable per-node display: PCA-RGB
+  for conv layers, MDS scatter for linear layers, histograms for
+  activations, dimensionality estimates. Bundle/Overlay would accept
+  `node_display={'conv.*': 'pca_rgb', ...}` mappings.
+
+- **Convenience constructors with intervention APIs.** `tl.zero(node)`,
+  `tl.steer(node, vector)`, `tl.compare(model, input, {...})`,
+  `tl.sweep(model, input, {...})`. Interventions produce a new
+  ModelLog (never mix clean and intervened activations in a Bundle).
+  Out of scope for MVP; design once Bundle/Overlay are stable.
+
+- **Rename ModelLog -> Trace** (one-way door). Clean public-API
+  migration -- `tl.trace()` constructor, `Trace` class. Major
+  breaking change to a published-and-cited package. Do as a separate
+  deliberate migration, never bundled with feature work.
+
+### Other improvements
+
 - Rethink the parameter name `activation_postfunc` itself. Current name is
   awkward (`-postfunc` suffix) and the semantic now reads as a "transform"
   hook, not a "post-processing function" (after the raw-vs-transformed

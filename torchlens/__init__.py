@@ -52,7 +52,7 @@ from .visualization import (
 
 # ---- Public API: multi-trace analysis ------------------------------------
 
-from .multi_trace import NodeView, TraceBundle, bundle
+from .multi_trace import NodeView, TraceBundle, bundle, show_bundle_graph
 
 # ---- Public API: decoration lifecycle ------------------------------------
 
@@ -118,6 +118,7 @@ __all__ = [
     "render_model_log_with_dagua",
     "save",
     "show_backward_graph",
+    "show_bundle_graph",
     "show_model_graph",
     "summary",
     "unwrap_torch",
