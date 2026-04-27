@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v2.10.0 (2026-04-27)
+
+### Features
+
+- **data-classes**: Add extra_data dict to layer logs and input_metadata to ModelLog
+  ([`f589700`](https://github.com/johnmarktaylor91/torchlens/commit/f589700df63a87102c6193da89c608262e936608))
+
+
 ## v2.9.0 (2026-04-27)
 
 ### Features
