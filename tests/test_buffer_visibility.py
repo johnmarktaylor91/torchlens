@@ -230,6 +230,24 @@ def test_always_shows_all_no_marker(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
+def test_visible_buffer_uses_cylinder_shape(tmp_path: Path) -> None:
+    """Visible buffers render as white cylinders instead of gray boxes."""
+
+    log = _log_model(_BatchNormWithArchitecturalBuffer())
+    try:
+        dot_source = _render_dot(log, tmp_path, "always")
+    finally:
+        log.cleanup()
+
+    buffer_node_lines = _buffer_node_lines(dot_source)
+    causal_mask_lines = [line for line in buffer_node_lines if "causal_mask" in line]
+
+    assert len(causal_mask_lines) == 1
+    assert "shape=cylinder" in causal_mask_lines[0]
+    assert "#888888" not in causal_mask_lines[0]
+
+
+@pytest.mark.smoke
 def test_legacy_true_matches_always(tmp_path: Path) -> None:
     """Legacy ``True`` buffer visibility maps to ``always``."""
 
