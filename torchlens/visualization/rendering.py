@@ -68,6 +68,11 @@ from ..data_classes.layer_log import LayerLog
 from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
 from .node_spec import NodeSpec, render_lines_to_html
 from .code_panel import CodePanelOption, render_code_panel_subgraph, resolve_code_panel_source
+from ._render_utils import (
+    compute_module_penwidth,
+    direction_to_rankdir,
+    make_module_cluster_attrs,
+)
 
 if TYPE_CHECKING:
     from ..data_classes.grad_fn_log import GradFnLog
@@ -180,10 +185,9 @@ DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
 _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
 
-# -- Module subgraph border widths --
-MAX_MODULE_PENWIDTH = 5
-MIN_MODULE_PENWIDTH = 2
-PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
+# Module subgraph border widths live in ._render_utils -- both this file
+# and ``multi_trace/visualization.py`` use ``compute_module_penwidth`` so
+# bundle and ModelLog clusters scale identically by depth.
 
 # Commutative functions: argument order doesn't matter, so we skip arg-position
 # labels on their incoming edges to reduce visual clutter.
@@ -502,14 +506,7 @@ def render_graph(
             vis_mode=vis_mode,
         )
 
-    if direction == "bottomup":
-        rankdir = "BT"
-    elif direction == "leftright":
-        rankdir = "LR"
-    elif direction == "topdown":
-        rankdir = "TB"
-    else:
-        raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
+    rankdir = direction_to_rankdir(direction)
 
     # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
     from .elk_layout import get_node_placement_engine
@@ -753,14 +750,7 @@ def render_backward_graph(
         raise ValueError("No backward graph is available; call log_backward(loss) first.")
     _ = collapsed_node_spec_fn, vis_node_mode
 
-    if direction == "bottomup":
-        rankdir = "BT"
-    elif direction == "leftright":
-        rankdir = "LR"
-    elif direction == "topdown":
-        rankdir = "TB"
-    else:
-        raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
+    rankdir = direction_to_rankdir(direction)
 
     split_outpath = vis_outpath.split(".")
     if split_outpath[-1] in [
@@ -3521,22 +3511,25 @@ def _setup_subgraphs_recurse(
 
     else:  # Leaf of this branch: create the subgraph and add all edges.
         with starting_subgraph.subgraph(name=cluster_name) as s:
-            # Penwidth scales with depth: outermost modules get thickest
-            # borders, deepest modules get thinnest.  Provides visual hierarchy.
-            nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
-            pen_width = MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
+            # Penwidth + cluster attrs come from ``_render_utils`` so the
+            # bundle renderer in ``multi_trace/visualization.py`` can build
+            # equivalent clusters with the same formula and label format.
+            pen_width = compute_module_penwidth(nesting_depth, max_nesting_depth)
             if module_edge_dict[subgraph_name]["has_input_ancestor"]:
                 line_style = "solid"
             else:
                 line_style = "dashed"
 
-            module_args = {
-                "label": f"<<B>@{subgraph_title}</B><br align='left'/>({module_type})<br align='left'/>>",
-                "labelloc": "b",
-                "style": f"filled,{line_style}",
-                "fillcolor": "white",
-                "penwidth": str(pen_width),
-            }
+            # ``title_already_escaped=True`` preserves the existing byte-level
+            # output: ModelLog subgraph titles never contain HTML specials, so
+            # the title is fed through verbatim, matching the legacy format.
+            module_args = make_module_cluster_attrs(
+                title=subgraph_title,
+                module_type=module_type,
+                line_style=line_style,
+                penwidth=pen_width,
+                title_already_escaped=True,
+            )
 
             for arg_name, arg_val in overrides.module.items():  # type: ignore[union-attr]
                 if callable(arg_val):

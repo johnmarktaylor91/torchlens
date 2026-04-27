@@ -1,12 +1,17 @@
 """Internal Graphviz rendering helpers shared across rendering paths.
 
-Private module: not part of the public API. Provides ModelLog-agnostic
+Private module: not part of the public API. Provides ModelLog/Bundle-agnostic
 primitives that the single-trace ``rendering.py`` and the multi-trace
 ``multi_trace/visualization.py`` both rely on, so we have one canonical
-implementation of file-format dispatch instead of two divergent copies.
+implementation of file-format dispatch, direction translation, module
+cluster styling, and HTML label escaping instead of two divergent copies.
 
 Keep this module narrow on purpose -- only primitives that take no
 ModelLog/Bundle context and can be reasoned about as pure utilities.
+The orchestration that knows WHICH nodes / edges / module paths to use
+lives in the per-input-shape callers (``rendering.render_graph`` for
+ModelLog, ``multi_trace/visualization.show_bundle_graph`` for
+TraceBundle).
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ from __future__ import annotations
 import os
 import subprocess
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 import graphviz
 
@@ -31,6 +36,14 @@ _KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff")
 # legacy literal that lived inside ``rendering.render_graph``.
 RENDER_TIMEOUT_SECONDS = 120
 
+# -- Module subgraph border widths (shared between ModelLog and bundle paths)
+# Outermost modules get the thickest border; deeper modules thin out by depth
+# fraction so visual hierarchy reads at a glance.  These constants are the
+# canonical source for both ``rendering.py`` and the bundle renderer.
+MAX_MODULE_PENWIDTH = 5
+MIN_MODULE_PENWIDTH = 2
+PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
+
 
 def strip_known_extension(outpath: str) -> str:
     """Strip a recognised image extension off ``outpath`` if present.
@@ -45,6 +58,122 @@ def strip_known_extension(outpath: str) -> str:
     if len(parts) > 1 and parts[-1].lower() in _KNOWN_EXTS:
         return ".".join(parts[:-1])
     return outpath
+
+
+def direction_to_rankdir(direction: str) -> str:
+    """Translate a TorchLens vis-direction literal into a Graphviz ``rankdir``.
+
+    Accepted inputs: ``'bottomup'``, ``'topdown'``, ``'leftright'``.  Raises
+    ``ValueError`` on anything else so callers don't silently render with the
+    Graphviz default when a typo'd direction sneaks through.
+    """
+
+    if direction == "bottomup":
+        return "BT"
+    if direction == "leftright":
+        return "LR"
+    if direction == "topdown":
+        return "TB"
+    raise ValueError(
+        f"direction must be one of 'bottomup', 'topdown', or 'leftright'; got {direction!r}"
+    )
+
+
+def compute_module_penwidth(nesting_depth: int, max_nesting_depth: int) -> float:
+    """Return the cluster border width for a module at ``nesting_depth``.
+
+    ``nesting_depth`` is 0-based (outermost is depth 0).  Outermost modules
+    get the maximum penwidth; deepest modules get the minimum.  When the
+    overall hierarchy has only one level (``max_nesting_depth == 0`` or
+    ``1``) we still return a sensible value so callers don't have to
+    special-case shallow models.
+    """
+
+    if max_nesting_depth <= 0:
+        return float(MIN_MODULE_PENWIDTH + PENWIDTH_RANGE)
+    nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
+    nesting_fraction = max(0.0, min(1.0, nesting_fraction))
+    return MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
+
+
+def html_escape(value: str) -> str:
+    """Escape the three Graphviz HTML-label specials.
+
+    Graphviz HTML-like labels reserve ``<``, ``>``, and ``&``; embedding any
+    of those raw breaks the parser.  Mirrors ``html.escape`` minus the
+    ``quote`` argument because Graphviz attribute values are themselves
+    already inside double quotes (no need to escape ``"``).
+    """
+
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def format_node_html(lines: Iterable[str]) -> str:
+    """Wrap pre-escaped label lines into a Graphviz HTML-like label string.
+
+    The caller is responsible for escaping content (use :func:`html_escape`)
+    -- a deliberate choice so callers can embed ``<B>``/``<I>``/``<FONT>``
+    tags where they want emphasis without us double-escaping them.
+    """
+
+    return "<" + "<BR/>".join(lines) + ">"
+
+
+def make_module_cluster_label(
+    title: str,
+    module_type: str | None = None,
+    *,
+    title_already_escaped: bool = False,
+) -> str:
+    """Return the HTML-style label string for a module cluster.
+
+    Mirrors the legacy format used by ``rendering._setup_subgraphs_recurse``:
+    ``<<B>@title</B><br align='left'/>(type)<br align='left'/>>``.  The
+    ``module_type`` line is omitted when no type information is available
+    (which is the case for bundle clusters because the supergraph stores
+    the module path string but not the underlying module class).
+
+    ``title_already_escaped`` lets the ModelLog path keep its existing
+    raw-title behaviour (where the title may itself contain ``:`` and is
+    fed verbatim) while the bundle path can opt-in to escaping arbitrary
+    user-provided strings.
+    """
+
+    title_str = title if title_already_escaped else html_escape(title)
+    if module_type:
+        return (
+            f"<<B>@{title_str}</B><br align='left'/>({html_escape(module_type)})<br align='left'/>>"
+        )
+    return f"<<B>@{title_str}</B><br align='left'/>>"
+
+
+def make_module_cluster_attrs(
+    *,
+    title: str,
+    module_type: str | None,
+    line_style: str,
+    penwidth: float,
+    fillcolor: str = "white",
+    title_already_escaped: bool = False,
+) -> dict[str, str]:
+    """Return the standard cluster attribute dict used by both renderers.
+
+    Centralises the Graphviz attrs that ModelLog and bundle clusters share:
+    HTML label, bottom labelloc, ``filled,<line_style>`` style, fill colour,
+    and depth-aware penwidth.  Module-type information is optional: bundle
+    clusters omit it because the supergraph doesn't preserve the module
+    class, while ModelLog clusters always pass it through.
+    """
+
+    return {
+        "label": make_module_cluster_label(
+            title, module_type, title_already_escaped=title_already_escaped
+        ),
+        "labelloc": "b",
+        "style": f"filled,{line_style}",
+        "fillcolor": fillcolor,
+        "penwidth": str(penwidth),
+    }
 
 
 def render_dot_to_file(

@@ -1036,9 +1036,8 @@ def render_elk_direct(
         FROZEN_PARAMS_BG_COLOR,
         DEFAULT_BG_COLOR,
         COMMUTE_FUNCS,
-        MIN_MODULE_PENWIDTH,
-        PENWIDTH_RANGE,
     )
+    from ._render_utils import compute_module_penwidth
     from .modes import COLLAPSED_MODE_REGISTRY
     from .node_spec import NodeSpec
 
@@ -1433,8 +1432,7 @@ def render_elk_direct(
         else:
             title = mod_addr
 
-        nf = (max_nest - depth) / max_nest if max_nest > 0 else 1
-        pw = MIN_MODULE_PENWIDTH + nf * PENWIDTH_RANGE
+        pw = compute_module_penwidth(depth, max_nest)
         ls = "solid" if module_has_ancestor.get(mod_key) else "dashed"
 
         cluster_label = f'<<B>@{title}</B><br align="left"/>({mod_type})<br align="left"/>>'
