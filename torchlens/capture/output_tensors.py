@@ -33,6 +33,7 @@ pause_logging usage:
 """
 
 import copy
+import time
 from collections import defaultdict
 from math import prod
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
@@ -71,6 +72,10 @@ from .tensor_tracking import (
     _update_tensor_containing_modules,
 )
 from ..data_classes.internal_types import FuncExecutionContext
+from ..fastlog._predicate import _evaluate_keep_op
+from ..fastlog._record_context import _build_record_context
+from ..fastlog._state import get_active_recording_state
+from ..fastlog.types import ActivationRecord, CaptureSpec
 from .salient_args import extract_salient_args
 from .source_tensors import _get_input_module_info
 
@@ -121,6 +126,103 @@ def log_function_output_tensors(
             exec_ctx,
             is_bottom_level_func,
         )
+    elif self.logging_mode == "predicate":
+        log_function_output_tensors_predicate(
+            self,
+            func_name,
+            args,
+            out_orig,
+            is_bottom_level_func,
+        )
+
+
+def _record_predicate_output(
+    ctx,
+    out: torch.Tensor,
+    spec: CaptureSpec,
+) -> None:
+    """Store a predicate-selected operation output."""
+
+    if not spec.save_activation and not spec.save_metadata:
+        return
+    state = get_active_recording_state()
+    ram_payload = None
+    disk_payload = None
+    if spec.save_activation:
+        ram_payload, disk_payload = state.resolve_storage(out, spec)
+    state.add_record(
+        ActivationRecord(
+            ctx=ctx,
+            spec=spec,
+            ram_payload=ram_payload,
+            disk_payload=disk_payload,
+        )
+    )
+
+
+def log_function_output_tensors_predicate(
+    self,
+    func_name: str,
+    args: Tuple[Any],
+    out_orig: Any,
+    is_bottom_level_func: bool,
+) -> None:
+    """Predicate-mode logging for decorated torch function outputs."""
+
+    state = get_active_recording_state()
+    layer_type = func_name.lower().replace("_", "")
+    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, {})
+    parent_labels = tuple(get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw"))
+    out_iter = ensure_iterable(out_orig)
+
+    for output_index, out in enumerate(out_iter):
+        if not _output_should_be_logged(out, is_bottom_level_func):
+            continue
+        self._layer_counter += 1
+        self._raw_layer_type_counter[layer_type] += 1
+        state.op_counts[layer_type] = state.op_counts.get(layer_type, 0) + 1
+        state.op_index += 1
+        state.event_index += 1
+        creation_order = self._layer_counter
+        layer_type_num = self._raw_layer_type_counter[layer_type]
+        tensor_label_raw = f"{layer_type}_{layer_type_num}_{creation_order}_raw"
+        out.tl_tensor_label_raw = tensor_label_raw
+        module_frame = state.module_stack[-1] if state.module_stack else None
+        ctx = _build_record_context(
+            kind="op",
+            layer_pass_log_or_op_data={
+                "label": tensor_label_raw,
+                "raw_label": tensor_label_raw,
+                "tensor_label_raw": tensor_label_raw,
+                "creation_order": creation_order,
+                "layer_type": layer_type,
+                "layer_type_num": layer_type_num,
+                "func_name": func_name,
+                "parent_labels": parent_labels,
+                "tensor": out,
+                "output_index": output_index,
+                "is_bottom_level_func": is_bottom_level_func,
+                "module_address": module_frame.module_address if module_frame else None,
+                "module_type": module_frame.module_type if module_frame else None,
+                "module_pass_index": module_frame.pass_index if module_frame else None,
+            },
+            module_stack=state.module_stack,
+            history=tuple(state.history),
+            op_counts=state.op_counts,
+            pass_index=state.pass_index,
+            event_index=state.event_index,
+            op_index=state.op_index,
+            time_since_pass_start=time.time() - self.pass_start_time,
+            include_source_events=state.options.include_source_events,
+            sample_id=state.sample_id,
+        )
+        try:
+            spec = _evaluate_keep_op(ctx, state.options)
+            _record_predicate_output(ctx, out, spec)
+        except Exception as exc:
+            state.handle_predicate_exception(ctx, exc)
+        finally:
+            state.append_context(ctx)
 
 
 def _build_graph_relationship_fields(
@@ -318,7 +420,9 @@ def _build_shared_fields_dict(
     fields_dict["func_applied"] = func
     fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = _get_func_call_stack(
-        self.num_context_lines, source_loading_enabled=self.save_source_context
+        self.num_context_lines,
+        source_loading_enabled=self.save_source_context,
+        disable_col_offset=False,
     )
     fields_dict["func_time"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states

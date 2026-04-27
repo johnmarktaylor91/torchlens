@@ -288,7 +288,7 @@ class ModelLog:
         self._pass_finished = False
         # "exhaustive" captures all metadata; "fast" reuses exhaustive-pass
         # structure, only re-capturing tensor contents.
-        self.logging_mode = "exhaustive"
+        self.logging_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
         self._all_layers_logged = False
         self._all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
@@ -778,6 +778,39 @@ class ModelLog:
             vis_renderer=vis_renderer,
             vis_theme=vis_theme,
             code_panel=code_panel,
+        )
+
+    def preview_fastlog(
+        self,
+        predicate: Optional[Callable] = None,
+        keep_op: Optional[Callable] = None,
+        keep_module: Optional[Callable] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Render a fastlog predicate preview for this model graph.
+
+        Parameters
+        ----------
+        predicate, keep_op, keep_module:
+            Predicate callables that receive synthesized fastlog ``RecordContext``
+            objects.
+        **kwargs:
+            Forwarded to :func:`torchlens.visualization.fastlog_preview.preview_fastlog`.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source.
+        """
+
+        from ..visualization.fastlog_preview import preview_fastlog as _impl
+
+        return _impl(
+            self,
+            predicate=predicate,
+            keep_op=keep_op,
+            keep_module=keep_module,
+            **kwargs,
         )
 
     def summary(

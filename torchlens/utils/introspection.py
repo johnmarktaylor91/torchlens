@@ -24,6 +24,44 @@ from torch import nn
 _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
 
 
+def _get_code_qualname(frame: FrameType) -> Optional[str]:
+    """Return ``co_qualname`` when available on this Python version.
+
+    Args:
+        frame: Stack frame whose code object should be inspected.
+
+    Returns:
+        Qualified code object name, or None when unavailable.
+    """
+    if sys.version_info < (3, 11):
+        return None
+    return getattr(frame.f_code, "co_qualname", None)
+
+
+def _get_col_offset(frame: FrameType) -> Optional[int]:
+    """Return the current instruction's column offset when available.
+
+    Args:
+        frame: Stack frame whose current bytecode instruction should be inspected.
+
+    Returns:
+        Column offset for the current instruction, or None when unavailable.
+    """
+    if sys.version_info < (3, 11):
+        return None
+    try:
+        for instruction in dis.get_instructions(frame.f_code):
+            if instruction.offset != frame.f_lasti:
+                continue
+            positions = instruction.positions
+            if positions is None:
+                return None
+            return positions.col_offset
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
 def get_vars_of_type_from_obj(
     obj: Any,
     which_type: Type,
@@ -373,7 +411,11 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
-def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: bool = True) -> List:
+def _get_func_call_stack(
+    num_context_lines: int = 7,
+    source_loading_enabled: bool = True,
+    disable_col_offset: bool = False,
+) -> List:
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
@@ -390,6 +432,8 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
             ``2 * num_context_lines + 1``.
         source_loading_enabled: Whether each ``FuncCallLocation`` should
             lazily load source text and function metadata on demand.
+        disable_col_offset: If True, skip bytecode inspection for column
+            offsets and store None for ``col_offset``.
 
     Returns:
         List[FuncCallLocation] ordered shallow-to-deep.
@@ -405,30 +449,8 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
     def _is_torchlens_internal(filename: str) -> bool:
         return filename.startswith(_TORCHLENS_PKG_DIR)
 
-    def _get_code_qualname(frame: FrameType) -> Optional[str]:
-        """Return ``co_qualname`` when available on this Python version."""
-        if sys.version_info < (3, 11):
-            return None
-        return getattr(frame.f_code, "co_qualname", None)
-
-    def _get_col_offset(frame: FrameType) -> Optional[int]:
-        """Return the current instruction's column offset when available."""
-        if sys.version_info < (3, 11):
-            return None
-        try:
-            for instruction in dis.get_instructions(frame.f_code):
-                if instruction.offset != frame.f_lasti:
-                    continue
-                positions = instruction.positions
-                if positions is None:
-                    return None
-                return positions.col_offset
-        except (TypeError, ValueError):
-            return None
-        return None
-
     # Phase 1: Collect lightweight frame data — only co_filename, co_name, f_lineno.
-    # Do NOT do f_locals/f_globals dict lookups yet (expensive, ~50/call).
+    # Do NOT do f_locals/f_globals dict lookups or bytecode walks yet.
     raw_frames = []
     frame = sys._getframe(0)
     while frame is not None:
@@ -438,8 +460,6 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
                 frame.f_code.co_name,
                 frame.f_lineno,
                 frame.f_code.co_firstlineno,
-                _get_code_qualname(frame),
-                _get_col_offset(frame),
                 frame,  # keep reference for phase 2 func_obj lookup
             )
         )
@@ -454,7 +474,7 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
     filtered_indices = []
 
     for idx in range(len(raw_frames) - 1, -1, -1):
-        filename, func_name, lineno, _, _, _, frame_ref = raw_frames[idx]
+        filename, func_name, lineno, _, frame_ref = raw_frames[idx]
 
         # Skip torchlens internals and PyTorch _call_impl
         if _is_torchlens_internal(filename):
@@ -466,7 +486,7 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
             tracking = True
             # Look for the user-script frame that called log_forward_pass
             for j in range(idx + 1, len(raw_frames)):
-                j_filename, j_func_name, _, _, _, _, _ = raw_frames[j]
+                j_filename, j_func_name, _, _, _ = raw_frames[j]
                 if not _is_torchlens_internal(j_filename) and "_call_impl" not in j_func_name:
                     pre_forward_frame_idx = j
                     break
@@ -479,12 +499,10 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
         filtered_indices.append(pre_forward_frame_idx)
 
     # Phase 2: Build FuncCallLocation objects only for surviving frames (~5-10).
-    # Do the expensive f_locals/f_globals dict lookup only here.
+    # Do expensive f_locals/f_globals lookups and bytecode walks only here.
     result = []
     for idx in filtered_indices:
-        filename, func_name, lineno, code_firstlineno, code_qualname, col_offset, frame_ref = (
-            raw_frames[idx]
-        )
+        filename, func_name, lineno, code_firstlineno, frame_ref = raw_frames[idx]
         loc = FuncCallLocation(
             file=filename,
             line_number=lineno,
@@ -496,8 +514,8 @@ def _get_func_call_stack(num_context_lines: int = 7, source_loading_enabled: boo
                 else None
             ),
             code_firstlineno=code_firstlineno,
-            code_qualname=code_qualname,
-            col_offset=col_offset,
+            code_qualname=_get_code_qualname(frame_ref),
+            col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
             source_loading_enabled=source_loading_enabled,
         )
         result.append(loc)

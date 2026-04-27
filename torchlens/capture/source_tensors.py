@@ -22,6 +22,7 @@ recognized as the same layer).
 """
 
 from collections import defaultdict
+import time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import torch
@@ -32,6 +33,10 @@ from ..utils.tensor_utils import get_tensor_memory_amount
 from ..utils.rng import log_current_rng_states
 from ..data_classes.buffer_log import BufferLog
 from ..data_classes.layer_pass_log import LayerPassLog
+from ..fastlog._predicate import _evaluate_keep_op
+from ..fastlog._record_context import _build_record_context
+from ..fastlog._state import get_active_recording_state
+from ..fastlog.types import ActivationRecord
 
 from .tensor_tracking import _add_backward_hook, _update_tensor_containing_modules
 
@@ -55,6 +60,79 @@ def log_source_tensor(self, t: torch.Tensor, source: str, extra_address: Optiona
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self.logging_mode == "fast":
         log_source_tensor_fast(self, t, source)
+    elif self.logging_mode == "predicate":
+        log_source_tensor_predicate(self, t, source, extra_address)
+
+
+def log_source_tensor_predicate(
+    self,
+    t: torch.Tensor,
+    source: str,
+    extra_addr: Optional[str] = None,
+) -> None:
+    """Predicate-mode source tensor logging for inputs and buffers."""
+
+    if source not in {"input", "buffer"}:
+        raise ValueError("source must be either 'input' or 'buffer'")
+    state = get_active_recording_state()
+    self._layer_counter += 1
+    self._raw_layer_type_counter[source] += 1
+    state.event_index += 1
+    creation_order = self._layer_counter
+    layer_type_num = self._raw_layer_type_counter[source]
+    tensor_label = f"{source}_{layer_type_num}_raw"
+    setattr(t, "tl_tensor_label_raw", tensor_label)
+    if source == "input":
+        self.input_layers.append(tensor_label)
+    else:
+        self.buffer_layers.append(tensor_label)
+    module_frame = state.module_stack[-1] if state.module_stack else None
+    ctx = _build_record_context(
+        kind="input" if source == "input" else "buffer",
+        layer_pass_log_or_op_data={
+            "label": tensor_label,
+            "raw_label": tensor_label,
+            "tensor_label_raw": tensor_label,
+            "creation_order": creation_order,
+            "layer_type": source,
+            "layer_type_num": layer_type_num,
+            "func_name": None,
+            "input_output_address": extra_addr,
+            "tensor": t,
+            "module_address": module_frame.module_address if module_frame else None,
+            "module_type": module_frame.module_type if module_frame else None,
+            "module_pass_index": module_frame.pass_index if module_frame else None,
+        },
+        module_stack=state.module_stack,
+        history=tuple(state.history),
+        op_counts=state.op_counts,
+        pass_index=state.pass_index,
+        event_index=state.event_index,
+        op_index=None,
+        time_since_pass_start=time.time() - self.pass_start_time,
+        include_source_events=state.options.include_source_events,
+        sample_id=state.sample_id,
+    )
+    try:
+        if state.options.include_source_events:
+            spec = _evaluate_keep_op(ctx, state.options)
+            if spec.save_activation or spec.save_metadata:
+                ram_payload = None
+                disk_payload = None
+                if spec.save_activation:
+                    ram_payload, disk_payload = state.resolve_storage(t, spec)
+                state.add_record(
+                    ActivationRecord(
+                        ctx=ctx,
+                        spec=spec,
+                        ram_payload=ram_payload,
+                        disk_payload=disk_payload,
+                    )
+                )
+    except Exception as exc:
+        state.handle_predicate_exception(ctx, exc)
+    finally:
+        state.append_context(ctx)
 
 
 def log_source_tensor_exhaustive(
@@ -167,7 +245,9 @@ def log_source_tensor_exhaustive(
         "func_applied": None,
         "func_name": "none",
         "func_call_stack": _get_func_call_stack(
-            self.num_context_lines, source_loading_enabled=self.save_source_context
+            self.num_context_lines,
+            source_loading_enabled=self.save_source_context,
+            disable_col_offset=False,
         ),
         "func_time": 0,
         "flops_forward": 0,

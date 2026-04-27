@@ -27,6 +27,7 @@ from .options import StreamingOptions, VisualizationOptions
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from ._io.bundle import save, load, cleanup_tmp
 from ._io import rehydrate_nested
+from . import fastlog
 
 # ---- Public API: data classes users interact with ------------------------
 
@@ -45,3 +46,22 @@ from .visualization import (
 # ---- Public API: decoration lifecycle ------------------------------------
 
 from .decoration import wrap_torch, unwrap_torch, wrapped
+
+
+def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
+    """Render a fastlog predicate preview for a model log.
+
+    Parameters
+    ----------
+    model_log:
+        ModelLog to render.
+    *args, **kwargs:
+        Forwarded to ``model_log.preview_fastlog``.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source.
+    """
+
+    return model_log.preview_fastlog(*args, **kwargs)
