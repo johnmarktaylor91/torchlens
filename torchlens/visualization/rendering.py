@@ -170,7 +170,6 @@ OUTPUT_COLOR = "#ff9999"  # Light red/salmon
 PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no ParamLog available)
 TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
 FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
-BUFFER_NODE_COLOR = "#888888"  # Medium gray for buffer nodes
 GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
 DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
@@ -1588,8 +1587,8 @@ def _get_node_address_shape_color(
         else:
             buffer_address = f"{source_node.buffer_address}:{source_node.buffer_pass}"
         node_address = "<br/>@" + buffer_address
-        node_shape = "box"
-        node_color = BUFFER_NODE_COLOR
+        node_shape = "cylinder"
+        node_color = "black"
     elif node.is_output_layer or node.is_input_layer:
         node_address = "<br/>@" + node.io_role
         node_shape = "oval"
