@@ -797,8 +797,7 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
                 if enter_spec.save_activation or enter_spec.save_metadata:
                     state.add_record(ActivationRecord(ctx=enter_ctx, spec=enter_spec))
             except Exception as exc:
-                state.add_predicate_failure(enter_ctx, exc)
-                raise
+                state.handle_predicate_exception(enter_ctx, exc)
             finally:
                 state.append_context(enter_ctx)
             try:
@@ -828,8 +827,7 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
                     if exit_spec.save_activation or exit_spec.save_metadata:
                         state.add_record(ActivationRecord(ctx=exit_ctx, spec=exit_spec))
                 except Exception as exc:
-                    state.add_predicate_failure(exit_ctx, exc)
-                    raise
+                    state.handle_predicate_exception(exit_ctx, exc)
                 finally:
                     state.append_context(exit_ctx)
                     state.module_stack.pop()

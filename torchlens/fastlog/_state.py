@@ -20,6 +20,7 @@ from .types import (
     Recording,
     StorageIntent,
 )
+from .exceptions import PredicateError
 
 _active_recording_state: "RecordingState | None" = None
 
@@ -72,6 +73,8 @@ class RecordingState:
     pass_index: int = 0
     event_index: int = 0
     op_index: int = 0
+    no_tensor_capture: bool = False
+    all_contexts: list[RecordContext] = field(default_factory=list)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
 
@@ -91,6 +94,7 @@ class RecordingState:
     def append_context(self, ctx: RecordContext) -> None:
         """Append an event context to the bounded sliding window."""
 
+        self.all_contexts.append(ctx)
         if self.options.history_size == 0:
             return
         self.history.append(ctx)
@@ -110,6 +114,8 @@ class RecordingState:
     ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
         """Resolve payloads through the active storage backend."""
 
+        if self.no_tensor_capture:
+            return None, None
         return self.storage_backend.resolve_payloads(tensor, spec, self.storage_intent)
 
     def finalize_storage(self) -> None:
@@ -121,6 +127,13 @@ class RecordingState:
         """Abort the active storage backend after a failed pass."""
 
         self.storage_backend.abort(reason)
+
+    def effective_predicate_error_mode(self) -> str:
+        """Return the concrete predicate exception policy for this session."""
+
+        if self.options.on_predicate_error != "auto":
+            return self.options.on_predicate_error
+        return "fail-fast" if self.storage_intent.on_disk else "accumulate"
 
     def add_predicate_failure(self, ctx: RecordContext, exc: BaseException) -> None:
         """Record a predicate failure subject to the configured cap."""
@@ -140,6 +153,30 @@ class RecordingState:
             self.recording,
             "predicate_failure_overflow_count",
             self.predicate_failure_overflow_count,
+        )
+
+    def handle_predicate_exception(self, ctx: RecordContext, exc: BaseException) -> None:
+        """Apply the configured predicate exception policy."""
+
+        self.add_predicate_failure(ctx, exc)
+        if self.effective_predicate_error_mode() == "fail-fast":
+            raise exc
+
+    def raise_accumulated_predicate_error(self) -> None:
+        """Raise a final PredicateError when accumulated failures exist."""
+
+        if self.effective_predicate_error_mode() != "accumulate":
+            return
+        if not self.predicate_failures and self.predicate_failure_overflow_count == 0:
+            return
+        details = ""
+        if self.predicate_failures:
+            details = f": {self.predicate_failures[0].traceback.strip().splitlines()[-1]}"
+        raise PredicateError(
+            f"fastlog predicate failed during recording{details}",
+            failures=list(self.predicate_failures),
+            total_count=len(self.predicate_failures) + self.predicate_failure_overflow_count,
+            overflow=self.predicate_failure_overflow_count,
         )
 
 

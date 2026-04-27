@@ -9,6 +9,7 @@ from torch import nn
 import torchlens._state as torchlens_state
 import torchlens.fastlog._state as fastlog_state
 from torchlens.fastlog._orchestrator import _run_predicate_pass
+from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog.options import RecordingOptions
 
 
@@ -133,7 +134,7 @@ def test_predicate_exception_cleans_logging_state() -> None:
 
         raise RuntimeError(f"bad predicate for {ctx.kind}")
 
-    with pytest.raises(RuntimeError, match="bad predicate"):
+    with pytest.raises(PredicateError, match="fastlog predicate failed"):
         _run_predicate_pass(
             RootOnly(),
             torch.ones(1),

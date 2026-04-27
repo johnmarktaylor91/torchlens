@@ -117,6 +117,12 @@ class RecordingTrace:
     contexts: tuple[RecordContext, ...]
     predicate_failures: tuple[PredicateFailure, ...] = ()
 
+    @property
+    def events(self) -> tuple[RecordContext, ...]:
+        """Return chronological dry-run events."""
+
+        return self.contexts
+
 
 @dataclass(frozen=True, slots=True)
 class Recording:

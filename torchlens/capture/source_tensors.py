@@ -130,8 +130,7 @@ def log_source_tensor_predicate(
                     )
                 )
     except Exception as exc:
-        state.add_predicate_failure(ctx, exc)
-        raise
+        state.handle_predicate_exception(ctx, exc)
     finally:
         state.append_context(ctx)
 

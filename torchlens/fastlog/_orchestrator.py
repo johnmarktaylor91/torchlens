@@ -39,7 +39,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
             if options.streaming is None or options.streaming.bundle_path is None
             else Path(options.streaming.bundle_path)
         ),
-        n_passes=1,
+        n_passes=0,
         n_records=0,
         pass_start_times=[],
         pass_end_times=[],
@@ -59,6 +59,23 @@ def _normalize_input_args(input_args: Any) -> tuple[Any, ...]:
     if isinstance(input_args, list):
         return tuple(input_args)
     return (input_args,)
+
+
+def _reset_state_for_pass(
+    state: RecordingState,
+    *,
+    pass_index: int,
+    sample_id: str | int | None,
+) -> None:
+    """Reset per-pass state while preserving accumulated records and storage."""
+
+    state.history.clear()
+    state.op_counts.clear()
+    state.module_stack.clear()
+    state.sample_id = sample_id
+    state.pass_index = pass_index
+    state.event_index = 0
+    state.op_index = 0
 
 
 def _emit_root_module_event(
@@ -95,8 +112,7 @@ def _emit_root_module_event(
         if spec.save_activation or spec.save_metadata:
             state.add_record(ActivationRecord(ctx=ctx, spec=spec))
     except Exception as exc:
-        state.add_predicate_failure(ctx, exc)
-        raise
+        state.handle_predicate_exception(ctx, exc)
     finally:
         state.append_context(ctx)
 
@@ -106,6 +122,11 @@ def _run_predicate_pass(
     input_args: Any,
     input_kwargs: dict[str, Any] | None,
     options: RecordingOptions,
+    *,
+    state: RecordingState | None = None,
+    pass_index: int = 1,
+    sample_id: str | int | None = None,
+    finalize_storage: bool = True,
 ) -> tuple[Any, Recording]:
     """Run one predicate-mode forward pass and return output plus Recording."""
 
@@ -116,9 +137,13 @@ def _run_predicate_pass(
     model_log = ModelLog(str(type(model).__name__))
     model_log.logging_mode = "predicate"
     model_log.pass_start_time = time.time()
-    recording = _empty_recording(options)
+    if state is None:
+        recording = _empty_recording(options)
+        state = RecordingState(options=options, recording=recording)
+    else:
+        recording = state.recording
+    _reset_state_for_pass(state, pass_index=pass_index, sample_id=sample_id)
     recording.pass_start_times.append(model_log.pass_start_time)
-    state = RecordingState(options=options, recording=recording)
     input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor, [torch.nn.Parameter])
     _ensure_model_prepared(model)
     _prepare_model_session(model_log, model)
@@ -161,8 +186,9 @@ def _run_predicate_pass(
         _cleanup_model_session(model, input_tensors)
         pass_end_time = time.time()
         recording.pass_end_times.append(pass_end_time)
-        object.__setattr__(recording, "n_passes", 1)
+        object.__setattr__(recording, "n_passes", max(recording.n_passes, pass_index))
         object.__setattr__(recording, "n_records", len(recording.records))
-        if not pass_failed:
+        if not pass_failed and finalize_storage:
             state.finalize_storage()
+            state.raise_accumulated_predicate_error()
     return model_output, recording

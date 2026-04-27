@@ -220,8 +220,7 @@ def log_function_output_tensors_predicate(
             spec = _evaluate_keep_op(ctx, state.options)
             _record_predicate_output(ctx, out, spec)
         except Exception as exc:
-            state.add_predicate_failure(ctx, exc)
-            raise
+            state.handle_predicate_exception(ctx, exc)
         finally:
             state.append_context(ctx)
 

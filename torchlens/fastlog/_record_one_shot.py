@@ -1,0 +1,77 @@
+"""One-shot public fastlog recording API."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from torch import nn
+
+from ..options import StreamingOptions
+from ._recorder import Recorder
+from ._validation import validate_postprocess
+from .options import PredicateErrorMode, PredicateFn
+from .types import CaptureSpec, Recording
+
+
+def record(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[str, Any] | None = None,
+    *,
+    keep_op: PredicateFn | None = None,
+    keep_module: PredicateFn | None = None,
+    default_op: bool | CaptureSpec = False,
+    default_module: bool | CaptureSpec = False,
+    history_size: int = 8,
+    include_source_events: bool = False,
+    max_predicate_failures: int = 32,
+    on_predicate_error: PredicateErrorMode = "auto",
+    streaming: StreamingOptions | None = None,
+    return_output: bool = False,
+    postprocess: str = "none",
+    random_seed: int | None = None,
+) -> Recording | tuple[Any, Recording]:
+    """Record one model forward pass with fastlog predicates.
+
+    Parameters
+    ----------
+    model:
+        PyTorch module to execute.
+    input_args:
+        Tensor, list, or tuple of positional model inputs.
+    input_kwargs:
+        Optional keyword arguments for the model call.
+    keep_op, keep_module, default_op, default_module, history_size,
+    include_source_events, max_predicate_failures, on_predicate_error, streaming,
+    random_seed:
+        Fastlog recording options.
+    return_output:
+        Whether to return ``(model_output, recording)``.
+    postprocess:
+        Postprocess preset. Only ``"none"`` is implemented in this bundle.
+
+    Returns
+    -------
+    Recording | tuple[Any, Recording]
+        Fastlog recording, optionally with the model output.
+    """
+
+    validate_postprocess(postprocess)
+    with Recorder(
+        model,
+        keep_op=keep_op,
+        keep_module=keep_module,
+        default_op=default_op,
+        default_module=default_module,
+        history_size=history_size,
+        include_source_events=include_source_events,
+        max_predicate_failures=max_predicate_failures,
+        on_predicate_error=on_predicate_error,
+        streaming=streaming,
+        random_seed=random_seed,
+    ) as recorder:
+        output = recorder.log(input_args, input_kwargs)
+    recording = recorder.recording
+    if return_output:
+        return output, recording
+    return recording
