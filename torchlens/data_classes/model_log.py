@@ -155,6 +155,7 @@ class ModelLog:
         "random_seed_used": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "detach_saved_tensors": FieldPolicy.KEEP,
+        "train_mode": FieldPolicy.DROP,
         "save_function_args": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
         "save_source_context": FieldPolicy.KEEP,
@@ -253,6 +254,7 @@ class ModelLog:
         save_rng_states: bool = False,
         detect_loops: bool = True,
         verbose: bool = False,
+        train_mode: bool = False,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -272,6 +274,8 @@ class ModelLog:
             optimizer: Optional torch optimizer, used to annotate which params
                 have optimizers attached.
             verbose: If True, print timed progress messages at each major pipeline stage.
+            train_mode: Session-time flag for training-compatible activation retention.
+                Portable bundle load restores the default ``False`` value.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -302,6 +306,7 @@ class ModelLog:
         self.random_seed_used = None
         self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
+        self.train_mode = train_mode
         self.save_function_args = save_function_args
         self.save_gradients = save_gradients
         self.save_source_context = save_source_context
@@ -520,8 +525,11 @@ class ModelLog:
                 "_in_exhaustive_pass": False,
                 "_source_code_blob": {},
                 "_source_model_ref": None,
+                "train_mode": False,
             },
         )
+        if state["train_mode"] is None:
+            state["train_mode"] = False
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})

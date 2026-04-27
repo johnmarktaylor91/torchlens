@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -33,7 +34,7 @@ def validate_training_compatibility(
     train_mode: bool,
     streaming: Any,
     detach_saved_tensors: bool | None = None,
-    save_activations_to: str | None = None,
+    save_activations_to: str | Path | None = None,
     inference_mode_active: bool | None = None,
 ) -> None:
     """Validate user options for autograd-retaining training captures.

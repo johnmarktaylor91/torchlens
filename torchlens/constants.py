@@ -43,6 +43,7 @@ MODEL_LOG_FIELD_ORDER = [
     "random_seed_used",
     "detach_saved_tensors",
     "output_device",
+    "train_mode",
     "save_function_args",
     "num_context_lines",
     "save_gradients",
