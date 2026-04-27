@@ -81,6 +81,8 @@ def _add_output_layers(
         new_output_node.func_kwargs_non_tensor = {}
         new_output_node.func_non_tensor_args = []
         new_output_node.grad_fn_name = None
+        new_output_node.autograd_saved_bytes = None
+        new_output_node.autograd_saved_tensor_count = None
         new_output_node.captured_args = [output_tensors[i]]
         new_output_node.captured_kwargs = {}
 

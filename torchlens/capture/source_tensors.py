@@ -232,6 +232,8 @@ def log_source_tensor_exhaustive(
         "tensor_shape": tuple(t.shape),
         "tensor_dtype": t.dtype,
         "tensor_memory": tensor_memory,
+        "autograd_saved_bytes": None,
+        "autograd_saved_tensor_count": None,
         # Child tensor variation tracking
         "has_child_tensor_variations": False,
         "children_tensor_versions": {},

@@ -109,6 +109,7 @@ MODEL_LOG_FIELD_ORDER = [
     "orphan_layers",
     # Tensor info:
     "total_activation_memory",
+    "total_autograd_saved_bytes",
     "num_tensors_saved",
     "saved_activation_memory",
     # Param info
@@ -174,6 +175,8 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "tensor_shape",
     "tensor_dtype",
     "tensor_memory",
+    "autograd_saved_bytes",
+    "autograd_saved_tensor_count",
     # Child tensor variation tracking
     "has_child_tensor_variations",
     "children_tensor_versions",
@@ -315,6 +318,8 @@ LAYER_LOG_FIELD_ORDER = [
     "tensor_shape",
     "tensor_dtype",
     "tensor_memory",
+    "autograd_saved_bytes",
+    "autograd_saved_tensor_count",
     # Config
     "output_device",
     "activation_postfunc",

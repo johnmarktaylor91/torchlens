@@ -125,6 +125,8 @@ class LayerPassLog:
         "tensor_shape": FieldPolicy.KEEP,
         "tensor_dtype": FieldPolicy.KEEP,
         "tensor_memory": FieldPolicy.KEEP,
+        "autograd_saved_bytes": FieldPolicy.KEEP,
+        "autograd_saved_tensor_count": FieldPolicy.KEEP,
         "has_child_tensor_variations": FieldPolicy.KEEP,
         "children_tensor_versions": FieldPolicy.BLOB_RECURSIVE,
         "gradient": FieldPolicy.BLOB,
@@ -299,6 +301,8 @@ class LayerPassLog:
         self.tensor_shape = fields_dict["tensor_shape"]
         self.tensor_dtype = fields_dict["tensor_dtype"]
         self.tensor_memory = fields_dict["tensor_memory"]
+        self.autograd_saved_bytes: Optional[int] = fields_dict["autograd_saved_bytes"]
+        self.autograd_saved_tensor_count: Optional[int] = fields_dict["autograd_saved_tensor_count"]
 
         # Child tensor variation tracking - stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
@@ -667,6 +671,8 @@ class LayerPassLog:
                 "_pending_blob_id": None,
                 "_pending_gradient_blob_id": None,
                 "extra_data": {},
+                "autograd_saved_bytes": None,
+                "autograd_saved_tensor_count": None,
             },
         )
         self.__dict__.update(state)

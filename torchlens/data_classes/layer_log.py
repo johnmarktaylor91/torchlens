@@ -84,6 +84,8 @@ class LayerLog:
         "tensor_shape": FieldPolicy.KEEP,
         "tensor_dtype": FieldPolicy.KEEP,
         "tensor_memory": FieldPolicy.KEEP,
+        "autograd_saved_bytes": FieldPolicy.KEEP,
+        "autograd_saved_tensor_count": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
         "extra_data": FieldPolicy.KEEP,
@@ -170,6 +172,8 @@ class LayerLog:
         self.tensor_shape = first_pass.tensor_shape
         self.tensor_dtype = first_pass.tensor_dtype
         self.tensor_memory = first_pass.tensor_memory
+        self.autograd_saved_bytes: Optional[int] = first_pass.autograd_saved_bytes
+        self.autograd_saved_tensor_count: Optional[int] = first_pass.autograd_saved_tensor_count
 
         # Config
         self.output_device = first_pass.output_device
@@ -301,7 +305,15 @@ class LayerLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(state, defaults={"_source_model_log_ref": None, "extra_data": {}})
+        default_fill_state(
+            state,
+            defaults={
+                "_source_model_log_ref": None,
+                "extra_data": {},
+                "autograd_saved_bytes": None,
+                "autograd_saved_tensor_count": None,
+            },
+        )
         self.__dict__.update(state)
 
     # ********************************************
