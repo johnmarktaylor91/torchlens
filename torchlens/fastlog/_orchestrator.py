@@ -156,6 +156,6 @@ def _run_predicate_pass(
         _cleanup_model_session(model, input_tensors)
         pass_end_time = time.time()
         recording.pass_end_times.append(pass_end_time)
-        recording.n_passes = 1
-        recording.n_records = len(recording.records)
+        object.__setattr__(recording, "n_passes", 1)
+        object.__setattr__(recording, "n_records", len(recording.records))
     return model_output, recording

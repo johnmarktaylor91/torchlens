@@ -79,7 +79,7 @@ class RecordingState:
             )
         if record.ctx.module_address is not None:
             self.recording.by_module_address.setdefault(record.ctx.module_address, []).append(index)
-        self.recording.n_records = len(self.recording.records)
+        object.__setattr__(self.recording, "n_records", len(self.recording.records))
 
     def add_predicate_failure(self, ctx: RecordContext, exc: BaseException) -> None:
         """Record a predicate failure subject to the configured cap."""
@@ -94,8 +94,12 @@ class RecordingState:
             self.predicate_failures.append(failure)
         else:
             self.predicate_failure_overflow_count += 1
-        self.recording.predicate_failures = list(self.predicate_failures)
-        self.recording.predicate_failure_overflow_count = self.predicate_failure_overflow_count
+        object.__setattr__(self.recording, "predicate_failures", list(self.predicate_failures))
+        object.__setattr__(
+            self.recording,
+            "predicate_failure_overflow_count",
+            self.predicate_failure_overflow_count,
+        )
 
 
 def get_active_recording_state() -> RecordingState:

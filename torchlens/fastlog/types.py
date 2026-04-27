@@ -118,7 +118,7 @@ class RecordingTrace:
     predicate_failures: tuple[PredicateFailure, ...] = ()
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class Recording:
     """Result of a fastlog recording session."""
 
