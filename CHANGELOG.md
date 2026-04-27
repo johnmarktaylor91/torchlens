@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v2.9.0 (2026-04-27)
+
+### Features
+
+- **backward**: Gradient disk streaming and backward_tutorial notebook
+  ([`85918f7`](https://github.com/johnmarktaylor91/torchlens/commit/85918f7201618d35bd3b4d5a82c2234b456f9659))
+
+
 ## v2.8.0 (2026-04-27)
 
 ### Features
