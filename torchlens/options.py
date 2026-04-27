@@ -10,6 +10,7 @@ import torch
 
 from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._literals import (
+    BufferVisibilityLiteral,
     VisDirectionLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
@@ -124,6 +125,30 @@ def _resolve_option_value(
     return supplied_value
 
 
+def _validate_buffer_visibility(value: BufferVisibilityLiteral | bool) -> None:
+    """Validate buffer visibility options.
+
+    Parameters
+    ----------
+    value:
+        Buffer visibility mode. Legacy bools are still accepted: ``True`` maps
+        to ``"always"`` and ``False`` maps to ``"never"``.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not a supported tri-state mode.
+    """
+
+    if value is True:
+        return
+    if value is False:
+        return
+    if value in {"never", "meaningful", "always"}:
+        return
+    raise ValueError("Buffer visibility must be 'never', 'meaningful', 'always', or a bool.")
+
+
 @dataclass(frozen=True, init=False)
 class VisualizationOptions:
     """Grouped visualization options for ``log_forward_pass`` and ``show_model_graph``."""
@@ -133,7 +158,7 @@ class VisualizationOptions:
     output_path: str = "graph.gv"
     save_only: bool = False
     file_format: str = "pdf"
-    show_buffers: bool = False
+    show_buffers: BufferVisibilityLiteral = "meaningful"
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_mode: VisNodeModeLiteral = "default"
@@ -161,7 +186,7 @@ class VisualizationOptions:
         output_path: str | MissingType = MISSING,
         save_only: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
-        show_buffers: bool | MissingType = MISSING,
+        show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_mode: VisNodeModeLiteral | MissingType = MISSING,
@@ -190,6 +215,9 @@ class VisualizationOptions:
         renderer, theme:
             Visualization option values. Explicitly supplied fields are tracked so
             deprecated flat kwargs can detect same-field conflicts later.
+            ``show_buffers`` accepts ``"never"``, ``"meaningful"``, or
+            ``"always"``. Legacy bools are deprecated but supported:
+            ``True`` maps to ``"always"`` and ``False`` maps to ``"never"``.
         """
 
         specified_fields: set[str] = set()
@@ -211,7 +239,7 @@ class VisualizationOptions:
             "show_buffers": _resolve_option_value(
                 "show_buffers",
                 show_buffers,
-                False,
+                "meaningful",
                 specified_fields,
             ),
             "direction": _resolve_option_value(
@@ -283,6 +311,7 @@ class VisualizationOptions:
             "renderer": _resolve_option_value("renderer", renderer, "graphviz", specified_fields),
             "theme": _resolve_option_value("theme", theme, "torchlens", specified_fields),
         }
+        _validate_buffer_visibility(values["show_buffers"])
         for field_name in _VISUALIZATION_FIELDS:
             object.__setattr__(self, field_name, values[field_name])
         _validate_node_mode(cast(VisNodeModeLiteral, values["node_mode"]))
@@ -308,6 +337,7 @@ class VisualizationOptions:
 
         instance = object.__new__(cls)
         _validate_node_mode(cast(VisNodeModeLiteral, values["node_mode"]))
+        _validate_buffer_visibility(values["show_buffers"])
         for field_name in _VISUALIZATION_FIELDS:
             object.__setattr__(instance, field_name, values[field_name])
         object.__setattr__(instance, "_specified_fields", specified_fields)
@@ -399,7 +429,7 @@ def merge_visualization_options(
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
-    vis_buffer_layers: bool | MissingType = MISSING,
+    vis_buffer_layers: BufferVisibilityLiteral | bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
@@ -425,6 +455,9 @@ def merge_visualization_options(
     vis_module_overrides, vis_node_placement, vis_renderer, vis_theme:
         Deprecated flat visualization kwargs. Presence is tracked with
         ``MISSING`` so explicit default-valued calls still count as supplied.
+        ``vis_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
+        ``"always"``. Legacy bools are deprecated but supported: ``True`` maps
+        to ``"always"`` and ``False`` maps to ``"never"``.
 
     Returns
     -------

@@ -53,6 +53,7 @@ from typing import (
 import graphviz
 
 from .._literals import (
+    BufferVisibilityLiteral,
     VisDirectionLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
@@ -173,6 +174,7 @@ BUFFER_NODE_COLOR = "#888888"  # Medium gray for buffer nodes
 GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
 DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
+_NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
 
 # -- Module subgraph border widths --
 MAX_MODULE_PENWIDTH = 5
@@ -182,6 +184,148 @@ PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 # Commutative functions: argument order doesn't matter, so we skip arg-position
 # labels on their incoming edges to reduce visual clutter.
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
+
+
+def _normalize_buffer_visibility(
+    show_buffer_layers: BufferVisibilityLiteral | bool,
+) -> BufferVisibilityLiteral:
+    """Normalize buffer visibility values accepted by the render path.
+
+    Parameters
+    ----------
+    show_buffer_layers:
+        Tri-state buffer visibility mode or legacy bool.
+
+    Returns
+    -------
+    BufferVisibilityLiteral
+        Canonical tri-state mode.
+
+    Raises
+    ------
+    ValueError
+        If ``show_buffer_layers`` is not supported.
+    """
+
+    if show_buffer_layers is True:
+        return "always"
+    if show_buffer_layers is False:
+        return "never"
+    if show_buffer_layers in {"never", "meaningful", "always"}:
+        return show_buffer_layers
+    raise ValueError("show_buffer_layers must be 'never', 'meaningful', 'always', or a bool.")
+
+
+def _buffer_name_segment(buffer_address: str | None) -> str:
+    """Return the last dotted segment of a buffer address.
+
+    Parameters
+    ----------
+    buffer_address:
+        Fully qualified buffer address, if available.
+
+    Returns
+    -------
+    str
+        Final dotted address segment, or an empty string for missing addresses.
+    """
+
+    if buffer_address is None:
+        return ""
+    return buffer_address.split(".")[-1]
+
+
+def _is_noise_buffer(node: GraphNode) -> bool:
+    """Return whether ``node`` is a hardcoded noisy buffer.
+
+    Parameters
+    ----------
+    node:
+        Candidate graph node.
+
+    Returns
+    -------
+    bool
+        True when the node is a buffer whose last address segment is filtered in
+        ``"meaningful"`` mode.
+    """
+
+    source_node = _unwrap_focus_node(node)
+    if not source_node.is_buffer_layer:
+        return False
+    buffer_address = getattr(source_node, "buffer_address", None)
+    return _buffer_name_segment(buffer_address) in _NOISE_BUFFER_NAMES
+
+
+def _is_buffer_visible(node: GraphNode, show_buffer_layers: BufferVisibilityLiteral) -> bool:
+    """Return whether a buffer node should be visible in the current mode.
+
+    Parameters
+    ----------
+    node:
+        Candidate graph node.
+    show_buffer_layers:
+        Canonical tri-state visibility mode.
+
+    Returns
+    -------
+    bool
+        True when the node is visible. Non-buffer nodes are always visible.
+    """
+
+    if not node.is_buffer_layer:
+        return True
+    if show_buffer_layers == "always":
+        return True
+    if show_buffer_layers == "never":
+        return False
+    return not _is_noise_buffer(node)
+
+
+def _get_hidden_parent_buffer_addresses(
+    model_log: "ModelLog",
+    node: GraphNode,
+    show_buffer_layers: BufferVisibilityLiteral,
+) -> list[str]:
+    """Return hidden buffer addresses attached as parents of ``node``.
+
+    Parameters
+    ----------
+    model_log:
+        Owning ModelLog.
+    node:
+        Non-buffer node to inspect.
+    show_buffer_layers:
+        Canonical tri-state visibility mode.
+
+    Returns
+    -------
+    list[str]
+        Hidden buffer addresses in parent order, de-duplicated.
+    """
+
+    if show_buffer_layers == "always" or node.is_buffer_layer:
+        return []
+
+    hidden_addresses: list[str] = []
+    seen_addresses: set[str] = set()
+    source_node = _unwrap_focus_node(node)
+    for parent_label in node.parent_layers:
+        if parent_label.startswith("__module_focus_"):
+            continue
+        parent_node: BaseGraphNode
+        if isinstance(source_node, LayerPassLog):
+            parent_node = model_log[parent_label]
+        else:
+            parent_node = model_log.layer_logs[parent_label]
+        if not parent_node.is_buffer_layer or _is_buffer_visible(parent_node, show_buffer_layers):
+            continue
+        buffer_address = parent_node.buffer_address
+        if buffer_address is None or buffer_address in seen_addresses:
+            continue
+        hidden_addresses.append(buffer_address)
+        seen_addresses.add(buffer_address)
+    return hidden_addresses
 
 
 @dataclass(frozen=True)
@@ -218,7 +362,7 @@ def render_graph(
     vis_module_overrides: Optional[Dict] = None,
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
-    show_buffer_layers: bool = False,
+    show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
     direction: VisDirectionLiteral = "bottomup",
     vis_node_placement: VisNodePlacementLiteral = "auto",
     vis_renderer: VisRendererLiteral = "graphviz",
@@ -259,7 +403,11 @@ def render_graph(
         vis_module_overrides: Overrides for module subgraph boxes.
         vis_save_only: If True, save without opening a viewer.
         vis_fileformat: Output format (pdf, png, svg, etc.).
-        show_buffer_layers: Whether to include buffer layers in the graph.
+        show_buffer_layers: Buffer visibility mode. ``"never"`` hides all
+            buffers, ``"meaningful"`` hides hardcoded BatchNorm running-stat
+            noise buffers, and ``"always"`` shows all buffers. Legacy bools are
+            deprecated but supported: ``True`` maps to ``"always"`` and
+            ``False`` maps to ``"never"``.
         direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
         vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
             or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK (or sfdp
@@ -280,6 +428,8 @@ def render_graph(
             "Visualization node_mode must be one of 'default', 'profiling', "
             "'vision', or 'attention'."
         )
+    show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
+
     if vis_renderer == "dagua":
         from .dagua_bridge import render_model_log_with_dagua
 
@@ -290,7 +440,7 @@ def render_graph(
             vis_outpath=vis_outpath,
             vis_save_only=vis_save_only,
             vis_fileformat=vis_fileformat,
-            vis_buffer_layers=show_buffer_layers,
+            vis_buffer_layers=show_buffer_layers == "always",
             vis_direction=direction,
             vis_theme=vis_theme,
         )
@@ -415,7 +565,7 @@ def render_graph(
             entries_to_plot,
             vis_mode,
             vis_nesting_depth,
-            show_buffer_layers,
+            show_buffer_layers == "always",
             overrides,
             node_mode,
             node_spec_fn,
@@ -476,7 +626,7 @@ def render_graph(
     for node_barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
             continue
-        if node.is_buffer_layer and not show_buffer_layers:
+        if node.is_buffer_layer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         _add_node_to_graphviz(
             self,
@@ -544,7 +694,7 @@ def _build_skip_filtered_edge_map(
     entries_to_plot: Mapping[str, GraphNode],
     *,
     vis_mode: str,
-    show_buffer_layers: bool,
+    show_buffer_layers: BufferVisibilityLiteral,
     skip_fn: SkipFn | None,
 ) -> tuple[dict[str, list[RenderEdge]], set[str]]:
     """Build skip-aware outgoing edges for each rendered node.
@@ -557,8 +707,8 @@ def _build_skip_filtered_edge_map(
         Candidate nodes for the current visualization mode.
     vis_mode:
         ``"unrolled"`` or ``"rolled"``.
-    show_buffer_layers:
-        Whether buffer nodes are visible.
+        show_buffer_layers:
+        Buffer visibility mode.
     skip_fn:
         Optional user predicate receiving aggregate LayerLog objects.
 
@@ -571,7 +721,7 @@ def _build_skip_filtered_edge_map(
     visible_entries = {
         label: node
         for label, node in entries_to_plot.items()
-        if show_buffer_layers or not node.is_buffer_layer
+        if not node.is_buffer_layer or _is_buffer_visible(node, show_buffer_layers)
     }
     skipped_labels: set[str] = set()
     if skip_fn is not None:
@@ -964,7 +1114,7 @@ def _add_node_to_graphviz(
     vis_mode: str,
     collapsed_modules: Set,
     vis_nesting_depth: int = 1000,
-    show_buffer_layers: bool = False,
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     overrides: Optional[VisualizationOverrides] = None,
     node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
@@ -981,7 +1131,7 @@ def _add_node_to_graphviz(
         vis_mode: Whether to roll the graph or not
         vis_nesting_depth: How many levels of nested modules to show
         collapsed_modules: Labels of collapsed module nodes that have been made so far.
-        show_buffer_layers: Whether to show the buffer layers
+        show_buffer_layers: Buffer visibility mode.
         overrides: Graphviz attribute overrides for nodes, edges, etc.
     """
     collapse_address = _collapse_module_address_for_node(
@@ -1171,7 +1321,7 @@ def _build_layer_node(
     self: "ModelLog",
     node: GraphNode,
     graphviz_graph,
-    show_buffer_layers: bool,
+    show_buffer_layers: BufferVisibilityLiteral,
     vis_mode: str,
     overrides: VisualizationOverrides,
     node_mode: VisNodeModeLiteral,
@@ -1182,7 +1332,7 @@ def _build_layer_node(
     Args:
         node: The LayerPassLog or LayerLog node to render.
         graphviz_graph: The graphviz Digraph object to add the node to.
-        show_buffer_layers: Whether buffer layers are shown.
+        show_buffer_layers: Buffer visibility mode.
         vis_mode: 'unrolled' or 'rolled'.
         overrides: Graphviz attribute overrides.
 
@@ -1232,6 +1382,12 @@ def _build_layer_node(
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
     node_args = _node_spec_to_graphviz_args(spec)
     node_args["name"] = node.layer_label.replace(":", "pass")
+    hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
+    if hidden_buffer_addresses and not (
+        node.is_input_layer or node.is_output_layer or node.is_buffer_layer
+    ):
+        node_args["peripheries"] = "2"
+        node_args["tooltip"] = f"Hidden buffers: {', '.join(hidden_buffer_addresses)}"
     # Colon in bg_color means it's a gradient fill (e.g.,
     # "#D9D9D9:#B0B0B0" for mixed trainable/frozen params).
     # Graphviz requires gradientangle to render gradients.
@@ -1387,7 +1543,7 @@ def _build_collapsed_module_node(
 def _get_node_address_shape_color(
     self: "ModelLog",
     node: GraphNode,
-    show_buffer_layers: bool,
+    show_buffer_layers: BufferVisibilityLiteral | bool,
 ) -> Tuple[str, str, str]:
     """Gets the node shape, address, and color for the graphviz figure.
 
@@ -1402,8 +1558,9 @@ def _get_node_address_shape_color(
     source_node = _unwrap_focus_node(node)
     if isinstance(source_node, BoundaryNode):
         raise ValueError("Boundary nodes are rendered by the boundary path.")
-    if not show_buffer_layers:
-        only_non_buffer_layer = _is_only_non_buffer_in_module(self, node)
+    show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
+    if show_buffer_layers != "always":
+        only_non_buffer_layer = _is_only_non_buffer_in_module(self, node, show_buffer_layers)
     else:
         only_non_buffer_layer = False
 
@@ -1445,7 +1602,9 @@ def _get_node_address_shape_color(
     return node_address, node_shape, node_color
 
 
-def _is_only_non_buffer_in_module(self: "ModelLog", node: GraphNode) -> bool:
+def _is_only_non_buffer_in_module(
+    self: "ModelLog", node: GraphNode, show_buffer_layers: BufferVisibilityLiteral
+) -> bool:
     """Returns True if a layer is the only non-buffer layer in a leaf module.
 
     Leaf modules are those with no child submodules. Container modules with
@@ -1454,6 +1613,7 @@ def _is_only_non_buffer_in_module(self: "ModelLog", node: GraphNode) -> bool:
 
     Args:
         node: The LayerPassLog or LayerLog node to check.
+        show_buffer_layers: Buffer visibility mode.
     """
     # Check whether it leaves its module:
     if not (
@@ -1479,7 +1639,10 @@ def _is_only_non_buffer_in_module(self: "ModelLog", node: GraphNode) -> bool:
             parent_layer = self[parent_layer_label]
         else:
             parent_layer = self.layer_logs[parent_layer_label]  # type: ignore[assignment]
-        if (not parent_layer.is_buffer_layer) and (
+        if (
+            (not parent_layer.is_buffer_layer)
+            or _is_buffer_visible(parent_layer, show_buffer_layers)
+        ) and (
             (len(parent_layer.containing_modules) > 0)
             and parent_layer.containing_modules[-1] == node.containing_modules[-1]
         ):
@@ -1952,7 +2115,7 @@ def _add_edges_for_node(
     edges_used: Set,
     graphviz_graph,
     vis_mode: str = "unrolled",
-    show_buffer_layers: bool = False,
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     overrides: Optional[VisualizationOverrides] = None,
     collapse_fn: CollapseFn | None = None,
     edge_map: Optional[dict[str, list[RenderEdge]]] = None,
@@ -1986,7 +2149,7 @@ def _add_edges_for_node(
         edges_used: Set of (tail, head) pairs already added.
         graphviz_graph: The graphviz graph object.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
-        show_buffer_layers: Whether buffer layers are shown.
+        show_buffer_layers: Buffer visibility mode.
         overrides: Graphviz attribute overrides.
     """
     if edge_map is None:
@@ -2003,7 +2166,7 @@ def _add_edges_for_node(
         child_node = render_edge.target
         metadata_child = render_edge.metadata_child
 
-        if child_node.is_buffer_layer and not show_buffer_layers:
+        if child_node.is_buffer_layer and not _is_buffer_visible(child_node, show_buffer_layers):
             continue
 
         if parent_node.has_input_ancestor:
@@ -2614,7 +2777,7 @@ def _label_node_arguments_if_needed(
     parent_node: Union["LayerPassLog", "LayerLog"],
     child_node: Union["LayerPassLog", "LayerLog"],
     edge_dict: Dict,
-    show_buffer_layers: bool = False,
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> None:
     """Add argument position labels to an edge when the child has multiple non-commutative parents.
 
@@ -2633,7 +2796,7 @@ def _label_node_arguments_if_needed(
         child_node: The child node receiving the edge.
         edge_dict: Mutable dict of edge attributes; ``"headlabel"`` or ``"xlabel"``
             may be added.
-        show_buffer_layers: Whether buffer layers are visible (affects parent count).
+        show_buffer_layers: Buffer visibility mode (affects parent count).
     """
     if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers):
         return
@@ -2674,7 +2837,7 @@ def _set_argument_edge_label(edge_dict: Dict, arg_label: str) -> None:
 def _should_mark_arguments_on_edge(
     self: "ModelLog",
     child_node: Union["LayerPassLog", "LayerLog"],
-    show_buffer_layers: bool = False,
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument position labels should be shown on the edge to child_node.
 
@@ -2685,7 +2848,7 @@ def _should_mark_arguments_on_edge(
 
     Args:
         child_node: The child node whose incoming edge is being considered.
-        show_buffer_layers: Whether buffer layers are shown in the graph.
+        show_buffer_layers: Buffer visibility mode.
     """
     # Commutative ops: argument order doesn't matter, skip labels.
     if child_node.layer_type in COMMUTE_FUNCS:
@@ -2698,19 +2861,27 @@ def _should_mark_arguments_on_edge(
 
 
 def _should_mark_arguments_on_unrolled_edge(
-    self, child_node: "LayerPassLog", show_buffer_layers: bool = False
+    self: "ModelLog",
+    child_node: "LayerPassLog",
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument labels should be shown on an unrolled graph edge.
 
     Args:
         child_node: The child LayerPassLog node whose incoming edge is being considered.
-        show_buffer_layers: Whether buffer layers are shown in the graph.
+        show_buffer_layers: Buffer visibility mode.
     """
     num_parents_shown = len(child_node.parent_layers)
 
-    if not show_buffer_layers:
+    if show_buffer_layers != "always":
         num_parents_shown -= sum(
-            [int(self[parent].is_buffer_layer) for parent in child_node.parent_layers]
+            [
+                int(
+                    self[parent].is_buffer_layer
+                    and not _is_buffer_visible(self[parent], show_buffer_layers)
+                )
+                for parent in child_node.parent_layers
+            ]
         )
 
     if num_parents_shown > 1:
@@ -2720,19 +2891,27 @@ def _should_mark_arguments_on_unrolled_edge(
 
 
 def _should_mark_arguments_on_rolled_edge(
-    self: "ModelLog", child_node: "LayerLog", show_buffer_layers: bool = False
+    self: "ModelLog",
+    child_node: "LayerLog",
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument labels should be shown on a rolled graph edge.
 
     Args:
         child_node: The child LayerLog node whose incoming edge is being considered.
-        show_buffer_layers: Whether buffer layers are shown in the graph.
+        show_buffer_layers: Buffer visibility mode.
     """
     for pass_num, pass_parents in child_node.parent_layers_per_pass.items():
         num_parents_shown = len(pass_parents)
-        if not show_buffer_layers:
+        if show_buffer_layers != "always":
             num_parents_shown -= sum(
-                [int(self.layer_logs[parent].is_buffer_layer) for parent in pass_parents]
+                [
+                    int(
+                        self.layer_logs[parent].is_buffer_layer
+                        and not _is_buffer_visible(self.layer_logs[parent], show_buffer_layers)
+                    )
+                    for parent in pass_parents
+                ]
             )
         if num_parents_shown > 1:
             return True

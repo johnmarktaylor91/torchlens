@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 from .._deprecations import warn_deprecated_alias
 from .._training_validation import reject_compiled_model
 from .._literals import (
+    BufferVisibilityLiteral,
     VisDirectionLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
@@ -740,7 +741,7 @@ class ModelLog:
         vis_module_overrides: Optional[Dict] = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
-        show_buffer_layers: bool = False,
+        show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
         direction: VisDirectionLiteral = "bottomup",
         vis_node_placement: VisNodePlacementLiteral = "auto",
         vis_renderer: VisRendererLiteral = "graphviz",
@@ -756,6 +757,9 @@ class ModelLog:
         vis_gradient_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, code_panel:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
+            ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
+            ``"always"``. Legacy bools are deprecated but supported by the
+            Graphviz renderer.
 
         Returns
         -------
