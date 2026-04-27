@@ -73,6 +73,6 @@ def validate_training_compatibility(
         )
     if inference_mode_active is True:
         raise TrainingModeConfigError(
-            "train_mode=True cannot run inside torch.inference_mode(); inference tensors "
-            "cannot retain autograd history"
+            "train_mode=True cannot run while PyTorch inference mode is active; "
+            "inference tensors cannot retain autograd history"
         )
