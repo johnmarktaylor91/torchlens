@@ -149,6 +149,9 @@ class LayerPassLog:
         "func_non_tensor_args": FieldPolicy.KEEP,
         "func_is_inplace": FieldPolicy.KEEP,
         "grad_fn_name": FieldPolicy.KEEP,
+        "grad_fn_id": FieldPolicy.KEEP,
+        "grad_fn_object": FieldPolicy.DROP,
+        "corresponding_grad_fn": FieldPolicy.DROP,
         "is_part_of_iterable_output": FieldPolicy.KEEP,
         "iterable_output_index": FieldPolicy.KEEP,
         "parent_params": FieldPolicy.KEEP,
@@ -316,6 +319,9 @@ class LayerPassLog:
         self.func_non_tensor_args = fields_dict["func_non_tensor_args"]
         self.func_is_inplace = fields_dict["func_is_inplace"]
         self.grad_fn_name = fields_dict["grad_fn_name"]
+        self.grad_fn_id = fields_dict["grad_fn_id"]
+        self.grad_fn_object = fields_dict["grad_fn_object"]
+        self.corresponding_grad_fn = fields_dict["corresponding_grad_fn"]
         self.is_part_of_iterable_output = fields_dict["is_part_of_iterable_output"]
         self.iterable_output_index = fields_dict["iterable_output_index"]
 
@@ -686,6 +692,8 @@ class LayerPassLog:
         fields_not_to_deepcopy = [
             "func_applied",
             "grad_fn_name",
+            "grad_fn_object",
+            "corresponding_grad_fn",
             "source_model_log",
             "func_rng_states",
             "captured_args",
@@ -787,7 +795,7 @@ class LayerPassLog:
             self.captured_args = None
             self.captured_kwargs = None
 
-    def log_tensor_grad(self, grad: torch.Tensor):
+    def log_tensor_grad(self, grad: torch.Tensor) -> None:
         """Save the gradient tensor for this layer's output.
 
         Called by the backward hook registered during the forward pass.
@@ -797,11 +805,17 @@ class LayerPassLog:
         Args:
             grad: The gradient tensor flowing back through this operation.
         """
-        self.gradient = grad.detach().clone()
+        model_log = self.source_model_log
+        grad_to_save = grad
+        gradient_postfunc = getattr(model_log, "gradient_postfunc", None)
+        if gradient_postfunc is not None:
+            with pause_logging():
+                grad_to_save = gradient_postfunc(grad_to_save)
+        self.gradient = grad_to_save.detach().clone()
         self.has_gradient = True
-        self.grad_shape = grad.shape
-        self.grad_dtype = grad.dtype
-        self.grad_memory = get_tensor_memory_amount(grad)
+        self.grad_shape = grad_to_save.shape
+        self.grad_dtype = grad_to_save.dtype
+        self.grad_memory = get_tensor_memory_amount(grad_to_save)
 
     # ********************************************
     # ************* Fetcher Functions ************

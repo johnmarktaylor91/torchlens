@@ -27,6 +27,8 @@ import weakref
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
+import torch
+
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
@@ -523,6 +525,30 @@ class ModuleLog:
     def macs(self) -> int:
         """Total MACs (forward + backward) for this module."""
         return self.flops // 2
+
+    @property
+    def gradient(self) -> torch.Tensor | List[torch.Tensor] | None:
+        """Aggregate saved gradients across layers in this module.
+
+        Returns
+        -------
+        torch.Tensor | List[torch.Tensor] | None
+            A stacked tensor when layer gradient shapes match, a list when
+            shapes differ, or ``None`` when no layer gradients were saved.
+        """
+        if self._source_model_log is None:
+            return None
+        gradients = [
+            self._source_model_log[layer_label].gradient
+            for layer_label in self.all_layers
+            if getattr(self._source_model_log[layer_label], "has_gradient", False)
+        ]
+        if not gradients:
+            return None
+        first_shape = gradients[0].shape
+        if all(gradient.shape == first_shape for gradient in gradients):
+            return torch.stack(gradients)
+        return gradients
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""

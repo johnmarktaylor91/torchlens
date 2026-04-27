@@ -58,6 +58,7 @@ def save_new_activations(
     input_args: Union[torch.Tensor, List[Any]],
     input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Union[str, List] = "all",
+    gradients_to_save: Union[str, List, None] = "all",
     random_seed: Optional[int] = None,
     train_mode: bool | None = None,
 ) -> None:
@@ -78,6 +79,7 @@ def save_new_activations(
         input_args: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
+        gradients_to_save: List of layers whose gradients should be saved.
         random_seed: Which random seed to use for deterministic reproduction.
         train_mode: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
@@ -104,6 +106,7 @@ def save_new_activations(
                 input_args=input_args,
                 input_kwargs=input_kwargs,
                 layers_to_save=layers_to_save,
+                gradients_to_save=gradients_to_save,
                 random_seed=random_seed,
                 train_mode=None,
             )
@@ -169,7 +172,7 @@ def save_new_activations(
     # Now run and log the new inputs.
     _vprint(self, "Running fast pass (saving requested activations)")
     self._run_and_log_inputs_through_model(
-        model, input_args, input_kwargs, layers_to_save, random_seed
+        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
     )
 
 
@@ -394,6 +397,7 @@ def run_and_log_inputs_through_model(
     input_args: Union[torch.Tensor, List[Any]],
     input_kwargs: Optional[Dict[Any, Any]] = None,
     layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
+    gradients_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
     random_seed: Optional[int] = None,
 ) -> None:
     """Core orchestration: run a forward pass and log everything into ModelLog.
@@ -421,6 +425,7 @@ def run_and_log_inputs_through_model(
     set_random_seed(random_seed)
 
     self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment, arg-type]
+    self._gradient_layer_nums_to_save = _get_op_nums_from_user_labels(self, gradients_to_save)  # type: ignore[assignment, arg-type]
 
     # In fast mode, output layers' activation are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must

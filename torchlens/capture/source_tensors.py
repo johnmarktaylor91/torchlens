@@ -263,6 +263,9 @@ def log_source_tensor_exhaustive(
         "func_non_tensor_args": [],
         "func_is_inplace": False,
         "grad_fn_name": "none",
+        "grad_fn_id": id(t.grad_fn) if t.grad_fn is not None else None,
+        "grad_fn_object": t.grad_fn,
+        "corresponding_grad_fn": None,
         "is_part_of_iterable_output": False,
         "iterable_output_index": None,
         # Param info:
