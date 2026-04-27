@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v2.11.0 (2026-04-27)
+
+### Features
+
+- **capture**: Add autograd_saved_bytes field tracking per-op autograd memory
+  ([`0d9a41d`](https://github.com/johnmarktaylor91/torchlens/commit/0d9a41d5c7a7c73817611357ea25eff9b9c6edbc))
+
+
 ## v2.10.0 (2026-04-27)
 
 ### Features
