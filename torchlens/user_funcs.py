@@ -41,7 +41,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._training_validation import validate_training_compatibility
+from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from .data_classes.model_log import (
     ModelLog,
 )
@@ -221,6 +221,8 @@ def _run_model_and_save_specified_activations(
     detect_loops: bool = True,
     save_activations_to: str | Path | None = None,
     keep_activations_in_memory: bool = True,
+    save_gradients_to: str | Path | None = None,
+    keep_gradients_in_memory: bool = True,
     activation_sink: Callable[[str, torch.Tensor], None] | None = None,
     verbose: bool = False,
     train_mode: bool = False,
@@ -265,6 +267,9 @@ def _run_model_and_save_specified_activations(
         save_activations_to: Optional portable bundle directory for streaming activation save.
         keep_activations_in_memory: Whether streamed activations should remain in memory
             after finalization.
+        save_gradients_to: Optional portable bundle directory for streaming gradient save.
+        keep_gradients_in_memory: Whether streamed gradients should remain in memory after
+            backward finalization.
         activation_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved activation.
         verbose: If True, print timed progress messages at each major pipeline stage.
@@ -306,9 +311,12 @@ def _run_model_and_save_specified_activations(
     model_log._source_model_ref = make_weak_model_ref(model)
     model_log._activation_sink = activation_sink
     model_log._keep_activations_in_memory = keep_activations_in_memory
+    model_log._keep_gradients_in_memory = keep_gradients_in_memory
+    model_log._defer_streaming_bundle_finalization = save_gradients_to is not None
     model_log._in_exhaustive_pass = True
-    if save_activations_to is not None:
-        model_log._activation_writer = BundleStreamWriter(save_activations_to)
+    bundle_path = save_gradients_to if save_gradients_to is not None else save_activations_to
+    if bundle_path is not None:
+        model_log._activation_writer = BundleStreamWriter(bundle_path)
     try:
         model_log._run_and_log_inputs_through_model(
             model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
@@ -360,6 +368,8 @@ def log_forward_pass(
     detect_loops: bool | MissingType = MISSING,
     save_activations_to: str | Path | None | MissingType = MISSING,
     keep_activations_in_memory: bool | MissingType = MISSING,
+    save_gradients_to: str | Path | None | MissingType = MISSING,
+    keep_gradients_in_memory: bool | MissingType = MISSING,
     activation_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     unwrap_when_done: bool = False,
     verbose: bool = False,
@@ -460,6 +470,11 @@ def log_forward_pass(
         save_activations_to: Deprecated alias for ``streaming.bundle_path``.
         keep_activations_in_memory: Deprecated alias for
             ``streaming.retain_in_memory``.
+        save_gradients_to: Optional portable bundle directory for streaming saved gradients.
+            If omitted while ``save_activations_to`` is set and gradient capture is enabled,
+            gradients are written into the same bundle path.
+        keep_gradients_in_memory: Whether streamed gradients should remain in memory after
+            ``log_backward`` or ``recording_backward`` finalizes the bundle.
         activation_sink: Deprecated alias for ``streaming.activation_callback``.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False - torch stays wrapped for subsequent calls.
@@ -533,6 +548,12 @@ def log_forward_pass(
         keep_activations_in_memory=keep_activations_in_memory,
         activation_sink=activation_sink,
     )
+    save_gradients_to_value = (
+        None if isinstance(save_gradients_to, MissingType) else save_gradients_to
+    )
+    keep_gradients_in_memory_value = (
+        True if isinstance(keep_gradients_in_memory, MissingType) else keep_gradients_in_memory
+    )
 
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
@@ -550,6 +571,9 @@ def log_forward_pass(
     else:
         train_mode_value = train_mode
     backward_opted_in = gradients_to_save is not MISSING
+    gradient_streaming_requested = save_gradients_to_value is not None
+    if gradient_streaming_requested:
+        save_gradients = True
     if backward_opted_in:
         if train_mode_explicit and train_mode_value is False:
             raise ValueError(
@@ -561,6 +585,22 @@ def log_forward_pass(
     gradients_to_save_resolved = (
         layers_to_save if gradients_to_save is MISSING else gradients_to_save
     )
+    if (
+        save_gradients
+        and save_gradients_to_value is None
+        and streaming_options.bundle_path is not None
+    ):
+        save_gradients_to_value = streaming_options.bundle_path
+    if (
+        save_gradients_to_value is not None
+        and streaming_options.bundle_path is not None
+        and Path(save_gradients_to_value) != Path(streaming_options.bundle_path)
+    ):
+        raise ValueError("save_activations_to and save_gradients_to must use the same bundle path.")
+    if train_mode_value and save_gradients_to_value is not None:
+        raise TrainingModeConfigError(
+            "train_mode=True is not compatible with slow/replay gradient disk saves"
+        )
 
     validate_training_compatibility(
         train_mode=train_mode_value,
@@ -583,6 +623,11 @@ def log_forward_pass(
             "release. For selective streaming use activation_sink=callable, or capture "
             'with layers_to_save="all" and filter post-hoc with '
             "torchlens.save(..., include_activations=True)."
+        )
+    if save_gradients_to_value is not None and uses_two_pass:
+        raise TorchLensIOError(
+            'save_gradients_to is only supported with gradients_to_save="all" in this '
+            "release. Capture all gradients and filter post-hoc with torchlens.save(...)."
         )
 
     if not uses_two_pass:
@@ -610,6 +655,8 @@ def log_forward_pass(
             detect_loops=detect_recurrent_patterns,
             save_activations_to=streaming_options.bundle_path,
             keep_activations_in_memory=streaming_options.retain_in_memory,
+            save_gradients_to=save_gradients_to_value,
+            keep_gradients_in_memory=keep_gradients_in_memory_value,
             activation_sink=streaming_options.activation_callback,
             verbose=verbose,
             train_mode=train_mode_value,
@@ -643,6 +690,8 @@ def log_forward_pass(
             detect_loops=detect_recurrent_patterns,
             save_activations_to=streaming_options.bundle_path,
             keep_activations_in_memory=streaming_options.retain_in_memory,
+            save_gradients_to=save_gradients_to_value,
+            keep_gradients_in_memory=keep_gradients_in_memory_value,
             activation_sink=streaming_options.activation_callback,
             verbose=verbose,
             train_mode=train_mode_value,

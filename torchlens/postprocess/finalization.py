@@ -21,7 +21,7 @@ Step 18 (_set_pass_finished): Marks ModelLog and all LayerPassLogs as finished, 
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, TYPE_CHECKING, Tuple
+from typing import Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING, Tuple, cast
 
 import torch
 
@@ -790,7 +790,7 @@ def _set_pass_finished(self) -> None:
 
 
 def _finalize_streamed_bundle(self: "ModelLog") -> None:
-    """Step 19: Finalize any in-progress streamed activation bundle.
+    """Step 19: Finalize any in-progress streamed tensor bundle.
 
     Parameters
     ----------
@@ -816,7 +816,7 @@ def _finalize_streamed_bundle(self: "ModelLog") -> None:
         include_captured_args=self.save_function_args,
         include_rng_states=self.save_rng_states,
     )
-    scrubbed_state, blob_specs = _reuse_streamed_activation_blob_ids(
+    scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
         self,
         scrubbed_state=scrubbed_state,
         blob_specs=blob_specs,
@@ -831,10 +831,11 @@ def _finalize_streamed_bundle(self: "ModelLog") -> None:
         "_source_bundle_manifest_sha256",
         sha256_of_file(Path(final_path) / "manifest.json"),
     )
-    _attach_streamed_activation_refs(
+    _attach_streamed_tensor_refs(
         self, scrubbed_state=scrubbed_state, writer=writer, final_path=final_path
     )
     self._activation_writer = None
+    self._defer_streaming_bundle_finalization = False
 
 
 def _evict_streamed_activations(self: "ModelLog") -> None:
@@ -851,14 +852,28 @@ def _evict_streamed_activations(self: "ModelLog") -> None:
             layer_entry.activation = None
 
 
-def _reuse_streamed_activation_blob_ids(
+def _evict_streamed_gradients(self: "ModelLog") -> None:
+    """Drop in-memory gradients once streaming refs have been attached.
+
+    Parameters
+    ----------
+    self:
+        Model log whose streamed gradients should be evicted.
+    """
+
+    for layer_entry in self.layer_list:
+        if getattr(layer_entry, "gradient_ref", None) is not None:
+            layer_entry.gradient = None
+
+
+def _reuse_streamed_blob_ids(
     model_log: "ModelLog",
     *,
     scrubbed_state: dict,
     blob_specs: list[tuple[str, torch.Tensor, str, str]],
     writer: BundleStreamWriter,
 ) -> tuple[dict, list[tuple[str, torch.Tensor, str, str]]]:
-    """Patch scrubbed activation refs to reuse blob ids written during capture.
+    """Patch scrubbed tensor refs to reuse blob ids written during capture.
 
     Parameters
     ----------
@@ -885,28 +900,36 @@ def _reuse_streamed_activation_blob_ids(
 
     skipped_blob_ids: set[str] = set()
     for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
-        activation_blob = getattr(scrubbed_layer, "activation", None)
-        if not isinstance(activation_blob, BlobRef):
-            continue
-        pending_blob_id = getattr(live_layer, "_pending_blob_id", None)
-        if pending_blob_id is None:
-            continue
-        skipped_blob_ids.add(activation_blob.blob_id)
-        scrubbed_layer.activation = BlobRef(blob_id=pending_blob_id, kind=activation_blob.kind)
-        writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
+        for tensor_field, pending_field in (
+            ("activation", "_pending_blob_id"),
+            ("gradient", "_pending_gradient_blob_id"),
+        ):
+            tensor_blob = getattr(scrubbed_layer, tensor_field, None)
+            if not isinstance(tensor_blob, BlobRef):
+                continue
+            pending_blob_id = getattr(live_layer, pending_field, None)
+            if pending_blob_id is None:
+                continue
+            skipped_blob_ids.add(tensor_blob.blob_id)
+            setattr(
+                scrubbed_layer,
+                tensor_field,
+                BlobRef(blob_id=pending_blob_id, kind=tensor_blob.kind),
+            )
+            writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
 
     filtered_blob_specs = [spec for spec in blob_specs if spec[0] not in skipped_blob_ids]
     return scrubbed_state, filtered_blob_specs
 
 
-def _attach_streamed_activation_refs(
+def _attach_streamed_tensor_refs(
     model_log: "ModelLog",
     *,
     scrubbed_state: dict,
     writer: BundleStreamWriter,
     final_path: str | Path,
 ) -> None:
-    """Attach ``LazyActivationRef`` placeholders for persisted activation blobs.
+    """Attach ``LazyActivationRef`` placeholders for persisted direct tensor blobs.
 
     Parameters
     ----------
@@ -928,20 +951,28 @@ def _attach_streamed_activation_refs(
         )
 
     for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
-        activation_blob = getattr(scrubbed_layer, "activation", None)
-        if not isinstance(activation_blob, BlobRef):
-            continue
-        manifest_entry = writer.get_entry(activation_blob.blob_id)
-        live_layer.activation_ref = LazyActivationRef(
-            blob_id=manifest_entry.blob_id,
-            shape=tuple(manifest_entry.shape),
-            dtype=_dtype_from_manifest_string(manifest_entry.dtype),
-            device_at_save=manifest_entry.device_at_save,
-            source_bundle_path=Path(final_path),
-            relative_path=manifest_entry.relative_path,
-            kind="activation",
-            expected_sha256=manifest_entry.sha256,
-        )
+        for tensor_field, ref_field, kind in (
+            ("activation", "activation_ref", "activation"),
+            ("gradient", "gradient_ref", "gradient"),
+        ):
+            tensor_blob = getattr(scrubbed_layer, tensor_field, None)
+            if not isinstance(tensor_blob, BlobRef):
+                continue
+            manifest_entry = writer.get_entry(tensor_blob.blob_id)
+            setattr(
+                live_layer,
+                ref_field,
+                LazyActivationRef(
+                    blob_id=manifest_entry.blob_id,
+                    shape=tuple(manifest_entry.shape),
+                    dtype=_dtype_from_manifest_string(manifest_entry.dtype),
+                    device_at_save=manifest_entry.device_at_save,
+                    source_bundle_path=Path(final_path),
+                    relative_path=manifest_entry.relative_path,
+                    kind=cast(Literal["activation", "gradient"], kind),
+                    expected_sha256=manifest_entry.sha256,
+                ),
+            )
 
 
 def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:

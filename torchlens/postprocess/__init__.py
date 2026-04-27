@@ -196,7 +196,9 @@ def postprocess(
     with _vtimed(self, "  Step 18: Mark pass finished"):
         _set_pass_finished(self)
 
-    should_finalize_streaming = self._activation_writer is not None
+    should_finalize_streaming = self._activation_writer is not None and not getattr(
+        self, "_defer_streaming_bundle_finalization", False
+    )
     if should_finalize_streaming:
         with _vtimed(self, "  Step 19: Finalize streamed bundle"):
             _finalize_streamed_bundle(self)
@@ -260,7 +262,9 @@ def postprocess_fast(self: "ModelLog") -> None:
     # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
     _set_pass_finished(self)
 
-    should_finalize_streaming = self._activation_writer is not None
+    should_finalize_streaming = self._activation_writer is not None and not getattr(
+        self, "_defer_streaming_bundle_finalization", False
+    )
     if should_finalize_streaming:
         _finalize_streamed_bundle(self)
     if should_finalize_streaming and not self._keep_activations_in_memory:

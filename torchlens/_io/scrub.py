@@ -379,6 +379,8 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "func_config"
     if field_name == "extra_attributes":
         return "module_meta"
+    if field_name in {"grad_inputs", "grad_outputs"}:
+        return "grad_fn_grad"
     raise TorchLensIOError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")
 
 

@@ -224,8 +224,20 @@ class LayerPassLog:
         "activation_ref": FieldPolicy.DROP,
         "gradient_ref": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
+        "_pending_gradient_blob_id": FieldPolicy.DROP,
         "parent_layer_log": FieldPolicy.DROP,
     }
+
+    def __getattribute__(self, name: str) -> Any:
+        """Materialize lazy gradients when the public ``gradient`` field is accessed."""
+
+        if name == "gradient":
+            state = object.__getattribute__(self, "__dict__")
+            gradient = state.get("gradient")
+            if gradient is None and state.get("gradient_ref") is not None:
+                return object.__getattribute__(self, "materialize_gradient")()
+            return gradient
+        return object.__getattribute__(self, name)
 
     def __init__(self, fields_dict: Dict):
         """Initialise from a complete fields dictionary.
@@ -418,6 +430,7 @@ class LayerPassLog:
         self.activation_ref: Optional["LazyActivationRef"] = None
         self.gradient_ref: Optional["LazyActivationRef"] = None
         self._pending_blob_id: Optional[str] = None
+        self._pending_gradient_blob_id: Optional[str] = None
         self.parent_layer_log: Optional["LayerLog"] = None
 
     @property
@@ -624,8 +637,9 @@ class LayerPassLog:
         torch.Size([2, 3])
         """
 
-        if isinstance(self.gradient, torch.Tensor):
-            return self.gradient
+        gradient = self.__dict__.get("gradient")
+        if isinstance(gradient, torch.Tensor):
+            return gradient
         if self.gradient_ref is None:
             raise TorchLensIOError("no gradient_ref to materialize from")
         self.gradient = self.gradient_ref.materialize(map_location=map_location)
@@ -649,6 +663,7 @@ class LayerPassLog:
                 "activation_ref": None,
                 "gradient_ref": None,
                 "_pending_blob_id": None,
+                "_pending_gradient_blob_id": None,
             },
         )
         self.__dict__.update(state)
@@ -816,6 +831,16 @@ class LayerPassLog:
         self.grad_shape = grad_to_save.shape
         self.grad_dtype = grad_to_save.dtype
         self.grad_memory = get_tensor_memory_amount(grad_to_save)
+        writer = getattr(model_log, "_activation_writer", None) if model_log is not None else None
+        if writer is not None and getattr(model_log, "_defer_streaming_bundle_finalization", False):
+            blob_id = writer.next_blob_id()
+            self._pending_gradient_blob_id = blob_id
+            writer.write_blob(
+                blob_id,
+                self.gradient,
+                kind="gradient",
+                label=self._streaming_label,
+            )
 
     # ********************************************
     # ************* Fetcher Functions ************

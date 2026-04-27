@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Iterator, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, Union
 
 import pandas as pd
 import torch
 
+from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from .grad_fn_pass_log import GradFnPassLog
 
@@ -43,6 +44,21 @@ def _clone_grad_value(value: Any) -> Any:
 class GradFnLog:
     """Metadata and runtime passes for one autograd ``grad_fn`` node."""
 
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "grad_fn_id": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
+        "module_path": FieldPolicy.KEEP,
+        "is_custom": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
+        "grad_fn_type": FieldPolicy.KEEP,
+        "grad_fn_type_num": FieldPolicy.KEEP,
+        "grad_fn_total_num": FieldPolicy.KEEP,
+        "is_intervening": FieldPolicy.KEEP,
+        "corresponding_layer": FieldPolicy.KEEP,
+        "next_grad_fn_ids": FieldPolicy.KEEP,
+        "passes": FieldPolicy.KEEP,
+    }
+
     grad_fn_id: int
     name: str
     module_path: str
@@ -55,6 +71,26 @@ class GradFnLog:
     corresponding_layer: "LayerLog | None" = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
     passes: dict[int, GradFnPassLog] = field(default_factory=dict)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state with an IO format marker."""
+
+        state = self.__dict__.copy()
+        state["io_format_version"] = IO_FORMAT_VERSION
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickle state and fill fields added in newer versions."""
+
+        read_io_format_version(state, cls_name=type(self).__name__)
+        default_fill_state(
+            state,
+            defaults={
+                "next_grad_fn_ids": [],
+                "passes": {},
+            },
+        )
+        self.__dict__.update(state)
 
     @property
     def num_passes(self) -> int:
