@@ -1,7 +1,20 @@
 # CHANGELOG
 
 
+## v2.5.0 (2026-04-27)
+
+### Features
+
+- **visualization**: Tri-state vis_buffer_layers with noise filter and hidden-buffer marker
+  ([`4bbd308`](https://github.com/johnmarktaylor91/torchlens/commit/4bbd30806290e77adc4acf2ec599eb71e9e205a3))
+
+
 ## v2.4.0 (2026-04-27)
+
+### Chores
+
+- Defer menagerie revamp design notes
+  ([`5118900`](https://github.com/johnmarktaylor91/torchlens/commit/51189009f9e74740ffdb9b285b00ec3106315d90))
 
 ### Features
 
