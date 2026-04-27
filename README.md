@@ -231,6 +231,31 @@ streamed_log = tl.log_forward_pass(
 )
 ```
 
+## Fast activation recording (`tl.fastlog`)
+
+Use `tl.fastlog` when you already know the events you want and do not need a full
+`ModelLog`. `log_forward_pass()` remains the exhaustive path for graph metadata,
+visualization, validation, and faithful reconstruction of the forward pass. Fastlog is
+the lighter path for predicate-selected activations across one pass or many repeated
+rollouts.
+
+```python
+keep_op = lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu"
+recording = tl.fastlog.record(model, x, keep_op=keep_op)
+print(recording.summary())
+```
+
+Predicates receive `RecordContext` objects with operation/module fields and bounded
+recent history, so they can express rules such as "ReLUs after convolutions" or "outputs
+of every `Linear` module." Captures can stay in RAM, stream synchronously to a fastlog
+directory bundle, or mirror to both. RAM mode is training-compatible via
+`CaptureSpec(keep_grad=True)`.
+
+The tutorial notebook at `notebooks/fastlog_tutorial.ipynb` walks through one-shot
+recording, many-rollout `Recorder` sessions, disk load/recovery, graph previews,
+`dry_run()` predicate iteration, downcasting with `CaptureSpec`, and the v1 support
+boundaries.
+
 ## Security
 
 Portable bundles contain a pickle file in `metadata.pkl`. Only load bundles

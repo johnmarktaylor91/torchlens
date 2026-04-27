@@ -18,10 +18,19 @@ log_forward_pass(model, input)
   |- capture/output_tensors.py — log each tensor operation
   |- postprocess/              — 18-step pipeline (graph, loops, labels, modules)
   +- Returns ModelLog with all logged data
+
+tl.fastlog.record(model, input, keep_op=...)
+  |- decoration/model_prep.py  — prepare model without mutating trainability
+  |- capture/output_tensors.py — build lightweight op RecordContext values
+  |- decoration/model_prep.py  — build module enter/exit RecordContext values
+  |- fastlog/_orchestrator.py  — evaluate predicates and append selected records
+  +- Returns Recording with sparse RAM and/or disk-backed activation records
 ```
 
 Two-pass strategy: when `layers_to_save` is a specific list, Pass 1 runs exhaustive
 (metadata only), Pass 2 runs fast (saves only requested layers).
+Predicate strategy: `tl.fastlog` runs one or more explicit `Recorder.log()` passes and
+retains only events selected by predicates. It does not build a faithful `ModelLog`.
 
 ## Key Concepts
 
@@ -45,6 +54,7 @@ Two-pass strategy: when `layers_to_save` is a specific list, Pass 1 runs exhaust
 - **[capture/](capture/)** — Real-time tensor operation logging during forward pass (7 files)
 - **[data_classes/](data_classes/)** — ModelLog, LayerLog, LayerPassLog, ModuleLog, ParamLog, etc. (10 files)
 - **[decoration/](decoration/)** — One-time torch function wrapping + model preparation (2 files)
+- **[fastlog/](fastlog/)** — Predicate-based sparse activation recording with RAM/disk storage (16 files)
 - **[postprocess/](postprocess/)** — 18-step pipeline: graph cleanup, loop detection, labeling (6 files)
 - **[utils/](utils/)** — Arg handling, tensor ops, RNG, hashing, display helpers (7 files)
 - **[validation/](validation/)** — Forward replay, perturbation checks, metadata invariants (3 files)
