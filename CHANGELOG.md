@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v2.8.0 (2026-04-27)
+
+### Features
+
+- **visualization**: Backward graph rendering via show_backward_graph
+  ([`82b7256`](https://github.com/johnmarktaylor91/torchlens/commit/82b7256d84024aa77f04982e1e649eba9e50d61e))
+
+
 ## v2.7.0 (2026-04-27)
 
 ### Chores
