@@ -288,7 +288,7 @@ class ModelLog:
         self._pass_finished = False
         # "exhaustive" captures all metadata; "fast" reuses exhaustive-pass
         # structure, only re-capturing tensor contents.
-        self.logging_mode = "exhaustive"
+        self.logging_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
         self._all_layers_logged = False
         self._all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers

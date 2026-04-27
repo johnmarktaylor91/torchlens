@@ -27,6 +27,7 @@ from .options import StreamingOptions, VisualizationOptions
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from ._io.bundle import save, load, cleanup_tmp
 from ._io import rehydrate_nested
+from . import fastlog
 
 # ---- Public API: data classes users interact with ------------------------
 
@@ -45,3 +46,9 @@ from .visualization import (
 # ---- Public API: decoration lifecycle ------------------------------------
 
 from .decoration import wrap_torch, unwrap_torch, wrapped
+
+
+def preview_fastlog(model_log, *args, **kwargs):
+    """Delegate to ``model_log.preview_fastlog`` when the preview method is available."""
+
+    return model_log.preview_fastlog(*args, **kwargs)
