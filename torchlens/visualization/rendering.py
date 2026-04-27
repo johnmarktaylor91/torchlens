@@ -51,6 +51,7 @@ from typing import (
 )
 
 import graphviz
+import torch
 
 from .._literals import (
     BufferVisibilityLiteral,
@@ -69,6 +70,7 @@ from .node_spec import NodeSpec, render_lines_to_html
 from .code_panel import CodePanelOption, render_code_panel_subgraph, resolve_code_panel_source
 
 if TYPE_CHECKING:
+    from ..data_classes.grad_fn_log import GradFnLog
     from ..data_classes.model_log import ModelLog
     from ..data_classes.module_log import ModuleLog
 
@@ -160,6 +162,7 @@ class BoundaryNode:
 
 GraphNode = Union[BaseGraphNode, BoundaryNode, FocusNode]
 NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]
+BackwardNodeSpecFn = Callable[["GradFnLog", NodeSpec], NodeSpec | None]
 CollapsedNodeSpecFn = Callable[["ModuleLog", NodeSpec], NodeSpec | None]
 CollapseFn = Callable[["ModuleLog"], bool]
 SkipFn = Callable[["LayerLog"], bool]
@@ -171,6 +174,8 @@ PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no ParamLog available)
 TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
 FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
 GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
+BACKWARD_NODE_COLOR = "#F2F3FF"  # Very light blue/purple for backward grad_fn nodes
+BACKWARD_NODE_BORDER_COLOR = GRADIENT_ARROW_COLOR
 DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
 _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
@@ -686,6 +691,303 @@ def render_graph(
         if os.path.exists(source_path):
             os.remove(source_path)
     return dot.source
+
+
+def render_backward_graph(
+    self: "ModelLog",
+    vis_outpath: str = "backward_modelgraph",
+    vis_graph_overrides: Optional[Dict] = None,
+    node_spec_fn: BackwardNodeSpecFn | None = None,
+    collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
+    vis_node_mode: VisNodeModeLiteral = "default",
+    vis_edge_overrides: Optional[Dict] = None,
+    vis_save_only: bool = False,
+    vis_fileformat: str = "pdf",
+    direction: VisDirectionLiteral = "topdown",
+    code_panel: CodePanelOption = False,
+) -> str:
+    """Render the captured backward grad_fn DAG as a Graphviz graph.
+
+    Intervening grad_fns use a ``[i]`` label prefix. Custom autograd grad_fns
+    use a ``[custom]`` label suffix so the two cues compose on the same node.
+
+    Parameters
+    ----------
+    self:
+        ModelLog containing captured backward metadata.
+    vis_outpath:
+        Output path for the rendered graph.
+    vis_graph_overrides:
+        Graphviz graph-level overrides.
+    node_spec_fn:
+        Optional callback receiving ``(grad_fn_log, default_spec)``.
+    collapsed_node_spec_fn:
+        Accepted for API symmetry with forward visualization. Not applied
+        because backward graphs do not render collapsed module nodes.
+    vis_node_mode:
+        Accepted for API symmetry with forward visualization. Not applied to
+        grad_fn nodes.
+    vis_edge_overrides:
+        Graphviz edge-level overrides.
+    vis_save_only:
+        If True, save without opening a viewer.
+    vis_fileformat:
+        Output format.
+    direction:
+        Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
+    code_panel:
+        Optional source-code panel mode.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source.
+
+    Raises
+    ------
+    ValueError
+        If no explicit backward graph has been captured.
+    """
+
+    if not self.has_backward_log or not self.grad_fn_logs:
+        raise ValueError("No backward graph is available; call log_backward(loss) first.")
+    _ = collapsed_node_spec_fn, vis_node_mode
+
+    if direction == "bottomup":
+        rankdir = "BT"
+    elif direction == "leftright":
+        rankdir = "LR"
+    elif direction == "topdown":
+        rankdir = "TB"
+    else:
+        raise ValueError("direction must be either 'bottomup', 'topdown', or 'leftright'.")
+
+    split_outpath = vis_outpath.split(".")
+    if split_outpath[-1] in [
+        "pdf",
+        "png",
+        "jpg",
+        "svg",
+        "jpeg",
+        "bmp",
+        "pic",
+        "tif",
+        "tiff",
+    ]:
+        vis_outpath = ".".join(split_outpath[:-1])
+
+    graph_caption = (
+        f"<<B>{self.model_name} backward graph</B><br align='left'/>"
+        f"{self.num_grad_fns} grad_fn nodes"
+        f"<br align='left'/>{self.backward_num_passes} backward pass(es)<br align='left'/>>"
+    )
+    dot = graphviz.Digraph(
+        name=f"{self.model_name}_backward",
+        comment="Backward grad_fn graph",
+        format=vis_fileformat,
+    )
+    graph_args = {
+        "rankdir": rankdir,
+        "label": graph_caption,
+        "labelloc": "t",
+        "labeljust": "left",
+        "ordering": "out",
+    }
+    for arg_name, arg_val in (vis_graph_overrides or {}).items():
+        if callable(arg_val):
+            graph_args[arg_name] = str(arg_val(self))
+        else:
+            graph_args[arg_name] = str(arg_val)
+
+    edge_args = {"color": GRADIENT_ARROW_COLOR, "fontcolor": GRADIENT_ARROW_COLOR}
+    for arg_name, arg_val in (vis_edge_overrides or {}).items():
+        if callable(arg_val):
+            edge_args[arg_name] = str(arg_val(self))
+        else:
+            edge_args[arg_name] = str(arg_val)
+
+    dot.graph_attr.update(graph_args)
+    dot.node_attr.update({"ordering": "out"})
+    dot.edge_attr.update(edge_args)
+
+    for grad_fn in self.grad_fns:
+        _add_backward_node_to_graphviz(grad_fn, dot, node_spec_fn)
+
+    visible_ids = set(self.grad_fn_logs)
+    for grad_fn in self.grad_fns:
+        tail_name = _backward_dot_node_name(grad_fn)
+        for next_grad_fn_id in grad_fn.next_grad_fn_ids:
+            if next_grad_fn_id not in visible_ids:
+                continue
+            head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
+            dot.edge(tail_name, head_name)
+
+    source_text = resolve_code_panel_source(
+        code_panel,
+        getattr(self, "_source_code_blob", {}),
+        getattr(self, "_source_model_ref", None),
+    )
+    if source_text is not None:
+        render_code_panel_subgraph(dot, source_text)
+
+    if in_notebook() and not vis_save_only:
+        from IPython.display import display
+
+        display(dot)
+
+    _RENDER_TIMEOUT = 120
+    source_path = dot.save(vis_outpath)
+    try:
+        rendered_path = f"{vis_outpath}.{vis_fileformat}"
+        cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+        subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        if not vis_save_only:
+            graphviz.backend.viewing.view(rendered_path)
+        _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
+    except subprocess.TimeoutExpired:
+        warnings.warn(
+            f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for backward graph with "
+            f"{self.num_grad_fns} grad_fn nodes. DOT source saved to '{source_path}'."
+        )
+    except subprocess.CalledProcessError as e:
+        warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
+    finally:
+        import os
+
+        if os.path.exists(source_path):
+            os.remove(source_path)
+    return dot.source
+
+
+def _backward_dot_node_name(grad_fn: "GradFnLog") -> str:
+    """Return a DOT-safe node name for a grad_fn log.
+
+    Parameters
+    ----------
+    grad_fn:
+        GradFnLog to name.
+
+    Returns
+    -------
+    str
+        DOT-safe node identifier.
+    """
+
+    return f"grad_fn_{grad_fn.grad_fn_id}"
+
+
+def _add_backward_node_to_graphviz(
+    grad_fn: "GradFnLog",
+    graphviz_graph,
+    node_spec_fn: BackwardNodeSpecFn | None,
+) -> None:
+    """Add one backward grad_fn node to a Graphviz graph.
+
+    Parameters
+    ----------
+    grad_fn:
+        GradFnLog to render.
+    graphviz_graph:
+        Graphviz Digraph object.
+    node_spec_fn:
+        Optional callback receiving ``(grad_fn, default_spec)``.
+    """
+
+    default_spec = NodeSpec(
+        lines=_compute_backward_node_lines(grad_fn),
+        shape="oval",
+        fillcolor=BACKWARD_NODE_COLOR,
+        fontcolor="black",
+        color=BACKWARD_NODE_BORDER_COLOR,
+        style="filled,solid",
+        penwidth=1.8,
+        extra_attrs={"ordering": "out"},
+    )
+    if node_spec_fn is not None:
+        result = node_spec_fn(grad_fn, default_spec)
+        spec = default_spec if result is None else result
+    else:
+        spec = default_spec
+    node_args = _node_spec_to_graphviz_args(spec)
+    node_args["name"] = _backward_dot_node_name(grad_fn)
+    graphviz_graph.node(**node_args)
+
+
+def _compute_backward_node_lines(grad_fn: "GradFnLog") -> list[str]:
+    """Build default label rows for a backward grad_fn node.
+
+    Parameters
+    ----------
+    grad_fn:
+        GradFnLog to render.
+
+    Returns
+    -------
+    list[str]
+        Plain-text rows for ``NodeSpec.lines``.
+    """
+
+    title = grad_fn.label
+    if grad_fn.is_intervening:
+        title = f"[i] {title}"
+    if grad_fn.is_custom:
+        title = f"{title} [custom]"
+
+    lines = [title]
+    if grad_fn.corresponding_layer is not None:
+        lines.append(f"@{grad_fn.corresponding_layer.layer_label}")
+    lines.append(f"grad {_format_backward_output_shape(grad_fn)}")
+    return lines
+
+
+def _format_backward_output_shape(grad_fn: "GradFnLog") -> str:
+    """Return the first captured output-gradient shape for a grad_fn.
+
+    Parameters
+    ----------
+    grad_fn:
+        GradFnLog to inspect.
+
+    Returns
+    -------
+    str
+        Compact shape string, or ``"unknown"`` when no tensor was captured.
+    """
+
+    for grad_fn_pass in reversed(list(grad_fn.passes.values())):
+        tensor = _first_tensor_in_obj(grad_fn_pass.grad_outputs)
+        if tensor is not None:
+            return _format_shape_str(tuple(tensor.shape))
+    return "unknown"
+
+
+def _first_tensor_in_obj(value: Any) -> torch.Tensor | None:
+    """Return the first tensor found in a nested value.
+
+    Parameters
+    ----------
+    value:
+        Arbitrarily nested hook payload.
+
+    Returns
+    -------
+    torch.Tensor | None
+        First tensor in traversal order, if present.
+    """
+
+    if isinstance(value, torch.Tensor):
+        return value
+    if isinstance(value, (tuple, list)):
+        for item in value:
+            tensor = _first_tensor_in_obj(item)
+            if tensor is not None:
+                return tensor
+    if isinstance(value, dict):
+        for item in value.values():
+            tensor = _first_tensor_in_obj(item)
+            if tensor is not None:
+                return tensor
+    return None
 
 
 def _build_skip_filtered_edge_map(

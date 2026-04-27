@@ -4,6 +4,7 @@ This module contains every user-facing function:
   - ``log_forward_pass``  - the main entry point (runs model, returns ModelLog)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
+  - ``show_backward_graph`` - backward grad_fn visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
   - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
@@ -21,7 +22,7 @@ import collections.abc
 import os
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 import pandas as pd
 import torch
@@ -903,6 +904,105 @@ def show_model_graph(
         model_log.render_graph(**render_kwargs)
     finally:
         model_log.cleanup()
+
+
+def show_backward_graph(
+    model_log: ModelLog,
+    vis_outpath: str | MissingType = MISSING,
+    vis_save_only: bool | MissingType = MISSING,
+    vis_fileformat: str | MissingType = MISSING,
+    vis_direction: VisDirectionLiteral | MissingType = MISSING,
+    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    node_spec_fn: Callable[[Any, Any], Any] | None = None,
+    collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
+    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
+    code_panel: CodePanelOption = False,
+    visualization: VisualizationOptions | None = None,
+) -> str:
+    """Render an existing ModelLog's captured backward grad_fn graph.
+
+    Parameters
+    ----------
+    model_log:
+        ModelLog with backward metadata captured by ``model_log.log_backward(loss)``
+        or ``model_log.recording_backward()``.
+    vis_outpath:
+        Output path for the rendered graph.
+    vis_save_only:
+        If True, save without opening a viewer.
+    vis_fileformat:
+        Output format.
+    vis_direction:
+        Layout direction. Defaults to ``"topdown"`` for backward graphs.
+    vis_graph_overrides:
+        Graphviz graph-level overrides.
+    vis_edge_overrides:
+        Graphviz edge-level overrides.
+    node_spec_fn:
+        Optional callback receiving ``(grad_fn_log, default_spec)``.
+    collapsed_node_spec_fn:
+        Accepted for forward-visualization API symmetry. Not applied because
+        backward graphs do not render collapsed module nodes.
+    vis_node_mode:
+        Accepted for forward-visualization API symmetry. Not applied to grad_fn
+        nodes.
+    code_panel:
+        Optional source-code panel mode.
+    visualization:
+        Grouped visualization options. Only output path, save behavior, file
+        format, direction, graph overrides, and edge overrides are used.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source.
+    """
+
+    if visualization is None:
+        output_path = "backward_modelgraph"
+        save_only = False
+        file_format = "pdf"
+        direction: VisDirectionLiteral = "topdown"
+        graph_overrides = None
+        edge_overrides = None
+        node_mode: VisNodeModeLiteral = "default"
+    else:
+        output_path = visualization.output_path
+        save_only = visualization.save_only
+        file_format = visualization.file_format
+        direction = visualization.direction
+        graph_overrides = visualization.graph_overrides
+        edge_overrides = visualization.edge_overrides
+        node_mode = visualization.node_mode
+
+    if vis_outpath is not MISSING:
+        output_path = cast(str, vis_outpath)
+    if vis_save_only is not MISSING:
+        save_only = cast(bool, vis_save_only)
+    if vis_fileformat is not MISSING:
+        file_format = cast(str, vis_fileformat)
+    if vis_direction is not MISSING:
+        direction = cast(VisDirectionLiteral, vis_direction)
+    if vis_graph_overrides is not MISSING:
+        graph_overrides = cast(dict[str, Any] | None, vis_graph_overrides)
+    if vis_edge_overrides is not MISSING:
+        edge_overrides = cast(dict[str, Any] | None, vis_edge_overrides)
+    if vis_node_mode is not MISSING:
+        node_mode = cast(VisNodeModeLiteral, vis_node_mode)
+
+    return model_log.show_backward_graph(
+        vis_outpath=output_path,
+        vis_graph_overrides=graph_overrides,
+        node_spec_fn=node_spec_fn,
+        collapsed_node_spec_fn=collapsed_node_spec_fn,
+        vis_node_mode=node_mode,
+        vis_edge_overrides=edge_overrides,
+        vis_save_only=save_only,
+        vis_fileformat=file_format,
+        vis_direction=direction,
+        code_panel=code_panel,
+    )
 
 
 def validate_forward_pass(
