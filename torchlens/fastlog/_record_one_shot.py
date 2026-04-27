@@ -6,6 +6,7 @@ from typing import Any
 
 from torch import nn
 
+from .._deprecations import MISSING, MissingType
 from ..options import StreamingOptions
 from ._recorder import Recorder
 from ._validation import validate_postprocess
@@ -20,8 +21,8 @@ def record(
     *,
     keep_op: PredicateFn | None = None,
     keep_module: PredicateFn | None = None,
-    default_op: bool | CaptureSpec = False,
-    default_module: bool | CaptureSpec = False,
+    default_op: bool | CaptureSpec | MissingType = MISSING,
+    default_module: bool | CaptureSpec | MissingType = MISSING,
     history_size: int = 8,
     include_source_events: bool = False,
     max_predicate_failures: int = 32,
@@ -30,6 +31,7 @@ def record(
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
+    train_mode: bool = False,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with fastlog predicates.
 
@@ -45,6 +47,8 @@ def record(
     include_source_events, max_predicate_failures, on_predicate_error, streaming,
     random_seed:
         Fastlog recording options.
+    train_mode:
+        If True, omitted defaults are promoted to keep-grad capture specs.
     return_output:
         Whether to return ``(model_output, recording)``.
     postprocess:
@@ -69,6 +73,7 @@ def record(
         on_predicate_error=on_predicate_error,
         streaming=streaming,
         random_seed=random_seed,
+        train_mode=train_mode,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)
     recording = recorder.recording

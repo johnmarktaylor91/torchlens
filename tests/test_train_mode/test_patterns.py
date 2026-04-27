@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import types
 
+import pytest
 import torch
 from torch import nn
 
@@ -182,6 +183,60 @@ def test_save_new_activations_train_mode_overrides() -> None:
     assert model_log.train_mode is False
     assert [layer.detach_saved_tensor for layer in model_log] == original_layer_flags
     model_log.cleanup()
+
+
+def test_fastlog_train_mode_sugar_promotes_defaults() -> None:
+    """fastlog train_mode promotes omitted defaults to keep-grad capture specs."""
+
+    recording = tl.fastlog.record(
+        SharedFrozenModule(),
+        torch.randn(3, 4, requires_grad=True),
+        train_mode=True,
+    )
+
+    grad_records = [
+        record
+        for record in recording
+        if record.ram_payload is not None and record.ram_payload.grad_fn is not None
+    ]
+    assert grad_records
+
+
+def test_fastlog_train_mode_explicit_default_op_false() -> None:
+    """Explicit default_op=False remains disabled under train_mode sugar."""
+
+    recording = tl.fastlog.record(
+        SharedFrozenModule(),
+        torch.randn(3, 4, requires_grad=True),
+        train_mode=True,
+        default_op=False,
+    )
+
+    assert all(record.ctx.kind != "op" for record in recording)
+
+
+def test_fastlog_train_mode_default_op_true_errors() -> None:
+    """default_op=True contradicts train_mode keep-grad sugar."""
+
+    with pytest.raises(tl.TrainingModeConfigError, match="default_op=True"):
+        tl.fastlog.record(
+            SharedFrozenModule(),
+            torch.randn(3, 4, requires_grad=True),
+            train_mode=True,
+            default_op=True,
+        )
+
+
+def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
+    """CaptureSpec keep_grad=False contradicts train_mode keep-grad sugar."""
+
+    with pytest.raises(tl.TrainingModeConfigError, match="keep_grad=False"):
+        tl.fastlog.record(
+            SharedFrozenModule(),
+            torch.randn(3, 4, requires_grad=True),
+            train_mode=True,
+            default_op=tl.fastlog.CaptureSpec(keep_grad=False),
+        )
 
 
 def test_save_new_activations_train_mode_restored_on_graph_mismatch() -> None:

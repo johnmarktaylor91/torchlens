@@ -52,3 +52,20 @@ def test_save_new_activations_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> No
     saved.sum().backward()
     assert any(param.grad is not None for param in two_layer_mlp.parameters())
     model_log.cleanup()
+
+
+@pytest.mark.smoke
+def test_fastlog_record_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
+    """fastlog record train_mode keeps recorded payloads differentiable."""
+
+    recording = tl.fastlog.record(
+        two_layer_mlp,
+        torch.randn(3, 4, requires_grad=True),
+        train_mode=True,
+    )
+    payload = next(record.ram_payload for record in recording if record.ram_payload is not None)
+
+    assert payload.grad_fn is not None
+    two_layer_mlp.zero_grad(set_to_none=True)
+    payload.sum().backward()
+    assert any(param.grad is not None for param in two_layer_mlp.parameters())
