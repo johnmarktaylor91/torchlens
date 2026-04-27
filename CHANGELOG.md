@@ -1,6 +1,59 @@
 # CHANGELOG
 
 
+## v2.14.0 (2026-04-27)
+
+### Chores
+
+- **todos**: Log deferred items from 2026-04-27 sprint and record completed PRs
+  ([`70111e6`](https://github.com/johnmarktaylor91/torchlens/commit/70111e6ad93530bd518f8793744874fda2683ba8))
+
+### Features
+
+- **multi-trace**: Add TraceBundle and supergraph for multi-pass analysis
+  ([`97b9524`](https://github.com/johnmarktaylor91/torchlens/commit/97b95246cc75f1516eb9a01e8e71b489b060b768))
+
+Phase 1 of the multi-trace sprint: introduces the `torchlens.multi_trace` subpackage containing
+  TraceBundle (a container for N ModelLog instances) and the supergraph data structure that unifies
+  their graphs.
+
+The bundle handles both shared-topology cases (every trace traverses every node, e.g. same model +
+  different inputs with no dynamic branching) and divergent-topology cases (e.g. dynamic networks,
+  conditional branches, MoE routing). The shared case is just a degenerate overlay where every node
+  is universal -- one class, one mental model, smooth degradation.
+
+Key surface (all re-exported as `tl.TraceBundle`, `tl.bundle`, `tl.NodeView`):
+
+- `TraceBundle(traces, names=None, groups=None)` -- holds N ModelLogs by reference; never copies
+  tensors. Builds the union supergraph at construction. Provides: - `__len__`, `__iter__`,
+  `__getitem__`, `__contains__` - `traces`, `names`, `groups`, `is_shared_topology`, `nodes`,
+  `universal_nodes`, `has_gradients` - `selective_nodes(group=None)`, `coverage(trace_name)` -
+  `most_changed(top_k, metric, on)`, `aggregate(node, statistic, on)` - `assert_shared_topology()` -
+  `bundle(...)` -- thin factory wrapper around `TraceBundle`. - `NodeView` -- per-node accessor
+  returned by `bundle[node_name]`. Two flavours of accessor for activations and gradients: list form
+  (`.activations`/`.gradients`, always works) and stacked form (`.activation`/`.gradient`, strict,
+  raises on partial coverage or shape disagreement). Includes `diff(other, metric, on)`,
+  `aggregate(statistic, on)`, `shape`, `op_type`, `module_path`. - `compare_topology(a, b)` +
+  `TopologyDiff` -- pairwise structural diff between two ModelLogs. - `Supergraph`,
+  `SupergraphNode`, `build_supergraph(traces, names)` -- the union-graph data structure. - Metric
+  primitives (`cosine_distance`, `relative_l2`, `pearson_correlation_distance`,
+  `relative_l1_scalar`) and `resolve_metric` / `METRIC_REGISTRY`. Scalar (0-d / 1-element) inputs
+  auto-fall back to relative_l1 in `NodeView.diff` regardless of the requested metric.
+
+Topology matching is intentionally simple: a greedy linear scan in topological order with
+  `(containing_module, func_name)` as the fingerprint. This catches the common cases without
+  graph-isomorphism machinery; the limitation is documented in the docstring.
+
+Tests: `tests/test_multi_trace.py` with 28 cases covering construction, node-view accessors, scalar
+  fallback, gradient diff, aggregate, ranking, groups, coverage, edge cases, topology comparison,
+  repr, factory function, plus a `@pytest.mark.smoke` smoke test. All pass against `mypy torchlens/`
+  and `ruff check .`.
+
+Visualization, counterfactual branch enumeration, intervention APIs, streaming aggregate over a
+  dataloader, and the eventual ModelLog->Trace rename are explicitly out of scope for this phase --
+  see `.project-context/todos.md`.
+
+
 ## v2.13.0 (2026-04-27)
 
 ### Features
