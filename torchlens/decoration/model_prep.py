@@ -242,11 +242,13 @@ def _prepare_model_session(
 
 
 def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimizer=None) -> None:
-    """Create ``ParamLog`` objects for all parameters and force ``requires_grad=True``.
+    """Create ``ParamLog`` objects and prepare parameter grad tracking.
 
-    ``requires_grad`` is forced True so that ``grad_fn`` metadata is available
-    on all intermediate tensors during the forward pass. The original value is
-    saved to ``tl_requires_grad`` and restored during ``_cleanup_model_session``.
+    Outside ``train_mode``, ``requires_grad`` is forced True so that ``grad_fn``
+    metadata is available on all intermediate tensors during the forward pass.
+    In ``train_mode``, user-authored ``requires_grad`` values are preserved. The
+    original value is always saved to ``tl_requires_grad`` and restored during
+    ``_cleanup_model_session``.
     """
     optimized_param_ids = set()
     if optimizer is not None:
@@ -272,7 +274,8 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
 
             # Save original requires_grad before forcing True.
             param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]
-            param.requires_grad = True
+            if not getattr(model_log, "train_mode", False):
+                param.requires_grad = True
 
             barcode = make_random_barcode()
             param.tl_param_barcode = barcode  # type: ignore[attr-defined]
