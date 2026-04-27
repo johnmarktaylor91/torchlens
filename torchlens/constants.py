@@ -47,6 +47,10 @@ MODEL_LOG_FIELD_ORDER = [
     "save_function_args",
     "num_context_lines",
     "save_gradients",
+    "gradients_to_save",
+    "_gradient_layer_nums_to_save",
+    "gradient_postfunc",
+    "gradient_postfunc_repr",
     "save_source_context",
     "save_rng_states",
     "detect_loops",
@@ -121,6 +125,8 @@ MODEL_LOG_FIELD_ORDER = [
     "time_forward_pass",
     "time_cleanup",
     "time_function_calls",
+    # Backward pass
+    "backward",
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [
@@ -188,6 +194,9 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "func_non_tensor_args",
     "func_is_inplace",
     "grad_fn_name",
+    "grad_fn_id",
+    "grad_fn_object",
+    "corresponding_grad_fn",
     "is_part_of_iterable_output",
     "iterable_output_index",
     # Param info
@@ -285,6 +294,9 @@ LAYER_LOG_FIELD_ORDER = [
     "func_name",
     "func_is_inplace",
     "grad_fn_name",
+    "grad_fn_id",
+    "grad_fn_object",
+    "corresponding_grad_fn",
     "func_argnames",
     "num_args",
     "num_positional_args",
@@ -475,6 +487,37 @@ MODULE_LOG_FIELD_ORDER = [
     "has_backward_hooks",
     "extra_attributes",
     "methods",
+]
+
+GRAD_FN_PASS_LOG_FIELD_ORDER = [
+    "pass_num",
+    "grad_inputs",
+    "grad_outputs",
+    "time_started",
+    "time_finished",
+]
+
+GRAD_FN_LOG_FIELD_ORDER = [
+    "grad_fn_id",
+    "name",
+    "module_path",
+    "is_custom",
+    "is_intervening",
+    "corresponding_layer",
+    "next_grad_fn_ids",
+    "passes",
+    "num_passes",
+]
+
+BACKWARD_LOG_FIELD_ORDER = [
+    "grad_fn_logs",
+    "grad_fn_order",
+    "root_grad_fn_id",
+    "num_grad_fns",
+    "num_intervening_grad_fns",
+    "num_passes",
+    "peak_memory_bytes",
+    "memory_backend",
 ]
 
 # ---------------------------------------------------------------------------

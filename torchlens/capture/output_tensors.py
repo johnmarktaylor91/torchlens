@@ -883,6 +883,12 @@ def _log_output_tensor_info(
     # In-place ops return the same tensor object, which already has tl_tensor_label_raw.
     fields_dict["func_is_inplace"] = hasattr(t, "tl_tensor_label_raw")
     fields_dict["grad_fn_name"] = type(t.grad_fn).__name__
+    fields_dict["grad_fn_id"] = id(t.grad_fn) if t.grad_fn is not None else None
+    # Autograd Function objects do not consistently support weak references.
+    # Keep the object only until explicit backward capture has registered hooks;
+    # the backward finalizer clears these strong refs to avoid pinning graphs.
+    fields_dict["grad_fn_object"] = t.grad_fn
+    fields_dict["corresponding_grad_fn"] = None
 
     if fields_dict["is_part_of_iterable_output"]:
         fields_dict["iterable_output_index"] = i

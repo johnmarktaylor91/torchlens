@@ -94,6 +94,10 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
 
     for layer_label in layers_to_update:
         layer = self[layer_label]
+        selection = getattr(self, "_gradient_layer_nums_to_save", "all")
+        if selection != "all":
+            if selection in [None, "none", []] or layer.creation_order not in selection:
+                continue
         if layer_label not in self._saved_gradients_set:
             self._saved_gradients_set.add(layer_label)
             self.layers_with_saved_gradients.append(layer_label)

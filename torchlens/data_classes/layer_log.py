@@ -72,6 +72,9 @@ class LayerLog:
         "func_name": FieldPolicy.KEEP,
         "func_is_inplace": FieldPolicy.KEEP,
         "grad_fn_name": FieldPolicy.KEEP,
+        "grad_fn_id": FieldPolicy.KEEP,
+        "grad_fn_object": FieldPolicy.DROP,
+        "corresponding_grad_fn": FieldPolicy.DROP,
         "func_argnames": FieldPolicy.KEEP,
         "num_args": FieldPolicy.KEEP,
         "num_positional_args": FieldPolicy.KEEP,
@@ -152,6 +155,9 @@ class LayerLog:
         self.func_name = first_pass.func_name
         self.func_is_inplace = first_pass.func_is_inplace
         self.grad_fn_name = first_pass.grad_fn_name
+        self.grad_fn_id = first_pass.grad_fn_id
+        self.grad_fn_object = first_pass.grad_fn_object
+        self.corresponding_grad_fn = first_pass.corresponding_grad_fn
         self.func_argnames = first_pass.func_argnames
         self.num_args = first_pass.num_args
         self.num_positional_args = first_pass.num_positional_args

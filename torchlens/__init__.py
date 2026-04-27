@@ -20,6 +20,7 @@ from .user_funcs import (
     log_model_metadata,
     get_model_metadata,
     validate_forward_pass,
+    validate_backward_pass,
     validate_saved_activations,
     validate_batch_of_models_and_inputs,
 )
@@ -33,6 +34,7 @@ from . import fastlog
 # ---- Public API: data classes users interact with ------------------------
 
 from .data_classes.model_log import ModelLog
+from .data_classes.backward_log import BackwardLog, GradFnLog, GradFnPassLog
 from .data_classes.layer_log import LayerLog, LayerAccessor
 from .data_classes.layer_pass_log import LayerPassLog, TensorLog
 from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog
@@ -70,6 +72,9 @@ def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
 
 __all__ = [
     "FuncCallLocation",
+    "BackwardLog",
+    "GradFnLog",
+    "GradFnPassLog",
     "LayerAccessor",
     "LayerLog",
     "LayerPassLog",
@@ -102,6 +107,7 @@ __all__ = [
     "summary",
     "unwrap_torch",
     "validate_batch_of_models_and_inputs",
+    "validate_backward_pass",
     "validate_forward_pass",
     "validate_saved_activations",
     "wrap_torch",

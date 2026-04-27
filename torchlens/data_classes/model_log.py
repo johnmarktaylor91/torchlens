@@ -80,6 +80,7 @@ from .interface import (
 )
 from .layer_log import LayerLog
 from .layer_pass_log import LayerPassLog, TensorLog
+from .backward_log import BackwardLog
 
 
 def _init_module_build_data() -> dict:
@@ -160,6 +161,10 @@ class ModelLog:
         "train_mode": FieldPolicy.DROP,
         "save_function_args": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
+        "gradients_to_save": FieldPolicy.KEEP,
+        "_gradient_layer_nums_to_save": FieldPolicy.KEEP,
+        "gradient_postfunc": FieldPolicy.DROP,
+        "gradient_postfunc_repr": FieldPolicy.KEEP,
         "save_source_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
         "detect_loops": FieldPolicy.KEEP,
@@ -238,6 +243,7 @@ class ModelLog:
         "time_forward_pass": FieldPolicy.KEEP,
         "time_cleanup": FieldPolicy.KEEP,
         "time_function_calls": FieldPolicy.KEEP,
+        "backward": FieldPolicy.KEEP,
     }
 
     def __init__(
@@ -245,9 +251,11 @@ class ModelLog:
         model_name: str,
         output_device: str = "same",
         activation_postfunc: Optional[Callable] = None,
+        gradient_postfunc: Optional[Callable] = None,
         keep_unsaved_layers: bool = True,
         save_function_args: bool = False,
         save_gradients: bool = False,
+        gradients_to_save: Any = "all",
         detach_saved_tensors: bool = False,
         mark_input_output_distances: bool = True,
         num_context_lines: int = 7,
@@ -264,10 +272,12 @@ class ModelLog:
             model_name: Human-readable name of the model being logged.
             output_device: Device to move saved activations to ("same" keeps original device).
             activation_postfunc: Optional function applied to each tensor before saving.
+            gradient_postfunc: Optional function applied to each gradient before saving.
             keep_unsaved_layers: If False, layers without saved activations are removed
                 from the final log (but still logged during the pass).
             save_function_args: Whether to deep-copy each operation's input arguments.
             save_gradients: Whether to register gradient hooks for backward pass.
+            gradients_to_save: Which layer gradients should be saved.
             detach_saved_tensors: Whether to detach saved tensors from the autograd graph.
             mark_input_output_distances: Whether to compute BFS distances from
                 inputs/outputs for each layer.
@@ -302,6 +312,10 @@ class ModelLog:
         self.activation_postfunc_repr = (
             repr(activation_postfunc) if activation_postfunc is not None else None
         )
+        self.gradient_postfunc = gradient_postfunc
+        self.gradient_postfunc_repr = (
+            repr(gradient_postfunc) if gradient_postfunc is not None else None
+        )
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
         self.current_function_call_barcode = None
@@ -311,6 +325,7 @@ class ModelLog:
         self.train_mode = train_mode
         self.save_function_args = save_function_args
         self.save_gradients = save_gradients
+        self.gradients_to_save = gradients_to_save
         self.save_source_context = save_source_context
         self.save_rng_states = save_rng_states
         self.detect_loops = detect_loops
@@ -340,6 +355,7 @@ class ModelLog:
         self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()  # raw barcode -> entry
         self._raw_layer_labels_list: List[str] = []
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
+        self._gradient_layer_nums_to_save: List[int] | str = []
         self._layer_counter: int = 0  # monotonic counter for operation numbering
         self.num_operations: int = 0  # total operations after postprocessing
         self._raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
@@ -421,6 +437,7 @@ class ModelLog:
         self.time_forward_pass: float = 0
         self.time_cleanup: float = 0
         self.time_function_calls: float = 0
+        self.backward = BackwardLog()
 
     # ********************************************
     # ************ Built-in Methods **************
@@ -518,6 +535,11 @@ class ModelLog:
             defaults={
                 "io_format_version": IO_FORMAT_VERSION,
                 "activation_postfunc_repr": None,
+                "gradient_postfunc": None,
+                "gradient_postfunc_repr": None,
+                "gradients_to_save": "all",
+                "_gradient_layer_nums_to_save": [],
+                "backward": BackwardLog(),
                 "_buffer_accessor": None,
                 "_module_logs": None,
                 "_module_build_data": None,
@@ -1178,6 +1200,7 @@ class ModelLog:
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: str | List = "all",
+        gradients_to_save: str | List | None = "all",
         random_seed: Optional[int] = None,
         train_mode: bool | None = None,
     ) -> None:
@@ -1185,7 +1208,7 @@ class ModelLog:
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, random_seed, train_mode:
+        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed, train_mode:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.save_new_activations`.
         """
@@ -1200,6 +1223,7 @@ class ModelLog:
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
+            gradients_to_save=gradients_to_save,
             random_seed=random_seed,
             train_mode=train_mode,
         )
@@ -1321,13 +1345,14 @@ class ModelLog:
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: Optional[str | List[str | int]] = "all",
+        gradients_to_save: Optional[str | List[str | int]] = "all",
         random_seed: Optional[int] = None,
     ) -> None:
         """Run a forward pass and capture it into this model log.
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, random_seed:
+        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.run_and_log_inputs_through_model`.
         """
@@ -1339,8 +1364,40 @@ class ModelLog:
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
+            gradients_to_save=gradients_to_save,
             random_seed=random_seed,
         )
+
+    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "ModelLog":
+        """Run backward from ``loss`` while capturing first-class backward metadata.
+
+        Parameters
+        ----------
+        loss:
+            Tensor whose ``grad_fn`` roots the backward graph.
+        **backward_kwargs:
+            Keyword arguments forwarded to ``torch.Tensor.backward``.
+
+        Returns
+        -------
+        ModelLog
+            This model log, for chaining.
+        """
+        from ..capture.backward import log_backward as _impl
+
+        return _impl(self, loss, **backward_kwargs)
+
+    def recording_backward(self) -> Any:
+        """Return a context manager that captures user-managed backward calls.
+
+        Returns
+        -------
+        Any
+            Backward recording context manager.
+        """
+        from ..capture.backward import recording_backward as _impl
+
+        return _impl(self)
 
     def _remove_log_entry(
         self,

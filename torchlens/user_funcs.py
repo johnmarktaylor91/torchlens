@@ -206,10 +206,12 @@ def _run_model_and_save_specified_activations(
     keep_unsaved_layers: bool = True,
     output_device: OutputDeviceLiteral = "same",
     activation_postfunc: Optional[Callable] = None,
+    gradient_postfunc: Optional[Callable] = None,
     mark_input_output_distances: bool = False,
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
     save_gradients: bool = False,
+    gradients_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
     random_seed: Optional[int] = None,
     num_context_lines: int = 7,
     optimizer=None,
@@ -243,12 +245,14 @@ def _run_model_and_save_specified_activations(
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
         activation_postfunc: Optional transform applied to each activation before storage
             (e.g., channel-wise averaging to reduce memory).
+        gradient_postfunc: Optional transform applied to each gradient before storage.
         mark_input_output_distances: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
         detach_saved_tensors: If True, saved tensors are detached from the autograd graph.
         save_function_args: If True, store the non-tensor arguments to each function call.
             Required for validation replay (``validate_saved_activations``).
         save_gradients: If True, register backward hooks to capture gradients.
+        gradients_to_save: Which layer gradients to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
@@ -282,9 +286,11 @@ def _run_model_and_save_specified_activations(
         model_name,
         output_device,
         activation_postfunc,
+        gradient_postfunc,
         keep_unsaved_layers,
         save_function_args,
         save_gradients,
+        gradients_to_save,
         detach_saved_tensors,
         mark_input_output_distances,
         num_context_lines,
@@ -304,7 +310,7 @@ def _run_model_and_save_specified_activations(
         model_log._activation_writer = BundleStreamWriter(save_activations_to)
     try:
         model_log._run_and_log_inputs_through_model(
-            model, input_args, input_kwargs, layers_to_save, random_seed
+            model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
         )
     except TorchLensIOError:
         raise
@@ -324,10 +330,12 @@ def log_forward_pass(
     keep_unsaved_layers: bool = True,
     output_device: OutputDeviceLiteral = "same",
     activation_postfunc: Optional[Callable] = None,
+    gradient_postfunc: Optional[Callable] = None,
     mark_input_output_distances: bool | MissingType = MISSING,
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
     save_gradients: bool = False,
+    gradients_to_save: Optional[Union[str, List]] | MissingType = MISSING,
     save_source_context: bool = False,
     save_rng_states: bool = False,
     vis_mode: VisModeLiteral | MissingType = MISSING,
@@ -359,7 +367,7 @@ def log_forward_pass(
     detect_recurrent_patterns: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
     streaming: StreamingOptions | None = None,
-    train_mode: bool = False,
+    train_mode: bool | MissingType = MISSING,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -402,12 +410,15 @@ def log_forward_pass(
             requested saved activations in the final log.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
         activation_postfunc: Optional function applied to each activation before saving.
+        gradient_postfunc: Optional function applied to each gradient before saving.
         mark_input_output_distances: Deprecated alias for
             ``compute_input_output_distances``.
         detach_saved_tensors: If True, detach saved tensors from the autograd graph.
         save_function_args: Store non-tensor args for each function call (needed for
             ``validate_forward_pass``).
         save_gradients: Capture gradients during a subsequent backward pass.
+        gradients_to_save: Which layer gradients to save. When omitted, explicit
+            backward capture uses the same selection as ``layers_to_save``.
         save_source_context: Python call-stack identity is always recorded for each
             tensor operation. If False (default), identity fields such as ``file``,
             ``line_number``, ``func_name``, ``code_firstlineno``,
@@ -532,8 +543,26 @@ def log_forward_pass(
         and streaming_options.activation_callback is not None
     ):
         raise ValueError("save_activations_to and activation_sink are mutually exclusive.")
+    train_mode_explicit = train_mode is not MISSING
+    if isinstance(train_mode, MissingType):
+        train_mode_value = False
+    else:
+        train_mode_value = train_mode
+    backward_opted_in = gradients_to_save is not MISSING
+    if backward_opted_in:
+        if train_mode_explicit and train_mode_value is False:
+            raise ValueError(
+                "gradients_to_save opts into backward capture, which requires train_mode=True. "
+                "Omit train_mode or set train_mode=True."
+            )
+        train_mode_value = True
+        save_gradients = True
+    gradients_to_save_resolved = (
+        layers_to_save if gradients_to_save is MISSING else gradients_to_save
+    )
+
     validate_training_compatibility(
-        train_mode=train_mode,
+        train_mode=train_mode_value,
         streaming=streaming_options,
         detach_saved_tensors=detach_saved_tensors,
         inference_mode_active=torch.is_inference_mode_enabled(),
@@ -541,8 +570,12 @@ def log_forward_pass(
 
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
+    if type(gradients_to_save_resolved) is str:
+        gradients_to_save_resolved = gradients_to_save_resolved.lower()
 
-    uses_two_pass = layers_to_save not in ["all", "none", None, []]
+    uses_two_pass = (layers_to_save not in ["all", "none", None, []]) or (
+        gradients_to_save_resolved not in ["all", "none", None, []]
+    )
     if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
             'save_activations_to is only supported with layers_to_save="all" in this '
@@ -562,10 +595,12 @@ def log_forward_pass(
             keep_unsaved_layers=keep_unsaved_layers,
             output_device=output_device,
             activation_postfunc=activation_postfunc,
+            gradient_postfunc=gradient_postfunc,
             mark_input_output_distances=compute_input_output_distances,
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,
             save_gradients=save_gradients,
+            gradients_to_save=gradients_to_save_resolved,  # type: ignore[arg-type]
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -576,7 +611,7 @@ def log_forward_pass(
             keep_activations_in_memory=streaming_options.retain_in_memory,
             activation_sink=streaming_options.activation_callback,
             verbose=verbose,
-            train_mode=train_mode,
+            train_mode=train_mode_value,
         )
     else:
         # --- TWO-PASS path ---
@@ -593,10 +628,12 @@ def log_forward_pass(
             keep_unsaved_layers=True,
             output_device=output_device,
             activation_postfunc=activation_postfunc,
+            gradient_postfunc=gradient_postfunc,
             mark_input_output_distances=compute_input_output_distances,
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,
-            save_gradients=save_gradients,
+            save_gradients=False,
+            gradients_to_save=None,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -607,19 +644,22 @@ def log_forward_pass(
             keep_activations_in_memory=streaming_options.retain_in_memory,
             activation_sink=streaming_options.activation_callback,
             verbose=verbose,
-            train_mode=train_mode,
+            train_mode=train_mode_value,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
         _vprint(model_log, "Two-pass mode: Pass 2 (fast, saving requested layers)")
         model_log.keep_unsaved_layers = keep_unsaved_layers
+        model_log.save_gradients = save_gradients
+        model_log.gradients_to_save = gradients_to_save_resolved
         model_log.save_new_activations(
             model=model,
             input_args=input_args,  # type: ignore[arg-type]
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
+            gradients_to_save=gradients_to_save_resolved,  # type: ignore[arg-type]
             random_seed=random_seed,
-            train_mode=train_mode,
+            train_mode=train_mode_value,
         )
 
     # Print final summary.
@@ -972,6 +1012,54 @@ def validate_forward_pass(
         model_log.cleanup()
         del model_log
     return activations_are_valid
+
+
+def validate_backward_pass(
+    model: nn.Module,
+    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
+    input_kwargs: Optional[Dict[Any, Any]] = None,
+    loss_fn: Optional[Callable[[Any], torch.Tensor]] = None,
+    *,
+    perturb_saved_gradients: bool = False,
+    atol: float = 1e-5,
+    rtol: float = 1e-4,
+) -> bool:
+    """Validate first-class backward capture against stock autograd.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Positional args for ``model.forward()``.
+    input_kwargs:
+        Keyword args for ``model.forward()``.
+    loss_fn:
+        Optional callable mapping model outputs to a scalar loss. Defaults to
+        summing all returned tensors.
+    perturb_saved_gradients:
+        If True, perturb a saved gradient and require validation to fail.
+    atol:
+        Absolute allclose tolerance.
+    rtol:
+        Relative allclose tolerance.
+
+    Returns
+    -------
+    bool
+        True if backward capture matches stock autograd.
+    """
+    from .validation.backward import validate_backward_pass as _impl
+
+    return _impl(
+        model,
+        input_args,
+        input_kwargs=input_kwargs,
+        loss_fn=loss_fn,
+        perturb_saved_gradients=perturb_saved_gradients,
+        atol=atol,
+        rtol=rtol,
+    )
 
 
 def validate_saved_activations(
