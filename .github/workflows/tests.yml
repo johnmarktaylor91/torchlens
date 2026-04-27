@@ -34,6 +34,12 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
+      - name: Install graphviz (system dep -- the `dot` binary used by
+          tests that render visualization output)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
       - name: Install torch (${{ matrix.torch }}, CPU wheel)
         run: |
           uv pip install --system "torch==${{ matrix.torch }}" \
