@@ -20,6 +20,7 @@ from __future__ import annotations
 import warnings
 from typing import (
     TYPE_CHECKING,
+    Any,
     Callable,
     Dict,
     Iterator,
@@ -333,6 +334,31 @@ class TraceBundle:
         if not isinstance(view, NodeView):  # pragma: no cover - defensive
             raise TypeError("aggregate requires a node name (str), not a trace index")
         return view.aggregate(statistic=statistic, on=on)
+
+    # ------------------------------------------------------------------
+    # Visualization
+    # ------------------------------------------------------------------
+
+    def show(
+        self,
+        vis_outpath: Optional[str] = None,
+        mode: Literal["auto", "divergence", "swarm", "group_color"] = "auto",
+        **kwargs: Any,
+    ) -> Optional[str]:
+        """Render this bundle as a Graphviz graph.
+
+        Thin convenience wrapper around
+        :func:`torchlens.multi_trace.visualization.show_bundle_graph`.
+        See that function for full kwarg documentation; common options
+        are ``metric=`` (for ``mode='divergence'``), ``show_coverage=``
+        (for ``mode='swarm'``), ``vis_format=``, ``vis_orientation=``,
+        and ``save_only=``.
+        """
+
+        # Lazy import to dodge the bundle <-> visualization import cycle.
+        from .visualization import show_bundle_graph
+
+        return show_bundle_graph(self, vis_outpath=vis_outpath, mode=mode, **kwargs)
 
     # ------------------------------------------------------------------
     # Hard checks

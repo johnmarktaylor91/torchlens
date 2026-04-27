@@ -13,10 +13,11 @@ Public surface:
   structure produced by :func:`build_supergraph`.
 * Metric primitives (cosine_distance, relative_l2, pearson_correlation_distance,
   relative_l1_scalar) and :func:`resolve_metric`.
+* :func:`show_bundle_graph` -- Graphviz visualization with three styling
+  modes (divergence, swarm, group_color) plus an ``auto`` default.
 
-Visualization, counterfactual branch enumeration, intervention APIs, and
-streaming aggregate are deferred to a Phase 2 dispatch -- see
-``.project-context/todos.md``.
+Counterfactual branch enumeration, intervention APIs, and streaming
+aggregate remain deferred -- see ``.project-context/todos.md``.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ from .topology import (
     build_supergraph,
     compare_topology,
 )
+from .visualization import show_bundle_graph
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from ..data_classes.model_log import ModelLog
@@ -75,4 +77,5 @@ __all__ = [
     "relative_l1_scalar",
     "relative_l2",
     "resolve_metric",
+    "show_bundle_graph",
 ]
