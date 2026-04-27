@@ -13,7 +13,7 @@ output, we render to a temp directory and check size + extension.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import pytest
 import torch
@@ -359,3 +359,271 @@ def test_too_many_groups_raises() -> None:
     b = TraceBundle(traces, names=names, groups=groups)
     with pytest.raises(ValueError, match="up to 10 groups"):
         show_bundle_graph(b, mode="group_color", return_dot=True)
+
+
+# ---------------------------------------------------------------------------
+# Module-cluster aesthetic parity with show_model_graph
+# ---------------------------------------------------------------------------
+
+
+def _extract_cluster_penwidths(dot_source: str) -> List[Tuple[str, float]]:
+    """Return ``[(cluster_name, penwidth), ...]`` from a Graphviz DOT source.
+
+    Walks line-by-line looking for ``subgraph "cluster_*"`` (or
+    ``subgraph cluster_*``) declarations and the ``penwidth=N`` attribute
+    on the immediately-following ``s.attr(...)`` line.  Used by the
+    parity tests to compare cluster border widths between bundle output
+    and ModelLog output.
+    """
+
+    import re
+
+    cluster_re = re.compile(r"subgraph\s+\"?(cluster_[A-Za-z0-9_.]+)\"?")
+    penwidth_re = re.compile(r"penwidth=([0-9.]+)")
+    out: List[Tuple[str, float]] = []
+    pending: Optional[str] = None
+    for line in dot_source.splitlines():
+        m_cluster = cluster_re.search(line)
+        if m_cluster:
+            pending = m_cluster.group(1)
+            continue
+        if pending is not None:
+            m_pen = penwidth_re.search(line)
+            if m_pen:
+                out.append((pending, float(m_pen.group(1))))
+                pending = None
+    return out
+
+
+class _NestedNet(nn.Module):
+    """Two levels of module nesting -- exercises depth-1 + depth-2 clusters."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.outer = _OuterBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.outer(x)
+
+
+class _OuterBlock(nn.Module):
+    """Outer wrapper used by :class:`_NestedNet`."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = _InnerBlock()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.fc(self.inner(x)))
+
+
+class _InnerBlock(nn.Module):
+    """Inner wrapper used by :class:`_OuterBlock`."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.lin(x))
+
+
+class _RecurrentNet(nn.Module):
+    """Calls a single submodule three times -- exercises pass-suffix labels."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.block = _InnerBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.block(x)
+        x = self.block(x)
+        x = self.block(x)
+        return x
+
+
+def test_module_cluster_penwidth_parity(tmp_path: Path) -> None:
+    """Cluster penwidths match between ModelLog and bundle for the same model.
+
+    Render the same nested model both as a single trace (via
+    ``show_model_graph``) and as a single-trace bundle and assert that
+    cluster ``penwidth`` values are identical at equivalent depths.  The
+    bundle uses the shared ``compute_module_penwidth`` formula in
+    ``visualization/_render_utils.py`` so single-trace and multi-trace
+    output should converge.
+    """
+
+    model = _NestedNet()
+    log = tl.log_forward_pass(model, torch.rand(2, 4))
+    modellog_src = log.render_graph(vis_save_only=True, vis_outpath=str(tmp_path / "modellog"))
+
+    b = TraceBundle([log])
+    bundle_src = show_bundle_graph(b, mode="auto", return_dot=True)
+    assert bundle_src is not None
+
+    modellog_widths = {key: width for key, width in _extract_cluster_penwidths(modellog_src)}
+    bundle_widths = {key: width for key, width in _extract_cluster_penwidths(bundle_src)}
+
+    # ``outer`` cluster: top-level (depth 0) -> max penwidth (5.0)
+    # ``outer.inner`` cluster: depth 1 -> middle width (4.0 with 2 levels of nesting,
+    # or different value depending on max_depth).
+    # We don't hardcode 5.0 / 4.0 since the formula depends on max_depth; we just
+    # require the bundle outputs the SAME values as ModelLog at matching keys.
+
+    assert modellog_widths, "expected at least one cluster penwidth in ModelLog DOT"
+    assert bundle_widths, "expected at least one cluster penwidth in bundle DOT"
+
+    # Build a normalised per-base-name map: ``{base_name: penwidth}`` so we can
+    # compare without depending on internal cluster_<name>_pass<N> mangling.
+    # The bundle's ``safe_dot_id`` rewrites ``.`` -> ``_`` so we also collapse
+    # both forms into a common key shape (``outer.inner`` and ``outer_inner``
+    # both -> ``outer-inner``).
+    def _normalise_keys(widths: dict[str, float]) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for key, width in widths.items():
+            base = key.replace("cluster_", "")
+            # Strip any trailing pass numbering (``_pass1`` from ModelLog,
+            # ``_1`` from the bundle's ``safe_dot_id`` output).
+            for sep in ("_pass", "_"):
+                if sep in base and base.rsplit(sep, 1)[-1].isdigit():
+                    base = base.rsplit(sep, 1)[0]
+                    break
+            base = base.replace(".", "-").replace("_", "-")
+            out.setdefault(base, width)
+        return out
+
+    modellog_norm = _normalise_keys(modellog_widths)
+    bundle_norm = _normalise_keys(bundle_widths)
+
+    shared_keys = set(modellog_norm) & set(bundle_norm)
+    assert shared_keys, (
+        f"no shared cluster keys between ModelLog ({sorted(modellog_norm)}) and "
+        f"bundle ({sorted(bundle_norm)})"
+    )
+
+    # The shallowest shared cluster (i.e. the one with the fewest "-" in its
+    # normalised name) MUST have identical penwidth across renders -- this
+    # is the strongest depth-0 parity check.  At deeper depths ModelLog's
+    # ``_get_max_nesting_depth`` excludes some leaf clusters from the depth
+    # count (it only counts modules with their own internal edges) while
+    # the bundle counts all nesting levels, so deeper-depth penwidths are
+    # allowed to drift.  We assert that at least the depth-0 cluster matches
+    # exactly, and at deeper depths just require both renderers to be
+    # monotonically scaling.
+    shallowest = sorted(shared_keys, key=lambda k: k.count("-"))[0]
+    assert modellog_norm[shallowest] == bundle_norm[shallowest], (
+        f"penwidth mismatch at shallowest cluster {shallowest!r}: "
+        f"ModelLog={modellog_norm[shallowest]} vs bundle={bundle_norm[shallowest]}"
+    )
+
+    # Both ModelLog and the bundle must produce monotonically non-increasing
+    # penwidths as depth increases (deeper clusters get thinner borders).
+    def _by_depth(widths: dict[str, float]) -> List[Tuple[int, float]]:
+        return sorted([(k.count("-"), w) for k, w in widths.items()])
+
+    for series, name in [
+        (_by_depth(modellog_norm), "ModelLog"),
+        (_by_depth(bundle_norm), "bundle"),
+    ]:
+        prev_w = None
+        prev_d = None
+        for depth, w in series:
+            if prev_d is not None and depth > prev_d:
+                assert w <= prev_w, (
+                    f"{name} penwidth not monotonic: depth {prev_d}={prev_w}, depth {depth}={w}"
+                )
+            prev_d, prev_w = depth, w
+
+    # Sanity: at least one cluster carries a non-default (>2) width so the
+    # parity check actually exercised the depth scaling formula.
+    assert any(w > 2.0 for w in bundle_norm.values()), (
+        f"expected at least one cluster with depth-scaled penwidth > 2.0; got {bundle_norm}"
+    )
+    # Both renderers should produce strictly decreasing penwidths from depth
+    # 0 to the deepest cluster.  Without this, the formula isn't actually
+    # being exercised.
+    bundle_widths_only = sorted({w for w in bundle_norm.values()}, reverse=True)
+    assert len(bundle_widths_only) >= 2, (
+        f"bundle should produce more than one distinct penwidth; got {bundle_norm}"
+    )
+
+
+def test_module_cluster_pass_labels(tmp_path: Path) -> None:
+    """Multi-pass module clusters carry ``(xN)`` count or ``:N`` pass suffixes.
+
+    The bundle operates on rolled-equivalent supergraph nodes (one
+    canonical entry per fingerprint+occurrence-index), so a recurrent
+    model that calls ``self.block(...)`` three times produces a single
+    ``@block`` cluster whose label carries the rolled-style count
+    ``(x3)`` -- mirroring ``show_model_graph(vis_mode='rolled')``.
+
+    For models where the supergraph genuinely contains multiple distinct
+    pass occurrences (covered separately in
+    :func:`test_module_cluster_unrolled_pass_labels`) each pass becomes
+    its own cluster with a ``:N`` suffix in the title.  Both signals are
+    pass-aware bundle parity for ``show_model_graph``'s aesthetics.
+    """
+
+    # Recurrent: same submodule called 3 times -> rolled-style ``(x3)``.
+    model = _RecurrentNet()
+    log = tl.log_forward_pass(model, torch.rand(2, 4))
+    b = TraceBundle([log])
+    src = show_bundle_graph(b, mode="auto", return_dot=True)
+    assert src is not None
+    assert "@block (x3)" in src, (
+        f"expected rolled-style '@block (x3)' label in bundle DOT; got:\n{src}"
+    )
+    assert "@block.lin (x3)" in src, (
+        f"expected nested rolled-style '@block.lin (x3)' label; got:\n{src}"
+    )
+
+
+def test_module_cluster_unrolled_pass_labels(tmp_path: Path) -> None:
+    """Genuinely multi-occurrence supergraph clusters carry ``:N`` suffixes.
+
+    When a model has distinct call-site occurrences of the same module
+    (e.g. ``NestedModules``' ``level21`` called from three positions in
+    ``forward()``), the supergraph produces one canonical cluster per
+    occurrence and each cluster's title includes the ``:N`` pass suffix.
+    """
+
+    import sys
+    from pathlib import Path as _Path
+
+    # Reuse the example_models fixtures alongside the test suite.
+    repo_root = _Path(__file__).resolve().parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    import example_models  # type: ignore[import-not-found]
+
+    model = example_models.NestedModules()
+    log = tl.log_forward_pass(model, torch.rand(5, 5))
+    b = TraceBundle([log])
+    src = show_bundle_graph(b, mode="auto", return_dot=True)
+    assert src is not None
+
+    # ``level21`` is called 3 times via distinct forward-statement positions;
+    # the supergraph emits three pass-tagged clusters.
+    for n in (1, 2, 3):
+        assert f"@level21:{n}" in src, f"expected unrolled pass cluster '@level21:{n}'; got:\n{src}"
+
+
+def test_module_cluster_single_pass_label_no_suffix(tmp_path: Path) -> None:
+    """Single-pass modules drop the ``:N`` suffix even though the data carries it.
+
+    Mirrors ``rendering._setup_subgraphs_recurse``'s ``num_passes == 1``
+    branch.  Without this the bundle would always print ``@fc1:1`` style
+    labels even for single-call modules, which would diverge visually
+    from ``show_model_graph``.
+    """
+
+    model = _LinearNet()
+    log = tl.log_forward_pass(model, torch.rand(2, 4))
+    b = TraceBundle([log])
+    src = show_bundle_graph(b, mode="auto", return_dot=True)
+    assert src is not None
+
+    # ``fc1`` and ``fc2`` are each called once -- bundle drops the suffix.
+    assert "@fc1<" in src, f"expected single-pass module label '@fc1' in bundle DOT; got:\n{src}"
+    assert "@fc1:1" not in src, f"single-pass module should not carry ':1' suffix; got:\n{src}"

@@ -53,6 +53,24 @@ but are natural follow-ons. Pick up after MVP ships.
   breaking change to a published-and-cited package. Do as a separate
   deliberate migration, never bundled with feature work.
 
+- **`vis_opt='rolled'` mode for `show_bundle_graph`.** Phase 2 plumbed
+  the kwarg through with arg validation but the bundle renderer
+  currently treats every supergraph node as a single rendered node
+  regardless. The supergraph already operates on `LayerLog` (rolled-
+  equivalent) entries, so cluster titles already carry `(xN)` count
+  suffixes for multi-pass modules. A true `rolled` mode would also
+  collapse loop-detected layer chains into single rendered nodes the
+  way `rendering.py` does for `vis_mode='rolled'`. Defer until a real
+  use case appears; the current `unrolled` behaviour covers the
+  visualization story for shared-topology and divergent bundles.
+
+- **`direction='backward'` for `show_bundle_graph`.** Currently raises
+  `ValueError` on anything except `'forward'`. Backward graph topology
+  depends on forward execution path, so multi-trace backward
+  visualization needs a design decision -- per-trace separate backward
+  subgraphs, or a unified backward supergraph keyed on grad_fn? Defer
+  to the multi-trace V2 batch alongside the other Phase 2 follow-ons.
+
 ### Other improvements
 
 - Rethink the parameter name `activation_postfunc` itself. Current name is
