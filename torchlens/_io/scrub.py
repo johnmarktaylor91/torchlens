@@ -181,9 +181,9 @@ def _effective_policy(
 ) -> FieldPolicy:
     """Resolve the runtime policy for a field after include-flag overrides."""
 
-    if field_name == "activation" and not options.include_activations:
+    if field_name in {"activation", "transformed_activation"} and not options.include_activations:
         return FieldPolicy.DROP
-    if field_name == "gradient" and not options.include_gradients:
+    if field_name in {"gradient", "transformed_gradient"} and not options.include_gradients:
         return FieldPolicy.DROP
     if field_name in {"captured_args", "captured_kwargs", "children_tensor_versions"}:
         return FieldPolicy.BLOB_RECURSIVE if options.include_captured_args else FieldPolicy.DROP
@@ -365,8 +365,12 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
 
     if field_name == "activation":
         return "activation"
+    if field_name == "transformed_activation":
+        return "transformed_activation"
     if field_name == "gradient":
         return "gradient"
+    if field_name == "transformed_gradient":
+        return "transformed_gradient"
     if field_name in {"captured_args", "captured_kwargs"}:
         return "captured_arg"
     if field_name == "children_tensor_versions":

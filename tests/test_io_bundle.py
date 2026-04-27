@@ -112,17 +112,17 @@ def _build_sparse_activation_log() -> ModelLog:
 
 
 def _build_non_tensor_activation_log() -> ModelLog:
-    """Create a live log whose first saved activation becomes a non-tensor post-hoc.
+    """Create a live log whose first transformed activation becomes a non-tensor post-hoc.
 
     Returns
     -------
     ModelLog
-        Model log containing a non-tensor activation payload.
+        Model log containing a non-tensor transformed activation payload.
     """
 
     model_log = _build_conv_log()
     first_saved_layer = next(layer for layer in model_log.layer_list if layer.has_saved_activations)
-    first_saved_layer.activation = 1.0
+    first_saved_layer.transformed_activation = 1.0
     model_log.activation_postfunc = lambda tensor: float(tensor.mean().item())
     return model_log
 

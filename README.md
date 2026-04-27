@@ -202,6 +202,27 @@ print(model_history.layer_labels)
 '''
 ```
 
+You can also keep raw activations while saving a transformed copy for analysis. For example, this stores each model
+output in `activation` (also available as `tensor`) and stores a channel-averaged copy in `transformed_activation`:
+
+```python
+model_history = tl.log_forward_pass(
+    alexnet,
+    x,
+    layers_to_save="all",
+    activation_postfunc=lambda t: t.mean(dim=(2, 3)) if t.ndim == 4 else t,
+)
+
+layer = model_history["conv2d_3_7"]
+print(layer.activation.shape)                # raw model output
+print(layer.transformed_activation.shape)    # postfunc output
+print(layer.tensor_shape)                    # metadata for the raw output
+print(layer.transformed_activation_shape)    # metadata for the transformed output
+```
+
+By default TorchLens stores both tensors when `activation_postfunc` is set. To keep only the transformed tensor while
+still retaining raw shape/dtype/memory metadata, pass `save_raw_activation=False`.
+
 ### Saving and Loading
 
 ```python

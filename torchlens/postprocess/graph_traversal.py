@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, List
 
 import torch
 
-from .._state import pause_logging
 from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
@@ -145,15 +144,30 @@ def _add_output_layers(
             actual_output = safe_copy(output_tensors[i])
             if output_node.output_device not in [str(actual_output.device), "same"]:
                 actual_output = safe_to(actual_output, output_node.output_device)
+            actual_output_raw = actual_output
             if self.activation_postfunc is not None:
-                with pause_logging():
-                    actual_output = self.activation_postfunc(actual_output)
-            if not tensor_nanequal(actual_output, output_node.activation):
+                actual_output = output_node._apply_postfunc(
+                    actual_output,
+                    self.activation_postfunc,
+                    postfunc_kind="activation",
+                    streaming_active=False,
+                )
+            comparison_output = (
+                output_node.activation
+                if output_node.activation is not None
+                else output_node.transformed_activation
+            )
+            if comparison_output is not None and not tensor_nanequal(
+                actual_output, comparison_output
+            ):
                 output_node.children_tensor_versions[new_output_node.tensor_label_raw] = (
                     actual_output
                 )
                 output_node.has_child_tensor_variations = True
-                new_output_node.activation = actual_output
+                if output_node.activation is None:
+                    new_output_node.transformed_activation = actual_output
+                else:
+                    new_output_node.activation = actual_output_raw
 
         # Change original output node:
 

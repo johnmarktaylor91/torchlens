@@ -239,15 +239,28 @@ def postprocess_fast(self: "ModelLog") -> None:
             continue  # Guard for parentless output layers (#152)
         parent_layer = self.layer_dict_main_keys[output_layer.parent_layers[0]]
         parent_contents = parent_layer.activation
+        parent_transformed = parent_layer.transformed_activation
         output_layer.activation = (
             safe_copy(parent_contents, detach_tensor=self.detach_saved_tensors)
             if parent_contents is not None
             else None
         )
+        output_layer.transformed_activation = (
+            safe_copy(parent_transformed, detach_tensor=self.detach_saved_tensors)
+            if isinstance(parent_transformed, torch.Tensor)
+            else parent_transformed
+        )
         output_layer.tensor_memory = parent_layer.tensor_memory
+        output_layer.transformed_activation_shape = parent_layer.transformed_activation_shape
+        output_layer.transformed_activation_dtype = parent_layer.transformed_activation_dtype
+        output_layer.transformed_activation_memory = parent_layer.transformed_activation_memory
         output_layer.has_saved_activations = parent_layer.has_saved_activations
         output_layer.has_gradient = parent_layer.has_gradient
         output_layer.gradient = parent_layer.gradient
+        output_layer.transformed_gradient = parent_layer.transformed_gradient
+        output_layer.transformed_gradient_shape = parent_layer.transformed_gradient_shape
+        output_layer.transformed_gradient_dtype = parent_layer.transformed_gradient_dtype
+        output_layer.transformed_gradient_memory = parent_layer.transformed_gradient_memory
         if output_layer.has_saved_activations:
             self.layers_with_saved_activations.append(output_layer_label)
     _trim_and_reorder_model_history_fields(self)

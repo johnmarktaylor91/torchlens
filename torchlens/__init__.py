@@ -26,6 +26,8 @@ from .user_funcs import (
     validate_batch_of_models_and_inputs,
 )
 from .options import StreamingOptions, VisualizationOptions
+from .types import ActivationPostfunc, GradientPostfunc
+from ._errors import TorchLensPostfuncError
 from ._training_validation import TrainingModeConfigError
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
 from ._io.bundle import save, load, cleanup_tmp
@@ -77,6 +79,8 @@ __all__ = [
     "GradFnAccessor",
     "GradFnLog",
     "GradFnPassLog",
+    "ActivationPostfunc",
+    "GradientPostfunc",
     "LayerAccessor",
     "LayerLog",
     "LayerPassLog",
@@ -89,6 +93,7 @@ __all__ = [
     "ParamLog",
     "StreamingOptions",
     "TensorLog",
+    "TorchLensPostfuncError",
     "TrainingModeConfigError",
     "VisualizationOptions",
     "build_render_audit",

@@ -82,8 +82,12 @@ class LayerLog:
         "is_part_of_iterable_output": FieldPolicy.KEEP,
         "iterable_output_index": FieldPolicy.KEEP,
         "tensor_shape": FieldPolicy.KEEP,
+        "transformed_activation_shape": FieldPolicy.KEEP,
         "tensor_dtype": FieldPolicy.KEEP,
+        "transformed_activation_dtype": FieldPolicy.KEEP,
         "tensor_memory": FieldPolicy.KEEP,
+        "transformed_activation_memory": FieldPolicy.KEEP,
+        "transformed_activation": FieldPolicy.BLOB,
         "autograd_saved_bytes": FieldPolicy.KEEP,
         "autograd_saved_tensor_count": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
@@ -91,6 +95,10 @@ class LayerLog:
         "extra_data": FieldPolicy.KEEP,
         "detach_saved_tensor": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
+        "transformed_gradient": FieldPolicy.BLOB,
+        "transformed_gradient_shape": FieldPolicy.KEEP,
+        "transformed_gradient_dtype": FieldPolicy.KEEP,
+        "transformed_gradient_memory": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
         "parent_param_barcodes": FieldPolicy.KEEP,
@@ -170,8 +178,11 @@ class LayerLog:
 
         # Tensor type (representative from first pass)
         self.tensor_shape = first_pass.tensor_shape
+        self.transformed_activation_shape = first_pass.transformed_activation_shape
         self.tensor_dtype = first_pass.tensor_dtype
+        self.transformed_activation_dtype = first_pass.transformed_activation_dtype
         self.tensor_memory = first_pass.tensor_memory
+        self.transformed_activation_memory = first_pass.transformed_activation_memory
         self.autograd_saved_bytes: Optional[int] = first_pass.autograd_saved_bytes
         self.autograd_saved_tensor_count: Optional[int] = first_pass.autograd_saved_tensor_count
 
@@ -181,6 +192,9 @@ class LayerLog:
         self.extra_data: Dict[str, Any] = {}
         self.detach_saved_tensor = first_pass.detach_saved_tensor
         self.save_gradients = first_pass.save_gradients
+        self.transformed_gradient_shape = first_pass.transformed_gradient_shape
+        self.transformed_gradient_dtype = first_pass.transformed_gradient_dtype
+        self.transformed_gradient_memory = first_pass.transformed_gradient_memory
 
         # FLOPs
         self.flops_forward = first_pass.flops_forward
@@ -312,6 +326,14 @@ class LayerLog:
                 "extra_data": {},
                 "autograd_saved_bytes": None,
                 "autograd_saved_tensor_count": None,
+                "transformed_activation": None,
+                "transformed_activation_shape": None,
+                "transformed_activation_dtype": None,
+                "transformed_activation_memory": None,
+                "transformed_gradient": None,
+                "transformed_gradient_shape": None,
+                "transformed_gradient_dtype": None,
+                "transformed_gradient_memory": None,
             },
         )
         self.__dict__.update(state)
@@ -344,6 +366,18 @@ class LayerLog:
         return self._single_pass_or_error("activation")
 
     @property
+    def tensor(self) -> Any:
+        """Alias for the raw saved activation on single-pass layers."""
+
+        return self._single_pass_or_error("tensor")
+
+    @property
+    def transformed_activation(self) -> Any:
+        """Transformed activation on single-pass layers."""
+
+        return self._single_pass_or_error("transformed_activation")
+
+    @property
     def has_saved_activations(self):
         return self._single_pass_or_error("has_saved_activations")
 
@@ -358,6 +392,12 @@ class LayerLog:
     @property
     def gradient(self):
         return self._single_pass_or_error("gradient")
+
+    @property
+    def transformed_gradient(self) -> Any:
+        """Transformed gradient on single-pass layers."""
+
+        return self._single_pass_or_error("transformed_gradient")
 
     @property
     def has_gradient(self):

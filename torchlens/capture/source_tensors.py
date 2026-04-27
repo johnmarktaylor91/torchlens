@@ -221,6 +221,7 @@ def log_source_tensor_exhaustive(
         "lookup_keys": [],
         # Saved tensor info:
         "activation": None,
+        "transformed_activation": None,
         "has_saved_activations": False,
         "activation_postfunc": self.activation_postfunc,
         "extra_data": {},
@@ -230,8 +231,11 @@ def log_source_tensor_exhaustive(
         "captured_args": None,
         "captured_kwargs": None,
         "tensor_shape": tuple(t.shape),
+        "transformed_activation_shape": None,
         "tensor_dtype": t.dtype,
+        "transformed_activation_dtype": None,
         "tensor_memory": tensor_memory,
+        "transformed_activation_memory": None,
         "autograd_saved_bytes": None,
         "autograd_saved_tensor_count": None,
         # Child tensor variation tracking
@@ -239,11 +243,15 @@ def log_source_tensor_exhaustive(
         "children_tensor_versions": {},
         # Grad info:
         "gradient": None,
+        "transformed_gradient": None,
         "save_gradients": self.save_gradients,
         "has_gradient": False,
         "grad_shape": None,
+        "transformed_gradient_shape": None,
         "grad_dtype": None,
+        "transformed_gradient_dtype": None,
         "grad_memory": 0,
+        "transformed_gradient_memory": None,
         # Function call info:
         "func_applied": None,
         "func_name": "none",
@@ -399,6 +407,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     if orig_tensor_label in self.unlogged_layers:
         return
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
+    previous_shape = orig_layer_entry.tensor_shape
     if (self._layer_nums_to_save == "all") or (
         orig_layer_entry.creation_order in self._layer_nums_to_save
     ):
@@ -409,12 +418,12 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
 
     # Minimal graph consistency validation (#99)
     new_shape = tuple(t.shape)
-    if orig_layer_entry.tensor_shape is not None and new_shape != orig_layer_entry.tensor_shape:
+    if previous_shape is not None and new_shape != previous_shape:
         import warnings
 
         warnings.warn(
             f"Tensor shape changed for '{orig_tensor_label}': "
-            f"expected {orig_layer_entry.tensor_shape}, got {new_shape}. "
+            f"expected {previous_shape}, got {new_shape}. "
             f"The computational graph may have changed between passes."
         )
     orig_layer_entry.tensor_shape = new_shape
