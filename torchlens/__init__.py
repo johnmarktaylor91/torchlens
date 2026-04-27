@@ -34,7 +34,8 @@ from . import fastlog
 # ---- Public API: data classes users interact with ------------------------
 
 from .data_classes.model_log import ModelLog
-from .data_classes.backward_log import BackwardLog, GradFnLog, GradFnPassLog
+from .data_classes.grad_fn_log import GradFnAccessor, GradFnLog
+from .data_classes.grad_fn_pass_log import GradFnPassLog
 from .data_classes.layer_log import LayerLog, LayerAccessor
 from .data_classes.layer_pass_log import LayerPassLog, TensorLog
 from .data_classes import FuncCallLocation, ModuleAccessor, ModuleLog, ModulePassLog, ParamLog
@@ -72,7 +73,7 @@ def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
 
 __all__ = [
     "FuncCallLocation",
-    "BackwardLog",
+    "GradFnAccessor",
     "GradFnLog",
     "GradFnPassLog",
     "LayerAccessor",

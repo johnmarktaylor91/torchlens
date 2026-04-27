@@ -1,8 +1,9 @@
 """Core data structures for representing a logged forward pass."""
 
 from .buffer_log import BufferAccessor, BufferLog
-from .backward_log import BackwardLog, GradFnLog, GradFnPassLog
 from .func_call_location import FuncCallLocation
+from .grad_fn_log import GradFnAccessor, GradFnLog
+from .grad_fn_pass_log import GradFnPassLog
 from .internal_types import FuncExecutionContext, VisualizationOverrides
 from .module_log import ModuleAccessor, ModuleLog, ModulePassLog
 from .param_log import ParamAccessor, ParamLog

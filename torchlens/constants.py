@@ -126,7 +126,13 @@ MODEL_LOG_FIELD_ORDER = [
     "time_cleanup",
     "time_function_calls",
     # Backward pass
-    "backward",
+    "has_backward_log",
+    "grad_fn_logs",
+    "grad_fn_order",
+    "backward_root_grad_fn_id",
+    "backward_num_passes",
+    "backward_peak_memory_bytes",
+    "backward_memory_backend",
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [
@@ -500,6 +506,10 @@ GRAD_FN_PASS_LOG_FIELD_ORDER = [
 GRAD_FN_LOG_FIELD_ORDER = [
     "grad_fn_id",
     "name",
+    "label",
+    "grad_fn_type",
+    "grad_fn_type_num",
+    "grad_fn_total_num",
     "module_path",
     "is_custom",
     "is_intervening",
@@ -507,17 +517,7 @@ GRAD_FN_LOG_FIELD_ORDER = [
     "next_grad_fn_ids",
     "passes",
     "num_passes",
-]
-
-BACKWARD_LOG_FIELD_ORDER = [
-    "grad_fn_logs",
-    "grad_fn_order",
-    "root_grad_fn_id",
-    "num_grad_fns",
-    "num_intervening_grad_fns",
-    "num_passes",
-    "peak_memory_bytes",
-    "memory_backend",
+    "pass_labels",
 ]
 
 # ---------------------------------------------------------------------------

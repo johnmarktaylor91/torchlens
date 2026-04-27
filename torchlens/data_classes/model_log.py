@@ -78,9 +78,9 @@ from .interface import (
     _str_after_pass,
     _str_during_pass,
 )
+from .grad_fn_log import GradFnAccessor, GradFnLog
 from .layer_log import LayerLog
 from .layer_pass_log import LayerPassLog, TensorLog
-from .backward_log import BackwardLog
 
 
 def _init_module_build_data() -> dict:
@@ -243,7 +243,13 @@ class ModelLog:
         "time_forward_pass": FieldPolicy.KEEP,
         "time_cleanup": FieldPolicy.KEEP,
         "time_function_calls": FieldPolicy.KEEP,
-        "backward": FieldPolicy.KEEP,
+        "has_backward_log": FieldPolicy.KEEP,
+        "grad_fn_logs": FieldPolicy.KEEP,
+        "grad_fn_order": FieldPolicy.KEEP,
+        "backward_root_grad_fn_id": FieldPolicy.KEEP,
+        "backward_num_passes": FieldPolicy.KEEP,
+        "backward_peak_memory_bytes": FieldPolicy.KEEP,
+        "backward_memory_backend": FieldPolicy.KEEP,
     }
 
     def __init__(
@@ -437,7 +443,13 @@ class ModelLog:
         self.time_forward_pass: float = 0
         self.time_cleanup: float = 0
         self.time_function_calls: float = 0
-        self.backward = BackwardLog()
+        self.has_backward_log: bool = False
+        self.grad_fn_logs: Dict[int, GradFnLog] = OrderedDict()
+        self.grad_fn_order: List[int] = []
+        self.backward_root_grad_fn_id: int | None = None
+        self.backward_num_passes: int = 0
+        self.backward_peak_memory_bytes: int = 0
+        self.backward_memory_backend: str = "unknown"
 
     # ********************************************
     # ************ Built-in Methods **************
@@ -539,7 +551,13 @@ class ModelLog:
                 "gradient_postfunc_repr": None,
                 "gradients_to_save": "all",
                 "_gradient_layer_nums_to_save": [],
-                "backward": BackwardLog(),
+                "has_backward_log": False,
+                "grad_fn_logs": OrderedDict(),
+                "grad_fn_order": [],
+                "backward_root_grad_fn_id": None,
+                "backward_num_passes": 0,
+                "backward_peak_memory_bytes": 0,
+                "backward_memory_backend": "unknown",
                 "_buffer_accessor": None,
                 "_module_logs": None,
                 "_module_build_data": None,
@@ -572,6 +590,9 @@ class ModelLog:
             parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
+        for grad_fn in self.grad_fn_logs.values():
+            if isinstance(grad_fn.corresponding_layer, str):
+                grad_fn.corresponding_layer = self.layer_logs.get(grad_fn.corresponding_layer)
 
     # ********************************************
     # ********** Computed Properties *************
@@ -741,6 +762,21 @@ class ModelLog:
     def buffers(self) -> "BufferAccessor":
         """Access buffer metadata by address, short name, or index."""
         return self._buffer_accessor  # type: ignore[return-value]
+
+    @property
+    def grad_fns(self) -> GradFnAccessor:
+        """Access backward grad_fn metadata by label, index, pass label, or substring."""
+        return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
+
+    @property
+    def num_grad_fns(self) -> int:
+        """Number of unique autograd grad_fn nodes discovered."""
+        return len(self.grad_fn_logs)
+
+    @property
+    def num_intervening_grad_fns(self) -> int:
+        """Number of grad_fn nodes without a corresponding forward LayerLog."""
+        return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.is_intervening)
 
     # ********************************************
     # ******** Public Convenience Methods ********

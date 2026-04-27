@@ -3,6 +3,30 @@
 > Status: ACTIVE SPRINT. Architecture decisions agreed 2026-04-27.
 > Phasing: 3 PRs. Pause + iMessage JMT after each one.
 
+## Refactor 2026-04-27
+
+PR #161 follow-up drops the `BackwardLog` wrapper after implementation review.
+Backward data now follows the existing flat ModelLog collection pattern:
+
+- `model_log.grad_fns` is the user-facing `GradFnLog` accessor, parallel to
+  `model_log.layers`, `model_log.modules`, `model_log.params`, and
+  `model_log.buffers`.
+- Storage fields live directly on `ModelLog`: `grad_fn_logs`,
+  `grad_fn_order`, `backward_root_grad_fn_id`, `backward_num_passes`,
+  `backward_peak_memory_bytes`, `backward_memory_backend`, and
+  `has_backward_log`.
+- GradFn names are locked as
+  `<normalized_grad_fn_type>_back_<type_idx>_<overall_idx>`, with pass labels
+  as `<label>:<pass_num>`. Normalization strips a trailing `Backward<digit>`
+  suffix from the autograd class name and lowercases the result.
+- `model_log.grad_fns[...]` supports ordinal lookup, exact label lookup,
+  first substring lookup, pass-qualified lookup, and iteration.
+- Cross-links are bidirectional: `LayerLog.corresponding_grad_fn` and
+  `GradFnLog.corresponding_layer`.
+
+The original PR-1 plan below is preserved for history, but its `BackwardLog`
+wrapper references are superseded by this flat ModelLog design.
+
 ## Goal
 
 Promote backward-pass support from a hidden side-effect to a co-equal first-class
@@ -39,7 +63,8 @@ with named cross-references, NOT one structure trying to do both jobs.
 
 ## Locked architectural decisions
 
-1. **Data model: two graphs, loosely linked.** ModelLog gets a `backward: BackwardLog`
+1. **Data model: two graphs, loosely linked.** Superseded by Refactor
+   2026-04-27 for storage shape. Original plan: ModelLog gets a `backward: BackwardLog`
    companion. BackwardLog has `GradFnLog` nodes (and `GradFnPassLog` for repeated
    calls). LayerLog gets `gradient` (already exists) plus a back-pointer
    `corresponding_grad_fn`. Cross-references navigate; no forced unification.
@@ -71,7 +96,8 @@ with named cross-references, NOT one structure trying to do both jobs.
 
 ## Naming (locked)
 
-- `BackwardLog` -- per ModelLog, exposed at `model_log.backward`
+- `BackwardLog` -- per ModelLog, exposed at `model_log.backward` (superseded:
+  dropped in favor of flat `ModelLog` fields and `model_log.grad_fns`)
 - `GradFnLog` -- one per grad_fn node
 - `GradFnPassLog` -- per-pass entry when grad_fns called multiple times
 - `model_log.log_backward(loss)` -- simple entry
@@ -87,7 +113,8 @@ with named cross-references, NOT one structure trying to do both jobs.
 ### PR 1 -- Data model + capture (the core)
 
 In scope:
-- BackwardLog, GradFnLog, GradFnPassLog data classes
+- BackwardLog, GradFnLog, GradFnPassLog data classes (superseded:
+  `GradFnLog` and `GradFnPassLog` remain; `BackwardLog` removed)
 - Walk grad_fn DAG from loss to enumerate all reachable grad_fns
 - Register grad_fn hooks for runtime capture (timing, gradient values)
 - Link forward LayerLog to corresponding GradFnLog by object identity
@@ -102,7 +129,8 @@ In scope:
 - Implicit hook path preserved (existing behavior unchanged)
 - Multiple losses via context manager
 - Higher-order gradients (`create_graph=True`) basic support
-- Peak memory tracking during backward (cumulative for the sweep) on BackwardLog
+- Peak memory tracking during backward (cumulative for the sweep) on
+  flat `ModelLog.backward_peak_memory_bytes`
 - `validate_backward_pass()` in `validation/`
 - New tests in `tests/test_backward.py` (or sibling files), all marked `@pytest.mark.smoke` for the smoke set
 
@@ -115,7 +143,7 @@ NOT in PR 1:
 
 ### PR 2 -- Backward visualization
 
-- `model_log.show_backward_graph(...)` renders BackwardLog in graphviz
+- `model_log.show_backward_graph(...)` renders flat `ModelLog` backward fields in graphviz
 - Visual idiom: blue/purple palette signaling backward; cross-references to
   forward where applicable
 - Stays an opt-in view. `show_model_graph()` default = forward only, blue

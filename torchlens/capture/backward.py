@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import time
 from collections import deque
 from typing import Any, Callable, Iterator
@@ -10,7 +11,7 @@ from typing import Any, Callable, Iterator
 import torch
 
 from .._state import pause_logging
-from ..data_classes.backward_log import BackwardLog, GradFnLog
+from ..data_classes.grad_fn_log import GradFnLog
 from .tensor_tracking import _add_backward_hook
 
 
@@ -78,13 +79,67 @@ def _selected_for_gradient_save(model_log: Any, layer_label: str | None) -> bool
     return model_log[layer_label].creation_order in selection
 
 
+def _normalize_grad_fn_type(grad_fn: Any) -> str:
+    """Normalize an autograd grad_fn class name for TorchLens labels.
+
+    Parameters
+    ----------
+    grad_fn:
+        Autograd function object.
+
+    Returns
+    -------
+    str
+        Lowercased class name with a trailing ``Backward<digits>`` suffix removed.
+    """
+    return re.sub(r"Backward\d*$", "", type(grad_fn).__name__).lower()
+
+
+def _grad_fn_label_parts(
+    model_log: Any,
+    grad_fn_type: str,
+    layer_label: str | None,
+    type_counter: dict[str, int],
+    total_num: int,
+) -> tuple[int, int, str]:
+    """Build numeric label fields for one grad_fn.
+
+    Parameters
+    ----------
+    model_log:
+        ModelLog being updated.
+    grad_fn_type:
+        Normalized grad_fn type.
+    layer_label:
+        Matching forward layer label, or ``None`` for intervening grad_fns.
+    type_counter:
+        Running per-type counter for intervening grad_fns.
+    total_num:
+        One-based discovery index in the backward graph.
+
+    Returns
+    -------
+    tuple[int, int, str]
+        GradFn type index, total index, and user-facing label.
+    """
+    if layer_label is not None:
+        layer = model_log.layers[layer_label]
+        type_num = layer.layer_type_num
+        total_num = layer.layer_total_num
+    else:
+        type_counter[grad_fn_type] = type_counter.get(grad_fn_type, 0) + 1
+        type_num = type_counter[grad_fn_type]
+    label = f"{grad_fn_type}_back_{type_num}_{total_num}"
+    return type_num, total_num, label
+
+
 def _make_grad_fn_hook(model_log: Any, grad_fn_id: int) -> Callable[..., None]:
     """Build a runtime hook for one autograd grad_fn.
 
     Parameters
     ----------
     model_log:
-        ModelLog whose BackwardLog should receive runtime data.
+        ModelLog whose flat backward fields should receive runtime data.
     grad_fn_id:
         ``id()`` of the hooked grad_fn.
 
@@ -95,12 +150,17 @@ def _make_grad_fn_hook(model_log: Any, grad_fn_id: int) -> Callable[..., None]:
     """
 
     def hook(*hook_args: Any) -> None:
-        grad_fn_log = model_log.backward.grad_fn_logs.get(grad_fn_id)
+        grad_fn_log = model_log.grad_fn_logs.get(grad_fn_id)
         if grad_fn_log is None:
             return
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else None
         grad_outputs = hook_args[1] if len(hook_args) >= 2 else None
-        if not _selected_for_gradient_save(model_log, grad_fn_log.corresponding_layer):
+        layer_label = (
+            grad_fn_log.corresponding_layer.layer_label
+            if grad_fn_log.corresponding_layer is not None
+            else None
+        )
+        if not _selected_for_gradient_save(model_log, layer_label):
             grad_inputs = None
             grad_outputs = None
         with pause_logging():
@@ -178,7 +238,7 @@ def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[An
     Parameters
     ----------
     model_log:
-        ModelLog that owns the BackwardLog.
+        ModelLog that owns the flat backward fields.
     loss:
         Scalar or tensor loss whose backward graph should be captured.
 
@@ -190,15 +250,14 @@ def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[An
     if loss.grad_fn is None:
         raise ValueError("log_backward requires a loss tensor with a grad_fn.")
 
-    if not isinstance(getattr(model_log, "backward", None), BackwardLog):
-        model_log.backward = BackwardLog()
-
     layer_lookup = _layer_by_grad_fn_id(model_log)
     queue: deque[Any] = deque([loss.grad_fn])
     seen: set[int] = set()
     handles: list[Any] = []
-    if model_log.backward.root_grad_fn_id is None:
-        model_log.backward.root_grad_fn_id = id(loss.grad_fn)
+    type_counter: dict[str, int] = {}
+    if model_log.backward_root_grad_fn_id is None:
+        model_log.backward_root_grad_fn_id = id(loss.grad_fn)
+    model_log.has_backward_log = True
 
     while queue:
         grad_fn = queue.popleft()
@@ -209,19 +268,33 @@ def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[An
         next_grad_fns = list(_iter_next_grad_fns(grad_fn))
         queue.extend(next_grad_fns)
         layer_label = layer_lookup.get(grad_fn_id)
-        grad_fn_log = model_log.backward.grad_fn_logs.get(grad_fn_id)
+        grad_fn_log = model_log.grad_fn_logs.get(grad_fn_id)
         if grad_fn_log is None:
+            grad_fn_type = _normalize_grad_fn_type(grad_fn)
+            grad_fn_total_num = len(model_log.grad_fn_order) + 1
+            grad_fn_type_num, grad_fn_total_num, label = _grad_fn_label_parts(
+                model_log,
+                grad_fn_type,
+                layer_label,
+                type_counter,
+                grad_fn_total_num,
+            )
+            corresponding_layer = model_log.layers[layer_label] if layer_label is not None else None
             grad_fn_log = GradFnLog(
                 grad_fn_id=grad_fn_id,
                 name=type(grad_fn).__name__,
+                label=label,
+                grad_fn_type=grad_fn_type,
+                grad_fn_type_num=grad_fn_type_num,
+                grad_fn_total_num=grad_fn_total_num,
                 module_path=type(grad_fn).__module__,
                 is_custom=_grad_fn_is_custom(grad_fn),
                 is_intervening=layer_label is None,
-                corresponding_layer=layer_label,
+                corresponding_layer=corresponding_layer,
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
             )
-            model_log.backward.grad_fn_logs[grad_fn_id] = grad_fn_log
-            model_log.backward.grad_fn_order.append(grad_fn_id)
+            model_log.grad_fn_logs[grad_fn_id] = grad_fn_log
+            model_log.grad_fn_order.append(grad_fn_id)
         else:
             grad_fn_log.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
         if layer_label is not None:
@@ -282,9 +355,9 @@ def _run_backward_with_capture(
                 handle.remove()
         _clear_forward_grad_fn_refs(model_log)
     _backend, after = _memory_snapshot(loss.device)
-    model_log.backward.memory_backend = backend
-    model_log.backward.peak_memory_bytes += max(0, after - before)
-    model_log.backward.num_passes += 1
+    model_log.backward_memory_backend = backend
+    model_log.backward_peak_memory_bytes += max(0, after - before)
+    model_log.backward_num_passes += 1
     return result
 
 

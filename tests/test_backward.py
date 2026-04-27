@@ -92,7 +92,7 @@ def test_recording_backward_context_manager() -> None:
     with model_log.recording_backward():
         loss.backward(retain_graph=True)
         (loss * 2).backward()
-    assert model_log.backward.num_passes == 2
+    assert model_log.backward_num_passes == 2
 
 
 @pytest.mark.smoke
@@ -100,7 +100,7 @@ def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
     """The backward DAG includes grad_fns without forward LayerLog matches."""
     _model, _x, model_log = _logged_model()
     model_log.log_backward(_output_loss(model_log))
-    assert any(grad_fn.is_intervening for grad_fn in model_log.backward.grad_fn_logs.values())
+    assert any(grad_fn.is_intervening for grad_fn in model_log.grad_fn_logs.values())
 
 
 @pytest.mark.smoke
@@ -109,6 +109,26 @@ def test_corresponding_grad_fn_back_pointer() -> None:
     _model, _x, model_log = _logged_model()
     model_log.log_backward(_output_loss(model_log))
     assert any(layer.corresponding_grad_fn is not None for layer in model_log.layer_list)
+    assert any(
+        grad_fn.corresponding_layer is not None
+        and grad_fn.corresponding_layer.corresponding_grad_fn is grad_fn
+        for grad_fn in model_log.grad_fns
+    )
+
+
+@pytest.mark.smoke
+def test_grad_fn_naming_and_indexing() -> None:
+    """GradFnLog labels and accessor indexing mirror layer lookup patterns."""
+    _model, _x, model_log = _logged_model()
+    model_log.log_backward(_output_loss(model_log))
+    first_grad_fn = model_log.grad_fns[0]
+    assert "_back_" in first_grad_fn.label
+    assert first_grad_fn.label == first_grad_fn.label.lower()
+    assert model_log.grad_fns[first_grad_fn.label] is first_grad_fn
+    assert model_log.grad_fns[first_grad_fn.grad_fn_type] is first_grad_fn
+    if first_grad_fn.num_passes:
+        assert model_log.grad_fns[f"{first_grad_fn.label}:1"] is first_grad_fn.passes[1]
+    assert list(model_log.grad_fns)
 
 
 @pytest.mark.smoke
@@ -197,7 +217,7 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     model_log = tl.log_forward_pass(model, x, gradients_to_save="all")
     model_log.log_backward(_output_loss(model_log))
-    assert any(grad_fn.is_custom for grad_fn in model_log.backward.grad_fn_logs.values())
+    assert any(grad_fn.is_custom for grad_fn in model_log.grad_fn_logs.values())
 
 
 @pytest.mark.smoke
@@ -228,11 +248,12 @@ def test_validate_backward_pass_perturbed() -> None:
 
 @pytest.mark.smoke
 def test_peak_memory_tracking_populated() -> None:
-    """BackwardLog stores peak-memory tracking metadata."""
+    """ModelLog stores flat backward peak-memory tracking metadata."""
     _model, _x, model_log = _logged_model()
     model_log.log_backward(_output_loss(model_log))
-    assert isinstance(model_log.backward.peak_memory_bytes, int)
-    assert model_log.backward.memory_backend in {"cpu", "cuda", "mps"}
+    assert model_log.has_backward_log
+    assert isinstance(model_log.backward_peak_memory_bytes, int)
+    assert model_log.backward_memory_backend in {"cpu", "cuda", "mps"}
 
 
 @pytest.mark.smoke
@@ -240,4 +261,4 @@ def test_higher_order_grads_basic_support() -> None:
     """create_graph=True backward calls run through capture."""
     _model, _x, model_log = _logged_model()
     model_log.log_backward(_output_loss(model_log), create_graph=True)
-    assert model_log.backward.num_passes == 1
+    assert model_log.backward_num_passes == 1
