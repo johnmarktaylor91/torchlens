@@ -6,7 +6,8 @@ This module provides the helper stack behind ModelLog cleanup operations:
    deletes all ModelLog attributes (both FIELD_ORDER and internal containers).
    Breaks circular references (ModelLog <-> LayerPassLog.source_model_log,
    LayerLog <-> LayerPassLog.parent_layer_log, ModuleLog <-> _source_model_log).
-   Also frees GPU memory via ``torch.cuda.empty_cache()``.
+   Also frees GPU memory via ``torch.cuda.empty_cache()`` when CUDA is
+   available (gated to avoid CUDA driver probe cost on CPU-only runs).
 
 2. **_remove_log_entry_references()** — removes a single layer label from all
    ModelLog list/dict fields that hold graph references.
@@ -24,6 +25,7 @@ import torch
 
 from ..constants import MODEL_LOG_FIELD_ORDER
 from ..utils.collections import remove_entry_from_list
+from ..utils.tensor_utils import _is_cuda_available
 from .layer_pass_log import LayerPassLog
 
 
@@ -72,7 +74,10 @@ def cleanup(self) -> None:
     ]:
         if hasattr(self, attr):
             delattr(self, attr)
-    torch.cuda.empty_cache()
+    # Gated behind cached cuda.is_available() so CPU-only runs don't pay the
+    # CUDA driver / NVML probe cost (per profiling audit 2026-04-27 finding #4).
+    if _is_cuda_available():
+        torch.cuda.empty_cache()
 
 
 def _clear_entry_attributes(log_entry: LayerPassLog) -> None:

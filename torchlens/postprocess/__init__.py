@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, List
 import time
 import torch
 
-from ..utils.tensor_utils import safe_copy
+from ..utils.tensor_utils import _is_cuda_available, safe_copy
 
 from .control_flow import (
     _fix_buffer_layers,
@@ -174,7 +174,10 @@ def postprocess(
         _undecorate_all_saved_tensors(self)
 
     # Step 14: Clear the cache after any tensor deletions for garbage collection purposes.
-    torch.cuda.empty_cache()
+    # Gated behind cached cuda.is_available() so CPU-only runs don't pay the
+    # CUDA driver / NVML probe cost (per profiling audit 2026-04-27 finding #4).
+    if _is_cuda_available():
+        torch.cuda.empty_cache()
 
     # Step 15: Log time elapsed.
     with _vtimed(self, "  Step 15: Log timing"):
@@ -267,7 +270,10 @@ def postprocess_fast(self: "ModelLog") -> None:
     _remove_unwanted_entries_and_log_remaining(self)
     _undecorate_all_saved_tensors(self)
 
-    torch.cuda.empty_cache()
+    # Gated behind cached cuda.is_available() so CPU-only fast-pass runs don't
+    # pay the CUDA driver / NVML probe cost.
+    if _is_cuda_available():
+        torch.cuda.empty_cache()
     _log_time_elapsed(self)
     _build_layer_logs(self)
     # Note: _build_module_logs is NOT called here because module structure

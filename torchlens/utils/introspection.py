@@ -8,8 +8,8 @@ nested attribute traversal and call-stack capture.
 import dis
 import sys
 import warnings
-from types import FrameType
-from typing import Any, Callable, List, Optional, Set, Type
+from types import CodeType, FrameType
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 import numpy as np
 import torch
@@ -22,6 +22,86 @@ from torch import nn
 # "grad" is also excluded (via substring check) to avoid pulling in gradient
 # tensors, which are tracked separately.
 _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
+
+# Cached instruction-offset -> column-offset maps, keyed by ``id(code_obj)``.
+#
+# CPython code objects are immutable, so once we disassemble a code object
+# the mapping never changes. ``dis.get_instructions`` is one of the most
+# expensive calls on transformer-style hot paths (per profiling audit
+# 2026-04-27, ``dis.*`` self time ~16.5s on GPT-2). Re-using the parsed
+# offset map per code object reduces repeated work to a single dict lookup.
+#
+# Keys are ``id(code_obj)`` so unloaded code objects (e.g. via
+# ``importlib.reload``) get implicitly evicted: the new module's code
+# objects are fresh objects with new ids, and the old entries become
+# unreachable garbage. To keep the cache from growing without bound on
+# pathological workloads, we apply a soft cap and emit a one-shot warning
+# when crossed (the cap is large enough that real-world models never hit it).
+_COL_OFFSET_CACHE: Dict[int, Dict[int, Optional[int]]] = {}
+_COL_OFFSET_CACHE_SIZE_CAP = 100_000
+_col_offset_cache_warned = False
+
+
+def _build_col_offset_map(code: CodeType) -> Dict[int, Optional[int]]:
+    """Return ``instruction_offset -> column_offset`` for every instruction.
+
+    The map covers all bytecode instructions in ``code``. Instructions whose
+    ``positions`` are missing or whose ``col_offset`` is ``None`` are stored
+    with ``None`` so callers can distinguish "not in map" (unknown offset)
+    from "no column information available" (positions absent).
+    """
+    if sys.version_info < (3, 11):
+        return {}
+    offset_map: Dict[int, Optional[int]] = {}
+    try:
+        for instruction in dis.get_instructions(code):
+            positions = instruction.positions
+            if positions is None:
+                offset_map[instruction.offset] = None
+            else:
+                offset_map[instruction.offset] = positions.col_offset
+    except (TypeError, ValueError):
+        return {}
+    return offset_map
+
+
+def _get_or_build_col_offset_map(code: CodeType) -> Dict[int, Optional[int]]:
+    """Return the cached column-offset map for ``code`` (build on miss).
+
+    The cache is keyed by ``id(code)``. Code objects are immutable, so the
+    cached map is valid for the entire lifetime of the code object.
+    """
+    global _col_offset_cache_warned
+    code_id = id(code)
+    cached = _COL_OFFSET_CACHE.get(code_id)
+    if cached is not None:
+        return cached
+    if not _col_offset_cache_warned and len(_COL_OFFSET_CACHE) >= _COL_OFFSET_CACHE_SIZE_CAP:
+        # Emit a single warning so unbounded growth in pathological workloads
+        # is visible without spamming the logs. Real-world models are well
+        # under this cap; crossing it usually points to a code-object leak.
+        warnings.warn(
+            "torchlens column-offset cache exceeded "
+            f"{_COL_OFFSET_CACHE_SIZE_CAP} entries; new entries will still be "
+            "added but this likely indicates a long-running process touching "
+            "very many unique code objects.",
+            stacklevel=2,
+        )
+        _col_offset_cache_warned = True
+    offset_map = _build_col_offset_map(code)
+    _COL_OFFSET_CACHE[code_id] = offset_map
+    return offset_map
+
+
+def _clear_col_offset_cache() -> None:
+    """Drop all cached column-offset maps.
+
+    Intended for tests that need a clean slate between cache-behaviour
+    assertions.
+    """
+    global _col_offset_cache_warned
+    _COL_OFFSET_CACHE.clear()
+    _col_offset_cache_warned = False
 
 
 def _get_code_qualname(frame: FrameType) -> Optional[str]:
@@ -49,17 +129,13 @@ def _get_col_offset(frame: FrameType) -> Optional[int]:
     """
     if sys.version_info < (3, 11):
         return None
-    try:
-        for instruction in dis.get_instructions(frame.f_code):
-            if instruction.offset != frame.f_lasti:
-                continue
-            positions = instruction.positions
-            if positions is None:
-                return None
-            return positions.col_offset
-    except (TypeError, ValueError):
+    offset_map = _get_or_build_col_offset_map(frame.f_code)
+    if not offset_map:
         return None
-    return None
+    # ``offset_map`` may legitimately contain ``None`` for instructions whose
+    # ``positions`` attribute is absent. Use ``get`` so a missing key (e.g.
+    # an instruction we never indexed) also returns ``None``.
+    return offset_map.get(frame.f_lasti)
 
 
 def get_vars_of_type_from_obj(

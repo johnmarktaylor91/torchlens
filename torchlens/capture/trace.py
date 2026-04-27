@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
+from ..utils.tensor_utils import _is_cuda_available
 from .source_tensors import log_source_tensor
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _vprint, _vtimed
@@ -536,5 +537,9 @@ def run_and_log_inputs_through_model(
 
     finally:
         # Release input tensor references so GC can reclaim CUDA memory.
+        # Gated behind cached cuda.is_available() so CPU-only runs don't pay
+        # the CUDA driver / NVML probe cost (per profiling audit 2026-04-27
+        # finding #4).
         input_tensors = None  # type: ignore[assignment]
-        torch.cuda.empty_cache()
+        if _is_cuda_available():
+            torch.cuda.empty_cache()

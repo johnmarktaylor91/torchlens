@@ -50,10 +50,31 @@ def _mark_conditional_branches(self: "ModelLog") -> None:
     4. Backward-flood IF edges from branch-participating bools only.
     5. Attribute executed ops and forward edges to conditional branch arms.
     6. Rebuild compatibility views derived from the new primary structures.
+
+    Performance fast-path: when no terminal scalar bools were captured, the
+    model has no conditional branches the pipeline can attribute, so we skip
+    the AST file indexing, per-bool classification, and per-op
+    ``attribute_op()`` work. All ModelLog-level conditional collections are
+    already initialized empty in :meth:`ModelLog.__init__`, and per-layer
+    conditional fields are initialized to their empty defaults during
+    capture (see ``capture/output_tensors.py``). The fast-path is verified
+    against the slow-path defaults via ``tests/test_perf_bundle.py``.
     """
+
+    if _can_fast_skip_step5(self):
+        return
 
     file_indexes = _build_file_indexes(self)
     conditional_keys, bool_classifications = _classify_bool_layers(self)
+    # Defensive guard: if no terminal bool produced a structural conditional
+    # key, attribution will produce zero edges, matching the fast-skip output.
+    # This invariant lets future refactors of the bool detector trip an
+    # explicit assertion rather than silently make the fast-path miss work.
+    if not bool_classifications:
+        assert not conditional_keys, (
+            "Internally-terminated bool layers were absent but conditional "
+            "keys were produced; the fast-skip precondition is stale."
+        )
     events_by_key = _materialize_conditional_events(
         self,
         file_indexes,
@@ -63,6 +84,46 @@ def _mark_conditional_branches(self: "ModelLog") -> None:
     _mark_conditional_branches_if_backward_flood(self, bool_classifications)
     _attribute_branches_forward(self, events_by_key)
     _materialize_derived_views(self)
+
+
+def _can_fast_skip_step5(self: "ModelLog") -> bool:
+    """Return True when Step 5 has no work to do.
+
+    The slow path's only branch-attributing inputs are the ModelLog's
+    ``internally_terminated_bool_layers``: if no terminal scalar bool was
+    captured, ``_iter_terminal_scalar_bool_labels`` yields nothing, so
+    every downstream collection (events, edges, per-layer arm children)
+    would resolve to its empty default. Skipping the slow path is then
+    semantically equivalent to running it.
+
+    The function also checks the derived ModelLog-level conditional
+    collections (``conditional_events``, ``conditional_branch_edges``,
+    ``conditional_then_edges``, ``conditional_elif_edges``,
+    ``conditional_else_edges``, ``conditional_arm_edges``,
+    ``conditional_edge_passes``). They are initialized empty in
+    :meth:`ModelLog.__init__`, and the slow path resets them on entry.
+    Any caller that pre-populated these would change the user-visible
+    output if we skipped, so we conservatively run the slow path in that
+    (pathological) case as well.
+    """
+
+    if self.internally_terminated_bool_layers:
+        return False
+    if self.conditional_events:
+        return False
+    if self.conditional_branch_edges:
+        return False
+    if self.conditional_then_edges:
+        return False
+    if self.conditional_elif_edges:
+        return False
+    if self.conditional_else_edges:
+        return False
+    if self.conditional_arm_edges:
+        return False
+    if self.conditional_edge_passes:
+        return False
+    return True
 
 
 def _build_file_indexes(
