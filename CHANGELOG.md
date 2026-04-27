@@ -1,6 +1,37 @@
 # CHANGELOG
 
 
+## v2.13.0 (2026-04-27)
+
+### Features
+
+- **fastlog**: Add activation_postfunc parity with slow path
+  ([`0098449`](https://github.com/johnmarktaylor91/torchlens/commit/00984493b1c433f16e9a8b0f7fe9454f5ff43fa5))
+
+Add activation_postfunc + save_raw_activation to fastlog (record(), Recorder, RecordingOptions).
+  Mirrors the slow-path UX shipped in PR #166 while keeping fastlog architecture intentionally
+  divergent per .project-context/research/fastlog_postfunc_parity_2026-04-27.md.
+
+- Public surface mirrors train_mode placement on record() / Recorder / RecordingOptions. - Postfunc
+  runs in _storage_resolver after safe_copy/_apply_payload_transforms and only for
+  predicate-selected events. Predicates and dry_run() continue to see raw RecordContext metadata;
+  dry_run never invokes the postfunc. - ActivationRecord gains transformed_ram_payload and
+  transformed_disk_payload parallel fields (LayerPassLog is not reused). - Disk bundles persist
+  transformed copies as kind="transformed_activation" blobs counted in the manifest auxiliary
+  section, with metadata, hash, and shape stored under transformed_activation_* metadata keys;
+  recovery validates both raw and transformed blobs. - metadata.json carries
+  activation_postfunc_repr (callable repr only) and Recording exposes activation_postfunc_repr for
+  in-memory introspection. - Train-mode + keep_grad validation rejects non-Tensor / non-grad-dtype /
+  detached transformed RAM payloads with TrainingModeConfigError; disk copies remain detached
+  inspection copies. - Postfunc errors propagate as TorchLensPostfuncError (with event label / kind
+  / func_name / shape / dtype / storage_target / keep_grad context) and bypass the predicate-failure
+  aggregation so the pass fails and the disk bundle aborts. - 14 new behavioral tests in
+  tests/test_fastlog_postfunc_parity.py covering RAM-only, disk-only, mirror, train-mode, source
+  events, predicate selection, dry-run isolation, repr exposure, and disk roundtrip.
+
+No gradient_postfunc surface and no slow-path changes; CaptureSpec stays declarative.
+
+
 ## v2.12.2 (2026-04-27)
 
 ### Bug Fixes
