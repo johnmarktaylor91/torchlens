@@ -851,6 +851,53 @@ class ModelLog:
             code_panel=code_panel,
         )
 
+    def show_backward_graph(
+        self,
+        vis_outpath: str = "backward_modelgraph",
+        vis_graph_overrides: Optional[Dict] = None,
+        node_spec_fn: Optional[Callable] = None,
+        collapsed_node_spec_fn: Optional[Callable] = None,
+        vis_node_mode: VisNodeModeLiteral = "default",
+        vis_edge_overrides: Optional[Dict] = None,
+        vis_save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        vis_direction: VisDirectionLiteral = "topdown",
+        code_panel: "CodePanelOption" = False,
+    ) -> str:
+        """Render the captured backward grad_fn graph.
+
+        Parameters
+        ----------
+        vis_outpath, vis_graph_overrides, node_spec_fn, collapsed_node_spec_fn, \
+        vis_node_mode, vis_edge_overrides, vis_save_only, vis_fileformat, \
+        vis_direction, code_panel:
+            Forwarded unchanged to
+            :func:`torchlens.visualization.rendering.render_backward_graph`.
+            ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
+            forward-visualization API symmetry but are not applied because
+            backward graphs do not render collapsed module nodes.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source.
+        """
+        from ..visualization.rendering import render_backward_graph as _impl
+
+        return _impl(
+            self,
+            vis_outpath=vis_outpath,
+            vis_graph_overrides=vis_graph_overrides,
+            node_spec_fn=node_spec_fn,
+            collapsed_node_spec_fn=collapsed_node_spec_fn,
+            vis_node_mode=vis_node_mode,
+            vis_edge_overrides=vis_edge_overrides,
+            vis_save_only=vis_save_only,
+            vis_fileformat=vis_fileformat,
+            direction=vis_direction,
+            code_panel=code_panel,
+        )
+
     def preview_fastlog(
         self,
         predicate: Optional[Callable] = None,
