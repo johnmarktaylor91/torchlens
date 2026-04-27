@@ -82,6 +82,8 @@ from .source_tensors import _get_input_module_info
 if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
+_AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
+
 
 def log_function_output_tensors(
     self,
@@ -553,6 +555,7 @@ def log_function_output_tensors_exhaustive(
     )
 
     out_iter = ensure_iterable(out_orig)
+    autograd_saved_stats = _get_autograd_saved_stats_by_output(out_orig)
 
     for i, out in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
@@ -576,7 +579,14 @@ def log_function_output_tensors_exhaustive(
         ):
             fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
         _log_output_tensor_info(
-            self, out, i, args, kwargs, parent_param_passes, fields_dict_onetensor
+            self,
+            out,
+            i,
+            args,
+            kwargs,
+            parent_param_passes,
+            fields_dict_onetensor,
+            autograd_saved_stats.get(i, (None, None)),
         )
         _make_layer_log_entry(
             self,
@@ -751,6 +761,10 @@ def log_function_output_tensors_fast(
         orig_layer_entry.tensor_shape = tuple(out.shape)
         orig_layer_entry.tensor_dtype = out.dtype
         orig_layer_entry.tensor_memory = get_tensor_memory_amount(out)
+        (
+            orig_layer_entry.autograd_saved_bytes,
+            orig_layer_entry.autograd_saved_tensor_count,
+        ) = _get_autograd_saved_stats_for_tensor(out)
         orig_layer_entry.func_time = exec_ctx.time_elapsed
         orig_layer_entry.func_rng_states = exec_ctx.rng_states
         orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
@@ -816,6 +830,154 @@ def _check_if_tensor_arg(arg: Any) -> bool:
         return False
 
 
+def _iter_autograd_saved_candidates(grad_fn: Any) -> List[Any]:
+    """Return accessible autograd-saved values from a grad_fn object.
+
+    Parameters
+    ----------
+    grad_fn
+        PyTorch autograd function object to inspect.
+
+    Returns
+    -------
+    list
+        Values exposed through ``saved_tensors`` and ``_saved_*`` attributes.
+        Attribute access failures are ignored because PyTorch may release or
+        guard some saved values.
+    """
+    saved_values: List[Any] = []
+    try:
+        saved_values.extend(getattr(grad_fn, "saved_tensors", ()))
+    except Exception:
+        pass
+
+    for attr_name in grad_fn.__class__.__dict__:
+        if not attr_name.startswith(_AUTOGRAD_SAVED_ATTR_PREFIX):
+            continue
+        try:
+            saved_values.append(getattr(grad_fn, attr_name))
+        except Exception:
+            continue
+    return saved_values
+
+
+def _collect_tensor_values(value: Any) -> List[torch.Tensor]:
+    """Collect tensor values from a shallow autograd-saved object.
+
+    Parameters
+    ----------
+    value
+        Value read from a grad_fn saved-tensor API.
+
+    Returns
+    -------
+    list of torch.Tensor
+        Tensor instances found in the value.
+    """
+    if isinstance(value, torch.Tensor):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if isinstance(item, torch.Tensor)]
+    if isinstance(value, dict):
+        return [item for item in value.values() if isinstance(item, torch.Tensor)]
+    return []
+
+
+def _add_autograd_saved_tensor(
+    tensor: torch.Tensor,
+    seen_data_ptrs: set[int],
+) -> tuple[int, int]:
+    """Return byte/count contribution for a deduped autograd-saved tensor.
+
+    Parameters
+    ----------
+    tensor
+        Saved tensor to measure.
+    seen_data_ptrs
+        Data pointers already counted for this operation.
+
+    Returns
+    -------
+    tuple of int
+        ``(bytes, tensor_count)`` contribution for this tensor.
+    """
+    try:
+        data_ptr = tensor.data_ptr()
+    except Exception:
+        return 0, 0
+    if data_ptr in seen_data_ptrs:
+        return 0, 0
+    seen_data_ptrs.add(data_ptr)
+    with pause_logging():
+        return tensor.numel() * tensor.element_size(), 1
+
+
+def _get_autograd_saved_stats_by_output(
+    output: Any,
+) -> dict[int, tuple[Optional[int], Optional[int]]]:
+    """Measure autograd-saved tensor bytes/counts for each tensor output.
+
+    Parameters
+    ----------
+    output
+        Raw function output from a decorated torch operation.
+
+    Returns
+    -------
+    dict
+        Mapping from output index to ``(autograd_saved_bytes,
+        autograd_saved_tensor_count)``. Non-tensor outputs and tensors without
+        ``grad_fn`` are omitted and handled by callers as ``None`` values.
+    """
+    stats_by_index: dict[int, tuple[Optional[int], Optional[int]]] = {}
+    seen_grad_fns: set[int] = set()
+    seen_data_ptrs: set[int] = set()
+
+    for output_index, maybe_tensor in enumerate(ensure_iterable(output)):
+        if not isinstance(maybe_tensor, torch.Tensor) or maybe_tensor.grad_fn is None:
+            continue
+
+        grad_fn = maybe_tensor.grad_fn
+        grad_fn_id = id(grad_fn)
+        if grad_fn_id in seen_grad_fns:
+            stats_by_index[output_index] = (0, 0)
+            continue
+        seen_grad_fns.add(grad_fn_id)
+
+        total_bytes = 0
+        tensor_count = 0
+        for saved_value in _iter_autograd_saved_candidates(grad_fn):
+            for saved_tensor in _collect_tensor_values(saved_value):
+                bytes_added, count_added = _add_autograd_saved_tensor(saved_tensor, seen_data_ptrs)
+                total_bytes += bytes_added
+                tensor_count += count_added
+        stats_by_index[output_index] = (total_bytes, tensor_count)
+
+    return stats_by_index
+
+
+def _get_autograd_saved_stats_for_tensor(
+    tensor: torch.Tensor,
+) -> tuple[Optional[int], Optional[int]]:
+    """Measure autograd-saved tensor bytes/counts for a single tensor output.
+
+    Parameters
+    ----------
+    tensor
+        Tensor output from a decorated torch operation.
+
+    Returns
+    -------
+    tuple
+        ``(autograd_saved_bytes, autograd_saved_tensor_count)``. Both values
+        are ``None`` when no grad_fn exists.
+    """
+    if tensor.grad_fn is None:
+        return None, None
+    stats_by_index = _get_autograd_saved_stats_by_output(tensor)
+    return stats_by_index.get(0, (None, None))
+
+
 def _log_output_tensor_info(
     self,
     t: torch.Tensor,
@@ -824,6 +986,7 @@ def _log_output_tensor_info(
     kwargs: Dict[str, Any],
     parent_param_passes: Dict[str, int],
     fields_dict: Dict[str, Any],
+    autograd_saved_stats: tuple[Optional[int], Optional[int]],
 ) -> None:
     """Populate per-tensor fields that differ across outputs of a single function call.
 
@@ -940,6 +1103,10 @@ def _log_output_tensor_info(
     fields_dict["tensor_dtype"] = t.dtype
     with pause_logging():
         fields_dict["tensor_memory"] = t.nelement() * t.element_size()
+    (
+        fields_dict["autograd_saved_bytes"],
+        fields_dict["autograd_saved_tensor_count"],
+    ) = autograd_saved_stats
 
     # FLOPs computation
     fields_dict["flops_forward"] = compute_forward_flops(

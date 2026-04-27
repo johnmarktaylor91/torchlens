@@ -215,6 +215,7 @@ class ModelLog:
         "layers_with_params": FieldPolicy.KEEP,
         "equivalent_operations": FieldPolicy.KEEP,
         "total_activation_memory": FieldPolicy.KEEP,
+        "total_autograd_saved_bytes": FieldPolicy.KEEP,
         "num_tensors_saved": FieldPolicy.KEEP,
         "saved_activation_memory": FieldPolicy.KEEP,
         "param_logs": FieldPolicy.KEEP,
@@ -411,6 +412,7 @@ class ModelLog:
 
         # Aggregate tensor statistics (computed during postprocessing):
         self.total_activation_memory: int = 0
+        self.total_autograd_saved_bytes: Optional[int] = None
         self.num_tensors_saved: int = 0  # layers with has_saved_activations=True
         self.saved_activation_memory: int = 0
 
@@ -565,6 +567,7 @@ class ModelLog:
                 "backward_num_passes": 0,
                 "backward_peak_memory_bytes": 0,
                 "backward_memory_backend": "unknown",
+                "total_autograd_saved_bytes": None,
                 "_buffer_accessor": None,
                 "_module_logs": None,
                 "_module_build_data": None,

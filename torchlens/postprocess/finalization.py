@@ -764,9 +764,32 @@ def _build_layer_logs(self: "ModelLog") -> None:
         pass_log.parent_layer_log = layer_log  # type: ignore[assignment]
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
+    total_autograd_saved_bytes = 0
+    has_autograd_saved_value = False
     for layer_log in layer_logs.values():
+        pass_autograd_bytes = [
+            pass_log.autograd_saved_bytes
+            for pass_log in layer_log.passes.values()
+            if pass_log.autograd_saved_bytes is not None
+        ]
+        pass_autograd_tensor_counts = [
+            pass_log.autograd_saved_tensor_count
+            for pass_log in layer_log.passes.values()
+            if pass_log.autograd_saved_tensor_count is not None
+        ]
+        if pass_autograd_bytes:
+            layer_log.autograd_saved_bytes = sum(pass_autograd_bytes)
+            layer_log.autograd_saved_tensor_count = sum(pass_autograd_tensor_counts)
+            total_autograd_saved_bytes += layer_log.autograd_saved_bytes
+            has_autograd_saved_value = True
+        else:
+            layer_log.autograd_saved_bytes = None
+            layer_log.autograd_saved_tensor_count = None
         _rebuild_layer_log_conditional_views(layer_log)
 
+    self.total_autograd_saved_bytes = (
+        total_autograd_saved_bytes if has_autograd_saved_value else None
+    )
     self.layer_logs = layer_logs
     _rebuild_conditional_edge_passes(self)
 
