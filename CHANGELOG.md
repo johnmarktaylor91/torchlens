@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v2.12.1 (2026-04-27)
+
+### Bug Fixes
+
+- **capture**: Correct fast-mode pass-through detection for in-place modules
+  ([`787025d`](https://github.com/johnmarktaylor91/torchlens/commit/787025d8f398486b6134a04efa03d4742c0de3f7))
+
+### Documentation
+
+- **research**: Two-pass mode in-place module diagnostic (2026-04-27)
+  ([`19cf533`](https://github.com/johnmarktaylor91/torchlens/commit/19cf533691fc6e1239afaadd54517b2a31953867))
+
+
 ## v2.12.0 (2026-04-27)
 
 ### Chores
