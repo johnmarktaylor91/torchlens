@@ -28,6 +28,8 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import torch
 from torch import nn
 
+from .._errors import TorchLensPostfuncError
+from .._training_validation import TrainingModeConfigError
 from ..utils.introspection import _get_func_call_stack, get_attr_values_from_tensor_list
 from ..utils.tensor_utils import get_tensor_memory_amount
 from ..utils.rng import log_current_rng_states
@@ -119,16 +121,32 @@ def log_source_tensor_predicate(
             if spec.save_activation or spec.save_metadata:
                 ram_payload = None
                 disk_payload = None
+                transformed_ram_payload = None
+                transformed_disk_payload = None
                 if spec.save_activation:
-                    ram_payload, disk_payload = state.resolve_storage(t, spec)
+                    (
+                        ram_payload,
+                        disk_payload,
+                        transformed_ram_payload,
+                        transformed_disk_payload,
+                    ) = state.resolve_storage(t, spec, ctx=ctx)
                 state.add_record(
                     ActivationRecord(
                         ctx=ctx,
                         spec=spec,
                         ram_payload=ram_payload,
                         disk_payload=disk_payload,
+                        transformed_ram_payload=transformed_ram_payload,
+                        transformed_disk_payload=transformed_disk_payload,
                     )
                 )
+    except (TorchLensPostfuncError, TrainingModeConfigError):
+        # Postfunc + train-mode validation errors are storage failures and
+        # must surface directly to the caller, not be aggregated through
+        # the predicate-failure pipeline. The orchestrator's outer
+        # exception handler aborts disk storage before the raise reaches
+        # the caller.
+        raise
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:

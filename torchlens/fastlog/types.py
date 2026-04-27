@@ -111,12 +111,40 @@ class RecordContext:
 
 @dataclass(frozen=True, slots=True)
 class ActivationRecord:
-    """One retained fastlog event."""
+    """One retained fastlog event.
+
+    Parameters
+    ----------
+    ctx:
+        Frozen record context produced for the underlying event.
+    spec:
+        Resolved capture policy for this record.
+    ram_payload:
+        Raw activation copy retained in memory, or ``None`` when not stored
+        either because the record is metadata-only or the caller opted out
+        via ``save_raw_activation=False``.
+    disk_payload:
+        Raw activation copy persisted to disk, or ``None`` when no disk
+        target is active or the caller opted out via
+        ``save_raw_activation=False``.
+    transformed_ram_payload:
+        Output of ``activation_postfunc`` retained in memory. ``None`` when
+        no postfunc is configured for the recording.
+    transformed_disk_payload:
+        Output of ``activation_postfunc`` persisted to disk. ``None`` when
+        no postfunc is configured for the recording.
+    metadata:
+        Auxiliary record metadata, including disk blob entries when present.
+    recorded_at:
+        Wall-clock time the record was created.
+    """
 
     ctx: RecordContext
     spec: CaptureSpec
     ram_payload: torch.Tensor | None = None
     disk_payload: torch.Tensor | None = None
+    transformed_ram_payload: torch.Tensor | None = None
+    transformed_disk_payload: torch.Tensor | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     recorded_at: float = field(default_factory=time.time)
 
@@ -235,6 +263,7 @@ class Recording:
     keep_op_repr: str | None
     keep_module_repr: str | None
     history_size: int
+    activation_postfunc_repr: str | None = None
     recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
 

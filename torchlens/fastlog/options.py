@@ -7,6 +7,7 @@ from typing import Any, Callable, Final, Literal, Mapping, cast
 
 from .._deprecations import MISSING, MissingType
 from ..options import StreamingOptions
+from ..types import ActivationPostfunc
 from .types import CaptureSpec, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None
@@ -24,6 +25,8 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "on_predicate_error",
     "streaming",
     "random_seed",
+    "activation_postfunc",
+    "save_raw_activation",
 )
 
 
@@ -55,6 +58,8 @@ class RecordingOptions:
     on_predicate_error: PredicateErrorMode = "auto"
     streaming: StreamingOptions | None = None
     random_seed: int | None = None
+    activation_postfunc: ActivationPostfunc | None = None
+    save_raw_activation: bool = True
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -74,6 +79,8 @@ class RecordingOptions:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
+        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        save_raw_activation: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -104,6 +111,12 @@ class RecordingOptions:
             "streaming": _resolve_recording_option("streaming", streaming, None, specified_fields),
             "random_seed": _resolve_recording_option(
                 "random_seed", random_seed, None, specified_fields
+            ),
+            "activation_postfunc": _resolve_recording_option(
+                "activation_postfunc", activation_postfunc, None, specified_fields
+            ),
+            "save_raw_activation": _resolve_recording_option(
+                "save_raw_activation", save_raw_activation, True, specified_fields
             ),
         }
         _validate_recording_values(values)
@@ -143,12 +156,18 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     history_size = values["history_size"]
     max_predicate_failures = values["max_predicate_failures"]
     on_predicate_error = values["on_predicate_error"]
+    activation_postfunc = values["activation_postfunc"]
+    save_raw_activation = values["save_raw_activation"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise ValueError("history_size must be an integer in [0, 1024]")
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise ValueError("max_predicate_failures must be a non-negative integer")
     if on_predicate_error not in {"auto", "accumulate", "fail-fast"}:
         raise ValueError("on_predicate_error must be 'auto', 'accumulate', or 'fail-fast'")
+    if activation_postfunc is not None and not callable(activation_postfunc):
+        raise ValueError("activation_postfunc must be callable or None")
+    if not isinstance(save_raw_activation, bool):
+        raise ValueError("save_raw_activation must be a bool")
 
 
 def merge_recording_options(
@@ -164,6 +183,8 @@ def merge_recording_options(
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
     streaming: StreamingOptions | None | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
+    activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+    save_raw_activation: bool | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
 
@@ -182,6 +203,8 @@ def merge_recording_options(
         "on_predicate_error": on_predicate_error,
         "streaming": streaming,
         "random_seed": random_seed,
+        "activation_postfunc": activation_postfunc,
+        "save_raw_activation": save_raw_activation,
     }
     for field_name, value in incoming.items():
         if value is MISSING:

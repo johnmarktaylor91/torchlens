@@ -9,6 +9,7 @@ from torch import nn
 from .._deprecations import MISSING, MissingType
 from .._training_validation import reject_compiled_model
 from ..options import StreamingOptions
+from ..types import ActivationPostfunc
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import PredicateErrorMode, PredicateFn
@@ -32,6 +33,8 @@ def record(
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
+    activation_postfunc: ActivationPostfunc | None = None,
+    save_raw_activation: bool = True,
     train_mode: bool = False,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with fastlog predicates.
@@ -48,6 +51,13 @@ def record(
     include_source_events, max_predicate_failures, on_predicate_error, streaming,
     random_seed:
         Fastlog recording options.
+    activation_postfunc:
+        Optional callable applied to each retained activation copy after
+        dtype/device transforms. Errors propagate as
+        :class:`torchlens.TorchLensPostfuncError`.
+    save_raw_activation:
+        When ``False`` and ``activation_postfunc`` is set, only transformed
+        payloads are retained. Defaults to ``True`` to mirror the slow path.
     train_mode:
         If True, omitted defaults are promoted to keep-grad capture specs.
     return_output:
@@ -75,6 +85,8 @@ def record(
         on_predicate_error=on_predicate_error,
         streaming=streaming,
         random_seed=random_seed,
+        activation_postfunc=activation_postfunc,
+        save_raw_activation=save_raw_activation,
         train_mode=train_mode,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)

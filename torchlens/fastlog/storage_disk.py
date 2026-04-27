@@ -22,7 +22,14 @@ from ._storage_resolver import _resolve_storage
 from .exceptions import PredicateError, RecordingConfigError
 from .options import RecordingOptions
 from .storage_ram import RamStorageBackend
-from .types import ActivationRecord, CaptureSpec, ModuleStackFrame, Recording, StorageIntent
+from .types import (
+    ActivationRecord,
+    CaptureSpec,
+    ModuleStackFrame,
+    RecordContext,
+    Recording,
+    StorageIntent,
+)
 
 _GRAD_DTYPES = {
     torch.float16,
@@ -82,6 +89,7 @@ class DiskStorageBackend:
 
         self._validate_record_keep_grad(record)
         stored_record = record
+        wrote_blob = False
         if record.disk_payload is not None:
             blob_id = self.writer.next_blob_id()
             entry = self.writer.write_blob(
@@ -92,8 +100,20 @@ class DiskStorageBackend:
             )
             self._tensor_entries.append(entry)
             stored_record.metadata.update(_entry_to_record_metadata(record, entry))
-            self._append_index_line(stored_record)
-        elif record.spec.save_metadata:
+            wrote_blob = True
+        if record.transformed_disk_payload is not None:
+            blob_id = self.writer.next_blob_id()
+            transformed_label = f"{record.ctx.label}::transformed_activation"
+            entry = self.writer.write_blob(
+                blob_id,
+                record.transformed_disk_payload,
+                kind="transformed_activation",
+                label=transformed_label,
+            )
+            self._tensor_entries.append(entry)
+            stored_record.metadata.update(_transformed_entry_to_record_metadata(record, entry))
+            wrote_blob = True
+        if wrote_blob or record.spec.save_metadata:
             self._append_index_line(stored_record)
         self._ram_backend.append(stored_record)
 
@@ -102,7 +122,15 @@ class DiskStorageBackend:
         tensor: torch.Tensor,
         spec: CaptureSpec,
         intent: StorageIntent,
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        *,
+        options: RecordingOptions,
+        ctx: "RecordContext | None" = None,
+    ) -> tuple[
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+    ]:
         """Resolve tensor payloads for disk-backed capture.
 
         Parameters
@@ -113,14 +141,27 @@ class DiskStorageBackend:
             Capture policy for the selected tensor.
         intent:
             Storage intent resolved from streaming options.
+        options:
+            Recording options carrying ``activation_postfunc`` /
+            ``save_raw_activation``.
+        ctx:
+            Record context used to enrich postfunc error messages.
 
         Returns
         -------
-        tuple[torch.Tensor | None, torch.Tensor | None]
-            RAM and disk payloads for the active storage mode.
+        tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]
+            ``(ram_payload, disk_payload, transformed_ram_payload,
+            transformed_disk_payload)``. Any element may be ``None``.
         """
 
-        return _resolve_storage(tensor, spec, intent)
+        return _resolve_storage(
+            tensor,
+            spec,
+            intent,
+            activation_postfunc=options.activation_postfunc,
+            save_raw_activation=options.save_raw_activation,
+            ctx=ctx,
+        )
 
     def finalize(self) -> None:
         """Finalize the fastlog directory bundle."""
@@ -233,13 +274,37 @@ def record_from_json(data: dict[str, Any]) -> ActivationRecord:
 
 
 def _entry_to_record_metadata(record: ActivationRecord, entry: TensorEntry) -> dict[str, Any]:
-    """Return persisted blob metadata for one record."""
+    """Return persisted raw activation blob metadata for one record."""
 
     metadata = entry.to_dict()
     metadata["shape"] = (
         entry.shape if record.ctx.tensor_shape is None else list(record.ctx.tensor_shape)
     )
     return metadata
+
+
+def _transformed_entry_to_record_metadata(
+    record: ActivationRecord,
+    entry: TensorEntry,
+) -> dict[str, Any]:
+    """Return persisted transformed activation blob metadata for one record.
+
+    Stored under a ``transformed_activation_*`` key namespace so it can be
+    rehydrated independently from the raw activation blob.
+    """
+
+    return {
+        "transformed_activation_blob_id": entry.blob_id,
+        "transformed_activation_kind": entry.kind,
+        "transformed_activation_relative_path": entry.relative_path,
+        "transformed_activation_shape": list(entry.shape),
+        "transformed_activation_dtype": entry.dtype,
+        "transformed_activation_backend": entry.backend,
+        "transformed_activation_bytes": entry.bytes,
+        "transformed_activation_sha256": entry.sha256,
+        "transformed_activation_layout": entry.layout,
+        "transformed_activation_device_at_save": entry.device_at_save,
+    }
 
 
 def _ctx_to_json(ctx: Any) -> dict[str, Any]:
@@ -325,6 +390,8 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
         "predicate_failure_overflow_count": recording.predicate_failure_overflow_count,
         "keep_op_repr": recording.keep_op_repr,
         "keep_module_repr": recording.keep_module_repr,
+        "activation_postfunc_repr": recording.activation_postfunc_repr,
+        "save_raw_activation": options.save_raw_activation,
         "history_size": options.history_size,
     }
     with path.open("w", encoding="utf-8") as handle:

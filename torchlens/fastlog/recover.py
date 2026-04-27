@@ -146,11 +146,41 @@ def _blob_is_recoverable(
     record: ActivationRecord,
     recovery_warnings: list[str],
 ) -> bool:
-    """Return whether a record's blob is present and hash-valid."""
+    """Return whether a record's blob(s) are present and hash-valid.
 
-    blob_id = record.metadata.get("blob_id")
-    relative_path = record.metadata.get("relative_path")
-    expected_sha256 = record.metadata.get("sha256")
+    Both the raw activation blob and the transformed activation blob are
+    validated when their metadata is present. A missing or hash-mismatched
+    blob disqualifies the record.
+    """
+
+    raw_recoverable = _validate_blob_metadata(
+        bundle_path,
+        record.metadata.get("blob_id"),
+        record.metadata.get("relative_path"),
+        record.metadata.get("sha256"),
+        recovery_warnings,
+    )
+    if not raw_recoverable:
+        return False
+    transformed_recoverable = _validate_blob_metadata(
+        bundle_path,
+        record.metadata.get("transformed_activation_blob_id"),
+        record.metadata.get("transformed_activation_relative_path"),
+        record.metadata.get("transformed_activation_sha256"),
+        recovery_warnings,
+    )
+    return transformed_recoverable
+
+
+def _validate_blob_metadata(
+    bundle_path: Path,
+    blob_id: Any,
+    relative_path: Any,
+    expected_sha256: Any,
+    recovery_warnings: list[str],
+) -> bool:
+    """Validate a single blob entry from record metadata."""
+
     if blob_id is None or relative_path is None or expected_sha256 is None:
         return True
     try:
@@ -192,6 +222,7 @@ def _recording_from_records(
         keep_op_repr=metadata.get("keep_op_repr"),
         keep_module_repr=metadata.get("keep_module_repr"),
         history_size=int(metadata.get("history_size", 0)),
+        activation_postfunc_repr=metadata.get("activation_postfunc_repr"),
         recovered=recovered,
         recovery_warnings=recovery_warnings,
     )
