@@ -32,6 +32,7 @@ from ._deprecations import MISSING, MissingType, resolve_renamed_kwarg, warn_dep
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
+    BufferVisibilityLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisModeLiteral,
@@ -334,7 +335,7 @@ def log_forward_pass(
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
-    vis_buffer_layers: bool | MissingType = MISSING,
+    vis_buffer_layers: BufferVisibilityLiteral | bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
@@ -427,6 +428,9 @@ def log_forward_pass(
         vis_save_only: Deprecated alias for ``visualization.save_only``.
         vis_fileformat: Deprecated alias for ``visualization.file_format``.
         vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
+            Accepts ``"never"``, ``"meaningful"``, or ``"always"``. Legacy
+            bools are deprecated but supported: ``True`` maps to ``"always"``
+            and ``False`` maps to ``"never"``.
         vis_direction: Deprecated alias for ``visualization.direction``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
@@ -735,7 +739,7 @@ def show_model_graph(
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
-    vis_buffer_layers: bool | MissingType = MISSING,
+    vis_buffer_layers: BufferVisibilityLiteral | bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
@@ -772,6 +776,9 @@ def show_model_graph(
         vis_save_only: Deprecated alias for ``visualization.save_only``.
         vis_fileformat: Deprecated alias for ``visualization.file_format``.
         vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
+            Accepts ``"never"``, ``"meaningful"``, or ``"always"``. Legacy
+            bools are deprecated but supported: ``True`` maps to ``"always"``
+            and ``False`` maps to ``"never"``.
         vis_direction: Deprecated alias for ``visualization.direction``.
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
         vis_renderer: Deprecated alias for ``visualization.renderer``.
