@@ -48,7 +48,7 @@ def record(
     return_output:
         Whether to return ``(model_output, recording)``.
     postprocess:
-        Postprocess preset. Only ``"none"`` is implemented in this bundle.
+        Optional postprocess enrichment preset.
 
     Returns
     -------
@@ -72,6 +72,8 @@ def record(
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)
     recording = recorder.recording
+    if postprocess != "none":
+        recording = recording.enrich(postprocess)
     if return_output:
         return output, recording
     return recording

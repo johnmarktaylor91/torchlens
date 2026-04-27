@@ -54,8 +54,6 @@ def validate_postprocess(postprocess: str) -> None:
             "postprocess must be 'none', 'module_path_strings', "
             "'param_addresses', or 'all-feasible'"
         )
-    if postprocess != "none":
-        raise RecordingConfigError("fastlog postprocess presets are implemented in a later step")
 
 
 def _validate_non_empty_capture(options: RecordingOptions) -> None:
