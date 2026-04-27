@@ -740,7 +740,6 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
         # Only nn.Identity and pass-through detection is needed to keep
         # tensor counters aligned with the exhaustive pass.
         if model_log.logging_mode == "fast":
-            out = orig_forward(*args, **kwargs)
             input_tensors_fast = get_vars_of_type_from_obj(
                 [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
             )
@@ -749,6 +748,7 @@ def module_forward_decorator(orig_forward: Callable, module: nn.Module) -> Calla
                 for t in input_tensors_fast
                 if hasattr(t, "tl_tensor_label_raw")
             }
+            out = orig_forward(*args, **kwargs)
             output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
                 # Force _decorated_identity() for nn.Identity modules and pass-throughs
