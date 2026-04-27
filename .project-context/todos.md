@@ -71,6 +71,35 @@ but are natural follow-ons. Pick up after MVP ships.
   subgraphs, or a unified backward supergraph keyed on grad_fn? Defer
   to the multi-trace V2 batch alongside the other Phase 2 follow-ons.
 
+- **Module-type second line in bundle cluster labels.** `show_model_graph`
+  cluster labels include a `(<ModuleType>)` line under the module name;
+  `show_bundle_graph` omits it because `Supergraph` doesn't preserve
+  module class on its nodes. Recoverable in two small edits: add a
+  `module_type: str | None` field to `SupergraphNode` populated during
+  `build_supergraph` from the canonical trace's `LayerLog.containing_module_type`
+  chain, then teach the bundle cluster builder in
+  `torchlens/multi_trace/_bundle_clusters.py` to emit the second line
+  when present. Defer until aesthetic parity matters more than a clean
+  diff.
+
+- **Public `TraceBundle.supergraph` accessor.** The bundle renderer
+  reads `bundle._supergraph` privately. If we want users to introspect
+  the supergraph directly (e.g. to enumerate selective nodes by their
+  edge frequencies, or build custom visualizations), promote to a
+  public property. One-line change; defer until a real user asks.
+
+- **Per-node / per-edge styling primitives in `_render_utils.py`.** Phase 2
+  polish extracted cluster styling, file-format dispatch, HTML escape,
+  and direction translation into shared `_render_utils.py`. Per-node
+  styling (`_build_layer_node`, `_build_collapsed_module_node`) and
+  per-edge styling were left in `rendering.py` because the shapes
+  differ substantially between ModelLog (LayerLog/NodeSpec coupled) and
+  bundle (mode-driven coloring) -- agent's call was a parameterised
+  version would be thin pass-through or parameter explosion. Revisit if
+  a third visualization consumer appears or if the bundle/ModelLog
+  styling logic genuinely converges; otherwise the current seam is the
+  right one.
+
 ### Other improvements
 
 - Rethink the parameter name `activation_postfunc` itself. Current name is
@@ -143,6 +172,49 @@ but are natural follow-ons. Pick up after MVP ships.
   Finding #6.
 
 ## Completed (recent)
+
+### 2026-04-27 multi-trace sprint (Phase 1 + Phase 2)
+
+Versions shipped: 2.14.0 (auto-released after Phase 1 merge); Phase 2
+release pending semantic-release run on Phase 2 merge (expected 2.15.0).
+
+- PR #170 -> 2.14.0: Phase 1 data layer. New `torchlens/multi_trace/`
+  subpackage with `TraceBundle`, `NodeView`, `Supergraph`,
+  `compare_topology`, diff metrics (cosine / relative_l2 / pearson +
+  scalar L1 fallback). Holds N `ModelLog` instances by reference;
+  unified handling of shared-topology and divergent-topology bundles
+  (degenerate Overlay model -- one class, not two). 28 tests; ruff +
+  mypy + smoke clean.
+- PR #171 -> CLOSED (superseded by #172). Initial Phase 2 visualization
+  pass shipped working bundle rendering but with judicious duplication
+  vs `rendering.py` and simpler module clusters than `show_model_graph`.
+  Architect rejected pre-merge.
+- PR #172 -> Phase 2 polish + visualization. Three commits on top of
+  the closed-#171 state:
+  - `refactor(visualization): extract reusable rendering primitives`
+    -- pulled cluster styling, file-format dispatch, direction
+    translation, HTML escape into `torchlens/visualization/_render_utils.py`;
+    adopted in BOTH `rendering.py` AND `elk_layout.py` (genuinely shared,
+    not bundle-private).
+  - `feat(multi-trace): bundle renderer refactor + module cluster
+    aesthetic parity` -- bundle renderer 779 -> 352 LOC (-55%); module
+    cluster penwidth/pass-suffix/nesting parity with `show_model_graph`;
+    bonus fix for divergence-mode crash on multi-pass canonical nodes.
+  - `test(multi-trace): cluster parity tests + defer rolled/backward
+    bundle modes` -- 4 cluster-parity regression tests + the two
+    deferred-mode todos in this file.
+  Single-trace regression tests pass byte-equivalent
+  (`test_output_aesthetics`, `test_visualization`,
+  `test_backward_visualization`, `test_dagua_theme` all green).
+
+Sprint notes:
+- Codex hit daily quota mid-Phase-1 dispatch; pivoted to Claude
+  general-purpose subagents for all three dispatches per the
+  fallback procedure in `~/.claude/CLAUDE.md`.
+- PR #171 was closed (not merged) after the architect flagged
+  insufficient refactoring + missing cluster aesthetic parity. Same
+  branch carried forward into PR #172 -- no force-push, three
+  commits on top, clean history.
 
 ### 2026-04-27 grab-bag + activation_postfunc + perf sprint
 
