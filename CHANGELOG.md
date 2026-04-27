@@ -1,6 +1,42 @@
 # CHANGELOG
 
 
+## v2.12.2 (2026-04-27)
+
+### Bug Fixes
+
+- **perf**: Cache bytecode column offsets, fast-skip empty-branch attribution, guard CUDA probes on
+  CPU runs
+  ([`b61202d`](https://github.com/johnmarktaylor91/torchlens/commit/b61202db5a49f38bbe49e2668b7819f7afb0a30b))
+
+Bundle three independent performance fixes from the 2026-04-27 profiling audit
+  (.project-context/research/profiling_audit_2026-04-27.md). All three are localized and
+  behaviorally identical to the slow paths they short-circuit.
+
+1. Cache _get_col_offset() per code object id. The disassembled instruction-offset -> column-offset
+  map is immutable for a given code object, so we build it once and reuse it. On GPT-2 the audit
+  measured ~16.5s self time across dis.* (~50% of profiled runtime); the cache reduces repeated work
+  to a dict lookup. A soft 100K-entry cap with a one-shot warning protects against pathological
+  workloads; real-world models stay well under the cap.
+
+2. Fast-skip Step 5 branch attribution when no conditional bools were captured. The slow path's only
+  branch-attributing input is ModelLog.internally_terminated_bool_layers; if it is empty the
+  downstream collections all resolve to their empty defaults (already set in ModelLog.__init__ and
+  capture/output_tensors.py). The precondition checks every derived ModelLog conditional collection
+  so any caller that pre-populated them still triggers the slow path. A defensive assert on the slow
+  path will trip if a future bool-detector refactor produces conditional keys without populating
+  internally_terminated_bool_layers, preventing silent fast-path drift.
+
+3. Gate torch.cuda.empty_cache() calls in postprocess and capture paths behind the cached
+  _is_cuda_available() helper. CUDA availability is process-fixed, so once cached the helper
+  short-circuits without touching the CUDA driver / NVML probes that the audit measured at ~12%
+  overhead on CPU-only ResNet50.
+
+Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
+  tests/test_perf_bundle.py adds 11 behavioral tests covering each fix; smoke + non-slow suites pass
+  without regression.
+
+
 ## v2.12.1 (2026-04-27)
 
 ### Bug Fixes
