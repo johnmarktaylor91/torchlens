@@ -58,6 +58,7 @@ MODEL_LOG_FIELD_ORDER = [
     "has_gradients",
     "activation_postfunc",
     "activation_postfunc_repr",
+    "input_metadata",
     "_source_code_blob",
     "_source_model_ref",
     "mark_input_output_distances",
@@ -165,6 +166,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "has_saved_activations",
     "output_device",
     "activation_postfunc",
+    "extra_data",
     "detach_saved_tensor",
     "args_captured",
     "captured_args",
@@ -316,6 +318,7 @@ LAYER_LOG_FIELD_ORDER = [
     # Config
     "output_device",
     "activation_postfunc",
+    "extra_data",
     "detach_saved_tensor",
     "save_gradients",
     # FLOPs

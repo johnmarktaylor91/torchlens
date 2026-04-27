@@ -932,6 +932,7 @@ def _log_output_tensor_info(
     fields_dict["activation"] = None
     fields_dict["has_saved_activations"] = False
     fields_dict["activation_postfunc"] = self.activation_postfunc
+    fields_dict["extra_data"] = {}
     fields_dict["args_captured"] = False
     fields_dict["captured_args"] = None
     fields_dict["captured_kwargs"] = None

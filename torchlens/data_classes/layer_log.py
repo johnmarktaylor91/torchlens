@@ -86,6 +86,7 @@ class LayerLog:
         "tensor_memory": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
+        "extra_data": FieldPolicy.KEEP,
         "detach_saved_tensor": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
@@ -173,6 +174,7 @@ class LayerLog:
         # Config
         self.output_device = first_pass.output_device
         self.activation_postfunc = first_pass.activation_postfunc
+        self.extra_data: Dict[str, Any] = {}
         self.detach_saved_tensor = first_pass.detach_saved_tensor
         self.save_gradients = first_pass.save_gradients
 
@@ -299,7 +301,7 @@ class LayerLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(state, defaults={"_source_model_log_ref": None})
+        default_fill_state(state, defaults={"_source_model_log_ref": None, "extra_data": {}})
         self.__dict__.update(state)
 
     # ********************************************

@@ -223,6 +223,7 @@ def log_source_tensor_exhaustive(
         "activation": None,
         "has_saved_activations": False,
         "activation_postfunc": self.activation_postfunc,
+        "extra_data": {},
         "detach_saved_tensor": self.detach_saved_tensors,
         "output_device": self.output_device,
         "args_captured": False,
