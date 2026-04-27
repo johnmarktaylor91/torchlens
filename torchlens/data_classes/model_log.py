@@ -1174,12 +1174,13 @@ class ModelLog:
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: str | List = "all",
         random_seed: Optional[int] = None,
+        train_mode: bool | None = None,
     ) -> None:
         """Re-run the model with new inputs, saving only activations.
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, random_seed:
+        model, input_args, input_kwargs, layers_to_save, random_seed, train_mode:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.save_new_activations`.
         """
@@ -1192,6 +1193,7 @@ class ModelLog:
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             random_seed=random_seed,
+            train_mode=train_mode,
         )
 
     def validate_saved_activations(

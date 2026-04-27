@@ -615,6 +615,7 @@ def log_forward_pass(
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
             random_seed=random_seed,
+            train_mode=train_mode,
         )
 
     # Print final summary.

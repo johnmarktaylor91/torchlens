@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import types
+
 import torch
 from torch import nn
 
@@ -27,6 +29,24 @@ class SharedFrozenModule(nn.Module):
         first = self.shared(x)
         second = self.shared(x + 1)
         return self.head(first + second)
+
+
+class BranchMismatchModel(nn.Module):
+    """Model whose graph changes based on input sign."""
+
+    def __init__(self) -> None:
+        """Initialize the branch layer."""
+
+        super().__init__()
+        self.linear = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a sign-dependent graph."""
+
+        out = self.linear(x)
+        if bool(x.sum() > 0):
+            out = torch.relu(out)
+        return out
 
 
 def _assert_params_require_grad(module: nn.Module, expected: bool) -> None:
@@ -110,4 +130,93 @@ def test_train_mode_shared_module_requires_grad() -> None:
 
     assert all(param.grad is None for param in model.shared.parameters())
     assert all(param.grad is not None for param in model.head.parameters())
+    model_log.cleanup()
+
+
+def test_save_new_activations_train_mode_inherits() -> None:
+    """save_new_activations inherits train_mode by default."""
+
+    model = SharedFrozenModule()
+    model_log = tl.log_forward_pass(
+        model,
+        torch.randn(3, 4, requires_grad=True),
+        train_mode=True,
+        random_seed=0,
+    )
+
+    model_log.save_new_activations(
+        model,
+        torch.randn(3, 4, requires_grad=True),
+        train_mode=None,
+        random_seed=0,
+    )
+
+    saved = model_log[model_log.output_layers[0]].activation
+    assert saved.grad_fn is not None
+    assert model_log.train_mode is True
+    model_log.cleanup()
+
+
+def test_save_new_activations_train_mode_overrides() -> None:
+    """Explicit save_new_activations train_mode overrides detach flags temporarily."""
+
+    model = SharedFrozenModule()
+    model_log = tl.log_forward_pass(
+        model,
+        torch.randn(3, 4, requires_grad=True),
+        detach_saved_tensors=True,
+        random_seed=0,
+    )
+    original_layer_flags = [layer.detach_saved_tensor for layer in model_log]
+
+    model_log.save_new_activations(
+        model,
+        torch.randn(3, 4, requires_grad=True),
+        train_mode=True,
+        random_seed=0,
+    )
+
+    saved = model_log[model_log.output_layers[0]].activation
+    assert saved.grad_fn is not None
+    assert model_log.detach_saved_tensors is True
+    assert model_log.train_mode is False
+    assert [layer.detach_saved_tensor for layer in model_log] == original_layer_flags
+    model_log.cleanup()
+
+
+def test_save_new_activations_train_mode_restored_on_graph_mismatch() -> None:
+    """save_new_activations restores override flags when fast-pass graph validation fails."""
+
+    model = BranchMismatchModel()
+    model_log = tl.log_forward_pass(
+        model,
+        torch.ones(2, 4, requires_grad=True),
+        detach_saved_tensors=True,
+        random_seed=0,
+    )
+    original_layer_flags = [layer.detach_saved_tensor for layer in model_log]
+
+    def divergent_forward(self: BranchMismatchModel, x: torch.Tensor) -> torch.Tensor:
+        """Run a different operation sequence from the exhaustive pass."""
+
+        out = self.linear(x)
+        return out + out
+
+    model.forward = types.MethodType(divergent_forward, model)
+
+    try:
+        model_log.save_new_activations(
+            model,
+            torch.ones(2, 4, requires_grad=True),
+            train_mode=True,
+            random_seed=0,
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Expected fast-pass graph mismatch")
+
+    assert model_log.detach_saved_tensors is True
+    assert model_log.train_mode is False
+    assert [layer.detach_saved_tensor for layer in model_log] == original_layer_flags
     model_log.cleanup()
