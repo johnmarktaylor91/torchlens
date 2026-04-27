@@ -1,6 +1,41 @@
 # CHANGELOG
 
 
+## v2.3.1 (2026-04-27)
+
+### Bug Fixes
+
+- **ci**: Unblock smoke + dep-audit ([#156](https://github.com/johnmarktaylor91/torchlens/pull/156),
+  [`9e82f42`](https://github.com/johnmarktaylor91/torchlens/commit/9e82f423876eb19e6af799822a554fe1b791d7a4))
+
+* fix(ci): unblock smoke (importorskip torchvision) and dep-audit (ignore upstream pip CVE)
+
+Two pre-existing CI failures on main, fixed in one PR:
+
+1. tests/test_real_world_models.py imported torchvision at the top, but the smoke job only installs
+  the [dev] extras (no torchvision). The resulting collection ImportError stopped the whole smoke
+  run before any smoke test could run. Switched to pytest.importorskip so the module SKIPs
+  gracefully on slim envs.
+
+2. The Dependency-audit job ran pip-audit which flagged CVE-2026-3219 on pip itself (the package on
+  the GitHub runner image). It is outside this project's dependency surface and not actionable from
+  pyproject.toml. Ignore that single ID with a TODO to remove once a pip release with the fix is
+  available.
+
+No behavior change for environments that already have torchvision; no test was disabled. Verified
+  locally with torchvision present (smoke passes) and with torchvision blocked (the file is SKIPPED,
+  not ERRORED).
+
+* fix(ci): install graphviz so smoke tests that render the model graph work
+
+The smoke job was failing with:
+
+FileNotFoundError: [Errno 2] No such file or directory: 'dot'
+
+at tests/test_conditional_branches.py because the graphviz `dot` binary isn't on the GitHub runner
+  image by default. Add an apt-get install step before the test run.
+
+
 ## v2.3.0 (2026-04-27)
 
 ### Features
