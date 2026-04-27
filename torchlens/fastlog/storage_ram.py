@@ -5,7 +5,8 @@ from __future__ import annotations
 import torch
 
 from ._storage_resolver import _resolve_storage
-from .types import ActivationRecord, CaptureSpec, Recording, StorageIntent
+from .options import RecordingOptions
+from .types import ActivationRecord, CaptureSpec, RecordContext, Recording, StorageIntent
 
 
 class RamStorageBackend:
@@ -27,7 +28,15 @@ class RamStorageBackend:
         tensor: torch.Tensor,
         spec: CaptureSpec,
         intent: StorageIntent,
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        *,
+        options: RecordingOptions,
+        ctx: RecordContext | None,
+    ) -> tuple[
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+    ]:
         """Resolve tensor payloads for in-memory capture.
 
         Parameters
@@ -38,14 +47,27 @@ class RamStorageBackend:
             Capture policy for the selected tensor.
         intent:
             Storage intent resolved from streaming options.
+        options:
+            Active recording options carrying the activation postfunc and
+            ``save_raw_activation`` flag.
+        ctx:
+            Record context used to enrich postfunc error messages.
 
         Returns
         -------
-        tuple[torch.Tensor | None, torch.Tensor | None]
-            RAM and disk payloads. RAM-only mode returns no disk payload.
+        tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]
+            Raw RAM payload, raw disk payload (always ``None`` for the RAM
+            backend), transformed RAM payload, and transformed disk payload.
         """
 
-        return _resolve_storage(tensor, spec, intent)
+        return _resolve_storage(
+            tensor,
+            spec,
+            intent,
+            activation_postfunc=options.activation_postfunc,
+            save_raw_activation=options.save_raw_activation,
+            ctx=ctx,
+        )
 
     def append(self, record: ActivationRecord) -> None:
         """Append one retained record and update recording indexes.

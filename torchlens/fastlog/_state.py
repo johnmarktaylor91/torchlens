@@ -36,7 +36,15 @@ class _StorageBackend(Protocol):
         tensor: torch.Tensor,
         spec: CaptureSpec,
         intent: StorageIntent,
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        *,
+        options: RecordingOptions,
+        ctx: RecordContext | None,
+    ) -> tuple[
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+    ]:
         """Resolve payloads for one selected tensor."""
 
     def finalize(self) -> None:
@@ -111,12 +119,32 @@ class RecordingState:
         self,
         tensor: torch.Tensor,
         spec: CaptureSpec,
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        """Resolve payloads through the active storage backend."""
+        *,
+        ctx: RecordContext | None = None,
+    ) -> tuple[
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+    ]:
+        """Resolve payloads through the active storage backend.
+
+        Returns
+        -------
+        tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]
+            ``(ram_payload, disk_payload, transformed_ram_payload,
+            transformed_disk_payload)``. Any element may be ``None``.
+        """
 
         if self.no_tensor_capture:
-            return None, None
-        return self.storage_backend.resolve_payloads(tensor, spec, self.storage_intent)
+            return None, None, None, None
+        return self.storage_backend.resolve_payloads(
+            tensor,
+            spec,
+            self.storage_intent,
+            options=self.options,
+            ctx=ctx,
+        )
 
     def finalize_storage(self) -> None:
         """Finalize the active storage backend."""

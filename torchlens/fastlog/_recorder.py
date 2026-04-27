@@ -13,6 +13,7 @@ from .._deprecations import MISSING, MissingType
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..decoration.model_prep import _ensure_model_prepared
 from ..options import StreamingOptions
+from ..types import ActivationPostfunc
 from ._orchestrator import _empty_recording, _run_predicate_pass
 from ._state import RecordingState
 from ._validation import validate_recording_options
@@ -136,6 +137,8 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
+        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        save_raw_activation: bool | MissingType = MISSING,
         train_mode: bool = False,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
@@ -148,6 +151,15 @@ class Recorder:
         include_source_events, max_predicate_failures, on_predicate_error, streaming,
         random_seed:
             Fastlog recording options.
+        activation_postfunc:
+            Optional callable applied to each retained activation copy after
+            dtype/device transforms. The callable runs under ``pause_logging``
+            and must return a ``torch.Tensor``. Errors are wrapped in
+            :class:`torchlens.TorchLensPostfuncError`.
+        save_raw_activation:
+            When ``False`` and ``activation_postfunc`` is set, only the
+            transformed payload is retained on the record. Defaults to
+            ``True`` to mirror the slow path.
         train_mode:
             If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
         """
@@ -177,6 +189,8 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             streaming=streaming,
             random_seed=random_seed,
+            activation_postfunc=activation_postfunc,
+            save_raw_activation=save_raw_activation,
         )
         validate_recording_options(self.options)
         _ensure_model_prepared(self.model)
