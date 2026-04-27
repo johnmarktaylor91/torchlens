@@ -124,9 +124,17 @@ def save_new_activations(
     # Clear all existing activations from the previous pass.
     for layer_log_entry in self:
         layer_log_entry.activation = None
+        layer_log_entry.transformed_activation = None
+        layer_log_entry.transformed_activation_shape = None
+        layer_log_entry.transformed_activation_dtype = None
+        layer_log_entry.transformed_activation_memory = None
         layer_log_entry.has_saved_activations = False
         layer_log_entry.has_gradient = False
         layer_log_entry.gradient = None
+        layer_log_entry.transformed_gradient = None
+        layer_log_entry.transformed_gradient_shape = None
+        layer_log_entry.transformed_gradient_dtype = None
+        layer_log_entry.transformed_gradient_memory = None
         layer_log_entry.has_child_tensor_variations = False
         # Note: children_tensor_versions is cleared and NOT rebuilt in fast pass.
         # This is a known limitation (#93): validation should not be run after

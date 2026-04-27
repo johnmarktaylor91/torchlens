@@ -13,7 +13,7 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import cleanup_tmp, log_forward_pass
+from torchlens import TorchLensPostfuncError, cleanup_tmp, log_forward_pass
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.model_log import ModelLog
@@ -189,7 +189,7 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
         raise RuntimeError("boom")
 
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="Streaming activation save failed"):
+    with pytest.raises(TorchLensPostfuncError, match="activation_postfunc raised"):
         log_forward_pass(
             model,
             inputs,

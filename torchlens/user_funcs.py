@@ -30,6 +30,7 @@ from torch import nn
 from tqdm import tqdm
 
 from ._deprecations import MISSING, MissingType, resolve_renamed_kwarg, warn_deprecated_alias
+from ._errors import TorchLensPostfuncError
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
@@ -42,6 +43,7 @@ from ._literals import (
     VisRendererLiteral,
 )
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
+from .types import ActivationPostfunc, GradientPostfunc
 from .data_classes.model_log import (
     ModelLog,
 )
@@ -206,8 +208,10 @@ def _run_model_and_save_specified_activations(
     layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
     keep_unsaved_layers: bool = True,
     output_device: OutputDeviceLiteral = "same",
-    activation_postfunc: Optional[Callable] = None,
-    gradient_postfunc: Optional[Callable] = None,
+    activation_postfunc: Optional[ActivationPostfunc] = None,
+    gradient_postfunc: Optional[GradientPostfunc] = None,
+    save_raw_activation: bool = True,
+    save_raw_gradient: bool = True,
     mark_input_output_distances: bool = False,
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
@@ -249,6 +253,10 @@ def _run_model_and_save_specified_activations(
         activation_postfunc: Optional transform applied to each activation before storage
             (e.g., channel-wise averaging to reduce memory).
         gradient_postfunc: Optional transform applied to each gradient before storage.
+        save_raw_activation: Whether raw activations are retained when ``activation_postfunc``
+            is set. Metadata always describes the raw activation.
+        save_raw_gradient: Whether raw gradients are retained when ``gradient_postfunc`` is set.
+            Metadata always describes the raw gradient.
         mark_input_output_distances: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
         detach_saved_tensors: If True, saved tensors are detached from the autograd graph.
@@ -289,23 +297,25 @@ def _run_model_and_save_specified_activations(
 
     model_name = str(type(model).__name__)
     model_log = ModelLog(
-        model_name,
-        output_device,
-        activation_postfunc,
-        gradient_postfunc,
-        keep_unsaved_layers,
-        save_function_args,
-        save_gradients,
-        gradients_to_save,
-        detach_saved_tensors,
-        mark_input_output_distances,
-        num_context_lines,
-        optimizer,
-        save_source_context,
-        save_rng_states,
-        detect_loops,
-        verbose,
-        train_mode,
+        model_name=model_name,
+        output_device=output_device,
+        activation_postfunc=activation_postfunc,
+        gradient_postfunc=gradient_postfunc,
+        save_raw_activation=save_raw_activation,
+        save_raw_gradient=save_raw_gradient,
+        keep_unsaved_layers=keep_unsaved_layers,
+        save_function_args=save_function_args,
+        save_gradients=save_gradients,
+        gradients_to_save=gradients_to_save,
+        detach_saved_tensors=detach_saved_tensors,
+        mark_input_output_distances=mark_input_output_distances,
+        num_context_lines=num_context_lines,
+        optimizer=optimizer,
+        save_source_context=save_source_context,
+        save_rng_states=save_rng_states,
+        detect_loops=detect_loops,
+        verbose=verbose,
+        train_mode=train_mode,
     )
     model_log._source_code_blob = capture_model_source_code(model)
     model_log._source_model_ref = make_weak_model_ref(model)
@@ -321,7 +331,7 @@ def _run_model_and_save_specified_activations(
         model_log._run_and_log_inputs_through_model(
             model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
         )
-    except TorchLensIOError:
+    except (TorchLensIOError, TorchLensPostfuncError):
         raise
     except Exception as exc:
         if model_log._activation_writer is not None:
@@ -338,8 +348,10 @@ def log_forward_pass(
     layers_to_save: Optional[Union[str, List]] = "all",
     keep_unsaved_layers: bool = True,
     output_device: OutputDeviceLiteral = "same",
-    activation_postfunc: Optional[Callable] = None,
-    gradient_postfunc: Optional[Callable] = None,
+    activation_postfunc: Optional[ActivationPostfunc] = None,
+    gradient_postfunc: Optional[GradientPostfunc] = None,
+    save_raw_activation: bool = True,
+    save_raw_gradient: bool = True,
     mark_input_output_distances: bool | MissingType = MISSING,
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
@@ -420,8 +432,16 @@ def log_forward_pass(
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
             requested saved activations in the final log.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
-        activation_postfunc: Optional function applied to each activation before saving.
-        gradient_postfunc: Optional function applied to each gradient before saving.
+        activation_postfunc: Optional function applied to each activation before saving. The
+            raw activation remains in ``layer.tensor``/``layer.activation`` by default, and
+            the postfunc result is stored in ``layer.transformed_activation``.
+        gradient_postfunc: Optional function applied to each gradient before saving. The raw
+            gradient remains in ``layer.gradient`` by default, and the postfunc result is stored
+            in ``layer.transformed_gradient``.
+        save_raw_activation: When ``False`` and ``activation_postfunc`` is set, do not retain
+            raw activation tensors in memory; raw activation metadata is still populated.
+        save_raw_gradient: When ``False`` and ``gradient_postfunc`` is set, do not retain raw
+            gradient tensors in memory; raw gradient metadata is still populated.
         mark_input_output_distances: Deprecated alias for
             ``compute_input_output_distances``.
         detach_saved_tensors: If True, detach saved tensors from the autograd graph.
@@ -492,6 +512,19 @@ def log_forward_pass(
         streaming: Grouped streaming-save options.
         train_mode: If True, validate training-compatible settings and keep saved
             activations attached to autograd.
+
+    Postfunc behavior:
+        ``activation_postfunc`` and ``gradient_postfunc`` both take a tensor, should return a
+        tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
+        raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
+
+        Activation postfuncs run during forward capture. Their result is stored alongside the raw
+        activation by default, and ``train_mode=True`` requires the transformed activation to stay
+        graph-connected and differentiable when the raw activation requires gradients.
+
+        Gradient postfuncs run from the backward hook output, so they follow the gradient tensor's
+        shorter lifetime rather than forward activation retention. When the raw gradient itself
+        requires gradients in ``train_mode=True``, the same differentiability checks apply.
 
     Returns:
         A ``ModelLog`` containing layer activations (if requested) and full metadata.
@@ -642,6 +675,8 @@ def log_forward_pass(
             output_device=output_device,
             activation_postfunc=activation_postfunc,
             gradient_postfunc=gradient_postfunc,
+            save_raw_activation=save_raw_activation,
+            save_raw_gradient=save_raw_gradient,
             mark_input_output_distances=compute_input_output_distances,
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,
@@ -677,6 +712,8 @@ def log_forward_pass(
             output_device=output_device,
             activation_postfunc=activation_postfunc,
             gradient_postfunc=gradient_postfunc,
+            save_raw_activation=save_raw_activation,
+            save_raw_gradient=save_raw_gradient,
             mark_input_output_distances=compute_input_output_distances,
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,

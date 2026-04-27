@@ -169,7 +169,7 @@ def test_auto_train_mode_conflict_with_explicit_false() -> None:
 
 @pytest.mark.smoke
 def test_gradient_postfunc_applied() -> None:
-    """gradient_postfunc transforms saved layer gradients."""
+    """gradient_postfunc writes transformed gradients separately."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     model_log = tl.log_forward_pass(
@@ -180,7 +180,10 @@ def test_gradient_postfunc_applied() -> None:
     )
     model_log.log_backward(_output_loss(model_log))
     assert all(
-        torch.equal(model_log[label].gradient, torch.zeros_like(model_log[label].gradient))
+        torch.equal(
+            model_log[label].transformed_gradient,
+            torch.zeros_like(model_log[label].gradient),
+        )
         for label in model_log.layers_with_saved_gradients
     )
 

@@ -60,6 +60,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from ..types import ActivationPostfunc, GradientPostfunc
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -152,6 +153,7 @@ class ModelLog:
         "keep_unsaved_layers": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
         "activation_postfunc_repr": FieldPolicy.KEEP,
+        "save_raw_activation": FieldPolicy.KEEP,
         "input_metadata": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
@@ -166,6 +168,7 @@ class ModelLog:
         "_gradient_layer_nums_to_save": FieldPolicy.KEEP,
         "gradient_postfunc": FieldPolicy.DROP,
         "gradient_postfunc_repr": FieldPolicy.KEEP,
+        "save_raw_gradient": FieldPolicy.KEEP,
         "save_source_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
         "detect_loops": FieldPolicy.KEEP,
@@ -260,8 +263,10 @@ class ModelLog:
         self,
         model_name: str,
         output_device: str = "same",
-        activation_postfunc: Optional[Callable] = None,
-        gradient_postfunc: Optional[Callable] = None,
+        activation_postfunc: Optional[ActivationPostfunc] = None,
+        gradient_postfunc: Optional[GradientPostfunc] = None,
+        save_raw_activation: bool = True,
+        save_raw_gradient: bool = True,
         keep_unsaved_layers: bool = True,
         save_function_args: bool = False,
         save_gradients: bool = False,
@@ -283,6 +288,8 @@ class ModelLog:
             output_device: Device to move saved activations to ("same" keeps original device).
             activation_postfunc: Optional function applied to each tensor before saving.
             gradient_postfunc: Optional function applied to each gradient before saving.
+            save_raw_activation: Whether raw activations are retained when a postfunc is set.
+            save_raw_gradient: Whether raw gradients are retained when a postfunc is set.
             keep_unsaved_layers: If False, layers without saved activations are removed
                 from the final log (but still logged during the pass).
             save_function_args: Whether to deep-copy each operation's input arguments.
@@ -322,11 +329,13 @@ class ModelLog:
         self.activation_postfunc_repr = (
             repr(activation_postfunc) if activation_postfunc is not None else None
         )
+        self.save_raw_activation = save_raw_activation
         self.input_metadata: Dict[str, Any] = {}
         self.gradient_postfunc = gradient_postfunc
         self.gradient_postfunc_repr = (
             repr(gradient_postfunc) if gradient_postfunc is not None else None
         )
+        self.save_raw_gradient = save_raw_gradient
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
         self.current_function_call_barcode = None
@@ -555,9 +564,11 @@ class ModelLog:
             defaults={
                 "io_format_version": IO_FORMAT_VERSION,
                 "activation_postfunc_repr": None,
+                "save_raw_activation": True,
                 "input_metadata": {},
                 "gradient_postfunc": None,
                 "gradient_postfunc_repr": None,
+                "save_raw_gradient": True,
                 "gradients_to_save": "all",
                 "_gradient_layer_nums_to_save": [],
                 "has_backward_log": False,

@@ -53,6 +53,8 @@ def _undecorate_all_saved_tensors(self) -> None:
         layer_entry = self.layer_dict_main_keys[layer_label]
         if layer_entry.activation is not None:
             tensors_to_undecorate.append(layer_entry.activation)
+        if getattr(layer_entry, "transformed_activation", None) is not None:
+            tensors_to_undecorate.append(layer_entry.transformed_activation)
 
         if layer_entry.captured_args:
             tensors_to_undecorate.extend(
@@ -873,6 +875,8 @@ def _evict_streamed_activations(self: "ModelLog") -> None:
     for layer_entry in self.layer_list:
         if getattr(layer_entry, "activation_ref", None) is not None:
             layer_entry.activation = None
+        if getattr(layer_entry, "_pending_transformed_activation_blob_id", None) is not None:
+            layer_entry.transformed_activation = None
 
 
 def _evict_streamed_gradients(self: "ModelLog") -> None:
@@ -887,6 +891,8 @@ def _evict_streamed_gradients(self: "ModelLog") -> None:
     for layer_entry in self.layer_list:
         if getattr(layer_entry, "gradient_ref", None) is not None:
             layer_entry.gradient = None
+        if getattr(layer_entry, "_pending_transformed_gradient_blob_id", None) is not None:
+            layer_entry.transformed_gradient = None
 
 
 def _reuse_streamed_blob_ids(
@@ -925,7 +931,9 @@ def _reuse_streamed_blob_ids(
     for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
         for tensor_field, pending_field in (
             ("activation", "_pending_blob_id"),
+            ("transformed_activation", "_pending_transformed_activation_blob_id"),
             ("gradient", "_pending_gradient_blob_id"),
+            ("transformed_gradient", "_pending_transformed_gradient_blob_id"),
         ):
             tensor_blob = getattr(scrubbed_layer, tensor_field, None)
             if not isinstance(tensor_blob, BlobRef):

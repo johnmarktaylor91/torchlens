@@ -504,8 +504,8 @@ def test_postfunc_applied(small_input):
     mh = log_forward_pass(model, small_input, activation_postfunc=torch.mean)
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.activation is not None:
-            assert entry.activation.dim() == 0, (
+        if entry.transformed_activation is not None:
+            assert entry.transformed_activation.dim() == 0, (
                 f"Layer {label} should be scalar after torch.mean postfunc"
             )
 

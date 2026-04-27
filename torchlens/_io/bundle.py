@@ -795,12 +795,14 @@ def _validate_activation_postfunc_outputs(
     for layer in model_log.layer_list:
         if not getattr(layer, "has_saved_activations", False):
             continue
-        if layer.activation is None:
+        transformed_activation = getattr(layer, "transformed_activation", None)
+        if transformed_activation is None:
             continue
-        if not isinstance(layer.activation, torch.Tensor):
+        if not isinstance(transformed_activation, torch.Tensor):
             raise TorchLensIOError(
                 "Portable bundle save requires activation_postfunc outputs to be torch.Tensor "
-                f"instances, but layer {layer.layer_label} produced {type(layer.activation).__name__}."
+                f"instances, but layer {layer.layer_label} produced "
+                f"{type(transformed_activation).__name__}."
             )
 
 

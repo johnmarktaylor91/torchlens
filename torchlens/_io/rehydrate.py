@@ -231,7 +231,7 @@ def _rehydrate_object(
                                 map_location,
                             ),
                         )
-                elif not lazy:
+                elif not lazy or field_name in {"transformed_activation", "transformed_gradient"}:
                     setattr(
                         value,
                         field_name,

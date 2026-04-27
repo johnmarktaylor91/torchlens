@@ -412,11 +412,15 @@ def _build_shared_fields_dict(
 
     # Grad info
     fields_dict["gradient"] = None
+    fields_dict["transformed_gradient"] = None
     fields_dict["save_gradients"] = self.save_gradients
     fields_dict["has_gradient"] = False
     fields_dict["grad_shape"] = None
+    fields_dict["transformed_gradient_shape"] = None
     fields_dict["grad_dtype"] = None
+    fields_dict["transformed_gradient_dtype"] = None
     fields_dict["grad_memory"] = 0
+    fields_dict["transformed_gradient_memory"] = None
 
     # Function call info
     fields_dict["func_applied"] = func
@@ -699,6 +703,7 @@ def log_function_output_tensors_fast(
         if orig_tensor_label in self.unlogged_layers:
             continue
         orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
+        previous_shape = orig_layer_entry.tensor_shape
 
         if self.save_gradients:
             _add_backward_hook(self, out, tensor_label_raw)  # Must pass RAW label (#86)
@@ -750,15 +755,29 @@ def log_function_output_tensors_fast(
                             # pause_logging prevents activation_postfunc from
                             # triggering decorated torch ops that would be logged.
                             with pause_logging():
-                                child_output.activation = self.activation_postfunc(
+                                child_output.transformed_activation = self.activation_postfunc(
                                     child_output.activation
                                 )
+                            if not getattr(self, "save_raw_activation", True):
+                                child_output.activation = None
                     child_output.has_saved_activations = True
-                    child_output.tensor_memory = get_tensor_memory_amount(child_output.activation)
+                    if child_output.activation is not None:
+                        child_output.tensor_memory = get_tensor_memory_amount(
+                            child_output.activation
+                        )
 
         # Update lightweight metadata that may vary across inputs
         # (shape can differ for dynamic-shape models that still share graph structure).
-        orig_layer_entry.tensor_shape = tuple(out.shape)
+        new_shape = tuple(out.shape)
+        if previous_shape is not None and new_shape != previous_shape:
+            import warnings
+
+            warnings.warn(
+                f"Tensor shape changed for '{orig_tensor_label}': "
+                f"expected {previous_shape}, got {new_shape}. "
+                f"The computational graph may have changed between passes."
+            )
+        orig_layer_entry.tensor_shape = new_shape
         orig_layer_entry.tensor_dtype = out.dtype
         orig_layer_entry.tensor_memory = get_tensor_memory_amount(out)
         (
@@ -1093,6 +1112,7 @@ def _log_output_tensor_info(
 
     # Saved tensor info
     fields_dict["activation"] = None
+    fields_dict["transformed_activation"] = None
     fields_dict["has_saved_activations"] = False
     fields_dict["activation_postfunc"] = self.activation_postfunc
     fields_dict["extra_data"] = {}
@@ -1100,9 +1120,12 @@ def _log_output_tensor_info(
     fields_dict["captured_args"] = None
     fields_dict["captured_kwargs"] = None
     fields_dict["tensor_shape"] = tuple(t.shape)
+    fields_dict["transformed_activation_shape"] = None
     fields_dict["tensor_dtype"] = t.dtype
+    fields_dict["transformed_activation_dtype"] = None
     with pause_logging():
         fields_dict["tensor_memory"] = t.nelement() * t.element_size()
+    fields_dict["transformed_activation_memory"] = None
     (
         fields_dict["autograd_saved_bytes"],
         fields_dict["autograd_saved_tensor_count"],
