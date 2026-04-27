@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v2.12.0 (2026-04-27)
+
+### Chores
+
+- **gitignore**: Ignore default modelgraph.* and backward_modelgraph.* viz outputs in repo root
+  ([`c65170c`](https://github.com/johnmarktaylor91/torchlens/commit/c65170cac2cdc82a1f6807c437339e9b4b7d3413))
+
+- **todos**: Track activation_postfunc rename and estimated_autograd_saved_bytes followups
+  ([`cd7269f`](https://github.com/johnmarktaylor91/torchlens/commit/cd7269f13f29b236c90b71e3c0be6c19172f543e))
+
+### Documentation
+
+- **research**: Postfunc review, fastlog postfunc parity, profiling audit (2026-04-27)
+  ([`b76cdf0`](https://github.com/johnmarktaylor91/torchlens/commit/b76cdf004b0d6bed0c865054db07c6fec4a54920))
+
+### Features
+
+- **activation_postfunc**: Split raw vs transformed, fix metadata drift, harden train_mode
+  ([`59ae72c`](https://github.com/johnmarktaylor91/torchlens/commit/59ae72ce6ce9571e1f5a70824dad298295c13f2a))
+
+
 ## v2.11.0 (2026-04-27)
 
 ### Features
