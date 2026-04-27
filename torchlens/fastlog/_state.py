@@ -6,11 +6,14 @@ import traceback
 from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Iterator, Protocol
+
+import torch
 
 from .options import RecordingOptions
 from .types import (
     ActivationRecord,
+    CaptureSpec,
     ModuleStackFrame,
     PredicateFailure,
     RecordContext,
@@ -19,6 +22,27 @@ from .types import (
 )
 
 _active_recording_state: "RecordingState | None" = None
+
+
+class _StorageBackend(Protocol):
+    """Protocol implemented by fastlog storage backends."""
+
+    def append(self, record: ActivationRecord) -> None:
+        """Append one retained record."""
+
+    def resolve_payloads(
+        self,
+        tensor: torch.Tensor,
+        spec: CaptureSpec,
+        intent: StorageIntent,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        """Resolve payloads for one selected tensor."""
+
+    def finalize(self) -> None:
+        """Finalize storage."""
+
+    def abort(self, reason: str) -> None:
+        """Abort storage."""
 
 
 def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
@@ -49,11 +73,20 @@ class RecordingState:
     event_index: int = 0
     op_index: int = 0
     storage_intent: StorageIntent = field(init=False)
+    storage_backend: _StorageBackend = field(init=False)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
 
         self.storage_intent = _resolve_storage_intent(self.options)
+        if self.storage_intent.on_disk:
+            from .storage_disk import DiskStorageBackend
+
+            self.storage_backend = DiskStorageBackend(self.options, self.recording)
+        else:
+            from .storage_ram import RamStorageBackend
+
+            self.storage_backend = RamStorageBackend(self.recording)
 
     def append_context(self, ctx: RecordContext) -> None:
         """Append an event context to the bounded sliding window."""
@@ -67,19 +100,27 @@ class RecordingState:
     def add_record(self, record: ActivationRecord) -> None:
         """Append a retained activation record and update indexes."""
 
-        index = len(self.recording.records)
-        self.recording.records.append(record)
-        self.recording.by_pass.setdefault(record.ctx.pass_index, []).append(index)
-        self.recording.by_label.setdefault(record.ctx.label, []).append(
-            (record.ctx.pass_index, index)
-        )
-        if record.ctx.raw_label is not None:
-            self.recording.by_label.setdefault(record.ctx.raw_label, []).append(
-                (record.ctx.pass_index, index)
-            )
-        if record.ctx.module_address is not None:
-            self.recording.by_module_address.setdefault(record.ctx.module_address, []).append(index)
+        self.storage_backend.append(record)
         object.__setattr__(self.recording, "n_records", len(self.recording.records))
+
+    def resolve_storage(
+        self,
+        tensor: torch.Tensor,
+        spec: CaptureSpec,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        """Resolve payloads through the active storage backend."""
+
+        return self.storage_backend.resolve_payloads(tensor, spec, self.storage_intent)
+
+    def finalize_storage(self) -> None:
+        """Finalize the active storage backend."""
+
+        self.storage_backend.finalize()
+
+    def abort_storage(self, reason: str) -> None:
+        """Abort the active storage backend after a failed pass."""
+
+        self.storage_backend.abort(reason)
 
     def add_predicate_failure(self, ctx: RecordContext, exc: BaseException) -> None:
         """Record a predicate failure subject to the configured cap."""

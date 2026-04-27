@@ -129,6 +129,7 @@ def _run_predicate_pass(
         module_id=id(model),
         pass_index=1,
     )
+    pass_failed = False
     try:
         with active_recording_state(state), _state.active_logging(model_log):
             for index, tensor in enumerate(input_tensors):
@@ -152,10 +153,16 @@ def _run_predicate_pass(
                     frame=root_frame,
                 )
                 state.module_stack.pop()
+    except Exception as exc:
+        pass_failed = True
+        state.abort_storage(str(exc))
+        raise
     finally:
         _cleanup_model_session(model, input_tensors)
         pass_end_time = time.time()
         recording.pass_end_times.append(pass_end_time)
         object.__setattr__(recording, "n_passes", 1)
         object.__setattr__(recording, "n_records", len(recording.records))
+        if not pass_failed:
+            state.finalize_storage()
     return model_output, recording

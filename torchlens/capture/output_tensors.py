@@ -75,7 +75,6 @@ from ..data_classes.internal_types import FuncExecutionContext
 from ..fastlog._predicate import _evaluate_keep_op
 from ..fastlog._record_context import _build_record_context
 from ..fastlog._state import get_active_recording_state
-from ..fastlog._storage_resolver import _resolve_storage
 from ..fastlog.types import ActivationRecord, CaptureSpec
 from .salient_args import extract_salient_args
 from .source_tensors import _get_input_module_info
@@ -150,7 +149,7 @@ def _record_predicate_output(
     ram_payload = None
     disk_payload = None
     if spec.save_activation:
-        ram_payload, disk_payload = _resolve_storage(out, spec, state.storage_intent)
+        ram_payload, disk_payload = state.resolve_storage(out, spec)
     state.add_record(
         ActivationRecord(
             ctx=ctx,

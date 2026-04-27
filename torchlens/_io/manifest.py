@@ -237,9 +237,10 @@ class Manifest:
             if not isinstance(field_value, str) or field_value == "":
                 raise TorchLensIOError(f"Manifest field {field_name!r} must be a non-empty string.")
 
-        if data["bundle_format"] != "directory":
+        if data["bundle_format"] not in {"directory", "fastlog-directory"}:
             raise TorchLensIOError(
-                f"Unsupported bundle_format={data['bundle_format']!r}; expected 'directory'."
+                "Unsupported bundle_format="
+                f"{data['bundle_format']!r}; expected 'directory' or 'fastlog-directory'."
             )
 
         raw_tensors = data.get("tensors")

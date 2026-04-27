@@ -36,7 +36,6 @@ from ..data_classes.layer_pass_log import LayerPassLog
 from ..fastlog._predicate import _evaluate_keep_op
 from ..fastlog._record_context import _build_record_context
 from ..fastlog._state import get_active_recording_state
-from ..fastlog._storage_resolver import _resolve_storage
 from ..fastlog.types import ActivationRecord
 
 from .tensor_tracking import _add_backward_hook, _update_tensor_containing_modules
@@ -121,7 +120,7 @@ def log_source_tensor_predicate(
                 ram_payload = None
                 disk_payload = None
                 if spec.save_activation:
-                    ram_payload, disk_payload = _resolve_storage(t, spec, state.storage_intent)
+                    ram_payload, disk_payload = state.resolve_storage(t, spec)
                 state.add_record(
                     ActivationRecord(
                         ctx=ctx,
