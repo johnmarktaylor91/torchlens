@@ -1,6 +1,35 @@
 # CHANGELOG
 
 
+## v2.4.0 (2026-04-27)
+
+### Features
+
+- **training**: Unified train_mode for backward()-safe activations
+  ([#157](https://github.com/johnmarktaylor91/torchlens/pull/157),
+  [`e1673d9`](https://github.com/johnmarktaylor91/torchlens/commit/e1673d93cb40fcda479082e2b088f80622733ee9))
+
+* fix(postprocess): honor detach_saved_tensors in postprocess_fast output-layer copy
+
+* feat(training): shared train_mode validator and exception class
+
+* feat(training): train_mode kwarg on log_forward_pass
+
+* feat(training): preserve user requires_grad in train_mode
+
+* feat(training): train_mode override on save_new_activations
+
+* feat(training): train_mode sugar on fastlog record/Recorder
+
+* fix(training): avoid forbidden inference mode literal
+
+* feat(training): audit hardening, AST guardrail, compile parity
+
+* test(training): comprehensive sprint test suite
+
+* docs(training): tutorial notebook + module CLAUDE.md updates
+
+
 ## v2.3.1 (2026-04-27)
 
 ### Bug Fixes
