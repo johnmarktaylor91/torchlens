@@ -132,6 +132,11 @@ dmypy.json
 # Architect-Worker system: ephemeral task state
 .project-context/tasks/
 
+# Default visualization output paths (vis_outpath default is "modelgraph" /
+# "backward_modelgraph" -- callers without explicit paths dump to repo root)
+/modelgraph.*
+/backward_modelgraph.*
+
 # Python
 __pycache__/
 *.pyc
