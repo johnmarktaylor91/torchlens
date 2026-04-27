@@ -150,8 +150,9 @@ class BundleStreamWriter:
 
         self._ensure_writable()
         if not isinstance(tensor, torch.Tensor):
+            postfunc_name = "gradient_postfunc" if kind == "gradient" else "activation_postfunc"
             reason = (
-                "Streaming activation save requires activation_postfunc outputs to be torch.Tensor "
+                f"Streaming {kind} save requires {postfunc_name} outputs to be torch.Tensor "
                 f"instances, but blob_id={blob_id} ({label}) received {type(tensor).__name__}."
             )
             self.abort(reason)
@@ -165,7 +166,7 @@ class BundleStreamWriter:
             else:
                 reason_text = "unsupported tensor"
             reason = (
-                f"Unsupported tensor for streaming activation save at {label} "
+                f"Unsupported tensor for streaming {kind} save at {label} "
                 f"(blob_id={blob_id}, kind={kind}): {reason_text}"
             )
             self.abort(reason)

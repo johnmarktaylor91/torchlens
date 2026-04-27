@@ -235,6 +235,8 @@ class ModelLog:
         "_pre_forward_rng_states": FieldPolicy.DROP,
         "_activation_writer": FieldPolicy.DROP,
         "_keep_activations_in_memory": FieldPolicy.DROP,
+        "_keep_gradients_in_memory": FieldPolicy.DROP,
+        "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
         "_activation_sink": FieldPolicy.DROP,
         "_in_exhaustive_pass": FieldPolicy.DROP,
         "pass_start_time": FieldPolicy.KEEP,
@@ -340,6 +342,8 @@ class ModelLog:
         self.mark_input_output_distances = mark_input_output_distances
         self._activation_writer: Optional["BundleStreamWriter"] = None
         self._keep_activations_in_memory: bool = True
+        self._keep_gradients_in_memory: bool = True
+        self._defer_streaming_bundle_finalization: bool = False
         self._activation_sink: Optional[Callable[[str, torch.Tensor], None]] = None
         self._in_exhaustive_pass: bool = True
 
@@ -563,6 +567,8 @@ class ModelLog:
                 "_module_build_data": None,
                 "_activation_writer": None,
                 "_keep_activations_in_memory": True,
+                "_keep_gradients_in_memory": True,
+                "_defer_streaming_bundle_finalization": False,
                 "_activation_sink": None,
                 "_in_exhaustive_pass": False,
                 "_source_code_blob": {},
@@ -593,6 +599,11 @@ class ModelLog:
         for grad_fn in self.grad_fn_logs.values():
             if isinstance(grad_fn.corresponding_layer, str):
                 grad_fn.corresponding_layer = self.layer_logs.get(grad_fn.corresponding_layer)
+            if grad_fn.corresponding_layer is not None:
+                grad_fn.corresponding_layer.corresponding_grad_fn = grad_fn
+                if hasattr(grad_fn.corresponding_layer, "passes"):
+                    for layer_pass in grad_fn.corresponding_layer.passes.values():
+                        layer_pass.corresponding_grad_fn = grad_fn
 
     # ********************************************
     # ********** Computed Properties *************

@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterator
 
 import torch
 
+from .._io.streaming import BundleStreamWriter
 from .._state import pause_logging
 from ..data_classes.grad_fn_log import GradFnLog
 from .tensor_tracking import _add_backward_hook
@@ -380,7 +381,62 @@ def _ensure_layer_gradient_hooks(model_log: Any) -> None:
             _add_backward_hook(model_log, activation, layer.tensor_label_raw)
 
 
-def log_backward(self: Any, loss: torch.Tensor, **backward_kwargs: Any) -> Any:
+def _configure_gradient_streaming(
+    model_log: Any,
+    *,
+    save_gradients_to: str | None,
+    keep_gradients_in_memory: bool | None,
+) -> None:
+    """Configure deferred bundle finalization for streamed gradients.
+
+    Parameters
+    ----------
+    model_log:
+        ModelLog receiving streamed gradient blobs.
+    save_gradients_to:
+        Optional bundle path for gradient streaming.
+    keep_gradients_in_memory:
+        Whether gradients should remain in memory after finalization.
+    """
+
+    if keep_gradients_in_memory is not None:
+        model_log._keep_gradients_in_memory = keep_gradients_in_memory
+    if save_gradients_to is not None:
+        if getattr(model_log, "_activation_writer", None) is not None:
+            raise ValueError("Cannot set save_gradients_to after a streaming writer exists.")
+        model_log._activation_writer = BundleStreamWriter(save_gradients_to)
+        model_log._defer_streaming_bundle_finalization = True
+        model_log.save_gradients = True
+
+
+def _finalize_gradient_streaming(model_log: Any) -> None:
+    """Finalize a deferred gradient-streaming bundle after backward capture."""
+
+    writer = getattr(model_log, "_activation_writer", None)
+    if writer is None or not getattr(model_log, "_defer_streaming_bundle_finalization", False):
+        return
+
+    from ..postprocess.finalization import (
+        _evict_streamed_activations,
+        _evict_streamed_gradients,
+        _finalize_streamed_bundle,
+    )
+
+    _finalize_streamed_bundle(model_log)
+    if not getattr(model_log, "_keep_activations_in_memory", True):
+        _evict_streamed_activations(model_log)
+    if not getattr(model_log, "_keep_gradients_in_memory", True):
+        _evict_streamed_gradients(model_log)
+
+
+def log_backward(
+    self: Any,
+    loss: torch.Tensor,
+    *,
+    save_gradients_to: str | None = None,
+    keep_gradients_in_memory: bool | None = None,
+    **backward_kwargs: Any,
+) -> Any:
     """Run ``loss.backward`` while capturing the backward graph.
 
     Parameters
@@ -395,6 +451,11 @@ def log_backward(self: Any, loss: torch.Tensor, **backward_kwargs: Any) -> Any:
     Any
         The same ModelLog, for chaining.
     """
+    _configure_gradient_streaming(
+        self,
+        save_gradients_to=save_gradients_to,
+        keep_gradients_in_memory=keep_gradients_in_memory,
+    )
     _ensure_layer_gradient_hooks(self)
 
     def run() -> Any:
@@ -402,18 +463,32 @@ def log_backward(self: Any, loss: torch.Tensor, **backward_kwargs: Any) -> Any:
         return loss.backward(**backward_kwargs)
 
     _run_backward_with_capture(self, loss, run)
+    _finalize_gradient_streaming(self)
     return self
 
 
 class RecordingBackward:
     """Context manager that captures every ``Tensor.backward`` call inside it."""
 
-    def __init__(self, model_log: Any) -> None:
+    def __init__(
+        self,
+        model_log: Any,
+        *,
+        save_gradients_to: str | None = None,
+        keep_gradients_in_memory: bool | None = None,
+    ) -> None:
         self.model_log = model_log
+        self.save_gradients_to = save_gradients_to
+        self.keep_gradients_in_memory = keep_gradients_in_memory
         self._original_backward: Callable[..., Any] | None = None
 
     def __enter__(self) -> "RecordingBackward":
         """Patch ``torch.Tensor.backward`` and return this context object."""
+        _configure_gradient_streaming(
+            self.model_log,
+            save_gradients_to=self.save_gradients_to,
+            keep_gradients_in_memory=self.keep_gradients_in_memory,
+        )
         _ensure_layer_gradient_hooks(self.model_log)
         self._original_backward = torch.Tensor.backward
         model_log = self.model_log
@@ -435,9 +510,16 @@ class RecordingBackward:
         """Restore ``torch.Tensor.backward``."""
         if self._original_backward is not None:
             torch.Tensor.backward = self._original_backward  # type: ignore[assignment]
+        if exc_type is None:
+            _finalize_gradient_streaming(self.model_log)
 
 
-def recording_backward(self: Any) -> RecordingBackward:
+def recording_backward(
+    self: Any,
+    *,
+    save_gradients_to: str | None = None,
+    keep_gradients_in_memory: bool | None = None,
+) -> RecordingBackward:
     """Return a context manager that records user-managed backward calls.
 
     Returns
@@ -445,4 +527,8 @@ def recording_backward(self: Any) -> RecordingBackward:
     RecordingBackward
         Context manager that patches ``Tensor.backward`` inside the block.
     """
-    return RecordingBackward(self)
+    return RecordingBackward(
+        self,
+        save_gradients_to=save_gradients_to,
+        keep_gradients_in_memory=keep_gradients_in_memory,
+    )
