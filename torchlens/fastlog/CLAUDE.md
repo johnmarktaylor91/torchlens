@@ -19,6 +19,16 @@ Storage is resolved from `StreamingOptions`:
 - `bundle_path` with `retain_in_memory=True` mirrors attached or detached RAM copies to disk.
 - `bundle_path` with `retain_in_memory=False` records disk-only and rejects `keep_grad=True`.
 
+`train_mode=True` is the public training knob. When the caller omits `default_op` or
+`default_module`, fastlog promotes that omitted default to
+`CaptureSpec(keep_grad=True, save_activation=True, save_metadata=True)`. Explicit
+defaults still win: `default_op=False` disables that slot, while `default_op=True` or
+`CaptureSpec(keep_grad=False)` conflicts with training mode and raises
+`TrainingModeConfigError`. Per-predicate `CaptureSpec.keep_grad` remains the low-level
+control for advanced selection, and `_storage_resolver.py` remains the only place that
+decides whether a RAM payload is attached or detached. Disk mirrors are detached
+inspection copies; the trainable payload is always the RAM copy.
+
 `Recorder` is the session orchestrator. It prepares the model, owns the active
 `RecordingState`, opens one logging scope per `log()` call, coordinates predicate
 evaluation through the orchestrator, and finalizes RAM or disk indexes on context exit.

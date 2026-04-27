@@ -58,6 +58,16 @@ via `__getattr__` delegation.
 Only 3 fields merged across passes (has_input_ancestor OR, io_role char-merge,
 is_leaf_module_output OR). All other 78 fields use first-pass values.
 
+### Saved Activation Autograd Contract
+`LayerPassLog.save_tensor_data()` is the slow/replay chokepoint for saved activation
+copies. Legacy `detach_saved_tensors=False` keeps the saved tensor copy attached to
+autograd, and existing explicit uses continue to work. `train_mode=True` is the
+preferred training API because it also rejects contradictory detaching and disk saves,
+preserves frozen parameter settings, and temporarily forces replay `detach_saved_tensor`
+flags to the graph-connected setting. `save_new_activations(train_mode=True)` must
+restore both `ModelLog.detach_saved_tensors` and every per-layer `detach_saved_tensor`
+flag in a `finally` path, including graph-mismatch failures.
+
 ## Circular References (GC concern)
 ```
 ModelLog -> LayerPassLog -> source_model_log -> ModelLog  (CYCLE)
