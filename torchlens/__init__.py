@@ -50,6 +50,10 @@ from .visualization import (
     render_model_log_with_dagua,
 )
 
+# ---- Public API: multi-trace analysis ------------------------------------
+
+from .multi_trace import NodeView, TraceBundle, bundle
+
 # ---- Public API: decoration lifecycle ------------------------------------
 
 from .decoration import wrap_torch, unwrap_torch, wrapped
@@ -90,13 +94,16 @@ __all__ = [
     "ModuleLog",
     "ModulePassLog",
     "NodeSpec",
+    "NodeView",
     "ParamLog",
     "StreamingOptions",
     "TensorLog",
     "TorchLensPostfuncError",
+    "TraceBundle",
     "TrainingModeConfigError",
     "VisualizationOptions",
     "build_render_audit",
+    "bundle",
     "check_metadata_invariants",
     "cleanup_tmp",
     "fastlog",
