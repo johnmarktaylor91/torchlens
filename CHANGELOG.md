@@ -1,6 +1,59 @@
 # CHANGELOG
 
 
+## v2.3.0 (2026-04-27)
+
+### Features
+
+- **fastlog**: High-throughput activation recording for dynamic models
+  ([#155](https://github.com/johnmarktaylor91/torchlens/pull/155),
+  [`1b19663`](https://github.com/johnmarktaylor91/torchlens/commit/1b19663d22b2ed4d7e8db5472d7aa8f1198da2b8))
+
+* fix(perf): defer col_offset extraction until after frame filtering
+
+Improves log_forward_pass throughput substantially on models with deep Python call stacks.
+  _get_col_offset and _get_code_qualname now run only on frames that survive Phase 1 filtering
+  instead of every raw frame.
+
+* feat(fastlog): scaffolding and types contract
+
+* feat(fastlog): predicate evaluator and RecordContext builder
+
+* feat(fastlog): capture-layer predicate dispatchers
+
+* feat(fastlog): orchestrator with root events
+
+* fix(fastlog): freeze Recording dataclass
+
+* feat(fastlog): RAM and sync-disk storage backends + recover()
+
+* feat(fastlog): public record / Recorder / dry_run API
+
+* feat(fastlog): preview_fastlog visualization
+
+Per execution plan Step 6. Adds model_log.preview_fastlog() and tl.preview_fastlog() top-level
+  alias. Generates node_spec_fn at call time; does not touch MODE_REGISTRY. Uses
+  _build_record_context to synthesize RecordContext from postprocessed LayerLog so a predicate that
+  accesses a postprocess-only field fails the same way as in dry_run. preview_fastlog(...,
+  vis_renderer='dagua') raises NotImplementedError for v1.
+
+* feat(fastlog): dry_run live visualization
+
+Per execution plan Step 7. Adds print_tree, to_pandas, show_graph (graphviz with module rails, no
+  containment boxes), summary, timeline_html, repredicate. RecordingTrace stores decisions without
+  tensor payloads.
+
+* feat(fastlog): opt-in incremental enrichments
+
+Per execution plan Step 8. Adds Recording.enrich() with module_path_strings preset and all-feasible
+  alias. param_addresses preset declared but raises pending capture-time field plumbing (scoped for
+  follow-up; documented in status report).
+
+* test(fastlog): comprehensive sprint test suite
+
+* docs(fastlog): tutorial notebook + module CLAUDE.md
+
+
 ## v2.2.1 (2026-04-25)
 
 ### Bug Fixes
