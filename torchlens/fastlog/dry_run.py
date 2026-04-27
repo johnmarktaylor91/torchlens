@@ -56,5 +56,10 @@ def dry_run(
         recorder._state.no_tensor_capture = True  # noqa: SLF001
         recorder.log(input_args, input_kwargs)
         contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001
+        kept_event_indexes = {
+            record.ctx.event_index
+            for record in recorder._state.recording.records  # noqa: SLF001
+        }
+        decisions = tuple(ctx.event_index in kept_event_indexes for ctx in contexts)
         failures = tuple(recorder._state.predicate_failures)  # noqa: SLF001
-    return RecordingTrace(contexts=contexts, predicate_failures=failures)
+    return RecordingTrace(contexts=contexts, decisions=decisions, predicate_failures=failures)
