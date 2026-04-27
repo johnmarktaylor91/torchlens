@@ -50,4 +50,9 @@ jobs:
           uv pip install --system pip-audit
 
       - name: Run pip-audit
-        run: pip-audit
+        # CVE-2026-3219 affects pip itself (the package installed on
+        # the GitHub runner image). It's outside this project's
+        # dependency surface and not actionable from pyproject.toml.
+        # Ignore that single ID; remove this once a pip release with
+        # the fix is generally available.
+        run: pip-audit --ignore-vuln CVE-2026-3219

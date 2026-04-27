@@ -1,10 +1,10 @@
 """Tests for real-world models.
 
-All optional-dependency imports are local (inside test functions) using
-pytest.importorskip() for non-torchvision packages. Tests with missing
-packages show as SKIPPED, never ERROR.
-
-Only torch, torchvision, pytest, and torchlens are imported at the top level.
+All optional-dependency imports use ``pytest.importorskip()`` so the
+file collects (and skips gracefully) on environments without the
+optional deps installed. Without the module-level guard below, a
+top-level ``import torchvision`` errors out the entire pytest collection
+on slim CI environments that only install ``[dev]`` extras.
 
 Tests that take >5 minutes are marked @pytest.mark.slow. To skip them:
     pytest tests/test_real_world_models.py -m "not slow"
@@ -15,12 +15,16 @@ from os.path import join as opj
 import numpy as np
 import pytest
 import torch
-import torchvision
 
-from conftest import VIS_OUTPUT_DIR
+# Module-level skip when torchvision is unavailable. pytest.importorskip
+# raises pytest.skip.Exception during collection, which marks the whole
+# file SKIPPED rather than ERROR.
+torchvision = pytest.importorskip("torchvision")
 
-import example_models
-from torchlens import show_model_graph, validate_forward_pass
+from conftest import VIS_OUTPUT_DIR  # noqa: E402
+
+import example_models  # noqa: E402
+from torchlens import show_model_graph, validate_forward_pass  # noqa: E402
 
 
 # =============================================================================
