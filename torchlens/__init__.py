@@ -9,7 +9,7 @@ The top-level package also exports portable bundle helpers: ``save()``,
 ``load()``, ``cleanup_tmp()``, and ``rehydrate_nested()``.
 """
 
-__version__ = "2.6.0"
+__version__ = "2.7.0"
 
 # ---- Public API: user-facing entry points --------------------------------
 

@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v2.7.0 (2026-04-27)
+
+### Chores
+
+- Backward-pass sprint design notes
+  ([`1af1f7f`](https://github.com/johnmarktaylor91/torchlens/commit/1af1f7f6af1ff540e7536ca73602778214632f74))
+
+### Features
+
+- **backward**: First-class backward-pass capture (data model, walk, hooks, validation)
+  ([`5713a1e`](https://github.com/johnmarktaylor91/torchlens/commit/5713a1e5ff5ee2c4ca86725a3b7acdf437c56b3b))
+
+### Refactoring
+
+- **backward**: Flatten BackwardLog to ModelLog fields; add GradFnLog naming and indexing
+  ([`825aa91`](https://github.com/johnmarktaylor91/torchlens/commit/825aa918d5ab523ac80a5c8c90821b3a3f75e9e6))
+
+
 ## v2.6.0 (2026-04-27)
 
 ### Features
