@@ -1,6 +1,138 @@
 # CHANGELOG
 
 
+## v2.15.0 (2026-04-27)
+
+### Features
+
+- **multi-trace**: Add bundle visualization with divergence/swarm/group_color modes
+  ([`79c57c3`](https://github.com/johnmarktaylor91/torchlens/commit/79c57c3a6a8bc1be8b4f451075c53ac57d4a4418))
+
+Phase 2 of the multi-trace sprint: a Graphviz visualization layer for TraceBundle objects,
+  implemented as a compact module-clustered renderer in torchlens/multi_trace/visualization.py.
+
+Public surface:
+
+- tl.show_bundle_graph(bundle, ...) -- canonical entry point. - bundle.show(...) -- thin wrapper on
+  TraceBundle for ergonomics. - Re-exported from torchlens.multi_trace and torchlens top-level.
+
+Modes:
+
+- 'divergence' -- per-node mean pairwise distance, sequential Reds colormap. Best for
+  shared-topology bundles ("which nodes change most across traces?"). - 'swarm' -- per-node coverage
+  fraction, sequential viridis colormap. Best for divergent topology ("which nodes did most/all
+  traces visit?"). - 'group_color' -- categorical (tab10) colouring by group membership. Multi-group
+  nodes get a neutral grey rather than a blended palette colour. Requires bundle.groups; raises
+  ValueError otherwise. - 'auto' -- shared topology -> divergence, divergent -> swarm.
+
+Output formats: PDF, PNG, SVG, JPG, BMP, TIF (mirrors show_model_graph).
+
+Refactor scope:
+
+- New private torchlens/visualization/_render_utils.py extracting the file-format dispatch +
+  dot.save / subprocess.run / view orchestration shared between the existing single-trace render
+  path and the new bundle renderer. The single-trace rendering.py is intentionally NOT modified --
+  its 3.5k-line orchestrator is too tightly coupled to ModelLog state to safely re-point at a
+  multi-trace input within this dispatch's risk budget. Bundle renderer reuses graphviz primitives
+  directly via the same library.
+
+- Colormaps (Reds, viridis, tab10) hardcoded as 10-stop hex arrays so torchlens does not gain a
+  matplotlib dependency.
+
+- Module clusters in the bundle render are derived from each supergraph node's module_path string
+  (dotted prefix chain) rather than the ModelLog ModuleLog hierarchy, which is not first-class on a
+  Supergraph.
+
+Tests: 17 in tests/test_multi_trace_visualization.py (15 spec'd + 2 internal-consistency bonus), one
+  marked smoke. All four modes verified end-to-end via DOT-source inspection plus rendered file size
+  checks.
+
+Quality gates: ruff clean, mypy clean. Phase 1 multi-trace tests (28), backward viz tests (8), and
+  aesthetics regression tests (12) all still pass.
+
+Existing show_model_graph() output is unchanged -- the absolute invariant from the spec held
+  throughout the refactor.
+
+The .project-context/todos.md edit shipping with this branch is the parking-lot update from the
+  architect; deferred V2 items remain parked for future sprints.
+
+- **multi-trace**: Bundle renderer refactor + module cluster aesthetic parity
+  ([`236f74a`](https://github.com/johnmarktaylor91/torchlens/commit/236f74a7bae62fa99c626aa4eff9ccd7e68d583c))
+
+Reroute multi_trace/visualization.py through the shared rendering primitives in
+  visualization/_render_utils.py and split the bundle helpers into focused modules:
+
+- _bundle_clusters.py owns supergraph -> cluster-hierarchy conversion (pass-aware module addresses,
+  parent/child cluster map, rolled-style ``(xN)`` count and ``:N`` pass-suffix titles). -
+  _bundle_styling.py owns the colormap tables, per-node aggregation (divergence / coverage / group),
+  per-mode fill+font dispatch, and edge colouring. - visualization.py shrinks to just the
+  orchestrator (arg validation, caption composition, Graphviz Digraph build, cluster emission, file
+  output) -- 354 lines instead of 779.
+
+Module clusters now match show_model_graph's aesthetics:
+
+- Per-depth penwidth scaling via the shared compute_module_penwidth formula (5.0 outermost, 2.0
+  deepest, linearly interpolated between). - Pass-aware titles: single-pass modules drop the ``:N``
+  suffix (``@fc1`` not ``@fc1:1``); supergraph clusters that genuinely span multiple pass
+  occurrences keep ``:N`` (``@level21:1``); rolled-mode multi-pass LayerLogs append ``(xN)``
+  (``@block (x3)``). - The same nested cluster hierarchy ModelLog produces, derived from each
+  canonical supergraph node's containing_modules chain rather than just the leaf module string. -
+  Bundle clusters omit the ``(ModuleType)`` label line because the supergraph doesn't preserve
+  module class -- documented as the only intentional difference from ModelLog.
+
+Bonus: divergence mode no longer crashes for multi-pass canonical nodes. The previous code called
+  LayerLog.has_saved_activations directly, which raises ValueError on multi-pass LayerLogs; we now
+  catch the error and fall back to "no tensor available" so the render proceeds with neutral-shade
+  nodes.
+
+### Refactoring
+
+- **visualization**: Extract reusable rendering primitives
+  ([`8874170`](https://github.com/johnmarktaylor91/torchlens/commit/8874170e6ae2dc78a55c01f727f2a1cab95de55e))
+
+Expand visualization/_render_utils.py with the Graphviz primitives shared between single-trace
+  rendering.py and the multi-trace bundle renderer:
+
+- direction_to_rankdir for vis-direction -> Graphviz rankdir - compute_module_penwidth for
+  depth-based cluster border scaling - make_module_cluster_attrs for the standard module-cluster
+  attr dict - html_escape and format_node_html for HTML label escaping - MAX_MODULE_PENWIDTH /
+  MIN_MODULE_PENWIDTH / PENWIDTH_RANGE constants (sole canonical source; rendering.py and
+  elk_layout.py used to keep duplicate copies)
+
+Update rendering.py and elk_layout.py to call these helpers instead of inlining the formulae and
+  constants. Output is byte-equivalent for ModelLog renderings -- the regression suite
+  (test_output_aesthetics, test_backward_visualization, test_dagua_theme) confirms.
+
+The motivation is the upcoming bundle renderer refactor, where the multi-trace cluster builder will
+  reuse the same primitives so single-and multi-trace cluster aesthetics stay in sync.
+
+### Testing
+
+- **multi-trace**: Cluster parity tests + defer rolled/backward bundle modes
+  ([`61f6afd`](https://github.com/johnmarktaylor91/torchlens/commit/61f6afdbe0bc6d919834d3bbd120e1e83a3f4776))
+
+Add four module-cluster aesthetic-parity tests in test_multi_trace_visualization.py:
+
+- test_module_cluster_penwidth_parity verifies bundle and ModelLog clusters share the same penwidth
+  at the shallowest matching depth and that both renderers produce monotonically non-increasing
+  penwidths from depth 0 to deepest. - test_module_cluster_pass_labels verifies recurrent models
+  produce rolled-style ``@block (x3)`` cluster titles (matching ModelLog rolled mode). -
+  test_module_cluster_unrolled_pass_labels verifies models with distinct call-site occurrences
+  (NestedModules' level21 called 3x) produce per-pass clusters with ``:N`` suffixes (matching
+  ModelLog unrolled mode). - test_module_cluster_single_pass_label_no_suffix verifies single-pass
+  modules drop the ``:N`` suffix from cluster titles even though the underlying containing_module
+  data carries it.
+
+Add the two deferred follow-ups the architect explicitly called out to .project-context/todos.md's
+  Multi-trace V2 section:
+
+- vis_opt='rolled' for show_bundle_graph (currently advisory) - direction='backward' for
+  show_bundle_graph (currently raises)
+
+Both are tracked alongside the existing Multi-trace V2 items so the follow-on sprint has the full
+  backlog in one place.
+
+
 ## v2.14.0 (2026-04-27)
 
 ### Chores
