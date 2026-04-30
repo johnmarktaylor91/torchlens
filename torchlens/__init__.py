@@ -27,6 +27,7 @@ from .user_funcs import (
 )
 from .options import StreamingOptions, VisualizationOptions
 from .types import ActivationPostfunc, GradientPostfunc
+from ._run_state import RunState
 from ._errors import TorchLensPostfuncError
 from ._training_validation import TrainingModeConfigError
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
@@ -134,6 +135,7 @@ __all__ = [
     "NodeSpec",
     "NodeView",
     "ParamLog",
+    "RunState",
     "StreamingOptions",
     "SiteTable",
     "TensorLog",

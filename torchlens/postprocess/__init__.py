@@ -39,6 +39,7 @@ import time
 import torch
 
 from ..utils.tensor_utils import _is_cuda_available, safe_copy
+from ..utils.hashing import compute_graph_shape_hash
 
 from .control_flow import (
     _fix_buffer_layers,
@@ -195,6 +196,10 @@ def postprocess(
     with _vtimed(self, "  Step 17: Build module logs"):
         _build_module_logs(self)
 
+    # Step 17.5: Compute graph shape hash before _set_pass_finished changes access behavior.
+    with _vtimed(self, "  Step 17.5: Graph shape hash"):
+        self.graph_shape_hash = compute_graph_shape_hash(self)
+
     # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
     with _vtimed(self, "  Step 18: Mark pass finished"):
         _set_pass_finished(self)
@@ -281,6 +286,9 @@ def postprocess_fast(self: "ModelLog") -> None:
     # Note: _build_module_logs is NOT called here because module structure
     # doesn't change between passes and _module_build_data isn't repopulated
     # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
+    if self.intervention_ready and not getattr(self, "capture_full_args", False):
+        self.intervention_ready = False
+    self.graph_shape_hash = compute_graph_shape_hash(self)
     _set_pass_finished(self)
 
     should_finalize_streaming = self._activation_writer is not None and not getattr(

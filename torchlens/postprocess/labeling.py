@@ -23,9 +23,11 @@ Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (un
 
 import weakref
 from collections import defaultdict
-from typing import Dict, List, TYPE_CHECKING
+from dataclasses import fields, is_dataclass, replace
+from typing import Any, Dict, List, TYPE_CHECKING
 
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
+from ..intervention.types import ParentRef
 from ..utils.display import human_readable_size
 from ..data_classes.layer_pass_log import LayerPassLog
 
@@ -317,6 +319,95 @@ def _replace_layer_names_for_layer_entry(self, layer_entry: LayerPassLog) -> Non
     if children_by_cond:
         d["cond_branch_children_by_cond"] = _rename_children_by_cond(children_by_cond, mapping)
 
+    if d.get("edge_uses"):
+        d["edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["edge_uses"]]
+
+    if d.get("captured_arg_template") is not None:
+        d["captured_arg_template"] = _rename_template_parent_refs(
+            d["captured_arg_template"], mapping
+        )
+    if d.get("captured_kwarg_template") is not None:
+        d["captured_kwarg_template"] = _rename_template_parent_refs(
+            d["captured_kwarg_template"], mapping
+        )
+    if d.get("intervention_log"):
+        d["intervention_log"] = [
+            _rename_label_dataclass(record, mapping) for record in d["intervention_log"]
+        ]
+
+
+def _rename_template_parent_refs(value: Any, mapping: Dict[str, str]) -> Any:
+    """Rename ``ParentRef.parent_label`` leaves in replay templates.
+
+    Args:
+        value: Template or nested template component.
+        mapping: Raw-to-final layer-label mapping.
+
+    Returns:
+        Template value with parent references rewritten where possible.
+    """
+
+    if isinstance(value, ParentRef):
+        return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
+    if isinstance(value, tuple):
+        return tuple(_rename_template_parent_refs(item, mapping) for item in value)
+    if isinstance(value, list):
+        return [_rename_template_parent_refs(item, mapping) for item in value]
+    if isinstance(value, dict):
+        return {key: _rename_template_parent_refs(item, mapping) for key, item in value.items()}
+    if is_dataclass(value) and not isinstance(value, type):
+        updates = {
+            field.name: _rename_template_parent_refs(getattr(value, field.name), mapping)
+            for field in fields(value)
+            if hasattr(value, field.name)
+        }
+        return replace(value, **updates)
+    return value
+
+
+def _rename_label_dataclass(value: Any, mapping: Dict[str, str]) -> Any:
+    """Rename known label fields on frozen intervention dataclasses.
+
+    Args:
+        value: Dataclass-like record or nested container.
+        mapping: Raw-to-final layer-label mapping.
+
+    Returns:
+        Record with label-bearing string fields rewritten.
+    """
+
+    label_fields = {
+        "parent_label",
+        "child_label",
+        "target_label",
+        "pass_label",
+        "site_label",
+        "layer_label",
+    }
+    if isinstance(value, tuple):
+        return tuple(_rename_label_dataclass(item, mapping) for item in value)
+    if isinstance(value, list):
+        return [_rename_label_dataclass(item, mapping) for item in value]
+    if isinstance(value, dict):
+        return {
+            _rename_label_dataclass(key, mapping): _rename_label_dataclass(item, mapping)
+            for key, item in value.items()
+        }
+    if is_dataclass(value) and not isinstance(value, type):
+        updates = {}
+        for field in fields(value):
+            if not hasattr(value, field.name):
+                continue
+            field_value = getattr(value, field.name)
+            if field.name in label_fields and isinstance(field_value, str):
+                updates[field.name] = mapping.get(field_value, field_value)
+            else:
+                updates[field.name] = _rename_label_dataclass(field_value, mapping)
+        return replace(value, **updates)
+    if isinstance(value, str):
+        return mapping.get(value, value)
+    return value
+
 
 def _log_module_hierarchy_info_for_layer(
     self, layer_entry: LayerPassLog, _shadow_sets: dict
@@ -402,10 +493,17 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
         if layer_entry.has_saved_activations:
             self.num_tensors_saved += 1
 
+    retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
+
     if self.keep_unsaved_layers:
         num_logged_tensors = len(self)
     else:
-        num_logged_tensors = self.num_tensors_saved
+        num_logged_tensors = sum(
+            1
+            for layer_entry in self
+            if layer_entry.has_saved_activations
+            or layer_entry.layer_label in retained_call_group_labels
+        )
 
     self.layer_list = []
     self.layer_dict_main_keys = {}
@@ -418,7 +516,12 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
     for raw_tensor_label in self._raw_layer_labels_list:
         layer_entry = self._raw_layer_dict[raw_tensor_label]
         # Determine valid lookup keys and relate them to the tensor's realtime operation number:
-        if getattr(layer_entry, "has_saved_activations", False) or self.keep_unsaved_layers:
+        should_keep_for_replay = layer_entry.layer_label in retained_call_group_labels
+        if (
+            getattr(layer_entry, "has_saved_activations", False)
+            or self.keep_unsaved_layers
+            or should_keep_for_replay
+        ):
             # Add the lookup keys for the layer, to itself and to ModelLog:
             _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
 
@@ -450,6 +553,106 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
         self._all_layers_saved = True
     else:
         self._all_layers_saved = False
+
+
+def _labels_in_replay_ready_call_groups_to_retain(self) -> set[str]:
+    """Return labels in same-call groups that must remain replay-addressable.
+
+    Args:
+        self: ModelLog being postprocessed.
+
+    Returns:
+        Labels to keep atomically even when their activation was not saved.
+    """
+
+    if not getattr(self, "intervention_ready", False):
+        return set()
+
+    call_groups: dict[int, list[LayerPassLog]] = defaultdict(list)
+    for layer_entry in self:
+        func_call_id = getattr(layer_entry, "func_call_id", None)
+        if func_call_id is not None:
+            call_groups[func_call_id].append(layer_entry)
+
+    labels_to_keep = {
+        layer_entry.layer_label for layer_entry in self if layer_entry.has_saved_activations
+    }
+    label_to_entry = {layer_entry.layer_label: layer_entry for layer_entry in self}
+    changed = True
+    while changed:
+        changed = False
+        for layer_label in list(labels_to_keep):
+            layer_entry = label_to_entry.get(layer_label)
+            if layer_entry is None:
+                continue
+            dependency_labels = _replay_dependency_labels(layer_entry)
+            for dependency_label in dependency_labels:
+                if dependency_label in label_to_entry and dependency_label not in labels_to_keep:
+                    labels_to_keep.add(dependency_label)
+                    changed = True
+            func_call_id = getattr(layer_entry, "func_call_id", None)
+            if func_call_id is None:
+                continue
+            for sibling in call_groups[func_call_id]:
+                if sibling.layer_label not in labels_to_keep:
+                    labels_to_keep.add(sibling.layer_label)
+                    changed = True
+    return labels_to_keep
+
+
+def _replay_dependency_labels(layer_entry: LayerPassLog) -> set[str]:
+    """Return final labels this entry's replay metadata depends on.
+
+    Args:
+        layer_entry: Layer entry to inspect.
+
+    Returns:
+        Parent labels referenced by templates, edge provenance, or graph edges.
+    """
+
+    dependency_labels = set(layer_entry.parent_layers)
+    for edge in getattr(layer_entry, "edge_uses", []):
+        dependency_labels.add(edge.parent_label)
+    for template in (layer_entry.captured_arg_template, layer_entry.captured_kwarg_template):
+        for parent_ref in _collect_parent_refs(template):
+            dependency_labels.add(parent_ref.parent_label)
+    return dependency_labels
+
+
+def _collect_parent_refs(value: Any) -> list[ParentRef]:
+    """Collect ``ParentRef`` leaves from a nested replay template.
+
+    Args:
+        value: Template or nested component.
+
+    Returns:
+        Parent references found under ``value``.
+    """
+
+    if isinstance(value, ParentRef):
+        return [value]
+    if isinstance(value, tuple):
+        refs: list[ParentRef] = []
+        for item in value:
+            refs.extend(_collect_parent_refs(item))
+        return refs
+    if isinstance(value, list):
+        refs = []
+        for item in value:
+            refs.extend(_collect_parent_refs(item))
+        return refs
+    if isinstance(value, dict):
+        refs = []
+        for item in value.values():
+            refs.extend(_collect_parent_refs(item))
+        return refs
+    if is_dataclass(value) and not isinstance(value, type):
+        refs = []
+        for field in fields(value):
+            if hasattr(value, field.name):
+                refs.extend(_collect_parent_refs(getattr(value, field.name)))
+        return refs
+    return []
 
 
 def _add_lookup_keys_for_layer_entry(
@@ -652,6 +855,14 @@ def _rename_model_history_layer_names(self) -> None:
             self._raw_to_final_layer_labels[layer_label]
             for layer_label in conditional_event.bool_layers
         ]
+
+    self.operation_history = _rename_label_dataclass(
+        getattr(self, "operation_history", []), self._raw_to_final_layer_labels
+    )
+    if getattr(self, "_intervention_spec", None) is not None:
+        self._intervention_spec = _rename_label_dataclass(
+            self._intervention_spec, self._raw_to_final_layer_labels
+        )
 
     mla = self._module_build_data["module_layer_argnames"]
     for module_pass, arglist in mla.items():

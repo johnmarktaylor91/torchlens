@@ -91,6 +91,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "captured_arg_template": None,
     "captured_kwarg_template": None,
     "edge_uses": [],
+    "module_address_normalized": None,
     "_construction_done": True,
 }
 _LAYER_PASS_LOG_DEFAULT_FILL = {
@@ -291,6 +292,7 @@ class LayerPassLog:
         "cond_branch_else_children": FieldPolicy.KEEP,
         "cond_branch_children_by_cond": FieldPolicy.KEEP,
         "containing_module": FieldPolicy.KEEP,
+        "module_address_normalized": FieldPolicy.KEEP,
         "containing_modules": FieldPolicy.KEEP,
         "modules_entered": FieldPolicy.KEEP,
         "modules_entered_argnames": FieldPolicy.KEEP,
@@ -370,6 +372,8 @@ class LayerPassLog:
         object.__setattr__(self, "_construction_done", False)
 
         # Validate that fields_dict has exactly the expected keys:
+        if "module_address_normalized" not in fields_dict:
+            fields_dict["module_address_normalized"] = None
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing LayerPassLog:"
@@ -546,6 +550,7 @@ class LayerPassLog:
 
         # Module info
         self.containing_module = fields_dict["containing_module"]
+        self.module_address_normalized = fields_dict["module_address_normalized"]
         self.containing_modules = fields_dict["containing_modules"]
         self.modules_entered = fields_dict["modules_entered"]
         self.modules_entered_argnames = fields_dict["modules_entered_argnames"]

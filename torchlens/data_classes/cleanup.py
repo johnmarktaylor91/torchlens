@@ -19,11 +19,13 @@ This module provides the helper stack behind ModelLog cleanup operations:
    with the removal helpers.
 """
 
-from typing import Dict, Iterable, List, Set, Tuple
+from dataclasses import fields, is_dataclass, replace
+from typing import Any, Dict, Iterable, List, Set, Tuple
 
 import torch
 
 from ..constants import MODEL_LOG_FIELD_ORDER
+from ..intervention.types import ParentRef, Unsupported
 from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
 from .layer_pass_log import LayerPassLog
@@ -339,6 +341,125 @@ def _scrub_conditional_fields_after_removal(
             for layer_label in conditional_event.bool_layers
             if layer_label not in labels_to_remove
         ]
+
+    _scrub_intervention_fields_after_removal(self, labels_to_remove, surviving_entries)
+
+
+def _scrub_intervention_fields_after_removal(
+    self: Any,
+    labels_to_remove: Set[str],
+    surviving_entries: Iterable[LayerPassLog],
+) -> None:
+    """Scrub replay/intervention metadata that carries layer labels.
+
+    Args:
+        self: ModelLog being updated.
+        labels_to_remove: Removed labels in the active label namespace.
+        surviving_entries: Surviving entries to scrub in-place.
+    """
+
+    for layer_entry in surviving_entries:
+        layer_entry.edge_uses = [
+            edge
+            for edge in getattr(layer_entry, "edge_uses", [])
+            if edge.parent_label not in labels_to_remove
+            and edge.child_label not in labels_to_remove
+        ]
+        layer_entry.captured_arg_template = _replace_removed_parent_refs(
+            getattr(layer_entry, "captured_arg_template", None), labels_to_remove
+        )
+        layer_entry.captured_kwarg_template = _replace_removed_parent_refs(
+            getattr(layer_entry, "captured_kwarg_template", None), labels_to_remove
+        )
+        intervention_log = [
+            record
+            for record in getattr(layer_entry, "intervention_log", [])
+            if not _record_mentions_removed_label(record, labels_to_remove)
+        ]
+        if hasattr(layer_entry, "_internal_set"):
+            layer_entry._internal_set("intervention_log", intervention_log)
+        else:
+            layer_entry.intervention_log = intervention_log
+
+    self.operation_history = [
+        record
+        for record in getattr(self, "operation_history", [])
+        if not _record_mentions_removed_label(record, labels_to_remove)
+    ]
+    intervention_spec = getattr(self, "_intervention_spec", None)
+    if intervention_spec is not None:
+        intervention_spec.records = [
+            record
+            for record in getattr(intervention_spec, "records", [])
+            if not _record_mentions_removed_label(record, labels_to_remove)
+        ]
+
+
+def _replace_removed_parent_refs(value: Any, labels_to_remove: Set[str]) -> Any:
+    """Replace template parent refs to removed labels with unsupported leaves.
+
+    Args:
+        value: Template or nested component.
+        labels_to_remove: Removed layer labels.
+
+    Returns:
+        Template value with stale parent refs replaced.
+    """
+
+    if isinstance(value, ParentRef) and value.parent_label in labels_to_remove:
+        return Unsupported(reason="removed_parent_ref", value_type="ParentRef")
+    if isinstance(value, tuple):
+        return tuple(_replace_removed_parent_refs(item, labels_to_remove) for item in value)
+    if isinstance(value, list):
+        return [_replace_removed_parent_refs(item, labels_to_remove) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _replace_removed_parent_refs(item, labels_to_remove) for key, item in value.items()
+        }
+    if is_dataclass(value) and not isinstance(value, type):
+        updates = {
+            field.name: _replace_removed_parent_refs(getattr(value, field.name), labels_to_remove)
+            for field in fields(value)
+            if hasattr(value, field.name)
+        }
+        return replace(value, **updates)
+    return value
+
+
+def _record_mentions_removed_label(record: Any, labels_to_remove: Set[str]) -> bool:
+    """Return whether a record contains a removed label-bearing field.
+
+    Args:
+        record: Dataclass record or nested object.
+        labels_to_remove: Removed labels.
+
+    Returns:
+        Whether the record references a removed label.
+    """
+
+    label_fields = {"parent_label", "child_label", "target_label", "pass_label", "site_label"}
+    if isinstance(record, str):
+        return record in labels_to_remove
+    if isinstance(record, (list, tuple)):
+        return any(_record_mentions_removed_label(item, labels_to_remove) for item in record)
+    if isinstance(record, dict):
+        return any(
+            _record_mentions_removed_label(key, labels_to_remove)
+            or _record_mentions_removed_label(value, labels_to_remove)
+            for key, value in record.items()
+        )
+    if is_dataclass(record) and not isinstance(record, type):
+        for field in fields(record):
+            if not hasattr(record, field.name):
+                continue
+            field_value = getattr(record, field.name)
+            if field.name in label_fields and field_value in labels_to_remove:
+                return True
+            if field.name not in label_fields and _record_mentions_removed_label(
+                field_value, labels_to_remove
+            ):
+                return True
+    return False
 
 
 # List fields on ModelLog that hold tensor labels and need filtering during

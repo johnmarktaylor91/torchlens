@@ -311,6 +311,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "cond_branch_children_by_cond",
     # Module info
     "containing_module",
+    "module_address_normalized",
     "containing_modules",
     "modules_entered",
     "module_passes_entered",
