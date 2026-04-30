@@ -55,7 +55,11 @@ from ..utils.display import identity
 from ..utils.rng import log_current_autocast_state, log_current_rng_states
 from ..utils.hashing import make_random_barcode
 from ..utils.tensor_utils import print_override, safe_copy
-from ..capture.output_tensors import _walk_output_tensors_with_paths, log_function_output_tensors
+from ..capture.output_tensors import (
+    _walk_output_tensors_with_paths,
+    apply_live_hooks_to_outputs,
+    log_function_output_tensors,
+)
 from ..capture.source_tensors import log_source_tensor
 
 if TYPE_CHECKING:
@@ -437,6 +441,18 @@ def torch_func_decorator(func: Callable, func_name: str):
             # Create a distinct tensor object for logging — otherwise attaching
             # tl_tensor_label_raw to the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
+
+        out_orig = apply_live_hooks_to_outputs(
+            model_log,
+            func,
+            func_name,
+            args,
+            kwargs,
+            out_orig,
+            exec_ctx,
+            is_bottom_level_func,
+            func_call_id,
+        )
 
         # Log all output tensors (excluding Parameters, which are source tensors).
         # Fast inline check for the common single-tensor output case.

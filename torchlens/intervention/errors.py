@@ -86,6 +86,10 @@ class HookSiteCoverageError(SiteResolutionError):
     """Raised when hook normalization cannot associate a hook with any site."""
 
 
+class LiveModeLabelError(SiteResolutionError):
+    """Raised when live capture cannot resolve a finalized-label selector."""
+
+
 __all__ = [
     "DirectActivationWriteWarning",
     "DirectWriteIgnoredWarning",
@@ -95,6 +99,7 @@ __all__ = [
     "HookValueError",
     "InterventionReadyConflictError",
     "InterventionAuditWarning",
+    "LiveModeLabelError",
     "MultiMatchWarning",
     "MutateInPlaceWarning",
     "ReplayPreconditionError",

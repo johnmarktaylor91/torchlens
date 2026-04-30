@@ -222,12 +222,19 @@ class CapturedArgTemplate:
 class FireRecord:
     """Runtime record for one intervention firing."""
 
-    target_label: str
+    target_label: str = ""
     pass_label: str | None = None
     func_call_id: int | None = None
     output_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
     helper: HelperSpec | None = None
+    site_label: str | None = None
+    timing: Literal["pre", "post"] | None = None
+    direction: Literal["forward", "backward"] | None = None
+    helper_name: str | None = None
+    seed: int | None = None
+    determinism_note: str | None = None
+    timestamp: float | None = None
 
 
 @dataclass(frozen=True)

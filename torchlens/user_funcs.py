@@ -67,6 +67,8 @@ from .visualization.code_panel import (
     make_weak_model_ref,
 )
 from .intervention.errors import InterventionReadyConflictError
+from .intervention.hooks import normalize_hook_plan
+from ._run_state import RunState
 
 
 def _layers_to_save_conflicts_with_intervention_ready(layers_to_save: Any) -> bool:
@@ -438,9 +440,10 @@ def _run_model_and_save_specified_activations(
     weight_fingerprint = _fingerprint_model_weights(model)
     input_id = _input_id_for_relationship_evidence(input_args)
     input_shape_hash = _hash_input_shapes(input_args, input_kwargs)
+    hook_plan = normalize_hook_plan(hooks) if hooks else []
     _state.reset_capture_runtime_context()
     _state.configure_capture_runtime_context(
-        hook_plan=hooks,
+        hook_plan=hook_plan,
         intervention_spec=None,
         capture_replay_templates=intervention_ready,
         source_model_id=source_model_id,
@@ -471,6 +474,8 @@ def _run_model_and_save_specified_activations(
         train_mode=train_mode,
     )
     model_log.intervention_ready = intervention_ready
+    if hook_plan:
+        model_log.run_state = RunState.LIVE_CAPTURED
     model_log.source_model_id = source_model_id
     model_log.source_model_class = source_model_class
     model_log.weight_fingerprint_at_capture = weight_fingerprint

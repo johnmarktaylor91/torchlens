@@ -34,7 +34,7 @@ from .rerun import rerun
 from .runtime import do
 from .save import load_intervention_spec, save_intervention
 from .selectors import contains, func, in_module, label, module, where
-from .errors import InterventionReadyConflictError
+from .errors import InterventionReadyConflictError, LiveModeLabelError
 from .types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -79,6 +79,7 @@ __all__ = [
     "HookContext",
     "InterventionSpec",
     "InterventionReadyConflictError",
+    "LiveModeLabelError",
     "LiteralTensor",
     "LiteralValue",
     "NamedField",

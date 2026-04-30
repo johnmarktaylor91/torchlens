@@ -62,6 +62,14 @@ deferred to Phase 4c, so the runtime value remains protocol-friendly and avoids
 importing ``torchlens.intervention`` at module load.
 """
 
+_pending_live_fire_records: dict[str, list[Any]] = {}
+"""Live hook fire records keyed by capture-time raw label.
+
+Wrappers create these records before ``LayerPassLog`` construction so hooks can
+run before activation saving. ``capture.output_tensors`` consumes them after the
+real log entry exists.
+"""
+
 _active_intervention_spec: "InterventionSpec | None" = None
 """Intervention spec associated with the active capture, if any.
 
@@ -111,12 +119,14 @@ def reset_capture_runtime_context() -> None:
     """
 
     global _active_hook_plan, _active_intervention_spec, _func_call_id_counter
+    global _pending_live_fire_records
     global _capture_replay_templates
     global _relationship_source_model_id, _relationship_source_model_class
     global _relationship_weight_fingerprint, _relationship_input_id
     global _relationship_input_shape_hash
 
     _active_hook_plan = None
+    _pending_live_fire_records = {}
     _active_intervention_spec = None
     _func_call_id_counter = 0
     _capture_replay_templates = False

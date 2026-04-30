@@ -866,6 +866,8 @@ class LayerPassLog:
             "func_rng_states",
             "captured_args",
             "captured_kwargs",
+            "captured_arg_template",
+            "captured_kwarg_template",
             "parent_params",
             "activation",
             "transformed_activation",

@@ -3,21 +3,29 @@
 from __future__ import annotations
 
 import inspect
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from types import MappingProxyType
 from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
-from .errors import HookSignatureError, HookSiteCoverageError
-from .selectors import BaseSelector, SelectorLike
+from .errors import (
+    HookSignatureError,
+    HookSiteCoverageError,
+    LiveModeLabelError,
+    SiteResolutionError,
+)
+from .selectors import BaseSelector, CompositeSelector, SelectorLike, in_module
 from .types import HelperSpec, TargetSpec
 
 HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
 HookCallable: TypeAlias = Callable[..., torch.Tensor]
 HookInput: TypeAlias = Callable[..., Any] | HelperSpec
+_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
 
 _LAYER_LOG_CONTEXT_FIELDS = (
     "layer_label",
@@ -214,6 +222,316 @@ def normalize_hook_plan(
     return entries
 
 
+def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
+    """Return whether a selector can match one capture-time site.
+
+    Parameters
+    ----------
+    selector_like:
+        Selector or target-spec-like object from a normalized hook entry.
+    site:
+        Capture-time pass proxy with raw labels and module context populated.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches the site during live capture.
+
+    Raises
+    ------
+    LiveModeLabelError
+        If a finalized-looking ``tl.label(...)`` selector cannot exist yet.
+    SiteResolutionError
+        If the selector kind is unsupported or a predicate fails.
+    """
+
+    selector = _normalize_live_selector(selector_like)
+    matched = _live_selector_matches_unchecked(selector, site)
+    if not matched and selector.selector_kind == "label":
+        label_value = str(selector.selector_value)
+        if _looks_like_finalized_label(label_value):
+            raise LiveModeLabelError(_live_label_error_message(label_value))
+    return matched
+
+
+def _normalize_live_selector(selector_like: Any) -> BaseSelector:
+    """Normalize a live-capture selector input.
+
+    Parameters
+    ----------
+    selector_like:
+        Selector-like object from the hook plan.
+
+    Returns
+    -------
+    BaseSelector
+        Normalized selector.
+    """
+
+    if isinstance(selector_like, BaseSelector):
+        return selector_like
+    if isinstance(selector_like, TargetSpec):
+        return _selector_from_target_spec(selector_like)
+    if isinstance(selector_like, str):
+        from .selectors import label
+
+        return label(selector_like)
+    if hasattr(selector_like, "layer_label"):
+        from .selectors import label
+
+        return label(str(selector_like.layer_label))
+    raise SiteResolutionError(f"Unsupported live hook selector {selector_like!r}.")
+
+
+def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
+    """Build a selector from a live target spec.
+
+    Parameters
+    ----------
+    target:
+        Target spec to convert.
+
+    Returns
+    -------
+    BaseSelector
+        Selector equivalent to the target spec.
+    """
+
+    from .selectors import contains, func, label, module, where
+
+    if target.selector_kind == "label":
+        return label(str(target.selector_value))
+    if target.selector_kind == "func":
+        return func(str(target.selector_value))
+    if target.selector_kind == "module":
+        return module(str(target.selector_value))
+    if target.selector_kind == "contains":
+        return contains(str(target.selector_value))
+    if target.selector_kind == "in_module":
+        from .selectors import in_module as make_in_module
+
+        selector = make_in_module(str(target.selector_value))
+        if isinstance(selector, BaseSelector):
+            return selector
+    if target.selector_kind == "predicate" and callable(target.selector_value):
+        return where(target.selector_value, name_hint=target.metadata.get("name_hint"))
+    raise SiteResolutionError(f"Unsupported live hook selector kind {target.selector_kind!r}.")
+
+
+def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
+    """Match one normalized selector against one live site.
+
+    Parameters
+    ----------
+    selector:
+        Normalized selector.
+    site:
+        Capture-time site proxy.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches.
+    """
+
+    kind = selector.selector_kind
+    value = selector.selector_value
+    if kind == "and" and isinstance(selector, CompositeSelector):
+        return all(
+            _live_selector_matches_unchecked(_normalize_live_selector(child), site)
+            for child in selector.selectors
+        )
+    if kind == "or" and isinstance(selector, CompositeSelector):
+        return any(
+            _live_selector_matches_unchecked(_normalize_live_selector(child), site)
+            for child in selector.selectors
+        )
+    if kind == "label":
+        return _live_label_matches(site, str(value))
+    if kind == "func":
+        return getattr(site, "func_name", None) == value
+    if kind == "module":
+        return _live_module_matches(site, str(value))
+    if kind == "contains":
+        return str(value).lower() in str(getattr(site, "layer_label_raw", "")).lower()
+    if kind == "in_module":
+        return _live_module_matches(site, str(value))
+    if kind == "predicate":
+        predicate = value[0] if isinstance(value, tuple) and callable(value[0]) else value
+        if not callable(predicate):
+            raise SiteResolutionError("tl.where(...) requires a callable predicate.")
+        try:
+            return bool(predicate(site))
+        except Exception as exc:
+            raise SiteResolutionError(
+                f"live predicate selector failed at {getattr(site, 'layer_label_raw', '<unknown>')}"
+            ) from exc
+    raise SiteResolutionError(f"Unsupported live hook selector kind {kind!r}.")
+
+
+def _live_label_matches(site: Any, label_value: str) -> bool:
+    """Return whether a label selector matches capture-time labels.
+
+    Parameters
+    ----------
+    site:
+        Capture-time site proxy.
+    label_value:
+        Requested label literal.
+
+    Returns
+    -------
+    bool
+        Whether the literal matches a raw label available during capture.
+    """
+
+    candidates = (
+        getattr(site, "layer_label_raw", None),
+        getattr(site, "tensor_label_raw", None),
+        getattr(site, "layer_label", None),
+    )
+    return label_value in candidates
+
+
+def _live_module_matches(site: Any, address: str) -> bool:
+    """Return whether a live site belongs to a module address.
+
+    Parameters
+    ----------
+    site:
+        Capture-time site proxy.
+    address:
+        Module address or pass label.
+
+    Returns
+    -------
+    bool
+        Whether the site is currently inside or exiting the module.
+    """
+
+    candidates = tuple(getattr(site, "module_passes_exited", ()) or ()) + tuple(
+        getattr(site, "containing_modules", ()) or ()
+    )
+    return any(_module_label_matches(str(candidate), address) for candidate in candidates)
+
+
+def _module_label_matches(module_pass: str, address: str) -> bool:
+    """Return whether a module-pass label matches an address.
+
+    Parameters
+    ----------
+    module_pass:
+        Module pass label or ``(address, pass_num)`` tuple string.
+    address:
+        Requested module address.
+
+    Returns
+    -------
+    bool
+        Whether the labels refer to the same module.
+    """
+
+    if module_pass.startswith("("):
+        return address in module_pass
+    module_address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or module_address == address
+
+
+def _looks_like_finalized_label(label_value: str) -> bool:
+    """Return whether a label literal looks postprocessed.
+
+    Parameters
+    ----------
+    label_value:
+        Label literal from ``tl.label``.
+
+    Returns
+    -------
+    bool
+        True for pass suffixes like ``:2`` or ``relu_4_27``-style names.
+    """
+
+    return bool(_FINAL_LABEL_PATTERN.search(label_value)) and not label_value.endswith("_raw")
+
+
+def _live_label_error_message(label_value: str) -> str:
+    """Build a copy-pasteable finalized-label diagnostic.
+
+    Parameters
+    ----------
+    label_value:
+        Finalized-looking label.
+
+    Returns
+    -------
+    str
+        User-facing error message.
+    """
+
+    return (
+        f"tl.label({label_value!r}) looks like a finalized postprocess label, but live hooks "
+        "run during capture before those labels exist. For post-capture selection use "
+        f'tl.where(lambda p: p.layer_label == "{label_value}"). For live hooks, prefer '
+        'a capture-time selector such as tl.func("relu") or tl.module("encoder.layer.4").'
+    )
+
+
+def make_live_site_proxy(
+    *,
+    layer_label_raw: str,
+    func_name: str,
+    layer_type: str,
+    tensor: torch.Tensor,
+    func_call_id: int,
+    output_path: tuple[Any, ...],
+    fields: Mapping[str, Any],
+) -> Any:
+    """Build a minimal LayerPassLog-like object for live hook matching.
+
+    Parameters
+    ----------
+    layer_label_raw:
+        Predicted raw label for the output tensor.
+    func_name:
+        Decorated function name.
+    layer_type:
+        Normalized layer type.
+    tensor:
+        Output tensor at the hook site.
+    func_call_id:
+        Function-call id allocated by the wrapper.
+    output_path:
+        Stable output path for multi-output containers.
+    fields:
+        Shared capture metadata from output logging.
+
+    Returns
+    -------
+    Any
+        Simple namespace with capture-time fields used by selectors and hooks.
+    """
+
+    return SimpleNamespace(
+        layer_label=layer_label_raw,
+        layer_label_raw=layer_label_raw,
+        tensor_label_raw=layer_label_raw,
+        layer_type=layer_type,
+        func_name=func_name,
+        func_call_id=func_call_id,
+        output_path=output_path,
+        tensor_shape=tuple(tensor.shape),
+        tensor_dtype=tensor.dtype,
+        tensor_device=tensor.device,
+        tensor_memory=tensor.nelement() * tensor.element_size(),
+        containing_module=fields.get("containing_module"),
+        containing_modules=fields.get("containing_modules", []),
+        module_passes_exited=fields.get("module_passes_exited", []),
+        modules_exited=fields.get("modules_exited", []),
+        pass_num=1,
+        lookup_keys=[],
+    )
+
+
 def _dispatch_hook_pairs(
     hooks_or_site: Any,
     hook: HookInput | None,
@@ -400,6 +718,8 @@ __all__ = [
     "HookTiming",
     "NormalizedHookEntry",
     "make_hook_context",
+    "make_live_site_proxy",
+    "live_selector_matches_site",
     "normalize_hook",
     "normalize_hook_plan",
 ]

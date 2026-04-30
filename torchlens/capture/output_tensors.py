@@ -71,6 +71,7 @@ from ..intervention.types import (
     TupleIndex,
     Unsupported,
 )
+from ..intervention.hooks import make_live_site_proxy
 from .arg_positions import (
     FUNC_ARG_SPECS,
     ArgSpec,
@@ -105,6 +106,57 @@ if TYPE_CHECKING:
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
+
+
+def _tensor_shape_or_none(tensor: torch.Tensor | None) -> tuple[int, ...] | None:
+    """Return a tensor shape tuple or ``None``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor-like value to inspect.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Shape tuple when a tensor is present.
+    """
+
+    return tuple(tensor.shape) if isinstance(tensor, torch.Tensor) else None
+
+
+def _tensor_dtype_or_none(tensor: torch.Tensor | None) -> torch.dtype | None:
+    """Return a tensor dtype or ``None``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor-like value to inspect.
+
+    Returns
+    -------
+    torch.dtype | None
+        Dtype when a tensor is present.
+    """
+
+    return tensor.dtype if isinstance(tensor, torch.Tensor) else None
+
+
+def _tensor_memory_or_none(tensor: torch.Tensor | None) -> int | None:
+    """Return tensor memory bytes or ``None``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor-like value to inspect.
+
+    Returns
+    -------
+    int | None
+        Memory amount when a tensor is present.
+    """
+
+    return get_tensor_memory_amount(tensor) if isinstance(tensor, torch.Tensor) else None
 
 
 def _is_namedtuple_instance(value: Any) -> bool:
@@ -606,6 +658,248 @@ def log_function_output_tensors(
             out_orig,
             is_bottom_level_func,
         )
+
+
+def apply_live_hooks_to_outputs(
+    self,
+    func: Callable,
+    func_name: str,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> Any:
+    """Apply live hooks to function outputs before output logging.
+
+    Parameters
+    ----------
+    self
+        Active model log.
+    func
+        Original decorated function.
+    func_name
+        Torch function name.
+    args
+        Function positional arguments.
+    kwargs
+        Function keyword arguments.
+    out_orig
+        Function output after in-place safe-copy handling.
+    exec_ctx
+        Function execution metadata.
+    is_bottom_level_func
+        Whether the wrapper call is a bottom-level operation.
+    func_call_id
+        Function-call id allocated before calling ``func``.
+
+    Returns
+    -------
+    Any
+        Output object with hooked tensors replaced in place where possible.
+    """
+
+    if not _st._active_hook_plan or self.logging_mode != "exhaustive":
+        return out_orig
+
+    from ..intervention.runtime import _apply_live_hooks
+
+    shared_fields, _parent_layer_entries, _arg_tensors, _parent_param_passes = (
+        _build_shared_fields_dict(
+            self, func, func_name, args, kwargs, out_orig, exec_ctx, func_call_id
+        )
+    )
+    layer_type = shared_fields["layer_type"]
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor] = {}
+    predicted_layer_counter = self._layer_counter
+    predicted_type_counter = self._raw_layer_type_counter[layer_type]
+
+    for out, output_path, _container_spec in _iter_loggable_live_outputs(
+        out_orig, is_bottom_level_func
+    ):
+        predicted_layer_counter += 1
+        predicted_type_counter += 1
+        raw_label = f"{layer_type}_{predicted_type_counter}_{predicted_layer_counter}_raw"
+        site = make_live_site_proxy(
+            layer_label_raw=raw_label,
+            func_name=func_name,
+            layer_type=layer_type,
+            tensor=out,
+            func_call_id=func_call_id,
+            output_path=output_path,
+            fields=shared_fields,
+        )
+        hooked = _apply_live_hooks(out, site=site, output_path=output_path)
+        if hooked is not out:
+            replacements[output_path] = hooked
+
+    if not replacements:
+        return out_orig
+    if isinstance(out_orig, torch.Tensor):
+        return replacements.get((), out_orig)
+    return _replace_output_tensors_by_path(out_orig, replacements)
+
+
+def _iter_loggable_live_outputs(
+    out_orig: Any,
+    is_bottom_level_func: bool,
+) -> Iterator[tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]]:
+    """Yield outputs that will be logged in exhaustive mode.
+
+    Parameters
+    ----------
+    out_orig
+        Function output.
+    is_bottom_level_func
+        Whether the wrapper call is a bottom-level operation.
+
+    Yields
+    ------
+    tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
+        Tensor, output path, and container spec.
+    """
+
+    for out, output_path, container_spec in _walk_output_tensors_with_paths(out_orig):
+        if _output_should_be_logged(out, is_bottom_level_func):
+            yield out, output_path, container_spec
+
+
+def _replace_output_tensors_by_path(
+    out_orig: Any,
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Return an output object with selected tensor paths replaced.
+
+    Parameters
+    ----------
+    out_orig
+        Original output container.
+    replacements
+        Replacement tensors keyed by output path.
+
+    Returns
+    -------
+    Any
+        Rebuilt output object when supported, otherwise the original object.
+    """
+
+    if () in replacements:
+        return replacements[()]
+    return _replace_output_value(out_orig, (), replacements)
+
+
+def _replace_output_value(
+    value: Any,
+    path: tuple[OutputPathComponent, ...],
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Recursively replace tensors in supported output containers.
+
+    Parameters
+    ----------
+    value
+        Current container value.
+    path
+        Path to the current value.
+    replacements
+        Replacement tensors keyed by full output path.
+
+    Returns
+    -------
+    Any
+        Rebuilt value.
+    """
+
+    if path in replacements:
+        return replacements[path]
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        replaced_items = [
+            _replace_output_value(item, (*path, NamedField(field)), replacements)
+            for field, item in zip(value._fields, value)
+        ]
+        return type(value)(*replaced_items)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        changes = {
+            field.name: _replace_output_value(
+                getattr(value, field.name), (*path, DataclassField(field.name)), replacements
+            )
+            for field in dataclasses.fields(value)
+        }
+        return dataclasses.replace(value, **changes)
+    if isinstance(value, tuple):
+        return type(value)(
+            _replace_output_value(item, (*path, TupleIndex(index)), replacements)
+            for index, item in enumerate(value)
+        )
+    if isinstance(value, list):
+        return [
+            _replace_output_value(item, (*path, TupleIndex(index)), replacements)
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _replace_output_value(item, (*path, DictKey(key)), replacements)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _apply_live_fire_records_to_entry(entry: LayerPassLog) -> None:
+    """Attach pending live fire records and refresh saved tensor metadata.
+
+    Parameters
+    ----------
+    entry
+        Newly created layer-pass entry.
+
+    Returns
+    -------
+    None
+        The entry is updated in place through internal setters.
+    """
+
+    records = _st._pending_live_fire_records.pop(entry.tensor_label_raw, [])
+    if not records:
+        return
+    entry.intervention_log.extend(records)
+    tensor = entry.activation if isinstance(entry.activation, torch.Tensor) else None
+    if tensor is not None:
+        _set_saved_activation_metadata(entry, tensor)
+
+
+def _set_saved_activation_metadata(entry: LayerPassLog, tensor: torch.Tensor) -> None:
+    """Refresh activation metadata through internal setters.
+
+    Parameters
+    ----------
+    entry
+        Layer pass whose saved activation metadata should match ``tensor``.
+    tensor
+        Saved activation tensor.
+
+    Returns
+    -------
+    None
+        Metadata fields are updated atomically through ``_internal_set``.
+    """
+
+    entry._internal_set("tensor_shape", tuple(tensor.shape))
+    entry._internal_set("tensor_dtype", tensor.dtype)
+    entry._internal_set("tensor_memory", get_tensor_memory_amount(tensor))
+    entry._internal_set("has_saved_activations", True)
+    entry._internal_set(
+        "transformed_activation_shape",
+        _tensor_shape_or_none(entry.transformed_activation),
+    )
+    entry._internal_set(
+        "transformed_activation_dtype",
+        _tensor_dtype_or_none(entry.transformed_activation),
+    )
+    entry._internal_set(
+        "transformed_activation_memory",
+        _tensor_memory_or_none(entry.transformed_activation),
+    )
 
 
 def _record_predicate_output(
@@ -1764,6 +2058,7 @@ def _make_layer_log_entry(
             activation_postfunc,
         )
         self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
+    _apply_live_fire_records_to_entry(new_entry)
     self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry
     self._raw_layer_labels_list.append(new_entry.tensor_label_raw)
 
