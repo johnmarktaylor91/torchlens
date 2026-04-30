@@ -767,6 +767,56 @@ class ModelLog:
                     for layer_pass in grad_fn.corresponding_layer.passes.values():
                         layer_pass.corresponding_grad_fn = grad_fn
 
+    def replace_run_state_from(self, new_log: "ModelLog") -> None:
+        """Atomically replace this log's run-state from another ``ModelLog``.
+
+        This method is intended for intervention rerun. The rerun engine builds
+        ``new_log`` off to the side and calls this only after validation passes.
+        The final state replacement uses one ``self.__dict__.update(...)`` call
+        to minimize torn-state windows. Concurrent reads during rerun are
+        unsupported; no lock is taken.
+
+        Parameters
+        ----------
+        new_log:
+            Fully postprocessed fresh log whose graph, layer containers,
+            accessors, output metadata, shape/hash fields, and per-pass entries
+            should replace this log's current run-state.
+
+        Returns
+        -------
+        None
+            This log is mutated in place.
+        """
+
+        preserved_fields = (
+            "name",
+            "parent_run",
+            "_intervention_spec",
+            "operation_history",
+            "_warned_direct_write",
+            "_warned_mutate_in_place",
+            "source_model_id",
+            "source_model_class",
+            "weight_fingerprint_at_capture",
+            "weight_fingerprint_full",
+            "input_id_at_capture",
+            "input_shape_hash",
+            "is_appended",
+            "relationship_evidence",
+            "_source_model_ref",
+            "_has_direct_writes",
+            "_spec_revision",
+            "_activation_recipe_revision",
+            "_append_sequence_id",
+        )
+        preserved_state = {
+            field_name: self.__dict__.get(field_name) for field_name in preserved_fields
+        }
+        replacement_state = dict(new_log.__dict__)
+        replacement_state.update(preserved_state)
+        self.__dict__.update(replacement_state)
+
     # ********************************************
     # ********** Computed Properties *************
     # ********************************************
@@ -1580,6 +1630,28 @@ class ModelLog:
         from ..intervention.replay import replay_from as _impl
 
         return _impl(self, site, strict=strict)
+
+    def rerun(self, model: nn.Module, x: Any = None, *, strict: bool = False) -> "ModelLog":
+        """Re-execute a model with this log's active intervention spec.
+
+        Parameters
+        ----------
+        model:
+            Model to execute through TorchLens decorated wrappers.
+        x:
+            Forward input. Phase 7 requires callers to pass this explicitly.
+        strict:
+            Whether graph-shape divergence should raise instead of warn.
+
+        Returns
+        -------
+        ModelLog
+            This model log, mutated in place after a validated atomic swap.
+        """
+
+        from ..intervention.rerun import rerun as _impl
+
+        return _impl(self, model, x, append=False, strict=strict)
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.

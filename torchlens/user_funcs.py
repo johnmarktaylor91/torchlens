@@ -268,10 +268,28 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
       TorchScript interpreter, not Python, so no Python-level decoration fires.
     * ``torch.export.ExportedProgram`` — a serialised IR, not a callable
       ``nn.Module`` that can be re-executed in Python.
+    * ``torch.distributed.fsdp.FullyShardedDataParallel`` — FSDP controls
+      parameter materialization and sharding around forward execution in ways
+      TorchLens cannot currently validate.
 
-    In all three cases the fix is the same: call ``log_forward_pass`` on the
-    *un-wrapped* model before compiling / scripting / exporting.
+    In these cases the fix is the same: call ``log_forward_pass`` on the
+    *un-wrapped* model before compiling, scripting, exporting, or sharding.
     """
+    # FullyShardedDataParallel
+    try:
+        from torch.distributed.fsdp import FullyShardedDataParallel
+    except (ImportError, RuntimeError):
+        pass
+    else:
+        if isinstance(model, FullyShardedDataParallel):
+            raise RuntimeError(
+                "torchlens.log_forward_pass does not support "
+                "FullyShardedDataParallel models: FSDP controls parameter "
+                "materialization and sharding around forward execution in ways "
+                "TorchLens cannot validate. Call log_forward_pass on the "
+                "underlying unwrapped nn.Module."
+            )
+
     # torch.compile -> torch._dynamo.eval_frame.OptimizedModule
     try:
         from torch._dynamo.eval_frame import OptimizedModule
@@ -364,6 +382,8 @@ def _run_model_and_save_specified_activations(
     activation_sink: Callable[[str, torch.Tensor], None] | None = None,
     intervention_ready: bool = False,
     hooks: Any | None = None,
+    intervention_spec: Any | None = None,
+    normalized_hook_plan: Any | None = None,
     verbose: bool = False,
     train_mode: bool = False,
 ) -> ModelLog:
@@ -419,6 +439,8 @@ def _run_model_and_save_specified_activations(
         intervention_ready: If True, mark the log as ready for future intervention
             replay-template capture without executing hooks in Phase 4a.
         hooks: Future hook plan input. Stored inertly in runtime context until Phase 4c.
+        intervention_spec: Active intervention spec to expose in runtime context.
+        normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
         verbose: If True, print timed progress messages at each major pipeline stage.
         train_mode: If True, keep saved activations attached to autograd for training.
 
@@ -440,11 +462,13 @@ def _run_model_and_save_specified_activations(
     weight_fingerprint = _fingerprint_model_weights(model)
     input_id = _input_id_for_relationship_evidence(input_args)
     input_shape_hash = _hash_input_shapes(input_args, input_kwargs)
-    hook_plan = normalize_hook_plan(hooks) if hooks else []
+    hook_plan = normalized_hook_plan if normalized_hook_plan is not None else []
+    if hook_plan == [] and hooks:
+        hook_plan = normalize_hook_plan(hooks)
     _state.reset_capture_runtime_context()
     _state.configure_capture_runtime_context(
         hook_plan=hook_plan,
-        intervention_spec=None,
+        intervention_spec=intervention_spec,
         capture_replay_templates=intervention_ready,
         source_model_id=source_model_id,
         source_model_class=source_model_class,
@@ -877,6 +901,8 @@ def log_forward_pass(
             activation_sink=streaming_options.activation_callback,
             intervention_ready=intervention_ready,
             hooks=hooks,
+            intervention_spec=None,
+            normalized_hook_plan=None,
             verbose=verbose,
             train_mode=train_mode_value,
         )
@@ -916,6 +942,8 @@ def log_forward_pass(
             activation_sink=streaming_options.activation_callback,
             intervention_ready=intervention_ready,
             hooks=hooks,
+            intervention_spec=None,
+            normalized_hook_plan=None,
             verbose=verbose,
             train_mode=train_mode_value,
         )

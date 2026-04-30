@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import time
+from collections.abc import Iterator
 from typing import Any
 
 import torch
@@ -12,6 +14,38 @@ from .._state import pause_logging
 from .errors import HookSignatureError, HookValueError, _not_implemented
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord
+
+
+@contextmanager
+def active_intervention_context(
+    *,
+    intervention_spec: Any | None,
+    hook_plan: Any | None,
+) -> Iterator[None]:
+    """Temporarily install a rerun/live intervention context in global state.
+
+    Parameters
+    ----------
+    intervention_spec:
+        Active intervention spec for the capture.
+    hook_plan:
+        Normalized hook entries consumed by live wrapper dispatch.
+
+    Yields
+    ------
+    None
+        Control while the context is installed.
+    """
+
+    previous_spec = _state._active_intervention_spec
+    previous_hook_plan = _state._active_hook_plan
+    _state._active_intervention_spec = intervention_spec
+    _state._active_hook_plan = hook_plan
+    try:
+        yield
+    finally:
+        _state._active_intervention_spec = previous_spec
+        _state._active_hook_plan = previous_hook_plan
 
 
 class _HookReentrancyGuard:
@@ -409,6 +443,7 @@ __all__ = [
     "_HookReentrancyGuard",
     "_apply_live_hooks",
     "_execute_hook",
+    "active_intervention_context",
     "do",
     "validate_hook_output",
 ]

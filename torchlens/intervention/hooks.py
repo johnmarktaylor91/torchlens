@@ -19,7 +19,7 @@ from .errors import (
     SiteResolutionError,
 )
 from .selectors import BaseSelector, CompositeSelector, SelectorLike, in_module
-from .types import HelperSpec, TargetSpec
+from .types import HelperSpec, InterventionSpec, TargetSpec
 
 HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
@@ -220,6 +220,80 @@ def normalize_hook_plan(
             )
         )
     return entries
+
+
+def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedHookEntry]:
+    """Normalize an intervention spec into live-capture hook-plan entries.
+
+    Parameters
+    ----------
+    spec:
+        Mutable intervention spec attached to a ``ModelLog``. ``None`` or an
+        empty spec produces no hook entries.
+
+    Returns
+    -------
+    list[NormalizedHookEntry]
+        Hook entries suitable for ``_state._active_hook_plan`` during rerun.
+    """
+
+    if spec is None or not spec.targets:
+        return []
+
+    hook_like = _hook_like_from_spec(spec)
+    if hook_like is None:
+        return []
+
+    entries: list[NormalizedHookEntry] = []
+    for target in spec.targets:
+        entries.extend(normalize_hook_plan(target, hook_like))
+    return entries
+
+
+def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
+    """Return the callable/helper represented by an intervention spec.
+
+    Parameters
+    ----------
+    spec:
+        Intervention spec to inspect.
+
+    Returns
+    -------
+    HookInput | None
+        Normalizable hook input, or ``None`` when the spec is empty.
+    """
+
+    if spec.hook is not None:
+        return cast(HookInput, spec.hook)
+    if spec.helper is not None:
+        return spec.helper
+    if spec.value is not None:
+        value = spec.value
+
+        def _value_hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Return a fixed replacement value from an intervention spec.
+
+            Parameters
+            ----------
+            activation:
+                Activation being replaced.
+            hook:
+                Hook context supplied by TorchLens.
+
+            Returns
+            -------
+            torch.Tensor
+                Replacement tensor.
+            """
+
+            del activation, hook
+            if callable(value):
+                return cast(torch.Tensor, value())
+            return cast(torch.Tensor, value)
+
+        return _value_hook
+    return None
 
 
 def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
