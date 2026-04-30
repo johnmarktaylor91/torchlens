@@ -98,7 +98,8 @@ def log_function_output_tensors(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
-):
+    func_call_id: int,
+) -> None:
     """Dispatch to exhaustive or fast logging based on current logging mode.
 
     Called by every decorated torch function wrapper after executing the
@@ -117,6 +118,7 @@ def log_function_output_tensors(
             out_orig,
             exec_ctx,
             is_bottom_level_func,
+            func_call_id,
         )
     elif self.logging_mode == "fast":
         log_function_output_tensors_fast(
@@ -129,6 +131,7 @@ def log_function_output_tensors(
             out_orig,
             exec_ctx,
             is_bottom_level_func,
+            func_call_id,
         )
     elif self.logging_mode == "predicate":
         log_function_output_tensors_predicate(
@@ -397,6 +400,7 @@ def _build_shared_fields_dict(
     kwargs: Dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
+    func_call_id: int,
 ) -> Tuple[Dict[str, Any], List, List, Dict]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
@@ -449,7 +453,7 @@ def _build_shared_fields_dict(
 
     # Function call info
     fields_dict["func_applied"] = func
-    fields_dict["func_call_id"] = None
+    fields_dict["func_call_id"] = func_call_id
     fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = _get_func_call_stack(
         self.num_context_lines,
@@ -552,7 +556,8 @@ def log_function_output_tensors_exhaustive(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
-):
+    func_call_id: int,
+) -> None:
     """Full metadata logging for each output tensor of a function call.
 
     For each loggable output tensor:
@@ -582,6 +587,7 @@ def log_function_output_tensors_exhaustive(
         kwargs,
         out_orig,
         exec_ctx,
+        func_call_id,
     )
 
     out_iter = ensure_iterable(out_orig)
@@ -669,7 +675,8 @@ def log_function_output_tensors_fast(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
-):
+    func_call_id: int,
+) -> None:
     """Fast-path logging: save new activation values into existing graph entries.
 
     Skips all metadata collection.  Instead:

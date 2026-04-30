@@ -34,6 +34,7 @@ from .rerun import rerun
 from .runtime import do
 from .save import load_intervention_spec, save_intervention
 from .selectors import contains, func, in_module, label, module, where
+from .errors import InterventionReadyConflictError
 from .types import (
     CapturedArgTemplate,
     EdgeUseRecord,
@@ -61,6 +62,7 @@ __all__ = [
     "HelperSpec",
     "HookContext",
     "InterventionSpec",
+    "InterventionReadyConflictError",
     "Relationship",
     "SiteTable",
     "TargetSpec",

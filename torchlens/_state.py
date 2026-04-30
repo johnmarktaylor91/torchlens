@@ -22,12 +22,13 @@ Design rationale:
 
 import weakref
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set
 
 # TYPE_CHECKING is False at runtime, so this import only exists for static
 # analysis / IDE support — it will never trigger the circular-import problem.
 if TYPE_CHECKING:
     from .data_classes.model_log import ModelLog
+    from .intervention.types import InterventionSpec
 
 # ---------------------------------------------------------------------------
 # Toggle — the single bool that gates every decorated wrapper
@@ -52,6 +53,147 @@ Set at the start of ``active_logging()`` and cleared on exit.  Wrappers read
 this to know *where* to record tensor operations.  Always None outside a
 logging session.
 """
+
+_active_hook_plan: Any | None = None
+"""Hook plan for the active intervention-ready capture.
+
+Phase 4a only stores this slot. Hook normalization/execution is intentionally
+deferred to Phase 4c, so the runtime value remains protocol-friendly and avoids
+importing ``torchlens.intervention`` at module load.
+"""
+
+_active_intervention_spec: "InterventionSpec | None" = None
+"""Intervention spec associated with the active capture, if any.
+
+This module uses a string annotation plus a ``TYPE_CHECKING`` import so
+``torchlens._state`` never imports the intervention package at runtime.
+"""
+
+_func_call_id_counter: int = 0
+"""Session-scoped monotonic function-call id counter."""
+
+_capture_replay_templates: bool = False
+"""Whether the active capture should collect replay-template data.
+
+Phase 4a only plumbs the flag. Phase 4b builds the actual templates.
+"""
+
+_relationship_source_model_id: int | None = None
+"""Relationship evidence seed: ``id(model)`` at capture start."""
+
+_relationship_source_model_class: str | None = None
+"""Relationship evidence seed: model class qualname at capture start."""
+
+_relationship_weight_fingerprint: str | None = None
+"""Relationship evidence seed: deterministic parameter-structure fingerprint."""
+
+_relationship_input_id: int | None = None
+"""Relationship evidence seed: ``id(input_args)`` or first input tensor id."""
+
+_relationship_input_shape_hash: str | None = None
+"""Relationship evidence seed: deterministic input shape/dtype/device hash."""
+
+_hook_reentrancy_depth: int = 0
+"""Primitive hook execution depth mirrored by ``intervention.runtime``.
+
+``_state`` owns this primitive instead of importing the runtime guard object,
+which keeps this module free of runtime intervention imports.
+"""
+
+
+def reset_capture_runtime_context() -> None:
+    """Reset per-capture intervention runtime context fields.
+
+    Returns
+    -------
+    None
+        The module-level runtime context is reset in place.
+    """
+
+    global _active_hook_plan, _active_intervention_spec, _func_call_id_counter
+    global _capture_replay_templates
+    global _relationship_source_model_id, _relationship_source_model_class
+    global _relationship_weight_fingerprint, _relationship_input_id
+    global _relationship_input_shape_hash
+
+    _active_hook_plan = None
+    _active_intervention_spec = None
+    _func_call_id_counter = 0
+    _capture_replay_templates = False
+    _relationship_source_model_id = None
+    _relationship_source_model_class = None
+    _relationship_weight_fingerprint = None
+    _relationship_input_id = None
+    _relationship_input_shape_hash = None
+
+
+def configure_capture_runtime_context(
+    *,
+    hook_plan: Any | None = None,
+    intervention_spec: "InterventionSpec | None" = None,
+    capture_replay_templates: bool = False,
+    source_model_id: int | None = None,
+    source_model_class: str | None = None,
+    weight_fingerprint: str | None = None,
+    input_id: int | None = None,
+    input_shape_hash: str | None = None,
+) -> None:
+    """Set per-capture intervention runtime context fields.
+
+    Parameters
+    ----------
+    hook_plan:
+        Active hook plan placeholder. Execution is deferred to Phase 4c.
+    intervention_spec:
+        Active intervention spec placeholder. Mutators land in a later phase.
+    capture_replay_templates:
+        Whether replay-template capture should be enabled for this run.
+    source_model_id:
+        ``id(model)`` captured at the public API boundary.
+    source_model_class:
+        Model class qualname captured at the public API boundary.
+    weight_fingerprint:
+        Deterministic model-parameter fingerprint.
+    input_id:
+        Input object identity captured at the public API boundary.
+    input_shape_hash:
+        Deterministic input shape/dtype/device fingerprint.
+
+    Returns
+    -------
+    None
+        The module-level runtime context is updated in place.
+    """
+
+    global _active_hook_plan, _active_intervention_spec, _capture_replay_templates
+    global _relationship_source_model_id, _relationship_source_model_class
+    global _relationship_weight_fingerprint, _relationship_input_id
+    global _relationship_input_shape_hash
+
+    _active_hook_plan = hook_plan
+    _active_intervention_spec = intervention_spec
+    _capture_replay_templates = capture_replay_templates
+    _relationship_source_model_id = source_model_id
+    _relationship_source_model_class = source_model_class
+    _relationship_weight_fingerprint = weight_fingerprint
+    _relationship_input_id = input_id
+    _relationship_input_shape_hash = input_shape_hash
+
+
+def next_func_call_id() -> int:
+    """Allocate the next session-scoped function-call id.
+
+    Returns
+    -------
+    int
+        Monotonic id for one decorated torch function invocation.
+    """
+
+    global _func_call_id_counter
+
+    _func_call_id_counter += 1
+    return _func_call_id_counter
+
 
 # ---------------------------------------------------------------------------
 # Decoration state — tracks whether torch functions are currently wrapped
@@ -186,7 +328,7 @@ all module attributes."""
 
 
 @contextmanager
-def active_logging(model_log: "ModelLog"):
+def active_logging(model_log: "ModelLog") -> Iterator[None]:
     """Activate logging for the duration of a forward pass.
 
     Sets ``_logging_enabled = True`` and ``_active_model_log = model_log``.
@@ -203,20 +345,21 @@ def active_logging(model_log: "ModelLog"):
     corrupting the outer log (overwriting ``_active_model_log`` and then
     clearing it on inner exit) is worse than failing loudly.
     """
-    global _logging_enabled, _active_model_log, _functorch_warning_emitted
-    if _logging_enabled:
+    global _logging_enabled, _active_model_log, _functorch_warning_emitted, _func_call_id_counter
+    if _logging_enabled or _active_model_log is not None or _hook_reentrancy_depth > 0:
         raise RuntimeError(
             "torchlens.log_forward_pass / active_logging is not re-entrant: "
             "another forward pass is already being logged. Nested logging "
             "would silently corrupt the outer ModelLog. If you need to log a "
             "model's forward pass from inside another log_forward_pass call "
-            "(e.g., a custom activation_postfunc), first drop out with "
-            "torchlens.pause_logging()."
+            "(e.g., a custom activation_postfunc), finish the outer capture "
+            "before starting another one."
         )
     # Model log must be visible before the toggle flips — wrappers will
     # immediately read _active_model_log once _logging_enabled is True.
     _active_model_log = model_log
     _functorch_warning_emitted = False
+    _func_call_id_counter = 0
     _logging_enabled = True
     try:
         yield
@@ -227,11 +370,15 @@ def active_logging(model_log: "ModelLog"):
 
 
 @contextmanager
-def pause_logging():
+def pause_logging() -> Iterator[None]:
     """Temporarily disable logging so internal torch ops don't get recorded.
 
     Nestable via save/restore: if already paused, restoring ``prev`` (False)
     is a harmless no-op.  If logging was active, it resumes on exit.
+
+    This intentionally does NOT clear ``_active_model_log``. The active log
+    remains visible while the toggle is paused so ``active_logging()`` can still
+    reject nested captures inside paused internal work.
 
     Typical callers:
         - ``safe_copy``: copies tensors without logging the copy op

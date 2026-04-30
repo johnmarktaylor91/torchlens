@@ -26,6 +26,10 @@ class TorchLensInterventionError(RuntimeError):
     """Base class for future TorchLens intervention errors."""
 
 
+class InterventionReadyConflictError(TorchLensInterventionError):
+    """Raised when intervention-ready capture is requested with unsupported options."""
+
+
 class DirectActivationWriteWarning(UserWarning):
     """Warning for direct LayerPassLog activation writes."""
 
@@ -89,6 +93,7 @@ __all__ = [
     "HookSignatureError",
     "HookSiteCoverageError",
     "HookValueError",
+    "InterventionReadyConflictError",
     "InterventionAuditWarning",
     "MultiMatchWarning",
     "MutateInPlaceWarning",

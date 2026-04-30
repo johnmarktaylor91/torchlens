@@ -6,6 +6,7 @@ from typing import Any
 
 import torch
 
+from .. import _state
 from .._state import pause_logging
 from .errors import HookSignatureError, HookValueError, _not_implemented
 from .hooks import HookContext
@@ -47,6 +48,7 @@ class _HookReentrancyGuard:
         """
 
         self.depth += 1
+        _state._hook_reentrancy_depth = self.depth
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
@@ -63,6 +65,7 @@ class _HookReentrancyGuard:
         """
 
         self.depth = max(0, self.depth - 1)
+        _state._hook_reentrancy_depth = self.depth
         if self.depth == 0:
             self.active_log_id = None
 

@@ -409,6 +409,7 @@ def torch_func_decorator(func: Callable, func_name: str):
         _save_rng = getattr(model_log, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
+        func_call_id = _state.next_func_call_id()
         out_orig = func(*args, **kwargs)
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - start_time,
@@ -453,6 +454,7 @@ def torch_func_decorator(func: Callable, func_name: str):
                 out_orig,
                 exec_ctx,
                 is_bottom_level_func,
+                func_call_id,
             )
 
             # For true in-place ops, propagate the newly assigned label back
