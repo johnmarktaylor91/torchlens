@@ -1540,6 +1540,47 @@ class ModelLog:
             validate_metadata=validate_metadata,
         )
 
+    def replay(self, strict: bool = False, hooks: dict[Any, Any] | None = None) -> "ModelLog":
+        """Replay the saved DAG cone affected by hooks.
+
+        Parameters
+        ----------
+        strict:
+            Whether replay divergence warnings should raise.
+        hooks:
+            Optional mapping from selector-like targets to hook callables.
+
+        Returns
+        -------
+        ModelLog
+            This model log, mutated in place.
+        """
+
+        from ..intervention.replay import replay as _impl
+
+        return _impl(self, strict=strict, hooks=hooks)
+
+    def replay_from(self, site: Any, strict: bool = False) -> "ModelLog":
+        """Replay downstream from a pre-mutated site.
+
+        Parameters
+        ----------
+        site:
+            Layer pass or selector resolving to one origin. The origin's
+            current activation is preserved and used as the override.
+        strict:
+            Whether replay divergence warnings should raise.
+
+        Returns
+        -------
+        ModelLog
+            This model log, mutated in place.
+        """
+
+        from ..intervention.replay import replay_from as _impl
+
+        return _impl(self, site, strict=strict)
+
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.
 

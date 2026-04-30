@@ -54,6 +54,14 @@ class ReplayPreconditionError(TorchLensInterventionError):
     """Raised when replay cannot satisfy its future execution preconditions."""
 
 
+class ControlFlowDivergenceWarning(UserWarning):
+    """Warning for replay-detected control-flow or saved-edge divergence."""
+
+
+class ControlFlowDivergenceError(TorchLensInterventionError):
+    """Raised when strict replay escalates a control-flow divergence."""
+
+
 class EngineDispatchError(TorchLensInterventionError):
     """Raised when future intervention engine dispatch arguments are invalid."""
 
@@ -91,6 +99,8 @@ class LiveModeLabelError(SiteResolutionError):
 
 
 __all__ = [
+    "ControlFlowDivergenceError",
+    "ControlFlowDivergenceWarning",
     "DirectActivationWriteWarning",
     "DirectWriteIgnoredWarning",
     "EngineDispatchError",

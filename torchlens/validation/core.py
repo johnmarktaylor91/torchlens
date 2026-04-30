@@ -24,7 +24,7 @@ from ..data_classes.layer_pass_log import LayerPassLog
 if TYPE_CHECKING:
     pass
 
-from ..utils.rng import AutocastRestore, log_current_rng_states, set_rng_from_saved_states
+from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.collections import assign_to_sequence_or_dict
 from ..utils.tensor_utils import tensor_nanequal, tensor_all_nan
 from .exemptions import (
@@ -492,14 +492,14 @@ def _execute_func_with_restored_state(
     """
     layer_func = layer.func_applied
 
-    # Save current RNG state so we can restore it after replay.
-    current_rng_states = log_current_rng_states()
-    # Restore the RNG state from when the layer originally executed.
-    set_rng_from_saved_states(layer.func_rng_states)
-
     try:
-        with AutocastRestore(layer.func_autocast_state):
-            recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
+        recomputed_output = execute_with_restored_rng_autocast(
+            layer_func,
+            tuple(input_args["args"]),
+            dict(input_args["kwargs"]),
+            rng_states=layer.func_rng_states,
+            autocast_state=layer.func_autocast_state,
+        )
     except Exception as e:
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
@@ -509,12 +509,7 @@ def _execute_func_with_restored_state(
                 f"Perturbation of {layers_to_perturb} for layer "
                 f"{layer_label} caused {type(e).__name__}: {e}"
             )
-        set_rng_from_saved_states(current_rng_states)
         return None
-
-    # Restore the original RNG state so subsequent validation steps
-    # don't inherit this layer's replayed state.
-    set_rng_from_saved_states(current_rng_states)
 
     # In-place mutating ops (__setitem__, zero_, __delitem__) return None
     # from PyTorch but the "output" is the mutated first argument.
