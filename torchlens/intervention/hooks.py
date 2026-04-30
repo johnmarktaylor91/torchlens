@@ -19,7 +19,7 @@ from .errors import (
     SiteResolutionError,
 )
 from .selectors import BaseSelector, CompositeSelector, SelectorLike, in_module
-from .types import HelperSpec, InterventionSpec, TargetSpec
+from .types import HelperSpec, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec
 
 HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
@@ -237,16 +237,114 @@ def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedH
         Hook entries suitable for ``_state._active_hook_plan`` during rerun.
     """
 
-    if spec is None or not spec.targets:
-        return []
-
-    hook_like = _hook_like_from_spec(spec)
-    if hook_like is None:
+    if spec is None:
         return []
 
     entries: list[NormalizedHookEntry] = []
-    for target in spec.targets:
-        entries.extend(normalize_hook_plan(target, hook_like))
+    entries.extend(_normalize_value_specs(spec.target_value_specs))
+    entries.extend(_normalize_sticky_hook_specs(spec.hook_specs))
+
+    if spec.targets:
+        hook_like = _hook_like_from_spec(spec)
+        if hook_like is not None:
+            for target in spec.targets:
+                entries.extend(normalize_hook_plan(target, hook_like))
+    return entries
+
+
+def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[NormalizedHookEntry]:
+    """Normalize set-replacement specs into hook-plan entries.
+
+    Parameters
+    ----------
+    value_specs:
+        Mutable set-replacement specs from an intervention recipe.
+
+    Returns
+    -------
+    list[NormalizedHookEntry]
+        Hook-plan entries that replace matching activations.
+    """
+
+    entries: list[NormalizedHookEntry] = []
+    for order, value_spec in enumerate(value_specs):
+        value = value_spec.value
+
+        def _set_value_hook(
+            activation: torch.Tensor,
+            *,
+            hook: HookContext,
+            replacement: Any = value,
+        ) -> torch.Tensor:
+            """Return a static or one-shot callable replacement.
+
+            Parameters
+            ----------
+            activation:
+                Activation at the matched site.
+            hook:
+                Hook context supplied by TorchLens.
+            replacement:
+                Replacement tensor or callable captured by default argument.
+
+            Returns
+            -------
+            torch.Tensor
+                Replacement activation.
+            """
+
+            del hook
+            if callable(replacement):
+                return cast(torch.Tensor, replacement(activation))
+            return cast(torch.Tensor, replacement)
+
+        metadata = {
+            "attach_order": order,
+            "composition": "left_to_right",
+            "force_shape_change": False,
+            "direction": "forward",
+            "timing": "post",
+            **value_spec.metadata,
+        }
+        entries.append(
+            NormalizedHookEntry(
+                site_target=value_spec.site_target,
+                normalized_callable=_set_value_hook,
+                helper_spec=None,
+                metadata=MappingProxyType(metadata),
+            )
+        )
+    return entries
+
+
+def _normalize_sticky_hook_specs(hook_specs: Sequence[HookSpec]) -> list[NormalizedHookEntry]:
+    """Normalize sticky hook specs into hook-plan entries.
+
+    Parameters
+    ----------
+    hook_specs:
+        Mutable sticky hook specs from an intervention recipe.
+
+    Returns
+    -------
+    list[NormalizedHookEntry]
+        Hook-plan entries in stored composition order.
+    """
+
+    entries: list[NormalizedHookEntry] = []
+    for hook_spec in hook_specs:
+        hook_like = hook_spec.helper if hook_spec.helper is not None else hook_spec.hook
+        normalized_entries = normalize_hook_plan(hook_spec.site_target, hook_like)
+        for entry in normalized_entries:
+            metadata = {**entry.metadata, **hook_spec.metadata}
+            entries.append(
+                NormalizedHookEntry(
+                    site_target=entry.site_target,
+                    normalized_callable=entry.normalized_callable,
+                    helper_spec=entry.helper_spec,
+                    metadata=MappingProxyType(metadata),
+                )
+            )
     return entries
 
 

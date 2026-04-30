@@ -66,6 +66,7 @@ from ..intervention.types import (
     MODEL_LOG_FORK_POLICY,
     InterventionSpec,
     Relationship,
+    TargetSpec,
 )
 from ..types import ActivationPostfunc, GradientPostfunc
 from .cleanup import (
@@ -626,6 +627,335 @@ class ModelLog:
         from ..intervention.resolver import resolve_sites
 
         return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+
+    def set(
+        self,
+        site: Any,
+        value: Any,
+        *,
+        strict: bool = False,
+        confirm_mutation: bool = False,
+    ) -> "ModelLog":
+        """Set a site activation recipe without propagating it.
+
+        Parameters
+        ----------
+        site:
+            Selector-like target for the activation to replace.
+        value:
+            Static replacement tensor or one-shot callable accepting the
+            matched activation and returning a replacement tensor.
+        strict:
+            Whether site resolution should reject non-portable selectors.
+        confirm_mutation:
+            Reserved confirmation flag for Phase 8b warning policy.
+
+        Returns
+        -------
+        ModelLog
+            This model log, with a stale intervention recipe.
+        """
+
+        del confirm_mutation
+        self._validate_intervention_site(site, strict=strict)
+        metadata = {"created_by": "set_callable_one_shot"} if callable(value) else {}
+        self._ensure_intervention_spec().add_set(
+            self._target_spec_from_site(site, strict=strict),
+            value,
+            metadata=metadata,
+        )
+        self._mark_intervention_spec_mutated()
+        return self
+
+    def attach_hooks(
+        self,
+        hooks_or_site: Any,
+        hook: Any = None,
+        *,
+        strict: bool = False,
+        prepend: bool = False,
+        confirm_mutation: bool = False,
+    ) -> "ModelLog":
+        """Attach sticky hooks to the current intervention spec.
+
+        Parameters
+        ----------
+        hooks_or_site:
+            Mapping/list batch input or selector-like site.
+        hook:
+            Optional hook for the ``(site, hook)`` input shape.
+        strict:
+            Whether site resolution should reject non-portable selectors.
+        prepend:
+            Whether new sticky hooks should run before existing sticky hooks.
+        confirm_mutation:
+            Reserved confirmation flag for Phase 8b warning policy.
+
+        Returns
+        -------
+        ModelLog
+            This model log, with a stale intervention recipe.
+        """
+
+        del confirm_mutation
+        from ..intervention.hooks import normalize_hook_plan
+
+        entries = normalize_hook_plan(hooks_or_site, hook)
+        for entry in entries:
+            self._validate_intervention_site(entry.site_target, strict=strict)
+        spec = self._ensure_intervention_spec()
+        for entry in entries:
+            metadata = dict(entry.metadata)
+            spec.add_hook(
+                self._target_spec_from_site(entry.site_target, strict=strict),
+                entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
+                helper=entry.helper_spec,
+                metadata=metadata,
+                prepend=prepend,
+            )
+        self._mark_intervention_spec_mutated()
+        return self
+
+    def detach_hooks(
+        self,
+        site: Any = None,
+        handle: Any = None,
+        *,
+        strict: bool = False,
+        confirm_mutation: bool = False,
+    ) -> "ModelLog":
+        """Detach sticky hooks by site, with handle matching deferred.
+
+        Parameters
+        ----------
+        site:
+            Optional selector-like target. When provided, all sticky hooks for
+            that target are removed.
+        handle:
+            Optional future hook handle. Phase 8a does not issue handles.
+        strict:
+            Whether no-op detach requests should raise.
+        confirm_mutation:
+            Reserved confirmation flag for Phase 8b warning policy.
+
+        Returns
+        -------
+        ModelLog
+            This model log, with a stale recipe if hooks were removed.
+        """
+
+        del confirm_mutation
+        from ..intervention.errors import SpecMutationError
+
+        if site is None and handle is None:
+            if strict:
+                raise SpecMutationError("detach_hooks requires a site or handle in strict mode.")
+            return self
+
+        if handle is not None and site is None:
+            if strict:
+                raise SpecMutationError(
+                    "detach_hooks(handle=...) is deferred in Phase 8a because handles are "
+                    "not issued by attach_hooks yet."
+                )
+            return self
+
+        target_spec = None
+        if site is not None:
+            self._validate_intervention_site(site, strict=strict)
+            target_spec = self._target_spec_from_site(site, strict=strict)
+
+        handle_value = str(handle) if handle is not None else None
+        removed = self._ensure_intervention_spec().remove_hook(
+            site_target=target_spec,
+            handle=handle_value,
+        )
+        if removed == 0 and strict:
+            raise SpecMutationError("detach_hooks did not match any sticky hooks.")
+        if removed > 0:
+            self._mark_intervention_spec_mutated()
+        return self
+
+    def clear_hooks(self, *, confirm_mutation: bool = False) -> "ModelLog":
+        """Clear all sticky hooks from the current intervention spec.
+
+        Parameters
+        ----------
+        confirm_mutation:
+            Reserved confirmation flag for Phase 8b warning policy.
+
+        Returns
+        -------
+        ModelLog
+            This model log with hook specs cleared and marked stale.
+        """
+
+        del confirm_mutation
+        self._ensure_intervention_spec().clear()
+        self._mark_intervention_spec_mutated()
+        return self
+
+    def do(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any = None,
+        *,
+        model: nn.Module | None = None,
+        x: Any = None,
+        engine: str = "auto",
+        confirm_mutation: bool = False,
+        strict: bool = False,
+    ) -> "ModelLog":
+        """Attach hooks and propagate with an explicitly selected engine.
+
+        Parameters
+        ----------
+        hooks_or_site:
+            Mapping/list batch input or selector-like site.
+        value_or_hook:
+            Optional hook for the ``(site, hook)`` input shape.
+        model:
+            Model required when ``engine="rerun"``.
+        x:
+            Input required when ``engine="rerun"``.
+        engine:
+            ``"replay"`` or ``"rerun"`` for Phase 8a pass-through.
+            ``"auto"`` is deferred to Phase 8b.
+        confirm_mutation:
+            Reserved confirmation flag for Phase 8b warning policy.
+        strict:
+            Whether selector and propagation checks should raise.
+
+        Returns
+        -------
+        ModelLog
+            This model log after the selected propagation engine runs.
+        """
+
+        if engine == "auto":
+            raise NotImplementedError("ModelLog.do(engine='auto') dispatch lands in Phase 8b.")
+        if engine not in {"replay", "rerun"}:
+            raise ValueError("do(..., engine=...) must be 'auto', 'replay', or 'rerun'.")
+
+        self.attach_hooks(
+            hooks_or_site,
+            value_or_hook,
+            strict=strict,
+            confirm_mutation=confirm_mutation,
+        )
+        if engine == "replay":
+            return self.replay(strict=strict)
+        if model is None:
+            raise ValueError("do(..., engine='rerun') requires model=.")
+        return self.rerun(model, x, strict=strict)
+
+    def fork(self, name: str | None = None) -> "ModelLog":
+        """Return an intervention fork of this log.
+
+        Parameters
+        ----------
+        name:
+            Optional name for the forked log.
+
+        Returns
+        -------
+        ModelLog
+            Forked model log.
+
+        Raises
+        ------
+        NotImplementedError
+            Always in Phase 8a.
+        """
+
+        del name
+        raise NotImplementedError("ModelLog.fork() lands in Phase 8b")
+
+    def _recipe_is_clean(self) -> bool:
+        """Return whether propagated activations match the current spec revision.
+
+        Returns
+        -------
+        bool
+            ``True`` when the current activation recipe revision equals the
+            mutable intervention spec revision.
+        """
+
+        return self._spec_revision == self._activation_recipe_revision
+
+    def _ensure_intervention_spec(self) -> InterventionSpec:
+        """Return the mutable intervention spec, creating one if needed.
+
+        Returns
+        -------
+        InterventionSpec
+            Mutable intervention recipe owned by this log.
+        """
+
+        if self._intervention_spec is None:
+            self._intervention_spec = InterventionSpec()
+        return self._intervention_spec
+
+    def _mark_intervention_spec_mutated(self) -> None:
+        """Invalidate cached frozen views and mark the spec stale.
+
+        Returns
+        -------
+        None
+            This model log is mutated in place.
+        """
+
+        self._spec_revision += 1
+        self.__dict__.pop("_frozen_intervention_spec", None)
+        self.__dict__.pop("_cached_frozen_intervention_spec", None)
+        self.run_state = RunState.SPEC_STALE
+
+    def _validate_intervention_site(self, site: Any, *, strict: bool) -> None:
+        """Validate that a mutator site resolves on this log.
+
+        Parameters
+        ----------
+        site:
+            Selector-like target to validate.
+        strict:
+            Whether selector resolution should be strict.
+
+        Returns
+        -------
+        None
+            Raises when the site cannot resolve.
+        """
+
+        max_fanout = max(1, len(self.layer_list))
+        self.resolve_sites(site, strict=strict, max_fanout=max_fanout)
+
+    def _target_spec_from_site(self, site: Any, *, strict: bool) -> TargetSpec:
+        """Convert a selector-like site to a mutable target spec.
+
+        Parameters
+        ----------
+        site:
+            Selector-like target, target spec, or layer pass.
+        strict:
+            Whether the resulting target should carry strict resolution.
+
+        Returns
+        -------
+        TargetSpec
+            Mutable target spec stored in the intervention recipe.
+        """
+
+        if isinstance(site, TargetSpec):
+            target = copy.copy(site)
+            target.strict = strict or target.strict
+            return target
+        if hasattr(site, "to_target_spec"):
+            target = site.to_target_spec()
+            target.strict = strict or target.strict
+            return target
+        if hasattr(site, "layer_label"):
+            return TargetSpec("label", str(site.layer_label), strict=strict)
+        return TargetSpec("label", site, strict=strict)
 
     def __str__(self) -> str:
         """Human-readable summary; delegates to post-pass or mid-pass formatter."""

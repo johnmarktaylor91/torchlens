@@ -251,6 +251,78 @@ class EdgeUseRecord:
 
 
 @dataclass
+class TargetValueSpec:
+    """Mutable set-replacement entry in an intervention recipe."""
+
+    site_target: TargetSpec
+    value: Any
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def freeze(self) -> "FrozenTargetValueSpec":
+        """Return an immutable view of this value replacement.
+
+        Returns
+        -------
+        FrozenTargetValueSpec
+            Frozen value spec with immutable target and metadata containers.
+        """
+
+        return FrozenTargetValueSpec(
+            site_target=self.site_target.freeze(),
+            value=self.value,
+            metadata=tuple(sorted(self.metadata.items())),
+        )
+
+
+@dataclass(frozen=True)
+class FrozenTargetValueSpec:
+    """Immutable set-replacement entry in a frozen intervention recipe."""
+
+    site_target: FrozenTargetSpec
+    value: Any
+    metadata: tuple[tuple[str, Any], ...] = ()
+
+
+@dataclass
+class HookSpec:
+    """Mutable sticky hook entry in an intervention recipe."""
+
+    site_target: TargetSpec
+    hook: Any
+    helper: HelperSpec | None = None
+    handle: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def freeze(self) -> "FrozenHookSpec":
+        """Return an immutable view of this sticky hook spec.
+
+        Returns
+        -------
+        FrozenHookSpec
+            Frozen hook spec with immutable target and metadata containers.
+        """
+
+        return FrozenHookSpec(
+            site_target=self.site_target.freeze(),
+            hook=self.hook,
+            helper=self.helper,
+            handle=self.handle,
+            metadata=tuple(sorted(self.metadata.items())),
+        )
+
+
+@dataclass(frozen=True)
+class FrozenHookSpec:
+    """Immutable sticky hook entry in a frozen intervention recipe."""
+
+    site_target: FrozenTargetSpec
+    hook: Any
+    helper: HelperSpec | None = None
+    handle: str | None = None
+    metadata: tuple[tuple[str, Any], ...] = ()
+
+
+@dataclass
 class InterventionSpec:
     """Mutable internal intervention recipe."""
 
@@ -258,8 +330,122 @@ class InterventionSpec:
     helper: HelperSpec | None = None
     value: Any | None = None
     hook: Any | None = None
+    target_value_specs: list[TargetValueSpec] = field(default_factory=list)
+    hook_specs: list[HookSpec] = field(default_factory=list)
     records: list[FireRecord] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def add_set(
+        self,
+        site_target: TargetSpec,
+        value: Any,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> TargetValueSpec:
+        """Append a set-replacement entry to this mutable recipe.
+
+        Parameters
+        ----------
+        site_target:
+            Portable target spec for the replacement site.
+        value:
+            Static replacement value or one-shot callable.
+        metadata:
+            Optional per-entry metadata.
+
+        Returns
+        -------
+        TargetValueSpec
+            The appended value-replacement spec.
+        """
+
+        value_spec = TargetValueSpec(site_target=site_target, value=value, metadata=metadata or {})
+        self.target_value_specs.append(value_spec)
+        return value_spec
+
+    def add_hook(
+        self,
+        site_target: TargetSpec,
+        hook: Any,
+        *,
+        helper: HelperSpec | None = None,
+        metadata: dict[str, Any] | None = None,
+        prepend: bool = False,
+    ) -> HookSpec:
+        """Add a sticky hook entry to this mutable recipe.
+
+        Parameters
+        ----------
+        site_target:
+            Portable target spec for the hook site.
+        hook:
+            Hook callable or helper spec.
+        helper:
+            Optional helper spec when ``hook`` came from a helper.
+        metadata:
+            Optional per-entry metadata.
+        prepend:
+            Whether to insert the hook before existing sticky hooks.
+
+        Returns
+        -------
+        HookSpec
+            The added sticky hook spec.
+        """
+
+        hook_spec = HookSpec(
+            site_target=site_target,
+            hook=hook,
+            helper=helper,
+            metadata=metadata or {},
+        )
+        if prepend:
+            self.hook_specs.insert(0, hook_spec)
+        else:
+            self.hook_specs.append(hook_spec)
+        return hook_spec
+
+    def remove_hook(
+        self,
+        *,
+        site_target: TargetSpec | None = None,
+        handle: str | None = None,
+    ) -> int:
+        """Remove sticky hook specs matching a site target or handle.
+
+        Parameters
+        ----------
+        site_target:
+            Optional target spec. When provided without a handle, all sticky
+            hooks for that target are removed.
+        handle:
+            Optional hook handle. Phase 8a does not issue handles, but this
+            path removes a matching stored handle if future code populated one.
+
+        Returns
+        -------
+        int
+            Number of hook specs removed.
+        """
+
+        original_len = len(self.hook_specs)
+        self.hook_specs = [
+            hook_spec
+            for hook_spec in self.hook_specs
+            if not _hook_spec_matches(hook_spec, site_target=site_target, handle=handle)
+        ]
+        return original_len - len(self.hook_specs)
+
+    def clear(self) -> None:
+        """Clear all Phase 8a sticky hook entries.
+
+        Returns
+        -------
+        None
+            This spec is mutated in place.
+        """
+
+        self.hook_specs.clear()
 
     def freeze(self) -> "FrozenInterventionSpec":
         """Return an immutable public view of this intervention spec.
@@ -275,6 +461,8 @@ class InterventionSpec:
             helper=self.helper,
             value=self.value,
             hook=self.hook,
+            target_value_specs=tuple(value_spec.freeze() for value_spec in self.target_value_specs),
+            hook_specs=tuple(hook_spec.freeze() for hook_spec in self.hook_specs),
             records=tuple(self.records),
             metadata=tuple(sorted(self.metadata.items())),
         )
@@ -288,8 +476,40 @@ class FrozenInterventionSpec:
     helper: HelperSpec | None = None
     value: Any | None = None
     hook: Any | None = None
+    target_value_specs: tuple[FrozenTargetValueSpec, ...] = ()
+    hook_specs: tuple[FrozenHookSpec, ...] = ()
     records: tuple[FireRecord, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
+
+
+def _hook_spec_matches(
+    hook_spec: HookSpec,
+    *,
+    site_target: TargetSpec | None,
+    handle: str | None,
+) -> bool:
+    """Return whether a hook spec matches a removal request.
+
+    Parameters
+    ----------
+    hook_spec:
+        Sticky hook spec to inspect.
+    site_target:
+        Optional target spec to match.
+    handle:
+        Optional handle to match.
+
+    Returns
+    -------
+    bool
+        ``True`` when the hook spec should be removed.
+    """
+
+    if handle is not None and hook_spec.handle != handle:
+        return False
+    if site_target is not None and hook_spec.site_target != site_target:
+        return False
+    return handle is not None or site_target is not None
 
 
 class Relationship(str, Enum):
@@ -408,12 +628,15 @@ __all__ = [
     "EdgeUseRecord",
     "FireRecord",
     "ForkFieldPolicy",
+    "FrozenHookSpec",
     "FrozenInterventionSpec",
     "FrozenTargetSpec",
+    "FrozenTargetValueSpec",
     "FunctionRegistryKey",
     "GraphShapeHash",
     "HFKey",
     "HelperSpec",
+    "HookSpec",
     "InterventionSpec",
     "LAYER_PASS_LOG_FORK_POLICY",
     "LiteralTensor",
@@ -424,6 +647,7 @@ __all__ = [
     "ParentRef",
     "Relationship",
     "TargetSpec",
+    "TargetValueSpec",
     "TensorSliceSpec",
     "TupleIndex",
     "Unsupported",

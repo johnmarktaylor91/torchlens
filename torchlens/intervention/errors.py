@@ -66,6 +66,10 @@ class EngineDispatchError(TorchLensInterventionError):
     """Raised when future intervention engine dispatch arguments are invalid."""
 
 
+class SpecMutationError(TorchLensInterventionError):
+    """Raised when an intervention spec mutator cannot apply a requested change."""
+
+
 class SiteResolutionError(TorchLensInterventionError):
     """Raised when future selector resolution cannot identify requested sites."""
 
@@ -115,6 +119,7 @@ __all__ = [
     "ReplayPreconditionError",
     "SiteAmbiguityError",
     "SiteResolutionError",
+    "SpecMutationError",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
     "TorchLensInterventionError",

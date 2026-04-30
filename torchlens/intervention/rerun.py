@@ -101,6 +101,7 @@ def rerun(
     }
     log.operation_history.append(history_record)
     log._has_direct_writes = False
+    log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
     return log
 
 

@@ -18,7 +18,12 @@ from .errors import (
     ControlFlowDivergenceWarning,
     ReplayPreconditionError,
 )
-from .hooks import NormalizedHookEntry, make_hook_context, normalize_hook_plan
+from .hooks import (
+    NormalizedHookEntry,
+    make_hook_context,
+    normalize_hook_plan,
+    normalize_hooks_from_spec,
+)
 from .runtime import _execute_hook
 from .types import (
     CapturedArgTemplate,
@@ -63,7 +68,7 @@ def replay(
     """
 
     _preflight_log(log)
-    hook_entries = _normalize_replay_hooks(hooks)
+    hook_entries = _normalize_replay_hooks(log, hooks)
     origins = _origin_sites_for_hooks(log, hook_entries, strict=strict)
     if not origins:
         raise ReplayPreconditionError("replay requires at least one hook target in Phase 6")
@@ -234,6 +239,7 @@ def _run_replay(
             _check_edge_expectations(member, strict=strict)
 
     log.run_state = RunState.REPLAY_PROPAGATED
+    log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
     log.last_run_ctx = {
         **_ensure_replay_run_ctx(log),
         "engine": "replay",
@@ -578,11 +584,16 @@ def _first_unsupported(component: Any) -> Unsupported | None:
     return None
 
 
-def _normalize_replay_hooks(hooks: dict[Any, Any] | None) -> list[NormalizedHookEntry]:
+def _normalize_replay_hooks(
+    log: "ModelLog",
+    hooks: dict[Any, Any] | None,
+) -> list[NormalizedHookEntry]:
     """Normalize explicit replay hook input.
 
     Parameters
     ----------
+    log:
+        Model log whose spec is used when explicit hooks are omitted.
     hooks:
         Mapping from selector-like target to hook callable.
 
@@ -593,7 +604,7 @@ def _normalize_replay_hooks(hooks: dict[Any, Any] | None) -> list[NormalizedHook
     """
 
     if hooks is None:
-        return []
+        return normalize_hooks_from_spec(getattr(log, "_intervention_spec", None))
     return normalize_hook_plan(hooks)
 
 
