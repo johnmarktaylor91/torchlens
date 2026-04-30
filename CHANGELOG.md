@@ -1,6 +1,444 @@
 # CHANGELOG
 
 
+## v2.16.0 (2026-04-30)
+
+### Bug Fixes
+
+- **validation**: Tier-3 model failures
+  ([`f19fb5c`](https://github.com/johnmarktaylor91/torchlens/commit/f19fb5c11f773b4f09265fc6aa5f18a43f985e82))
+
+Six pre-existing tier-3 real-world model tests failed on main because validation required exact or
+  too-tight replay equality for numerically equivalent FP32 outputs in deep convolutional stacks.
+  Add local validation-only tolerances for direct model outputs and late numeric replay ops without
+  changing global tensor equality constants.
+
+Two save_new_activations _fails tests were stale: AlexNet and ResNet18 now refresh activations
+  correctly. Update them to compare fast refresh activations against a fresh exhaustive log instead
+  of expecting a graph-change error.
+
+Verified: ruff check . --fix; mypy torchlens/; pytest tests/ -m smoke -x --tb=short; pytest tests/
+  -m 'not slow' -x --tb=short; targeted 8 tier-3 tests pass.
+
+### Chores
+
+- **intervention**: Phase 16 cleanup + bench + ship
+  ([`dd94370`](https://github.com/johnmarktaylor91/torchlens/commit/dd94370c0742d7270c28a7904342cf00053b0cb1))
+
+- Internalize/remove obsolete TraceBundle public code; multi_trace kept only as internal helpers
+  used by Bundle. - Remove _is_fork remnants, dead compatibility helpers, unused imports, stale
+  tests for deleted public APIs. - Audit __all__ in torchlens/__init__.py. - Add
+  test_field_lifecycle_matrix programmatic audit (every field has portable policy + ForkFieldPolicy
+  + default-fill). - Add test_not_mvp_audit grep audit (deferred features absent from public). -
+  Performance benchmarks: baseline 0.000057s, non-ready capture 0.032300s, ready capture 0.007983s,
+  replay 0.001117s, rerun 0.012192s, Bundle.node 0.000300s in benchmarks/intervention_overhead.py.
+
+Final phase of v5.2 intervention API implementation. 21 phases complete. -2052 LOC net + 126
+  intervention tests.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 4.5 capture-time runtime smoke
+  ([`04600da`](https://github.com/johnmarktaylor91/torchlens/commit/04600daa81564f5c65a31a19fe51221a222a3a95))
+
+Regression checkpoint after Phase 4a/4b/4c. Adds tests for: non-ready capture parity,
+  intervention_ready=True no-hook output equality with default, exception-path runtime state cleanup
+  (active_model_log, active_hook_plan, hook_reentrancy_depth all reset), subsequent capture succeeds
+  after hook-raised exception.
+
+No production behavior change.
+
+Branch: codex/intervention-api.
+
+- **todos**: Log multi-trace V2 follow-ons and record sprint completion
+  ([`dda5a9e`](https://github.com/johnmarktaylor91/torchlens/commit/dda5a9ef47da9bdb9e6c79e30fad2c99a00d2100))
+
+Documents three additional V2 follow-ons surfaced during the multi-trace sprint review: -
+  Module-type second line in bundle cluster labels - Public TraceBundle.supergraph accessor -
+  Per-node / per-edge styling primitives in _render_utils.py
+
+Plus a Completed-section entry for the multi-trace sprint covering PRs #170 (Phase 1) and #172
+  (Phase 2 polish), the closed-then-superseded PR #171, and the codex quota -> Claude agent pivot.
+
+### Documentation
+
+- **intervention**: Phase 15 worked examples + cohort migration + API docs
+  ([`cdfe68e`](https://github.com/johnmarktaylor91/torchlens/commit/cdfe68e1419744d60461aa1c05becf6480513bc1))
+
+- 16 worked examples in examples/intervention/ covering first-5-minutes, activation patching, sticky
+  hooks, set vs attach_hooks, chunked batching, Bundle comparison, live capture, submodule
+  discovery, post-hoc replay, SAE attachment, linear probe, paired-prompt 3+, per-position steering,
+  publishing for reproducibility, top-level tl.do. - tests/test_examples.py harness imports/runs
+  each example. - 10 cohort migration tables (TransformerLens, NNsight, Pyvene, baukit, Penzai,
+  Captum, SAELens, RepE, Inseq, AutoCircuit). - Visibility class docs explain fused attention / SDPA
+  limitations. - Replay vs rerun, mutate-in-place + fork-first, direct-write dirty, save levels,
+  .tlspec/, append constraints, Tier-1 backward hook contract explainers added. - API docs for
+  selectors, helpers, Bundle. - Docstring polish across torchlens/intervention/*.py and method
+  docstrings on ModelLog. README adds interventions section. - No TraceBundle promoted as public;
+  mentioned only in migration notes.
+
+Branch: codex/intervention-api.
+
+### Features
+
+- **intervention**: Phase 0 codebase prep
+  ([`6f3283a`](https://github.com/johnmarktaylor91/torchlens/commit/6f3283a124f5300460a2bc0284e80c346fa4e2af))
+
+Add torchlens/intervention/ subpackage with stub placeholders for the v5.2 intervention API. All
+  stubs raise NotImplementedError; this phase establishes import surface only. Branch:
+  codex/intervention-api.
+
+- **intervention**: Phase 1 data model — types and field additions
+  ([`d3609f4`](https://github.com/johnmarktaylor91/torchlens/commit/d3609f4bbff486a89387537d937ab7b0b3703066))
+
+Add intervention data model: RunState enum, TargetSpec/FrozenTargetSpec,
+  InterventionSpec/FrozenInterventionSpec, FireRecord, CapturedArgTemplate, OutputPathComponent,
+  HelperSpec, FunctionRegistryKey, EdgeUseRecord, Relationship, ForkFieldPolicy with per-class
+  policy tables.
+
+Add ModelLog fields: name, intervention_ready, capture_full_args, parent_run, _intervention_spec,
+  operation_history, last_run_ctx, _has_direct_writes, _warned_direct_write,
+  _warned_mutate_in_place, _spec_revision, _activation_recipe_revision, _append_sequence_id,
+  run_state, source_model_id, source_model_class, weight_fingerprint_*, input_id_at_capture,
+  input_shape_hash, graph_shape_hash, is_appended, relationship_evidence.
+
+Add LayerPassLog fields: func_call_id, output_path, intervention_log, container_spec,
+  captured_arg_template, captured_kwarg_template, edge_uses, _construction_done. Add direct-write
+  guard via __setattr__ and _internal_set helper.
+
+Bump IO_FORMAT_VERSION to 2. Default-fill entries in both __setstate__ for old-format logs.
+  Per-instance defaults for new container fields.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 10 .tlspec save/load + safetensors + registry keys
+  ([`e0f54d3`](https://github.com/johnmarktaylor91/torchlens/commit/e0f54d3baa27c617afda21e9493f937b07eb3af1))
+
+Implement intervention recipe persistence with three save levels (audit / executable_with_callables
+  / portable), .tlspec/ directory format, helper serialization, callable registry keys, target
+  manifest, compatibility checks, fail-closed executable replay.
+
+- .tlspec/ directory: spec.json + manifest.json + README.md + tensors/*.safetensors. format_version
+  and helper_registry_version distinct from IO_FORMAT_VERSION. Atomic tmp.<uuid>/ -> fsync -> rename
+  protocol. - HelperSpec portability tags: builtin (portable), import_ref (executable), opaque_audit
+  (audit-only). Save-level enforcement raises OpaqueCallableInExecutableSaveError. -
+  FunctionRegistryKey: namespace (torch / torch.Tensor / torch.nn.functional / operator / custom),
+  qualname, dispatch_kind (function/method/dunder/namespace_alias), version. Resolved via registry
+  strategy, not getattr(torch, name). - Target manifest: original selector + resolved labels +
+  graph_shape_hash + module_address_normalized. Re-resolution at load. - tl.check_spec_compat(spec,
+  new_log) returns SpecCompat dataclass (EXACT / COMPATIBLE_WITH_CONFIRMATION / FAIL); raises
+  GraphShapeMismatchError for fatal executable mismatch. - log.save_intervention(path, level=...).
+  tl.load(path) detects .tlspec/ vs ordinary logs. tl.load_intervention_spec(path). - Direct-write
+  policy: AUDIT warns; EXECUTABLE/PORTABLE raise DirectWriteInExecutableSaveError unless
+  allow_direct_writes=True. - validation.core._raise_if_portable_bundle_log narrowed.
+
+Errors: OpaqueCallableInExecutableSaveError, DirectWriteInExecutableSaveError,
+  GraphShapeMismatchError.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 11 visualization wiring
+  ([`8a35e90`](https://github.com/johnmarktaylor91/torchlens/commit/8a35e909830a0ba7eb37227e52a6b251a54a454d))
+
+Add intervention visualization to graph rendering: - vis_intervention_mode="node_mark" (default):
+  magenta border on intervention sites; subtler magenta on cone-of-effect members when
+  vis_show_cone=True (default). - vis_intervention_mode="as_node": hook nodes inserted between
+  producer and downstream consumers. - Cone extracted via Phase 6 cone_of_effect helper (no
+  duplication). - Reuses existing node_spec_fn callback infrastructure. - ModelLog.show() and
+  Bundle.show() public methods. - Dagua bridge exposes is_intervention_site / is_in_cone /
+  intervention_log_summary fields. - Direct-write dirty flag surfaced in summary panel where
+  available. - Re-enabled 21 previously-skipped multi_trace_visualization tests where intent maps to
+  new Bundle API.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 12 append chunked batching
+  ([`7aa71af`](https://github.com/johnmarktaylor91/torchlens/commit/7aa71af2a84c7296edbb698c6188eaedec3c7016))
+
+Implement rerun(model, x_new, append=True): concat activations along batch dim while preserving
+  per-call scalar state from last chunk.
+
+Preconditions: _recipe_is_clean (Phase 8a), same model evidence, same graph_shape_hash, same
+  topology + site labels, shape match except batch dim, dtype/device match, helper batch
+  independence.
+
+- Concatenate activation, transformed_activation; reject gradient concatenation by default
+  (helper-specific opt-in). - is_appended=True; _append_sequence_id++; run_state=APPENDED;
+  operation_history records chunk size + new total. - HelperSpec.batch_independent flag gates
+  append; default-False for unknown helpers. - BatchNormTrainModeWarning when model.training and any
+  nn.BatchNorm*. - Shape-changing hooks reject unless helper.compatible_with_append. - Save/load
+  (.tlspec + ordinary) preserves is_appended + _append_sequence_id + appended history.
+
+Errors: AppendMismatchError, AppendBatchDependenceError, BatchNormTrainModeWarning.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 13 discoverability
+  ([`d88ec0a`](https://github.com/johnmarktaylor91/torchlens/commit/d88ec0a0c2b99bc229b9a7bae273e81c70a5fb16))
+
+- ModelLog.summary(): comprehensive multi-section status (capture metadata, recipe, recent ops,
+  lineage, run_state, dirty flag, append status, available next ops, hash, relationship evidence,
+  portability, stale spec, RNG notes). - ModelLog.last_run_records(): frozen tuple snapshot of
+  FireRecords from most recent replay/rerun/live capture. - SiteTable.__repr__ finalized; find_sites
+  notebook-friendly. - Process-wide weak log registry; tl.list_logs() returns tuple snapshot.
+  _state.py imports no ModelLog (weakref only). - Auto-naming in log_forward_pass: lowercase short
+  class name with HuggingFace suffix stripping + monotonic per-process counter; respects explicit
+  name=. tl.reset_naming_counter(class_name=None). - Bundle default names derived from log.name when
+  omitted; counter suffix on collisions. - ModelLog.__repr__ includes name without losing model
+  identity. - Loaded logs preserve names without incrementing counters.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 14 error catalog + cross-cutting tests
+  ([`7e7be48`](https://github.com/johnmarktaylor91/torchlens/commit/7e7be483dd3b8c2b4151962b3d22d63fa4c7291a))
+
+- Centralize v5.2 error catalog: 27 errors + 5 warnings each with severity tag (recoverable /
+  informational / fatal) and named-fields contract. Reconcile aliases to match v5.2 section 23. -
+  Add missing errors: RecursiveTracingError, AxisAmbiguityError. - Catalog raise-loop test verifies
+  every named error/warning is importable, has severity, and is exercised somewhere in the test
+  matrix. - Cross-cutting axes added: per-verb (A), engine equivalence (B), concurrency/GC (I),
+  error-message quality (K), degradation (L). - Slow tests marked. Smoke subset stays fast.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 2 selectors, resolver, SiteTable
+  ([`bf56a41`](https://github.com/johnmarktaylor91/torchlens/commit/bf56a417ab549f62cf5e5ad0dd09d0da3de024c2))
+
+Implement typed site grammar: tl.label, tl.func, tl.module, tl.contains, tl.where, tl.in_module. Add
+  resolve_sites with default max_fanout=8 and strict mode rejecting bare strings. Add SiteTable with
+  __len__/__iter__/ __getitem__/where/first/labels/to_dataframe. Wire ModelLog.find_sites and
+  ModelLog.resolve_sites; ModelLog.__getitem__ branches on selector objects before string cascade.
+  Add MultiMatchWarning, SiteAmbiguityError, SiteResolutionError. Existing string lookup behavior
+  preserved.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 3 hooks, helpers, execution contract
+  ([`1062856`](https://github.com/johnmarktaylor91/torchlens/commit/1062856403f5533b9153e46fb4f41e35190245fe))
+
+Implement hook signature contract, HookContext (MappingProxyType view over layer metadata, never
+  live LayerPassLog), normalizer dispatch for plain callable / HelperSpec / dict / list-of-tuples /
+  single-site shapes, return-value handling with default raise on None, dtype/ device/shape
+  validation with force_shape_change escape hatch.
+
+Add 14 helpers: zero_ablate, mean_ablate, resample_ablate, steer, scale, clamp, noise, project_onto,
+  project_off, swap_with, splice_module (forward) + bwd_hook, gradient_zero, gradient_scale
+  (backward, live/rerun-only). Each carries a HelperSpec with portability tag. RNG policy: seeded
+  helpers get hook-local Generator, unseeded stochastic helpers enqueue a non-determinism note.
+
+Add SpliceModuleDtypeError, SpliceModuleDeviceError, HookSignatureError, HookValueError,
+  HookSiteCoverageError. Hook execution wraps user callable in pause_logging(). Add re-entrancy
+  guard scaffold.
+
+Phase 3 does NOT wire hooks into capture/replay/rerun (Phase 4a-4c).
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 4a capture flag plumbing + runtime context + func_call_id
+  ([`16a964d`](https://github.com/johnmarktaylor91/torchlens/commit/16a964d0a4cdc89ca659fa1b711f634bb2dc4a95))
+
+Add intervention_ready and hooks parameters to log_forward_pass (hooks inert until Phase 4c). Reject
+  intervention_ready=True combined with layers_to_save=<list> via InterventionReadyConflictError.
+  Auto-enable replay-template capture flags when intervention_ready=True (templates land in Phase
+  4b).
+
+Add active intervention runtime context to _state.py with TYPE_CHECKING imports for intervention
+  types. Tighten active_logging() guard to require _logging_enabled is False AND _active_model_log
+  is None.
+
+Add func_call_id session counter; allocate before func() call in torch wrapper around
+  decoration/torch_funcs.py:412; propagate through log_function_output_tensors; ensure multi-output
+  calls share id.
+
+Initialize relationship evidence at capture start: source_model_id, source_model_class, weight
+  fingerprint, input id, input shape hash. Capture pre-forward RNG before active_logging() per
+  existing invariant.
+
+Phase 4a does NOT execute hooks, build replay templates, or change saved activations.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 4b replay templates + edge provenance + output_path
+  ([`29b272f`](https://github.com/johnmarktaylor91/torchlens/commit/29b272f2552fe2b42b7b5a93e379c693ca3ba185))
+
+Add path-preserving output traversal helper. Replace _collect_output_tensors BFS and ensure_iterable
+  in intervention-ready captures with path-aware walker that preserves dict keys,
+  namedtuple/dataclass fields, HuggingFace ModelOutput keys, tuple/list indices, and attr components
+  via OutputPathComponent. Single tensor outputs get output_path=().
+
+Add ContainerSpec on LayerPassLog for reconstructing multi-output containers during replay. Build
+  CapturedArgTemplate at decoration time, reusing FUNC_ARG_SPECS / _locate_parent_tensors_in_args /
+  _cache_dynamic_spec. Classify template components as parent_ref / literal_tensor / literal_value /
+  unsupported. Templates are the single replay source of truth in intervention_ready mode.
+
+Wire edge provenance: EdgeUseRecord per parent-child tensor use including arg_kind, arg_path
+  (mirroring parent_layer_arg_locs schema), parent/child raw labels, view/copy status. Preserve
+  existing parent_layer_arg_locs and children_tensor_versions.
+
+Outputs from one function call share func_call_id and have unique output_path per output. Template +
+  path capture gated by intervention_ready=True or capture_full_args=True; non-ready captures pay no
+  overhead.
+
+Phase 4b does NOT execute hooks (Phase 4c).
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 4c live hook execution + LiveModeLabelError
+  ([`2e773bc`](https://github.com/johnmarktaylor91/torchlens/commit/2e773bc07c65b2fa4b74f960843391c1cc5f8e98))
+
+Wire live post-hook execution in decoration/torch_funcs.py: hooks run after func() returns, after
+  in-place safe-copy, and before output collection so returned and saved activations do not diverge.
+  Reuse Phase 3 _execute_hook (which wraps in pause_logging) and shared metadata setter to update
+  shape/dtype/device/memory/transformed_ activation/has_saved_activations on tensor replacement (no
+  direct .activation assignment).
+
+Resolve hook plan against capture-time site identity (raw label, function name, module address,
+  predicate). Raise LiveModeLabelError with copy-paste suggestion when a selector requires a
+  finalized postprocess label (e.g., 'relu_4_27:2').
+
+Append FireRecord to LayerPassLog.intervention_log per fire. Set ModelLog.run_state =
+  RunState.LIVE_CAPTURED when hooks are non-empty; otherwise unchanged from Phase 4a.
+
+MVP scope: forward post-hooks only. Backward hooks and pre-hooks deferred to v1. Replay/rerun
+  behavior unchanged. Pre-forward RNG capture ordering preserved per Phase 4a invariant.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 5 postprocess pipeline updates
+  ([`0a229b0`](https://github.com/johnmarktaylor91/torchlens/commit/0a229b0a08255f4e766fdf27a6fc8dd3cdc985dc))
+
+Teach 18-step postprocess pipeline to preserve intervention metadata: - Step 3 _remove_orphan_nodes
+  preserves func_call_id groups atomically by raw labels. - Step 8 loop detection does NOT
+  regenerate func_call_id (per-wrapper-call allocation already unique). - Step 11
+  _replace_layer_names_for_layer_entry rewrites labels in edge_uses, template leaves (parent_ref),
+  intervention_log, and operation_history. - Step 12 retention predicate keeps replay-ready call
+  groups atomic (metadata-only siblings retained when activation values pruned). - Step 12
+  _batch_remove_log_entries scrubs new label-bearing fields. - Step 17.5 computes graph_shape_hash
+  over op sequence + normalized function names + parent edges + normalized module addresses +
+  output_path/cardinality (excludes activation values and labels that differ across loop expansion).
+  Stored on ModelLog. - Step 18 _set_pass_finished flips access behavior only after intervention
+  metadata is finalized. - Fast path postprocess_fast preserves replay metadata or marks log not
+  intervention_ready; never builds module logs. - module_address_normalized strips pass qualifiers
+  and rolled-loop iteration indices.
+
+Add Invariant S (func_call_id consistency) to validation/invariants.py dispatch.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 6 replay engine
+  ([`5d21148`](https://github.com/johnmarktaylor91/torchlens/commit/5d2114855c1731656b1921fd92b17aeb3cbd338b))
+
+Implement saved-DAG replay engine that mutates ModelLog by recomputing the cone of effect from
+  changed sites without calling model.forward().
+
+- cone_of_effect(origins): BFS forward from origins, follows children_tensor_versions for in-place
+  ops, includes all func_call_id group siblings, tracks visited to avoid cycles, preserves topo
+  order. - Forward-from-origin arg reconstruction from CapturedArgTemplate; resolves ParentRef via
+  overlay or current activation; raises ReplayPreconditionError on Unsupported. -
+  _slice_output_by_path supports tuple/list/dict/namedtuple/dataclass/ HF ModelOutput per Phase 4b
+  container set. - Multi-output func_call_id groups execute once; outputs sliced by output_path.
+  In-place op handling honors children_tensor_versions. - RNG/autocast restored narrowly via reused
+  validation primitive wrapped in strict replay mode (re-raises exceptions). - Hook composition:
+  pause_logging() wrap, FIFO order, FireRecord per fire with engine="replay". - Shared metadata
+  setter updates shape/dtype/memory/transformed/ has_saved_activations on activation replacement. -
+  ModelLog.replay(strict=False, hooks=None) and ModelLog.replay_from(site, strict=False); set
+  run_state=REPLAY_PROPAGATED and last_run_ctx. - ReplayPreconditionError,
+  ControlFlowDivergenceWarning, ControlFlowDivergenceError.
+
+Replay does NOT call model forward (rerun is Phase 7) and does NOT rebuild module logs unless
+  metadata shape changes require it.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 7 rerun engine + atomic state swap
+  ([`076ce8e`](https://github.com/johnmarktaylor91/torchlens/commit/076ce8ef8dc0a472874d8309b894ed348240b627))
+
+Implement full-forward rerun through decorated wrappers with active InterventionSpec installed in
+  runtime context. Build fresh ModelLog off to the side; validate; atomically swap state via
+  ModelLog.replace_run_state_from(new_log).
+
+- rerun(log, model, x, append=False): preflight (reject FSDP/compile/scripted via existing
+  _reject_opaque_wrappers), install active spec, fresh capture, validate, atomic swap,
+  run_state=RERUN_PROPAGATED, last_run_ctx populated, one operation_history record appended. -
+  replace_run_state_from(new_log): preserve name, parent_run, _intervention_spec, warning flags,
+  relationship evidence; replace graph/log containers, layer_list, lookup_keys, layer_logs,
+  accessors, output metadata, graph_shape_hash, shape fields. Single __dict__.update for atomic
+  swap; concurrent reads unsupported. - Counter alignment: graph_shape_hash divergence triggers
+  ControlFlowDivergenceWarning (non-strict) or ControlFlowDivergenceError (strict). - append=True
+  raises NotImplementedError until Phase 12. - RNG capture follows log_forward_pass invariant
+  (pre-active_logging).
+
+Failure leaves original ModelLog unchanged including graph_shape_hash, operation_history, current
+  activations, and warning flags.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 8a mutator methods + spec revision
+  ([`fa480a2`](https://github.com/johnmarktaylor91/torchlens/commit/fa480a274ec2beddade8e8d8f3eca1e4bc27a78c))
+
+Add ModelLog mutator methods: set(site, value|fn), attach_hooks(...), detach_hooks(site, handle),
+  clear_hooks(), do(...) signature, fork() stub. Each mutator increments _spec_revision, invalidates
+  cached FrozenInterventionSpec, sets run_state=SPEC_STALE, returns self.
+
+set(callable) tags spec with created_by="set_callable_one_shot". attach_hooks is sticky; persists
+  until detach/clear. detach_hooks accepts site+handle (handle support is MVP-deferred to
+  site-only).
+
+Mutators do NOT propagate; replay/rerun/live capture advance _activation_recipe_revision on success.
+
+_recipe_is_clean() helper compares revisions for Phase 12 append precondition. do() and fork()
+  shells raise NotImplementedError pointing to Phase 8b.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 8b do dispatch + warnings + fork + op history
+  ([`0f7acb1`](https://github.com/johnmarktaylor91/torchlens/commit/0f7acb100624a07de25d5abb22ac6ee46e4a89e2))
+
+- _record_operation appends per-mutator records to operation_history with op, spec_revision,
+  timestamp, op-specific payload. - MutateInPlaceWarning fires once on first root-log mutator
+  (parent_run None). Suppression via confirm_mutation=True kwarg, session-level
+  tl.suppress_mutate_warnings(True), or context manager. Forks (parent_run not None) NEVER emit. -
+  DirectActivationWriteWarning fires once when LayerPassLog.__setattr__ guard detects bypass; sets
+  _has_direct_writes=True and run_state=DIRECT_WRITE_DIRTY. Replay/rerun emit one-time warning when
+  _has_direct_writes is True. - do() auto-dispatch: tensor/hooks without model -> mutate+replay;
+  with model -> mutate+rerun; ambiguous (only x or only model) -> EngineDispatchError. Fingerprint
+  mismatch -> ModelMismatchError. - tl.do(log, ...) top-level alias (replaces Phase 0 placeholder).
+  - fork(name=None) per ForkFieldPolicy table: activations FORK_SHARE, mutable containers FORK_COPY,
+  weak refs FORK_RECONSTRUCT, relationship evidence FORK_COPY, source model refs FORK_SHARE. Sets
+  parent_run weakref; copies _intervention_spec mutable; fork's revisions sync with parent at fork
+  time. _is_fork is NOT used.
+
+EngineDispatchError, ModelMismatchError, MutateInPlaceWarning, DirectActivationWriteWarning added.
+
+Branch: codex/intervention-api.
+
+- **intervention**: Phase 9 single Bundle type
+  ([`d823caa`](https://github.com/johnmarktaylor91/torchlens/commit/d823caa4de1afc97e908d5ec82f94611f1fd4b5c))
+
+Replace TraceBundle with single Bundle type. Flat container of ModelLogs with lazy supergraph
+  construction, relationship-gated operations, NodeView access, and intervention verbs over members.
+
+- Bundle(...) accepts dict, list+names, list-of-tuples, list+auto-derive. - Unique names required.
+  Optional baseline (auto-detected when unambiguous; BaselineUndeterminedError otherwise). -
+  bundle[str] returns ModelLog (was NodeView). - bundle.node(site) returns NodeView with
+  .activations as dict keyed by member name (was list). - Lazy supergraph build on first node()
+  call. - Relationship taxonomy: SAME_OBJECT / SAME_MODEL_OBJECT_AT_CAPTURE /
+  SHARED_GRAPH_{SAME,DIFFERENT}_INPUT / SHARED_ARCHITECTURE / SAME_PARAM_SHAPES / DIFF_MODEL /
+  UNKNOWN. Permissive construction; lazy-fail at op time per permission matrix. - Bundle-level: do,
+  fork, attach_hooks, replay, rerun, metric, joint_metric, compare_at, most_changed, diff. cluster()
+  raises NotImplementedError. - set_capacity protects baseline from eviction. - bundle.help() lists
+  per-member readiness. - tl.bundle now constructs Bundle. TraceBundle removed from public exports;
+  multi_trace.* kept as internal helpers.
+
+Errors: BundleMemberError, BundleRelationshipError, BaselineUndeterminedError, NoParentError,
+  DeadParentError.
+
+Existing multi-trace tests rewritten to new API where intent applies; otherwise marked xfail/skip
+  with Phase 9 redesign note.
+
+Branch: codex/intervention-api.
+
+
 ## v2.15.0 (2026-04-27)
 
 ### Features
