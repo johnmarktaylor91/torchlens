@@ -1,17 +1,15 @@
 """Internal Graphviz rendering helpers shared across rendering paths.
 
-Private module: not part of the public API. Provides ModelLog/Bundle-agnostic
-primitives that the single-trace ``rendering.py`` and the multi-trace
-``multi_trace/visualization.py`` both rely on, so we have one canonical
-implementation of file-format dispatch, direction translation, module
-cluster styling, and HTML label escaping instead of two divergent copies.
+Private module: not part of the public API. Provides rendering primitives
+shared by single-trace graph rendering and any internal bundle renderers, so
+we have one canonical implementation of file-format dispatch, direction
+translation, module cluster styling, and HTML label escaping.
 
 Keep this module narrow on purpose -- only primitives that take no
 ModelLog/Bundle context and can be reasoned about as pure utilities.
 The orchestration that knows WHICH nodes / edges / module paths to use
-lives in the per-input-shape callers (``rendering.render_graph`` for
-ModelLog, ``multi_trace/visualization.show_bundle_graph`` for
-TraceBundle).
+lives in the per-input-shape callers, such as ``rendering.render_graph`` for
+ModelLog.
 """
 
 from __future__ import annotations

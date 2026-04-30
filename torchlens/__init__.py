@@ -53,10 +53,6 @@ from .visualization import (
     render_model_log_with_dagua,
 )
 
-# ---- Public API: multi-trace analysis ------------------------------------
-
-from .multi_trace import NodeView, show_bundle_graph
-
 # ---- Public API: intervention placeholders --------------------------------
 
 # Intervention stubs intentionally import only the intervention subpackage; do
@@ -158,7 +154,6 @@ __all__ = [
     "ModuleLog",
     "ModulePassLog",
     "NodeSpec",
-    "NodeView",
     "ParamLog",
     "RunState",
     "SaveLevel",
@@ -212,7 +207,6 @@ __all__ = [
     "save_intervention",
     "scale",
     "show_backward_graph",
-    "show_bundle_graph",
     "show_model_graph",
     "splice_module",
     "steer",
