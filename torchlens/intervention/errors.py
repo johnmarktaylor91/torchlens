@@ -26,6 +26,22 @@ class TorchLensInterventionError(RuntimeError):
     """Base class for future TorchLens intervention errors."""
 
 
+class DirectActivationWriteWarning(UserWarning):
+    """Warning for direct LayerPassLog activation writes."""
+
+
+class MutateInPlaceWarning(UserWarning):
+    """Warning for mutating a root ModelLog in place."""
+
+
+class DirectWriteIgnoredWarning(UserWarning):
+    """Warning for propagation engines that ignore direct activation writes."""
+
+
+class InterventionAuditWarning(UserWarning):
+    """Warning for non-canonical intervention state in audit contexts."""
+
+
 class ReplayPreconditionError(TorchLensInterventionError):
     """Raised when replay cannot satisfy its future execution preconditions."""
 
@@ -39,7 +55,11 @@ class SiteResolutionError(TorchLensInterventionError):
 
 
 __all__ = [
+    "DirectActivationWriteWarning",
+    "DirectWriteIgnoredWarning",
     "EngineDispatchError",
+    "InterventionAuditWarning",
+    "MutateInPlaceWarning",
     "ReplayPreconditionError",
     "SiteResolutionError",
     "TorchLensInterventionError",

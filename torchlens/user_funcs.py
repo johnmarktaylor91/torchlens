@@ -359,6 +359,7 @@ def log_forward_pass(
     gradients_to_save: Optional[Union[str, List]] | MissingType = MISSING,
     save_source_context: bool = False,
     save_rng_states: bool = False,
+    vis_opt: Any | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
     vis_nesting_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
@@ -464,6 +465,7 @@ def log_forward_pass(
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
+        vis_opt: Deprecated alias for ``vis_mode``.
         vis_mode: Deprecated alias for ``visualization.mode``.
         vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
         vis_outpath: Deprecated alias for ``visualization.output_path``.
@@ -556,6 +558,8 @@ def log_forward_pass(
         new_value=detect_recurrent_patterns,
         default=True,
     )
+    if vis_opt is not MISSING:
+        vis_mode = vis_opt
     visualization_options = merge_visualization_options(
         function_default_mode="none",
         visualization=visualization,

@@ -1,4 +1,4 @@
-"""Run-state ownership for future TorchLens intervention execution.
+"""Run-state ownership for TorchLens intervention execution.
 
 This module intentionally stays outside ``torchlens.intervention`` so
 ``torchlens._state`` can import ``RunState`` later without creating a cycle.
@@ -8,12 +8,15 @@ from enum import Enum
 
 
 class RunState(Enum):
-    """Future user-visible operational state machine for intervention runs."""
+    """User-visible operational state machine for intervention runs."""
 
-    IDLE = "idle"
-    CAPTURING = "capturing"
-    REPLAYING = "replaying"
-    RERUNNING = "rerunning"
+    PRISTINE = "pristine"
+    SPEC_STALE = "spec_stale"
+    REPLAY_PROPAGATED = "replay_propagated"
+    RERUN_PROPAGATED = "rerun_propagated"
+    LIVE_CAPTURED = "live_captured"
+    DIRECT_WRITE_DIRTY = "direct_write_dirty"
+    APPENDED = "appended"
 
 
 __all__ = ["RunState"]

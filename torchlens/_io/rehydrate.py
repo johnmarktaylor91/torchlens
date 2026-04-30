@@ -217,11 +217,11 @@ def _rehydrate_object(
                         kind=field_name,
                     )
                     if tensor_ref is not None:
-                        setattr(value, ref_field_name, tensor_ref)
+                        _assign_rehydrated_field(value, ref_field_name, tensor_ref)
                     if lazy:
-                        setattr(value, field_name, None)
+                        _assign_rehydrated_field(value, field_name, None)
                     else:
-                        setattr(
+                        _assign_rehydrated_field(
                             value,
                             field_name,
                             _materialize_blob_ref(
@@ -232,7 +232,7 @@ def _rehydrate_object(
                             ),
                         )
                 elif not lazy or field_name in {"transformed_activation", "transformed_gradient"}:
-                    setattr(
+                    _assign_rehydrated_field(
                         value,
                         field_name,
                         _materialize_blob_ref(
@@ -242,7 +242,7 @@ def _rehydrate_object(
         elif policy == FieldPolicy.BLOB_RECURSIVE:
             if lazy and not materialize_nested:
                 continue
-            setattr(
+            _assign_rehydrated_field(
                 value,
                 field_name,
                 _materialize_recursive_blob_refs(
@@ -253,7 +253,7 @@ def _rehydrate_object(
                 ),
             )
         elif policy == FieldPolicy.KEEP:
-            setattr(
+            _assign_rehydrated_field(
                 value,
                 field_name,
                 _rehydrate_object(
@@ -267,6 +267,26 @@ def _rehydrate_object(
                 ),
             )
     return value
+
+
+def _assign_rehydrated_field(value: Any, field_name: str, field_value: Any) -> None:
+    """Assign a rehydrated field without treating it as a user direct write.
+
+    Parameters
+    ----------
+    value:
+        Object being rehydrated.
+    field_name:
+        Field name to write.
+    field_value:
+        Rehydrated field value.
+    """
+
+    internal_set = getattr(value, "_internal_set", None)
+    if callable(internal_set):
+        internal_set(field_name, field_value)
+    else:
+        setattr(value, field_name, field_value)
 
 
 def _materialize_recursive_blob_refs(
@@ -759,7 +779,7 @@ def _rehydrate_nested_object(
             continue
         policy = spec[field_name]
         if policy == FieldPolicy.BLOB_RECURSIVE:
-            setattr(
+            _assign_rehydrated_field(
                 value,
                 field_name,
                 _materialize_recursive_blob_refs(
@@ -770,7 +790,7 @@ def _rehydrate_nested_object(
                 ),
             )
         elif policy == FieldPolicy.KEEP:
-            setattr(
+            _assign_rehydrated_field(
                 value,
                 field_name,
                 _rehydrate_nested_object(

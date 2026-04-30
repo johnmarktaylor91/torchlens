@@ -265,6 +265,7 @@ def _build_graph_relationship_fields(
 
     fields_dict["parent_layers"] = parent_layer_labels
     fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
+    fields_dict["edge_uses"] = []
     fields_dict["root_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
     fields_dict["child_layers"] = []
     fields_dict["has_children"] = False
@@ -427,6 +428,12 @@ def _build_shared_fields_dict(
     fields_dict["layer_type"] = layer_type
     fields_dict["detach_saved_tensor"] = self.detach_saved_tensors
     fields_dict["output_device"] = self.output_device
+    fields_dict["_construction_done"] = False
+    fields_dict["intervention_log"] = []
+    fields_dict["captured_arg_template"] = None
+    fields_dict["captured_kwarg_template"] = None
+    fields_dict["output_path"] = ()
+    fields_dict["container_spec"] = None
 
     # Grad info
     fields_dict["gradient"] = None
@@ -442,6 +449,7 @@ def _build_shared_fields_dict(
 
     # Function call info
     fields_dict["func_applied"] = func
+    fields_dict["func_call_id"] = None
     fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = _get_func_call_stack(
         self.num_context_lines,
@@ -766,18 +774,19 @@ def log_function_output_tensors_fast(
                     ):
                         # children_tensor_versions already has postfunc applied.
                         tensor_to_save = orig_layer_entry.children_tensor_versions[child_layer]
-                        child_output.activation = safe_copy(tensor_to_save)
+                        child_output._internal_set("activation", safe_copy(tensor_to_save))
                     else:
-                        child_output.activation = safe_copy(out)
+                        child_output._internal_set("activation", safe_copy(out))
                         if self.activation_postfunc is not None:
                             # pause_logging prevents activation_postfunc from
                             # triggering decorated torch ops that would be logged.
                             with pause_logging():
-                                child_output.transformed_activation = self.activation_postfunc(
-                                    child_output.activation
+                                child_output._internal_set(
+                                    "transformed_activation",
+                                    self.activation_postfunc(child_output.activation),
                                 )
                             if not getattr(self, "save_raw_activation", True):
-                                child_output.activation = None
+                                child_output._internal_set("activation", None)
                     child_output.has_saved_activations = True
                     if child_output.activation is not None:
                         child_output.tensor_memory = get_tensor_memory_amount(

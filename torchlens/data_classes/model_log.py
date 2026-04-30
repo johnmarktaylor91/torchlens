@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._deprecations import warn_deprecated_alias
+from .._run_state import RunState
 from .._training_validation import reject_compiled_model
 from .._literals import (
     BufferVisibilityLiteral,
@@ -60,6 +61,12 @@ from .._literals import (
     VisRendererLiteral,
 )
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from ..constants import MODEL_LOG_FIELD_ORDER
+from ..intervention.types import (
+    MODEL_LOG_FORK_POLICY,
+    InterventionSpec,
+    Relationship,
+)
 from ..types import ActivationPostfunc, GradientPostfunc
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
@@ -82,6 +89,37 @@ from .interface import (
 from .grad_fn_log import GradFnAccessor, GradFnLog
 from .layer_log import LayerLog
 from .layer_pass_log import LayerPassLog, TensorLog
+
+_MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
+    "name": None,
+    "intervention_ready": False,
+    "capture_full_args": False,
+    "parent_run": None,
+    "_intervention_spec": None,
+    "operation_history": [],
+    "last_run_ctx": None,
+    "_has_direct_writes": False,
+    "_warned_direct_write": False,
+    "_warned_mutate_in_place": False,
+    "_spec_revision": 0,
+    "_activation_recipe_revision": 0,
+    "_append_sequence_id": 0,
+    "run_state": RunState.PRISTINE,
+    "source_model_id": None,
+    "source_model_class": None,
+    "weight_fingerprint_at_capture": None,
+    "weight_fingerprint_full": None,
+    "input_id_at_capture": None,
+    "input_shape_hash": None,
+    "graph_shape_hash": None,
+    "is_appended": False,
+    "relationship_evidence": {},
+}
+_MODEL_LOG_DEFAULT_FILL = {
+    **{field_name: None for field_name in MODEL_LOG_FIELD_ORDER},
+    **_MODEL_LOG_DEFAULT_FILL,
+}
+_MODEL_LOG_DEFAULT_FILL["io_format_version"] = IO_FORMAT_VERSION
 
 
 def _init_module_build_data() -> dict:
@@ -142,6 +180,7 @@ class ModelLog:
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "name": FieldPolicy.KEEP,
         "model_name": FieldPolicy.KEEP,
         "num_context_lines": FieldPolicy.KEEP,
         "_optimizer": FieldPolicy.DROP,
@@ -151,12 +190,21 @@ class ModelLog:
         "_all_layers_logged": FieldPolicy.KEEP,
         "_all_layers_saved": FieldPolicy.KEEP,
         "keep_unsaved_layers": FieldPolicy.KEEP,
+        "intervention_ready": FieldPolicy.KEEP,
+        "capture_full_args": FieldPolicy.KEEP,
         "activation_postfunc": FieldPolicy.DROP,
         "activation_postfunc_repr": FieldPolicy.KEEP,
         "save_raw_activation": FieldPolicy.KEEP,
         "input_metadata": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
+        "parent_run": FieldPolicy.DROP,
+        "source_model_id": FieldPolicy.KEEP,
+        "source_model_class": FieldPolicy.KEEP,
+        "weight_fingerprint_at_capture": FieldPolicy.KEEP,
+        "weight_fingerprint_full": FieldPolicy.KEEP,
+        "input_id_at_capture": FieldPolicy.KEEP,
+        "input_shape_hash": FieldPolicy.KEEP,
         "current_function_call_barcode": FieldPolicy.KEEP,
         "random_seed_used": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
@@ -175,6 +223,19 @@ class ModelLog:
         "verbose": FieldPolicy.KEEP,
         "has_gradients": FieldPolicy.KEEP,
         "mark_input_output_distances": FieldPolicy.KEEP,
+        "graph_shape_hash": FieldPolicy.KEEP,
+        "_intervention_spec": FieldPolicy.DROP,
+        "operation_history": FieldPolicy.KEEP,
+        "last_run_ctx": FieldPolicy.DROP,
+        "_has_direct_writes": FieldPolicy.KEEP,
+        "_warned_direct_write": FieldPolicy.DROP,
+        "_warned_mutate_in_place": FieldPolicy.DROP,
+        "_spec_revision": FieldPolicy.KEEP,
+        "_activation_recipe_revision": FieldPolicy.KEEP,
+        "_append_sequence_id": FieldPolicy.KEEP,
+        "run_state": FieldPolicy.KEEP,
+        "is_appended": FieldPolicy.KEEP,
+        "relationship_evidence": FieldPolicy.KEEP,
         "layer_list": FieldPolicy.KEEP,
         "layer_dict_main_keys": FieldPolicy.KEEP,
         "layer_dict_all_keys": FieldPolicy.KEEP,
@@ -309,6 +370,7 @@ class ModelLog:
         # Callables are effectively immutable - deepcopy is unnecessary.
 
         # General info
+        self.name: str | None = None
         self.model_name = model_name
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
@@ -325,6 +387,8 @@ class ModelLog:
         self._all_layers_logged = False
         self._all_layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
+        self.intervention_ready = False
+        self.capture_full_args = False
         self.activation_postfunc = activation_postfunc
         self.activation_postfunc_repr = (
             repr(activation_postfunc) if activation_postfunc is not None else None
@@ -338,6 +402,13 @@ class ModelLog:
         self.save_raw_gradient = save_raw_gradient
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
+        self.parent_run: weakref.ReferenceType["ModelLog"] | None = None
+        self.source_model_id: int | None = None
+        self.source_model_class: str | None = None
+        self.weight_fingerprint_at_capture: str | None = None
+        self.weight_fingerprint_full: str | None = None
+        self.input_id_at_capture: int | None = None
+        self.input_shape_hash: str | None = None
         self.current_function_call_barcode = None
         self.random_seed_used = None
         self.output_device = output_device
@@ -352,6 +423,24 @@ class ModelLog:
         self.verbose = verbose
         self.has_gradients = False
         self.mark_input_output_distances = mark_input_output_distances
+        self.graph_shape_hash: str | None = None
+        self._intervention_spec: InterventionSpec | None = InterventionSpec()
+        self.operation_history: list[Any] = []
+        self.last_run_ctx: Any | None = None
+        self._has_direct_writes = False
+        self._warned_direct_write = False
+        self._warned_mutate_in_place = False
+        self._spec_revision = 0
+        self._activation_recipe_revision = 0
+        self._append_sequence_id = 0
+        self.run_state = RunState.PRISTINE
+        self.is_appended = False
+        self.relationship_evidence: dict[str, Relationship] = {
+            "model": Relationship.UNKNOWN,
+            "weights": Relationship.UNKNOWN,
+            "input": Relationship.UNKNOWN,
+            "graph": Relationship.UNKNOWN,
+        }
         self._activation_writer: Optional["BundleStreamWriter"] = None
         self._keep_activations_in_memory: bool = True
         self._keep_gradients_in_memory: bool = True
@@ -549,6 +638,8 @@ class ModelLog:
         state["_buffer_accessor"] = None
         state["_module_build_data"] = None
         state["_source_model_ref"] = None
+        state["parent_run"] = None
+        state["last_run_ctx"] = None
         state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
         state["activation_postfunc_repr"] = (
             repr(self.activation_postfunc) if self.activation_postfunc is not None else None
@@ -562,6 +653,7 @@ class ModelLog:
         default_fill_state(
             state,
             defaults={
+                **_MODEL_LOG_DEFAULT_FILL,
                 "io_format_version": IO_FORMAT_VERSION,
                 "activation_postfunc_repr": None,
                 "save_raw_activation": True,
@@ -593,6 +685,15 @@ class ModelLog:
                 "train_mode": False,
             },
         )
+        if state.get("_intervention_spec") is None:
+            state["_intervention_spec"] = InterventionSpec()
+        if not state.get("relationship_evidence"):
+            state["relationship_evidence"] = {
+                "model": Relationship.UNKNOWN,
+                "weights": Relationship.UNKNOWN,
+                "input": Relationship.UNKNOWN,
+                "graph": Relationship.UNKNOWN,
+            }
         if state["train_mode"] is None:
             state["train_mode"] = False
         self.__dict__.update(state)
@@ -1588,3 +1689,7 @@ class ModelLog:
             for equiv_group, equivalent_label_set in self.equivalent_operations.items()
             if len(equivalent_label_set) > 0
         }
+
+
+ModelLog.FORK_POLICY = MODEL_LOG_FORK_POLICY  # type: ignore[attr-defined]
+ModelLog.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]

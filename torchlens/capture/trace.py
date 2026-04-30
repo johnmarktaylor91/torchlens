@@ -124,15 +124,15 @@ def save_new_activations(
 
     # Clear all existing activations from the previous pass.
     for layer_log_entry in self:
-        layer_log_entry.activation = None
-        layer_log_entry.transformed_activation = None
+        layer_log_entry._internal_set("activation", None)
+        layer_log_entry._internal_set("transformed_activation", None)
         layer_log_entry.transformed_activation_shape = None
         layer_log_entry.transformed_activation_dtype = None
         layer_log_entry.transformed_activation_memory = None
         layer_log_entry.has_saved_activations = False
         layer_log_entry.has_gradient = False
-        layer_log_entry.gradient = None
-        layer_log_entry.transformed_gradient = None
+        layer_log_entry._internal_set("gradient", None)
+        layer_log_entry._internal_set("transformed_gradient", None)
         layer_log_entry.transformed_gradient_shape = None
         layer_log_entry.transformed_gradient_dtype = None
         layer_log_entry.transformed_gradient_memory = None

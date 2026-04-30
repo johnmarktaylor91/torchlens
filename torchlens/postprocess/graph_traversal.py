@@ -82,8 +82,8 @@ def _add_output_layers(
         new_output_node.grad_fn_name = None
         new_output_node.autograd_saved_bytes = None
         new_output_node.autograd_saved_tensor_count = None
-        new_output_node.captured_args = [output_tensors[i]]
-        new_output_node.captured_kwargs = {}
+        new_output_node._internal_set("captured_args", [output_tensors[i]])
+        new_output_node._internal_set("captured_kwargs", {})
 
         # Strip any params:
 
@@ -165,9 +165,9 @@ def _add_output_layers(
                 )
                 output_node.has_child_tensor_variations = True
                 if output_node.activation is None:
-                    new_output_node.transformed_activation = actual_output
+                    new_output_node._internal_set("transformed_activation", actual_output)
                 else:
-                    new_output_node.activation = actual_output_raw
+                    new_output_node._internal_set("activation", actual_output_raw)
 
         # Change original output node:
 

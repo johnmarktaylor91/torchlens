@@ -20,7 +20,7 @@ from typing import Any, NamedTuple
 
 import torch
 
-IO_FORMAT_VERSION = 1
+IO_FORMAT_VERSION = 2
 
 
 class TorchLensIOError(RuntimeError):

@@ -874,9 +874,9 @@ def _evict_streamed_activations(self: "ModelLog") -> None:
 
     for layer_entry in self.layer_list:
         if getattr(layer_entry, "activation_ref", None) is not None:
-            layer_entry.activation = None
+            layer_entry._internal_set("activation", None)
         if getattr(layer_entry, "_pending_transformed_activation_blob_id", None) is not None:
-            layer_entry.transformed_activation = None
+            layer_entry._internal_set("transformed_activation", None)
 
 
 def _evict_streamed_gradients(self: "ModelLog") -> None:
@@ -890,9 +890,9 @@ def _evict_streamed_gradients(self: "ModelLog") -> None:
 
     for layer_entry in self.layer_list:
         if getattr(layer_entry, "gradient_ref", None) is not None:
-            layer_entry.gradient = None
+            layer_entry._internal_set("gradient", None)
         if getattr(layer_entry, "_pending_transformed_gradient_blob_id", None) is not None:
-            layer_entry.transformed_gradient = None
+            layer_entry._internal_set("transformed_gradient", None)
 
 
 def _reuse_streamed_blob_ids(

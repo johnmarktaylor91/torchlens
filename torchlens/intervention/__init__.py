@@ -26,10 +26,34 @@ from .rerun import rerun
 from .runtime import do
 from .save import load_intervention_spec, save_intervention
 from .selectors import contains, func, in_module, label, module, where
-from .types import TensorSliceSpec
+from .types import (
+    CapturedArgTemplate,
+    EdgeUseRecord,
+    FireRecord,
+    ForkFieldPolicy,
+    FrozenInterventionSpec,
+    FrozenTargetSpec,
+    FunctionRegistryKey,
+    HelperSpec,
+    InterventionSpec,
+    Relationship,
+    TargetSpec,
+    TensorSliceSpec,
+)
 
 __all__ = [
     "Bundle",
+    "CapturedArgTemplate",
+    "EdgeUseRecord",
+    "FireRecord",
+    "ForkFieldPolicy",
+    "FrozenInterventionSpec",
+    "FrozenTargetSpec",
+    "FunctionRegistryKey",
+    "HelperSpec",
+    "InterventionSpec",
+    "Relationship",
+    "TargetSpec",
     "TensorSliceSpec",
     "bwd_hook",
     "clamp",
