@@ -22,11 +22,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.multi_trace import TraceBundle, bundle, show_bundle_graph
 
-pytestmark = pytest.mark.skip(
-    reason="Phase 9 redesign: multi-trace visualization adaptation is deferred to Phase 11."
-)
-
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

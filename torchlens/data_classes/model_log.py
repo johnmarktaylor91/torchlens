@@ -58,6 +58,7 @@ from .._training_validation import reject_compiled_model
 from .._literals import (
     BufferVisibilityLiteral,
     VisDirectionLiteral,
+    VisInterventionModeLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
@@ -1838,6 +1839,8 @@ class ModelLog:
         vis_node_placement: VisNodePlacementLiteral = "auto",
         vis_renderer: VisRendererLiteral = "graphviz",
         vis_theme: str = "torchlens",
+        vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
+        vis_show_cone: bool = True,
         code_panel: "CodePanelOption" = False,
     ) -> str:
         """Render the computational graph for this model log.
@@ -1847,7 +1850,8 @@ class ModelLog:
         vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, module, node_mode, \
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
         vis_gradient_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
-        show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, code_panel:
+        show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
+        vis_intervention_mode, vis_show_cone, code_panel:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
@@ -1882,8 +1886,34 @@ class ModelLog:
             vis_node_placement=vis_node_placement,
             vis_renderer=vis_renderer,
             vis_theme=vis_theme,
+            vis_intervention_mode=vis_intervention_mode,
+            vis_show_cone=vis_show_cone,
             code_panel=code_panel,
         )
+
+    def show(self, **kwargs: Any) -> str | None:
+        """Render this model log with intervention visualization defaults.
+
+        Parameters
+        ----------
+        **kwargs:
+            Forwarded to :meth:`render_graph`. The legacy ``vis_opt`` alias is
+            accepted for parity with logging APIs.
+
+        Returns
+        -------
+        str | None
+            DOT source when rendering occurs, otherwise ``None`` for
+            ``vis_opt='none'`` / ``vis_mode='none'``.
+        """
+
+        if "vis_opt" in kwargs and "vis_mode" not in kwargs:
+            kwargs["vis_mode"] = kwargs.pop("vis_opt")
+        elif "vis_opt" in kwargs:
+            kwargs.pop("vis_opt")
+        if kwargs.get("vis_mode") == "none":
+            return None
+        return self.render_graph(**kwargs)
 
     def show_backward_graph(
         self,

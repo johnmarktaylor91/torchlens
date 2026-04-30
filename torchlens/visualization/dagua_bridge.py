@@ -13,6 +13,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import torch
 
 from ..utils.display import human_readable_size
+from .node_spec import (
+    INTERVENTION_CONE_COLOR,
+    INTERVENTION_SITE_COLOR,
+    intervention_site_and_cone_labels,
+)
 
 COMMUTATIVE_FUNCS = {"add", "mul", "cat", "eq", "ne"}
 
@@ -32,6 +37,8 @@ MODELLOG_FIELD_USAGE: Dict[str, str] = {
     "layer_dict_main_keys": "Unrolled node inventory.",
     "layer_logs": "Rolled node inventory.",
     "layer_list": "Fallback node inventory and audit coverage.",
+    "_intervention_spec": "Intervention site and fire-record metadata overlay.",
+    "_has_direct_writes": "Direct-write dirty flag surfaced in graph metadata when present.",
 }
 
 ENTRY_FIELD_USAGE: Dict[str, str] = {
@@ -66,6 +73,7 @@ ENTRY_FIELD_USAGE: Dict[str, str] = {
     "is_submodule_output": "Rectangle/module-output shape override.",
     "is_leaf_module_output": "Rectangle/module-output shape override.",
     "has_gradient": "Backward-edge inclusion in unrolled mode.",
+    "intervention_log": "Per-node intervention fire-record summary.",
 }
 
 MODULE_FIELD_USAGE: Dict[str, str] = {
@@ -263,6 +271,28 @@ def _build_node_label(entry, vis_mode: str) -> str:
     return "\n".join(lines)
 
 
+def _intervention_log_summary(entry) -> str:
+    """Return a compact summary of intervention fire records for an entry.
+
+    Parameters
+    ----------
+    entry:
+        Layer-pass or layer log entry.
+
+    Returns
+    -------
+    str
+        Human-readable fire-record summary, or an empty string when no records
+        are attached.
+    """
+
+    records = list(getattr(entry, "intervention_log", ()) or ())
+    if not records:
+        return ""
+    engines = sorted({str(getattr(record, "engine", "") or "unknown") for record in records})
+    return f"{len(records)} fire record(s): {', '.join(engines)}"
+
+
 def _base_node_type(entry) -> str:
     if getattr(entry, "is_input_layer", False):
         return "input"
@@ -437,6 +467,11 @@ def model_log_to_dagua_graph(
     if not show_buffer_layers:
         entries = [e for e in entries if not getattr(e, "is_buffer_layer", False)]
     entries_by_label = {getattr(e, "layer_label"): e for e in entries}
+    site_labels, cone_labels = intervention_site_and_cone_labels(model_log, show_cone=True)
+    g.is_intervention_site = []
+    g.is_in_cone = []
+    g.intervention_log_summary = []
+    g.has_direct_writes = bool(getattr(model_log, "_has_direct_writes", False))
 
     module_shape = dagua.NodeStyle(shape="roundrect", corner_radius=8.0)
     op_shape = dagua.NodeStyle(shape="ellipse")
@@ -446,6 +481,11 @@ def model_log_to_dagua_graph(
         node_id = getattr(entry, "layer_label")
         g.add_node(node_id, label=_build_node_label(entry, vis_mode), type=_base_node_type(entry))
         node_idx = g._id_to_index[node_id]
+        is_site = node_id in site_labels
+        is_cone = node_id in cone_labels
+        g.is_intervention_site.append(is_site)
+        g.is_in_cone.append(is_cone)
+        g.intervention_log_summary.append(_intervention_log_summary(entry))
 
         shape_override = op_shape
         if getattr(entry, "is_buffer_layer", False):
@@ -460,6 +500,13 @@ def model_log_to_dagua_graph(
                 shape=shape_override.shape,
                 corner_radius=shape_override.corner_radius,
                 stroke_dash="dashed",
+            )
+        if is_site or is_cone:
+            shape_override = dagua.NodeStyle(
+                shape=shape_override.shape,
+                corner_radius=shape_override.corner_radius,
+                stroke_dash=shape_override.stroke_dash,
+                stroke=INTERVENTION_SITE_COLOR if is_site else INTERVENTION_CONE_COLOR,
             )
         g.node_styles[node_idx] = shape_override
 

@@ -38,6 +38,7 @@ from ._literals import (
     BufferVisibilityLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
+    VisInterventionModeLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
@@ -566,6 +567,8 @@ def log_forward_pass(
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
+    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
+    vis_show_cone: bool | MissingType = MISSING,
     random_seed: Optional[int] = None,
     num_context_lines: int | MissingType = MISSING,
     optimizer=None,
@@ -774,6 +777,8 @@ def log_forward_pass(
         vis_node_placement=vis_node_placement,
         vis_renderer=vis_renderer,
         vis_theme=vis_theme,
+        vis_intervention_mode=vis_intervention_mode,
+        vis_show_cone=vis_show_cone,
     )
     streaming_options = merge_streaming_options(
         streaming=streaming,
@@ -1085,6 +1090,8 @@ def show_model_graph(
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
+    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
+    vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: Optional[int] = None,
@@ -1124,6 +1131,11 @@ def show_model_graph(
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
         vis_renderer: Deprecated alias for ``visualization.renderer``.
         vis_theme: Deprecated alias for ``visualization.theme``.
+        vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
+            marks intervention sites and optionally their cones. ``"as_node"``
+            inserts a small hook node after each intervention site.
+        vis_show_cone: Whether ``"node_mark"`` mode also marks downstream
+            cone-of-effect members.
         code_panel: Optional source-code panel mode. ``True`` is equivalent to
             ``"forward"``. Built-in modes use source captured at log time;
             callable modes receive the live model object and are only available
@@ -1173,6 +1185,8 @@ def show_model_graph(
         vis_node_placement=vis_node_placement,
         vis_renderer=vis_renderer,
         vis_theme=vis_theme,
+        vis_intervention_mode=vis_intervention_mode,
+        vis_show_cone=vis_show_cone,
     )
 
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:

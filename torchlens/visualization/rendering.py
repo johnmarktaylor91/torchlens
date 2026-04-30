@@ -56,6 +56,7 @@ import torch
 from .._literals import (
     BufferVisibilityLiteral,
     VisDirectionLiteral,
+    VisInterventionModeLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
@@ -66,7 +67,16 @@ from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
 from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
-from .node_spec import NodeSpec, render_lines_to_html
+from .node_spec import (
+    INTERVENTION_HOOK_BORDER_COLOR,
+    INTERVENTION_HOOK_FILL_COLOR,
+    NodeSpec,
+    graphviz_graph_overrides,
+    intervention_graph_override,
+    intervention_site_and_cone_labels,
+    make_intervention_node_spec_fn,
+    render_lines_to_html,
+)
 from .code_panel import CodePanelOption, render_code_panel_subgraph, resolve_code_panel_source
 from ._render_utils import (
     compute_module_penwidth,
@@ -375,6 +385,8 @@ def render_graph(
     vis_node_placement: VisNodePlacementLiteral = "auto",
     vis_renderer: VisRendererLiteral = "graphviz",
     vis_theme: str = "torchlens",
+    vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
+    vis_show_cone: bool = True,
     code_panel: CodePanelOption = False,
 ) -> str:
     """Render the computational graph as a Graphviz Digraph.
@@ -420,6 +432,13 @@ def render_graph(
         vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
             or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK (or sfdp
             fallback) for large ones.
+        vis_renderer: Renderer backend: ``'graphviz'`` or ``'dagua'``.
+        vis_theme: Renderer theme name for backends that support themes.
+        vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
+            marks sites and cones; ``"as_node"`` inserts hook nodes after
+            intervention sites.
+        vis_show_cone: Whether ``"node_mark"`` mode marks downstream cone
+            members.
         code_panel: Optional source-code panel. ``True`` is equivalent to
             ``"forward"``; callable values receive the live model object when
             it is still available.
@@ -436,7 +455,16 @@ def render_graph(
             "Visualization node_mode must be one of 'default', 'profiling', "
             "'vision', or 'attention'."
         )
+    if vis_intervention_mode not in {"node_mark", "as_node"}:
+        raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
+    site_labels, _ = intervention_site_and_cone_labels(self, show_cone=vis_show_cone)
+    intervention_node_spec_fn = make_intervention_node_spec_fn(
+        self,
+        show_cone=vis_show_cone,
+        graph_overrides=vis_graph_overrides,
+        user_node_spec_fn=node_spec_fn,
+    )
 
     if vis_renderer == "dagua":
         from .dagua_bridge import render_model_log_with_dagua
@@ -456,7 +484,7 @@ def render_graph(
         raise ValueError("vis_renderer must be 'graphviz' or 'dagua'")
 
     overrides = VisualizationOverrides(
-        graph=vis_graph_overrides or {},
+        graph=graphviz_graph_overrides(vis_graph_overrides),
         edge=vis_edge_overrides or {},
         gradient_edge=vis_gradient_edge_overrides or {},
         module=vis_module_overrides or {},
@@ -525,6 +553,8 @@ def render_graph(
     )
     num_nodes = len(entries_to_plot) - len(skipped_labels)
     engine = get_node_placement_engine(vis_node_placement, num_nodes)
+    if vis_intervention_mode == "as_node" and engine == "elk":
+        engine = "dot"
     if source_text is not None and engine == "elk":
         # The code panel is implemented in pure Graphviz so the graph and source
         # remain in one output file. ELK's direct renderer bypasses Digraph
@@ -553,6 +583,10 @@ def render_graph(
         f"tensors total ({self.total_activation_memory_str})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
+    if getattr(self, "_has_direct_writes", False):
+        graph_caption = graph_caption[:-2] + (
+            "Direct writes detected - recipe propagation will overlay<br align='left'/>>"
+        )
 
     # ELK fast path: skip graphviz.Digraph construction entirely.
     # Generates DOT directly with ELK positions and cluster subgraphs (module boxes).
@@ -569,7 +603,7 @@ def render_graph(
             show_buffer_layers == "always",
             overrides,
             node_mode,
-            node_spec_fn,
+            intervention_node_spec_fn,
             collapsed_node_spec_fn,
             collapse_fn,
             skip_fn,
@@ -641,11 +675,16 @@ def render_graph(
             show_buffer_layers,
             overrides,
             node_mode,
-            node_spec_fn,
+            intervention_node_spec_fn,
             collapsed_node_spec_fn,
             collapse_fn,
             edge_map,
+            vis_intervention_mode,
+            site_labels,
         )
+
+    if vis_intervention_mode == "as_node":
+        _add_intervention_hook_nodes(dot, site_labels, vis_graph_overrides)
 
     # Finally, set up the subgraphs.
     _setup_subgraphs(self, dot, vis_mode, module_cluster_dict, overrides)
@@ -1412,6 +1451,8 @@ def _add_node_to_graphviz(
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
     edge_map: Optional[dict[str, list[RenderEdge]]] = None,
+    vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
+    intervention_site_labels: set[str] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -1473,6 +1514,8 @@ def _add_node_to_graphviz(
         overrides,
         collapse_fn,
         edge_map,
+        vis_intervention_mode,
+        intervention_site_labels,
     )
 
 
@@ -1693,6 +1736,77 @@ def _build_layer_node(
             s.node(node.layer_label.replace(":", "pass"))
 
     return node_color
+
+
+def _intervention_hook_node_name(site_label: str) -> str:
+    """Return the Graphviz node name for an intervention hook node.
+
+    Parameters
+    ----------
+    site_label:
+        Layer-pass label for the intervention site.
+
+    Returns
+    -------
+    str
+        Graphviz-safe hook node identifier.
+    """
+
+    return f"intervention_hook_{site_label.replace(':', 'pass')}"
+
+
+def _add_intervention_hook_nodes(
+    graphviz_graph: graphviz.Digraph,
+    site_labels: set[str],
+    graph_overrides: dict[str, Any] | None,
+) -> None:
+    """Add standalone hook nodes for ``vis_intervention_mode='as_node'``.
+
+    Parameters
+    ----------
+    graphviz_graph:
+        Graphviz graph being rendered.
+    site_labels:
+        Layer-pass labels with intervention specs.
+    graph_overrides:
+        Graph override dictionary, including optional intervention style keys.
+
+    Returns
+    -------
+    None
+        The graph is mutated in place.
+    """
+
+    fillcolor = str(
+        intervention_graph_override(
+            graph_overrides,
+            "intervention_hook_fillcolor",
+            INTERVENTION_HOOK_FILL_COLOR,
+        )
+    )
+    color = str(
+        intervention_graph_override(
+            graph_overrides,
+            "intervention_hook_color",
+            INTERVENTION_HOOK_BORDER_COLOR,
+        )
+    )
+    penwidth = str(intervention_graph_override(graph_overrides, "intervention_hook_penwidth", 2.0))
+    for site_label in sorted(site_labels):
+        spec = NodeSpec(
+            lines=["intervention", site_label],
+            shape="diamond",
+            fillcolor=fillcolor,
+            fontcolor="black",
+            style="filled,solid",
+            color=color,
+            penwidth=float(penwidth),
+            tooltip=f"Intervention hook after {site_label}",
+            extra_attrs={"ordering": "out", "width": "0.35", "height": "0.25"},
+        )
+        node_args = _node_spec_to_graphviz_args(spec)
+        node_args["name"] = _intervention_hook_node_name(site_label)
+        graphviz_graph.node(**node_args)
 
 
 def _build_collapsed_module_node(
@@ -2410,6 +2524,8 @@ def _add_edges_for_node(
     overrides: Optional[VisualizationOverrides] = None,
     collapse_fn: CollapseFn | None = None,
     edge_map: Optional[dict[str, list[RenderEdge]]] = None,
+    vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
+    intervention_site_labels: set[str] | None = None,
 ) -> None:
     """Add forward (and optionally gradient) edges from a parent node to all its children.
 
@@ -2525,6 +2641,25 @@ def _add_edges_for_node(
 
         # Edge deduplication: multiple layers mapping to the same collapsed
         # module node would produce duplicate edges without this check.
+        if (
+            vis_intervention_mode == "as_node"
+            and intervention_site_labels is not None
+            and parent_node.layer_label in intervention_site_labels
+        ):
+            hook_name = _intervention_hook_node_name(parent_node.layer_label)
+            if (tail_name, hook_name) not in edges_used:
+                edges_used.add((tail_name, hook_name))
+                graphviz_graph.edge(
+                    tail_name=tail_name,
+                    head_name=hook_name,
+                    color=node_color,
+                    fontcolor=node_color,
+                    style=edge_style,
+                    arrowsize=".7",
+                    labelfontsize="8",
+                )
+            tail_name = hook_name
+
         if tail_name == head_name:
             continue
         if (tail_name, head_name) in edges_used:

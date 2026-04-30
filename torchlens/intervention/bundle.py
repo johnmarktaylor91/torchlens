@@ -412,6 +412,36 @@ class Bundle:
 
         return fn(self)
 
+    def show(self, **kwargs: Any) -> dict[str, str | None]:
+        """Render each bundle member graph as a member-keyed strip.
+
+        Parameters
+        ----------
+        **kwargs:
+            Forwarded to each member's :meth:`ModelLog.show`. When an output
+            path is supplied, member names are appended to produce one artifact
+            per log. ``vis_opt='none'`` is accepted and returns without
+            rendering, matching ``ModelLog.show``.
+
+        Returns
+        -------
+        dict[str, str | None]
+            Member-keyed render results. Values are DOT source strings when
+            rendering occurs, or ``None`` for skipped ``vis_opt='none'`` calls.
+        """
+
+        if kwargs.get("vis_opt") == "none" or kwargs.get("vis_mode") == "none":
+            return {name: None for name in self._members}
+
+        base_outpath = kwargs.get("vis_outpath")
+        results: dict[str, str | None] = {}
+        for name, member in self._members.items():
+            member_kwargs = dict(kwargs)
+            if isinstance(base_outpath, str):
+                member_kwargs["vis_outpath"] = f"{base_outpath}_{name}"
+            results[name] = member.show(**member_kwargs)
+        return results
+
     def compare_at(self, site: Any) -> torch.Tensor:
         """Return pairwise activation differences at a site.
 

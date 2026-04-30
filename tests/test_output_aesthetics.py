@@ -30,7 +30,7 @@ from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
 import torch.nn as nn
 
 import example_models
-from torchlens import log_forward_pass, show_model_graph
+from torchlens import func, log_forward_pass, show_model_graph
 
 # ---------------------------------------------------------------------------
 # Report helpers
@@ -1530,6 +1530,41 @@ class TestVisualizationBugfixes:
             )
         except ImportError:
             pytest.skip("graphviz not available")
+
+    def test_intervention_visualization_styles(self):
+        """Intervention node-mark and as-node modes emit expected style cues."""
+
+        class ReluAdd(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                """Run a relu followed by an add."""
+
+                return torch.relu(x) + 1
+
+        log = log_forward_pass(
+            ReluAdd(),
+            torch.randn(2, 3),
+            vis_opt="none",
+            intervention_ready=True,
+        )
+        log.set(func("relu"), torch.zeros(2, 3))
+        try:
+            node_mark = log.render_graph(
+                vis_save_only=True,
+                vis_outpath=opj(VIS_DIR, "test_intervention_node_mark"),
+                vis_fileformat="dot",
+                vis_intervention_mode="node_mark",
+            )
+            as_node = log.render_graph(
+                vis_save_only=True,
+                vis_outpath=opj(VIS_DIR, "test_intervention_as_node"),
+                vis_fileformat="dot",
+                vis_intervention_mode="as_node",
+            )
+            assert "#FF00FF" in node_mark
+            assert "#FFB3FF" in node_mark
+            assert "shape=diamond" in as_node
+        finally:
+            log.cleanup()
 
     def test_vis_keep_unsaved_false(self):
         """keep_unsaved_layers=False should not crash visualization."""

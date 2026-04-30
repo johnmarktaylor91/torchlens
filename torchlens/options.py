@@ -12,6 +12,7 @@ from ._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ._literals import (
     BufferVisibilityLiteral,
     VisDirectionLiteral,
+    VisInterventionModeLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
@@ -43,6 +44,8 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "layout_engine",
     "renderer",
     "theme",
+    "intervention_mode",
+    "show_cone",
 )
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "bundle_path",
@@ -65,6 +68,8 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "vis_node_placement": "layout_engine",
     "vis_renderer": "renderer",
     "vis_theme": "theme",
+    "vis_intervention_mode": "intervention_mode",
+    "vis_show_cone": "show_cone",
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_activations_to": "bundle_path",
@@ -154,6 +159,24 @@ def _validate_node_mode(node_mode: VisNodeModeLiteral) -> None:
         )
 
 
+def _validate_intervention_mode(intervention_mode: VisInterventionModeLiteral) -> None:
+    """Validate an intervention visualization mode name.
+
+    Parameters
+    ----------
+    intervention_mode:
+        Candidate intervention visualization mode.
+
+    Raises
+    ------
+    ValueError
+        If ``intervention_mode`` is not a supported mode.
+    """
+
+    if intervention_mode not in {"node_mark", "as_node"}:
+        raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
+
+
 def _resolve_option_value(
     field_name: str,
     supplied_value: Any,
@@ -232,6 +255,8 @@ class VisualizationOptions:
     layout_engine: VisNodePlacementLiteral = "auto"
     renderer: VisRendererLiteral = "graphviz"
     theme: str = "torchlens"
+    intervention_mode: VisInterventionModeLiteral = "node_mark"
+    show_cone: bool = True
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -264,6 +289,8 @@ class VisualizationOptions:
         layout_engine: VisNodePlacementLiteral | MissingType = MISSING,
         renderer: VisRendererLiteral | MissingType = MISSING,
         theme: str | MissingType = MISSING,
+        intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
+        show_cone: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen visualization option bundle.
 
@@ -370,11 +397,19 @@ class VisualizationOptions:
             ),
             "renderer": _resolve_option_value("renderer", renderer, "graphviz", specified_fields),
             "theme": _resolve_option_value("theme", theme, "torchlens", specified_fields),
+            "intervention_mode": _resolve_option_value(
+                "intervention_mode",
+                intervention_mode,
+                "node_mark",
+                specified_fields,
+            ),
+            "show_cone": _resolve_option_value("show_cone", show_cone, True, specified_fields),
         }
         _validate_buffer_visibility(values["show_buffers"])
         for field_name in _VISUALIZATION_FIELDS:
             object.__setattr__(self, field_name, values[field_name])
         _validate_node_mode(cast(VisNodeModeLiteral, values["node_mode"]))
+        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
     def as_dict(self) -> dict[str, Any]:
@@ -397,6 +432,7 @@ class VisualizationOptions:
 
         instance = object.__new__(cls)
         _validate_node_mode(cast(VisNodeModeLiteral, values["node_mode"]))
+        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
         _validate_buffer_visibility(values["show_buffers"])
         for field_name in _VISUALIZATION_FIELDS:
             object.__setattr__(instance, field_name, values[field_name])
@@ -499,6 +535,8 @@ def merge_visualization_options(
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
+    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
+    vis_show_cone: bool | MissingType = MISSING,
 ) -> VisualizationOptions:
     """Merge deprecated flat visualization kwargs into a grouped options object.
 
@@ -555,6 +593,8 @@ def merge_visualization_options(
         "vis_node_placement": vis_node_placement,
         "vis_renderer": vis_renderer,
         "vis_theme": vis_theme,
+        "vis_intervention_mode": vis_intervention_mode,
+        "vis_show_cone": vis_show_cone,
     }
     for flat_name, group_name in _VISUALIZATION_FLAT_TO_GROUP.items():
         flat_value = flat_values[flat_name]
@@ -654,4 +694,6 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "vis_node_placement": visualization.layout_engine,
         "vis_renderer": visualization.renderer,
         "vis_theme": visualization.theme,
+        "vis_intervention_mode": visualization.intervention_mode,
+        "vis_show_cone": visualization.show_cone,
     }
