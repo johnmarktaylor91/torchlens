@@ -192,6 +192,7 @@ def _run_replay(
         Mutated model log.
     """
 
+    started_at = time.monotonic()
     cone = cone_of_effect(log, origins)
     origin_labels = {origin.layer_label for origin in origins}
     overlay: dict[str, torch.Tensor] = {}
@@ -246,7 +247,8 @@ def _run_replay(
     log.last_run_ctx = {
         **_ensure_replay_run_ctx(log),
         "engine": "replay",
-        "timestamp": time.time(),
+        "timestamp": started_at,
+        "started_at": started_at,
         "origins": tuple(origin.layer_label for origin in origins),
         "hooks": tuple(_hook_name(entry) for entry in hook_entries),
         "strict": strict,

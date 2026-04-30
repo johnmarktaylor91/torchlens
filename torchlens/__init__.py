@@ -15,6 +15,8 @@ __version__ = "2.15.0"
 
 from .user_funcs import (
     log_forward_pass,
+    list_logs,
+    reset_naming_counter,
     summary,
     show_model_graph,
     show_backward_graph,
@@ -187,6 +189,7 @@ __all__ = [
     "label",
     "load",
     "load_intervention_spec",
+    "list_logs",
     "log_forward_pass",
     "log_model_metadata",
     "mean_ablate",
@@ -202,6 +205,7 @@ __all__ = [
     "render_lines_to_html",
     "render_model_log_with_dagua",
     "rerun",
+    "reset_naming_counter",
     "resample_ablate",
     "resolve_sites",
     "save",

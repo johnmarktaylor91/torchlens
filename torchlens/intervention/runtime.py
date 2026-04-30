@@ -317,8 +317,11 @@ def _live_run_ctx() -> dict[str, Any]:
         return {}
     run_ctx = getattr(model_log, "last_run_ctx", None)
     if run_ctx is None:
-        run_ctx = {}
+        run_ctx = {"engine": "live", "timestamp": time.monotonic()}
         model_log.last_run_ctx = run_ctx
+    else:
+        run_ctx.setdefault("engine", "live")
+        run_ctx.setdefault("timestamp", time.monotonic())
     return run_ctx
 
 

@@ -166,9 +166,16 @@ class SiteTable:
             Summary including count and first labels.
         """
 
-        labels = ", ".join(self.labels()[:5])
-        suffix = ", ..." if len(self) > 5 else ""
-        return f"SiteTable(n={len(self)}, labels=({labels}{suffix}))"
+        count = len(self)
+        if count == 0:
+            return "SiteTable(0 sites)"
+        labels = self.labels()
+        if count == 1:
+            return f"SiteTable(1 site: {labels[0]})"
+        if count <= 3:
+            return f"SiteTable({count} sites: {', '.join(labels)})"
+        prefix = ", ".join(labels[:3])
+        return f"SiteTable({count} sites: {prefix}, ... {labels[-1]})"
 
     def where(self, predicate: Callable[["LayerPassLog"], bool]) -> "SiteTable":
         """Filter the table with a predicate.

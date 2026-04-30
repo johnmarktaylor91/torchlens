@@ -108,6 +108,120 @@ _hook_reentrancy_depth: int = 0
 which keeps this module free of runtime intervention imports.
 """
 
+_log_registry: "weakref.WeakSet[ModelLog]" = weakref.WeakSet()
+"""Process-wide weak registry of currently live ``ModelLog`` objects."""
+
+_naming_counters: dict[str, int] = {}
+"""Process-global counters used by unnamed ``log_forward_pass`` captures.
+
+The counter is intentionally not thread-safe. Public capture is serialized by
+``active_logging()``'s re-entrancy guard, which is the same concurrency boundary
+used by the rest of TorchLens logging state.
+"""
+
+_HF_CLASS_SUFFIXES: tuple[str, ...] = (
+    "ForCausalLM",
+    "ForSequenceClassification",
+    "ForMaskedLM",
+    "ForQuestionAnswering",
+    "ForTokenClassification",
+    "ForImageClassification",
+    "PreTrainedModel",
+    "Model",
+)
+"""Common HuggingFace class suffixes stripped from generated log names."""
+
+
+def _register_log(log: "ModelLog") -> None:
+    """Register a model log in the process-wide weak registry.
+
+    Parameters
+    ----------
+    log:
+        Model log object to track weakly.
+
+    Returns
+    -------
+    None
+        The weak registry is updated in place.
+    """
+
+    _log_registry.add(log)
+
+
+def list_logs() -> tuple["ModelLog", ...]:
+    """Return a snapshot of currently live ``ModelLog`` objects.
+
+    Returns
+    -------
+    tuple[ModelLog, ...]
+        Immutable snapshot of logs still alive in this process.
+    """
+
+    snapshot = list(_log_registry)
+    return tuple(log for log in snapshot if log is not None)
+
+
+def _strip_hf_suffix(class_name: str) -> str:
+    """Strip common HuggingFace suffixes from a model class name.
+
+    Parameters
+    ----------
+    class_name:
+        Model class name.
+
+    Returns
+    -------
+    str
+        Shortened class name when a known suffix matched.
+    """
+
+    for suffix in _HF_CLASS_SUFFIXES:
+        if class_name.endswith(suffix) and len(class_name) > len(suffix):
+            return class_name[: -len(suffix)]
+    return class_name
+
+
+def _auto_name(model: Any) -> str:
+    """Return the next automatic name for a model instance.
+
+    Parameters
+    ----------
+    model:
+        PyTorch module-like object whose class name seeds the generated name.
+
+    Returns
+    -------
+    str
+        Lowercase short class name plus a monotonic counter.
+    """
+
+    class_name = type(model).__name__
+    short = _strip_hf_suffix(class_name).lower()
+    n = _naming_counters.get(short, 0) + 1
+    _naming_counters[short] = n
+    return f"{short}_{n}"
+
+
+def reset_naming_counter(class_name: str | None = None) -> None:
+    """Reset automatic log-name counters.
+
+    Parameters
+    ----------
+    class_name:
+        Lowercase short class name to reset, or ``None`` to reset all counters.
+
+    Returns
+    -------
+    None
+        The naming counter dictionary is mutated in place.
+    """
+
+    if class_name is None:
+        _naming_counters.clear()
+    else:
+        _naming_counters.pop(class_name, None)
+
 
 def reset_capture_runtime_context() -> None:
     """Reset per-capture intervention runtime context fields.

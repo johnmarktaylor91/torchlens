@@ -3,7 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Literal, Optional, Sequence
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+)
 
 from ..utils.display import human_readable_size
 
@@ -100,7 +111,7 @@ def render_model_summary(
     resolved_fields = _resolve_fields(resolved_level, fields=fields, columns=columns)
 
     if not model_log._pass_finished:
-        text = _render_in_progress_summary(
+        legacy_text = _render_in_progress_summary(
             model_log=model_log,
             fields=resolved_fields,
             mode=mode,
@@ -108,7 +119,7 @@ def render_model_summary(
             max_rows=max_rows,
         )
     else:
-        text = _render_finished_summary(
+        legacy_text = _render_finished_summary(
             model_log=model_log,
             level=resolved_level,
             fields=resolved_fields,
@@ -116,6 +127,7 @@ def render_model_summary(
             show_ops=resolved_show_ops,
             max_rows=max_rows,
         )
+    text = f"{format_discoverability_summary(model_log)}\n\n{legacy_text}"
     if print_to is not None:
         print_to(text)
     return text
@@ -134,26 +146,489 @@ def format_model_repr(model_log: "ModelLog") -> str:
     str
         Short two-line representation.
     """
+    run_state = getattr(getattr(model_log, "run_state", None), "name", "UNKNOWN")
     if not model_log._pass_finished:
-        lines = [
-            f"<ModelLog {model_log.model_name}>",
-            f"pass_in_progress ops_logged={len(model_log._raw_layer_dict)} finalized=False",
-        ]
-        return "\n".join(lines)
+        return (
+            f"ModelLog(name={getattr(model_log, 'name', None)!r}, "
+            f"model_class={model_log.model_name!r}, layers={len(model_log._raw_layer_dict)}, "
+            f"run_state={run_state})"
+        )
 
+    return (
+        f"ModelLog(name={getattr(model_log, 'name', None)!r}, "
+        f"model_class={model_log.model_name!r}, layers={len(model_log.layer_logs)}, "
+        f"run_state={run_state})"
+    )
+
+
+def format_discoverability_summary(model_log: "ModelLog") -> str:
+    """Render the Phase 13 user-facing discoverability summary.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to summarize.
+
+    Returns
+    -------
+    str
+        Multi-section notebook-friendly summary.
+    """
+
+    spec = getattr(model_log, "_intervention_spec", None)
+    target_specs = tuple(getattr(spec, "target_value_specs", ()) or ())
+    hook_specs = tuple(getattr(spec, "hook_specs", ()) or ())
     lines = [
-        f"<ModelLog {model_log.model_name}>",
-        " ".join(
-            [
-                f"layers={len(model_log.layer_logs)}",
-                f"params={_human_count(model_log.total_params)}",
-                f"ops={model_log.num_operations}",
-                f"saved={human_readable_size(model_log.saved_activation_memory)}",
-                f"forward={model_log.time_forward_pass:.3f}s",
-            ]
-        ),
+        "TorchLens Discoverability Summary",
+        "Capture:",
+        f"  name: {getattr(model_log, 'name', None)!r}",
+        f"  model_class: {getattr(model_log, 'model_name', None)}",
+        f"  input_shape: {_input_shape_summary(model_log)}",
+        f"  capture_timestamp: {_capture_timestamp(model_log)}",
+        f"  intervention_ready: {bool(getattr(model_log, 'intervention_ready', False))}",
+        f"  capture_full_args: {bool(getattr(model_log, 'capture_full_args', False))}",
+        "Run state:",
+        f"  run_state: {_run_state_name(model_log)}",
+        f"  direct_write_dirty: {bool(getattr(model_log, '_has_direct_writes', False))}",
+        f"  append: is_appended={bool(getattr(model_log, 'is_appended', False))}, "
+        f"sequence_id={getattr(model_log, '_append_sequence_id', 0)}",
+        f"  stale_spec: {_stale_spec_status(model_log)}",
+        f"  last_run: {_last_run_summary(model_log)}",
+        "Active recipe:",
+        f"  target_value_specs: {len(target_specs)}{_spec_sample(target_specs)}",
+        f"  hook_specs: {len(hook_specs)}{_spec_sample(hook_specs)}",
+        f"  portability: {_portability_status(target_specs, hook_specs)}",
+        "Recent operations:",
+        *_recent_operation_lines(model_log),
+        "Lineage:",
+        f"  parent_run: {_parent_run_summary(model_log)}",
+        f"  fork_chain: {_fork_chain_summary(model_log)}",
+        "Graph and relationship evidence:",
+        f"  graph_shape_hash: {_truncated(getattr(model_log, 'graph_shape_hash', None))}",
+        f"  source_model_class: {getattr(model_log, 'source_model_class', None)}",
+        "  weight_fingerprint: "
+        f"{_truncated(getattr(model_log, 'weight_fingerprint_at_capture', None))}",
+        f"  relationship_evidence: {_relationship_evidence_summary(model_log)}",
+        "Next operations:",
+        f"  {_next_operation_hint(model_log)}",
+        "RNG and helper notes:",
+        f"  {_rng_note_summary(model_log)}",
     ]
     return "\n".join(lines)
+
+
+def _input_shape_summary(model_log: "ModelLog") -> str:
+    """Return a compact input-shape summary.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Shape summary or ``"unknown"``.
+    """
+
+    layers = getattr(model_log, "input_layers", []) or []
+    shape = _combined_shape_str(model_log, layers)
+    if shape and shape != "-":
+        return shape
+    metadata = getattr(model_log, "input_metadata", {}) or {}
+    if metadata:
+        return _shorten(repr(metadata), limit=80)
+    return "unknown"
+
+
+def _capture_timestamp(model_log: "ModelLog") -> str:
+    """Return a readable capture timestamp surrogate.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Pass start/end timing information.
+    """
+
+    pass_start = float(getattr(model_log, "pass_start_time", 0.0) or 0.0)
+    pass_end = float(getattr(model_log, "pass_end_time", 0.0) or 0.0)
+    if pass_start <= 0:
+        return "unknown"
+    if pass_end > 0:
+        return f"start={pass_start:.6f}, end={pass_end:.6f}"
+    return f"start={pass_start:.6f}"
+
+
+def _run_state_name(model_log: "ModelLog") -> str:
+    """Return the run-state enum name.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Run-state name or repr.
+    """
+
+    run_state = getattr(model_log, "run_state", None)
+    return str(getattr(run_state, "name", run_state))
+
+
+def _stale_spec_status(model_log: "ModelLog") -> str:
+    """Return whether the activation recipe is stale.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Staleness summary.
+    """
+
+    spec_revision = int(getattr(model_log, "_spec_revision", 0) or 0)
+    recipe_revision = int(getattr(model_log, "_activation_recipe_revision", 0) or 0)
+    stale = spec_revision != recipe_revision
+    return f"{stale} (spec={spec_revision}, activation_recipe={recipe_revision})"
+
+
+def _last_run_summary(model_log: "ModelLog") -> str:
+    """Return a compact last-run context summary.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Last-run status.
+    """
+
+    ctx = getattr(model_log, "last_run_ctx", None)
+    if not isinstance(ctx, dict) or not ctx:
+        return "none"
+    engine = ctx.get("engine", "unknown")
+    revision = ctx.get("spec_revision", getattr(model_log, "_spec_revision", 0))
+    duration = ctx.get("duration_s")
+    duration_text = (
+        f", duration={float(duration):.4f}s" if isinstance(duration, (int, float)) else ""
+    )
+    return f"engine={engine}, spec_revision={revision}{duration_text}"
+
+
+def _spec_sample(specs: Sequence[Any]) -> str:
+    """Return a short sample of recipe specs.
+
+    Parameters
+    ----------
+    specs:
+        Sequence of recipe spec objects.
+
+    Returns
+    -------
+    str
+        Empty string or parenthesized summary.
+    """
+
+    if not specs:
+        return ""
+    labels = [_site_target_repr(getattr(spec, "site_target", None)) for spec in specs[:3]]
+    if len(specs) > 3:
+        labels.append("...")
+    return f" ({', '.join(labels)})"
+
+
+def _site_target_repr(site_target: Any) -> str:
+    """Return a compact site-target representation.
+
+    Parameters
+    ----------
+    site_target:
+        Target spec-like object.
+
+    Returns
+    -------
+    str
+        Compact representation.
+    """
+
+    if site_target is None:
+        return "unknown"
+    kind = getattr(site_target, "selector_kind", getattr(site_target, "kind", None))
+    value = getattr(site_target, "selector_value", getattr(site_target, "value", None))
+    if kind is not None:
+        return f"{kind}:{value}"
+    return _shorten(repr(site_target), limit=48)
+
+
+def _portability_status(target_specs: Sequence[Any], hook_specs: Sequence[Any]) -> str:
+    """Return recipe save/load portability status.
+
+    Parameters
+    ----------
+    target_specs:
+        Target value specs.
+    hook_specs:
+        Hook specs.
+
+    Returns
+    -------
+    str
+        Portability summary.
+    """
+
+    helpers = []
+    for spec in tuple(target_specs) + tuple(hook_specs):
+        helper = getattr(spec, "helper", None)
+        if helper is not None:
+            helpers.append(helper)
+        value = getattr(spec, "value", None)
+        if getattr(value, "portability", None) is not None:
+            helpers.append(value)
+    opaque = sum(1 for helper in helpers if getattr(helper, "portability", None) == "opaque_audit")
+    import_ref = sum(
+        1 for helper in helpers if getattr(helper, "portability", None) == "import_ref"
+    )
+    if opaque:
+        return f"{opaque} opaque -> audit-only"
+    if import_ref:
+        return f"{import_ref} import-ref helper(s) -> environment-dependent"
+    return "all helpers builtin -> portable"
+
+
+def _recent_operation_lines(model_log: "ModelLog") -> list[str]:
+    """Return recent operation-history lines.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    list[str]
+        Indented operation lines.
+    """
+
+    history = list(getattr(model_log, "operation_history", []) or [])
+    if not history:
+        return ["  none"]
+    lines = []
+    for record in history[-8:]:
+        if isinstance(record, dict):
+            op = record.get("op", "unknown")
+            revision = record.get("spec_revision", "?")
+            detail = _operation_detail(record)
+            lines.append(f"  - {op} (spec={revision}){detail}")
+        else:
+            lines.append(f"  - {_shorten(repr(record), limit=96)}")
+    return lines
+
+
+def _operation_detail(record: Mapping[str, Any]) -> str:
+    """Return selected details from one operation record.
+
+    Parameters
+    ----------
+    record:
+        Operation-history record.
+
+    Returns
+    -------
+    str
+        Optional details string.
+    """
+
+    detail_keys = ("site", "engine", "name", "origins", "hooks", "append_sequence_id")
+    parts = []
+    for key in detail_keys:
+        if key in record and record[key] not in (None, (), []):
+            parts.append(f"{key}={_shorten(repr(record[key]), limit=36)}")
+    return f": {', '.join(parts)}" if parts else ""
+
+
+def _parent_run_summary(model_log: "ModelLog") -> str:
+    """Return parent-run status.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Parent summary.
+    """
+
+    parent_ref = getattr(model_log, "parent_run", None)
+    if parent_ref is None:
+        return "none"
+    parent = parent_ref()
+    if parent is None:
+        return "collected"
+    return f"{getattr(parent, 'name', None)!r} ({getattr(parent, 'model_name', None)})"
+
+
+def _fork_chain_summary(model_log: "ModelLog") -> str:
+    """Return a compact fork lineage chain.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Fork chain from root to current log.
+    """
+
+    names = [str(getattr(model_log, "name", None))]
+    seen = {id(model_log)}
+    current = model_log
+    while True:
+        parent_ref = getattr(current, "parent_run", None)
+        if parent_ref is None:
+            break
+        parent = parent_ref()
+        if parent is None or id(parent) in seen:
+            break
+        names.append(str(getattr(parent, "name", None)))
+        seen.add(id(parent))
+        current = parent
+    return " <- ".join(reversed(names))
+
+
+def _truncated(value: Any, *, length: int = 8) -> str:
+    """Return a truncated hash-like value.
+
+    Parameters
+    ----------
+    value:
+        Value to display.
+    length:
+        Maximum prefix length.
+
+    Returns
+    -------
+    str
+        Truncated string or ``"unknown"``.
+    """
+
+    if value is None:
+        return "unknown"
+    text = str(value)
+    return text[:length]
+
+
+def _relationship_evidence_summary(model_log: "ModelLog") -> str:
+    """Return relationship evidence enum names.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        Compact relationship summary.
+    """
+
+    evidence = getattr(model_log, "relationship_evidence", {}) or {}
+    if not evidence:
+        return "unknown"
+    parts = []
+    for key in ("model", "weights", "input", "graph"):
+        value = evidence.get(key)
+        parts.append(f"{key}={getattr(value, 'name', value)}")
+    return ", ".join(parts)
+
+
+def _next_operation_hint(model_log: "ModelLog") -> str:
+    """Return available next-operation guidance.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        User-facing next-step hint.
+    """
+
+    if getattr(model_log, "_has_direct_writes", False):
+        return "direct writes present; replay() or rerun() will overlay recipe state"
+    if getattr(model_log, "_spec_revision", 0) != getattr(
+        model_log, "_activation_recipe_revision", 0
+    ):
+        return "spec stale; call replay() or rerun() to propagate"
+    if not getattr(model_log, "intervention_ready", False):
+        return "not intervention-ready; recapture with intervention_ready=True for replay templates"
+    return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
+
+
+def _rng_note_summary(model_log: "ModelLog") -> str:
+    """Return helper RNG and non-determinism notes.
+
+    Parameters
+    ----------
+    model_log:
+        Model log to inspect.
+
+    Returns
+    -------
+    str
+        RNG summary.
+    """
+
+    notes = []
+    for layer in getattr(model_log, "layer_list", []) or []:
+        for record in getattr(layer, "intervention_log", []) or []:
+            note = getattr(record, "determinism_note", None)
+            if note:
+                notes.append(str(note))
+    if notes:
+        return _shorten("; ".join(notes[:3]), limit=140)
+    if getattr(model_log, "save_rng_states", False):
+        return "per-operation RNG states captured"
+    return "no unseeded helper RNG notes"
+
+
+def _shorten(text: str, *, limit: int) -> str:
+    """Shorten text to a fixed display limit.
+
+    Parameters
+    ----------
+    text:
+        Text to shorten.
+    limit:
+        Maximum returned length.
+
+    Returns
+    -------
+    str
+        Shortened text.
+    """
+
+    if len(text) <= limit:
+        return text
+    return f"{text[: max(0, limit - 3)]}..."
 
 
 def _resolve_level(*, level: SummaryLevel, preset: SummaryLevel | None) -> str:

@@ -673,10 +673,12 @@ class Bundle:
                 pairs = [(str(member_name), log) for member_name, log in tuple_values]
             else:
                 log_values = cast("Sequence[ModelLog]", values)
-                pairs = [
-                    (cls._derive_name(log, name=None, index=index), log)
-                    for index, log in enumerate(log_values)
-                ]
+                pairs = cls._dedupe_default_names(
+                    [
+                        (cls._derive_name(log, name=None, index=index), log)
+                        for index, log in enumerate(log_values)
+                    ]
+                )
         if not pairs:
             raise ValueError("Bundle requires at least one ModelLog.")
         duplicate_names = sorted(
@@ -685,6 +687,32 @@ class Bundle:
         if duplicate_names:
             raise ValueError(f"Bundle member names must be unique; duplicates: {duplicate_names}")
         return pairs
+
+    @staticmethod
+    def _dedupe_default_names(pairs: list[tuple[str, "ModelLog"]]) -> list[tuple[str, "ModelLog"]]:
+        """Disambiguate automatically derived member names.
+
+        Parameters
+        ----------
+        pairs:
+            Derived name/log pairs from a sequence without explicit names.
+
+        Returns
+        -------
+        list[tuple[str, ModelLog]]
+            Pairs with ``_2``, ``_3`` suffixes for repeated names.
+        """
+
+        seen: dict[str, int] = {}
+        deduped: list[tuple[str, ModelLog]] = []
+        for member_name, log in pairs:
+            count = seen.get(member_name, 0) + 1
+            seen[member_name] = count
+            if count == 1:
+                deduped.append((member_name, log))
+            else:
+                deduped.append((f"{member_name}_{count}", log))
+        return deduped
 
     @staticmethod
     def _is_name_log_tuple(value: Any) -> bool:

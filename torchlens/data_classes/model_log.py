@@ -45,6 +45,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    from ..intervention.types import FireRecord
     from .._io.streaming import BundleStreamWriter
     from ..visualization.code_panel import CodePanelOption
     from .buffer_log import BufferAccessor
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._deprecations import warn_deprecated_alias
+from .. import _state
 from .._run_state import RunState
 from .._training_validation import reject_compiled_model
 from .._literals import (
@@ -564,6 +566,7 @@ class ModelLog:
         self.backward_num_passes: int = 0
         self.backward_peak_memory_bytes: int = 0
         self.backward_memory_backend: str = "unknown"
+        _state._register_log(self)
 
     # ********************************************
     # ************ Built-in Methods **************
@@ -1157,6 +1160,7 @@ class ModelLog:
         layer_map = fork._fork_layer_passes_from(self)
         fork._rebuild_fork_layer_collections(self, layer_map)
         fork._rebind_fork_owner_refs()
+        _state._register_log(fork)
         return fork
 
     def _next_fork_name(self) -> str:
@@ -1580,6 +1584,7 @@ class ModelLog:
                 if hasattr(grad_fn.corresponding_layer, "passes"):
                     for layer_pass in grad_fn.corresponding_layer.passes.values():
                         layer_pass.corresponding_grad_fn = grad_fn
+        _state._register_log(self)
 
     def replace_run_state_from(self, new_log: "ModelLog") -> None:
         """Atomically replace this log's run-state from another ``ModelLog``.
@@ -2123,6 +2128,29 @@ class ModelLog:
             keep_module=keep_module,
             **kwargs,
         )
+
+    def last_run_records(self) -> tuple["FireRecord", ...]:
+        """Return fire records from the most recent replay, rerun, or live capture.
+
+        Returns
+        -------
+        tuple[FireRecord, ...]
+            Immutable snapshot of matching intervention fire records.
+        """
+
+        ctx = getattr(self, "last_run_ctx", None)
+        if not isinstance(ctx, dict):
+            return ()
+        timestamp = ctx.get("timestamp")
+        if not isinstance(timestamp, (int, float)):
+            return ()
+        records = []
+        for layer in getattr(self, "layer_list", []) or []:
+            for record in getattr(layer, "intervention_log", []) or []:
+                record_timestamp = getattr(record, "timestamp", None)
+                if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
+                    records.append(record)
+        return tuple(records)
 
     def summary(
         self,
