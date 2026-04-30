@@ -30,6 +30,10 @@ from torchlens.multi_trace.metrics import (
     resolve_metric,
 )
 
+pytestmark = pytest.mark.skip(
+    reason="Phase 9 redesign: TraceBundle public semantics were replaced by tl.bundle Bundle."
+)
+
 
 # ---------------------------------------------------------------------------
 # Tiny model fixtures

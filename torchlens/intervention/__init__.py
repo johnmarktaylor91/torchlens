@@ -35,12 +35,17 @@ from .runtime import do
 from .save import load_intervention_spec, save_intervention
 from .selectors import contains, func, in_module, label, module, where
 from .errors import (
+    BaselineUndeterminedError,
+    BundleMemberError,
+    BundleRelationshipError,
+    DeadParentError,
     DirectActivationWriteWarning,
     EngineDispatchError,
     InterventionReadyConflictError,
     LiveModeLabelError,
     ModelMismatchError,
     MutateInPlaceWarning,
+    NoParentError,
 )
 from .types import (
     ArgComponent,
@@ -70,10 +75,14 @@ from .types import (
 
 __all__ = [
     "ArgComponent",
+    "BaselineUndeterminedError",
     "Bundle",
+    "BundleMemberError",
+    "BundleRelationshipError",
     "CapturedArgTemplate",
     "ContainerSpec",
     "DataclassField",
+    "DeadParentError",
     "DictKey",
     "DirectActivationWriteWarning",
     "EdgeUseRecord",
@@ -94,6 +103,7 @@ __all__ = [
     "ModelMismatchError",
     "MutateInPlaceWarning",
     "NamedField",
+    "NoParentError",
     "Relationship",
     "ParentRef",
     "SiteTable",

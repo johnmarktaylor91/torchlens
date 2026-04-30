@@ -1,6 +1,6 @@
-"""Multi-trace analysis for TorchLens.
+"""Internal multi-trace analysis helpers for TorchLens.
 
-Public surface:
+Internal surface:
 
 * :class:`TraceBundle` -- container for N ``ModelLog`` instances, with a
   union supergraph and per-node accessors.
@@ -68,7 +68,6 @@ __all__ = [
     "Supergraph",
     "SupergraphNode",
     "TopologyDiff",
-    "TraceBundle",
     "build_supergraph",
     "bundle",
     "compare_topology",

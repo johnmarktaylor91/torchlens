@@ -106,9 +106,33 @@ class LiveModeLabelError(SiteResolutionError):
     """Raised when live capture cannot resolve a finalized-label selector."""
 
 
+class BundleMemberError(TorchLensInterventionError):
+    """Raised when a bundle operation cannot resolve against one or more members."""
+
+
+class BundleRelationshipError(TorchLensInterventionError):
+    """Raised when bundle members lack the relationship required for an operation."""
+
+
+class BaselineUndeterminedError(TorchLensInterventionError):
+    """Raised when a bundle operation requires an unambiguous baseline."""
+
+
+class NoParentError(TorchLensInterventionError):
+    """Raised when a lineage operation requires a parent run and none is recorded."""
+
+
+class DeadParentError(TorchLensInterventionError):
+    """Raised when a lineage operation requires a parent run whose weakref is dead."""
+
+
 __all__ = [
+    "BaselineUndeterminedError",
+    "BundleMemberError",
+    "BundleRelationshipError",
     "ControlFlowDivergenceError",
     "ControlFlowDivergenceWarning",
+    "DeadParentError",
     "DirectActivationWriteWarning",
     "DirectWriteIgnoredWarning",
     "EngineDispatchError",
@@ -121,6 +145,7 @@ __all__ = [
     "ModelMismatchError",
     "MultiMatchWarning",
     "MutateInPlaceWarning",
+    "NoParentError",
     "ReplayPreconditionError",
     "SiteAmbiguityError",
     "SiteResolutionError",

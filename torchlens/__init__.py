@@ -53,7 +53,7 @@ from .visualization import (
 
 # ---- Public API: multi-trace analysis ------------------------------------
 
-from .multi_trace import NodeView, TraceBundle, bundle, show_bundle_graph
+from .multi_trace import NodeView, show_bundle_graph
 
 # ---- Public API: intervention placeholders --------------------------------
 
@@ -95,6 +95,25 @@ from .intervention import (
 # ---- Public API: decoration lifecycle ------------------------------------
 
 from .decoration import wrap_torch, unwrap_torch, wrapped
+
+
+def bundle(*args, **kwargs) -> Bundle:
+    """Construct a TorchLens Bundle.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Forwarded to :class:`torchlens.intervention.bundle.Bundle`.
+
+    Returns
+    -------
+    Bundle
+        Constructed Bundle.
+    """
+
+    from .intervention.bundle import Bundle as _Bundle
+
+    return _Bundle(*args, **kwargs)
 
 
 def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
@@ -141,7 +160,6 @@ __all__ = [
     "TensorLog",
     "TensorSliceSpec",
     "TorchLensPostfuncError",
-    "TraceBundle",
     "TrainingModeConfigError",
     "VisualizationOptions",
     "bwd_hook",

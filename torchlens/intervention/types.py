@@ -513,12 +513,16 @@ def _hook_spec_matches(
 
 
 class Relationship(str, Enum):
-    """Evidence level for relationships between logs, models, inputs, and graphs."""
+    """Evidence level for relationships between bundle members."""
 
-    UNKNOWN = "unknown"
     SAME_OBJECT = "same_object"
-    SAME_FINGERPRINT = "same_fingerprint"
-    DIFFERENT = "different"
+    SAME_MODEL_OBJECT_AT_CAPTURE = "same_model_at_capture"
+    SHARED_GRAPH_SAME_INPUT = "shared_graph_same_input"
+    SHARED_GRAPH_DIFFERENT_INPUT = "shared_graph_diff_input"
+    SHARED_ARCHITECTURE = "shared_architecture"
+    SAME_PARAM_SHAPES = "same_param_shapes"
+    DIFF_MODEL = "diff_model"
+    UNKNOWN = "unknown"
 
 
 class ForkFieldPolicy(str, Enum):
