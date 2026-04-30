@@ -8,7 +8,12 @@ from typing import Any
 import torch
 from torch import nn
 
-from .errors import HookValueError, SpliceModuleDeviceError, SpliceModuleDtypeError
+from .errors import (
+    AxisAmbiguityError,
+    HookValueError,
+    SpliceModuleDeviceError,
+    SpliceModuleDtypeError,
+)
 from .hooks import HookContext, normalize_hook
 from .types import HelperPortability, HelperSpec
 
@@ -881,7 +886,7 @@ def _align_direction(
         return direction
     if direction.ndim == 1 and activation.ndim > 1:
         if feature_axis is None:
-            raise HookValueError(
+            raise AxisAmbiguityError(
                 "vector directions require explicit feature_axis to avoid axis ambiguity"
             )
         normalized_axis = feature_axis % activation.ndim
