@@ -4,20 +4,110 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+import importlib
+import operator
+from typing import TYPE_CHECKING, Any, Literal
 import warnings
 
 import pandas as pd
+import torch
 
-from .errors import MultiMatchWarning, SiteAmbiguityError, SiteResolutionError
+from .errors import (
+    MultiMatchWarning,
+    ReplayPreconditionError,
+    SiteAmbiguityError,
+    SiteResolutionError,
+)
 from .selectors import BaseSelector, CompositeSelector, in_module
-from .types import FrozenTargetSpec, TargetSpec
+from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 
 if TYPE_CHECKING:
     from torchlens.data_classes.layer_pass_log import LayerPassLog
     from torchlens.data_classes.model_log import ModelLog
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
+
+
+def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionRegistryKey:
+    """Infer a portable registry key from a captured callable.
+
+    Parameters
+    ----------
+    func:
+        Callable captured during tracing.
+
+    Returns
+    -------
+    FunctionRegistryKey
+        Registry key using known namespaces where possible and import refs for
+        custom callables.
+    """
+
+    module = getattr(func, "__module__", "") or ""
+    qualname = getattr(func, "__qualname__", None) or getattr(func, "__name__", None) or repr(func)
+    name = getattr(func, "__name__", qualname.rsplit(".", maxsplit=1)[-1])
+    dispatch_kind: Literal["function", "dunder"] = (
+        "dunder" if str(name).startswith("__") and str(name).endswith("__") else "function"
+    )
+
+    if module == "torch":
+        return FunctionRegistryKey("torch", str(name), dispatch_kind)
+    if module == "torch.nn.functional":
+        return FunctionRegistryKey("torch.nn.functional", str(name), dispatch_kind)
+    if module == "operator":
+        return FunctionRegistryKey("operator", str(name), dispatch_kind)
+    if module in {"torch._tensor", "torch.Tensor"} or (
+        hasattr(torch.Tensor, str(name)) and "Tensor" in str(qualname)
+    ):
+        return FunctionRegistryKey("torch.Tensor", str(name), "method")
+
+    import_path = f"{module}:{qualname}" if module else None
+    return FunctionRegistryKey("custom", str(qualname), dispatch_kind, import_path=import_path)
+
+
+def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any]:
+    """Resolve a saved function registry key to a runtime callable.
+
+    Parameters
+    ----------
+    key:
+        Saved function registry key.
+
+    Returns
+    -------
+    Callable[..., Any]
+        Resolved callable.
+
+    Raises
+    ------
+    ReplayPreconditionError
+        If the namespace or qualified name cannot be resolved.
+    """
+
+    try:
+        if key.namespace == "torch":
+            return getattr(torch, key.qualname)
+        if key.namespace == "torch.Tensor":
+            return getattr(torch.Tensor, key.qualname)
+        if key.namespace == "torch.nn.functional":
+            return getattr(torch.nn.functional, key.qualname)
+        if key.namespace == "operator":
+            return getattr(operator, key.qualname)
+        if key.namespace == "custom":
+            if not key.import_path:
+                raise AttributeError("custom key is missing import_path")
+            module_name, _, qualname = key.import_path.partition(":")
+            module = importlib.import_module(module_name)
+            obj: Any = module
+            for part in qualname.split("."):
+                obj = getattr(obj, part)
+            if not callable(obj):
+                raise TypeError(f"{key.import_path!r} resolved to non-callable {obj!r}")
+            return obj
+    except (AttributeError, ImportError, TypeError) as exc:
+        raise ReplayPreconditionError(f"Could not resolve function registry key {key!r}") from exc
+
+    raise ReplayPreconditionError(f"Unknown function registry namespace {key.namespace!r}")
 
 
 @dataclass(frozen=True)

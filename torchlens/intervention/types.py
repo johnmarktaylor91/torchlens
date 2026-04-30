@@ -157,10 +157,17 @@ class HelperSpec:
 class FunctionRegistryKey:
     """Portable identity for a captured Python function."""
 
-    module: str | None
-    qualname: str | None
-    name: str | None = None
-    registry_id: str | None = None
+    namespace: Literal[
+        "torch",
+        "torch.Tensor",
+        "torch.nn.functional",
+        "operator",
+        "custom",
+    ]
+    qualname: str
+    dispatch_kind: Literal["function", "method", "dunder", "namespace_alias"]
+    version: int = 1
+    import_path: str | None = None
 
 
 @dataclass(frozen=True)

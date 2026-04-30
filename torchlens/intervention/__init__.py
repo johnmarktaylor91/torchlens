@@ -32,7 +32,14 @@ from .replay import replay, replay_from
 from .resolver import SiteTable, resolve_sites
 from .rerun import rerun
 from .runtime import do
-from .save import load_intervention_spec, save_intervention
+from .save import (
+    SaveLevel,
+    SpecCompat,
+    TargetManifestDiff,
+    check_spec_compat,
+    load_intervention_spec,
+    save_intervention,
+)
 from .selectors import contains, func, in_module, label, module, where
 from .errors import (
     BaselineUndeterminedError,
@@ -105,14 +112,18 @@ __all__ = [
     "NamedField",
     "NoParentError",
     "Relationship",
+    "SaveLevel",
     "ParentRef",
+    "SpecCompat",
     "SiteTable",
+    "TargetManifestDiff",
     "TargetSpec",
     "TensorSliceSpec",
     "TupleIndex",
     "Unsupported",
     "bwd_hook",
     "clamp",
+    "check_spec_compat",
     "contains",
     "do",
     "func",

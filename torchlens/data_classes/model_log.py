@@ -632,6 +632,39 @@ class ModelLog:
 
         return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
 
+    def save_intervention(
+        self,
+        path: str | Path,
+        *,
+        level: str = "executable_with_callables",
+        allow_direct_writes: bool = False,
+        overwrite: bool = False,
+    ) -> None:
+        """Save this log's intervention recipe to a ``.tlspec`` directory.
+
+        Parameters
+        ----------
+        path:
+            Destination ``.tlspec`` directory path.
+        level:
+            Save level: ``"audit"``, ``"executable_with_callables"``, or
+            ``"portable"``.
+        allow_direct_writes:
+            Whether executable saves may proceed after direct activation writes.
+        overwrite:
+            Whether an existing destination may be replaced.
+        """
+
+        from ..intervention.save import save_intervention
+
+        save_intervention(
+            self,
+            path,
+            level=level,
+            allow_direct_writes=allow_direct_writes,
+            overwrite=overwrite,
+        )
+
     def set(
         self,
         site: Any,

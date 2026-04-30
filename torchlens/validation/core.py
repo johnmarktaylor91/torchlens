@@ -43,7 +43,7 @@ MAX_PERTURB_ATTEMPTS = 100
 
 
 def _raise_if_portable_bundle_log(self: Any) -> None:
-    """Reject validation on portable-loaded model logs.
+    """Reject validation only when loaded logs lack replay callables.
 
     Parameters
     ----------
@@ -53,15 +53,25 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     Raises
     ------
     TorchLensIOError
-        If the log was loaded from a portable bundle.
+        If the log was loaded from a portable bundle without resolved
+        ``func_applied`` callables on computational nodes.
     """
 
-    if bool(getattr(self, "_loaded_from_bundle", False)):
+    if not bool(getattr(self, "_loaded_from_bundle", False)):
+        return
+    unresolved = [
+        getattr(layer, "layer_label", "<unknown>")
+        for layer in getattr(self, "layer_list", [])
+        if getattr(layer, "func_applied", None) is None
+        and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
+    ]
+    if unresolved:
         from .._io import TorchLensIOError
 
         raise TorchLensIOError(
-            "validate_forward_pass requires live func_applied callables; portable bundles "
-            "drop them. Run validation before saving or use plain pickle instead."
+            "validate_forward_pass requires resolved func_applied callables; portable bundles "
+            "drop them when functions cannot be represented. This bundle has unresolved "
+            f"computational functions, e.g. {unresolved[:3]!r}."
         )
 
 

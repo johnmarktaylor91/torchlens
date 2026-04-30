@@ -435,12 +435,9 @@ def _function_registry_key(func: Callable) -> FunctionRegistryKey:
         Best-effort function identity.
     """
 
-    return FunctionRegistryKey(
-        module=getattr(func, "__module__", None),
-        qualname=getattr(func, "__qualname__", None),
-        name=getattr(func, "__name__", None),
-        registry_id=None,
-    )
+    from torchlens.intervention.resolver import function_registry_key_from_callable
+
+    return function_registry_key_from_callable(func)
 
 
 def _literal_value_supported(value: Any) -> bool:

@@ -12,6 +12,8 @@ from .errors import HookValueError, SpliceModuleDeviceError, SpliceModuleDtypeEr
 from .hooks import HookContext, normalize_hook
 from .types import HelperPortability, HelperSpec
 
+HELPER_REGISTRY_VERSION = "1"
+
 
 def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
     """Create a helper that replaces an activation with zeros.
@@ -661,6 +663,91 @@ def _helper_spec(
     )
 
 
+def helper_from_serialized(
+    data: dict[str, Any],
+    *,
+    tensor_loader: Callable[[str], torch.Tensor],
+    import_resolver: Callable[[str], Callable[..., Any]],
+) -> HelperSpec | Callable[..., Any]:
+    """Reconstruct a helper or callable from serialized helper data.
+
+    Parameters
+    ----------
+    data:
+        JSON-decoded helper payload.
+    tensor_loader:
+        Callable mapping tensor reference IDs to loaded tensors.
+    import_resolver:
+        Callable resolving ``module:qualname`` import references.
+
+    Returns
+    -------
+    HelperSpec | Callable[..., Any]
+        Runtime helper spec or import-ref callable.
+    """
+
+    portability = data["portability"]
+    if portability == "import_ref":
+        return import_resolver(data["import_path"])
+    if portability == "opaque_audit":
+        return HelperSpec(
+            helper_name=data.get("name", "opaque_audit"),
+            portability="opaque_audit",
+            metadata=(("repr", data.get("repr", "")), ("executable", False)),
+        )
+
+    name = data["name"]
+    args = tuple(_decode_jsonish(value, tensor_loader) for value in data.get("args", []))
+    kwargs = {
+        str(key): _decode_jsonish(value, tensor_loader)
+        for key, value in data.get("kwargs", {}).items()
+    }
+    constructors: dict[str, Callable[..., HelperSpec]] = {
+        "zero_ablate": zero_ablate,
+        "mean_ablate": mean_ablate,
+        "resample_ablate": resample_ablate,
+        "steer": steer,
+        "scale": scale,
+        "clamp": clamp,
+        "noise": noise,
+        "project_onto": project_onto,
+        "project_off": project_off,
+        "swap_with": swap_with,
+        "splice_module": splice_module,
+        "bwd_hook": bwd_hook,
+        "gradient_zero": gradient_zero,
+        "gradient_scale": gradient_scale,
+    }
+    if name not in constructors:
+        raise ValueError(f"Unknown builtin helper {name!r}")
+    return constructors[name](*args, **kwargs)
+
+
+def _decode_jsonish(value: Any, tensor_loader: Callable[[str], torch.Tensor]) -> Any:
+    """Decode JSON-safe helper argument data.
+
+    Parameters
+    ----------
+    value:
+        JSON-decoded value.
+    tensor_loader:
+        Callable resolving tensor refs.
+
+    Returns
+    -------
+    Any
+        Runtime value.
+    """
+
+    if isinstance(value, dict) and "__tensor_ref__" in value:
+        return tensor_loader(str(value["__tensor_ref__"]))
+    if isinstance(value, list):
+        return [_decode_jsonish(item, tensor_loader) for item in value]
+    if isinstance(value, dict):
+        return {key: _decode_jsonish(item, tensor_loader) for key, item in value.items()}
+    return value
+
+
 def _make_generator(seed: int | None) -> torch.Generator | None:
     """Create a hook-local CPU generator when a seed is provided.
 
@@ -802,10 +889,12 @@ def _resolve_swap_value(other_label: Any, hook: HookContext) -> Any:
 
 
 __all__ = [
+    "HELPER_REGISTRY_VERSION",
     "bwd_hook",
     "clamp",
     "gradient_scale",
     "gradient_zero",
+    "helper_from_serialized",
     "mean_ablate",
     "noise",
     "project_off",

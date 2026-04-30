@@ -54,6 +54,18 @@ class ReplayPreconditionError(TorchLensInterventionError):
     """Raised when replay cannot satisfy its future execution preconditions."""
 
 
+class OpaqueCallableInExecutableSaveError(TorchLensInterventionError):
+    """Raised when an executable intervention save would require opaque code."""
+
+
+class DirectWriteInExecutableSaveError(TorchLensInterventionError):
+    """Raised when executable spec save sees direct activation writes."""
+
+
+class GraphShapeMismatchError(TorchLensInterventionError):
+    """Raised when a saved spec's graph shape is incompatible with a target log."""
+
+
 class ControlFlowDivergenceWarning(UserWarning):
     """Warning for replay-detected control-flow or saved-edge divergence."""
 
@@ -134,8 +146,10 @@ __all__ = [
     "ControlFlowDivergenceWarning",
     "DeadParentError",
     "DirectActivationWriteWarning",
+    "DirectWriteInExecutableSaveError",
     "DirectWriteIgnoredWarning",
     "EngineDispatchError",
+    "GraphShapeMismatchError",
     "HookSignatureError",
     "HookSiteCoverageError",
     "HookValueError",
@@ -146,6 +160,7 @@ __all__ = [
     "MultiMatchWarning",
     "MutateInPlaceWarning",
     "NoParentError",
+    "OpaqueCallableInExecutableSaveError",
     "ReplayPreconditionError",
     "SiteAmbiguityError",
     "SiteResolutionError",
