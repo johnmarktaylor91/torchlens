@@ -94,6 +94,8 @@ class _DummyLog:
         vis_node_placement: str = "auto",
         vis_renderer: str = "graphviz",
         vis_theme: str = "torchlens",
+        vis_intervention_mode: str = "node_mark",
+        vis_show_cone: bool = False,
     ) -> str:
         """Record render kwargs passed by the API under test."""
 
@@ -118,6 +120,8 @@ class _DummyLog:
                 "vis_node_placement": vis_node_placement,
                 "vis_renderer": vis_renderer,
                 "vis_theme": vis_theme,
+                "vis_intervention_mode": vis_intervention_mode,
+                "vis_show_cone": vis_show_cone,
             }
         )
         return "graph"

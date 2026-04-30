@@ -242,6 +242,7 @@ class ModelLog:
         "run_state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
+        "_output_container_specs_by_raw_label": FieldPolicy.KEEP,
         "layer_list": FieldPolicy.KEEP,
         "layer_dict_main_keys": FieldPolicy.KEEP,
         "layer_dict_all_keys": FieldPolicy.KEEP,
@@ -447,6 +448,7 @@ class ModelLog:
             "input": Relationship.UNKNOWN,
             "graph": Relationship.UNKNOWN,
         }
+        self._output_container_specs_by_raw_label: dict[str, Any] = {}
         self._activation_writer: Optional["BundleStreamWriter"] = None
         self._keep_activations_in_memory: bool = True
         self._keep_gradients_in_memory: bool = True
@@ -1629,6 +1631,133 @@ class ModelLog:
         replacement_state.update(preserved_state)
         self.__dict__.update(replacement_state)
 
+    def append_run_state_from(self, new_log: "ModelLog") -> None:
+        """Merge compatible chunk activations from ``new_log`` into this log.
+
+        Parameters
+        ----------
+        new_log:
+            Freshly captured append chunk whose topology and tensor metadata
+            have already been validated against this log.
+        """
+
+        new_by_raw = {layer.layer_label_raw: layer for layer in new_log.layer_list}
+        for layer in self.layer_list:
+            new_layer = new_by_raw[layer.layer_label_raw]
+            layer._append_tensor_from(new_layer, "activation")
+            layer._append_tensor_from(new_layer, "transformed_activation")
+            self._copy_append_last_chunk_fields(layer, new_layer)
+            self._refresh_appended_tensor_metadata(layer)
+        self.has_gradients = self.has_gradients or new_log.has_gradients
+        self.random_seed_used = new_log.random_seed_used
+        self.input_id_at_capture = new_log.input_id_at_capture
+        self.input_shape_hash = new_log.input_shape_hash
+        self._rebind_fork_owner_refs()
+
+    def _copy_append_last_chunk_fields(self, layer: Any, new_layer: Any) -> None:
+        """Copy per-call metadata fields from the last appended chunk.
+
+        Parameters
+        ----------
+        layer:
+            Existing accumulated layer pass.
+        new_layer:
+            New chunk layer pass supplying per-call state.
+        """
+
+        for field_name in (
+            "func_time",
+            "flops_forward",
+            "flops_backward",
+            "func_rng_states",
+            "func_autocast_state",
+            "func_argnames",
+            "num_args",
+            "num_positional_args",
+            "num_keyword_args",
+            "func_positional_args_non_tensor",
+            "func_kwargs_non_tensor",
+            "func_non_tensor_args",
+            "func_is_inplace",
+            "grad_fn_name",
+            "grad_fn_id",
+            "intervention_log",
+            "extra_data",
+        ):
+            if hasattr(new_layer, field_name):
+                layer._internal_set(
+                    field_name, self._copy_append_metadata_value(getattr(new_layer, field_name))
+                )
+
+    def _copy_append_metadata_value(self, value: Any) -> Any:
+        """Copy metadata from the last chunk without failing on non-leaf tensors.
+
+        Parameters
+        ----------
+        value:
+            Metadata value from the new chunk.
+
+        Returns
+        -------
+        Any
+            Best-effort copied value.
+        """
+
+        if isinstance(value, torch.Tensor):
+            from ..utils.tensor_utils import safe_copy
+
+            return safe_copy(value, detach_tensor=True)
+        if isinstance(value, list):
+            return [self._copy_append_metadata_value(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._copy_append_metadata_value(item) for item in value)
+        if isinstance(value, dict):
+            return {
+                self._copy_append_metadata_value(key): self._copy_append_metadata_value(item)
+                for key, item in value.items()
+            }
+        try:
+            return copy.deepcopy(value)
+        except RuntimeError:
+            return value
+
+    def _refresh_appended_tensor_metadata(self, layer: Any) -> None:
+        """Refresh shape, dtype, and memory fields after tensor concatenation.
+
+        Parameters
+        ----------
+        layer:
+            Layer pass whose tensor fields may have been concatenated.
+        """
+
+        for tensor_field, shape_field, dtype_field, memory_field in (
+            ("activation", "tensor_shape", "tensor_dtype", "tensor_memory"),
+            (
+                "transformed_activation",
+                "transformed_activation_shape",
+                "transformed_activation_dtype",
+                "transformed_activation_memory",
+            ),
+            ("gradient", "grad_shape", "grad_dtype", "grad_memory"),
+            (
+                "transformed_gradient",
+                "transformed_gradient_shape",
+                "transformed_gradient_dtype",
+                "transformed_gradient_memory",
+            ),
+        ):
+            value = getattr(layer, tensor_field, None)
+            if isinstance(value, torch.Tensor):
+                from ..utils.tensor_utils import get_tensor_memory_amount
+
+                layer._internal_set(shape_field, tuple(value.shape))
+                layer._internal_set(dtype_field, value.dtype)
+                layer._internal_set(memory_field, get_tensor_memory_amount(value))
+            else:
+                layer._internal_set(shape_field, None)
+                layer._internal_set(dtype_field, None)
+                layer._internal_set(memory_field, None)
+
     # ********************************************
     # ********** Computed Properties *************
     # ********************************************
@@ -2472,7 +2601,14 @@ class ModelLog:
 
         return _impl(self, site, strict=strict)
 
-    def rerun(self, model: nn.Module, x: Any = None, *, strict: bool = False) -> "ModelLog":
+    def rerun(
+        self,
+        model: nn.Module,
+        x: Any = None,
+        *,
+        append: bool = False,
+        strict: bool = False,
+    ) -> "ModelLog":
         """Re-execute a model with this log's active intervention spec.
 
         Parameters
@@ -2481,6 +2617,8 @@ class ModelLog:
             Model to execute through TorchLens decorated wrappers.
         x:
             Forward input. Phase 7 requires callers to pass this explicitly.
+        append:
+            If true, append a compatible chunk along batch dimension 0.
         strict:
             Whether graph-shape divergence should raise instead of warn.
 
@@ -2492,7 +2630,7 @@ class ModelLog:
 
         from ..intervention.rerun import rerun as _impl
 
-        return _impl(self, model, x, append=False, strict=strict)
+        return _impl(self, model, x, append=append, strict=strict)
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.

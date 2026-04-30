@@ -146,6 +146,7 @@ def save_intervention(
             "helper_registry_version": HELPER_REGISTRY_VERSION,
             "save_level": save_level.value,
             "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(serialized_spec),
+            "append_state": _append_state_for_json(log),
             "target_manifest": target_manifest,
             "helpers": _collect_helpers(serialized_spec),
             "intervention_spec": serialized_spec,
@@ -201,12 +202,39 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
             "executable": bool(data.get("executable", False)),
             "target_manifest": data.get("target_manifest", []),
             "function_registry_keys": data.get("function_registry_keys", []),
+            "append_state": data.get("append_state", {}),
             "loaded_from_tlspec": str(spec_path),
         }
     )
     spec.metadata = metadata
     _verify_loaded_function_keys(data.get("function_registry_keys", []))
     return spec
+
+
+def _append_state_for_json(log: Any) -> dict[str, Any]:
+    """Return append provenance fields for tlspec metadata.
+
+    Parameters
+    ----------
+    log:
+        Model log being saved.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-safe append state summary.
+    """
+
+    append_records = [
+        record
+        for record in getattr(log, "operation_history", [])
+        if isinstance(record, dict) and record.get("op") == "append"
+    ]
+    return {
+        "is_appended": bool(getattr(log, "is_appended", False)),
+        "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
+        "operation_history": append_records,
+    }
 
 
 def check_spec_compat(spec: InterventionSpec, new_log: Any) -> SpecCompat:
@@ -529,7 +557,13 @@ def _serialize_helper(
         )
         return {"portability": "import_ref", "name": helper.name, "import_path": import_path}
     if portability == "opaque_audit":
-        return {"portability": "opaque_audit", "name": helper.name, "repr": repr(helper)}
+        return {
+            "portability": "opaque_audit",
+            "name": helper.name,
+            "repr": repr(helper),
+            "batch_independent": bool(helper.batch_independent),
+            "compatible_with_append": bool(helper.compatible_with_append),
+        }
 
     return {
         "portability": "builtin",
@@ -538,6 +572,8 @@ def _serialize_helper(
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
+        "batch_independent": bool(helper.batch_independent),
+        "compatible_with_append": bool(helper.compatible_with_append),
     }
 
 

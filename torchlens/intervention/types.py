@@ -121,6 +121,8 @@ class HelperSpec:
         default=None, compare=False, repr=False
     )
     metadata: tuple[tuple[str, Any], ...] = ()
+    batch_independent: bool = False
+    compatible_with_append: bool = False
 
     @property
     def name(self) -> str:

@@ -42,7 +42,10 @@ from .save import (
 )
 from .selectors import contains, func, in_module, label, module, where
 from .errors import (
+    AppendBatchDependenceError,
+    AppendMismatchError,
     BaselineUndeterminedError,
+    BatchNormTrainModeWarning,
     BundleMemberError,
     BundleRelationshipError,
     DeadParentError,
@@ -81,8 +84,11 @@ from .types import (
 )
 
 __all__ = [
+    "AppendBatchDependenceError",
+    "AppendMismatchError",
     "ArgComponent",
     "BaselineUndeterminedError",
+    "BatchNormTrainModeWarning",
     "Bundle",
     "BundleMemberError",
     "BundleRelationshipError",

@@ -82,6 +82,18 @@ class ModelMismatchError(TorchLensInterventionError):
     """Raised when a supplied model does not match capture evidence."""
 
 
+class AppendMismatchError(TorchLensInterventionError):
+    """Raised when a chunked append candidate is incompatible with the base log."""
+
+
+class AppendBatchDependenceError(TorchLensInterventionError):
+    """Raised when append cannot prove helper or gradient batch independence."""
+
+
+class BatchNormTrainModeWarning(UserWarning):
+    """Warning for append reruns through batch-sensitive train-mode modules."""
+
+
 class SpecMutationError(TorchLensInterventionError):
     """Raised when an intervention spec mutator cannot apply a requested change."""
 
@@ -139,7 +151,10 @@ class DeadParentError(TorchLensInterventionError):
 
 
 __all__ = [
+    "AppendBatchDependenceError",
+    "AppendMismatchError",
     "BaselineUndeterminedError",
+    "BatchNormTrainModeWarning",
     "BundleMemberError",
     "BundleRelationshipError",
     "ControlFlowDivergenceError",

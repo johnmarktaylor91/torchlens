@@ -254,14 +254,15 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     assert log.layer_labels == new_log.layer_labels
 
 
-def test_rerun_append_true_is_deferred() -> None:
-    """Phase 7 explicitly rejects append rerun."""
+def test_rerun_append_true_dispatches_to_append() -> None:
+    """Phase 12 implements append rerun through the function API."""
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
 
-    with pytest.raises(NotImplementedError, match="Phase 12"):
-        rerun(log, ReluAdd(), x, append=True)
+    rerun(log, ReluAdd(), x, append=True)
+
+    assert log.run_state is RunState.APPENDED
 
 
 def test_rerun_x_none_requires_explicit_input() -> None:

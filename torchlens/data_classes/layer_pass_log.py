@@ -54,7 +54,13 @@ from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import LAYER_PASS_LOG_FORK_POLICY
 from ..intervention.errors import DirectActivationWriteWarning
 from .._state import pause_logging
-from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
+from ..utils.tensor_utils import (
+    concatenate_batch_tensors,
+    get_tensor_memory_amount,
+    print_override,
+    safe_copy,
+    safe_to,
+)
 from ..utils.display import human_readable_size
 
 _LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
@@ -371,6 +377,22 @@ class LayerPassLog:
         """
 
         object.__setattr__(self, attr, value)
+
+    def _append_tensor_from(self, other: "LayerPassLog", field_name: str) -> None:
+        """Append one tensor field from another pass along batch dimension 0.
+
+        Parameters
+        ----------
+        other:
+            New chunk pass with a compatible tensor field.
+        field_name:
+            Tensor attribute name to concatenate.
+        """
+
+        current_value = getattr(self, field_name)
+        other_value = getattr(other, field_name)
+        if isinstance(current_value, torch.Tensor) and isinstance(other_value, torch.Tensor):
+            self._internal_set(field_name, concatenate_batch_tensors(current_value, other_value))
 
     def __init__(self, fields_dict: Dict):
         """Initialise from a complete fields dictionary.

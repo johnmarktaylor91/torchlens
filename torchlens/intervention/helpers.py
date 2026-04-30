@@ -38,7 +38,11 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
         return _hook
 
     return _helper_spec(
-        "zero_ablate", kwargs={"force_shape_change": force_shape_change}, factory=factory
+        "zero_ablate",
+        kwargs={"force_shape_change": force_shape_change},
+        factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -77,11 +81,14 @@ def mean_ablate(
 
         return _hook
 
+    batch_independent = not (source == "batch_mean" or over in {"batch", "batch_mean", "self"})
     return _helper_spec(
         "mean_ablate",
         args=(source,),
         kwargs={"over": over, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=batch_independent,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -146,6 +153,8 @@ def resample_ablate(
         args=(source_value,),
         kwargs={"seed": seed, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=False,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -202,6 +211,8 @@ def steer(
             "force_shape_change": force_shape_change,
         },
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -234,6 +245,8 @@ def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
         args=(factor,),
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -275,6 +288,8 @@ def clamp(
         "clamp",
         kwargs={"min": min, "max": max, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -329,6 +344,8 @@ def noise(
         args=(std,),
         kwargs={"seed": seed, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -375,6 +392,8 @@ def project_onto(
         args=(direction,),
         kwargs={"feature_axis": feature_axis, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -422,6 +441,8 @@ def project_off(
         args=(direction,),
         kwargs={"feature_axis": feature_axis, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -464,6 +485,8 @@ def swap_with(
         args=(other_label,),
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=True,
+        compatible_with_append=not force_shape_change,
     )
 
 
@@ -520,6 +543,8 @@ def splice_module(
         args=(module,),
         kwargs={"input": input, "output": output, "force_shape_change": force_shape_change},
         factory=factory,
+        batch_independent=False,
+        compatible_with_append=False,
     )
 
 
@@ -549,6 +574,8 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True},
+        batch_independent=False,
+        compatible_with_append=False,
     )
 
 
@@ -580,6 +607,8 @@ def gradient_zero(*, force_shape_change: bool = False) -> HelperSpec:
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
+        batch_independent=False,
+        compatible_with_append=False,
     )
 
 
@@ -614,6 +643,8 @@ def gradient_scale(factor: float, *, force_shape_change: bool = False) -> Helper
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
+        batch_independent=False,
+        compatible_with_append=False,
     )
 
 
@@ -626,6 +657,8 @@ def _helper_spec(
     portability: HelperPortability = "builtin",
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
+    batch_independent: bool = False,
+    compatible_with_append: bool = False,
 ) -> HelperSpec:
     """Build a HelperSpec with stable tuple metadata.
 
@@ -645,6 +678,10 @@ def _helper_spec(
         Runtime hook factory.
     metadata:
         Extra helper metadata.
+    batch_independent:
+        Whether this helper can be applied independently to each batch item.
+    compatible_with_append:
+        Whether this helper opts into append when it changes activation shape.
 
     Returns
     -------
@@ -660,6 +697,8 @@ def _helper_spec(
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
+        batch_independent=batch_independent,
+        compatible_with_append=compatible_with_append,
     )
 
 
@@ -694,6 +733,8 @@ def helper_from_serialized(
             helper_name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
+            batch_independent=bool(data.get("batch_independent", False)),
+            compatible_with_append=bool(data.get("compatible_with_append", False)),
         )
 
     name = data["name"]
