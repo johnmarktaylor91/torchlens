@@ -467,9 +467,11 @@ def _run_model_and_save_specified_activations(
             backward finalization.
         activation_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved activation.
-        intervention_ready: If True, mark the log as ready for future intervention
-            replay-template capture without executing hooks in Phase 4a.
-        hooks: Future hook plan input. Stored inertly in runtime context until Phase 4c.
+        intervention_ready: If True, capture replay-template metadata and mark the
+            returned log as eligible for intervention mutators, replay, rerun, and
+            intervention spec persistence.
+        hooks: Optional live forward post-hook plan. Accepts the same shapes as
+            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
         verbose: If True, print timed progress messages at each major pipeline stage.
@@ -727,9 +729,12 @@ def log_forward_pass(
         keep_gradients_in_memory: Whether streamed gradients should remain in memory after
             ``log_backward`` or ``recording_backward`` finalizes the bundle.
         activation_sink: Deprecated alias for ``streaming.activation_callback``.
-        intervention_ready: If True, enable Phase 4a intervention-readiness metadata and
-            replay-template capture flags. This does not imply ``save_function_args=True``.
-        hooks: Future hook plan input. Accepted but not executed until Phase 4c.
+        intervention_ready: If True, capture replay-template metadata and mark the
+            returned log as eligible for intervention mutators, replay, rerun, and
+            intervention spec persistence. This does not imply
+            ``save_function_args=True``.
+        hooks: Optional live forward post-hook plan. Accepts the same shapes as
+            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.

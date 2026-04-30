@@ -87,7 +87,13 @@ class BaseSelector:
 
 @dataclass(frozen=True, repr=False)
 class LabelSelector(BaseSelector):
-    """Exact TorchLens layer-label selector."""
+    """Exact TorchLens layer-label selector.
+
+    Parameters
+    ----------
+    name:
+        TorchLens final, raw, short, or pass-qualified label.
+    """
 
     name: str
 
@@ -107,7 +113,13 @@ class LabelSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class FuncSelector(BaseSelector):
-    """Function-name selector."""
+    """Function-name selector.
+
+    Parameters
+    ----------
+    name:
+        Captured function name such as ``"relu"`` or ``"matmul"``.
+    """
 
     name: str
 
@@ -127,7 +139,13 @@ class FuncSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class ModuleSelector(BaseSelector):
-    """Module-output-boundary selector."""
+    """Module-output-boundary selector.
+
+    Parameters
+    ----------
+    address:
+        Module address or pass label.
+    """
 
     address: str
 
@@ -147,7 +165,13 @@ class ModuleSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class ContainsSelector(BaseSelector):
-    """Label-substring selector."""
+    """Label-substring selector.
+
+    Parameters
+    ----------
+    substring:
+        Substring to match in TorchLens labels.
+    """
 
     substring: str
 
@@ -167,7 +191,15 @@ class ContainsSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class WhereSelector(BaseSelector):
-    """Predicate selector over ``LayerPassLog`` objects."""
+    """Predicate selector over ``LayerPassLog`` objects.
+
+    Parameters
+    ----------
+    predicate:
+        Callable that receives a layer pass record.
+    name_hint:
+        Optional diagnostic label for this non-portable selector.
+    """
 
     predicate: Callable[[Any], bool]
     name_hint: str | None = None
@@ -220,7 +252,13 @@ class WhereSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class InModuleSelector(BaseSelector):
-    """Module-containment selector."""
+    """Module-containment selector.
+
+    Parameters
+    ----------
+    address:
+        Module address whose pass-qualified containment should match.
+    """
 
     address: str
 
@@ -240,7 +278,15 @@ class InModuleSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class CompositeSelector(BaseSelector):
-    """Selector composed with ``&`` or ``|``."""
+    """Selector composed with ``&`` or ``|``.
+
+    Parameters
+    ----------
+    operator:
+        ``"and"`` for intersection or ``"or"`` for union.
+    selectors:
+        Pair of selectors to combine.
+    """
 
     operator: Literal["and", "or"]
     selectors: tuple[SelectorLike, SelectorLike]
@@ -383,11 +429,39 @@ def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> 
 
 
 @overload
-def in_module(address_or_layer: str) -> InModuleSelector: ...
+def in_module(address_or_layer: str) -> InModuleSelector:
+    """Create a module-containment selector.
+
+    Parameters
+    ----------
+    address_or_layer:
+        Module address.
+
+    Returns
+    -------
+    InModuleSelector
+        Selector matching sites contained in the module.
+    """
+    ...
 
 
 @overload
-def in_module(address_or_layer: Any, address: str) -> bool: ...
+def in_module(address_or_layer: Any, address: str) -> bool:
+    """Test whether a layer pass belongs to a module.
+
+    Parameters
+    ----------
+    address_or_layer:
+        Layer pass record.
+    address:
+        Module address.
+
+    Returns
+    -------
+    bool
+        Whether the layer pass belongs to the module.
+    """
+    ...
 
 
 def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSelector | bool:

@@ -691,7 +691,8 @@ class ModelLog:
         strict:
             Whether site resolution should reject non-portable selectors.
         confirm_mutation:
-            Reserved confirmation flag for Phase 8b warning policy.
+            Suppress the once-per-root mutate-in-place warning for callers that
+            intentionally mutate this log.
 
         Returns
         -------
@@ -739,7 +740,8 @@ class ModelLog:
         prepend:
             Whether new sticky hooks should run before existing sticky hooks.
         confirm_mutation:
-            Reserved confirmation flag for Phase 8b warning policy.
+            Suppress the once-per-root mutate-in-place warning for callers that
+            intentionally mutate this log.
 
         Returns
         -------
@@ -793,7 +795,8 @@ class ModelLog:
         strict:
             Whether no-op detach requests should raise.
         confirm_mutation:
-            Reserved confirmation flag for Phase 8b warning policy.
+            Suppress the once-per-root mutate-in-place warning for callers that
+            intentionally mutate this log.
 
         Returns
         -------
@@ -846,7 +849,8 @@ class ModelLog:
         Parameters
         ----------
         confirm_mutation:
-            Reserved confirmation flag for Phase 8b warning policy.
+            Suppress the once-per-root mutate-in-place warning for callers that
+            intentionally mutate this log.
 
         Returns
         -------
@@ -886,7 +890,8 @@ class ModelLog:
         engine:
             ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
         confirm_mutation:
-            Reserved confirmation flag for Phase 8b warning policy.
+            Suppress the once-per-root mutate-in-place warning for callers that
+            intentionally mutate this log.
         strict:
             Whether selector and propagation checks should raise.
 
