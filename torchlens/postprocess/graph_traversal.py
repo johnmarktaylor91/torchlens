@@ -58,6 +58,12 @@ def _add_output_layers(
         if output_addresses[i] != "":
             output_address += f".{output_addresses[i]}"
         new_output_node.io_role = output_address
+        output_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
+            output_node.tensor_label_raw
+        )
+        if output_path_meta is not None:
+            new_output_node.output_path = output_path_meta[0]
+            new_output_node.container_spec = output_path_meta[1]
 
         # Fix function information:
 
@@ -124,6 +130,7 @@ def _add_output_layers(
             "args": {0: output_node.tensor_label_raw},
             "kwargs": {},
         }
+        new_output_node.edge_uses = []
 
         # Clear func_config on synthetic output nodes:
         new_output_node.func_config = {}

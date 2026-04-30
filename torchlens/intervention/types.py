@@ -8,7 +8,46 @@ from enum import Enum
 from typing import Any, Literal, TypeAlias
 
 GraphShapeHash: TypeAlias = str
-OutputPathComponent: TypeAlias = str | int
+
+
+@dataclass(frozen=True)
+class TupleIndex:
+    """Index component for tuple/list output paths."""
+
+    index: int
+
+
+@dataclass(frozen=True)
+class DictKey:
+    """Key component for dict output paths."""
+
+    key: Any
+
+
+@dataclass(frozen=True)
+class NamedField:
+    """Field-name component for namedtuple output paths."""
+
+    name: str
+
+
+@dataclass(frozen=True)
+class DataclassField:
+    """Field-name component for dataclass output paths."""
+
+    name: str
+
+
+@dataclass(frozen=True)
+class HFKey:
+    """Key component for HuggingFace ``ModelOutput`` output paths."""
+
+    key: Any
+
+
+OutputPathComponent: TypeAlias = (
+    TupleIndex | DictKey | NamedField | DataclassField | HFKey | str | int
+)
 
 
 @dataclass(frozen=True)
@@ -124,14 +163,59 @@ class FunctionRegistryKey:
     registry_id: str | None = None
 
 
-@dataclass
-class CapturedArgTemplate:
-    """Replay template for one captured function argument container."""
+@dataclass(frozen=True)
+class ContainerSpec:
+    """Portable description of an output container seen during capture."""
 
-    template_kind: Literal["args", "kwargs", "value"]
-    values: Any = None
-    tensor_paths: tuple[tuple[OutputPathComponent, ...], ...] = ()
-    source_labels: tuple[str, ...] = ()
+    kind: Literal["tuple", "list", "dict", "namedtuple", "dataclass", "hf_model_output"]
+    length: int | None = None
+    keys: tuple[Any, ...] = ()
+    fields: tuple[str, ...] = ()
+    type_module: str | None = None
+    type_qualname: str | None = None
+    child_specs: tuple[tuple[OutputPathComponent, "ContainerSpec"], ...] = ()
+
+
+@dataclass(frozen=True)
+class ParentRef:
+    """Template component that resolves to a previously captured tensor."""
+
+    parent_label: str
+
+
+@dataclass(frozen=True)
+class LiteralTensor:
+    """Template component that stores a tensor literal for replay."""
+
+    value: Any
+
+
+@dataclass(frozen=True)
+class LiteralValue:
+    """Template component that stores a non-tensor literal for replay."""
+
+    value: Any
+
+
+@dataclass(frozen=True)
+class Unsupported:
+    """Template component for values replay cannot reconstruct yet."""
+
+    reason: str
+    value_type: str
+
+
+ArgComponent: TypeAlias = ParentRef | LiteralTensor | LiteralValue | Unsupported | tuple[Any, ...]
+
+
+@dataclass(frozen=True)
+class CapturedArgTemplate:
+    """Replay template for one captured function call."""
+
+    args: tuple[ArgComponent, ...] = ()
+    kwargs: tuple[tuple[str, ArgComponent], ...] = ()
+    func_id: FunctionRegistryKey | None = None
+    notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -152,9 +236,11 @@ class EdgeUseRecord:
 
     parent_label: str
     child_label: str
+    arg_kind: Literal["positional", "keyword"]
     arg_path: tuple[OutputPathComponent, ...]
-    arg_kind: Literal["args", "kwargs"]
-    func_call_id: int | None = None
+    view_or_copy: Literal["view", "copy", "unknown"] | None
+    parent_func_call_id: int | None
+    child_func_call_id: int
 
 
 @dataclass
@@ -308,6 +394,10 @@ LAYER_PASS_LOG_FORK_POLICY = _build_layer_pass_log_fork_policy()
 
 __all__ = [
     "CapturedArgTemplate",
+    "ArgComponent",
+    "ContainerSpec",
+    "DataclassField",
+    "DictKey",
     "EdgeUseRecord",
     "FireRecord",
     "ForkFieldPolicy",
@@ -315,12 +405,19 @@ __all__ = [
     "FrozenTargetSpec",
     "FunctionRegistryKey",
     "GraphShapeHash",
+    "HFKey",
     "HelperSpec",
     "InterventionSpec",
     "LAYER_PASS_LOG_FORK_POLICY",
+    "LiteralTensor",
+    "LiteralValue",
     "MODEL_LOG_FORK_POLICY",
+    "NamedField",
     "OutputPathComponent",
+    "ParentRef",
     "Relationship",
     "TargetSpec",
     "TensorSliceSpec",
+    "TupleIndex",
+    "Unsupported",
 ]
