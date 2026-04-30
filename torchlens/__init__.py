@@ -60,6 +60,7 @@ from .multi_trace import NodeView, TraceBundle, bundle, show_bundle_graph
 # not import them from _state.py, which is the global toggle-cycle boundary.
 from .intervention import (
     Bundle,
+    SiteTable,
     TensorSliceSpec,
     bwd_hook,
     clamp,
@@ -80,6 +81,7 @@ from .intervention import (
     replay_from,
     rerun,
     resample_ablate,
+    resolve_sites,
     save_intervention,
     scale,
     splice_module,
@@ -133,6 +135,7 @@ __all__ = [
     "NodeView",
     "ParamLog",
     "StreamingOptions",
+    "SiteTable",
     "TensorLog",
     "TensorSliceSpec",
     "TorchLensPostfuncError",
@@ -172,6 +175,7 @@ __all__ = [
     "render_model_log_with_dagua",
     "rerun",
     "resample_ablate",
+    "resolve_sites",
     "save",
     "save_intervention",
     "scale",

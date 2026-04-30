@@ -42,6 +42,10 @@ class InterventionAuditWarning(UserWarning):
     """Warning for non-canonical intervention state in audit contexts."""
 
 
+class MultiMatchWarning(UserWarning):
+    """Informational warning for selector queries that resolve multiple sites."""
+
+
 class ReplayPreconditionError(TorchLensInterventionError):
     """Raised when replay cannot satisfy its future execution preconditions."""
 
@@ -54,13 +58,19 @@ class SiteResolutionError(TorchLensInterventionError):
     """Raised when future selector resolution cannot identify requested sites."""
 
 
+class SiteAmbiguityError(SiteResolutionError):
+    """Raised when a site query resolves too many sites for the surface."""
+
+
 __all__ = [
     "DirectActivationWriteWarning",
     "DirectWriteIgnoredWarning",
     "EngineDispatchError",
     "InterventionAuditWarning",
+    "MultiMatchWarning",
     "MutateInPlaceWarning",
     "ReplayPreconditionError",
+    "SiteAmbiguityError",
     "SiteResolutionError",
     "TorchLensInterventionError",
 ]

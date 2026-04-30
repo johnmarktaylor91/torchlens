@@ -18,7 +18,7 @@ For integer keys: direct index into ``layer_list`` (supports negative indexing).
 For slice keys: returns a list slice of ``layer_list``.
 """
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 
@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .layer_pass_log import LayerPassLog
+from ..intervention.errors import SiteAmbiguityError
+from ..intervention.selectors import BaseSelector
+from ..intervention.types import FrozenTargetSpec, TargetSpec
 
 
 def _getitem_during_pass(self: "ModelLog", ix) -> LayerPassLog:
@@ -44,7 +47,7 @@ def _getitem_during_pass(self: "ModelLog", ix) -> LayerPassLog:
         raise ValueError(f"{ix} not found in the ModelLog object.")
 
 
-def _getitem_after_pass(self, ix):
+def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
     """Multi-key lookup for ModelLog entries after postprocessing.
 
     Lookup cascade:
@@ -66,6 +69,16 @@ def _getitem_after_pass(self, ix):
         KeyError: No match found.
         ValueError: Ambiguous substring match or invalid index.
     """
+    if isinstance(ix, BaseSelector | TargetSpec | FrozenTargetSpec):
+        from ..intervention.resolver import resolve_sites
+
+        table = resolve_sites(self, ix, max_fanout=1)
+        if len(table) != 1:
+            raise SiteAmbiguityError(
+                f"site {ix!r} matched {len(table)} sites, but ModelLog.__getitem__ requires one."
+            )
+        return table.first()
+
     if isinstance(ix, slice):
         return self.layer_list[ix]  # #78: slice indexing support
 
@@ -101,15 +114,22 @@ def _getitem_after_pass(self, ix):
         keys_with_substr = [
             key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
-        if len(keys_with_substr) == 1:
-            return self.layer_dict_all_keys[keys_with_substr[0]]
-        elif len(keys_with_substr) > 1:
-            matches_str = ", ".join(str(k) for k in keys_with_substr[:10])
+        entries_with_substr = {
+            self.layer_dict_all_keys[key].creation_order: self.layer_dict_all_keys[key]
+            for key in keys_with_substr
+        }
+        if len(entries_with_substr) == 1:
+            return next(iter(entries_with_substr.values()))
+        elif len(entries_with_substr) > 1:
+            matches = [entry.layer_label for entry in entries_with_substr.values()]
+            matches_str = ", ".join(str(k) for k in matches[:10])
             suffix = (
-                f" (and {len(keys_with_substr) - 10} more)" if len(keys_with_substr) > 10 else ""
+                f" (and {len(entries_with_substr) - 10} more)"
+                if len(entries_with_substr) > 10
+                else ""
             )
             raise ValueError(
-                f"Ambiguous lookup: '{ix}' matches {len(keys_with_substr)} layers: "
+                f"Ambiguous lookup: '{ix}' matches {len(entries_with_substr)} layers: "
                 f"{matches_str}{suffix}. Please use a more specific key."
             )
 

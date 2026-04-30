@@ -22,6 +22,7 @@ from .helpers import (
     zero_ablate,
 )
 from .replay import replay, replay_from
+from .resolver import SiteTable, resolve_sites
 from .rerun import rerun
 from .runtime import do
 from .save import load_intervention_spec, save_intervention
@@ -53,6 +54,7 @@ __all__ = [
     "HelperSpec",
     "InterventionSpec",
     "Relationship",
+    "SiteTable",
     "TargetSpec",
     "TensorSliceSpec",
     "bwd_hook",
@@ -74,6 +76,7 @@ __all__ = [
     "replay_from",
     "rerun",
     "resample_ablate",
+    "resolve_sites",
     "save_intervention",
     "scale",
     "splice_module",

@@ -583,6 +583,50 @@ class ModelLog:
         else:
             return _getitem_during_pass(self, ix)
 
+    def find_sites(self, query: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+        """Return a table of intervention sites matching a query.
+
+        Parameters
+        ----------
+        query:
+            Selector, target spec, frozen target spec, or non-strict bare string.
+        strict:
+            Whether to reject non-portable query forms.
+        max_fanout:
+            Maximum number of matching sites.
+
+        Returns
+        -------
+        SiteTable
+            Ordered table of matching layer-pass records.
+        """
+
+        from ..intervention.resolver import find_sites
+
+        return find_sites(self, query, strict=strict, max_fanout=max_fanout)
+
+    def resolve_sites(self, query: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+        """Resolve intervention sites matching a query.
+
+        Parameters
+        ----------
+        query:
+            Selector, target spec, frozen target spec, or non-strict bare string.
+        strict:
+            Whether to reject non-portable query forms.
+        max_fanout:
+            Maximum number of matching sites.
+
+        Returns
+        -------
+        SiteTable
+            Ordered table of matching layer-pass records.
+        """
+
+        from ..intervention.resolver import resolve_sites
+
+        return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+
     def __str__(self) -> str:
         """Human-readable summary; delegates to post-pass or mid-pass formatter."""
         if self._pass_finished:
