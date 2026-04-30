@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal, TypeAlias
@@ -64,13 +65,53 @@ class FrozenTargetSpec:
     metadata: tuple[tuple[str, Any], ...] = ()
 
 
+HelperKind: TypeAlias = Literal["forward", "backward"]
+HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
+
+
 @dataclass(frozen=True)
 class HelperSpec:
-    """Portable identity for helper-built interventions."""
+    """Portable identity and hook factory for helper-built interventions."""
 
     helper_name: str
     args: tuple[Any, ...] = ()
     kwargs: tuple[tuple[str, Any], ...] = ()
+    kind: HelperKind = "forward"
+    portability: HelperPortability = "builtin"
+    factory: Callable[[], Callable[..., Any]] | None = field(
+        default=None, compare=False, repr=False
+    )
+    metadata: tuple[tuple[str, Any], ...] = ()
+
+    @property
+    def name(self) -> str:
+        """Return this helper's public name.
+
+        Returns
+        -------
+        str
+            Stable helper name.
+        """
+
+        return self.helper_name
+
+    def __call__(self) -> Callable[..., Any]:
+        """Build this helper's normalized hook callable.
+
+        Returns
+        -------
+        Callable[..., Any]
+            Hook callable with signature ``hook(activation, *, hook)``.
+
+        Raises
+        ------
+        TypeError
+            If the spec does not carry a runtime factory.
+        """
+
+        if self.factory is None:
+            raise TypeError(f"HelperSpec {self.helper_name!r} has no hook factory")
+        return self.factory()
 
 
 @dataclass(frozen=True)

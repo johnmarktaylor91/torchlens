@@ -21,6 +21,13 @@ from .helpers import (
     swap_with,
     zero_ablate,
 )
+from .hooks import (
+    HookContext,
+    NormalizedHookEntry,
+    make_hook_context,
+    normalize_hook,
+    normalize_hook_plan,
+)
 from .replay import replay, replay_from
 from .resolver import SiteTable, resolve_sites
 from .rerun import rerun
@@ -52,6 +59,7 @@ __all__ = [
     "FrozenTargetSpec",
     "FunctionRegistryKey",
     "HelperSpec",
+    "HookContext",
     "InterventionSpec",
     "Relationship",
     "SiteTable",
@@ -67,9 +75,13 @@ __all__ = [
     "in_module",
     "label",
     "load_intervention_spec",
+    "make_hook_context",
     "mean_ablate",
     "module",
     "noise",
+    "normalize_hook",
+    "normalize_hook_plan",
+    "NormalizedHookEntry",
     "project_off",
     "project_onto",
     "replay",

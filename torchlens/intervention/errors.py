@@ -62,15 +62,40 @@ class SiteAmbiguityError(SiteResolutionError):
     """Raised when a site query resolves too many sites for the surface."""
 
 
+class SpliceModuleDtypeError(TorchLensInterventionError):
+    """Raised when ``splice_module`` returns a tensor with an unexpected dtype."""
+
+
+class SpliceModuleDeviceError(TorchLensInterventionError):
+    """Raised when ``splice_module`` returns a tensor on an unexpected device."""
+
+
+class HookSignatureError(TorchLensInterventionError):
+    """Raised when a hook callable does not accept the required signature."""
+
+
+class HookValueError(TorchLensInterventionError):
+    """Raised when a hook returns an invalid replacement value."""
+
+
+class HookSiteCoverageError(SiteResolutionError):
+    """Raised when hook normalization cannot associate a hook with any site."""
+
+
 __all__ = [
     "DirectActivationWriteWarning",
     "DirectWriteIgnoredWarning",
     "EngineDispatchError",
+    "HookSignatureError",
+    "HookSiteCoverageError",
+    "HookValueError",
     "InterventionAuditWarning",
     "MultiMatchWarning",
     "MutateInPlaceWarning",
     "ReplayPreconditionError",
     "SiteAmbiguityError",
     "SiteResolutionError",
+    "SpliceModuleDeviceError",
+    "SpliceModuleDtypeError",
     "TorchLensInterventionError",
 ]
