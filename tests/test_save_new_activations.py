@@ -170,46 +170,67 @@ def test_save_new_activations_fast_path_does_not_attach_streaming_refs() -> None
 
 
 # =============================================================================
-# Known failure: torchvision models with identity-propagated ops
+# Torchvision models with identity-propagated ops
 # =============================================================================
 
 
-@pytest.mark.slow
-def test_save_new_activations_alexnet_fails():
-    """AlexNet save_new_activations fails due to identity op counter misalignment.
+def _assert_save_new_activations_matches_fresh_log(
+    model: nn.Module, x1: torch.Tensor, x2: torch.Tensor
+) -> None:
+    """Verify fast activation refresh matches a fresh exhaustive log.
 
-    Identity operations (where output tensor has same barcode as input)
-    are detected and dropped in the exhaustive pass via label propagation
-    (decorate_torch.py:98-100). The fast pass counter diverges because identity
-    detection may not fire identically, producing raw labels not in the original
-    _raw_to_final_layer_labels mapping.
-
-    This is a known limitation — models with identity-propagated ops require
-    a fresh log_forward_pass call instead of save_new_activations.
+    Parameters
+    ----------
+    model:
+        Model to log and refresh.
+    x1:
+        Initial input for the exhaustive log.
+    x2:
+        Replacement input for ``save_new_activations`` and the fresh log.
     """
+    log = log_forward_pass(model, x1, random_seed=42)
+    fresh_log = None
+    try:
+        log.save_new_activations(model, x2, random_seed=42)
+        fresh_log = log_forward_pass(model, x2, random_seed=42)
+        fresh_layers_by_label = {layer.layer_label: layer for layer in fresh_log.layer_list}
+
+        compared_layers = 0
+        for layer in log.layer_list:
+            if layer.activation is None:
+                continue
+            assert layer.layer_label in fresh_layers_by_label
+            fresh_activation = fresh_layers_by_label[layer.layer_label].activation
+            assert fresh_activation is not None
+            assert layer.activation.shape == fresh_activation.shape
+            assert layer.activation.dtype == fresh_activation.dtype
+            assert torch.allclose(layer.activation, fresh_activation, rtol=1e-4, atol=1e-5)
+            compared_layers += 1
+        assert compared_layers > 0
+    finally:
+        log.cleanup()
+        if fresh_log is not None:
+            fresh_log.cleanup()
+
+
+@pytest.mark.slow
+def test_save_new_activations_alexnet_fails() -> None:
+    """AlexNet fast activation refresh matches a fresh exhaustive log."""
     torchvision = pytest.importorskip("torchvision")
     model = torchvision.models.alexnet(weights=None)
     model.eval()
     x = torch.randn(1, 3, 224, 224)
-    log = log_forward_pass(model, x, random_seed=42)
-
-    with pytest.raises(ValueError, match="computational graph changed"):
-        log.save_new_activations(model, torch.randn(1, 3, 224, 224), random_seed=42)
-    log.cleanup()
+    _assert_save_new_activations_matches_fresh_log(model, x, torch.randn(1, 3, 224, 224))
 
 
 @pytest.mark.slow
-def test_save_new_activations_resnet_fails():
-    """ResNet18 also fails save_new_activations (same identity op issue)."""
+def test_save_new_activations_resnet_fails() -> None:
+    """ResNet18 fast activation refresh matches a fresh exhaustive log."""
     torchvision = pytest.importorskip("torchvision")
     model = torchvision.models.resnet18(weights=None)
     model.eval()
     x = torch.randn(1, 3, 224, 224)
-    log = log_forward_pass(model, x, random_seed=42)
-
-    with pytest.raises(ValueError, match="computational graph changed"):
-        log.save_new_activations(model, torch.randn(1, 3, 224, 224), random_seed=42)
-    log.cleanup()
+    _assert_save_new_activations_matches_fresh_log(model, x, torch.randn(1, 3, 224, 224))
 
 
 # =============================================================================
