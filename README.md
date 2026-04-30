@@ -60,6 +60,51 @@ in its forward pass; you can grab the saved outputs of every last one:
 The goal of *TorchLens* is to do this for any PyTorch model whatsoever. You can see a bunch of example model
 visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
 
+## Interventions (v2.0+)
+
+TorchLens can also capture an intervention-ready log, mutate a fork of that log,
+and propagate the edit with replay or rerun:
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+
+model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4)).eval()
+x = torch.randn(2, 8)
+
+clean = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+site = clean.find_sites(tl.func("relu")).first()
+
+edited = clean.fork("zero_relu")
+edited.attach_hooks(tl.label(site.layer_label), tl.zero_ablate())
+edited.replay()
+
+assert not torch.allclose(clean.layer_list[-1].activation, edited.layer_list[-1].activation)
+```
+
+Key intervention entry points:
+
+- Select sites with `tl.label`, `tl.func`, `tl.module`, `tl.contains`, `tl.where`,
+  and `tl.in_module`; selectors can be composed with `&` and `|` for discovery.
+- Use helpers such as `tl.zero_ablate`, `tl.mean_ablate`, `tl.resample_ablate`,
+  `tl.steer`, `tl.scale`, `tl.clamp`, `tl.noise`, `tl.project_onto`,
+  `tl.project_off`, `tl.swap_with`, and `tl.splice_module`.
+- Use `log.fork()` for branched experiments, then `log.set(...)`,
+  `log.attach_hooks(...)`, `log.do(...)`, or top-level `tl.do(log, ...)`.
+- Use `log.replay()` for graph-stable post-hoc edits and `log.rerun(model, x)`
+  when the model should execute again.
+- Compare related logs with `tl.bundle(...)`.
+- Publish recipes with `log.save_intervention(path, level="portable")`; the
+  saved `.tlspec/` directory contains JSON metadata plus tensor sidecars.
+
+Worked examples live in [`examples/intervention/`](examples/intervention/README.md).
+Additional docs cover [visibility classes](docs/visibility.md),
+[intervention explainers](docs/intervention_explainers.md), the
+[intervention API](docs/intervention_api.md), and cohort migration tables in
+[`docs/migration/`](docs/migration/).
+
 ## Installation
 
 To install *TorchLens*, first install graphviz if you haven't already (required to generate the network visualizations),

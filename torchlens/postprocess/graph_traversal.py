@@ -58,6 +58,12 @@ def _add_output_layers(
         if output_addresses[i] != "":
             output_address += f".{output_addresses[i]}"
         new_output_node.io_role = output_address
+        output_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
+            output_node.tensor_label_raw
+        )
+        if output_path_meta is not None:
+            new_output_node.output_path = output_path_meta[0]
+            new_output_node.container_spec = output_path_meta[1]
 
         # Fix function information:
 
@@ -82,8 +88,8 @@ def _add_output_layers(
         new_output_node.grad_fn_name = None
         new_output_node.autograd_saved_bytes = None
         new_output_node.autograd_saved_tensor_count = None
-        new_output_node.captured_args = [output_tensors[i]]
-        new_output_node.captured_kwargs = {}
+        new_output_node._internal_set("captured_args", [output_tensors[i]])
+        new_output_node._internal_set("captured_kwargs", {})
 
         # Strip any params:
 
@@ -124,6 +130,7 @@ def _add_output_layers(
             "args": {0: output_node.tensor_label_raw},
             "kwargs": {},
         }
+        new_output_node.edge_uses = []
 
         # Clear func_config on synthetic output nodes:
         new_output_node.func_config = {}
@@ -165,9 +172,9 @@ def _add_output_layers(
                 )
                 output_node.has_child_tensor_variations = True
                 if output_node.activation is None:
-                    new_output_node.transformed_activation = actual_output
+                    new_output_node._internal_set("transformed_activation", actual_output)
                 else:
-                    new_output_node.activation = actual_output_raw
+                    new_output_node._internal_set("activation", actual_output_raw)
 
         # Change original output node:
 
@@ -241,6 +248,7 @@ def _remove_orphan_nodes(self) -> None:
             if next_label not in nodes_seen:
                 node_stack.append(next_label)
 
+    nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
     self.orphan_layers = list(orphan_nodes)
 
@@ -256,6 +264,38 @@ def _remove_orphan_nodes(self) -> None:
             new_layer_list.append(tensor_label)
     self._raw_layer_labels_list = new_layer_list
     self._raw_layer_dict = new_layer_dict
+
+
+def _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen: set[str]) -> set[str]:
+    """Add raw-label siblings for any surviving ``func_call_id`` group.
+
+    Parameters
+    ----------
+    nodes_seen:
+        Raw labels reachable from the input/output flood.
+
+    Returns
+    -------
+    set[str]
+        Reachable raw labels expanded so multi-output wrapper calls are kept
+        atomically.
+    """
+
+    func_groups: dict[int, set[str]] = {}
+    for raw_label in self._raw_layer_labels_list:
+        func_call_id = getattr(self._raw_layer_dict[raw_label], "func_call_id", None)
+        if func_call_id is not None:
+            func_groups.setdefault(func_call_id, set()).add(raw_label)
+
+    expanded_seen = set(nodes_seen)
+    changed = True
+    while changed:
+        changed = False
+        for raw_labels in func_groups.values():
+            if expanded_seen.intersection(raw_labels) and not raw_labels.issubset(expanded_seen):
+                expanded_seen.update(raw_labels)
+                changed = True
+    return expanded_seen
 
 
 def _mark_input_output_distances(self) -> None:

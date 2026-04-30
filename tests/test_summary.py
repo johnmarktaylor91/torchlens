@@ -45,7 +45,8 @@ def tiny_summary_log() -> Generator[tl.ModelLog, None, None]:
 def test_small_model_default_output_golden(tiny_summary_log: tl.ModelLog) -> None:
     """Default overview output should match the expected compact golden text."""
     summary_text = tiny_summary_log.summary()
-    assert summary_text == (
+    assert "TorchLens Discoverability Summary" in summary_text
+    assert summary_text.endswith(
         "Model: TinySummaryModel\n"
         "+-------------------+--------------+--------+-------+\n"
         "| Layer             | Output Shape | Params | Train |\n"

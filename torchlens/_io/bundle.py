@@ -266,6 +266,10 @@ def load(
     """
 
     bundle_path = Path(path)
+    if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
+        from ..intervention.save import load_intervention_spec
+
+        return load_intervention_spec(bundle_path)  # type: ignore[return-value]
     _reject_symlink_path(bundle_path, context="bundle path")
     manifest_path = bundle_path / "manifest.json"
     metadata_path = bundle_path / "metadata.pkl"

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -50,6 +51,25 @@ class MetadataInvariantError(ValueError):
     def __init__(self, check_name: str, message: str):
         super().__init__(f"[{check_name}] {message}")
         self.check_name = check_name
+
+
+@dataclass(frozen=True)
+class InvariantResult:
+    """Structured result for an individual metadata invariant.
+
+    Attributes
+    ----------
+    name:
+        Invariant check name.
+    passed:
+        Whether the invariant passed.
+    message:
+        Optional diagnostic message.
+    """
+
+    name: str
+    passed: bool
+    message: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +116,122 @@ def check_metadata_invariants(model_log: "ModelLog") -> bool:
     _check_graph_connectivity(model_log)  # P
     _check_module_containment_logic(model_log)  # Q
     _check_lookup_key_consistency(model_log)  # R
+    check_func_call_id_invariant(model_log)  # S
     return True
+
+
+def check_func_call_id_invariant(model_log: "ModelLog") -> InvariantResult:
+    """Invariant S: func_call_id consistency.
+
+    For intervention-ready logs, every non-synthetic function output must have a
+    ``func_call_id``. Outputs from the same call must agree on function identity,
+    call stack, captured templates, and container spec; each output in the group
+    must have a unique ``output_path``; and same-call groups must not span
+    incompatible pass labels. Synthetic input, output, and buffer nodes are
+    exempt.
+
+    Parameters
+    ----------
+    model_log:
+        Postprocessed model log to validate.
+
+    Returns
+    -------
+    InvariantResult
+        Passing result when no inconsistency is found.
+    """
+
+    name = "func_call_id_consistency"
+    if not getattr(model_log, "intervention_ready", False):
+        return InvariantResult(name=name, passed=True)
+
+    groups: dict[int, list["LayerPassLog"]] = defaultdict(list)
+    for layer in model_log.layer_list:
+        if _is_func_call_id_exempt(layer):
+            continue
+        if layer.func_call_id is None:
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} has no func_call_id",
+            )
+        groups[layer.func_call_id].append(layer)
+
+    for func_call_id, group in groups.items():
+        reference = group[0]
+        expected_signature = _func_call_group_signature(reference)
+        output_paths = []
+        pass_nums = set()
+        no_pass_labels = set()
+        for layer in group:
+            if _func_call_group_signature(layer) != expected_signature:
+                raise MetadataInvariantError(
+                    name,
+                    f"func_call_id {func_call_id} has incompatible call metadata",
+                )
+            output_path = tuple(getattr(layer, "output_path", ()) or ())
+            if output_path in output_paths:
+                raise MetadataInvariantError(
+                    name,
+                    f"func_call_id {func_call_id} has duplicate output_path {output_path!r}",
+                )
+            output_paths.append(output_path)
+            pass_nums.add(layer.pass_num)
+            no_pass_labels.add(layer.layer_label_no_pass)
+        if len(pass_nums) > 1 and len(no_pass_labels) > 1:
+            raise MetadataInvariantError(
+                name,
+                f"func_call_id {func_call_id} spans incompatible pass labels",
+            )
+    return InvariantResult(name=name, passed=True)
+
+
+def _is_func_call_id_exempt(layer: "LayerPassLog") -> bool:
+    """Return whether a layer is exempt from Invariant S.
+
+    Parameters
+    ----------
+    layer:
+        Layer pass to classify.
+
+    Returns
+    -------
+    bool
+        Whether the layer is synthetic input/output/buffer metadata.
+    """
+
+    if layer.is_input_layer or layer.is_output_layer or layer.is_buffer_layer:
+        return True
+    func_applied = getattr(layer, "func_applied", None)
+    func_name = str(getattr(layer, "func_name", "")).lower()
+    return func_applied in {"input", "output", "buffer"} or func_name in {
+        "input",
+        "output",
+        "buffer",
+        "none",
+    }
+
+
+def _func_call_group_signature(layer: "LayerPassLog") -> tuple[object, ...]:
+    """Return comparable same-call metadata for Invariant S.
+
+    Parameters
+    ----------
+    layer:
+        Layer pass to summarize.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Stable comparison tuple.
+    """
+
+    return (
+        layer.func_name,
+        tuple(repr(location) for location in (layer.func_call_stack or ())),
+        repr(layer.captured_arg_template),
+        repr(layer.captured_kwarg_template),
+        repr(layer.container_spec),
+    )
 
 
 # ---------------------------------------------------------------------------

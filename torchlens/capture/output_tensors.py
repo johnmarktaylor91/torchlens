@@ -33,10 +33,12 @@ pause_logging usage:
 """
 
 import copy
+import dataclasses
 import time
+import warnings
 from collections import defaultdict
 from math import prod
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
@@ -52,6 +54,24 @@ from ..utils.collections import index_nested, ensure_iterable
 from .flops import compute_backward_flops, compute_forward_flops
 from ..data_classes.buffer_log import BufferLog
 from ..data_classes.layer_pass_log import LayerPassLog
+from ..intervention.types import (
+    ArgComponent,
+    CapturedArgTemplate,
+    ContainerSpec,
+    DataclassField,
+    DictKey,
+    EdgeUseRecord,
+    FunctionRegistryKey,
+    HFKey,
+    LiteralTensor,
+    LiteralValue,
+    NamedField,
+    OutputPathComponent,
+    ParentRef,
+    TupleIndex,
+    Unsupported,
+)
+from ..intervention.hooks import make_live_site_proxy
 from .arg_positions import (
     FUNC_ARG_SPECS,
     ArgSpec,
@@ -85,6 +105,500 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
+_UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
+
+
+def _tensor_shape_or_none(tensor: torch.Tensor | None) -> tuple[int, ...] | None:
+    """Return a tensor shape tuple or ``None``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor-like value to inspect.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Shape tuple when a tensor is present.
+    """
+
+    return tuple(tensor.shape) if isinstance(tensor, torch.Tensor) else None
+
+
+def _tensor_dtype_or_none(tensor: torch.Tensor | None) -> torch.dtype | None:
+    """Return a tensor dtype or ``None``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor-like value to inspect.
+
+    Returns
+    -------
+    torch.dtype | None
+        Dtype when a tensor is present.
+    """
+
+    return tensor.dtype if isinstance(tensor, torch.Tensor) else None
+
+
+def _tensor_memory_or_none(tensor: torch.Tensor | None) -> int | None:
+    """Return tensor memory bytes or ``None``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor-like value to inspect.
+
+    Returns
+    -------
+    int | None
+        Memory amount when a tensor is present.
+    """
+
+    return get_tensor_memory_amount(tensor) if isinstance(tensor, torch.Tensor) else None
+
+
+def _is_namedtuple_instance(value: Any) -> bool:
+    """Return whether ``value`` is a namedtuple instance.
+
+    Parameters
+    ----------
+    value
+        Object to inspect.
+
+    Returns
+    -------
+    bool
+        True when the object behaves like a namedtuple instance.
+    """
+
+    return isinstance(value, tuple) and hasattr(value, "_fields")
+
+
+def _is_hf_model_output(value: Any) -> bool:
+    """Return whether ``value`` looks like a HuggingFace ``ModelOutput``.
+
+    Parameters
+    ----------
+    value
+        Object to inspect.
+
+    Returns
+    -------
+    bool
+        True when the object is a ``transformers.utils.ModelOutput`` instance
+        or a duck-typed equivalent with ``keys`` and ``__getitem__``.
+    """
+
+    cls = type(value)
+    if any(
+        base.__module__.startswith("transformers") and base.__name__ == "ModelOutput"
+        for base in cls.__mro__
+    ):
+        return True
+    return (
+        (cls.__module__.startswith("transformers") or cls.__name__.endswith("ModelOutput"))
+        and hasattr(value, "keys")
+        and hasattr(value, "__getitem__")
+    )
+
+
+def _container_type_ref(value: Any) -> tuple[str | None, str | None]:
+    """Return the import-ish type reference for a container value.
+
+    Parameters
+    ----------
+    value
+        Container value.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        ``(module, qualname)`` for the value's class.
+    """
+
+    cls = type(value)
+    return cls.__module__, cls.__qualname__
+
+
+def _build_container_spec(value: Any) -> ContainerSpec | None:
+    """Build a replay container spec for a supported output container.
+
+    Parameters
+    ----------
+    value
+        Output object to describe.
+
+    Returns
+    -------
+    ContainerSpec | None
+        Container spec, or ``None`` for a single tensor / unsupported scalar.
+    """
+
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+    if _is_hf_model_output(value):
+        keys = tuple(value.keys())
+        for key in keys:
+            child_spec = _build_container_spec(value[key])
+            if child_spec is not None:
+                child_specs.append((HFKey(key), child_spec))
+        module, qualname = _container_type_ref(value)
+        return ContainerSpec(
+            kind="hf_model_output",
+            length=len(keys),
+            keys=keys,
+            type_module=module,
+            type_qualname=qualname,
+            child_specs=tuple(child_specs),
+        )
+    if _is_namedtuple_instance(value):
+        fields = tuple(value._fields)
+        for field_name in fields:
+            child_spec = _build_container_spec(getattr(value, field_name))
+            if child_spec is not None:
+                child_specs.append((NamedField(field_name), child_spec))
+        module, qualname = _container_type_ref(value)
+        return ContainerSpec(
+            kind="namedtuple",
+            length=len(value),
+            fields=fields,
+            type_module=module,
+            type_qualname=qualname,
+            child_specs=tuple(child_specs),
+        )
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        fields = tuple(field.name for field in dataclasses.fields(value))
+        for field_name in fields:
+            child_spec = _build_container_spec(getattr(value, field_name))
+            if child_spec is not None:
+                child_specs.append((DataclassField(field_name), child_spec))
+        module, qualname = _container_type_ref(value)
+        return ContainerSpec(
+            kind="dataclass",
+            length=len(fields),
+            fields=fields,
+            type_module=module,
+            type_qualname=qualname,
+            child_specs=tuple(child_specs),
+        )
+    if isinstance(value, dict):
+        keys = tuple(value.keys())
+        for key in keys:
+            child_spec = _build_container_spec(value[key])
+            if child_spec is not None:
+                child_specs.append((DictKey(key), child_spec))
+        return ContainerSpec(
+            kind="dict",
+            length=len(keys),
+            keys=keys,
+            child_specs=tuple(child_specs),
+        )
+    if isinstance(value, tuple):
+        for index, item in enumerate(value):
+            child_spec = _build_container_spec(item)
+            if child_spec is not None:
+                child_specs.append((TupleIndex(index), child_spec))
+        return ContainerSpec(kind="tuple", length=len(value), child_specs=tuple(child_specs))
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            child_spec = _build_container_spec(item)
+            if child_spec is not None:
+                child_specs.append((TupleIndex(index), child_spec))
+        return ContainerSpec(kind="list", length=len(value), child_specs=tuple(child_specs))
+    return None
+
+
+def _walk_supported_output_container(
+    out: Any,
+    *,
+    root_spec: ContainerSpec,
+    path: tuple[OutputPathComponent, ...],
+) -> Iterator[tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]]:
+    """Yield tensors from a supported output container.
+
+    Parameters
+    ----------
+    out
+        Output object or nested child object to traverse.
+    root_spec
+        Spec for the outermost output container.
+    path
+        Path accumulated from the outermost output container.
+
+    Yields
+    ------
+    tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
+        Tensor, path, and root container spec.
+    """
+
+    if isinstance(out, torch.Tensor):
+        if not isinstance(out, torch.nn.Parameter):
+            yield out, path, root_spec
+        return
+    if _is_hf_model_output(out):
+        for key in out.keys():
+            yield from _walk_supported_output_container(
+                out[key],
+                root_spec=root_spec,
+                path=(*path, HFKey(key)),
+            )
+        return
+    if _is_namedtuple_instance(out):
+        for field_name in out._fields:
+            yield from _walk_supported_output_container(
+                getattr(out, field_name),
+                root_spec=root_spec,
+                path=(*path, NamedField(field_name)),
+            )
+        return
+    if dataclasses.is_dataclass(out) and not isinstance(out, type):
+        for field in dataclasses.fields(out):
+            yield from _walk_supported_output_container(
+                getattr(out, field.name),
+                root_spec=root_spec,
+                path=(*path, DataclassField(field.name)),
+            )
+        return
+    if isinstance(out, dict):
+        for key, value in out.items():
+            yield from _walk_supported_output_container(
+                value,
+                root_spec=root_spec,
+                path=(*path, DictKey(key)),
+            )
+        return
+    if isinstance(out, (list, tuple)):
+        for index, item in enumerate(out):
+            yield from _walk_supported_output_container(
+                item,
+                root_spec=root_spec,
+                path=(*path, TupleIndex(index)),
+            )
+
+
+def _walk_output_tensors_with_paths(
+    out: Any,
+) -> Iterator[tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]]:
+    """Yield each output tensor with its path inside the output container.
+
+    Parameters
+    ----------
+    out
+        Raw output object from a torch operation or model forward call.
+
+    Yields
+    ------
+    tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
+        Output tensor, path inside the output container, and the outer
+        container spec. Single tensor outputs use ``()`` and ``None``.
+    """
+
+    if isinstance(out, torch.Tensor):
+        if not isinstance(out, torch.nn.Parameter):
+            yield out, (), None
+        return
+
+    root_spec = _build_container_spec(out)
+    if root_spec is None:
+        if _literal_value_supported(out) or isinstance(out, torch.Size):
+            return
+        container_name = type(out).__qualname__
+        if container_name not in _UNSUPPORTED_OUTPUT_CONTAINER_WARNED:
+            _UNSUPPORTED_OUTPUT_CONTAINER_WARNED.add(container_name)
+            warnings.warn(
+                f"TorchLens intervention-ready output traversal does not support "
+                f"{container_name}; falling back to BFS without stable output paths.",
+                UserWarning,
+                stacklevel=2,
+            )
+        for tensor in get_vars_of_type_from_obj(
+            out, which_type=torch.Tensor, subclass_exceptions=[torch.nn.Parameter]
+        ):
+            yield tensor, (), None
+        return
+
+    yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
+
+
+def _function_registry_key(func: Callable) -> FunctionRegistryKey:
+    """Build a portable registry key for a captured function.
+
+    Parameters
+    ----------
+    func
+        Function object being logged.
+
+    Returns
+    -------
+    FunctionRegistryKey
+        Best-effort function identity.
+    """
+
+    from torchlens.intervention.resolver import function_registry_key_from_callable
+
+    return function_registry_key_from_callable(func)
+
+
+def _literal_value_supported(value: Any) -> bool:
+    """Return whether ``value`` is a replay-safe literal.
+
+    Parameters
+    ----------
+    value
+        Value to classify.
+
+    Returns
+    -------
+    bool
+        True when the value can be stored directly in an argument template.
+    """
+
+    return isinstance(
+        value,
+        (int, float, bool, str, bytes, type(None), torch.dtype, torch.device, slice),
+    )
+
+
+def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
+    """Classify a function argument value for replay templating.
+
+    Parameters
+    ----------
+    value
+        Argument value to classify.
+    notes
+        Accumulator for unsupported-value notes.
+
+    Returns
+    -------
+    ArgComponent
+        Tagged replay template component.
+    """
+
+    label = getattr(value, "tl_tensor_label_raw", None)
+    if isinstance(label, str):
+        return ParentRef(label)
+    if isinstance(value, torch.Tensor):
+        with pause_logging():
+            return LiteralTensor(safe_copy(value))
+    if _literal_value_supported(value):
+        return LiteralValue(value)
+    if isinstance(value, (list, tuple)):
+        return tuple(_classify_arg_component(item, notes) for item in value)
+    if isinstance(value, dict):
+        return tuple((key, _classify_arg_component(item, notes)) for key, item in value.items())
+
+    reason = f"unsupported argument type {type(value).__module__}.{type(value).__qualname__}"
+    notes.append(reason)
+    return Unsupported(reason=reason, value_type=type(value).__qualname__)
+
+
+def _build_captured_arg_template(
+    func: Callable,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> CapturedArgTemplate:
+    """Build a replay template from original function args and kwargs.
+
+    Parameters
+    ----------
+    func
+        Function object being logged.
+    args
+        Original positional args.
+    kwargs
+        Original keyword args.
+
+    Returns
+    -------
+    CapturedArgTemplate
+        Replay template for the function call.
+    """
+
+    notes: list[str] = []
+    arg_components = tuple(_classify_arg_component(arg, notes) for arg in args)
+    kwarg_components = tuple(
+        (str(key), _classify_arg_component(value, notes)) for key, value in kwargs.items()
+    )
+    return CapturedArgTemplate(
+        args=arg_components,
+        kwargs=kwarg_components,
+        func_id=_function_registry_key(func),
+        notes=tuple(notes),
+    )
+
+
+def _arg_location_to_path(location: Any) -> tuple[OutputPathComponent, ...]:
+    """Convert a parent-layer arg location to the MVP edge path schema.
+
+    Parameters
+    ----------
+    location
+        Location key from ``parent_layer_arg_locs``.
+
+    Returns
+    -------
+    tuple[OutputPathComponent, ...]
+        Path tuple mirroring the existing two-level arg-location scheme.
+    """
+
+    if isinstance(location, tuple):
+        return location
+    return (location,)
+
+
+def _build_edge_use_records(
+    self: "ModelLog",
+    parent_layer_arg_locs: dict[str, dict[Any, str]],
+    child_label: str,
+    child_func_call_id: int,
+) -> list[EdgeUseRecord]:
+    """Build edge provenance records from existing parent arg locations.
+
+    Parameters
+    ----------
+    self
+        Active model log.
+    parent_layer_arg_locs
+        Existing parent-location map.
+    child_label
+        Raw label for the child tensor output.
+    child_func_call_id
+        Function call id for the child operation.
+
+    Returns
+    -------
+    list[EdgeUseRecord]
+        Edge provenance records.
+    """
+
+    edge_uses: list[EdgeUseRecord] = []
+    for location, parent_label in parent_layer_arg_locs["args"].items():
+        edge_uses.append(
+            EdgeUseRecord(
+                parent_label=parent_label,
+                child_label=child_label,
+                arg_kind="positional",
+                arg_path=_arg_location_to_path(location),
+                view_or_copy="unknown",
+                parent_func_call_id=getattr(self[parent_label], "func_call_id", None),
+                child_func_call_id=child_func_call_id,
+            )
+        )
+    for location, parent_label in parent_layer_arg_locs["kwargs"].items():
+        edge_uses.append(
+            EdgeUseRecord(
+                parent_label=parent_label,
+                child_label=child_label,
+                arg_kind="keyword",
+                arg_path=_arg_location_to_path(location),
+                view_or_copy="unknown",
+                parent_func_call_id=getattr(self[parent_label], "func_call_id", None),
+                child_func_call_id=child_func_call_id,
+            )
+        )
+    return edge_uses
 
 
 def log_function_output_tensors(
@@ -98,7 +612,8 @@ def log_function_output_tensors(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
-):
+    func_call_id: int,
+) -> None:
     """Dispatch to exhaustive or fast logging based on current logging mode.
 
     Called by every decorated torch function wrapper after executing the
@@ -117,6 +632,7 @@ def log_function_output_tensors(
             out_orig,
             exec_ctx,
             is_bottom_level_func,
+            func_call_id,
         )
     elif self.logging_mode == "fast":
         log_function_output_tensors_fast(
@@ -129,6 +645,7 @@ def log_function_output_tensors(
             out_orig,
             exec_ctx,
             is_bottom_level_func,
+            func_call_id,
         )
     elif self.logging_mode == "predicate":
         log_function_output_tensors_predicate(
@@ -138,6 +655,248 @@ def log_function_output_tensors(
             out_orig,
             is_bottom_level_func,
         )
+
+
+def apply_live_hooks_to_outputs(
+    self,
+    func: Callable,
+    func_name: str,
+    args: Tuple[Any],
+    kwargs: Dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> Any:
+    """Apply live hooks to function outputs before output logging.
+
+    Parameters
+    ----------
+    self
+        Active model log.
+    func
+        Original decorated function.
+    func_name
+        Torch function name.
+    args
+        Function positional arguments.
+    kwargs
+        Function keyword arguments.
+    out_orig
+        Function output after in-place safe-copy handling.
+    exec_ctx
+        Function execution metadata.
+    is_bottom_level_func
+        Whether the wrapper call is a bottom-level operation.
+    func_call_id
+        Function-call id allocated before calling ``func``.
+
+    Returns
+    -------
+    Any
+        Output object with hooked tensors replaced in place where possible.
+    """
+
+    if not _st._active_hook_plan or self.logging_mode != "exhaustive":
+        return out_orig
+
+    from ..intervention.runtime import _apply_live_hooks
+
+    shared_fields, _parent_layer_entries, _arg_tensors, _parent_param_passes = (
+        _build_shared_fields_dict(
+            self, func, func_name, args, kwargs, out_orig, exec_ctx, func_call_id
+        )
+    )
+    layer_type = shared_fields["layer_type"]
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor] = {}
+    predicted_layer_counter = self._layer_counter
+    predicted_type_counter = self._raw_layer_type_counter[layer_type]
+
+    for out, output_path, _container_spec in _iter_loggable_live_outputs(
+        out_orig, is_bottom_level_func
+    ):
+        predicted_layer_counter += 1
+        predicted_type_counter += 1
+        raw_label = f"{layer_type}_{predicted_type_counter}_{predicted_layer_counter}_raw"
+        site = make_live_site_proxy(
+            layer_label_raw=raw_label,
+            func_name=func_name,
+            layer_type=layer_type,
+            tensor=out,
+            func_call_id=func_call_id,
+            output_path=output_path,
+            fields=shared_fields,
+        )
+        hooked = _apply_live_hooks(out, site=site, output_path=output_path)
+        if hooked is not out:
+            replacements[output_path] = hooked
+
+    if not replacements:
+        return out_orig
+    if isinstance(out_orig, torch.Tensor):
+        return replacements.get((), out_orig)
+    return _replace_output_tensors_by_path(out_orig, replacements)
+
+
+def _iter_loggable_live_outputs(
+    out_orig: Any,
+    is_bottom_level_func: bool,
+) -> Iterator[tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]]:
+    """Yield outputs that will be logged in exhaustive mode.
+
+    Parameters
+    ----------
+    out_orig
+        Function output.
+    is_bottom_level_func
+        Whether the wrapper call is a bottom-level operation.
+
+    Yields
+    ------
+    tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
+        Tensor, output path, and container spec.
+    """
+
+    for out, output_path, container_spec in _walk_output_tensors_with_paths(out_orig):
+        if _output_should_be_logged(out, is_bottom_level_func):
+            yield out, output_path, container_spec
+
+
+def _replace_output_tensors_by_path(
+    out_orig: Any,
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Return an output object with selected tensor paths replaced.
+
+    Parameters
+    ----------
+    out_orig
+        Original output container.
+    replacements
+        Replacement tensors keyed by output path.
+
+    Returns
+    -------
+    Any
+        Rebuilt output object when supported, otherwise the original object.
+    """
+
+    if () in replacements:
+        return replacements[()]
+    return _replace_output_value(out_orig, (), replacements)
+
+
+def _replace_output_value(
+    value: Any,
+    path: tuple[OutputPathComponent, ...],
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Recursively replace tensors in supported output containers.
+
+    Parameters
+    ----------
+    value
+        Current container value.
+    path
+        Path to the current value.
+    replacements
+        Replacement tensors keyed by full output path.
+
+    Returns
+    -------
+    Any
+        Rebuilt value.
+    """
+
+    if path in replacements:
+        return replacements[path]
+    if isinstance(value, tuple) and hasattr(value, "_fields"):
+        replaced_items = [
+            _replace_output_value(item, (*path, NamedField(field)), replacements)
+            for field, item in zip(value._fields, value)
+        ]
+        return type(value)(*replaced_items)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        changes = {
+            field.name: _replace_output_value(
+                getattr(value, field.name), (*path, DataclassField(field.name)), replacements
+            )
+            for field in dataclasses.fields(value)
+        }
+        return dataclasses.replace(value, **changes)
+    if isinstance(value, tuple):
+        return type(value)(
+            _replace_output_value(item, (*path, TupleIndex(index)), replacements)
+            for index, item in enumerate(value)
+        )
+    if isinstance(value, list):
+        return [
+            _replace_output_value(item, (*path, TupleIndex(index)), replacements)
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _replace_output_value(item, (*path, DictKey(key)), replacements)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _apply_live_fire_records_to_entry(entry: LayerPassLog) -> None:
+    """Attach pending live fire records and refresh saved tensor metadata.
+
+    Parameters
+    ----------
+    entry
+        Newly created layer-pass entry.
+
+    Returns
+    -------
+    None
+        The entry is updated in place through internal setters.
+    """
+
+    records = _st._pending_live_fire_records.pop(entry.tensor_label_raw, [])
+    if not records:
+        return
+    entry.intervention_log.extend(records)
+    tensor = entry.activation if isinstance(entry.activation, torch.Tensor) else None
+    if tensor is not None:
+        _set_saved_activation_metadata(entry, tensor)
+
+
+def _set_saved_activation_metadata(entry: LayerPassLog, tensor: torch.Tensor) -> None:
+    """Refresh activation metadata through internal setters.
+
+    Parameters
+    ----------
+    entry
+        Layer pass whose saved activation metadata should match ``tensor``.
+    tensor
+        Saved activation tensor.
+
+    Returns
+    -------
+    None
+        Metadata fields are updated atomically through ``_internal_set``.
+    """
+
+    entry._internal_set("tensor_shape", tuple(tensor.shape))
+    entry._internal_set("tensor_dtype", tensor.dtype)
+    entry._internal_set("tensor_memory", get_tensor_memory_amount(tensor))
+    entry._internal_set("has_saved_activations", True)
+    entry._internal_set(
+        "transformed_activation_shape",
+        _tensor_shape_or_none(entry.transformed_activation),
+    )
+    entry._internal_set(
+        "transformed_activation_dtype",
+        _tensor_dtype_or_none(entry.transformed_activation),
+    )
+    entry._internal_set(
+        "transformed_activation_memory",
+        _tensor_memory_or_none(entry.transformed_activation),
+    )
 
 
 def _record_predicate_output(
@@ -265,6 +1024,7 @@ def _build_graph_relationship_fields(
 
     fields_dict["parent_layers"] = parent_layer_labels
     fields_dict["parent_layer_arg_locs"] = parent_layer_arg_locs
+    fields_dict["edge_uses"] = []
     fields_dict["root_ancestors"] = input_ancestors.union(internally_initialized_ancestors)
     fields_dict["child_layers"] = []
     fields_dict["has_children"] = False
@@ -396,6 +1156,7 @@ def _build_shared_fields_dict(
     kwargs: Dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
+    func_call_id: int,
 ) -> Tuple[Dict[str, Any], List, List, Dict]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
@@ -427,6 +1188,20 @@ def _build_shared_fields_dict(
     fields_dict["layer_type"] = layer_type
     fields_dict["detach_saved_tensor"] = self.detach_saved_tensors
     fields_dict["output_device"] = self.output_device
+    fields_dict["_construction_done"] = False
+    fields_dict["intervention_log"] = []
+    should_capture_template = bool(
+        getattr(self, "intervention_ready", False) or getattr(self, "capture_full_args", False)
+    )
+    if should_capture_template:
+        captured_template = _build_captured_arg_template(func, args, kwargs)
+        fields_dict["captured_arg_template"] = captured_template
+        fields_dict["captured_kwarg_template"] = captured_template if kwargs else None
+    else:
+        fields_dict["captured_arg_template"] = None
+        fields_dict["captured_kwarg_template"] = None
+    fields_dict["output_path"] = ()
+    fields_dict["container_spec"] = None
 
     # Grad info
     fields_dict["gradient"] = None
@@ -442,6 +1217,7 @@ def _build_shared_fields_dict(
 
     # Function call info
     fields_dict["func_applied"] = func
+    fields_dict["func_call_id"] = func_call_id
     fields_dict["func_name"] = func_name
     fields_dict["func_call_stack"] = _get_func_call_stack(
         self.num_context_lines,
@@ -544,7 +1320,8 @@ def log_function_output_tensors_exhaustive(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
-):
+    func_call_id: int,
+) -> None:
     """Full metadata logging for each output tensor of a function call.
 
     For each loggable output tensor:
@@ -574,19 +1351,24 @@ def log_function_output_tensors_exhaustive(
         kwargs,
         out_orig,
         exec_ctx,
+        func_call_id,
     )
 
-    out_iter = ensure_iterable(out_orig)
-    autograd_saved_stats = _get_autograd_saved_stats_by_output(out_orig)
+    if getattr(self, "intervention_ready", False):
+        out_iter = list(_walk_output_tensors_with_paths(out_orig))
+        autograd_saved_stats = _get_autograd_saved_stats_by_output_entries(out_iter)
+    else:
+        out_iter = [(out, (), None) for out in ensure_iterable(out_orig)]
+        autograd_saved_stats = _get_autograd_saved_stats_by_output(out_orig)
 
-    for i, out in enumerate(out_iter):
+    for i, (out, output_path, container_spec) in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
 
         # Each output tensor gets its own fields_dict to avoid shared-mutation bugs.
         # Shallow-copy mutable containers (list, dict, set); immutable values
         # (str, int, bool, None, tuple, torch.dtype) are safely shared.
-        fields_dict_onetensor = {}
+        fields_dict_onetensor: dict[str, Any] = {}
         for key, value in fields_dict.items():
             if isinstance(value, (list, dict, set)):
                 fields_dict_onetensor[key] = copy.copy(value)
@@ -600,6 +1382,10 @@ def log_function_output_tensors_exhaustive(
             "parent_param_passes",
         ):
             fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
+        fields_dict_onetensor["output_path"] = output_path
+        fields_dict_onetensor["container_spec"] = container_spec
+        if container_spec is not None:
+            fields_dict_onetensor["is_part_of_iterable_output"] = True
         _log_output_tensor_info(
             self,
             out,
@@ -610,6 +1396,13 @@ def log_function_output_tensors_exhaustive(
             fields_dict_onetensor,
             autograd_saved_stats.get(i, (None, None)),
         )
+        if getattr(self, "intervention_ready", False):
+            fields_dict_onetensor["edge_uses"] = _build_edge_use_records(
+                self,
+                fields_dict_onetensor["parent_layer_arg_locs"],
+                fields_dict_onetensor["tensor_label_raw"],
+                func_call_id,
+            )
         _make_layer_log_entry(
             self,
             out,
@@ -661,7 +1454,8 @@ def log_function_output_tensors_fast(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
-):
+    func_call_id: int,
+) -> None:
     """Fast-path logging: save new activation values into existing graph entries.
 
     Skips all metadata collection.  Instead:
@@ -766,18 +1560,19 @@ def log_function_output_tensors_fast(
                     ):
                         # children_tensor_versions already has postfunc applied.
                         tensor_to_save = orig_layer_entry.children_tensor_versions[child_layer]
-                        child_output.activation = safe_copy(tensor_to_save)
+                        child_output._internal_set("activation", safe_copy(tensor_to_save))
                     else:
-                        child_output.activation = safe_copy(out)
+                        child_output._internal_set("activation", safe_copy(out))
                         if self.activation_postfunc is not None:
                             # pause_logging prevents activation_postfunc from
                             # triggering decorated torch ops that would be logged.
                             with pause_logging():
-                                child_output.transformed_activation = self.activation_postfunc(
-                                    child_output.activation
+                                child_output._internal_set(
+                                    "transformed_activation",
+                                    self.activation_postfunc(child_output.activation),
                                 )
                             if not getattr(self, "save_raw_activation", True):
-                                child_output.activation = None
+                                child_output._internal_set("activation", None)
                     child_output.has_saved_activations = True
                     if child_output.activation is not None:
                         child_output.tensor_memory = get_tensor_memory_amount(
@@ -972,6 +1767,51 @@ def _get_autograd_saved_stats_by_output(
 
     for output_index, maybe_tensor in enumerate(ensure_iterable(output)):
         if not isinstance(maybe_tensor, torch.Tensor) or maybe_tensor.grad_fn is None:
+            continue
+
+        grad_fn = maybe_tensor.grad_fn
+        grad_fn_id = id(grad_fn)
+        if grad_fn_id in seen_grad_fns:
+            stats_by_index[output_index] = (0, 0)
+            continue
+        seen_grad_fns.add(grad_fn_id)
+
+        total_bytes = 0
+        tensor_count = 0
+        for saved_value in _iter_autograd_saved_candidates(grad_fn):
+            for saved_tensor in _collect_tensor_values(saved_value):
+                bytes_added, count_added = _add_autograd_saved_tensor(saved_tensor, seen_data_ptrs)
+                total_bytes += bytes_added
+                tensor_count += count_added
+        stats_by_index[output_index] = (total_bytes, tensor_count)
+
+    return stats_by_index
+
+
+def _get_autograd_saved_stats_by_output_entries(
+    output_entries: list[
+        tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
+    ],
+) -> dict[int, tuple[Optional[int], Optional[int]]]:
+    """Measure autograd-saved tensor bytes/counts for path-aware outputs.
+
+    Parameters
+    ----------
+    output_entries
+        Path-aware output entries from ``_walk_output_tensors_with_paths``.
+
+    Returns
+    -------
+    dict[int, tuple[Optional[int], Optional[int]]]
+        Mapping from output entry index to autograd saved-byte/count stats.
+    """
+
+    stats_by_index: dict[int, tuple[Optional[int], Optional[int]]] = {}
+    seen_grad_fns: set[int] = set()
+    seen_data_ptrs: set[int] = set()
+
+    for output_index, (maybe_tensor, _, _) in enumerate(output_entries):
+        if maybe_tensor.grad_fn is None:
             continue
 
         grad_fn = maybe_tensor.grad_fn
@@ -1215,6 +2055,7 @@ def _make_layer_log_entry(
             activation_postfunc,
         )
         self.layers_with_saved_activations.append(new_entry.tensor_label_raw)
+    _apply_live_fire_records_to_entry(new_entry)
     self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry
     self._raw_layer_labels_list.append(new_entry.tensor_label_raw)
 

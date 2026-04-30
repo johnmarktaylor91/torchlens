@@ -21,7 +21,8 @@ mixed-precision ops can be replayed under the same dtype context.
 """
 
 import random
-from typing import Any, Dict, List
+from collections.abc import Callable
+from typing import Any, Dict, List, TypeVar
 
 import numpy as np
 import torch
@@ -29,6 +30,7 @@ import torch
 from .tensor_utils import _is_cuda_available
 
 _AUTOCAST_DEVICES = ("cpu", "cuda")
+_T = TypeVar("_T")
 
 
 def set_random_seed(seed: int):
@@ -44,6 +46,51 @@ def set_random_seed(seed: int):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def execute_with_restored_rng_autocast(
+    func: Callable[..., _T],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    rng_states: Dict[str, Any] | None,
+    autocast_state: Dict[str, Any] | None,
+) -> _T:
+    """Execute a callable with saved RNG and autocast state in a tight scope.
+
+    Parameters
+    ----------
+    func:
+        Callable to execute.
+    args:
+        Positional arguments for ``func``.
+    kwargs:
+        Keyword arguments for ``func``.
+    rng_states:
+        RNG states captured before the original operation. ``None`` or an empty
+        dict leaves the current RNG state untouched until final restoration.
+    autocast_state:
+        Autocast state captured before the original operation.
+
+    Returns
+    -------
+    _T
+        Return value from ``func``.
+
+    Raises
+    ------
+    Exception
+        Re-raises any exception from ``func`` after restoring caller RNG state.
+    """
+
+    current_rng_states = log_current_rng_states()
+    if rng_states:
+        set_rng_from_saved_states(rng_states)
+    try:
+        with AutocastRestore(autocast_state or {}):
+            return func(*args, **kwargs)
+    finally:
+        set_rng_from_saved_states(current_rng_states)
 
 
 def log_current_rng_states(torch_only: bool = False) -> Dict:

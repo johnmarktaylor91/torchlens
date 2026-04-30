@@ -19,6 +19,7 @@ two-pass path (save specific layers).
 """
 
 import collections.abc
+import hashlib
 import os
 import random
 from pathlib import Path
@@ -37,12 +38,14 @@ from ._literals import (
     BufferVisibilityLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
+    VisInterventionModeLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
+from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
 from .data_classes.model_log import (
     ModelLog,
@@ -64,6 +67,167 @@ from .visualization.code_panel import (
     capture_model_source_code,
     make_weak_model_ref,
 )
+from .intervention.errors import InterventionReadyConflictError
+from .intervention.hooks import normalize_hook_plan
+from ._run_state import RunState
+
+
+def list_logs() -> tuple[ModelLog, ...]:
+    """Return a snapshot of currently live ``ModelLog`` objects.
+
+    Returns
+    -------
+    tuple[ModelLog, ...]
+        Immutable snapshot from TorchLens' process-wide weak registry.
+    """
+
+    return _state.list_logs()
+
+
+def reset_naming_counter(class_name: str | None = None) -> None:
+    """Reset automatic ``ModelLog`` naming counters.
+
+    Parameters
+    ----------
+    class_name:
+        Lowercase short class name to reset, or ``None`` to reset all counters.
+
+    Returns
+    -------
+    None
+        The process-global counter dictionary is updated.
+    """
+
+    _state.reset_naming_counter(class_name)
+
+
+def _layers_to_save_conflicts_with_intervention_ready(layers_to_save: Any) -> bool:
+    """Return whether ``layers_to_save`` requests unsupported selective readiness.
+
+    Parameters
+    ----------
+    layers_to_save:
+        User-provided activation selection.
+
+    Returns
+    -------
+    bool
+        True only for a non-empty list, which would require a deferred two-pass
+        intervention-ready capture.
+    """
+
+    return isinstance(layers_to_save, list) and len(layers_to_save) > 0
+
+
+def _qualname_for_model(model: nn.Module) -> str:
+    """Return a stable class name for relationship evidence.
+
+    Parameters
+    ----------
+    model:
+        Model being captured.
+
+    Returns
+    -------
+    str
+        Module-qualified class name.
+    """
+
+    model_type = type(model)
+    return f"{model_type.__module__}.{model_type.__qualname__}"
+
+
+def _fingerprint_model_weights(model: nn.Module) -> str:
+    """Fingerprint model parameter metadata for relationship evidence.
+
+    Phase 4a does not depend on tensor values. The deterministic scheme hashes
+    ``(name, shape, dtype)`` for every named parameter, which is stable across
+    devices and avoids retaining parameter references.
+
+    Parameters
+    ----------
+    model:
+        Model whose parameters should be fingerprinted.
+
+    Returns
+    -------
+    str
+        SHA-256 hex digest of parameter metadata.
+    """
+
+    entries = [
+        (name, tuple(param.shape), str(param.dtype)) for name, param in model.named_parameters()
+    ]
+    return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
+
+
+def _iter_tensor_inputs(obj: Any) -> list[torch.Tensor]:
+    """Collect tensor leaves from a nested input object.
+
+    Parameters
+    ----------
+    obj:
+        Arbitrary nested input object.
+
+    Returns
+    -------
+    list[torch.Tensor]
+        Tensor leaves in traversal order.
+    """
+
+    tensors: list[torch.Tensor] = []
+    if isinstance(obj, torch.Tensor):
+        return [obj]
+    if isinstance(obj, dict):
+        for key in sorted(obj.keys(), key=repr):
+            tensors.extend(_iter_tensor_inputs(obj[key]))
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            tensors.extend(_iter_tensor_inputs(item))
+    return tensors
+
+
+def _input_id_for_relationship_evidence(input_args: Any) -> int:
+    """Return the input identity used for relationship evidence.
+
+    Parameters
+    ----------
+    input_args:
+        User-provided positional input container.
+
+    Returns
+    -------
+    int
+        ``id`` of the sole input tensor when available, otherwise ``id`` of
+        the input container.
+    """
+
+    tensors = _iter_tensor_inputs(input_args)
+    if len(tensors) == 1:
+        return id(tensors[0])
+    return id(input_args)
+
+
+def _hash_input_shapes(input_args: Any, input_kwargs: Any) -> str:
+    """Fingerprint input tensor shape metadata for relationship evidence.
+
+    Parameters
+    ----------
+    input_args:
+        Positional input container.
+    input_kwargs:
+        Keyword input container.
+
+    Returns
+    -------
+    str
+        SHA-256 hex digest over tensor shapes, dtypes, and devices.
+    """
+
+    tensors = _iter_tensor_inputs((input_args, input_kwargs))
+    entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]
+    return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
+
 
 if TYPE_CHECKING:
     from .data_classes.module_log import ModuleLog
@@ -134,10 +298,28 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
       TorchScript interpreter, not Python, so no Python-level decoration fires.
     * ``torch.export.ExportedProgram`` — a serialised IR, not a callable
       ``nn.Module`` that can be re-executed in Python.
+    * ``torch.distributed.fsdp.FullyShardedDataParallel`` — FSDP controls
+      parameter materialization and sharding around forward execution in ways
+      TorchLens cannot currently validate.
 
-    In all three cases the fix is the same: call ``log_forward_pass`` on the
-    *un-wrapped* model before compiling / scripting / exporting.
+    In these cases the fix is the same: call ``log_forward_pass`` on the
+    *un-wrapped* model before compiling, scripting, exporting, or sharding.
     """
+    # FullyShardedDataParallel
+    try:
+        from torch.distributed.fsdp import FullyShardedDataParallel
+    except (ImportError, RuntimeError):
+        pass
+    else:
+        if isinstance(model, FullyShardedDataParallel):
+            raise RuntimeError(
+                "torchlens.log_forward_pass does not support "
+                "FullyShardedDataParallel models: FSDP controls parameter "
+                "materialization and sharding around forward execution in ways "
+                "TorchLens cannot validate. Call log_forward_pass on the "
+                "underlying unwrapped nn.Module."
+            )
+
     # torch.compile -> torch._dynamo.eval_frame.OptimizedModule
     try:
         from torch._dynamo.eval_frame import OptimizedModule
@@ -228,8 +410,13 @@ def _run_model_and_save_specified_activations(
     save_gradients_to: str | Path | None = None,
     keep_gradients_in_memory: bool = True,
     activation_sink: Callable[[str, torch.Tensor], None] | None = None,
+    intervention_ready: bool = False,
+    hooks: Any | None = None,
+    intervention_spec: Any | None = None,
+    normalized_hook_plan: Any | None = None,
     verbose: bool = False,
     train_mode: bool = False,
+    name: str | None = None,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
 
@@ -280,8 +467,16 @@ def _run_model_and_save_specified_activations(
             backward finalization.
         activation_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved activation.
+        intervention_ready: If True, capture replay-template metadata and mark the
+            returned log as eligible for intervention mutators, replay, rerun, and
+            intervention spec persistence.
+        hooks: Optional live forward post-hook plan. Accepts the same shapes as
+            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
+        intervention_spec: Active intervention spec to expose in runtime context.
+        normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
         verbose: If True, print timed progress messages at each major pipeline stage.
         train_mode: If True, keep saved activations attached to autograd for training.
+        name: User-facing log name. If omitted, generated by the public wrapper.
 
     Returns:
         Fully-populated ModelLog.
@@ -296,6 +491,25 @@ def _run_model_and_save_specified_activations(
             input_kwargs = _move_tensors_to_device(input_kwargs, model_device)
 
     model_name = str(type(model).__name__)
+    source_model_id = id(model)
+    source_model_class = _qualname_for_model(model)
+    weight_fingerprint = _fingerprint_model_weights(model)
+    input_id = _input_id_for_relationship_evidence(input_args)
+    input_shape_hash = _hash_input_shapes(input_args, input_kwargs)
+    hook_plan = normalized_hook_plan if normalized_hook_plan is not None else []
+    if hook_plan == [] and hooks:
+        hook_plan = normalize_hook_plan(hooks)
+    _state.reset_capture_runtime_context()
+    _state.configure_capture_runtime_context(
+        hook_plan=hook_plan,
+        intervention_spec=intervention_spec,
+        capture_replay_templates=intervention_ready,
+        source_model_id=source_model_id,
+        source_model_class=source_model_class,
+        weight_fingerprint=weight_fingerprint,
+        input_id=input_id,
+        input_shape_hash=input_shape_hash,
+    )
     model_log = ModelLog(
         model_name=model_name,
         output_device=output_device,
@@ -317,6 +531,16 @@ def _run_model_and_save_specified_activations(
         verbose=verbose,
         train_mode=train_mode,
     )
+    model_log.name = name
+    model_log.intervention_ready = intervention_ready
+    if hook_plan:
+        model_log.run_state = RunState.LIVE_CAPTURED
+    model_log.source_model_id = source_model_id
+    model_log.source_model_class = source_model_class
+    model_log.weight_fingerprint_at_capture = weight_fingerprint
+    model_log.weight_fingerprint_full = weight_fingerprint
+    model_log.input_id_at_capture = input_id
+    model_log.input_shape_hash = input_shape_hash
     model_log._source_code_blob = capture_model_source_code(model)
     model_log._source_model_ref = make_weak_model_ref(model)
     model_log._activation_sink = activation_sink
@@ -338,6 +562,8 @@ def _run_model_and_save_specified_activations(
             model_log._activation_writer.abort(str(exc))
             raise TorchLensIOError("Streaming activation save failed during forward pass.") from exc
         raise
+    finally:
+        _state.reset_capture_runtime_context()
     return model_log
 
 
@@ -359,6 +585,7 @@ def log_forward_pass(
     gradients_to_save: Optional[Union[str, List]] | MissingType = MISSING,
     save_source_context: bool = False,
     save_rng_states: bool = False,
+    vis_opt: Any | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
     vis_nesting_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
@@ -374,6 +601,8 @@ def log_forward_pass(
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
+    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
+    vis_show_cone: bool | MissingType = MISSING,
     random_seed: Optional[int] = None,
     num_context_lines: int | MissingType = MISSING,
     optimizer=None,
@@ -383,6 +612,8 @@ def log_forward_pass(
     save_gradients_to: str | Path | None | MissingType = MISSING,
     keep_gradients_in_memory: bool | MissingType = MISSING,
     activation_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+    intervention_ready: bool = False,
+    hooks: Any | None = None,
     unwrap_when_done: bool = False,
     verbose: bool = False,
     source_context_lines: int | MissingType = MISSING,
@@ -391,6 +622,7 @@ def log_forward_pass(
     visualization: VisualizationOptions | None = None,
     streaming: StreamingOptions | None = None,
     train_mode: bool | MissingType = MISSING,
+    name: str | None = None,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -464,6 +696,7 @@ def log_forward_pass(
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
+        vis_opt: Deprecated alias for ``vis_mode``.
         vis_mode: Deprecated alias for ``visualization.mode``.
         vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
         vis_outpath: Deprecated alias for ``visualization.output_path``.
@@ -496,6 +729,12 @@ def log_forward_pass(
         keep_gradients_in_memory: Whether streamed gradients should remain in memory after
             ``log_backward`` or ``recording_backward`` finalizes the bundle.
         activation_sink: Deprecated alias for ``streaming.activation_callback``.
+        intervention_ready: If True, capture replay-template metadata and mark the
+            returned log as eligible for intervention mutators, replay, rerun, and
+            intervention spec persistence. This does not imply
+            ``save_function_args=True``.
+        hooks: Optional live forward post-hook plan. Accepts the same shapes as
+            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
@@ -512,6 +751,10 @@ def log_forward_pass(
         streaming: Grouped streaming-save options.
         train_mode: If True, validate training-compatible settings and keep saved
             activations attached to autograd.
+        name: Optional user-facing name for the returned ``ModelLog``. When omitted,
+            TorchLens uses a process-local counter based on the model class name after
+            stripping common HuggingFace suffixes. The counter is not thread-safe; it
+            relies on TorchLens' single active logging session guard.
 
     Postfunc behavior:
         ``activation_postfunc`` and ``gradient_postfunc`` both take a tensor, should return a
@@ -556,6 +799,8 @@ def log_forward_pass(
         new_value=detect_recurrent_patterns,
         default=True,
     )
+    if vis_opt is not MISSING:
+        vis_mode = vis_opt
     visualization_options = merge_visualization_options(
         function_default_mode="none",
         visualization=visualization,
@@ -574,6 +819,8 @@ def log_forward_pass(
         vis_node_placement=vis_node_placement,
         vis_renderer=vis_renderer,
         vis_theme=vis_theme,
+        vis_intervention_mode=vis_intervention_mode,
+        vis_show_cone=vis_show_cone,
     )
     streaming_options = merge_streaming_options(
         streaming=streaming,
@@ -646,10 +893,17 @@ def log_forward_pass(
         layers_to_save = layers_to_save.lower()
     if type(gradients_to_save_resolved) is str:
         gradients_to_save_resolved = gradients_to_save_resolved.lower()
+    if intervention_ready and _layers_to_save_conflicts_with_intervention_ready(layers_to_save):
+        raise InterventionReadyConflictError(
+            "intervention_ready=True is not compatible with a non-empty list for "
+            "layers_to_save in Phase 4a. Use layers_to_save='all', 'none', None, or [] "
+            "until two-pass intervention readiness lands."
+        )
 
     uses_two_pass = (layers_to_save not in ["all", "none", None, []]) or (
         gradients_to_save_resolved not in ["all", "none", None, []]
     )
+    log_name = name if name is not None else _state._auto_name(model)
     if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
             'save_activations_to is only supported with layers_to_save="all" in this '
@@ -693,8 +947,13 @@ def log_forward_pass(
             save_gradients_to=save_gradients_to_value,
             keep_gradients_in_memory=keep_gradients_in_memory_value,
             activation_sink=streaming_options.activation_callback,
+            intervention_ready=intervention_ready,
+            hooks=hooks,
+            intervention_spec=None,
+            normalized_hook_plan=None,
             verbose=verbose,
             train_mode=train_mode_value,
+            name=log_name,
         )
     else:
         # --- TWO-PASS path ---
@@ -730,8 +989,13 @@ def log_forward_pass(
             save_gradients_to=save_gradients_to_value,
             keep_gradients_in_memory=keep_gradients_in_memory_value,
             activation_sink=streaming_options.activation_callback,
+            intervention_ready=intervention_ready,
+            hooks=hooks,
+            intervention_spec=None,
+            normalized_hook_plan=None,
             verbose=verbose,
             train_mode=train_mode_value,
+            name=log_name,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
@@ -871,6 +1135,8 @@ def show_model_graph(
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
     vis_theme: str | MissingType = MISSING,
+    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
+    vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: Optional[int] = None,
@@ -910,6 +1176,11 @@ def show_model_graph(
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
         vis_renderer: Deprecated alias for ``visualization.renderer``.
         vis_theme: Deprecated alias for ``visualization.theme``.
+        vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
+            marks intervention sites and optionally their cones. ``"as_node"``
+            inserts a small hook node after each intervention site.
+        vis_show_cone: Whether ``"node_mark"`` mode also marks downstream
+            cone-of-effect members.
         code_panel: Optional source-code panel mode. ``True`` is equivalent to
             ``"forward"``. Built-in modes use source captured at log time;
             callable modes receive the live model object and are only available
@@ -959,6 +1230,8 @@ def show_model_graph(
         vis_node_placement=vis_node_placement,
         vis_renderer=vis_renderer,
         vis_theme=vis_theme,
+        vis_intervention_mode=vis_intervention_mode,
+        vis_show_cone=vis_show_cone,
     )
 
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:

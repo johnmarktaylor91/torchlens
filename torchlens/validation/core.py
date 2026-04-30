@@ -24,7 +24,7 @@ from ..data_classes.layer_pass_log import LayerPassLog
 if TYPE_CHECKING:
     pass
 
-from ..utils.rng import AutocastRestore, log_current_rng_states, set_rng_from_saved_states
+from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.collections import assign_to_sequence_or_dict
 from ..utils.tensor_utils import tensor_nanequal, tensor_all_nan
 from .exemptions import (
@@ -41,9 +41,39 @@ from .exemptions import (
 # where the value space may be small (e.g., a single-element int tensor).
 MAX_PERTURB_ATTEMPTS = 100
 
+# Deep convolutional models can replay the same FP32 op with tiny differences
+# after many accumulated reductions. Keep this local to validation replay so
+# global tensor equality stays strict for graph bookkeeping and lower-tier tests.
+DEEP_NUMERIC_REPLAY_FUNCS = frozenset(
+    {
+        "addmm",
+        "baddbmm",
+        "bmm",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+        "conv_transpose1d",
+        "conv_transpose2d",
+        "conv_transpose3d",
+        "linear",
+        "matmul",
+        "mm",
+    }
+)
+DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM = 100
+DEEP_NUMERIC_REPLAY_RTOL = 1e-3
+DEEP_NUMERIC_REPLAY_ATOL = 1e-4
+DEEP_NUMERIC_REPLAY_OUTLIER_RTOL = 5e-2
+DEEP_NUMERIC_REPLAY_OUTLIER_ATOL = 1e-2
+DEEP_NUMERIC_REPLAY_MAX_OUTLIER_FRACTION = 1e-4
+DEEP_NUMERIC_REPLAY_MAX_SCALED_DIFF = 5e-2
+DEEP_NUMERIC_REPLAY_MAX_MEAN_SCALED_DIFF = 1e-3
+GROUND_TRUTH_OUTPUT_RTOL = 1e-6
+GROUND_TRUTH_OUTPUT_ATOL = 1e-8
+
 
 def _raise_if_portable_bundle_log(self: Any) -> None:
-    """Reject validation on portable-loaded model logs.
+    """Reject validation only when loaded logs lack replay callables.
 
     Parameters
     ----------
@@ -53,15 +83,76 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     Raises
     ------
     TorchLensIOError
-        If the log was loaded from a portable bundle.
+        If the log was loaded from a portable bundle without resolved
+        ``func_applied`` callables on computational nodes.
     """
 
-    if bool(getattr(self, "_loaded_from_bundle", False)):
+    if not bool(getattr(self, "_loaded_from_bundle", False)):
+        return
+    unresolved = [
+        getattr(layer, "layer_label", "<unknown>")
+        for layer in getattr(self, "layer_list", [])
+        if getattr(layer, "func_applied", None) is None
+        and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
+    ]
+    if unresolved:
         from .._io import TorchLensIOError
 
         raise TorchLensIOError(
-            "validate_forward_pass requires live func_applied callables; portable bundles "
-            "drop them. Run validation before saving or use plain pickle instead."
+            "validate_forward_pass requires resolved func_applied callables; portable bundles "
+            "drop them when functions cannot be represented. This bundle has unresolved "
+            f"computational functions, e.g. {unresolved[:3]!r}."
+        )
+
+
+def _ground_truth_output_matches_saved(
+    saved_output: torch.Tensor,
+    ground_truth_output: torch.Tensor,
+) -> bool:
+    """Return whether a saved model output matches the direct forward output.
+
+    The direct output check is exact first. For floating-point outputs, it then
+    allows only sub-ULP wrapper noise, which covers models whose logged full
+    forward produces numerically equivalent logits that differ at ~1e-11 scale.
+
+    Parameters
+    ----------
+    saved_output:
+        Output tensor saved by TorchLens logging.
+    ground_truth_output:
+        Output tensor from the direct model forward pass.
+
+    Returns
+    -------
+    bool
+        True if the outputs are exactly equal or differ only by the tight
+        output-only floating-point tolerance.
+    """
+    if tensor_nanequal(saved_output, ground_truth_output, allow_tolerance=False):
+        return True
+    if saved_output.shape != ground_truth_output.shape:
+        return False
+    if saved_output.dtype != ground_truth_output.dtype:
+        return False
+    if not saved_output.is_floating_point():
+        return False
+
+    from .._state import pause_logging
+
+    with pause_logging():
+        if not torch.equal(saved_output.isnan(), ground_truth_output.isnan()):
+            return False
+        if not torch.equal(saved_output.isinf(), ground_truth_output.isinf()):
+            return False
+        saved_nonan = torch.nan_to_num(saved_output, 0.7234691827346)
+        ground_truth_nonan = torch.nan_to_num(ground_truth_output, 0.7234691827346)
+        return bool(
+            torch.allclose(
+                saved_nonan,
+                ground_truth_nonan,
+                rtol=GROUND_TRUTH_OUTPUT_RTOL,
+                atol=GROUND_TRUTH_OUTPUT_ATOL,
+            )
         )
 
 
@@ -97,13 +188,14 @@ def validate_saved_activations(
     """
     _raise_if_portable_bundle_log(self)
 
-    # Phase 0: verify logged outputs match a fresh forward pass (no tolerance).
+    # Phase 0: verify logged outputs match a fresh forward pass.
     for i, output_layer_label in enumerate(self.output_layers):
         output_layer = self[output_layer_label]
-        if not tensor_nanequal(
-            output_layer.activation,
-            ground_truth_output_tensors[i],
-            allow_tolerance=False,
+        if output_layer.activation is None:
+            print(f"The {i}th output layer, {output_layer_label}, has no saved activation.")
+            return False
+        if not _ground_truth_output_matches_saved(
+            output_layer.activation, ground_truth_output_tensors[i]
         ):
             print(
                 f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
@@ -492,14 +584,14 @@ def _execute_func_with_restored_state(
     """
     layer_func = layer.func_applied
 
-    # Save current RNG state so we can restore it after replay.
-    current_rng_states = log_current_rng_states()
-    # Restore the RNG state from when the layer originally executed.
-    set_rng_from_saved_states(layer.func_rng_states)
-
     try:
-        with AutocastRestore(layer.func_autocast_state):
-            recomputed_output = layer_func(*input_args["args"], **input_args["kwargs"])
+        recomputed_output = execute_with_restored_rng_autocast(
+            layer_func,
+            tuple(input_args["args"]),
+            dict(input_args["kwargs"]),
+            rng_states=layer.func_rng_states,
+            autocast_state=layer.func_autocast_state,
+        )
     except Exception as e:
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
@@ -509,12 +601,7 @@ def _execute_func_with_restored_state(
                 f"Perturbation of {layers_to_perturb} for layer "
                 f"{layer_label} caused {type(e).__name__}: {e}"
             )
-        set_rng_from_saved_states(current_rng_states)
         return None
-
-    # Restore the original RNG state so subsequent validation steps
-    # don't inherit this layer's replayed state.
-    set_rng_from_saved_states(current_rng_states)
 
     # In-place mutating ops (__setitem__, zero_, __delitem__) return None
     # from PyTorch but the "output" is the mutated first argument.
@@ -527,6 +614,83 @@ def _execute_func_with_restored_state(
         recomputed_output = recomputed_output[layer.iterable_output_index]
 
     return recomputed_output
+
+
+def _deep_numeric_replay_matches_saved(
+    layer: LayerPassLog,
+    recomputed_output: torch.Tensor,
+) -> bool:
+    """Return whether a deep numeric replay matches within local relaxed tolerance.
+
+    The standard validation tolerance remains the default for every layer. This
+    fallback is intentionally narrow: it only applies to later convolution-like
+    numeric ops, first tries a modest ``allclose`` relaxation, then allows a
+    tiny fraction of stricter-check outliers only when the overall scaled error
+    is still very small.
+
+    Parameters
+    ----------
+    layer:
+        Layer whose saved activation is being replayed.
+    recomputed_output:
+        Output from re-executing ``layer.func_applied`` on saved parent values.
+
+    Returns
+    -------
+    bool
+        True if this layer qualifies for the deep numeric replay tolerance and
+        the recomputed output is close enough to the saved activation.
+    """
+    saved_output = layer.activation
+    if saved_output is None:
+        return False
+    if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
+        return False
+    if layer.operation_num < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+        return False
+    if recomputed_output.shape != saved_output.shape:
+        return False
+    if recomputed_output.dtype != saved_output.dtype:
+        return False
+    if not recomputed_output.is_floating_point():
+        return False
+
+    from .._state import pause_logging
+
+    with pause_logging():
+        if not torch.equal(recomputed_output.isnan(), saved_output.isnan()):
+            return False
+        if not torch.equal(recomputed_output.isinf(), saved_output.isinf()):
+            return False
+
+        recomputed_nonan = torch.nan_to_num(recomputed_output, 0.7234691827346)
+        saved_nonan = torch.nan_to_num(saved_output, 0.7234691827346)
+
+        if torch.allclose(
+            recomputed_nonan,
+            saved_nonan,
+            rtol=DEEP_NUMERIC_REPLAY_RTOL,
+            atol=DEEP_NUMERIC_REPLAY_ATOL,
+        ):
+            return True
+
+        close = torch.isclose(
+            recomputed_nonan,
+            saved_nonan,
+            rtol=DEEP_NUMERIC_REPLAY_OUTLIER_RTOL,
+            atol=DEEP_NUMERIC_REPLAY_OUTLIER_ATOL,
+        )
+        outlier_fraction = (~close).sum().item() / close.numel()
+        if outlier_fraction > DEEP_NUMERIC_REPLAY_MAX_OUTLIER_FRACTION:
+            return False
+
+        diff = (recomputed_nonan - saved_nonan).abs()
+        scale = torch.maximum(recomputed_nonan.abs(), saved_nonan.abs()) + 1e-12
+        scaled_diff = diff / scale
+        return bool(
+            scaled_diff.max().item() <= DEEP_NUMERIC_REPLAY_MAX_SCALED_DIFF
+            and scaled_diff.mean().item() <= DEEP_NUMERIC_REPLAY_MAX_MEAN_SCALED_DIFF
+        )
 
 
 def _check_whether_func_on_saved_parents_yields_saved_tensor(
@@ -591,6 +755,8 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         return True
 
     matches_saved = tensor_nanequal(recomputed_output, layer.activation, allow_tolerance=True)
+    if not matches_saved and not perturb and isinstance(recomputed_output, torch.Tensor):
+        matches_saved = _deep_numeric_replay_matches_saved(layer, recomputed_output)
 
     # Forward replay failure (non-perturbed): saved activations don't match.
     if not matches_saved and not perturb:

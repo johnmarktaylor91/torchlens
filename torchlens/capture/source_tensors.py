@@ -224,6 +224,7 @@ def log_source_tensor_exhaustive(
         "operation_num": None,
         "source_model_log": self,
         "_pass_finished": False,
+        "_construction_done": False,
         # Label Info:
         "layer_label": None,
         "layer_label_short": None,
@@ -243,11 +244,14 @@ def log_source_tensor_exhaustive(
         "has_saved_activations": False,
         "activation_postfunc": self.activation_postfunc,
         "extra_data": {},
+        "intervention_log": [],
         "detach_saved_tensor": self.detach_saved_tensors,
         "output_device": self.output_device,
         "args_captured": False,
         "captured_args": None,
         "captured_kwargs": None,
+        "captured_arg_template": None,
+        "captured_kwarg_template": None,
         "tensor_shape": tuple(t.shape),
         "transformed_activation_shape": None,
         "tensor_dtype": t.dtype,
@@ -272,6 +276,7 @@ def log_source_tensor_exhaustive(
         "transformed_gradient_memory": None,
         # Function call info:
         "func_applied": None,
+        "func_call_id": None,
         "func_name": "none",
         "func_call_stack": _get_func_call_stack(
             self.num_context_lines,
@@ -297,6 +302,8 @@ def log_source_tensor_exhaustive(
         "corresponding_grad_fn": None,
         "is_part_of_iterable_output": False,
         "iterable_output_index": None,
+        "output_path": (),
+        "container_spec": None,
         # Param info:
         "parent_params": [],
         "parent_param_barcodes": [],
@@ -314,6 +321,7 @@ def log_source_tensor_exhaustive(
         # Graph info:
         "parent_layers": [],
         "parent_layer_arg_locs": {"args": {}, "kwargs": {}},
+        "edge_uses": [],
         "root_ancestors": {tensor_label},
         "child_layers": [],
         "has_children": False,

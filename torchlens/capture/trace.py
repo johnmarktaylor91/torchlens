@@ -49,6 +49,7 @@ from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_sa
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from ..utils.tensor_utils import _is_cuda_available
 from .source_tensors import log_source_tensor
+from .output_tensors import _walk_output_tensors_with_paths
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _vprint, _vtimed
 
@@ -124,15 +125,15 @@ def save_new_activations(
 
     # Clear all existing activations from the previous pass.
     for layer_log_entry in self:
-        layer_log_entry.activation = None
-        layer_log_entry.transformed_activation = None
+        layer_log_entry._internal_set("activation", None)
+        layer_log_entry._internal_set("transformed_activation", None)
         layer_log_entry.transformed_activation_shape = None
         layer_log_entry.transformed_activation_dtype = None
         layer_log_entry.transformed_activation_memory = None
         layer_log_entry.has_saved_activations = False
         layer_log_entry.has_gradient = False
-        layer_log_entry.gradient = None
-        layer_log_entry.transformed_gradient = None
+        layer_log_entry._internal_set("gradient", None)
+        layer_log_entry._internal_set("transformed_gradient", None)
         layer_log_entry.transformed_gradient_shape = None
         layer_log_entry.transformed_gradient_dtype = None
         layer_log_entry.transformed_gradient_memory = None
@@ -372,13 +373,28 @@ def _extract_and_mark_outputs(
     Returns:
         (output_tensors, output_tensor_addresses)
     """
-    output_tensors_w_addresses_all = get_vars_of_type_from_obj(
-        outputs,
-        torch.Tensor,
-        search_depth=5,
-        return_addresses=True,
-        allow_repeats=True,
-    )
+    if getattr(self, "intervention_ready", False):
+        output_tensors_w_addresses_all = [
+            (tensor, _output_path_to_address(path), None)
+            for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs)
+        ]
+        output_specs_by_raw_label = {}
+        for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs):
+            tensor_label_raw = getattr(tensor, "tl_tensor_label_raw", None)
+            if tensor_label_raw is not None:
+                output_specs_by_raw_label[tensor_label_raw] = (
+                    path,
+                    container_spec,
+                )
+        setattr(self, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
+    else:
+        output_tensors_w_addresses_all = get_vars_of_type_from_obj(
+            outputs,
+            torch.Tensor,
+            search_depth=5,
+            return_addresses=True,
+            allow_repeats=True,
+        )
     # Remove duplicate addresses (same tensor at multiple output positions).
     addresses_seen = set()
     output_tensors_w_addresses = []
@@ -393,11 +409,39 @@ def _extract_and_mark_outputs(
 
     for t in output_tensors:
         # Only record output_layers during exhaustive pass; fast pass reuses the list.
+        tensor_label_raw = getattr(t, "tl_tensor_label_raw")
         if self.logging_mode == "exhaustive":
-            self.output_layers.append(t.tl_tensor_label_raw)
-        self._raw_layer_dict[t.tl_tensor_label_raw].feeds_output = True
+            self.output_layers.append(tensor_label_raw)
+        self._raw_layer_dict[tensor_label_raw].feeds_output = True
 
     return output_tensors, output_tensor_addresses
+
+
+def _output_path_to_address(path: tuple[Any, ...]) -> str:
+    """Convert an output path tuple to TorchLens' display address string.
+
+    Parameters
+    ----------
+    path
+        Path components from path-aware output traversal.
+
+    Returns
+    -------
+    str
+        Dot-separated output address suffix.
+    """
+
+    parts: list[str] = []
+    for component in path:
+        if hasattr(component, "index"):
+            parts.append(str(component.index))
+        elif hasattr(component, "key"):
+            parts.append(str(component.key))
+        elif hasattr(component, "name"):
+            parts.append(str(component.name))
+        else:
+            parts.append(str(component))
+    return ".".join(parts)
 
 
 def run_and_log_inputs_through_model(

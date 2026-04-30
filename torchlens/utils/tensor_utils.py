@@ -188,6 +188,28 @@ def get_tensor_memory_amount(t: torch.Tensor) -> int:
         return 0
 
 
+def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+    """Concatenate two tensors along the leading batch dimension.
+
+    Parameters
+    ----------
+    left:
+        Existing accumulated tensor.
+    right:
+        New chunk tensor.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing ``left`` followed by ``right`` on dimension 0.
+    """
+
+    from .._state import pause_logging
+
+    with pause_logging():
+        return torch.cat([left, right], dim=0)
+
+
 def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
     """Best-effort memory format probe — returns ``preserve_format`` on any error.
 

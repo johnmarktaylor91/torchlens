@@ -8,7 +8,7 @@ this module produces:
 * :class:`Supergraph` (and :class:`SupergraphNode`) -- the union of N graphs,
   with each node carrying which traces traversed it plus per-trace LayerLog
   pointers.
-* :func:`build_supergraph` -- the constructor used by ``TraceBundle``.
+* :func:`build_supergraph` -- the constructor used by intervention ``Bundle``.
 
 Matching is intentionally simple: a linear scan in topological order with a
 greedy fingerprint match. The fingerprint is ``(containing_module, func_name)``

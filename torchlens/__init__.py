@@ -15,6 +15,8 @@ __version__ = "2.15.0"
 
 from .user_funcs import (
     log_forward_pass,
+    list_logs,
+    reset_naming_counter,
     summary,
     show_model_graph,
     show_backward_graph,
@@ -25,8 +27,9 @@ from .user_funcs import (
     validate_saved_activations,
     validate_batch_of_models_and_inputs,
 )
-from .options import StreamingOptions, VisualizationOptions
+from .options import StreamingOptions, VisualizationOptions, suppress_mutate_warnings
 from .types import ActivationPostfunc, GradientPostfunc
+from ._run_state import RunState
 from ._errors import TorchLensPostfuncError
 from ._training_validation import TrainingModeConfigError
 from .validation.invariants import check_metadata_invariants, MetadataInvariantError
@@ -50,13 +53,69 @@ from .visualization import (
     render_model_log_with_dagua,
 )
 
-# ---- Public API: multi-trace analysis ------------------------------------
+# ---- Public API: intervention placeholders --------------------------------
 
-from .multi_trace import NodeView, TraceBundle, bundle, show_bundle_graph
+# Intervention stubs intentionally import only the intervention subpackage; do
+# not import them from _state.py, which is the global toggle-cycle boundary.
+from .intervention import (
+    Bundle,
+    SaveLevel,
+    SiteTable,
+    SpecCompat,
+    TargetManifestDiff,
+    TensorSliceSpec,
+    bwd_hook,
+    clamp,
+    check_spec_compat,
+    contains,
+    do,
+    func,
+    gradient_scale,
+    gradient_zero,
+    in_module,
+    label,
+    load_intervention_spec,
+    mean_ablate,
+    module,
+    noise,
+    project_off,
+    project_onto,
+    replay,
+    replay_from,
+    rerun,
+    resample_ablate,
+    resolve_sites,
+    save_intervention,
+    scale,
+    splice_module,
+    steer,
+    swap_with,
+    where,
+    zero_ablate,
+)
 
 # ---- Public API: decoration lifecycle ------------------------------------
 
 from .decoration import wrap_torch, unwrap_torch, wrapped
+
+
+def bundle(*args, **kwargs) -> Bundle:
+    """Construct a TorchLens Bundle.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Forwarded to :class:`torchlens.intervention.bundle.Bundle`.
+
+    Returns
+    -------
+    Bundle
+        Constructed Bundle.
+    """
+
+    from .intervention.bundle import Bundle as _Bundle
+
+    return _Bundle(*args, **kwargs)
 
 
 def preview_fastlog(model_log: ModelLog, *args, **kwargs) -> str:
@@ -84,6 +143,7 @@ __all__ = [
     "GradFnLog",
     "GradFnPassLog",
     "ActivationPostfunc",
+    "Bundle",
     "GradientPostfunc",
     "LayerAccessor",
     "LayerLog",
@@ -94,38 +154,72 @@ __all__ = [
     "ModuleLog",
     "ModulePassLog",
     "NodeSpec",
-    "NodeView",
     "ParamLog",
+    "RunState",
+    "SaveLevel",
     "StreamingOptions",
+    "SpecCompat",
+    "SiteTable",
+    "TargetManifestDiff",
     "TensorLog",
+    "TensorSliceSpec",
     "TorchLensPostfuncError",
-    "TraceBundle",
     "TrainingModeConfigError",
     "VisualizationOptions",
+    "bwd_hook",
     "build_render_audit",
     "bundle",
     "check_metadata_invariants",
+    "check_spec_compat",
+    "clamp",
     "cleanup_tmp",
+    "contains",
+    "do",
     "fastlog",
+    "func",
     "get_model_metadata",
+    "gradient_scale",
+    "gradient_zero",
+    "in_module",
+    "label",
     "load",
+    "load_intervention_spec",
+    "list_logs",
     "log_forward_pass",
     "log_model_metadata",
+    "mean_ablate",
+    "module",
     "model_log_to_dagua_graph",
+    "noise",
     "preview_fastlog",
+    "project_off",
+    "project_onto",
+    "replay",
+    "replay_from",
     "rehydrate_nested",
     "render_lines_to_html",
     "render_model_log_with_dagua",
+    "rerun",
+    "reset_naming_counter",
+    "resample_ablate",
+    "resolve_sites",
     "save",
+    "save_intervention",
+    "scale",
     "show_backward_graph",
-    "show_bundle_graph",
     "show_model_graph",
+    "splice_module",
+    "steer",
     "summary",
+    "suppress_mutate_warnings",
+    "swap_with",
     "unwrap_torch",
     "validate_batch_of_models_and_inputs",
     "validate_backward_pass",
     "validate_forward_pass",
     "validate_saved_activations",
+    "where",
     "wrap_torch",
     "wrapped",
+    "zero_ablate",
 ]

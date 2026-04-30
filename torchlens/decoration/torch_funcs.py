@@ -55,7 +55,11 @@ from ..utils.display import identity
 from ..utils.rng import log_current_autocast_state, log_current_rng_states
 from ..utils.hashing import make_random_barcode
 from ..utils.tensor_utils import print_override, safe_copy
-from ..capture.output_tensors import log_function_output_tensors
+from ..capture.output_tensors import (
+    _walk_output_tensors_with_paths,
+    apply_live_hooks_to_outputs,
+    log_function_output_tensors,
+)
 from ..capture.source_tensors import log_source_tensor
 
 if TYPE_CHECKING:
@@ -409,6 +413,7 @@ def torch_func_decorator(func: Callable, func_name: str):
         _save_rng = getattr(model_log, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
+        func_call_id = _state.next_func_call_id()
         out_orig = func(*args, **kwargs)
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - start_time,
@@ -437,9 +442,24 @@ def torch_func_decorator(func: Callable, func_name: str):
             # tl_tensor_label_raw to the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
 
+        out_orig = apply_live_hooks_to_outputs(
+            model_log,
+            func,
+            func_name,
+            args,
+            kwargs,
+            out_orig,
+            exec_ctx,
+            is_bottom_level_func,
+            func_call_id,
+        )
+
         # Log all output tensors (excluding Parameters, which are source tensors).
         # Fast inline check for the common single-tensor output case.
-        output_tensors = _collect_output_tensors(out_orig)
+        if getattr(model_log, "intervention_ready", False):
+            output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]
+        else:
+            output_tensors = _collect_output_tensors(out_orig)
 
         if len(output_tensors) > 0:
             log_function_output_tensors(
@@ -453,6 +473,7 @@ def torch_func_decorator(func: Callable, func_name: str):
                 out_orig,
                 exec_ctx,
                 is_bottom_level_func,
+                func_call_id,
             )
 
             # For true in-place ops, propagate the newly assigned label back
