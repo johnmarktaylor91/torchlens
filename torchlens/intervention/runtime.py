@@ -11,7 +11,7 @@ import torch
 
 from .. import _state
 from .._state import pause_logging
-from .errors import HookSignatureError, HookValueError, _not_implemented
+from .errors import HookSignatureError, HookValueError
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord
 
@@ -413,29 +413,24 @@ def _site_name(hook_context: HookContext | None) -> str:
 
 
 def do(log: Any, *args: Any, **kwargs: Any) -> Any:
-    """Apply a future one-shot intervention operation to a model log.
+    """Apply a one-shot intervention operation to a model log.
 
     Parameters
     ----------
     log:
         ModelLog-like object that will eventually receive the operation.
     *args:
-        Reserved positional arguments for future site and hook/value inputs.
+        Positional arguments forwarded to ``log.do``.
     **kwargs:
-        Reserved keyword arguments for future engine dispatch.
+        Keyword arguments forwarded to ``log.do``.
 
     Returns
     -------
     Any
-        Reserved operation result.
-
-    Raises
-    ------
-    NotImplementedError
-        Always raised until Phase 8b implements the dispatch operation.
+        Operation result from ``log.do``.
     """
 
-    return _not_implemented("do", "Phase 8b")
+    return log.do(*args, **kwargs)
 
 
 __all__ = [

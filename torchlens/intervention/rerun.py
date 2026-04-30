@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, Any
 from torch import nn
 
 from .._run_state import RunState
-from .errors import ControlFlowDivergenceError, ControlFlowDivergenceWarning
+from .errors import (
+    ControlFlowDivergenceError,
+    ControlFlowDivergenceWarning,
+    DirectActivationWriteWarning,
+)
 from .hooks import normalize_hooks_from_spec
 from .runtime import active_intervention_context
 
@@ -58,6 +62,7 @@ def rerun(
     if append:
         raise NotImplementedError("rerun(..., append=True) is deferred until Phase 12.")
     _preflight(log, model, x)
+    _warn_if_direct_writes_will_be_overlaid(log)
 
     spec = getattr(log, "_intervention_spec", None)
     hook_plan = normalize_hooks_from_spec(spec)
@@ -99,10 +104,32 @@ def rerun(
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(log, "graph_shape_hash", None),
     }
-    log.operation_history.append(history_record)
+    log._record_operation(**history_record)
     log._has_direct_writes = False
     log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
     return log
+
+
+def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
+    """Warn once that rerun propagation overlays direct writes.
+
+    Parameters
+    ----------
+    log:
+        Model log about to be propagated.
+    """
+
+    if not getattr(log, "_has_direct_writes", False):
+        return
+    if getattr(log, "_warned_direct_write_propagation", False):
+        return
+    warnings.warn(
+        "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
+        "recipe and may overlay direct LayerPassLog activation writes.",
+        DirectActivationWriteWarning,
+        stacklevel=3,
+    )
+    setattr(log, "_warned_direct_write_propagation", True)
 
 
 def _preflight(log: "ModelLog", model: nn.Module, x: Any) -> None:
@@ -270,10 +297,9 @@ def _build_operation_history_record(
     """
 
     return {
+        "op": "rerun",
         "engine": "rerun",
-        "timestamp": time.monotonic(),
         "started_at": started_at,
-        "spec_revision": getattr(log, "_spec_revision", 0),
         "strict": strict,
         "append": False,
         "hook_count": len(hook_plan),

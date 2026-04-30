@@ -25,7 +25,7 @@ from .user_funcs import (
     validate_saved_activations,
     validate_batch_of_models_and_inputs,
 )
-from .options import StreamingOptions, VisualizationOptions
+from .options import StreamingOptions, VisualizationOptions, suppress_mutate_warnings
 from .types import ActivationPostfunc, GradientPostfunc
 from ._run_state import RunState
 from ._errors import TorchLensPostfuncError
@@ -187,6 +187,7 @@ __all__ = [
     "splice_module",
     "steer",
     "summary",
+    "suppress_mutate_warnings",
     "swap_with",
     "unwrap_torch",
     "validate_batch_of_models_and_inputs",

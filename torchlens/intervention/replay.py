@@ -16,6 +16,7 @@ from ..utils.rng import execute_with_restored_rng_autocast
 from .errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
+    DirectActivationWriteWarning,
     ReplayPreconditionError,
 )
 from .hooks import (
@@ -68,6 +69,7 @@ def replay(
     """
 
     _preflight_log(log)
+    _warn_if_direct_writes_will_be_overlaid(log)
     hook_entries = _normalize_replay_hooks(log, hooks)
     origins = _origin_sites_for_hooks(log, hook_entries, strict=strict)
     if not origins:
@@ -99,6 +101,7 @@ def replay_from(
     """
 
     _preflight_log(log)
+    _warn_if_direct_writes_will_be_overlaid(log)
     origin = _resolve_single_origin(log, site, strict=strict)
     if not isinstance(origin.activation, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor activation")
@@ -250,8 +253,39 @@ def _run_replay(
         "errors_non_fatal": errors_non_fatal,
         "cone": tuple(site.layer_label for site in cone),
     }
+    log._record_operation(
+        "replay",
+        engine="replay",
+        origins=tuple(origin.layer_label for origin in origins),
+        hooks=tuple(_hook_name(entry) for entry in hook_entries),
+        strict=strict,
+        cone=tuple(site.layer_label for site in cone),
+        errors_non_fatal=errors_non_fatal,
+    )
     log._has_direct_writes = False
     return log
+
+
+def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
+    """Warn once that replay/rerun propagation overlays direct writes.
+
+    Parameters
+    ----------
+    log:
+        Model log about to be propagated.
+    """
+
+    if not getattr(log, "_has_direct_writes", False):
+        return
+    if getattr(log, "_warned_direct_write_propagation", False):
+        return
+    warnings.warn(
+        "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
+        "recipe and may overlay direct LayerPassLog activation writes.",
+        DirectActivationWriteWarning,
+        stacklevel=3,
+    )
+    setattr(log, "_warned_direct_write_propagation", True)
 
 
 def _reconstruct_args_from_template(

@@ -34,7 +34,14 @@ from .rerun import rerun
 from .runtime import do
 from .save import load_intervention_spec, save_intervention
 from .selectors import contains, func, in_module, label, module, where
-from .errors import InterventionReadyConflictError, LiveModeLabelError
+from .errors import (
+    DirectActivationWriteWarning,
+    EngineDispatchError,
+    InterventionReadyConflictError,
+    LiveModeLabelError,
+    ModelMismatchError,
+    MutateInPlaceWarning,
+)
 from .types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -68,7 +75,9 @@ __all__ = [
     "ContainerSpec",
     "DataclassField",
     "DictKey",
+    "DirectActivationWriteWarning",
     "EdgeUseRecord",
+    "EngineDispatchError",
     "FireRecord",
     "ForkFieldPolicy",
     "FrozenInterventionSpec",
@@ -82,6 +91,8 @@ __all__ = [
     "LiveModeLabelError",
     "LiteralTensor",
     "LiteralValue",
+    "ModelMismatchError",
+    "MutateInPlaceWarning",
     "NamedField",
     "Relationship",
     "ParentRef",

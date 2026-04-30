@@ -35,6 +35,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 
 import copy
 import weakref
+import warnings
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
@@ -47,9 +48,11 @@ from .._io import (
     read_io_format_version,
 )
 from .._errors import TorchLensPostfuncError
+from .._run_state import RunState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import LAYER_PASS_LOG_FORK_POLICY
+from ..intervention.errors import DirectActivationWriteWarning
 from .._state import pause_logging
 from ..utils.tensor_utils import get_tensor_memory_amount, print_override, safe_copy, safe_to
 from ..utils.display import human_readable_size
@@ -345,6 +348,15 @@ class LayerPassLog:
             model_log = owner() if owner is not None else None
             if model_log is not None:
                 object.__setattr__(model_log, "_has_direct_writes", True)
+                object.__setattr__(model_log, "run_state", RunState.DIRECT_WRITE_DIRTY)
+                if not getattr(model_log, "_warned_direct_write", False):
+                    warnings.warn(
+                        "DirectActivationWriteWarning: direct LayerPassLog activation writes "
+                        "are not recipe edits; replay/rerun propagation will overlay them.",
+                        DirectActivationWriteWarning,
+                        stacklevel=2,
+                    )
+                    object.__setattr__(model_log, "_warned_direct_write", True)
         object.__setattr__(self, name, value)
 
     def _internal_set(self, attr: str, value: Any) -> None:

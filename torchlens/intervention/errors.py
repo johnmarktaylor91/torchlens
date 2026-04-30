@@ -31,11 +31,11 @@ class InterventionReadyConflictError(TorchLensInterventionError):
 
 
 class DirectActivationWriteWarning(UserWarning):
-    """Warning for direct LayerPassLog activation writes."""
+    """User directly wrote a LayerPassLog activation field."""
 
 
 class MutateInPlaceWarning(UserWarning):
-    """Warning for mutating a root ModelLog in place."""
+    """First root-log mutation; ModelLog mutators operate in place."""
 
 
 class DirectWriteIgnoredWarning(UserWarning):
@@ -63,7 +63,11 @@ class ControlFlowDivergenceError(TorchLensInterventionError):
 
 
 class EngineDispatchError(TorchLensInterventionError):
-    """Raised when future intervention engine dispatch arguments are invalid."""
+    """Raised when ``do(...)`` cannot determine a propagation engine."""
+
+
+class ModelMismatchError(TorchLensInterventionError):
+    """Raised when a supplied model does not match capture evidence."""
 
 
 class SpecMutationError(TorchLensInterventionError):
@@ -114,6 +118,7 @@ __all__ = [
     "InterventionReadyConflictError",
     "InterventionAuditWarning",
     "LiveModeLabelError",
+    "ModelMismatchError",
     "MultiMatchWarning",
     "MutateInPlaceWarning",
     "ReplayPreconditionError",

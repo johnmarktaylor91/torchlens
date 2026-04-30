@@ -172,13 +172,16 @@ def test_rerun_advances_activation_recipe_revision_after_set() -> None:
     assert log._recipe_is_clean()
 
 
-def test_fork_and_auto_do_are_phase8b_stubs() -> None:
-    """Phase 8a leaves fork and auto dispatch to Phase 8b."""
+def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
+    """Phase 8b implements fork and auto dispatch paths."""
 
     log = _capture()
 
-    with pytest.raises(NotImplementedError, match="Phase 8b"):
-        log.fork("candidate")
+    fork = log.fork("candidate")
+    assert fork is not log
+    assert fork.name == "candidate"
+    assert fork.parent_run() is log
 
-    with pytest.raises(NotImplementedError, match="Phase 8b"):
-        log.do({tl.func("relu"): _identity_hook})
+    result = log.do({tl.func("relu"): _identity_hook}, confirm_mutation=True)
+    assert result is log
+    assert log.run_state is RunState.REPLAY_PROPAGATED

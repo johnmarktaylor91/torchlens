@@ -73,6 +73,66 @@ _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 
 
+class _MutateWarningSuppression:
+    """Session-level toggle and context manager for mutation warnings."""
+
+    def __init__(self) -> None:
+        """Initialize the suppression flag."""
+
+        self._suppress = False
+        self._prior = False
+
+    def __call__(self, on: bool = True) -> "_MutateWarningSuppression":
+        """Set suppression state and return this context-capable object.
+
+        Parameters
+        ----------
+        on:
+            Whether mutate-in-place warnings should be suppressed.
+
+        Returns
+        -------
+        _MutateWarningSuppression
+            This suppression controller.
+        """
+
+        self._suppress = bool(on)
+        return self
+
+    def __enter__(self) -> "_MutateWarningSuppression":
+        """Temporarily suppress mutate-in-place warnings.
+
+        Returns
+        -------
+        _MutateWarningSuppression
+            This suppression controller.
+        """
+
+        self._prior = self._suppress
+        self._suppress = True
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        """Restore the suppression state active before the context.
+
+        Parameters
+        ----------
+        *exc:
+            Exception triple supplied by the context manager protocol.
+        """
+
+        self._suppress = self._prior
+
+    @property
+    def is_suppressed(self) -> bool:
+        """Whether mutate-in-place warnings are currently suppressed."""
+
+        return self._suppress
+
+
+suppress_mutate_warnings = _MutateWarningSuppression()
+
+
 def _validate_node_mode(node_mode: VisNodeModeLiteral) -> None:
     """Validate a visualization node-mode preset name.
 

@@ -30,10 +30,13 @@ Key design patterns:
 
 import copy
 from collections import OrderedDict, defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
+import time
 import weakref
+import warnings
 from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
 import numpy as np
@@ -63,6 +66,7 @@ from .._literals import (
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODEL_LOG_FIELD_ORDER
 from ..intervention.types import (
+    ForkFieldPolicy,
     MODEL_LOG_FORK_POLICY,
     InterventionSpec,
     Relationship,
@@ -656,7 +660,7 @@ class ModelLog:
             This model log, with a stale intervention recipe.
         """
 
-        del confirm_mutation
+        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
         self._validate_intervention_site(site, strict=strict)
         metadata = {"created_by": "set_callable_one_shot"} if callable(value) else {}
         self._ensure_intervention_spec().add_set(
@@ -665,6 +669,13 @@ class ModelLog:
             metadata=metadata,
         )
         self._mark_intervention_spec_mutated()
+        self._record_operation(
+            "set",
+            site=repr(site),
+            value_kind=type(value).__name__,
+            strict=strict,
+            callable=callable(value),
+        )
         return self
 
     def attach_hooks(
@@ -697,7 +708,7 @@ class ModelLog:
             This model log, with a stale intervention recipe.
         """
 
-        del confirm_mutation
+        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
         from ..intervention.hooks import normalize_hook_plan
 
         entries = normalize_hook_plan(hooks_or_site, hook)
@@ -714,6 +725,13 @@ class ModelLog:
                 prepend=prepend,
             )
         self._mark_intervention_spec_mutated()
+        self._record_operation(
+            "attach_hooks",
+            hook_count=len(entries),
+            sites=tuple(repr(entry.site_target) for entry in entries),
+            strict=strict,
+            prepend=prepend,
+        )
         return self
 
     def detach_hooks(
@@ -744,7 +762,7 @@ class ModelLog:
             This model log, with a stale recipe if hooks were removed.
         """
 
-        del confirm_mutation
+        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
         from ..intervention.errors import SpecMutationError
 
         if site is None and handle is None:
@@ -774,6 +792,13 @@ class ModelLog:
             raise SpecMutationError("detach_hooks did not match any sticky hooks.")
         if removed > 0:
             self._mark_intervention_spec_mutated()
+        self._record_operation(
+            "detach_hooks",
+            site=repr(site) if site is not None else None,
+            handle=str(handle) if handle is not None else None,
+            removed=removed,
+            strict=strict,
+        )
         return self
 
     def clear_hooks(self, *, confirm_mutation: bool = False) -> "ModelLog":
@@ -790,9 +815,10 @@ class ModelLog:
             This model log with hook specs cleared and marked stale.
         """
 
-        del confirm_mutation
+        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
         self._ensure_intervention_spec().clear()
         self._mark_intervention_spec_mutated()
+        self._record_operation("clear_hooks")
         return self
 
     def do(
@@ -806,7 +832,7 @@ class ModelLog:
         confirm_mutation: bool = False,
         strict: bool = False,
     ) -> "ModelLog":
-        """Attach hooks and propagate with an explicitly selected engine.
+        """Apply an intervention and dispatch to replay, rerun, or set-only.
 
         Parameters
         ----------
@@ -819,8 +845,7 @@ class ModelLog:
         x:
             Input required when ``engine="rerun"``.
         engine:
-            ``"replay"`` or ``"rerun"`` for Phase 8a pass-through.
-            ``"auto"`` is deferred to Phase 8b.
+            ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
         confirm_mutation:
             Reserved confirmation flag for Phase 8b warning policy.
         strict:
@@ -832,25 +857,44 @@ class ModelLog:
             This model log after the selected propagation engine runs.
         """
 
-        if engine == "auto":
-            raise NotImplementedError("ModelLog.do(engine='auto') dispatch lands in Phase 8b.")
-        if engine not in {"replay", "rerun"}:
-            raise ValueError("do(..., engine=...) must be 'auto', 'replay', or 'rerun'.")
+        from ..intervention.errors import EngineDispatchError
 
-        self.attach_hooks(
+        if engine not in {"auto", "replay", "rerun", "set_only"}:
+            raise ValueError(
+                "do(..., engine=...) must be 'auto', 'replay', 'rerun', or 'set_only'."
+            )
+
+        selected_engine = self._select_do_engine(engine, model=model, x=x)
+        if selected_engine == "rerun":
+            if model is None:
+                raise EngineDispatchError("do(..., engine='rerun') requires model= and x=.")
+            self._validate_supplied_model_matches_capture(model)
+        mutation_kind = self._apply_do_mutation(
             hooks_or_site,
             value_or_hook,
+            engine=selected_engine,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
-        if engine == "replay":
+        self._record_operation(
+            "do",
+            mutation_kind=mutation_kind,
+            engine=selected_engine,
+            requested_engine=engine,
+            model_supplied=model is not None,
+            x_supplied=x is not None,
+            strict=strict,
+        )
+
+        if selected_engine == "set_only":
+            return self
+        if selected_engine == "replay":
             return self.replay(strict=strict)
-        if model is None:
-            raise ValueError("do(..., engine='rerun') requires model=.")
+        assert model is not None
         return self.rerun(model, x, strict=strict)
 
     def fork(self, name: str | None = None) -> "ModelLog":
-        """Return an intervention fork of this log.
+        """Create a copy-on-write intervention fork of this log.
 
         Parameters
         ----------
@@ -861,15 +905,419 @@ class ModelLog:
         -------
         ModelLog
             Forked model log.
+        """
+
+        fork = self._fork_model_log(name=name)
+        self._record_operation("fork", source_id=id(self), name=fork.name)
+        return fork
+
+    def _record_operation(self, op: str, **payload: Any) -> None:
+        """Append a structured operation record to ``operation_history``.
+
+        Parameters
+        ----------
+        op:
+            Operation name.
+        **payload:
+            Operation-specific metadata.
+
+        Returns
+        -------
+        None
+            The history list is mutated in place.
+        """
+
+        self.operation_history.append(
+            {
+                "op": op,
+                "spec_revision": self._spec_revision,
+                "timestamp": time.monotonic(),
+                **payload,
+            }
+        )
+
+    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
+        """Emit the once-per-root mutate-in-place warning when appropriate.
+
+        Parameters
+        ----------
+        confirm_mutation:
+            Whether the caller explicitly accepted in-place mutation.
+        """
+
+        if confirm_mutation or self.parent_run is not None or self._warned_mutate_in_place:
+            return
+        from ..intervention.errors import MutateInPlaceWarning
+        from ..options import suppress_mutate_warnings
+
+        if suppress_mutate_warnings.is_suppressed:
+            return
+        warnings.warn(
+            "MutateInPlaceWarning: ModelLog mutators modify root logs in place. "
+            "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
+            MutateInPlaceWarning,
+            stacklevel=3,
+        )
+        self._warned_mutate_in_place = True
+
+    def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
+        """Resolve the concrete ``do`` engine from caller arguments.
+
+        Parameters
+        ----------
+        engine:
+            Requested engine name.
+        model:
+            Optional model supplied for rerun.
+        x:
+            Optional input supplied for rerun.
+
+        Returns
+        -------
+        str
+            Concrete engine name.
 
         Raises
         ------
-        NotImplementedError
-            Always in Phase 8a.
+        EngineDispatchError
+            If the engine cannot be inferred from an incomplete model/input pair.
         """
 
-        del name
-        raise NotImplementedError("ModelLog.fork() lands in Phase 8b")
+        from ..intervention.errors import EngineDispatchError
+
+        if engine != "auto":
+            if engine == "rerun" and (model is None or x is None):
+                raise EngineDispatchError(
+                    "do(..., engine='rerun') requires both model= and x=. "
+                    "Pass both, or use engine='replay' if full rerun is not intended."
+                )
+            return engine
+        if (model is None) != (x is None):
+            raise EngineDispatchError(
+                "do(engine='auto') needs both model= and x= for rerun, or neither for "
+                "replay. Pass both, or use engine='replay' if rerun is not intended."
+            )
+        return "rerun" if model is not None else "replay"
+
+    def _apply_do_mutation(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any,
+        *,
+        engine: str,
+        strict: bool,
+        confirm_mutation: bool,
+    ) -> str:
+        """Apply the mutation part of ``do`` and report its kind.
+
+        Parameters
+        ----------
+        hooks_or_site:
+            Mapping/list batch input or selector-like site.
+        value_or_hook:
+            Optional value or hook.
+        engine:
+            Concrete engine selected by ``_select_do_engine``.
+        strict:
+            Whether selector checks should be strict.
+        confirm_mutation:
+            Whether root mutation warnings should be suppressed.
+
+        Returns
+        -------
+        str
+            ``"set"`` or ``"attach_hooks"``.
+        """
+
+        if engine == "set_only" and value_or_hook is not None:
+            self.set(
+                hooks_or_site,
+                value_or_hook,
+                strict=strict,
+                confirm_mutation=confirm_mutation,
+            )
+            return "set"
+        if value_or_hook is not None and not callable(value_or_hook):
+            self.set(
+                hooks_or_site,
+                value_or_hook,
+                strict=strict,
+                confirm_mutation=confirm_mutation,
+            )
+            return "set"
+        self.attach_hooks(
+            hooks_or_site,
+            value_or_hook,
+            strict=strict,
+            confirm_mutation=confirm_mutation,
+        )
+        return "attach_hooks"
+
+    def _validate_supplied_model_matches_capture(self, model: nn.Module) -> None:
+        """Validate rerun model evidence against the captured source model.
+
+        Parameters
+        ----------
+        model:
+            Candidate model for rerun.
+
+        Raises
+        ------
+        ModelMismatchError
+            If available class or weight-fingerprint evidence differs.
+        """
+
+        from ..intervention.errors import ModelMismatchError
+        from ..user_funcs import _fingerprint_model_weights, _qualname_for_model
+
+        expected_class = getattr(self, "source_model_class", None)
+        actual_class = _qualname_for_model(model)
+        if expected_class is not None and actual_class != expected_class:
+            raise ModelMismatchError(
+                "Supplied model class does not match captured model class: "
+                f"expected {expected_class!r}, got {actual_class!r}."
+            )
+
+        expected_fingerprint = getattr(self, "weight_fingerprint_at_capture", None)
+        if expected_fingerprint is None:
+            return
+        actual_fingerprint = _fingerprint_model_weights(model)
+        if actual_fingerprint != expected_fingerprint:
+            raise ModelMismatchError(
+                "Supplied model weight fingerprint does not match captured model weights."
+            )
+
+    def _fork_model_log(self, *, name: str | None) -> "ModelLog":
+        """Build a forked ModelLog with policy-driven field handling.
+
+        Parameters
+        ----------
+        name:
+            Optional fork name.
+
+        Returns
+        -------
+        ModelLog
+            Forked log whose mutable containers are independent.
+        """
+
+        fork = object.__new__(type(self))
+        fork_state = {
+            field_name: self._fork_model_field(field_name, value)
+            for field_name, value in self.__dict__.items()
+        }
+        fork.__dict__.update(fork_state)
+        fork.parent_run = weakref.ref(self)
+        fork.name = name or self._next_fork_name()
+        fork._intervention_spec = copy.deepcopy(self._ensure_intervention_spec())
+        fork.operation_history = copy.deepcopy(self.operation_history)
+        fork.relationship_evidence = copy.deepcopy(self.relationship_evidence)
+        fork._activation_recipe_revision = self._activation_recipe_revision
+        fork._spec_revision = self._spec_revision
+        fork.run_state = self.run_state
+        fork._warned_mutate_in_place = False
+        fork._warned_direct_write = False
+
+        layer_map = fork._fork_layer_passes_from(self)
+        fork._rebuild_fork_layer_collections(self, layer_map)
+        fork._rebind_fork_owner_refs()
+        return fork
+
+    def _next_fork_name(self) -> str:
+        """Return a deterministic default fork name for this parent log."""
+
+        base_name = self.name or "model_log"
+        fork_count = sum(
+            1
+            for record in self.operation_history
+            if isinstance(record, dict) and record.get("op") == "fork"
+        )
+        return f"{base_name}_fork_{fork_count + 1}"
+
+    def _fork_model_field(self, field_name: str, value: Any) -> Any:
+        """Apply the ModelLog fork policy to a single field.
+
+        Parameters
+        ----------
+        field_name:
+            Field being copied.
+        value:
+            Current field value.
+
+        Returns
+        -------
+        Any
+            Field value for the fork.
+        """
+
+        policy = MODEL_LOG_FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        if policy is ForkFieldPolicy.FORK_SHARE:
+            return value
+        if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
+            return None
+        return self._copy_fork_value(value)
+
+    def _fork_layer_passes_from(self, parent: "ModelLog") -> dict[int, LayerPassLog]:
+        """Fork every LayerPassLog and return an old-object-id map.
+
+        Parameters
+        ----------
+        parent:
+            Parent log whose layer passes are being forked.
+
+        Returns
+        -------
+        dict[int, LayerPassLog]
+            Mapping from ``id(parent_pass)`` to forked pass.
+        """
+
+        layer_map: dict[int, LayerPassLog] = {}
+        fork_equivalent_operations = self.equivalent_operations
+        for parent_pass in parent.layer_list:
+            fork_pass = object.__new__(LayerPassLog)
+            fork_pass.__dict__.update(
+                {
+                    field_name: self._fork_layer_pass_field(field_name, value)
+                    for field_name, value in parent_pass.__dict__.items()
+                }
+            )
+            fork_pass.source_model_log = self
+            eq_type = getattr(fork_pass, "operation_equivalence_type", None)
+            if eq_type in fork_equivalent_operations:
+                fork_pass.equivalent_operations = fork_equivalent_operations[eq_type]
+            fork_pass._construction_done = True
+            layer_map[id(parent_pass)] = fork_pass
+        return layer_map
+
+    def _fork_layer_pass_field(self, field_name: str, value: Any) -> Any:
+        """Apply the LayerPassLog fork policy to a single field.
+
+        Parameters
+        ----------
+        field_name:
+            LayerPassLog field being copied.
+        value:
+            Current field value.
+
+        Returns
+        -------
+        Any
+            Field value for the forked pass.
+        """
+
+        if field_name in {"_source_model_log_ref", "parent_layer_log"}:
+            return None
+        policy = LayerPassLog.FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        if policy is ForkFieldPolicy.FORK_SHARE:
+            return value
+        if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
+            return None
+        return self._copy_fork_value(value)
+
+    def _rebuild_fork_layer_collections(
+        self, parent: "ModelLog", layer_map: dict[int, LayerPassLog]
+    ) -> None:
+        """Rebuild layer lookup containers so they point at forked passes.
+
+        Parameters
+        ----------
+        parent:
+            Parent log whose containers are being mirrored.
+        layer_map:
+            Mapping from parent pass object id to forked pass.
+        """
+
+        def remap_pass(value: Any) -> Any:
+            return layer_map.get(id(value), value)
+
+        self.layer_list = [remap_pass(layer) for layer in parent.layer_list]
+        self.layer_dict_main_keys = OrderedDict(
+            (key, remap_pass(layer)) for key, layer in parent.layer_dict_main_keys.items()
+        )
+        self.layer_dict_all_keys = OrderedDict(
+            (key, remap_pass(layer)) for key, layer in parent.layer_dict_all_keys.items()
+        )
+        self._raw_layer_dict = OrderedDict(
+            (key, remap_pass(layer)) for key, layer in parent._raw_layer_dict.items()
+        )
+
+        fork_layer_logs: dict[str, LayerLog] = OrderedDict()
+        for label, parent_layer_log in parent.layer_logs.items():
+            fork_layer_log = copy.copy(parent_layer_log)
+            fork_layer_log.__dict__ = {
+                key: self._copy_fork_value(value)
+                for key, value in parent_layer_log.__dict__.items()
+            }
+            fork_layer_log.source_model_log = self
+            fork_layer_log.passes = OrderedDict(
+                (pass_num, remap_pass(layer_pass))
+                for pass_num, layer_pass in parent_layer_log.passes.items()
+            )
+            for layer_pass in fork_layer_log.passes.values():
+                layer_pass.parent_layer_log = fork_layer_log
+            if (
+                getattr(fork_layer_log, "operation_equivalence_type", None)
+                in self.equivalent_operations
+            ):
+                fork_layer_log.equivalent_operations = self.equivalent_operations[
+                    fork_layer_log.operation_equivalence_type
+                ]
+            fork_layer_logs[label] = fork_layer_log
+        self.layer_logs = fork_layer_logs
+
+    def _rebind_fork_owner_refs(self) -> None:
+        """Rebind weak owner references on forked child objects to this fork."""
+
+        for layer_pass in self.layer_list:
+            layer_pass.source_model_log = self
+            parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
+            if parent_layer_log is not None:
+                layer_pass.parent_layer_log = parent_layer_log
+        for layer_log in self.layer_logs.values():
+            layer_log.source_model_log = self
+
+    @staticmethod
+    def _copy_fork_value(value: Any) -> Any:
+        """Copy a fork field while preserving tensor and callable identity.
+
+        Parameters
+        ----------
+        value:
+            Value to copy.
+
+        Returns
+        -------
+        Any
+            Fork-safe copy.
+        """
+
+        if isinstance(value, torch.Tensor) or callable(value):
+            return value
+        try:
+            return copy.deepcopy(value)
+        except Exception:
+            return copy.copy(value)
+
+    @staticmethod
+    def _default_fork_policy(value: Any) -> ForkFieldPolicy:
+        """Choose a conservative fork policy for fields outside policy tables.
+
+        Parameters
+        ----------
+        value:
+            Field value without an explicit policy.
+
+        Returns
+        -------
+        ForkFieldPolicy
+            Default share/copy decision.
+        """
+
+        if isinstance(value, (str, bytes, int, float, bool, type(None), tuple)):
+            return ForkFieldPolicy.FORK_SHARE
+        if isinstance(value, torch.Tensor) or callable(value):
+            return ForkFieldPolicy.FORK_SHARE
+        return ForkFieldPolicy.FORK_COPY
 
     def _recipe_is_clean(self) -> bool:
         """Return whether propagated activations match the current spec revision.
