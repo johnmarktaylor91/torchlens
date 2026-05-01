@@ -32,6 +32,7 @@ import copy
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+import difflib
 from os import PathLike
 from pathlib import Path
 import time
@@ -180,6 +181,25 @@ class ConditionalEvent:
     parent_conditional_id: Optional[int]
     parent_branch_kind: Optional[str]
     bool_layers: List[str] = field(default_factory=list)
+
+
+class _CallableList(list):
+    """List that returns a plain list when called.
+
+    This keeps rare report surfaces callable for user ergonomics without adding
+    extra callable methods to the ModelLog method ledger.
+    """
+
+    def __call__(self) -> list[Any]:
+        """Return a plain-list copy of this report.
+
+        Returns
+        -------
+        list[Any]
+            Plain list containing this report's items.
+        """
+
+        return list(self)
 
 
 def _legacy_conditional_then_edges(
@@ -710,6 +730,96 @@ class ModelLog:
         from ..intervention.resolver import resolve_sites
 
         return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+
+    def find_layers(self, query: str, *, limit: int = 10) -> List[str]:
+        """Return layer labels matching a fuzzy query.
+
+        Parameters
+        ----------
+        query:
+            Layer-label substring or approximate layer name.
+        limit:
+            Maximum number of labels to return.
+
+        Returns
+        -------
+        List[str]
+            Matching no-pass layer labels in execution order, followed by close
+            fuzzy matches when substring matches are insufficient.
+        """
+
+        query_text = str(query).lower()
+        labels = list(self.layer_labels_no_pass)
+        substring_matches = [label for label in labels if query_text in label.lower()]
+        if len(substring_matches) >= limit:
+            return substring_matches[:limit]
+        fuzzy_matches = difflib.get_close_matches(str(query), labels, n=limit, cutoff=0.25)
+        result = substring_matches[:]
+        for label in fuzzy_matches:
+            if label not in result:
+                result.append(label)
+            if len(result) >= limit:
+                break
+        return result
+
+    def suggest(self, query: str, *, limit: int = 3) -> List[str]:
+        """Return a short list of suggested layer labels for a failed query.
+
+        Parameters
+        ----------
+        query:
+            Layer query that did not resolve.
+        limit:
+            Maximum number of suggestions.
+
+        Returns
+        -------
+        List[str]
+            Suggested no-pass layer labels.
+        """
+
+        return self.find_layers(query, limit=limit)
+
+    @property
+    def unsupported_ops(self) -> _CallableList:
+        """Return operations TorchLens could not represent specially.
+
+        Returns
+        -------
+        _CallableList
+            Best-effort list of unsupported operation names. The current
+            exhaustive capture path records all observed tensor-producing ops,
+            so this returns an empty list unless future capture metadata marks
+            a layer with ``unsupported_op=True``.
+        """
+
+        unsupported: set[str] = set()
+        for layer in self.layer_list:
+            if getattr(layer, "unsupported_op", False):
+                op_name = getattr(layer, "func_name", None) or getattr(layer, "layer_type", "")
+                unsupported.add(str(op_name))
+        return _CallableList(sorted(unsupported))
+
+    @property
+    def uncalled_modules(self) -> _CallableList:
+        """Return registered modules that were not exercised in the captured pass.
+
+        Returns
+        -------
+        _CallableList
+            Module addresses present on the source model but absent from the
+            captured module accessor. Returns an empty list when the source
+            model is no longer available.
+        """
+
+        source_ref = getattr(self, "_source_model_ref", None)
+        model = source_ref() if source_ref is not None else None
+        if model is None:
+            return _CallableList()
+        registered = {address or "self" for address, _module in model.named_modules()}
+        called = set(getattr(self._module_logs, "_dict", {}).keys())
+        called.update(getattr(self._module_logs, "_alias_dict", {}).keys())
+        return _CallableList(sorted(registered - called))
 
     def save_intervention(
         self,

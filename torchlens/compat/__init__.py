@@ -1,3 +1,5 @@
 """Compatibility adapter namespace reserved for TorchLens 2.0."""
 
-__all__: list[str] = []
+from .torchextractor import Extractor
+
+__all__ = ["Extractor"]

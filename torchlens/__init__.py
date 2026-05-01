@@ -11,8 +11,13 @@ from __future__ import annotations
 
 import functools as _functools
 import importlib as _importlib
+from collections.abc import Callable as _Callable, Iterable as _Iterable, Mapping as _Mapping
+from pathlib import Path as _Path
 import warnings as _warnings
 from typing import Any
+
+import torch as _torch
+from torch import nn as _nn
 
 __version__ = "2.16.0"
 
@@ -60,6 +65,7 @@ from .validation import (
     validate_saved_activations as _moved_validate_saved_activations,
 )
 from .io import load_intervention_spec as _moved_load_intervention_spec
+from .options import CaptureOptions as _CaptureOptions
 
 _REMOVED_IN = "v2.NN"
 
@@ -185,43 +191,382 @@ def _phase_stub(name: str, phase: str) -> Any:
     raise NotImplementedError(f"torchlens.{name} ships in {phase}; see IMPLEMENTATION_PLAN.md")
 
 
-def peek(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 2 onramp for extracting one layer.
+def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
+    """Build a short suggestion suffix for lookup failures.
 
     Parameters
     ----------
-    *args, **kwargs:
-        Reserved for the Phase 2 implementation.
+    name:
+        Lookup string supplied by the user.
+    suggestions:
+        Candidate layer labels.
+
+    Returns
+    -------
+    str
+        Human-readable lookup error.
     """
 
-    del args, kwargs
-    return _phase_stub("peek", "Phase 2")
+    if suggestions:
+        suggestion_str = ", ".join(repr(item) for item in suggestions)
+        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+    return f"Layer {name!r} not found."
 
 
-def extract(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 2 onramp for extracting multiple layers.
+def _activation_from_log(model_log: ModelLog, layer: str) -> _torch.Tensor:
+    """Return a saved activation from a layer lookup.
 
     Parameters
     ----------
-    *args, **kwargs:
-        Reserved for the Phase 2 implementation.
+    model_log:
+        Log containing saved activations.
+    layer:
+        Layer label, module path, pass-qualified label, or unique substring.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved layer activation.
+
+    Raises
+    ------
+    ValueError
+        If the layer cannot be resolved or has no saved activation.
     """
 
-    del args, kwargs
-    return _phase_stub("extract", "Phase 2")
+    try:
+        layer_log = model_log[layer]
+    except (KeyError, ValueError) as exc:
+        suggestions = model_log.suggest(layer) if hasattr(model_log, "suggest") else []
+        raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
+
+    activation = getattr(layer_log, "activation", None)
+    if activation is None:
+        raise ValueError(f"Layer {layer!r} resolved but has no saved activation.")
+    if not isinstance(activation, _torch.Tensor):
+        raise TypeError(f"Layer {layer!r} activation is not a torch.Tensor.")
+    return activation
 
 
-def batched_extract(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 2 onramp for batched extraction.
+def _normalize_extract_layers(layers: _Iterable[str] | _Mapping[str, str]) -> dict[str, str]:
+    """Normalize list or mapping layer specs to ``output_key -> lookup``.
 
     Parameters
     ----------
-    *args, **kwargs:
-        Reserved for the Phase 2 implementation.
+    layers:
+        List of layer lookups or mapping from user label to layer lookup.
+
+    Returns
+    -------
+    dict[str, str]
+        Normalized extraction plan.
     """
 
-    del args, kwargs
-    return _phase_stub("batched_extract", "Phase 2")
+    if isinstance(layers, _Mapping):
+        return {str(label): str(pattern) for label, pattern in layers.items()}
+    return {str(layer): str(layer) for layer in layers}
+
+
+def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]:
+    """Return saved layer labels matching an extraction pattern.
+
+    Parameters
+    ----------
+    model_log:
+        Log containing candidate layer labels.
+    pattern:
+        Exact label or substring pattern.
+
+    Returns
+    -------
+    list[str]
+        Matching no-pass layer labels in execution order.
+    """
+
+    if pattern in model_log.layer_dict_all_keys:
+        return [pattern]
+    if pattern in model_log.layer_logs:
+        return [pattern]
+    lower_pattern = pattern.lower()
+    matches = [
+        label
+        for label in model_log.layer_labels_no_pass
+        if lower_pattern in label.lower() and label in model_log.layers_with_saved_activations
+    ]
+    if matches:
+        return matches
+    try:
+        resolved = model_log[pattern]
+    except (KeyError, ValueError):
+        return []
+    label = getattr(resolved, "layer_label_no_pass", getattr(resolved, "layer_label", pattern))
+    return [str(label)]
+
+
+def peek(model: _nn.Module, x: Any, layer: str) -> _torch.Tensor:
+    """Return the saved activation for one layer.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to run.
+    x:
+        Positional input argument or argument container for ``model.forward``.
+    layer:
+        Layer label, module path, pass-qualified label, or unique substring.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved activation for the requested layer.
+
+    Raises
+    ------
+    ValueError
+        If ``layer`` does not resolve or did not produce a saved tensor.
+    """
+
+    model_log = log_forward_pass(
+        model,
+        x,
+        capture=_CaptureOptions(layers_to_save=[layer], keep_unsaved_layers=True),
+    )
+    return _activation_from_log(model_log, layer)
+
+
+def extract(
+    model: _nn.Module,
+    x: Any,
+    layers: _Iterable[str] | _Mapping[str, str],
+) -> dict[str, _torch.Tensor]:
+    """Return saved activations for many layers.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to run.
+    x:
+        Positional input argument or argument container for ``model.forward``.
+    layers:
+        Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        Mapping from user labels to activations for mapping inputs, or from
+        resolved layer labels to activations for list inputs.
+    """
+
+    layer_plan = _normalize_extract_layers(layers)
+    model_log = log_forward_pass(
+        model,
+        x,
+        capture=_CaptureOptions(
+            layers_to_save=list(layer_plan.values()),
+            keep_unsaved_layers=True,
+        ),
+    )
+    if isinstance(layers, _Mapping):
+        return {
+            label: _activation_from_log(model_log, pattern) for label, pattern in layer_plan.items()
+        }
+
+    outputs: dict[str, _torch.Tensor] = {}
+    for pattern in layer_plan.values():
+        matches = _matching_saved_layer_labels(model_log, pattern)
+        if not matches:
+            suggestions = model_log.suggest(pattern)
+            raise ValueError(_did_you_mean_message(pattern, suggestions))
+        for match in matches:
+            outputs[match] = _activation_from_log(model_log, match)
+    return outputs
+
+
+def _move_nested_to_device(value: Any, device: _torch.device | str | None) -> Any:
+    """Move tensors in a nested value to a device.
+
+    Parameters
+    ----------
+    value:
+        Tensor or nested Python container.
+    device:
+        Target device, or ``None`` to leave values unchanged.
+
+    Returns
+    -------
+    Any
+        Value with tensors moved to ``device``.
+    """
+
+    if device is None:
+        return value
+    if isinstance(value, _torch.Tensor):
+        return value.to(device)
+    if isinstance(value, tuple):
+        return tuple(_move_nested_to_device(item, device) for item in value)
+    if isinstance(value, list):
+        return [_move_nested_to_device(item, device) for item in value]
+    if isinstance(value, dict):
+        return {key: _move_nested_to_device(item, device) for key, item in value.items()}
+    return value
+
+
+def _collate_batch(items: list[Any]) -> Any:
+    """Collate a small list of stimuli into one model input.
+
+    Parameters
+    ----------
+    items:
+        Stimulus items accumulated for one batch.
+
+    Returns
+    -------
+    Any
+        Batched tensor or nested container.
+    """
+
+    if not items:
+        raise ValueError("Cannot collate an empty batch.")
+    first = items[0]
+    if isinstance(first, _torch.Tensor):
+        return _torch.stack(items)
+    if isinstance(first, tuple):
+        return tuple(_collate_batch([item[index] for item in items]) for index in range(len(first)))
+    if isinstance(first, list):
+        return [_collate_batch([item[index] for item in items]) for index in range(len(first))]
+    if isinstance(first, dict):
+        return {key: _collate_batch([item[key] for item in items]) for key in first}
+    return items
+
+
+def _iter_batches(stimuli: Any, batch_size: int) -> _Iterable[Any]:
+    """Yield batched model inputs from tensors or iterables.
+
+    Parameters
+    ----------
+    stimuli:
+        Tensor with batch dimension or iterable stimulus set.
+    batch_size:
+        Number of items per batch.
+
+    Yields
+    ------
+    Any
+        One batch suitable for ``model.forward``.
+    """
+
+    if isinstance(stimuli, _torch.Tensor):
+        for start in range(0, stimuli.shape[0], batch_size):
+            yield stimuli[start : start + batch_size]
+        return
+
+    batch: list[Any] = []
+    for item in stimuli:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield _collate_batch(batch)
+            batch = []
+    if batch:
+        yield _collate_batch(batch)
+
+
+def _merge_batch_outputs(
+    accumulator: dict[str, list[_torch.Tensor]],
+    batch_outputs: dict[str, _torch.Tensor],
+    postfunc: _Callable[[_torch.Tensor], _torch.Tensor] | None,
+) -> None:
+    """Append one batch of extracted activations to an accumulator.
+
+    Parameters
+    ----------
+    accumulator:
+        Mutable mapping from layer label to per-batch tensors.
+    batch_outputs:
+        Extraction output from one batch.
+    postfunc:
+        Optional transform applied to each activation before storage.
+    """
+
+    for layer_name, tensor in batch_outputs.items():
+        stored = postfunc(tensor) if postfunc is not None else tensor
+        accumulator.setdefault(layer_name, []).append(stored.detach().cpu())
+
+
+def batched_extract(
+    model: _nn.Module,
+    stimuli: Any,
+    layers: _Iterable[str] | _Mapping[str, str],
+    batch_size: int = 32,
+    device: _torch.device | str | None = None,
+    output_dir: str | _Path | None = None,
+    postfunc: _Callable[[_torch.Tensor], _torch.Tensor] | None = None,
+    progress: bool = True,
+) -> dict[str, _torch.Tensor] | list[_Path]:
+    """Extract activations from an iterable stimulus set in batches.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to run.
+    stimuli:
+        Tensor with a leading batch dimension or iterable of stimulus items.
+    layers:
+        List or mapping accepted by :func:`extract`.
+    batch_size:
+        Number of stimuli per forward pass.
+    device:
+        Optional device for model and stimuli.
+    output_dir:
+        Optional directory. When supplied, each batch output is written as
+        ``batch_XXXXX.pt`` and paths are returned.
+    postfunc:
+        Optional tensor transform applied to each activation before storage.
+    progress:
+        Whether to wrap batch iteration with ``tqdm``.
+
+    Returns
+    -------
+    dict[str, torch.Tensor] | list[pathlib.Path]
+        In-memory concatenated activations, or written batch paths.
+    """
+
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive.")
+    if device is not None:
+        model = model.to(device)
+
+    batch_iterable = _iter_batches(stimuli, batch_size)
+    if progress:
+        from tqdm.auto import tqdm
+
+        total = None
+        if isinstance(stimuli, _torch.Tensor):
+            total = (stimuli.shape[0] + batch_size - 1) // batch_size
+        batch_iterable = tqdm(batch_iterable, total=total, desc="torchlens.extract")
+
+    output_paths: list[_Path] = []
+    in_memory: dict[str, list[_torch.Tensor]] = {}
+    output_path = _Path(output_dir) if output_dir is not None else None
+    if output_path is not None:
+        output_path.mkdir(parents=True, exist_ok=True)
+
+    for batch_index, batch in enumerate(batch_iterable):
+        batch = _move_nested_to_device(batch, device)
+        batch_outputs = extract(model, batch, layers)
+        if output_path is not None:
+            processed = {
+                label: (postfunc(tensor) if postfunc is not None else tensor).detach().cpu()
+                for label, tensor in batch_outputs.items()
+            }
+            batch_path = output_path / f"batch_{batch_index:05d}.pt"
+            _torch.save(processed, batch_path)
+            output_paths.append(batch_path)
+        else:
+            _merge_batch_outputs(in_memory, batch_outputs, postfunc)
+
+    if output_path is not None:
+        return output_paths
+    return {label: _torch.cat(tensors, dim=0) for label, tensors in in_memory.items()}
 
 
 def validate(*args: Any, **kwargs: Any) -> Any:

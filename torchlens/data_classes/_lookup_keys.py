@@ -82,6 +82,11 @@ def _get_lookup_help_str(self: "ModelLog", layer_label: Union[int, str], mode: s
     str
         Help text describing valid lookup forms.
     """
+    suggestions = self.suggest(str(layer_label)) if hasattr(self, "suggest") else []
+    if suggestions:
+        suggestion_str = ", ".join(repr(item) for item in suggestions)
+        return f"Layer {layer_label!r} not found. Did you mean {suggestion_str}?"
+
     if not self.layer_labels_w_pass:
         sample_layer1 = "conv2d_1_1:1"
         sample_layer2 = "conv2d_1_1"

@@ -73,6 +73,29 @@ class BaseSelector:
             selector_value=self.selector_value,
         )
 
+    def __dir__(self) -> list[str]:
+        """Return selector attributes for tab completion.
+
+        Returns
+        -------
+        list[str]
+            Standard selector attributes. Selectors are not bound to a
+            ``ModelLog``, so layer-name completion lives on log accessors.
+        """
+
+        return sorted(set(super().__dir__()) | {"selector_kind", "selector_value"})
+
+    def _ipython_key_completions_(self) -> list[str]:
+        """Return key completions for IPython.
+
+        Returns
+        -------
+        list[str]
+            Empty list because selector instances have no bound layer universe.
+        """
+
+        return []
+
     def __repr__(self) -> str:
         """Return a concise constructor-style representation.
 

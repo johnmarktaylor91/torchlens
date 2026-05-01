@@ -771,9 +771,7 @@ class ModuleAccessor:
             return self._alias_dict[key]
         if key in self._pass_dict:
             return self._pass_dict[key]
-        raise KeyError(
-            f"Module '{key}' not found. Valid addresses: {list(self._dict.keys())[:10]}..."
-        )
+        raise KeyError(f"Module '{key}' not found.")
 
     def __contains__(self, key) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
@@ -784,6 +782,31 @@ class ModuleAccessor:
     def __len__(self) -> int:
         """Return the number of modules in this accessor."""
         return len(self._dict)
+
+    def __dir__(self) -> List[str]:
+        """Return Python attributes plus module addresses for tab completion.
+
+        Returns
+        -------
+        List[str]
+            Attribute names and valid module addresses.
+        """
+
+        keys = set(self._dict.keys()) | set(self._alias_dict.keys()) | set(self._pass_dict.keys())
+        return sorted(set(super().__dir__()) | keys)
+
+    def _ipython_key_completions_(self) -> List[str]:
+        """Return module addresses for IPython ``obj[...]`` completion.
+
+        Returns
+        -------
+        List[str]
+            Valid module addresses and pass labels.
+        """
+
+        return (
+            list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
+        )
 
     def __iter__(self):
         """Iterate over ModuleLog objects in address order."""
