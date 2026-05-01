@@ -412,11 +412,13 @@ class Bundle:
 
         return fn(self)
 
-    def show(self, **kwargs: Any) -> dict[str, str | None]:
+    def show(self, method: str = "graph", **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.
 
         Parameters
         ----------
+        method:
+            Display method forwarded to each member's :meth:`ModelLog.show`.
         **kwargs:
             Forwarded to each member's :meth:`ModelLog.show`. When an output
             path is supplied, member names are appended to produce one artifact
@@ -439,7 +441,7 @@ class Bundle:
             member_kwargs = dict(kwargs)
             if isinstance(base_outpath, str):
                 member_kwargs["vis_outpath"] = f"{base_outpath}_{name}"
-            results[name] = member.show(**member_kwargs)
+            results[name] = member.show(method=method, **member_kwargs)  # type: ignore[arg-type]
         return results
 
     def compare_at(self, site: Any) -> torch.Tensor:

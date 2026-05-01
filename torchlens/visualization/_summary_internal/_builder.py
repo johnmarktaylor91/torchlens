@@ -16,7 +16,7 @@ from typing import (
     Sequence,
 )
 
-from ...utils.display import human_readable_size
+from ...utils.display import format_flops, human_readable_size
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
@@ -938,6 +938,8 @@ def _build_overview_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], L
         f"Saved activations: {human_readable_size(model_log.saved_activation_memory)}",
         f"Forward FLOPs: {_human_flops(model_log.total_flops_forward)}  "
         f"MACs: {_human_flops(model_log.total_macs_forward)}",
+        "FLOP convention: counts use the captured TorchLens convention; "
+        "MACs are reported as FLOPs // 2.",
     ]
     return rows, footer_lines
 
@@ -1581,7 +1583,7 @@ def _human_flops(value: int) -> str:
     str
         Compact FLOP string.
     """
-    return _human_count(value)
+    return format_flops(value)
 
 
 def _int_with_commas(value: int) -> str:

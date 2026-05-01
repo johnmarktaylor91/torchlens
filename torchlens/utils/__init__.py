@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import inspect
+import importlib
+import subprocess
 from collections import Counter
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Literal, get_args, get_origin, get_type_hints
 
@@ -59,12 +62,222 @@ from .hashing import (
     make_short_barcode_from_input,
 )
 from .display import (
+    format_flops,
+    format_size,
     identity,
     int_list_to_compact_str,
     human_readable_size,
     in_notebook,
+    progress_bar,
+    tensor_stats_summary,
     warn_parallel,
 )
+
+
+@dataclass(frozen=True)
+class DoctorCheck:
+    """One TorchLens environment health-check row.
+
+    Parameters
+    ----------
+    name:
+        Human-readable check name.
+    status:
+        ``"PASS"``, ``"FAIL"``, or ``"SKIP"``.
+    detail:
+        Short diagnostic detail.
+    """
+
+    name: str
+    status: Literal["PASS", "FAIL", "SKIP"]
+    detail: str
+
+
+@dataclass(frozen=True)
+class DoctorReport:
+    """Structured report returned by :func:`doctor`.
+
+    Parameters
+    ----------
+    checks:
+        Ordered health-check rows.
+    """
+
+    checks: tuple[DoctorCheck, ...]
+
+    def show(self) -> str:
+        """Render the doctor report as a text table.
+
+        Returns
+        -------
+        str
+            Human-readable report.
+        """
+
+        rows = ["TorchLens doctor report:"]
+        for check in self.checks:
+            rows.append(f"- {check.status:<4} {check.name}: {check.detail}")
+        return "\n".join(rows)
+
+    def __str__(self) -> str:
+        """Return the rendered report.
+
+        Returns
+        -------
+        str
+            Human-readable report.
+        """
+
+        return self.show()
+
+
+_EXTRA_PROBES: dict[str, tuple[str, ...]] = {
+    "notebook": ("IPython", "jupyter_client"),
+    "viz": ("torchshow", "lovely_tensors"),
+    "tabular": ("pandas",),
+    "captum": ("captum",),
+    "neuro": ("rsatoolbox", "brainscore_core"),
+    "lightning": ("lightning",),
+    "wandb": ("wandb",),
+    "hf": ("transformers", "timm"),
+    "gradcam": ("pytorch_grad_cam",),
+    "shap": ("shap",),
+    "inseq": ("inseq",),
+    "steering": ("steering_vectors",),
+    "repeng": ("repeng",),
+    "dialz": ("dialz",),
+    "nnsight": ("nnsight",),
+    "lit": ("lit_nlp",),
+    "depyf": ("depyf",),
+    "compat-shims": ("torchextractor", "sentence_transformers"),
+    "vision-shims": ("torchvision",),
+    "io": ("pyarrow",),
+}
+
+
+def _module_is_installed(module_name: str) -> bool:
+    """Return whether a module can be imported.
+
+    Parameters
+    ----------
+    module_name:
+        Importable module name.
+
+    Returns
+    -------
+    bool
+        ``True`` when import succeeds.
+    """
+
+    try:
+        importlib.import_module(module_name)
+    except Exception:
+        return False
+    return True
+
+
+def _probe_graphviz() -> DoctorCheck:
+    """Probe Python and system Graphviz availability.
+
+    Returns
+    -------
+    DoctorCheck
+        Graphviz health-check row.
+    """
+
+    python_graphviz = _module_is_installed("graphviz")
+    try:
+        completed = subprocess.run(
+            ["dot", "-V"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return DoctorCheck(
+            "graphviz",
+            "FAIL",
+            f"python graphviz={python_graphviz}; dot unavailable ({exc})",
+        )
+    version_text = (completed.stderr or completed.stdout).strip()
+    status: Literal["PASS", "FAIL"] = (
+        "PASS" if python_graphviz and completed.returncode == 0 else "FAIL"
+    )
+    return DoctorCheck(
+        "graphviz",
+        status,
+        f"python graphviz={python_graphviz}; dot={version_text or completed.returncode}",
+    )
+
+
+def _probe_extras() -> DoctorCheck:
+    """Probe declared optional extras by importing their representative modules.
+
+    Returns
+    -------
+    DoctorCheck
+        Optional-extras health-check row.
+    """
+
+    installed = []
+    missing = []
+    for extra, modules in _EXTRA_PROBES.items():
+        if all(_module_is_installed(module_name) for module_name in modules):
+            installed.append(extra)
+        else:
+            missing.append(extra)
+    detail = f"installed={installed or 'none'}; missing={missing or 'none'}"
+    return DoctorCheck("extras", "PASS", detail)
+
+
+def _probe_fingerprint() -> DoctorCheck:
+    """Probe model weight fingerprinting on a tiny module.
+
+    Returns
+    -------
+    DoctorCheck
+        Fingerprint utility health-check row.
+    """
+
+    try:
+        from torchlens.user_funcs import _fingerprint_model_weights
+
+        model = nn.Linear(2, 1)
+        fingerprint = _fingerprint_model_weights(model)
+    except Exception as exc:
+        return DoctorCheck("model fingerprint", "FAIL", repr(exc))
+    status: Literal["PASS", "FAIL"] = "PASS" if fingerprint else "FAIL"
+    return DoctorCheck("model fingerprint", status, fingerprint[:16] if fingerprint else "empty")
+
+
+def doctor() -> DoctorReport:
+    """Run a TorchLens startup health check.
+
+    Returns
+    -------
+    DoctorReport
+        Structured report with PyTorch, CUDA, Graphviz, safetensors, extras,
+        and model-fingerprint checks.
+    """
+
+    checks: list[DoctorCheck] = [
+        DoctorCheck("pytorch", "PASS", torch.__version__),
+        DoctorCheck(
+            "cuda",
+            "PASS" if torch.cuda.is_available() else "SKIP",
+            f"available={torch.cuda.is_available()}; devices={torch.cuda.device_count()}",
+        ),
+        _probe_graphviz(),
+        DoctorCheck(
+            "safetensors",
+            "PASS" if _module_is_installed("safetensors") else "FAIL",
+            "installed" if _module_is_installed("safetensors") else "missing",
+        ),
+        _probe_extras(),
+        _probe_fingerprint(),
+    ]
+    return DoctorReport(tuple(checks))
 
 
 def list_modules(model: nn.Module) -> list[tuple[str, type[nn.Module]]]:
@@ -180,7 +393,7 @@ def list_ops(
     return _log_ops_for_mode(model, x, mode)
 
 
-def flop_count(model: nn.Module, x: Any) -> int:
+def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> int:
     """Return a lightweight FLOP count from TorchLens per-layer metadata.
 
     Parameters
@@ -189,6 +402,10 @@ def flop_count(model: nn.Module, x: Any) -> int:
         PyTorch model to run.
     x:
         Input passed to ``log_forward_pass``.
+    count_fma_as_two:
+        FLOP/MAC convention marker. TorchLens stores counts using its capture-time
+        convention; this argument records the requested display convention and is
+        reserved for handlers that can distinguish FMA costs.
 
     Returns
     -------
@@ -197,6 +414,7 @@ def flop_count(model: nn.Module, x: Any) -> int:
         estimate contribute zero.
     """
 
+    del count_fma_as_two
     from torchlens import log_forward_pass
     from torchlens.options import CaptureOptions
 
@@ -425,6 +643,8 @@ def find_executable_save_set(
 
 __all__ = [
     "AutocastRestore",
+    "DoctorCheck",
+    "DoctorReport",
     "MAX_FLOATING_POINT_TOLERANCE",
     "_ATTR_SKIP_SET",
     "_AUTOCAST_DEVICES",
@@ -434,6 +654,7 @@ __all__ = [
     "_model_expects_single_arg",
     "_safe_copy_arg",
     "assign_to_sequence_or_dict",
+    "doctor",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",
     "get_tensor_memory_amount",
@@ -447,6 +668,8 @@ __all__ = [
     "iter_accessible_attributes",
     "find_executable_save_set",
     "flop_count",
+    "format_flops",
+    "format_size",
     "list_modules",
     "list_ops",
     "log_current_autocast_state",
@@ -458,6 +681,7 @@ __all__ = [
     "normalize_input_args",
     "print_override",
     "peek_graph",
+    "progress_bar",
     "remove_attributes_with_prefix",
     "remove_entry_from_list",
     "safe_copy",
@@ -469,5 +693,6 @@ __all__ = [
     "set_rng_from_saved_states",
     "tensor_all_nan",
     "tensor_nanequal",
+    "tensor_stats_summary",
     "warn_parallel",
 ]

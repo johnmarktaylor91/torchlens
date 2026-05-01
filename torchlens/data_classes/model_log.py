@@ -202,6 +202,25 @@ class _CallableList(list):
         return list(self)
 
 
+class _CallableDict(dict):
+    """Dict that returns a plain dict when called.
+
+    This preserves legacy ``log.report_by_type()`` ergonomics for budgeted
+    report properties that should not remain inspectable methods.
+    """
+
+    def __call__(self) -> dict[Any, Any]:
+        """Return a plain-dict copy of this report.
+
+        Returns
+        -------
+        dict[Any, Any]
+            Plain dict containing this report's items.
+        """
+
+        return dict(self)
+
+
 def _legacy_conditional_then_edges(
     conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[str, str]]:
@@ -1665,22 +1684,41 @@ class ModelLog:
         str
             HTML fragment for IPython/Jupyter display.
 
-        Raises
-        ------
-        ImportError
-            If IPython is unavailable.
+        Falls back to ``repr(self)`` when the notebook extra is unavailable.
         """
         try:
-            from IPython.display import HTML
-        except ImportError as e:
-            raise ImportError(
-                "IPython is required for this feature. Install with "
-                "`pip install torchlens[notebook]`."
-            ) from e
+            import IPython  # noqa: F401
+        except ImportError:
+            return repr(self)
 
         from html import escape
 
-        return HTML(f"<pre>{escape(repr(self))}</pre>")._repr_html_()
+        layers = len(getattr(self, "layer_logs", {}) or {})
+        ops = getattr(self, "num_operations", 0)
+        save_level = "all" if getattr(self, "_all_layers_saved", False) else "selected"
+        if getattr(self, "num_tensors_saved", 0) == 0:
+            save_level = "metadata only"
+        nonfinite = self.first_nonfinite()
+        nonfinite_summary = (
+            "No non-finite saved activations"
+            if nonfinite.startswith("No non-finite")
+            else escape(nonfinite)
+        )
+        title = escape(str(getattr(self, "name", None) or self.model_name))
+        run_state = escape(str(getattr(getattr(self, "run_state", None), "name", "UNKNOWN")))
+        return (
+            "<div style='border:1px solid #d0d7de;border-radius:8px;"
+            "padding:10px 12px;font-family:system-ui,sans-serif;max-width:560px'>"
+            f"<div style='font-weight:700;margin-bottom:6px'>TorchLens ModelLog: {title}</div>"
+            "<div style='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px'>"
+            f"<div><b>Layers</b>: {layers}</div>"
+            f"<div><b>Ops</b>: {ops}</div>"
+            f"<div><b>Save level</b>: {escape(save_level)}</div>"
+            f"<div><b>Run state</b>: {run_state}</div>"
+            "</div>"
+            f"<div style='margin-top:8px'><b>NaN/Inf</b>: {nonfinite_summary}</div>"
+            "</div>"
+        )
 
     def __iter__(self):
         """Loops through all tensors in the log."""
@@ -2202,11 +2240,12 @@ class ModelLog:
         """Total FLOPs (forward + backward)."""
         return self.total_flops_forward + self.total_flops_backward
 
-    def flops_by_type(self) -> Dict[str, Dict[str, int]]:
+    @property
+    def flops_by_type(self) -> _CallableDict:
         """Group FLOPs by layer type.
 
         Returns:
-            Dict mapping layer_type to {"forward": int, "backward": int, "count": int}.
+            Callable dict mapping layer_type to forward/backward/count totals.
         """
         result: Dict[str, Dict[str, int]] = {}
         for entry in self.layer_list:
@@ -2218,7 +2257,7 @@ class ModelLog:
                 result[lt]["forward"] += entry.flops_forward
             if entry.flops_backward is not None:
                 result[lt]["backward"] += entry.flops_backward
-        return result
+        return _CallableDict(result)
 
     # ********************************************
     # ************** MACs Properties *************
@@ -2240,11 +2279,12 @@ class ModelLog:
         """Total MACs (forward + backward)."""
         return self.total_flops // 2
 
-    def macs_by_type(self) -> Dict[str, Dict[str, int]]:
+    @property
+    def macs_by_type(self) -> _CallableDict:
         """Group MACs by layer type.
 
         Returns:
-            Dict mapping layer_type to {"forward": int, "backward": int, "count": int}.
+            Callable dict mapping layer_type to forward/backward/count totals.
         """
         result: Dict[str, Dict[str, int]] = {}
         for entry in self.layer_list:
@@ -2256,7 +2296,7 @@ class ModelLog:
                 result[lt]["forward"] += entry.flops_forward // 2
             if entry.flops_backward is not None:
                 result[lt]["backward"] += entry.flops_backward // 2
-        return result
+        return _CallableDict(result)
 
     # ********************************************
     # ************* Params Accessor **************
@@ -2382,11 +2422,53 @@ class ModelLog:
             code_panel=code_panel,
         )
 
-    def show(self, **kwargs: Any) -> str | None:
+    def first_nonfinite(self) -> str:
+        """Return a text answer describing the first saved non-finite activation.
+
+        Returns
+        -------
+        str
+            Human-readable single-paragraph answer naming the layer, operation,
+            module, shape, dtype, parents, and source location.
+        """
+
+        for layer in getattr(self, "layer_list", []) or []:
+            activation = getattr(layer, "activation", None)
+            if not isinstance(activation, torch.Tensor) or activation.numel() == 0:
+                continue
+            try:
+                has_nonfinite = bool((~torch.isfinite(activation.detach())).any().item())
+            except (RuntimeError, TypeError):
+                continue
+            if not has_nonfinite:
+                continue
+            stack = getattr(layer, "func_call_stack", None) or []
+            location = "source unavailable"
+            if stack:
+                frame = stack[0]
+                location = (
+                    f"{getattr(frame, 'file', 'unknown')}:"
+                    f"{getattr(frame, 'line_number', 'unknown')}"
+                )
+            parents = ", ".join(getattr(layer, "parent_layers", None) or []) or "none"
+            module = getattr(layer, "containing_module", None) or "no module"
+            return (
+                f"First non-finite saved activation is in layer {layer.layer_label} "
+                f"(op {getattr(layer, 'func_name', 'unknown')}, module {module}), "
+                f"shape={getattr(layer, 'tensor_shape', None)}, "
+                f"dtype={getattr(layer, 'tensor_dtype', None)}, parents={parents}, "
+                f"source={location}."
+            )
+        return "No non-finite tensor values found in saved activations."
+
+    def show(self, method: Literal["graph", "repr", "html"] = "graph", **kwargs: Any) -> str | None:
         """Render this model log with intervention visualization defaults.
 
         Parameters
         ----------
+        method:
+            ``"graph"`` renders the model graph. ``"repr"`` prints the compact
+            representation. ``"html"`` returns the notebook HTML fragment.
         **kwargs:
             Forwarded to :meth:`render_graph`. The legacy ``vis_opt`` alias is
             accepted for parity with logging APIs.
@@ -2398,6 +2480,12 @@ class ModelLog:
             ``vis_opt='none'`` / ``vis_mode='none'``.
         """
 
+        if method == "repr":
+            return repr(self)
+        if method == "html":
+            return self._repr_html_()
+        if method != "graph":
+            raise ValueError("method must be 'graph', 'repr', or 'html'.")
         if "vis_opt" in kwargs and "vis_mode" not in kwargs:
             kwargs["vis_mode"] = kwargs.pop("vis_opt")
         elif "vis_opt" in kwargs:
@@ -2525,6 +2613,7 @@ class ModelLog:
         include_ops: Optional[bool] = None,
         max_rows: Optional[int] = 200,
         print_to: Optional[Callable[[str], None]] = None,
+        count_fma_as_two: bool = False,
     ) -> str:
         """Render a concise text summary of the logged model.
 
@@ -2549,6 +2638,10 @@ class ModelLog:
             Maximum number of rows to render per table. ``None`` disables truncation.
         print_to:
             Optional callable that receives the rendered summary text.
+        count_fma_as_two:
+            FLOP/MAC convention marker for summary consumers. Current captured
+            counts are displayed as stored; this flag reserves the public
+            convention toggle without changing saved metadata.
 
         Returns
         -------
@@ -2557,6 +2650,7 @@ class ModelLog:
         """
         from ..visualization._summary_internal import render_model_summary
 
+        del count_fma_as_two
         return render_model_summary(
             self,
             level=level,

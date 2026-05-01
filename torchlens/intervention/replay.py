@@ -14,6 +14,7 @@ import torch
 from .._deprecations import MISSING, MissingType
 from .._run_state import RunState
 from ..options import ReplayOptions, merge_replay_options
+from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
 from .errors import (
     ControlFlowDivergenceError,
@@ -223,7 +224,7 @@ def _run_replay(
     call_groups = _func_call_groups(log)
     errors_non_fatal = 0
 
-    for site in cone:
+    for site in progress_bar(cone, total=len(cone), desc="torchlens.replay"):
         if preserve_origins and site.layer_label in origin_labels:
             _apply_activation_update(site, overlay[site.layer_label])
             continue

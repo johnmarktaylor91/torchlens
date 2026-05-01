@@ -83,27 +83,22 @@ def test_to_pandas_missing_pandas_mentions_tabular_extra() -> None:
 
 
 def test_repr_html_succeeds_when_notebook_extra_is_available() -> None:
-    """ModelLog._repr_html_ succeeds when IPython is installed."""
+    """ModelLog._repr_html_ returns the Phase 3 HTML card when IPython is installed."""
 
     log = _make_log()
     html = log._repr_html_()
 
-    assert html.startswith("<pre>")
-    assert "ModelLog" in html
+    assert html.startswith("<div")
+    assert "TorchLens ModelLog" in html
+    assert "NaN/Inf" in html
 
 
-def test_repr_html_missing_ipython_mentions_notebook_extra() -> None:
-    """ModelLog._repr_html_ raises a helpful extra-install hint when IPython is missing."""
+def test_repr_html_missing_ipython_falls_back_to_text() -> None:
+    """ModelLog._repr_html_ falls back to text when IPython is missing."""
 
     log = _make_log()
 
     with patch.dict("sys.modules", {"IPython": None, "IPython.display": None}):
-        try:
-            log._repr_html_()
-        except ImportError as exc:
-            message = str(exc)
-        else:
-            raise AssertionError("Expected ImportError when IPython is unavailable.")
+        html = log._repr_html_()
 
-    assert "IPython is required for this feature" in message
-    assert "pip install torchlens[notebook]" in message
+    assert html == repr(log)

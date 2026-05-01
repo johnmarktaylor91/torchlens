@@ -536,13 +536,18 @@ def batched_extract(
         model = model.to(device)
 
     batch_iterable = _iter_batches(stimuli, batch_size)
+    total = None
+    if isinstance(stimuli, _torch.Tensor):
+        total = (stimuli.shape[0] + batch_size - 1) // batch_size
     if progress:
-        from tqdm.auto import tqdm
+        from .utils.display import progress_bar
 
-        total = None
-        if isinstance(stimuli, _torch.Tensor):
-            total = (stimuli.shape[0] + batch_size - 1) // batch_size
-        batch_iterable = tqdm(batch_iterable, total=total, desc="torchlens.extract")
+        batch_iterable = progress_bar(
+            batch_iterable,
+            total=total,
+            desc="torchlens.extract",
+            enabled=progress,
+        )
 
     output_paths: list[_Path] = []
     in_memory: dict[str, list[_torch.Tensor]] = {}

@@ -704,6 +704,31 @@ class LayerLog:
     def get_parent_layers(self):
         return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
 
+    def show(
+        self,
+        method: Literal["auto", "heatmap", "channels", "rgb", "hist"] = "auto",
+        **kwargs: Any,
+    ) -> Any:
+        """Display this layer's saved activation.
+
+        Parameters
+        ----------
+        method:
+            Display method. ``"auto"`` chooses from tensor shape.
+        **kwargs:
+            Forwarded to the tensor display helper.
+
+        Returns
+        -------
+        Any
+            Matplotlib figure when plotting is available, otherwise a text
+            fallback explaining why no plot was produced.
+        """
+
+        from ..viz._tensor_display import show_tensor
+
+        return show_tensor(self, method=method, **kwargs)
+
     # ********************************************
     # ************* Built-in Methods *************
     # ********************************************

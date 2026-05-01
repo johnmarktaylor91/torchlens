@@ -36,7 +36,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 import copy
 import weakref
 import warnings
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Union
 
 import torch
 
@@ -62,6 +62,7 @@ from ..utils.tensor_utils import (
     safe_to,
 )
 from ..utils.display import human_readable_size
+from ..utils.display import tensor_stats_summary
 
 _LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
 _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
@@ -1226,6 +1227,31 @@ class LayerPassLog:
     def get_parent_layers(self):
         return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
 
+    def show(
+        self,
+        method: Literal["auto", "heatmap", "channels", "rgb", "hist"] = "auto",
+        **kwargs: Any,
+    ) -> Any:
+        """Display this pass's saved activation.
+
+        Parameters
+        ----------
+        method:
+            Display method. ``"auto"`` chooses from tensor shape.
+        **kwargs:
+            Forwarded to the tensor display helper.
+
+        Returns
+        -------
+        Any
+            Matplotlib figure when plotting is available, otherwise a text
+            fallback explaining why no plot was produced.
+        """
+
+        from ..viz._tensor_display import show_tensor
+
+        return show_tensor(self, method=method, **kwargs)
+
     @property
     def params(self):
         """Access parameter metadata by address, short name, or index."""
@@ -1327,6 +1353,7 @@ class LayerPassLog:
             return ""
         else:
             s = ""
+            s += f"\n\t\t{tensor_stats_summary(self.activation)}"
             tensor_size_shown = 8
             # Use logged shape, not live tensor shape (#45)
             saved_shape = (

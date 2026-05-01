@@ -192,6 +192,7 @@ def _str_after_pass(self) -> str:
         f"\n\tParameters: {self.total_param_layers} parameter operations ({self.total_params} params total; "
         f"{self.total_params_memory_str})"
     )
+    s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 
     # Print the module hierarchy.
     s += "\n\tModule Hierarchy:"

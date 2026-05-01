@@ -1022,6 +1022,12 @@ def log_forward_pass(
         # Pass 1 (exhaustive): Run with layers_to_save=None and keep_unsaved_layers=True
         # so the full graph is discovered and all layer labels are assigned.  No
         # activations are saved yet - this pass is purely for metadata/structure.
+        from .utils.display import progress_bar
+
+        capture_progress = iter(
+            progress_bar(("exhaustive", "fast"), total=2, desc="torchlens.capture")
+        )
+        next(capture_progress, None)
         if verbose:
             print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
         model_log = _run_model_and_save_specified_activations(
@@ -1061,6 +1067,7 @@ def log_forward_pass(
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
+        next(capture_progress, None)
         _vprint(model_log, "Two-pass mode: Pass 2 (fast, saving requested layers)")
         model_log.keep_unsaved_layers = keep_unsaved_layers
         model_log.save_gradients = save_gradients
