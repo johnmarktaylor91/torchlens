@@ -29,6 +29,7 @@ import linecache
 from typing import Any, Dict, List, Optional, Union
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from .._source_links import terminal_file_line_link, vscode_file_line_link
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
 # Used as the default for lazy-loading placeholders so we can tell the
@@ -302,7 +303,7 @@ class FuncCallLocation:
         """Show file, line number, function name, and source context with arrow."""
         lines = [
             "FuncCallLocation:",
-            f"  file: {self.file}",
+            f"  file: {terminal_file_line_link(self.file, self.line_number)}",
             f"  line: {self.line_number}",
             f"  function: {self.func_name}",
         ]
@@ -312,6 +313,17 @@ class FuncCallLocation:
         else:
             lines.append("  code: source unavailable")
         return "\n".join(lines)
+
+    def to_html_link(self) -> str:
+        """Return a VS Code source-location anchor for HTML renderers.
+
+        Returns
+        -------
+        str
+            HTML anchor pointing at this frame's source location.
+        """
+
+        return vscode_file_line_link(self.file, self.line_number)
 
     def __getitem__(self, i: Union[int, slice]) -> Union[str, List[str]]:
         """Index into the source context lines."""

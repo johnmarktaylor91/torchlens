@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -17,6 +16,7 @@ from typing import (
 )
 
 from ...utils.display import format_flops, human_readable_size
+from ..._source_links import terminal_file_line_link
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
@@ -1483,7 +1483,7 @@ def _event_source(event: "ConditionalEvent") -> str:
     str
         Source locator.
     """
-    return f"{Path(event.source_file).name}:{event.if_stmt_span[0]}"
+    return terminal_file_line_link(event.source_file, event.if_stmt_span[0])
 
 
 def _event_bool_layer(event: "ConditionalEvent") -> str:

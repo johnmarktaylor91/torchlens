@@ -49,4 +49,4 @@ separate unsupported contexts from new TorchLens bugs.
 | Static graph export parity | `known_broken` | TorchLens records eager execution, not static export IR. |
 | Optional bridge without its extra | `known_broken` | Install the matching extra before using bridge adapters. |
 
-See `ROADMAP.md` for planned follow-up work. That file is scheduled for Phase 15.
+See `ROADMAP.md` for planned follow-up work.

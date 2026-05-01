@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .. import _state
+from ._explain import explain
 
 
 def log_value(name: str, value: Any) -> None:
@@ -29,4 +30,4 @@ def log_value(name: str, value: Any) -> None:
     model_log.report_values[str(name)] = value
 
 
-__all__ = ["log_value"]
+__all__ = ["explain", "log_value"]

@@ -109,6 +109,7 @@ from .interface import (
 from .grad_fn_log import GradFnAccessor, GradFnLog
 from .layer_log import LayerLog
 from .layer_pass_log import LayerPassLog, TensorLog
+from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "name": None,
@@ -1822,11 +1823,11 @@ class ModelLog:
         save_level = "all" if getattr(self, "_all_layers_saved", False) else "selected"
         if getattr(self, "num_tensors_saved", 0) == 0:
             save_level = "metadata only"
-        nonfinite = self.first_nonfinite()
+        nonfinite = self.first_nonfinite(link_format="html")
         nonfinite_summary = (
             "No non-finite saved activations"
             if nonfinite.startswith("No non-finite")
-            else escape(nonfinite)
+            else nonfinite
         )
         title = escape(str(getattr(self, "name", None) or self.model_name))
         run_state = escape(str(getattr(getattr(self, "run_state", None), "name", "UNKNOWN")))
@@ -2667,8 +2668,15 @@ class ModelLog:
             + "})();</script></div>"
         )
 
-    def first_nonfinite(self) -> str:
+    def first_nonfinite(self, link_format: Literal["terminal", "html", "text"] = "terminal") -> str:
         """Return a text answer describing the first saved non-finite activation.
+
+        Parameters
+        ----------
+        link_format:
+            Source-location link style. ``"terminal"`` emits OSC 8 hyperlinks,
+            ``"html"`` emits VS Code URI anchors, and ``"text"`` emits plain
+            ``path:line`` text.
 
         Returns
         -------
@@ -2691,10 +2699,16 @@ class ModelLog:
             location = "source unavailable"
             if stack:
                 frame = stack[0]
-                location = (
-                    f"{getattr(frame, 'file', 'unknown')}:"
-                    f"{getattr(frame, 'line_number', 'unknown')}"
-                )
+                file_path = str(getattr(frame, "file", "unknown"))
+                line_number = getattr(frame, "line_number", "unknown")
+                if link_format == "terminal":
+                    location = terminal_file_line_link(file_path, line_number)
+                elif link_format == "html":
+                    location = vscode_file_line_link(file_path, line_number)
+                elif link_format == "text":
+                    location = file_line_text(file_path, line_number)
+                else:
+                    raise ValueError("link_format must be 'terminal', 'html', or 'text'.")
             parents = ", ".join(getattr(layer, "parent_layers", None) or []) or "none"
             module = getattr(layer, "containing_module", None) or "no module"
             return (

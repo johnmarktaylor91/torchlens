@@ -12,12 +12,50 @@ from typing import Any, Literal, TypeAlias, cast
 import graphviz
 from torch import nn
 
+from .._source_links import file_line_text
+
 CodePanelMode: TypeAlias = Literal["forward", "class", "init+forward"]
 CodePanelOption: TypeAlias = bool | CodePanelMode | Callable[[nn.Module], str]
 CodePanelSide: TypeAlias = Literal["right", "left"]
 
 MAX_CODE_PANEL_LINES = 120
 MIN_CODE_PANEL_DISPLAY_LINES = 36
+
+
+class SourceText(str):
+    """Source text with optional file-line metadata for clickable renderers."""
+
+    file_path: str | None
+    line_number: int | None
+
+    def __new__(
+        cls,
+        value: str,
+        *,
+        file_path: str | None = None,
+        line_number: int | None = None,
+    ) -> "SourceText":
+        """Create a source string carrying optional file-line metadata.
+
+        Parameters
+        ----------
+        value:
+            Source text.
+        file_path:
+            Source file path.
+        line_number:
+            First source line number.
+
+        Returns
+        -------
+        SourceText
+            String subclass with source-location attributes.
+        """
+
+        obj = str.__new__(cls, value)
+        obj.file_path = file_path
+        obj.line_number = line_number
+        return obj
 
 
 def capture_model_source_code(model: nn.Module) -> dict[str, str]:
@@ -44,8 +82,10 @@ def capture_model_source_code(model: nn.Module) -> dict[str, str]:
     if class_source:
         source_blob["class"] = class_source
     if init_source or forward_source:
-        source_blob["init+forward"] = "\n\n".join(
-            source for source in (init_source, forward_source) if source
+        source_blob["init+forward"] = SourceText(
+            "\n\n".join(source for source in (init_source, forward_source) if source),
+            file_path=getattr(init_source or forward_source, "file_path", None),
+            line_number=getattr(init_source or forward_source, "line_number", None),
         )
     return source_blob
 
@@ -203,7 +243,13 @@ def _get_source_or_empty(obj: object) -> str:
     """
 
     try:
-        return textwrap.dedent(inspect.getsource(cast(Any, obj))).rstrip()
+        source_lines, line_number = inspect.getsourcelines(cast(Any, obj))
+        source = textwrap.dedent("".join(source_lines)).rstrip()
+        return SourceText(
+            source,
+            file_path=inspect.getsourcefile(cast(Any, obj)),
+            line_number=line_number,
+        )
     except (OSError, TypeError):
         return ""
 
@@ -228,6 +274,21 @@ def _source_text_to_html_rows(source_text: str) -> list[str]:
     if extra_line_count:
         displayed_lines.append(f"... {extra_line_count} more lines")
     rows = []
+    file_path = getattr(source_text, "file_path", None)
+    line_number = getattr(source_text, "line_number", None)
+    if file_path is not None:
+        link_label = html.escape("Open source", quote=False)
+        href = html.escape(
+            f"vscode://file/{file_path}:{line_number}"
+            if line_number is not None
+            else f"vscode://file/{file_path}",
+            quote=True,
+        )
+        tooltip = html.escape(file_line_text(str(file_path), line_number), quote=True)
+        rows.append(
+            f"<TR><TD ALIGN='LEFT' HREF='{href}' TOOLTIP='{tooltip}'>"
+            f"<FONT FACE='Courier' COLOR='#0366D6'>{link_label}</FONT></TD></TR>"
+        )
     for line in displayed_lines:
         escaped_line = html.escape(line, quote=False) if line else "&#160;"
         rows.append(f"<TR><TD ALIGN='LEFT'><FONT FACE='Courier'>{escaped_line}</FONT></TD></TR>")

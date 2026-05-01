@@ -8,6 +8,8 @@
 - [CoLab tutorial](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing)
 - [\"Menagerie\" of model visualizations](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb)
 - [Metadata provided by TorchLens](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf)
+- License: [Apache 2.0](LICENSE); functional docs: [limitations](LIMITATIONS.md),
+  [roadmap](ROADMAP.md), and [migration tables](docs/migration/).
 
 ## Overview
 
