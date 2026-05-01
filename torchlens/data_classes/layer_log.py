@@ -803,7 +803,12 @@ class LayerAccessor:
 
     def to_pandas(self) -> "pd.DataFrame":
         """One row per unique layer (aggregate view)."""
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
 
         rows = []
         for ll in self._list:

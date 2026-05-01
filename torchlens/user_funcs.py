@@ -25,7 +25,6 @@ import random
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
-import pandas as pd
 import torch
 from torch import nn
 from tqdm import tqdm
@@ -234,6 +233,8 @@ def _hash_input_shapes(input_args: Any, input_kwargs: Any) -> str:
 
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .data_classes.module_log import ModuleLog
 
 
@@ -1615,7 +1616,7 @@ def validate_batch_of_models_and_inputs(
     models_and_inputs_dict: Dict[str, Dict[str, Union[str, Callable, Dict]]],
     out_path: str,
     redo_model_if_already_run: bool = True,
-) -> pd.DataFrame:
+) -> "pd.DataFrame":
     """Batch-validate multiple models, writing incremental results to a CSV.
 
     For each model/input pair, calls ``validate_forward_pass`` and appends the
@@ -1633,6 +1634,13 @@ def validate_batch_of_models_and_inputs(
     Returns:
         DataFrame with columns: model_category, model_name, input_name, validation_success.
     """
+    try:
+        import pandas as pd
+    except ImportError as e:
+        raise ImportError(
+            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+        ) from e
+
     if os.path.exists(out_path):
         current_csv = pd.read_csv(out_path)
     else:

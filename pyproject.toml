@@ -25,14 +25,13 @@ classifiers = [
 ]
 dependencies = [
     "numpy",
-    "pandas",
+    "packaging",
     # torch>=2.4 required: torch.is_autocast_enabled(device_type) and
     # torch.get_autocast_dtype(device_type) (used in torchlens/utils/rng.py)
     # only accept a device_type argument on torch 2.4+.
     "torch>=2.4",
     "safetensors>=0.4",
     "tqdm",
-    "ipython",
     "graphviz",
 ]
 

@@ -40,11 +40,12 @@ import warnings
 from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
 
 import numpy as np
-import pandas as pd
 import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .._io.streaming import BundleStreamWriter
     from ..experimental.dagua._bridge import TorchLensRenderAudit
     from ..intervention.types import FireRecord
@@ -1480,6 +1481,31 @@ class ModelLog:
 
         return format_model_repr(self)
 
+    def _repr_html_(self) -> str:
+        """Return the notebook HTML representation for this model log.
+
+        Returns
+        -------
+        str
+            HTML fragment for IPython/Jupyter display.
+
+        Raises
+        ------
+        ImportError
+            If IPython is unavailable.
+        """
+        try:
+            from IPython.display import HTML
+        except ImportError as e:
+            raise ImportError(
+                "IPython is required for this feature. Install with "
+                "`pip install torchlens[notebook]`."
+            ) from e
+
+        from html import escape
+
+        return HTML(f"<pre>{escape(repr(self))}</pre>")._repr_html_()
+
     def __iter__(self):
         """Loops through all tensors in the log."""
         if self._pass_finished:
@@ -2339,7 +2365,7 @@ class ModelLog:
             if not any([attr_name.startswith("_"), attr_name in fields_to_exclude, callable(attr)]):
                 print(f"{attr_name}: {attr}")
 
-    def to_pandas(self) -> pd.DataFrame:
+    def to_pandas(self) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass.
 
         Returns
@@ -2357,6 +2383,13 @@ class ModelLog:
                 "to_pandas() cannot be called before the forward pass is complete. "
                 "Please wait until log_forward_pass has returned."
             )
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         fields_for_df = [
             "layer_label",
             "layer_label_w_pass",

@@ -92,7 +92,12 @@ def print_tree(trace: RecordingTrace) -> str:
 def to_pandas(trace: RecordingTrace) -> Any:
     """Return a pandas DataFrame with one row per trace event."""
 
-    import pandas as pd
+    try:
+        import pandas as pd
+    except ImportError as e:
+        raise ImportError(
+            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+        ) from e
 
     rows = [
         {
@@ -209,7 +214,12 @@ def summary(trace: RecordingTrace) -> str:
 def timeline_html(trace: RecordingTrace) -> Any:
     """Return a horizontal module-row timeline as ``IPython.display.HTML``."""
 
-    from IPython.display import HTML
+    try:
+        from IPython.display import HTML
+    except ImportError as e:
+        raise ImportError(
+            "IPython is required for this feature. Install with `pip install torchlens[notebook]`."
+        ) from e
 
     module_rows: dict[str, list[RecordContext]] = defaultdict(list)
     for ctx in trace.events:

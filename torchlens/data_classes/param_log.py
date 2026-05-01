@@ -20,14 +20,16 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
 from os import PathLike
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
-import pandas as pd
 import torch
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def _param_log_to_row(param_log: "ParamLog") -> Dict[str, Any]:
@@ -316,6 +318,13 @@ class ParamAccessor:
         pd.DataFrame
             One row per parameter, ordered by ``PARAM_LOG_FIELD_ORDER``.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         rows = [_param_log_to_row(param_log) for param_log in self._list]
         return pd.DataFrame(rows, columns=PARAM_LOG_FIELD_ORDER)
 

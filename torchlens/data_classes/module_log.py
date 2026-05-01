@@ -22,7 +22,6 @@ ModuleLog vs ModulePassLog label convention:
 This matches each accessor's natural granularity.
 """
 
-import pandas as pd
 import weakref
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
@@ -34,6 +33,8 @@ from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .model_log import ModelLog
     from .param_log import ParamAccessor
 
@@ -147,6 +148,13 @@ class ModulePassLog:
         pd.DataFrame
             Single-row DataFrame ordered by ``MODULE_PASS_LOG_FIELD_ORDER``.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         row = _module_pass_log_to_row(self)
         return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
 
@@ -632,6 +640,13 @@ class ModuleLog:
         """
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot build DataFrame.")
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         rows = []
         for label in self.all_layers:
             entry = self._source_model_log[label]
@@ -796,6 +811,13 @@ class ModuleAccessor:
         pd.DataFrame
             One row per module in address order.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         rows = []
         for ml in self._list:
             rows.append(

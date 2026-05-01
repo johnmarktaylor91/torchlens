@@ -9,7 +9,6 @@ import operator
 from typing import TYPE_CHECKING, Any, Literal
 import warnings
 
-import pandas as pd
 import torch
 
 from .errors import (
@@ -22,6 +21,8 @@ from .selectors import BaseSelector, CompositeSelector, in_module
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from torchlens.data_classes.layer_pass_log import LayerPassLog
     from torchlens.data_classes.model_log import ModelLog
 
@@ -222,7 +223,7 @@ class SiteTable:
 
         return tuple(str(site.layer_label) for site in self._sites)
 
-    def to_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> "pd.DataFrame":
         """Return a pandas table describing resolved sites.
 
         Returns
@@ -230,6 +231,12 @@ class SiteTable:
         pd.DataFrame
             DataFrame with one row per resolved site.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
 
         rows = [
             {

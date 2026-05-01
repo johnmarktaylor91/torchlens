@@ -709,7 +709,13 @@ def render_graph(
         render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
-        from IPython.display import display  # #72: lazy import
+        try:
+            from IPython.display import display  # #72: lazy import
+        except ImportError as e:
+            raise ImportError(
+                "IPython is required for this feature. Install with "
+                "`pip install torchlens[notebook]`."
+            ) from e
 
         display(dot)
 
@@ -877,7 +883,13 @@ def render_backward_graph(
         render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
-        from IPython.display import display
+        try:
+            from IPython.display import display
+        except ImportError as e:
+            raise ImportError(
+                "IPython is required for this feature. Install with "
+                "`pip install torchlens[notebook]`."
+            ) from e
 
         display(dot)
 

@@ -294,7 +294,12 @@ class Recording:
     def to_pandas(self) -> Any:
         """Return a pandas DataFrame representation of retained records."""
 
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
 
         rows = [
             {
