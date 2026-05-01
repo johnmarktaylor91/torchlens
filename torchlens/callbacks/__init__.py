@@ -1,3 +1,5 @@
 """Callback integration namespace reserved for TorchLens 2.0."""
 
-__all__: list[str] = []
+from . import lightning
+
+__all__ = ["lightning"]

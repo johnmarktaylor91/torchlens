@@ -1,5 +1,14 @@
 """External-tool bridge namespace."""
 
-from . import depyf, huggingface, profiler
+from . import brain_score, captum, depyf, huggingface, nnsight, profiler, rsatoolbox, sae_lens
 
-__all__ = ["depyf", "huggingface", "profiler"]
+__all__ = [
+    "brain_score",
+    "captum",
+    "depyf",
+    "huggingface",
+    "nnsight",
+    "profiler",
+    "rsatoolbox",
+    "sae_lens",
+]
