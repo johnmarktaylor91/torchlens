@@ -7,7 +7,7 @@ import torch
 
 from torchlens import log_forward_pass, show_model_graph
 from torchlens.user_funcs import validate_forward_pass
-from torchlens.visualization.elk_layout import (
+from torchlens.visualization._elk_internal.layout import (
     elk_available,
     get_node_placement_engine,
     build_elk_graph,

@@ -20,7 +20,7 @@ exceeds `vis_nesting_depth`. All downstream indexing into
 - **Edge labels**: Arg position numbers, "IF" markers for `cond_branch_start_children`,
   "THEN" markers for `cond_branch_then_children`, pass numbers for rolled graphs
 
-### `render_elk_direct()` (elk_layout.py)
+### `render_elk_direct()` (`_elk_internal/layout.py`)
 Alternative rendering path for large graphs. Node.js ELK subprocess via Worker thread.
 Kahn's topological sort for stress seeding. sfdp fallback when Node.js/ELK unavailable.
 
@@ -33,7 +33,7 @@ Kahn's topological sort for stress seeding. sfdp fallback when Node.js/ELK unava
 ## Known Bugs
 - **ELK-IF-THEN**: ELK path has ZERO conditional branch code. IF/THEN edge labels only
   appear in the Graphviz path (rendering.py:970-982), not ELK.
-- **ELK-EDGE-LABEL-DEDUP**: Edge dedup (elk_layout.py:990-992) keeps first edge between a
+- **ELK-EDGE-LABEL-DEDUP**: Edge dedup (`_elk_internal/layout.py`) keeps first edge between a
   pair, dropping later edges' arg labels.
 - **Edge dedup before labels**: rendering.py:956-958 dedup happens BEFORE IF/THEN label
   assignment at 970-982. Can silently drop labels for collapsed modules.

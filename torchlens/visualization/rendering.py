@@ -33,6 +33,7 @@ Key mechanisms:
 
 import copy
 import subprocess
+import sys
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -66,7 +67,7 @@ from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
-from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
+from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from .node_spec import (
     INTERVENTION_HOOK_BORDER_COLOR,
     INTERVENTION_HOOK_FILL_COLOR,
@@ -430,9 +431,11 @@ def render_graph(
             ``False`` maps to ``"never"``.
         direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
         vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
-            or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK (or sfdp
-            fallback) for large ones.
-        vis_renderer: Renderer backend: ``'graphviz'`` or ``'dagua'``.
+            or ``'sfdp'``. ``'elk'`` remains accepted as an internal backend escape
+            hatch; the public API default is ``'auto'``.
+        vis_renderer: Renderer backend: ``'graphviz'`` or experimental
+            ``'dagua'``. Import ``torchlens.experimental.dagua`` before using
+            the Dagua renderer.
         vis_theme: Renderer theme name for backends that support themes.
         vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
             marks sites and cones; ``"as_node"`` inserts hook nodes after
@@ -452,8 +455,16 @@ def render_graph(
     """
     if node_mode not in MODE_REGISTRY:
         raise ValueError(
-            "Visualization node_mode must be one of 'default', 'profiling', "
-            "'vision', or 'attention'."
+            "Visualization node_style/node_mode must be one of 'default', "
+            "'profiling', 'vision', or 'attention'."
+        )
+    if node_mode in DOMAIN_NODE_MODES:
+        warnings.warn(
+            f"node_style={node_mode!r} is moving out of core; use the equivalent "
+            f"recipe at examples/recipes/{node_mode}.py or wait for the "
+            f"torchlens.{node_mode} plugin",
+            DeprecationWarning,
+            stacklevel=2,
         )
     if vis_intervention_mode not in {"node_mark", "as_node"}:
         raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
@@ -467,7 +478,13 @@ def render_graph(
     )
 
     if vis_renderer == "dagua":
-        from .dagua_bridge import render_model_log_with_dagua
+        opted_in_module = sys.modules.get("torchlens.experimental.dagua")
+        if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
+            raise RuntimeError(
+                "dagua renderer is experimental; opt in via "
+                "`from torchlens.experimental import dagua` first"
+            )
+        from ..experimental.dagua import render_model_log_with_dagua
 
         return render_model_log_with_dagua(
             self,
@@ -537,7 +554,7 @@ def render_graph(
     rankdir = direction_to_rankdir(direction)
 
     # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
-    from .elk_layout import get_node_placement_engine
+    from ._elk_internal.layout import get_node_placement_engine
 
     edge_map, skipped_labels = _build_skip_filtered_edge_map(
         self,
@@ -593,7 +610,7 @@ def render_graph(
     # If ELK layout fails (OOM, timeout), render_elk_direct falls back internally
     # to sfdp — still using the fast DOT-text path, never graphviz.Digraph.
     if engine == "elk":
-        from .elk_layout import render_elk_direct
+        from ._elk_internal.layout import render_elk_direct
 
         result = render_elk_direct(
             self,
@@ -697,7 +714,7 @@ def render_graph(
         display(dot)
 
     # ELK was already handled above (early return). Only dot/sfdp reach here.
-    from .elk_layout import render_with_sfdp
+    from ._elk_internal.layout import render_with_sfdp
 
     _RENDER_TIMEOUT = 120  # seconds
     source_path = dot.save(vis_outpath)

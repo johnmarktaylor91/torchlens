@@ -45,13 +45,13 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from ..intervention.types import FireRecord
     from .._io.streaming import BundleStreamWriter
+    from ..experimental.dagua._bridge import TorchLensRenderAudit
+    from ..intervention.types import FireRecord
     from ..visualization.code_panel import CodePanelOption
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
     from .module_log import ModuleLog
-    from ..visualization.dagua_bridge import TorchLensRenderAudit
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
@@ -2246,21 +2246,21 @@ class ModelLog:
         vis_direction: str = "bottomup",
         vis_theme: str = "torchlens",
     ) -> str:
-        """Render this model log with the Dagua backend.
+        """Render this model log with the experimental Dagua backend.
 
         Parameters
         ----------
         vis_mode, vis_nesting_depth, vis_outpath, vis_save_only, vis_fileformat, \
         vis_buffer_layers, vis_direction, vis_theme:
             Forwarded unchanged to
-            :func:`torchlens.visualization.dagua_bridge.render_model_log_with_dagua`.
+            :func:`torchlens.experimental.dagua.render_model_log_with_dagua`.
 
         Returns
         -------
         str
             Serialized Dagua graph output or the rendered artifact path.
         """
-        from ..visualization.dagua_bridge import render_model_log_with_dagua as _impl
+        from ..experimental.dagua import render_model_log_with_dagua as _impl
 
         return _impl(
             self,
@@ -2282,20 +2282,20 @@ class ModelLog:
         direction: str = "bottomup",
         include_gradient_edges: Optional[bool] = None,
     ) -> Any:
-        """Translate this model log into a Dagua graph.
+        """Translate this model log into an experimental Dagua graph.
 
         Parameters
         ----------
         vis_mode, vis_nesting_depth, show_buffer_layers, direction, include_gradient_edges:
             Forwarded unchanged to
-            :func:`torchlens.visualization.dagua_bridge.model_log_to_dagua_graph`.
+            :func:`torchlens.experimental.dagua.model_log_to_dagua_graph`.
 
         Returns
         -------
         Any
             Dagua graph object.
         """
-        from ..visualization.dagua_bridge import model_log_to_dagua_graph as _impl
+        from ..experimental.dagua import model_log_to_dagua_graph as _impl
 
         return _impl(
             self,
@@ -2314,7 +2314,7 @@ class ModelLog:
         TorchLensRenderAudit
             Audit of used and unused fields in the visualization bridge.
         """
-        from ..visualization.dagua_bridge import build_render_audit as _impl
+        from ..experimental.dagua import build_render_audit as _impl
 
         return _impl(self)
 

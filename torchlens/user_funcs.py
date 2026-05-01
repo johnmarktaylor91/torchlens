@@ -725,7 +725,11 @@ def log_forward_pass(
             ``visualization.gradient_edge_overrides``.
         vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
-        vis_renderer: Deprecated alias for ``visualization.renderer``.
+            ``"elk"`` remains accepted as an internal backend escape hatch;
+            public API callers should prefer ``"auto"``.
+        vis_renderer: Deprecated alias for ``visualization.renderer``. The
+            ``"dagua"`` renderer is experimental and requires
+            ``from torchlens.experimental import dagua`` before use.
         vis_theme: Deprecated alias for ``visualization.theme``.
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Deprecated alias for ``source_context_lines``.
@@ -1226,7 +1230,11 @@ def show_model_graph(
             and ``False`` maps to ``"never"``.
         vis_direction: Deprecated alias for ``visualization.direction``.
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
-        vis_renderer: Deprecated alias for ``visualization.renderer``.
+            ``"elk"`` remains accepted as an internal backend escape hatch;
+            public API callers should prefer ``"auto"``.
+        vis_renderer: Deprecated alias for ``visualization.renderer``. The
+            ``"dagua"`` renderer is experimental and requires
+            ``from torchlens.experimental import dagua`` before use.
         vis_theme: Deprecated alias for ``visualization.theme``.
         vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
             marks intervention sites and optionally their cones. ``"as_node"``

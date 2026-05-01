@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Final, Mapping, TypeVar, cast
@@ -310,8 +311,16 @@ def _validate_node_style(node_style: VisNodeModeLiteral) -> None:
 
     if node_style not in {"default", "profiling", "vision", "attention"}:
         raise ValueError(
-            "Visualization node_style must be one of 'default', 'profiling', "
-            "'vision', or 'attention'."
+            "Visualization node_style/node_mode must be one of 'default', "
+            "'profiling', 'vision', or 'attention'."
+        )
+    if node_style in {"vision", "attention"}:
+        warnings.warn(
+            f"node_style={node_style!r} is moving out of core; use the equivalent "
+            f"recipe at examples/recipes/{node_style}.py or wait for the "
+            f"torchlens.{node_style} plugin",
+            DeprecationWarning,
+            stacklevel=3,
         )
 
 
@@ -854,7 +863,8 @@ class VisualizationOptions:
     module_overrides:
         Module cluster style overrides.
     layout:
-        Layout engine selector.
+        Layout engine selector. ``"elk"`` remains accepted as an internal
+        backend escape hatch; public API callers should prefer ``"auto"``.
     renderer:
         Renderer backend selector.
     theme:

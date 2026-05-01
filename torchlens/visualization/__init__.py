@@ -1,8 +1,11 @@
-"""Computational graph visualization via Graphviz and Dagua."""
+"""Computational graph visualization via Graphviz.
+
+The experimental Dagua renderer is available from
+``torchlens.experimental.dagua`` after explicit opt-in.
+"""
 
 from typing import Any
 
-from .dagua_bridge import build_render_audit, model_log_to_dagua_graph, render_model_log_with_dagua
 from .node_spec import NodeSpec, render_lines_to_html
 
 _USER_FUNC_EXPORTS = {"show_backward_graph", "show_model_graph", "summary"}
@@ -36,10 +39,7 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "NodeSpec",
-    "build_render_audit",
-    "model_log_to_dagua_graph",
     "render_lines_to_html",
-    "render_model_log_with_dagua",
     "show_backward_graph",
     "show_model_graph",
     "summary",
