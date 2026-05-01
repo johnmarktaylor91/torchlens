@@ -1,5 +1,7 @@
 # <img src="images/logo.png" width=8% height=8%> TorchLens
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+
 **Quick Links**
 
 - [Paper introducing TorchLens](https://www.nature.com/articles/s41598-023-40807-0)

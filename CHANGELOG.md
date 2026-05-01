@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Unreleased
+
+### Changed
+
+- Switch project licensing from GPL-3.0-only to Apache-2.0 so TorchLens can serve
+  as a substrate dependency for the broader ML ecosystem.
+- Update the package classifier from Alpha to Beta per the TorchLens 2.0 Q23
+  release-positioning lock.
+
 
 ## v2.16.0 (2026-04-30)
 
