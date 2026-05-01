@@ -378,6 +378,7 @@ class InterventionSpec:
         hook: Any,
         *,
         helper: HelperSpec | None = None,
+        handle: str | None = None,
         metadata: dict[str, Any] | None = None,
         prepend: bool = False,
     ) -> HookSpec:
@@ -391,6 +392,8 @@ class InterventionSpec:
             Hook callable or helper spec.
         helper:
             Optional helper spec when ``hook`` came from a helper.
+        handle:
+            Optional removable handle identifier.
         metadata:
             Optional per-entry metadata.
         prepend:
@@ -406,6 +409,7 @@ class InterventionSpec:
             site_target=site_target,
             hook=hook,
             helper=helper,
+            handle=handle,
             metadata=metadata or {},
         )
         if prepend:

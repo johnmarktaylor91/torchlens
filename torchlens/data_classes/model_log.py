@@ -36,6 +36,7 @@ import difflib
 from os import PathLike
 from pathlib import Path
 import time
+import uuid
 import weakref
 import warnings
 from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
@@ -120,6 +121,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_spec_revision": 0,
     "_activation_recipe_revision": 0,
     "_append_sequence_id": 0,
+    "_last_hook_handle_ids": (),
     "run_state": RunState.PRISTINE,
     "source_model_id": None,
     "source_model_class": None,
@@ -130,6 +132,8 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "graph_shape_hash": None,
     "module_filter_fn": None,
     "capture_kpis": {},
+    "report_values": {},
+    "observer_spans": [],
     "manual_tensor_connections": [],
     "forward_lineno": None,
     "capture_cache_hit": False,
@@ -349,6 +353,8 @@ class ModelLog:
         "train_mode": FieldPolicy.DROP,
         "module_filter_fn": FieldPolicy.DROP,
         "capture_kpis": FieldPolicy.KEEP,
+        "report_values": FieldPolicy.KEEP,
+        "observer_spans": FieldPolicy.KEEP,
         "manual_tensor_connections": FieldPolicy.KEEP,
         "forward_lineno": FieldPolicy.KEEP,
         "capture_cache_hit": FieldPolicy.KEEP,
@@ -381,6 +387,7 @@ class ModelLog:
         "_spec_revision": FieldPolicy.KEEP,
         "_activation_recipe_revision": FieldPolicy.KEEP,
         "_append_sequence_id": FieldPolicy.KEEP,
+        "_last_hook_handle_ids": FieldPolicy.DROP,
         "run_state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
@@ -584,6 +591,8 @@ class ModelLog:
         self.graph_shape_hash: str | None = None
         self._intervention_spec: InterventionSpec | None = InterventionSpec()
         self.operation_history: list[Any] = []
+        self.observer_spans: list[dict[str, Any]] = list(_state._active_record_spans)
+        self.report_values: dict[str, Any] = {}
         self.last_run_ctx: Any | None = None
         self._has_direct_writes = False
         self._warned_direct_write = False
@@ -591,6 +600,7 @@ class ModelLog:
         self._spec_revision = 0
         self._activation_recipe_revision = 0
         self._append_sequence_id = 0
+        self._last_hook_handle_ids: tuple[str, ...] = ()
         self.run_state = RunState.PRISTINE
         self.is_appended = False
         self.relationship_evidence: dict[str, Relationship] = {
@@ -958,11 +968,11 @@ class ModelLog:
         self,
         hooks_or_site: Any,
         hook: Any = None,
-        *,
+        *extra_hooks: Any,
         strict: bool = False,
         prepend: bool = False,
         confirm_mutation: bool = False,
-    ) -> "ModelLog":
+    ) -> Any:
         """Attach sticky hooks to the current intervention spec.
 
         Parameters
@@ -971,6 +981,8 @@ class ModelLog:
             Mapping/list batch input or selector-like site.
         hook:
             Optional hook for the ``(site, hook)`` input shape.
+        *extra_hooks:
+            Additional hooks to compose at ``hooks_or_site`` in left-to-right order.
         strict:
             Whether site resolution should reject non-portable selectors.
         prepend:
@@ -981,23 +993,36 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
-            This model log, with a stale intervention recipe.
+        Any
+            Scoped removable hook handle.
         """
 
         self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
+        from ..intervention.errors import HookSignatureError
+        from ..intervention.handles import HookHandle
         from ..intervention.hooks import normalize_hook_plan
 
-        entries = normalize_hook_plan(hooks_or_site, hook)
+        if extra_hooks:
+            if hook is None:
+                raise HookSignatureError("extra hooks require an initial hook argument.")
+            entries = normalize_hook_plan(
+                [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)]
+            )
+        else:
+            entries = normalize_hook_plan(hooks_or_site, hook)
         for entry in entries:
             self._validate_intervention_site(entry.site_target, strict=strict)
         spec = self._ensure_intervention_spec()
+        handle_ids: list[str] = []
         for entry in entries:
+            handle_id = f"hook-{uuid.uuid4().hex}"
+            handle_ids.append(handle_id)
             metadata = dict(entry.metadata)
             spec.add_hook(
                 self._target_spec_from_site(entry.site_target, strict=strict),
                 entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
                 helper=entry.helper_spec,
+                handle=handle_id,
                 metadata=metadata,
                 prepend=prepend,
             )
@@ -1008,8 +1033,53 @@ class ModelLog:
             sites=tuple(repr(entry.site_target) for entry in entries),
             strict=strict,
             prepend=prepend,
+            handles=tuple(handle_ids),
         )
+        self._last_hook_handle_ids = tuple(handle_ids)
+        scoped_handle = HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
+        if extra_hooks:
+            return scoped_handle
         return self
+
+    def remove(self) -> None:
+        """Remove the most recent legacy-returned hook attachment.
+
+        Returns
+        -------
+        None
+            Hook specs attached by the last single-hook ``attach_hooks`` call
+            are detached.
+        """
+
+        for handle_id in self._last_hook_handle_ids:
+            self.detach_hooks(handle=handle_id, confirm_mutation=True)
+        self._last_hook_handle_ids = ()
+
+    def __enter__(self) -> "ModelLog":
+        """Enter a legacy scoped hook attachment.
+
+        Returns
+        -------
+        ModelLog
+            This log, acting as the most recent hook handle.
+        """
+
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        """Clean up a legacy scoped hook attachment.
+
+        Parameters
+        ----------
+        exc_type:
+            Exception type, if the body raised.
+        exc:
+            Exception value, if the body raised.
+        traceback:
+            Exception traceback, if the body raised.
+        """
+
+        self.remove()
 
     def detach_hooks(
         self,
@@ -1019,7 +1089,7 @@ class ModelLog:
         strict: bool = False,
         confirm_mutation: bool = False,
     ) -> "ModelLog":
-        """Detach sticky hooks by site, with handle matching deferred.
+        """Detach sticky hooks by site or handle.
 
         Parameters
         ----------
@@ -1027,7 +1097,7 @@ class ModelLog:
             Optional selector-like target. When provided, all sticky hooks for
             that target are removed.
         handle:
-            Optional future hook handle. Phase 8a does not issue handles.
+            Optional hook handle returned by ``attach_hooks``.
         strict:
             Whether no-op detach requests should raise.
         confirm_mutation:
@@ -1048,24 +1118,20 @@ class ModelLog:
                 raise SpecMutationError("detach_hooks requires a site or handle in strict mode.")
             return self
 
-        if handle is not None and site is None:
-            if strict:
-                raise SpecMutationError(
-                    "detach_hooks(handle=...) is deferred in Phase 8a because handles are "
-                    "not issued by attach_hooks yet."
-                )
-            return self
-
         target_spec = None
         if site is not None:
             self._validate_intervention_site(site, strict=strict)
             target_spec = self._target_spec_from_site(site, strict=strict)
 
-        handle_value = str(handle) if handle is not None else None
-        removed = self._ensure_intervention_spec().remove_hook(
-            site_target=target_spec,
-            handle=handle_value,
+        handle_values = (
+            tuple(getattr(handle, "handle_ids", (str(handle),))) if handle is not None else (None,)
         )
+        removed = 0
+        for handle_value in handle_values:
+            removed += self._ensure_intervention_spec().remove_hook(
+                site_target=target_spec,
+                handle=handle_value,
+            )
         if removed == 0 and strict:
             raise SpecMutationError("detach_hooks did not match any sticky hooks.")
         if removed > 0:
@@ -1845,6 +1911,8 @@ class ModelLog:
                 "train_mode": False,
                 "module_filter_fn": None,
                 "capture_kpis": {},
+                "report_values": {},
+                "observer_spans": [],
                 "manual_tensor_connections": [],
                 "forward_lineno": None,
                 "capture_cache_hit": False,
@@ -1854,6 +1922,7 @@ class ModelLog:
                 "streaming_pass_logs": [],
                 "num_streamed_passes": 1,
                 "_activation_hash_cache": {},
+                "_last_hook_handle_ids": (),
             },
         )
         if state.get("_intervention_spec") is None:

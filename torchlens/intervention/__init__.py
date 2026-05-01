@@ -28,6 +28,7 @@ from .hooks import (
     normalize_hook,
     normalize_hook_plan,
 )
+from .handles import HookHandle
 from .replay import replay, replay_from
 from .resolver import SiteTable, resolve_sites
 from .rerun import rerun
@@ -41,6 +42,7 @@ from .save import (
     save_intervention,
 )
 from .selectors import contains, func, in_module, label, module, where
+from .sites import SiteCollection, SiteSpec, sites
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -131,6 +133,7 @@ __all__ = [
     "HFKey",
     "HelperSpec",
     "HookSignatureError",
+    "HookHandle",
     "HookContext",
     "HookSiteCoverageError",
     "HookValueError",
@@ -156,6 +159,9 @@ __all__ = [
     "SpecMutationError",
     "SpecPortabilityError",
     "SiteTable",
+    "SiteCollection",
+    "SiteSpec",
+    "sites",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
     "TargetManifestDiff",

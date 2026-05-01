@@ -111,6 +111,9 @@ which keeps this module free of runtime intervention imports.
 _log_registry: "weakref.WeakSet[ModelLog]" = weakref.WeakSet()
 """Process-wide weak registry of currently live ``ModelLog`` objects."""
 
+_active_record_spans: list[dict[str, Any]] = []
+"""Observer spans currently active around or inside a logging session."""
+
 _naming_counters: dict[str, int] = {}
 """Process-global counters used by unnamed ``log_forward_pass`` captures.
 

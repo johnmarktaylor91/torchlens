@@ -734,7 +734,13 @@ def _dispatch_hook_pairs(
     """
 
     if hook is not None:
+        if hasattr(hooks_or_site, "to_hook_pairs"):
+            return list(hooks_or_site.to_hook_pairs(hook))
         return [(hooks_or_site, hook)]
+
+    observer_site = getattr(hooks_or_site, "site", None)
+    if observer_site is not None and _is_hook_like(hooks_or_site):
+        return [(observer_site, hooks_or_site)]
 
     if _is_hook_like(hooks_or_site):
         if default_site_target is None:

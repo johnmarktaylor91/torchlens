@@ -69,7 +69,10 @@ from .validation import (
     validate_saved_activations as _moved_validate_saved_activations,
 )
 from .io import load_intervention_spec as _moved_load_intervention_spec
+from .observers import record_span, tap
 from .options import CaptureOptions as _CaptureOptions
+from .intervention.sites import sites
+from .validation.consolidated import validate
 
 _REMOVED_IN = "v2.NN"
 
@@ -584,100 +587,96 @@ def batched_extract(
     return {label: _torch.cat(tensors, dim=0) for label, tensors in in_memory.items()}
 
 
-def validate(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 5a consolidated validation entry point.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the Phase 5a implementation.
-    """
-
-    del args, kwargs
-    return _phase_stub("validate", "Phase 5a")
-
-
-def tap(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 5a user-tap observer entry point.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the Phase 5a implementation.
-    """
-
-    del args, kwargs
-    return _phase_stub("tap", "Phase 5a")
-
-
-def record_span(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 5a observer span context manager.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the Phase 5a implementation.
-    """
-
-    del args, kwargs
-    return _phase_stub("record_span", "Phase 5a")
-
-
-def sites(*args: Any, **kwargs: Any) -> Any:
-    """Reserved Phase 5a site-collection and sweep specification helper.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Reserved for the Phase 5a implementation.
-    """
-
-    del args, kwargs
-    return _phase_stub("sites", "Phase 5a")
-
-
 @_functools.wraps(_moved_validate_forward_pass)
-def validate_forward_pass(*args: Any, **kwargs: Any) -> Any:
+def validate_forward_pass(
+    model: _nn.Module,
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None = None,
+    random_seed: int | None = None,
+    verbose: bool = False,
+    validate_metadata: bool = True,
+) -> bool:
     """Deprecated top-level wrapper for ``torchlens.validation.validate_forward_pass``.
 
     Parameters
     ----------
-    *args, **kwargs:
-        Legacy arguments forwarded unchanged.
+    model, input_args, input_kwargs, random_seed, verbose, validate_metadata:
+        Legacy forward validation arguments.
     """
 
     _warn_moved_name("validate_forward_pass", "torchlens.validation", "validate_forward_pass")
-    return _moved_validate_forward_pass(*args, **kwargs)
+    return validate(
+        model,
+        input_args,
+        input_kwargs,
+        scope="forward",
+        random_seed=random_seed,
+        verbose=verbose,
+        validate_metadata=validate_metadata,
+    )
 
 
 @_functools.wraps(_moved_validate_backward_pass)
-def validate_backward_pass(*args: Any, **kwargs: Any) -> Any:
+def validate_backward_pass(
+    model: _nn.Module,
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None = None,
+    loss_fn: _Callable[[Any], _torch.Tensor] | None = None,
+    *,
+    perturb_saved_gradients: bool = False,
+    atol: float = 1e-5,
+    rtol: float = 1e-4,
+) -> bool:
     """Deprecated top-level wrapper for ``torchlens.validation.validate_backward_pass``.
 
     Parameters
     ----------
-    *args, **kwargs:
-        Legacy arguments forwarded unchanged.
+    model, input_args, input_kwargs, loss_fn, perturb_saved_gradients, atol, rtol:
+        Legacy backward validation arguments.
     """
 
     _warn_moved_name("validate_backward_pass", "torchlens.validation", "validate_backward_pass")
-    return _moved_validate_backward_pass(*args, **kwargs)
+    return validate(
+        model,
+        input_args,
+        input_kwargs,
+        scope="backward",
+        loss_fn=loss_fn,
+        perturb_saved_gradients=perturb_saved_gradients,
+        atol=atol,
+        rtol=rtol,
+    )
 
 
 @_functools.wraps(_moved_validate_saved_activations)
-def validate_saved_activations(*args: Any, **kwargs: Any) -> Any:
+def validate_saved_activations(
+    model: _nn.Module,
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None = None,
+    random_seed: int | None = None,
+    verbose: bool = False,
+    validate_metadata: bool = True,
+) -> bool:
     """Deprecated top-level wrapper for ``torchlens.validation.validate_saved_activations``.
 
     Parameters
     ----------
-    *args, **kwargs:
-        Legacy arguments forwarded unchanged.
+    model, input_args, input_kwargs, random_seed, verbose, validate_metadata:
+        Legacy saved-activation validation arguments.
     """
 
     _warn_moved_name(
         "validate_saved_activations", "torchlens.validation", "validate_saved_activations"
     )
-    return _moved_validate_saved_activations(*args, **kwargs)
+    return validate(
+        model,
+        input_args,
+        input_kwargs,
+        scope="saved",
+        random_seed=random_seed,
+        verbose=verbose,
+        validate_metadata=validate_metadata,
+    )
 
 
 @_functools.wraps(_moved_summary)

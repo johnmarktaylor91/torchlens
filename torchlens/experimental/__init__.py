@@ -91,6 +91,122 @@ class AutoCaptureSession:
     calls: int = 0
 
 
+@dataclass
+class Session:
+    """Multi-input capture session for one model.
+
+    Parameters
+    ----------
+    model:
+        Model to invoke repeatedly.
+    """
+
+    model: nn.Module
+    logs: list[Any] = field(default_factory=list)
+    invocations: list[dict[str, Any]] = field(default_factory=list)
+
+    def invoke(self, input_args: Any, input_kwargs: dict[str, Any] | None = None) -> Any:
+        """Capture one model invocation and add it to this session.
+
+        Parameters
+        ----------
+        input_args:
+            Positional model input.
+        input_kwargs:
+            Keyword model input.
+
+        Returns
+        -------
+        Any
+            Captured ``ModelLog`` for this invocation.
+        """
+
+        import torchlens
+
+        index = len(self.logs)
+        log = torchlens.log_forward_pass(
+            self.model,
+            input_args,
+            input_kwargs=input_kwargs,
+            intervention_ready=True,
+            name=f"session_{index}",
+        )
+        metadata = {"index": index, "name": log.name}
+        setattr(log, "session_invocation", metadata)
+        self.logs.append(log)
+        self.invocations.append(metadata)
+        for stored_log in self.logs:
+            setattr(stored_log, "session_invocations", self.invocations)
+            setattr(stored_log, "session_logs", self.logs)
+        return log
+
+    def bundle(self) -> Any:
+        """Return a bundle containing all captured invocation logs.
+
+        Returns
+        -------
+        Any
+            ``torchlens.Bundle`` keyed by invocation name.
+        """
+
+        import torchlens
+
+        return torchlens.bundle(
+            {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.logs)}
+        )
+
+
+def session(model: nn.Module) -> Session:
+    """Create a multi-input capture session for a model.
+
+    Parameters
+    ----------
+    model:
+        Model to invoke repeatedly.
+
+    Returns
+    -------
+    Session
+        Session with ``invoke`` and ``bundle`` methods.
+    """
+
+    return Session(model=model)
+
+
+@contextmanager
+def freeze_module(layer: nn.Module) -> Iterator[nn.Module]:
+    """Temporarily suppress parameter updates for a module.
+
+    Parameters
+    ----------
+    layer:
+        Module whose parameters should be frozen.
+
+    Yields
+    ------
+    nn.Module
+        The frozen module.
+    """
+
+    parameters = list(layer.parameters(recurse=True))
+    previous_requires_grad = [parameter.requires_grad for parameter in parameters]
+    previous_grads = [
+        None if parameter.grad is None else parameter.grad.detach().clone()
+        for parameter in parameters
+    ]
+    try:
+        for parameter in parameters:
+            parameter.requires_grad_(False)
+            parameter.grad = None
+        yield layer
+    finally:
+        for parameter, requires_grad, grad in zip(
+            parameters, previous_requires_grad, previous_grads
+        ):
+            parameter.requires_grad_(requires_grad)
+            parameter.grad = grad
+
+
 @contextmanager
 def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSession]:
     """Capture every Nth forward call in a block.
@@ -158,9 +274,12 @@ def _active_stop_after_site() -> Any | None:
 
 __all__ = [
     "AutoCaptureSession",
+    "Session",
     "attribute_walk",
     "auto_capture",
     "dagua",
+    "freeze_module",
     "node_styles",
+    "session",
     "stop_after",
 ]
