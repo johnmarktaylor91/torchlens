@@ -44,6 +44,7 @@ import torch
 
 from .. import _state as _st
 from .._state import pause_logging
+from ..errors import CaptureError
 from ..utils.introspection import (
     _get_func_call_stack,
     get_attr_values_from_tensor_list,
@@ -2067,5 +2068,56 @@ def _make_layer_log_entry(
     _apply_live_fire_records_to_entry(new_entry)
     self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry
     self._raw_layer_labels_list.append(new_entry.tensor_label_raw)
+    _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry
+
+
+def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: LayerPassLog) -> None:
+    """Raise a structured capture error if ``raise_on_nan`` finds a non-finite tensor.
+
+    Parameters
+    ----------
+    self:
+        Active ``ModelLog`` instance.
+    tensor:
+        Tensor output produced by the just-logged operation.
+    entry:
+        Newly registered layer pass log for ``tensor``.
+
+    Raises
+    ------
+    CaptureError
+        If ``self.raise_on_nan`` is enabled and ``tensor`` contains NaN or Inf.
+    """
+
+    if not getattr(self, "raise_on_nan", False) or tensor.numel() == 0:
+        return
+    try:
+        with pause_logging():
+            has_nonfinite = bool(
+                (~torch.isfinite(safe_copy(tensor, detach_tensor=True))).any().item()
+            )
+    except (RuntimeError, TypeError):
+        return
+    if not has_nonfinite:
+        return
+
+    raw_label = getattr(entry, "tensor_label_raw", getattr(entry, "layer_label_raw", "unknown"))
+    func_name = getattr(entry, "func_name", "unknown")
+    shape = tuple(tensor.shape)
+    dtype = tensor.dtype
+    parents = list(getattr(entry, "parent_layers", []) or [])
+    message = (
+        "TorchLens capture stopped at first non-finite tensor: "
+        f"op={func_name!r}, layer={raw_label!r}, shape={shape}, dtype={dtype}."
+    )
+    raise CaptureError(
+        message,
+        affected_sites=[raw_label],
+        op=func_name,
+        layer=raw_label,
+        shape=shape,
+        dtype=str(dtype),
+        parents=parents,
+    )

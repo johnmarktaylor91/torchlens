@@ -33,6 +33,8 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 import difflib
+from functools import cached_property
+from html import escape
 from os import PathLike
 from pathlib import Path
 import time
@@ -78,6 +80,7 @@ from ..options import (
     merge_replay_options,
 )
 from ..intervention.types import (
+    FrozenInterventionSpec,
     ForkFieldPolicy,
     MODEL_LOG_FORK_POLICY,
     InterventionSpec,
@@ -131,6 +134,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "input_shape_hash": None,
     "graph_shape_hash": None,
     "module_filter_fn": None,
+    "raise_on_nan": False,
     "capture_kpis": {},
     "report_values": {},
     "observer_spans": [],
@@ -352,6 +356,7 @@ class ModelLog:
         "detach_saved_tensors": FieldPolicy.KEEP,
         "train_mode": FieldPolicy.DROP,
         "module_filter_fn": FieldPolicy.DROP,
+        "raise_on_nan": FieldPolicy.KEEP,
         "capture_kpis": FieldPolicy.KEEP,
         "report_values": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,
@@ -569,6 +574,7 @@ class ModelLog:
         self.detach_saved_tensors = detach_saved_tensors
         self.train_mode = train_mode
         self.module_filter_fn = module_filter_fn
+        self.raise_on_nan: bool = False
         self.capture_kpis: Dict[str, Any] = {}
         self.manual_tensor_connections: List[Tuple[str, str]] = []
         self.forward_lineno: int | None = None
@@ -916,6 +922,18 @@ class ModelLog:
             allow_direct_writes=allow_direct_writes,
             overwrite=overwrite,
         )
+
+    @cached_property
+    def intervention_spec(self) -> FrozenInterventionSpec:
+        """Return an immutable snapshot of this log's intervention recipe.
+
+        Returns
+        -------
+        FrozenInterventionSpec
+            Frozen public view of the current mutable intervention spec.
+        """
+
+        return self._ensure_intervention_spec().freeze()
 
     def set(
         self,
@@ -1543,7 +1561,7 @@ class ModelLog:
             eq_type = getattr(fork_pass, "operation_equivalence_type", None)
             if eq_type in fork_equivalent_operations:
                 fork_pass.equivalent_operations = fork_equivalent_operations[eq_type]
-            fork_pass._construction_done = True
+            object.__setattr__(fork_pass, "_construction_done", True)
             layer_map[id(parent_pass)] = fork_pass
         return layer_map
 
@@ -1712,6 +1730,7 @@ class ModelLog:
         """
 
         self._spec_revision += 1
+        self.__dict__.pop("intervention_spec", None)
         self.__dict__.pop("_frozen_intervention_spec", None)
         self.__dict__.pop("_cached_frozen_intervention_spec", None)
         self.run_state = RunState.SPEC_STALE
@@ -1910,6 +1929,7 @@ class ModelLog:
                 "_source_model_ref": None,
                 "train_mode": False,
                 "module_filter_fn": None,
+                "raise_on_nan": False,
                 "capture_kpis": {},
                 "report_values": {},
                 "observer_spans": [],
@@ -2489,7 +2509,14 @@ class ModelLog:
         vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
         vis_show_cone: bool = True,
         code_panel: "CodePanelOption" = False,
-    ) -> str:
+        node_overlay: str | Mapping[str, Any] | None = None,
+        node_label_fields: list[str] | None = None,
+        show_legend: bool = False,
+        font_size: int | None = None,
+        dpi: int | None = None,
+        for_paper: bool = False,
+        return_graph: bool = False,
+    ) -> Any:
         """Render the computational graph for this model log.
 
         Parameters
@@ -2506,8 +2533,9 @@ class ModelLog:
 
         Returns
         -------
-        str
-            Graphviz DOT source or renderer-specific output.
+        Any
+            Graphviz DOT source, renderer-specific output, or renderer object
+            when ``return_graph=True``.
         """
         from ..visualization.rendering import render_graph as _impl
 
@@ -2536,6 +2564,100 @@ class ModelLog:
             vis_intervention_mode=vis_intervention_mode,
             vis_show_cone=vis_show_cone,
             code_panel=code_panel,
+            node_overlay=node_overlay,
+            node_label_fields=node_label_fields,
+            show_legend=show_legend,
+            font_size=font_size,
+            dpi=dpi,
+            for_paper=for_paper,
+            return_graph=return_graph,
+        )
+
+    def add_node_overlay(
+        self,
+        scores: Mapping[str, Any],
+        *,
+        name: str = "overlay",
+    ) -> "ModelLog":
+        """Register external per-node overlay scores for later rendering.
+
+        Parameters
+        ----------
+        scores:
+            Mapping from layer labels to scalar or displayable values.
+        name:
+            Overlay name stored on the log for discoverability.
+
+        Returns
+        -------
+        ModelLog
+            This log, allowing chained calls before ``render_graph``.
+        """
+
+        self._node_overlay_scores = dict(scores)
+        self._node_overlay_name = name
+        return self
+
+    def animate_passes(self, site: Any) -> str:
+        """Return a minimal HTML animation for repeated passes at ``site``.
+
+        Parameters
+        ----------
+        site:
+            Layer label, pass-qualified layer label, or object with a
+            ``layer_label`` attribute.
+
+        Returns
+        -------
+        str
+            Self-contained HTML fragment with play/pause controls.
+
+        Raises
+        ------
+        KeyError
+            If the requested site cannot be resolved.
+        """
+
+        label = str(getattr(site, "layer_label", site))
+        base_label = label.split(":", 1)[0]
+        if base_label not in self.layer_logs:
+            raise KeyError(f"Unknown layer site {label!r}.")
+        layer = self.layer_logs[base_label]
+        pass_entries = list(getattr(layer, "passes", ()) or [])
+        if not pass_entries:
+            pass_entries = [self[label]]
+        frames = [
+            {
+                "pass": int(getattr(entry, "pass_num", index + 1) or index + 1),
+                "label": str(getattr(entry, "layer_label", base_label)),
+                "shape": "x".join(str(dim) for dim in getattr(entry, "tensor_shape", ()) or ()),
+                "memory": str(getattr(entry, "tensor_memory_str", "")),
+            }
+            for index, entry in enumerate(pass_entries)
+        ]
+        frame_markup = "".join(
+            "<li data-frame='{idx}'>{label} pass {pass_num}: {shape} {memory}</li>".format(
+                idx=index,
+                label=escape(str(frame["label"])),
+                pass_num=frame["pass"],
+                shape=escape(str(frame["shape"] or "scalar")),
+                memory=escape(str(frame["memory"])),
+            )
+            for index, frame in enumerate(frames)
+        )
+        return (
+            "<div class='tl-pass-animation' data-site='"
+            + escape(base_label)
+            + "'><button type='button' data-action='play'>Play</button>"
+            + "<button type='button' data-action='pause'>Pause</button><ol>"
+            + frame_markup
+            + "</ol><script>(function(){var root=document.currentScript.parentElement;"
+            + "var items=root.querySelectorAll('li');var i=0,t=null;"
+            + "function show(){items.forEach(function(x,j){x.style.display=j===i?'':'none';});}"
+            + "show();root.querySelector('[data-action=play]').onclick=function(){"
+            + "if(t)return;t=setInterval(function(){i=(i+1)%items.length;show();},500);};"
+            + "root.querySelector('[data-action=pause]').onclick=function(){clearInterval(t);t=null;};"
+            + "})();</script></div>"
         )
 
     def first_nonfinite(self) -> str:
@@ -2716,14 +2838,14 @@ class ModelLog:
     def summary(
         self,
         level: Literal[
-            "overview", "graph", "memory", "control_flow", "compute", "cost"
+            "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall"
         ] = "overview",
         *,
         fields: Optional[List[str]] = None,
         mode: Literal["auto", "rolled", "unrolled"] = "auto",
         show_ops: bool = False,
         preset: Optional[
-            Literal["overview", "graph", "memory", "control_flow", "compute", "cost"]
+            Literal["overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall"]
         ] = None,
         columns: Optional[List[str]] = None,
         include_ops: Optional[bool] = None,

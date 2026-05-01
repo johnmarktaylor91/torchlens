@@ -7,6 +7,7 @@
 | Target a hook point by name | Discover once, then use `tl.label(label)` | TorchLens labels are graph-derived; exact labels are preferred for reproducibility. |
 | `run_with_hooks` | `log.fork().attach_hooks(site, hook).rerun(model, x)` | Rerun is the closest live execution equivalent. |
 | Patch from clean cache into corrupted run | Capture clean and corrupted logs, then `corrupted.fork().set(site, clean_site.activation).replay()` | Equivalent for graph-stable patching. |
+| `act_patch` attribution patching | Use `tl.bwd_hook(...)` during a corrupted `rerun`, then compute `grad * (clean - corrupt)` for the selected site. | Building blocks are present; turnkey heatmap helpers are deferred. |
 | Activation ablation helpers | `tl.zero_ablate`, `tl.mean_ablate`, `tl.resample_ablate` | Built-in helpers cover common cases. |
 | Residual stream steering | `tl.steer(direction, magnitude=...)` at the discovered site | Equivalent if the relevant residual op is visible. |
 | Attention-head Q/K/V internals | Use a manual attention implementation with visible PyTorch ops | Fused SDPA/FlashAttention internals are not visible. |

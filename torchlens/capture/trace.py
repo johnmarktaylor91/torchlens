@@ -588,6 +588,12 @@ def run_and_log_inputs_through_model(
         # active_logging's __exit__ already turned off the toggle.
         # Clean up model session state and strip tl_ attributes from any
         # partially-constructed tensor entries to avoid stale references (#110).
+        from ..partial import PartialModelLog
+
+        try:
+            e.partial_log = PartialModelLog.from_model_log(self, e)  # type: ignore[attr-defined]
+        except Exception:
+            pass
         _cleanup_model_session(model, input_tensors)
         for label in list(self._raw_layer_dict.keys()):
             entry = self._raw_layer_dict.get(label)

@@ -88,3 +88,10 @@ capture clean/corrupted logs, choose a target site, attach a hook, and compute a
 metric over a `Bundle`. Turnkey attribution-patching row/formula helpers are
 deferred; keep those formulas in analysis code and record the exact selectors
 and metric definitions next to saved specs.
+
+When using TorchLens backward hooks for attribution patching, the recommended
+local convention is the TransformerLens-style first-order estimate
+`grad * (clean - corrupt)`, where `grad` is taken at the corrupted run and the
+activation delta is clean minus corrupt. If an analysis instead reports
+`(corrupt - clean) * patched`, treat that as a signed alternative and document
+the sign convention next to the metric so higher/lower scores remain clear.

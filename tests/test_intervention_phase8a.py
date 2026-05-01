@@ -141,6 +141,47 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
     assert log._intervention_spec.hook_specs == []
 
 
+def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
+    """Frozen intervention-spec snapshots refresh after each public mutator."""
+
+    log = _capture()
+    first_snapshot = log.intervention_spec
+    assert log.intervention_spec is first_snapshot
+
+    replacement = torch.zeros(2, 3)
+    log.set(tl.func("relu"), replacement, confirm_mutation=True)
+    after_set = log.intervention_spec
+    assert after_set is not first_snapshot
+    assert len(after_set.target_value_specs) == 1
+
+    log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    after_attach = log.intervention_spec
+    assert after_attach is not after_set
+    assert len(after_attach.hook_specs) == 1
+
+    log.detach_hooks(tl.func("relu"), confirm_mutation=True)
+    after_detach = log.intervention_spec
+    assert after_detach is not after_attach
+    assert after_detach.hook_specs == ()
+
+    log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    after_second_attach = log.intervention_spec
+    log.clear_hooks(confirm_mutation=True)
+    after_clear = log.intervention_spec
+    assert after_clear is not after_second_attach
+    assert after_clear.hook_specs == ()
+
+    log.do(
+        tl.func("relu"),
+        torch.ones(2, 3),
+        engine="set_only",
+        confirm_mutation=True,
+    )
+    after_do = log.intervention_spec
+    assert after_do is not after_clear
+    assert len(after_do.target_value_specs) == 2
+
+
 def test_detach_hooks_no_site_is_noop_unless_strict() -> None:
     """``detach_hooks()`` is a non-mutating no-op unless strict mode is requested."""
 

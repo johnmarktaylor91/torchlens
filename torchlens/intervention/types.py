@@ -65,6 +65,33 @@ class TensorSliceSpec:
     feature_axis: int | None = None
 
 
+def _freeze_value(value: Any) -> Any:
+    """Recursively freeze built-in mutable containers.
+
+    Parameters
+    ----------
+    value:
+        Value to freeze.
+
+    Returns
+    -------
+    Any
+        Immutable equivalent for built-in list, dict, and set containers, or
+        the original value for opaque objects.
+    """
+
+    if isinstance(value, dict):
+        return tuple(
+            (key, _freeze_value(item))
+            for key, item in sorted(value.items(), key=lambda pair: repr(pair[0]))
+        )
+    if isinstance(value, list | tuple):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, set | frozenset):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
+
+
 @dataclass
 class TargetSpec:
     """Mutable internal selector target specification."""
@@ -86,10 +113,13 @@ class TargetSpec:
 
         return FrozenTargetSpec(
             selector_kind=self.selector_kind,
-            selector_value=self.selector_value,
+            selector_value=_freeze_value(self.selector_value),
             strict=self.strict,
             slice_spec=self.slice_spec,
-            metadata=tuple(sorted(self.metadata.items())),
+            metadata=tuple(
+                (key, _freeze_value(value))
+                for key, value in sorted(self.metadata.items(), key=lambda pair: repr(pair[0]))
+            ),
         )
 
 

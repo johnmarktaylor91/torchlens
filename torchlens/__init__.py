@@ -21,7 +21,7 @@ from torch import nn as _nn
 
 __version__ = "2.16.0"
 
-from . import bridge, experimental, fastlog, options, stats
+from . import bridge, experimental, export, fastlog, options, partial, stats
 from ._io.bundle import load, save
 from .stats import aggregate
 from .data_classes.layer_log import LayerLog

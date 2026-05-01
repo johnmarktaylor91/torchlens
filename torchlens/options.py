@@ -56,6 +56,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "module_filter_fn",
     "stop_after",
     "emit_nvtx",
+    "raise_on_nan",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "output_dir",
@@ -88,6 +89,13 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "theme",
     "intervention_mode",
     "show_cone",
+    "node_overlay",
+    "node_label_fields",
+    "show_legend",
+    "font_size",
+    "dpi",
+    "for_paper",
+    "return_graph",
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "strict",
@@ -140,6 +148,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "cache_dir": "cache_dir",
     "module_filter_fn": "module_filter_fn",
     "stop_after": "stop_after",
+    "raise_on_nan": "raise_on_nan",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_postfunc": "activation_transform",
@@ -557,6 +566,8 @@ class CaptureOptions:
         Experimental stop-early site. Only supported by ``torchlens.peek``.
     emit_nvtx:
         Placeholder toggle for future NVTX ranges; currently inert.
+    raise_on_nan:
+        Whether capture should stop at the first NaN or Inf tensor.
 
     Examples
     --------
@@ -590,6 +601,7 @@ class CaptureOptions:
     module_filter_fn: Callable[[Any], bool] | None = None
     stop_after: Any | None = None
     emit_nvtx: bool = False
+    raise_on_nan: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -619,6 +631,7 @@ class CaptureOptions:
         module_filter_fn: Callable[[Any], bool] | None | MissingType = MISSING,
         stop_after: Any | None | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
+        raise_on_nan: bool | MissingType = MISSING,
         *,
         mark_input_output_distances: bool | MissingType = MISSING,
         num_context_lines: int | MissingType = MISSING,
@@ -713,6 +726,9 @@ class CaptureOptions:
             ),
             "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
             "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
+            "raise_on_nan": _resolve_option_value(
+                "raise_on_nan", raise_on_nan, False, specified_fields
+            ),
         }
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
@@ -898,6 +914,20 @@ class VisualizationOptions:
         Intervention overlay mode.
     show_cone:
         Whether intervention cones are highlighted.
+    node_overlay:
+        Built-in overlay name or external score mapping for graph nodes.
+    node_label_fields:
+        Optional explicit label row fields.
+    show_legend:
+        Whether to render the theme legend with the graph.
+    font_size:
+        Optional Graphviz font size.
+    dpi:
+        Optional Graphviz output DPI.
+    for_paper:
+        Convenience toggle forcing the paper theme preset.
+    return_graph:
+        Whether rendering returns the renderer object instead of DOT source.
 
     Examples
     --------
@@ -927,6 +957,13 @@ class VisualizationOptions:
     theme: str = "torchlens"
     intervention_mode: VisInterventionModeLiteral = "node_mark"
     show_cone: bool = True
+    node_overlay: str | Mapping[str, Any] | None = None
+    node_label_fields: list[str] | None = None
+    show_legend: bool = False
+    font_size: int | None = None
+    dpi: int | None = None
+    for_paper: bool = False
+    return_graph: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -956,6 +993,13 @@ class VisualizationOptions:
         theme: str | MissingType = MISSING,
         intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
         show_cone: bool | MissingType = MISSING,
+        node_overlay: str | Mapping[str, Any] | None | MissingType = MISSING,
+        node_label_fields: list[str] | None | MissingType = MISSING,
+        show_legend: bool | MissingType = MISSING,
+        font_size: int | None | MissingType = MISSING,
+        dpi: int | None | MissingType = MISSING,
+        for_paper: bool | MissingType = MISSING,
+        return_graph: bool | MissingType = MISSING,
         *,
         mode: VisModeLiteral | MissingType = MISSING,
         max_module_depth: int | MissingType = MISSING,
@@ -1034,6 +1078,21 @@ class VisualizationOptions:
                 "intervention_mode", intervention_mode, "node_mark", specified_fields
             ),
             "show_cone": _resolve_option_value("show_cone", show_cone, True, specified_fields),
+            "node_overlay": _resolve_option_value(
+                "node_overlay", node_overlay, None, specified_fields
+            ),
+            "node_label_fields": _resolve_option_value(
+                "node_label_fields", node_label_fields, None, specified_fields
+            ),
+            "show_legend": _resolve_option_value(
+                "show_legend", show_legend, False, specified_fields
+            ),
+            "font_size": _resolve_option_value("font_size", font_size, None, specified_fields),
+            "dpi": _resolve_option_value("dpi", dpi, None, specified_fields),
+            "for_paper": _resolve_option_value("for_paper", for_paper, False, specified_fields),
+            "return_graph": _resolve_option_value(
+                "return_graph", return_graph, False, specified_fields
+            ),
         }
         _validate_buffer_visibility(values["show_buffers"])
         _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
@@ -1581,7 +1640,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         Keyword arguments expected by ``ModelLog.render_graph``.
     """
 
-    return {
+    kwargs: dict[str, Any] = {
         "vis_mode": visualization.view,
         "vis_nesting_depth": visualization.depth,
         "vis_outpath": visualization.output_path,
@@ -1604,6 +1663,21 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "vis_intervention_mode": visualization.intervention_mode,
         "vis_show_cone": visualization.show_cone,
     }
+    phase7_kwargs = {
+        "node_overlay": visualization.node_overlay,
+        "node_label_fields": visualization.node_label_fields,
+        "show_legend": visualization.show_legend,
+        "font_size": visualization.font_size,
+        "dpi": visualization.dpi,
+        "for_paper": visualization.for_paper,
+        "return_graph": visualization.return_graph,
+    }
+    for field_name, value in phase7_kwargs.items():
+        if visualization.is_field_explicit(field_name) or (
+            value is not None and value is not False
+        ):
+            kwargs[field_name] = value
+    return kwargs
 
 
 __all__ = [

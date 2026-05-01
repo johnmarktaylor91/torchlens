@@ -56,6 +56,13 @@ Backward helpers are Tier-1 live/rerun-only helpers.
 | `tl.gradient_zero` | `gradient_zero(*, force_shape_change=False)` | Live/rerun-only; not portable. |
 | `tl.gradient_scale` | `gradient_scale(factor, *, force_shape_change=False)` | Live/rerun-only; not portable. |
 
+Hook callables receive one positional tensor and a required keyword-only
+`hook` context. For forward hooks the positional tensor is the activation; for
+backward hooks it is the gradient. The positional parameter is matched by
+position, so `def hook(activation, *, hook): ...` and
+`lambda g, *, hook: ...` are both valid. Hooks must return the replacement
+tensor.
+
 ## ModelLog Mutators
 
 | Method | Use |

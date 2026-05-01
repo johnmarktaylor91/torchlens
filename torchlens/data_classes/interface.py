@@ -185,6 +185,9 @@ def _str_after_pass(self) -> str:
         f"computed in forward pass."
     )
     s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.saved_activation_memory_str}) with saved activations."
+    nonfinite = self.first_nonfinite()
+    if not nonfinite.startswith("No non-finite"):
+        s += f"\n\t\t- NaN/Inf: {nonfinite}"
 
     # Model parameters:
 

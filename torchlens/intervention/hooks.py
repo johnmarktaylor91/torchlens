@@ -840,6 +840,9 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
     ------
     HookSignatureError
         If the callable cannot be called as ``fn(activation, *, hook=ctx)``.
+        Backward hooks receive a gradient as the first positional argument; the
+        parameter name is conventional only, so ``g`` or any other name is
+        accepted.
     """
 
     try:

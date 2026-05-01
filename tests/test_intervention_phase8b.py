@@ -144,6 +144,20 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
             session.set(tl.func("relu"), torch.zeros(2, 3))
     assert warnings_record == []
 
+    callable_session, _ = _capture()
+    tl.suppress_mutate_warnings(False)
+    assert tl.suppress_mutate_warnings.is_suppressed is False
+    try:
+        returned = tl.suppress_mutate_warnings(True)
+        assert returned is tl.suppress_mutate_warnings
+        assert tl.suppress_mutate_warnings.is_suppressed is True
+        with warnings.catch_warnings(record=True) as warnings_record:
+            warnings.simplefilter("always")
+            callable_session.set(tl.func("relu"), torch.zeros(2, 3))
+        assert warnings_record == []
+    finally:
+        tl.suppress_mutate_warnings(False)
+
 
 @pytest.mark.smoke
 def test_fork_mutation_does_not_warn_or_mutate_parent_intervention_log() -> None:
