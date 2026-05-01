@@ -546,8 +546,8 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
             if not lpl.func_name:
                 raise MetadataInvariantError(name, f"Layer {label}: func_name is empty")
 
-        # Operation numbering (input/buffer layers have operation_num=0)
-        if not (lpl.is_input_layer or lpl.is_buffer_layer):
+        # Operation numbering (input/buffer/output bookkeeping layers have operation_num=0)
+        if not (lpl.is_input_layer or lpl.is_buffer_layer or lpl.is_output_layer):
             if lpl.operation_num is not None and lpl.operation_num < 1:
                 raise MetadataInvariantError(
                     name, f"Layer {label}: operation_num={lpl.operation_num} < 1"

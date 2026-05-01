@@ -153,16 +153,17 @@ def _check_lstm_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) 
     perturbed_tensor = self[layers_to_perturb[0]].activation
     args = layer.captured_args
 
-    return (
-        torch.equal(perturbed_tensor, args[1][0])  # hidden state h
-        or torch.equal(perturbed_tensor, args[1][1])  # hidden state c
-        or torch.equal(perturbed_tensor, args[2][0])  # cell state h
-        or torch.equal(perturbed_tensor, args[2][1])  # cell state c
-        or (
-            isinstance(args[1], torch.Tensor)  # flat hidden state
-            and torch.equal(perturbed_tensor, args[1])
+    if len(args) < 2 or perturbed_tensor is None:
+        return False
+    hidden_arg = args[1]
+    if isinstance(hidden_arg, torch.Tensor):
+        return torch.equal(perturbed_tensor, hidden_arg)
+    if isinstance(hidden_arg, (list, tuple)):
+        return any(
+            isinstance(hidden_tensor, torch.Tensor) and torch.equal(perturbed_tensor, hidden_tensor)
+            for hidden_tensor in hidden_arg
         )
-    )
+    return False
 
 
 def _check_interpolate_exempt(self, layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:

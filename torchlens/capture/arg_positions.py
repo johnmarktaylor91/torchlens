@@ -26,6 +26,32 @@ def _normalize_func_name(func_name: str) -> str:
     return func_name.lower().replace("_", "")
 
 
+def _get_tensor_kwarg(kwargs: dict, name: str) -> object:
+    """Return a tensor-bearing kwarg by exact or normalized name.
+
+    Parameters
+    ----------
+    kwargs:
+        Keyword arguments passed to the torch function.
+    name:
+        Expected keyword name, either raw (``"attn_mask"``) or normalized
+        (``"attnmask"``).
+
+    Returns
+    -------
+    object
+        Matching kwarg value, or ``None`` when absent.
+    """
+
+    if name in kwargs:
+        return kwargs[name]
+    normalized_name = _normalize_func_name(name)
+    for key, value in kwargs.items():
+        if _normalize_func_name(str(key)) == normalized_name:
+            return value
+    return None
+
+
 @dataclass(frozen=True)
 class ArgSpec:
     """Which argument positions can hold tensors or parameters.
@@ -54,13 +80,29 @@ def extract_tensors_and_params(
     tensors: List[torch.Tensor] = []
     params: List[torch.nn.Parameter] = []
 
+    def _append_tensor_or_param(value: object) -> None:
+        """Append tensor-like values from a known argument slot.
+
+        Parameters
+        ----------
+        value:
+            Candidate tensor, parameter, or shallow sequence of tensors.
+        """
+
+        if isinstance(value, torch.nn.Parameter):
+            params.append(value)
+        elif isinstance(value, torch.Tensor):
+            tensors.append(value)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, torch.nn.Parameter):
+                    params.append(item)
+                elif isinstance(item, torch.Tensor):
+                    tensors.append(item)
+
     for pos in spec.positions:
         if pos < len(args):
-            arg = args[pos]
-            if isinstance(arg, torch.nn.Parameter):
-                params.append(arg)
-            elif isinstance(arg, torch.Tensor):
-                tensors.append(arg)
+            _append_tensor_or_param(args[pos])
 
     for pos in spec.sequence_positions:
         if pos < len(args):
@@ -73,12 +115,9 @@ def extract_tensors_and_params(
                         tensors.append(item)
 
     for name in spec.tensor_kwargs:
-        val = kwargs.get(name)
+        val = _get_tensor_kwarg(kwargs, name)
         if val is not None:
-            if isinstance(val, torch.nn.Parameter):
-                params.append(val)
-            elif isinstance(val, torch.Tensor):
-                tensors.append(val)
+            _append_tensor_or_param(val)
 
     return tensors, params
 
@@ -853,10 +892,11 @@ for _name in ["gather", "indexselect"]:
 # index_put: (self, indices_tuple, values)
 FUNC_ARG_SPECS["indexput"] = ArgSpec(positions=(0, 2), sequence_positions=(1,))
 
-# linear: F.linear(input, weight, bias) — bias often passed positionally
-FUNC_ARG_SPECS["linear"] = _P012
+# linear: F.linear(input, weight, bias) — weight/bias can be keyword args
+FUNC_ARG_SPECS["linear"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias"))
 
 # conv: F.conv2d(input, weight, bias, stride, ...) — bias at position 2
+_CONV_SPEC = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias"))
 for _name in [
     "conv1d",
     "conv2d",
@@ -865,7 +905,7 @@ for _name in [
     "convtranspose2d",
     "convtranspose3d",
 ]:
-    FUNC_ARG_SPECS[_name] = _P012
+    FUNC_ARG_SPECS[_name] = _CONV_SPEC
 
 # CUDNN conv variants
 for _name in [
@@ -874,23 +914,31 @@ for _name in [
     "cudnnconvolutionrelu",
     "cudnnconvolutionaddrely",
 ]:
-    FUNC_ARG_SPECS[_name] = _P012
+    FUNC_ARG_SPECS[_name] = _CONV_SPEC
 
 # batch_norm: F.batch_norm(input, running_mean, running_var, weight, bias, ...)
 # All 5 args commonly passed positionally by nn.BatchNorm*.forward()
-FUNC_ARG_SPECS["batchnorm"] = ArgSpec(positions=(0, 1, 2, 3, 4))
-FUNC_ARG_SPECS["cudnnbatchnorm"] = ArgSpec(positions=(0, 1, 2, 3, 4))
+_NORM_WITH_RUNNING_STATS_SPEC = ArgSpec(
+    positions=(0, 1, 2, 3, 4),
+    tensor_kwargs=("input", "running_mean", "running_var", "weight", "bias"),
+)
+FUNC_ARG_SPECS["batchnorm"] = _NORM_WITH_RUNNING_STATS_SPEC
+FUNC_ARG_SPECS["cudnnbatchnorm"] = _NORM_WITH_RUNNING_STATS_SPEC
 
 # instance_norm: similar to batch_norm
-FUNC_ARG_SPECS["instancenorm"] = ArgSpec(positions=(0, 1, 2, 3, 4))
+FUNC_ARG_SPECS["instancenorm"] = _NORM_WITH_RUNNING_STATS_SPEC
 
 # layer_norm: F.layer_norm(input, normalized_shape, weight, bias, ...)
 # weight at pos 2, bias at pos 3
-FUNC_ARG_SPECS["layernorm"] = ArgSpec(positions=(0, 2, 3))
+FUNC_ARG_SPECS["layernorm"] = ArgSpec(
+    positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")
+)
 
 # group_norm: F.group_norm(input, num_groups, weight, bias, ...)
 # weight at pos 2, bias at pos 3
-FUNC_ARG_SPECS["groupnorm"] = ArgSpec(positions=(0, 2, 3))
+FUNC_ARG_SPECS["groupnorm"] = ArgSpec(
+    positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")
+)
 
 # Loss functions: (input, target, weight=None, ...)
 # weight can be positional (pos 2) or kwarg
@@ -923,19 +971,23 @@ for _name in [
     FUNC_ARG_SPECS[_name] = _P01
 
 # bilinear: (input1, input2, weight, bias) — bias can be positional
-FUNC_ARG_SPECS["bilinear"] = ArgSpec(positions=(0, 1, 2, 3))
+FUNC_ARG_SPECS["bilinear"] = ArgSpec(
+    positions=(0, 1, 2, 3), tensor_kwargs=("input1", "input2", "weight", "bias")
+)
 
 # scaled_dot_product_attention: (query, key, value, attn_mask=None, ...)
 # attn_mask can be positional (pos 3) or kwarg
 FUNC_ARG_SPECS["scaleddotproductattention"] = ArgSpec(
-    positions=(0, 1, 2, 3), tensor_kwargs=("attnmask",)
+    positions=(0, 1, 2, 3), tensor_kwargs=("query", "key", "value", "attn_mask")
 )
 
 # multi_head_attention_forward: (query, key, value, ...)
-FUNC_ARG_SPECS["multiheadattentionforward"] = _P012
+FUNC_ARG_SPECS["multiheadattentionforward"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("query", "key", "value")
+)
 
 # grid_sample: (input, grid)
-FUNC_ARG_SPECS["gridsample"] = _P01
+FUNC_ARG_SPECS["gridsample"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid"))
 FUNC_ARG_SPECS["cudnngridsampler"] = _P01
 FUNC_ARG_SPECS["cudnnaffinegridgenerator"] = _P0
 
@@ -944,6 +996,14 @@ FUNC_ARG_SPECS["affinegrid"] = _P0
 
 # one_hot: (tensor, num_classes)
 FUNC_ARG_SPECS["onehot"] = _P0
+
+FUNC_ARG_SPECS["cat"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",))
+FUNC_ARG_SPECS["concat"] = FUNC_ARG_SPECS["cat"]
+FUNC_ARG_SPECS["concatenate"] = FUNC_ARG_SPECS["cat"]
+FUNC_ARG_SPECS["stack"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",))
+FUNC_ARG_SPECS["where"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
+)
 
 # Tensor iterator and subclass methods
 for _name in [

@@ -2968,9 +2968,7 @@ def _add_edges_for_node(
             graphviz_graph.edge(**edge_dict)
 
         # Finally, add a backwards edge if both tensors have stored gradients.
-        if vis_mode == "unrolled" and not (
-            isinstance(parent_node, BoundaryNode) or isinstance(child_node, BoundaryNode)
-        ):
+        if not (isinstance(parent_node, BoundaryNode) or isinstance(child_node, BoundaryNode)):
             _add_gradient_edge(
                 self,
                 parent_node,
@@ -3688,22 +3686,23 @@ def _add_gradient_edge(
     """Add a backward (gradient) edge if both layers have saved gradients.
 
     Gradient edges flow child -> parent (opposite of data flow), drawn in
-    ``GRADIENT_ARROW_COLOR`` to distinguish from forward edges.  Only added
-    in unrolled mode (rolled mode doesn't show gradients).
+    ``GRADIENT_ARROW_COLOR`` to distinguish from forward edges.  In rolled
+    mode, an aggregate edge is shown when either rolled endpoint has a gradient
+    on any pass.
 
     Args:
-        parent_layer: The parent LayerPassLog (gradient destination).
-        child_layer: The child LayerPassLog (gradient source).
+        parent_layer: The parent LayerPassLog or LayerLog (gradient destination).
+        child_layer: The child LayerPassLog or LayerLog (gradient source).
         edge_style: ``'solid'`` or ``'dashed'`` (matches the forward edge style).
         containing_module: Module cluster name, or -1 for top-level.
         module_edge_dict: Dict mapping each module cluster to its edges.
         graphviz_graph: The graphviz Digraph object.
         overrides: Graphviz attribute overrides for gradient edges.
     """
-    if parent_layer.has_gradient and child_layer.has_gradient:
+    if _node_has_gradient(parent_layer) and _node_has_gradient(child_layer):
         edge_dict = {
-            "tail_name": child_layer.layer_label.replace(":", "pass"),
-            "head_name": parent_layer.layer_label.replace(":", "pass"),
+            "tail_name": _gradient_node_name(child_layer),
+            "head_name": _gradient_node_name(parent_layer),
             "color": GRADIENT_ARROW_COLOR,
             "fontcolor": GRADIENT_ARROW_COLOR,
             "style": edge_style,
@@ -3720,6 +3719,43 @@ def _add_gradient_edge(
             module_edge_dict[containing_module]["edges"].append(edge_dict)
         else:
             graphviz_graph.edge(**edge_dict)
+
+
+def _node_has_gradient(layer: Any) -> bool:
+    """Return whether a rendered node has any saved gradient.
+
+    Parameters
+    ----------
+    layer:
+        ``LayerPassLog`` or rolled ``LayerLog``.
+
+    Returns
+    -------
+    bool
+        True if the node has at least one saved gradient tensor.
+    """
+
+    passes = getattr(layer, "passes", None)
+    if isinstance(passes, dict):
+        return any(bool(getattr(pass_log, "has_gradient", False)) for pass_log in passes.values())
+    return bool(getattr(layer, "has_gradient", False))
+
+
+def _gradient_node_name(layer: Any) -> str:
+    """Return the Graphviz node name for a gradient edge endpoint.
+
+    Parameters
+    ----------
+    layer:
+        Rendered graph node.
+
+    Returns
+    -------
+    str
+        Graphviz-safe node name.
+    """
+
+    return str(layer.layer_label).replace(":", "pass")
 
 
 def _setup_subgraphs(

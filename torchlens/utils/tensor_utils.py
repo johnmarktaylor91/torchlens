@@ -31,6 +31,13 @@ MAX_FLOATING_POINT_TOLERANCE = 1e-5
 # while still matching the saved operation numerically.
 REL_FLOATING_POINT_TOLERANCE = 1e-4
 
+_DTYPE_FLOAT_TOLERANCES: dict[torch.dtype, tuple[float, float]] = {
+    torch.float16: (1e-3, 1e-3),
+    torch.bfloat16: (1e-2, 1e-2),
+    torch.float32: (REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE),
+    torch.float64: (REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE),
+}
+
 # Cached result of torch.cuda.is_available().  Evaluated once per process
 # because CUDA availability cannot change at runtime.  Avoids repeated
 # calls into the CUDA runtime (which involve driver queries).
@@ -48,6 +55,26 @@ def _is_cuda_available() -> bool:
     if _cuda_available is None:
         _cuda_available = torch.cuda.is_available()
     return _cuda_available
+
+
+def _tolerances_for_dtype(dtype: torch.dtype) -> tuple[float, float]:
+    """Return replay comparison tolerances for ``dtype``.
+
+    Parameters
+    ----------
+    dtype:
+        Tensor dtype being compared.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(rtol, atol)`` pair for ``torch.allclose``.
+    """
+
+    return _DTYPE_FLOAT_TOLERANCES.get(
+        dtype,
+        (REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE),
+    )
 
 
 def tensor_all_nan(tensor: torch.Tensor) -> bool:
@@ -161,14 +188,10 @@ def tensor_nanequal(
             allow_tolerance
             and (tensor_a_nonan.dtype != torch.bool)
             and (tensor_b_nonan.dtype != torch.bool)
-            and torch.allclose(
-                tensor_a_nonan,
-                tensor_b_nonan,
-                rtol=REL_FLOATING_POINT_TOLERANCE,
-                atol=MAX_FLOATING_POINT_TOLERANCE,
-            )
         ):
-            return True
+            rtol, atol = _tolerances_for_dtype(tensor_a_nonan.dtype)
+            if torch.allclose(tensor_a_nonan, tensor_b_nonan, rtol=rtol, atol=atol):
+                return True
 
     return False
 

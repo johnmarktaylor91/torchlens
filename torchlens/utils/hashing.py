@@ -16,7 +16,6 @@ They serve two purposes:
    that separate forward-pass operations actually reference the same weight.
 """
 
-import base64
 import hashlib
 import json
 import re
@@ -48,21 +47,21 @@ def make_short_barcode_from_input(things_to_hash: List[Any], barcode_len: int = 
     Used to create content-based barcodes for parameters and buffers so
     that loop detection can identify operations that share the same weights.
     The inputs are stringified, joined with a null-byte separator (to avoid
-    accidental collisions from concatenation), hashed, and base64-encoded.
+    accidental collisions from concatenation), and hashed with SHA-256.  This
+    avoids Python's process-randomized ``hash()`` and the collision-prone decimal
+    truncation used by older TorchLens releases.
 
     Args:
         things_to_hash: Values to hash (must be stringifiable).
         barcode_len: Maximum length of the returned barcode.
 
     Returns:
-        A URL-safe base64 string truncated to ``barcode_len`` characters.
+        A deterministic hexadecimal SHA-256 prefix of ``barcode_len`` characters.
     """
     # Null-byte separator prevents "ab" + "c" from colliding with "a" + "bc".
     joined = "\x00".join([str(x) for x in things_to_hash])
-    hash_str = str(hash(joined))
-    encoded: bytes = hash_str.encode("utf-8")
-    b64: bytes = base64.urlsafe_b64encode(encoded)
-    return b64.decode("utf-8")[:barcode_len]
+    digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
+    return digest[:barcode_len]
 
 
 _MODULE_PASS_SUFFIX_RE = re.compile(r":\d+(?=\.|$)")

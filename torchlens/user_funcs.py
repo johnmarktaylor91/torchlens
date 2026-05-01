@@ -2138,50 +2138,53 @@ def validate_forward_pass(
     # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
     # Save state_dict first because requires_grad forcing during logging can
     # alter parameter metadata; we restore it afterward.
-    state_dict = model.state_dict()
-    ground_truth_output_all = get_vars_of_type_from_obj(
-        model(*input_args_copy, **input_kwargs_copy),
-        torch.Tensor,
-        search_depth=5,
-        return_addresses=True,
-        allow_repeats=True,
-    )
-    # Deduplicate by structural address to match how capture/trace.py extracts
-    # outputs (same tensor returned in multiple positions is counted once).
-    addresses_used = []
-    ground_truth_output_tensors = []
-    for entry in ground_truth_output_all:
-        if entry[1] in addresses_used:
-            continue
-        ground_truth_output_tensors.append(entry[0])
-        addresses_used.append(entry[1])
-    model.load_state_dict(state_dict)
-
-    # Step 2: Run the model *through* TorchLens, saving all activations.
-    # save_function_args=True is essential - the replay needs each function's
-    # non-tensor arguments to re-execute the computation from saved activations.
-    model_log = _run_model_and_save_specified_activations(
-        model=model,
-        input_args=input_args,
-        input_kwargs=input_kwargs,
-        layers_to_save="all",
-        keep_unsaved_layers=True,
-        activation_transform=None,
-        mark_input_output_distances=False,
-        detach_saved_tensors=False,
-        save_gradients=False,
-        save_function_args=True,
-        random_seed=random_seed,
-        save_rng_states=True,
-    )
-    # Step 3: Validate by replaying the forward pass from saved activations.
+    state_dict = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
+    model_log: Optional[ModelLog] = None
+    activations_are_valid = False
     try:
+        ground_truth_output_all = get_vars_of_type_from_obj(
+            model(*input_args_copy, **input_kwargs_copy),
+            torch.Tensor,
+            search_depth=5,
+            return_addresses=True,
+            allow_repeats=True,
+        )
+        # Deduplicate by structural address to match how capture/trace.py extracts
+        # outputs (same tensor returned in multiple positions is counted once).
+        addresses_used = []
+        ground_truth_output_tensors = []
+        for entry in ground_truth_output_all:
+            if entry[1] in addresses_used:
+                continue
+            ground_truth_output_tensors.append(entry[0])
+            addresses_used.append(entry[1])
+        model.load_state_dict(state_dict)
+
+        # Step 2: Run the model *through* TorchLens, saving all activations.
+        # save_function_args=True is essential - the replay needs each function's
+        # non-tensor arguments to re-execute the computation from saved activations.
+        model_log = _run_model_and_save_specified_activations(
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save="all",
+            keep_unsaved_layers=True,
+            activation_transform=None,
+            mark_input_output_distances=False,
+            detach_saved_tensors=False,
+            save_gradients=False,
+            save_function_args=True,
+            random_seed=random_seed,
+            save_rng_states=True,
+        )
+        # Step 3: Validate by replaying the forward pass from saved activations.
         activations_are_valid = model_log.validate_forward_pass(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
     finally:
-        model_log.cleanup()
-        del model_log
+        model.load_state_dict(state_dict)
+        if model_log is not None:
+            model_log.cleanup()
     return activations_are_valid
 
 
