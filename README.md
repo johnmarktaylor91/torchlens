@@ -62,6 +62,25 @@ in its forward pass; you can grab the saved outputs of every last one:
 The goal of *TorchLens* is to do this for any PyTorch model whatsoever. You can see a bunch of example model
 visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
 
+## Compatibility report
+
+Before filing a bug for a model-specific failure, run the runtime compatibility
+report on the exact model wrapper and example input you plan to log:
+
+```python
+import torchlens as tl
+
+compat = tl.compat.report(model, x)
+print(compat.show())
+print(compat.to_markdown())  # useful in issues and README snippets
+```
+
+`tl.compat.report(model, x)` does not execute the model. It inspects the model
+wrapper, modules, parameter sharing, input tensors, CUDA visibility, and common
+framework markers, then reports each row as `pass`, `known_broken`, `scope`, or
+`not_tested`. Known-broken and out-of-scope rows are cross-referenced in
+[`LIMITATIONS.md`](LIMITATIONS.md).
+
 ## Interventions (v2.0+)
 
 TorchLens can also capture an intervention-ready log, mutate a fork of that log,

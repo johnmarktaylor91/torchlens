@@ -58,6 +58,42 @@ def tensor_all_nan(tensor: torch.Tensor) -> bool:
         return False
 
 
+def _quantized_tensor_equal(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> bool:
+    """Return exact equality for quantized tensors without floating ops.
+
+    Parameters
+    ----------
+    tensor_a:
+        First quantized tensor.
+    tensor_b:
+        Second quantized tensor.
+
+    Returns
+    -------
+    bool
+        True if quantization metadata and integer payloads match.
+    """
+
+    if not (tensor_a.is_quantized and tensor_b.is_quantized):
+        return False
+    if tensor_a.qscheme() != tensor_b.qscheme():
+        return False
+    if not torch.equal(tensor_a.int_repr(), tensor_b.int_repr()):
+        return False
+    if tensor_a.qscheme() in (torch.per_tensor_affine, torch.per_tensor_symmetric):
+        return tensor_a.q_scale() == tensor_b.q_scale() and (
+            tensor_a.q_zero_point() == tensor_b.q_zero_point()
+        )
+    return (
+        tensor_a.q_per_channel_axis() == tensor_b.q_per_channel_axis()
+        and torch.equal(tensor_a.q_per_channel_scales(), tensor_b.q_per_channel_scales())
+        and torch.equal(
+            tensor_a.q_per_channel_zero_points(),
+            tensor_b.q_per_channel_zero_points(),
+        )
+    )
+
+
 def tensor_nanequal(
     tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolerance: bool = False
 ) -> bool:
@@ -93,6 +129,9 @@ def tensor_nanequal(
         return False
 
     with pause_logging():
+        if tensor_a.is_quantized or tensor_b.is_quantized:
+            return _quantized_tensor_equal(tensor_a, tensor_b)
+
         # Inf positions must match exactly (inf != -inf).
         if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
             return False

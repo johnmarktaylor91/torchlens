@@ -384,6 +384,7 @@ def torch_func_decorator(func: Callable, func_name: str):
             return func(*args, **kwargs)
 
         model_log = _state._active_model_log
+        kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
         # Skip logging inside vmap/functorch transforms — internal TorchLens
         # operations (safe_copy, torch.equal, .item()) don't have vmap batching

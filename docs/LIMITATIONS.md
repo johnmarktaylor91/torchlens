@@ -34,7 +34,7 @@ If you hit a case we haven't listed, please
 | **`torch.export.ExportedProgram`** | `RuntimeError` at entry | Log the source `nn.Module` before exporting |
 | **`FullyShardedDataParallel` (FSDP)** | `RuntimeError` at entry | Log a rank-local unsharded copy of the inner module |
 | **`DistributedDataParallel` (DDP)** | Automatically unwrapped via `.module` | — (just works) |
-| **`nn.DataParallel`** | Automatically unwrapped via `.module` | — (just works) |
+| **`nn.DataParallel`** | Reported as `known_broken` by `tl.compat.report` | Log `model.module` directly from one process/thread |
 | **Meta tensor inputs / meta-init model** | `UnsupportedTensorVariantError` | Materialise the model on a real device (`model.to("cpu")`) first |
 | **Sparse tensor inputs** | `UnsupportedTensorVariantError` | Pass dense tensors; densify sparse inputs with `.to_dense()` |
 | **Symbolic-shape (`SymInt`) inputs** | `UnsupportedTensorVariantError` | Pass tensors with concrete integer shapes |
@@ -179,7 +179,8 @@ if your log looks wrong in one of these scenarios, suspect the caveat:
 If you hit a crash or wrong result in a context that isn't listed above:
 
 1. Run `python -c "import torch; print(torch.__version__)"`.
-2. File an issue with: the torch / python version, the full traceback,
+2. Run `tl.compat.report(model, x).to_markdown()` for the exact wrapper/input.
+3. File an issue with: the torch / python version, the compatibility report, the full traceback,
    and (if possible) a small reproducer.
-3. If it's a silent-wrong-result, include the layer count in the resulting
+4. If it's a silent-wrong-result, include the layer count in the resulting
    ``ModelLog`` vs. what you expected.
