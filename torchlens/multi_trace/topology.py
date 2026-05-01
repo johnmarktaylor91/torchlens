@@ -187,6 +187,8 @@ class SupergraphNode:
         trace's LayerLog).
     module_path:
         Representative ``containing_module`` (or ``None`` if not in a module).
+    module_type:
+        Representative module class name when available from ``ModelLog.modules``.
     """
 
     name: str
@@ -195,6 +197,7 @@ class SupergraphNode:
     layer_refs: Dict[str, "LayerLog"] = field(default_factory=dict)
     op_type: str = ""
     module_path: Optional[str] = None
+    module_type: Optional[str] = None
 
 
 @dataclass
@@ -220,6 +223,37 @@ class Supergraph:
     nodes: Dict[str, SupergraphNode] = field(default_factory=dict)
     edges: Dict[Tuple[str, str], Set[str]] = field(default_factory=dict)
     topological_order: List[str] = field(default_factory=list)
+
+
+def _module_type_for_layer(trace: "ModelLog", layer: "LayerLog") -> Optional[str]:
+    """Return the module class name for a layer's containing module.
+
+    Parameters
+    ----------
+    trace:
+        Model log that owns ``layer``.
+    layer:
+        Layer whose module class should be resolved.
+
+    Returns
+    -------
+    str | None
+        Module class name when the module accessor has the containing module.
+    """
+
+    module_path = getattr(layer, "containing_module", None)
+    if module_path is None:
+        return None
+    modules = getattr(trace, "modules", None)
+    if modules is None:
+        return None
+    module_key = str(module_path).split(":", maxsplit=1)[0]
+    try:
+        module_log = modules[module_key]
+    except (KeyError, TypeError):
+        return None
+    module_type = getattr(module_log, "module_class_name", None)
+    return str(module_type) if module_type else None
 
 
 def _per_trace_fingerprint_to_canonical(
@@ -317,6 +351,7 @@ def build_supergraph(traces: List["ModelLog"], names: List[str]) -> Supergraph:
                         if layer.containing_module is not None
                         else None
                     ),
+                    module_type=_module_type_for_layer(trace, layer),
                 )
                 super_g.nodes[cname] = node
             if trace_name not in node.layer_refs:

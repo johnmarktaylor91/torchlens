@@ -60,6 +60,7 @@ from .user_funcs import (
     record_kpi_in_graph,
     register_tensor_connection,
     show_backward_graph as _moved_show_backward_graph,
+    show_bundle_graph,
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
 )

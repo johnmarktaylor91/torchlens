@@ -8,7 +8,7 @@ from typing import Any
 
 from .node_spec import NodeSpec, render_lines_to_html
 
-_USER_FUNC_EXPORTS = {"show_backward_graph", "show_model_graph", "summary"}
+_USER_FUNC_EXPORTS = {"show_backward_graph", "show_bundle_graph", "show_model_graph", "summary"}
 
 
 def __getattr__(name: str) -> Any:
@@ -41,6 +41,7 @@ __all__ = [
     "NodeSpec",
     "render_lines_to_html",
     "show_backward_graph",
+    "show_bundle_graph",
     "show_model_graph",
     "summary",
 ]

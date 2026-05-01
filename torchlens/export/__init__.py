@@ -60,6 +60,88 @@ def html(log: Any, path: str | Path) -> Path:
     return destination
 
 
+def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
+    """Export a Chrome trace timeline comparing bundle members.
+
+    Parameters
+    ----------
+    bundle:
+        TorchLens ``Bundle`` with a ``supergraph`` accessor.
+    path:
+        Destination JSON path.
+
+    Returns
+    -------
+    Path
+        Written JSON path.
+    """
+
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "traceEvents": _chrome_trace_diff_events(bundle),
+        "displayTimeUnit": "ms",
+        "metadata": {
+            "schema": "torchlens.chrome_trace_diff.v1",
+            "members": list(bundle.names),
+        },
+    }
+    destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return destination
+
+
+def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
+    """Return Chrome trace events for a bundle comparison.
+
+    Parameters
+    ----------
+    bundle:
+        Bundle to serialize.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Chrome trace event records.
+    """
+
+    events: list[dict[str, Any]] = []
+    deltas = bundle.norm_delta()
+    pid_by_member = {name: index + 1 for index, name in enumerate(bundle.names)}
+    for member_name in bundle.names:
+        events.append(
+            {
+                "name": "process_name",
+                "ph": "M",
+                "pid": pid_by_member[member_name],
+                "tid": 0,
+                "args": {"name": member_name},
+            }
+        )
+    for node_index, node_name in enumerate(bundle.supergraph.topological_order):
+        node = bundle.supergraph.nodes[node_name]
+        for member_name in getattr(node, "traces", []):
+            layer = node.layer_refs.get(member_name)
+            events.append(
+                {
+                    "name": node_name,
+                    "cat": "torchlens.forward",
+                    "ph": "X",
+                    "pid": pid_by_member[member_name],
+                    "tid": 0,
+                    "ts": node_index * 1000,
+                    "dur": 1000,
+                    "args": {
+                        "op_type": getattr(node, "op_type", ""),
+                        "module_path": getattr(node, "module_path", None),
+                        "module_type": getattr(node, "module_type", None),
+                        "delta": deltas.get(node_name, {}).get(member_name),
+                        "tensor_memory": getattr(layer, "tensor_memory", None),
+                    },
+                }
+            )
+    return events
+
+
 def _static_graph_data(log: Any) -> dict[str, Any]:
     """Serialize a ModelLog into static graph data.
 
@@ -249,4 +331,4 @@ def _safe_id(value: str) -> str:
     return "".join(char if char.isalnum() else "-" for char in value).strip("-")
 
 
-__all__ = ["html", "svg"]
+__all__ = ["chrome_trace_diff", "html", "svg"]
