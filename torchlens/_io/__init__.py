@@ -20,10 +20,12 @@ from typing import Any, NamedTuple
 
 import torch
 
+from ..errors._base import CompatibilityError
+
 IO_FORMAT_VERSION = 2
 
 
-class TorchLensIOError(RuntimeError):
+class TorchLensIOError(CompatibilityError, RuntimeError):
     """Raised when TorchLens portable bundle state is invalid or unsupported."""
 
 

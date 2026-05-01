@@ -34,6 +34,8 @@ from typing import Any, Iterable, Iterator, List, Tuple
 import torch
 from torch import nn
 
+from .errors._base import CompatibilityError
+
 
 # ---------------------------------------------------------------------------
 # Per-tensor detectors
@@ -145,7 +147,7 @@ def _iter_tensors(obj: Any, _seen: set | None = None) -> Iterator[torch.Tensor]:
 # ---------------------------------------------------------------------------
 
 
-class UnsupportedTensorVariantError(RuntimeError):
+class UnsupportedTensorVariantError(CompatibilityError, RuntimeError):
     """Raised when ``log_forward_pass`` is called on a model/input combination
     that TorchLens cannot reliably log (see module docstring for the matrix).
     """

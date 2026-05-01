@@ -34,6 +34,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..errors._base import ValidationError
+
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
     from ..data_classes.layer_pass_log import LayerPassLog
@@ -41,14 +43,24 @@ if TYPE_CHECKING:
     from ..data_classes.module_log import ModuleLog
 
 
-class MetadataInvariantError(ValueError):
+class MetadataInvariantError(ValidationError, ValueError):
     """Raised when a metadata invariant check fails.
 
     Embeds the check name (e.g., ``"graph_topology"``) in the message prefix
     and stores it as an attribute for programmatic inspection in tests.
     """
 
-    def __init__(self, check_name: str, message: str):
+    def __init__(self, check_name: str, message: str) -> None:
+        """Initialize a metadata invariant failure.
+
+        Parameters
+        ----------
+        check_name:
+            Invariant check group name.
+        message:
+            Human-readable failure detail.
+        """
+
         super().__init__(f"[{check_name}] {message}")
         self.check_name = check_name
 

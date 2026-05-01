@@ -17,6 +17,10 @@
   visualization, replay, intervention, and streaming settings.
 - Introduce canonical visualization vocabulary: `view`, `depth`, `renderer`,
   `layout`, and `node_style`, with legacy `vis_*` spellings still accepted.
+- Collapse TorchLens-specific exceptions under `torchlens.errors` domain bases:
+  `InterventionError`, `CaptureError`, `ConfigurationError`,
+  `CompatibilityError`, and `ValidationError`, with legacy exception names
+  preserved for the migration window.
 
 
 ## v2.16.0 (2026-04-30)

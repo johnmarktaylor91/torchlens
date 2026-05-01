@@ -1,6 +1,15 @@
 """Error ownership for the planned TorchLens intervention API."""
 
-from typing import ClassVar, Literal, NoReturn
+from typing import Literal, NoReturn
+
+from ..errors._base import (
+    CaptureError,
+    CompatibilityError,
+    ConfigurationError,
+    InterventionError,
+    TorchLensWarning,
+    ValidationError,
+)
 
 
 def _not_implemented(name: str, phase: str) -> NoReturn:
@@ -46,10 +55,10 @@ def _message_from_fields(class_name: str, fields: dict[str, object]) -> str:
     return f"{class_name}: {rendered}."
 
 
-class TorchLensInterventionError(RuntimeError):
+class TorchLensInterventionError(InterventionError, RuntimeError):
     """Base class for future TorchLens intervention errors."""
 
-    severity: ClassVar[Severity] = "recoverable"
+    severity: Severity = "recoverable"
 
     def __init__(self, *args: object, **fields: object) -> None:
         """Initialize an intervention error with message text or named fields.
@@ -67,14 +76,18 @@ class TorchLensInterventionError(RuntimeError):
         self.fields = dict(fields)
         if fields:
             super().__init__(_message_from_fields(type(self).__name__, self.fields))
+        elif len(args) > 1:
+            super().__init__(", ".join(str(arg) for arg in args))
+        elif args:
+            super().__init__(str(args[0]))
         else:
-            super().__init__(*args)
+            super().__init__()
 
 
-class TorchLensInterventionWarning(UserWarning):
+class TorchLensInterventionWarning(TorchLensWarning):
     """Base class for TorchLens intervention warnings."""
 
-    severity: ClassVar[Severity] = "informational"
+    severity: Severity = "informational"
 
     def __init__(self, *args: object, **fields: object) -> None:
         """Initialize an intervention warning with message text or named fields.
@@ -92,11 +105,15 @@ class TorchLensInterventionWarning(UserWarning):
         self.fields = dict(fields)
         if fields:
             super().__init__(_message_from_fields(type(self).__name__, self.fields))
+        elif len(args) > 1:
+            super().__init__(", ".join(str(arg) for arg in args))
+        elif args:
+            super().__init__(str(args[0]))
         else:
-            super().__init__(*args)
+            super().__init__()
 
 
-class InterventionReadyConflictError(TorchLensInterventionError):
+class InterventionReadyConflictError(ConfigurationError, ValueError):
     """Raised when intervention-ready capture is requested with unsupported options."""
 
 
@@ -124,7 +141,7 @@ class ReplayPreconditionError(TorchLensInterventionError):
     """Raised when replay cannot satisfy its future execution preconditions."""
 
 
-class OpaqueCallableInExecutableSaveError(TorchLensInterventionError):
+class OpaqueCallableInExecutableSaveError(ConfigurationError, ValueError):
     """Raised when an executable intervention save would require opaque code."""
 
 
@@ -132,11 +149,11 @@ SpecPortabilityError = OpaqueCallableInExecutableSaveError
 """Alias for v5.2 portability failures in intervention spec persistence."""
 
 
-class DirectWriteInExecutableSaveError(TorchLensInterventionError):
+class DirectWriteInExecutableSaveError(ConfigurationError, ValueError):
     """Raised when executable spec save sees direct activation writes."""
 
 
-class GraphShapeMismatchError(TorchLensInterventionError):
+class GraphShapeMismatchError(ValidationError, ValueError):
     """Raised when a saved spec's graph shape is incompatible with a target log."""
 
     severity = "fatal"
@@ -146,27 +163,27 @@ class ControlFlowDivergenceWarning(TorchLensInterventionWarning):
     """Warning for replay-detected control-flow or saved-edge divergence."""
 
 
-class ControlFlowDivergenceError(TorchLensInterventionError):
+class ControlFlowDivergenceError(ValidationError, RuntimeError):
     """Raised when strict replay escalates a control-flow divergence."""
 
     severity = "fatal"
 
 
-class EngineDispatchError(TorchLensInterventionError):
+class EngineDispatchError(ConfigurationError, ValueError):
     """Raised when ``do(...)`` cannot determine a propagation engine."""
 
 
-class ModelMismatchError(TorchLensInterventionError):
+class ModelMismatchError(CompatibilityError, RuntimeError):
     """Raised when a supplied model does not match capture evidence."""
 
     severity = "fatal"
 
 
-class AppendMismatchError(TorchLensInterventionError):
+class AppendMismatchError(ValidationError, ValueError):
     """Raised when a chunked append candidate is incompatible with the base log."""
 
 
-class AppendBatchDependenceError(TorchLensInterventionError):
+class AppendBatchDependenceError(ValidationError, ValueError):
     """Raised when append cannot prove helper or gradient batch independence."""
 
 
@@ -174,11 +191,11 @@ class BatchNormTrainModeWarning(TorchLensInterventionWarning):
     """Warning for append reruns through batch-sensitive train-mode modules."""
 
 
-class SpecMutationError(TorchLensInterventionError):
+class SpecMutationError(ConfigurationError, ValueError):
     """Raised when an intervention spec mutator cannot apply a requested change."""
 
 
-class SiteResolutionError(TorchLensInterventionError):
+class SiteResolutionError(ConfigurationError, ValueError):
     """Raised when future selector resolution cannot identify requested sites."""
 
 
@@ -186,35 +203,35 @@ class SiteAmbiguityError(SiteResolutionError):
     """Raised when a site query resolves too many sites for the surface."""
 
 
-class RecursiveTracingError(TorchLensInterventionError):
+class RecursiveTracingError(CaptureError, RuntimeError):
     """Raised when intervention tracing recursively enters an active trace."""
 
     severity = "fatal"
 
 
-class AxisAmbiguityError(TorchLensInterventionError):
+class AxisAmbiguityError(ConfigurationError, ValueError):
     """Raised when a helper cannot infer a feature axis safely."""
 
 
-class SpliceModuleDtypeError(TorchLensInterventionError):
+class SpliceModuleDtypeError(CompatibilityError, RuntimeError):
     """Raised when ``splice_module`` returns a tensor with an unexpected dtype."""
 
     severity = "fatal"
 
 
-class SpliceModuleDeviceError(TorchLensInterventionError):
+class SpliceModuleDeviceError(CompatibilityError, RuntimeError):
     """Raised when ``splice_module`` returns a tensor on an unexpected device."""
 
     severity = "fatal"
 
 
-class HookSignatureError(TorchLensInterventionError):
+class HookSignatureError(ConfigurationError, TypeError):
     """Raised when a hook callable does not accept the required signature."""
 
     severity = "fatal"
 
 
-class HookValueError(TorchLensInterventionError):
+class HookValueError(InterventionError, ValueError):
     """Raised when a hook returns an invalid replacement value."""
 
 
@@ -226,25 +243,25 @@ class LiveModeLabelError(SiteResolutionError):
     """Raised when live capture cannot resolve a finalized-label selector."""
 
 
-class BundleMemberError(TorchLensInterventionError):
+class BundleMemberError(ConfigurationError, ValueError):
     """Raised when a bundle operation cannot resolve against one or more members."""
 
 
-class BundleRelationshipError(TorchLensInterventionError):
+class BundleRelationshipError(ValidationError, ValueError):
     """Raised when bundle members lack the relationship required for an operation."""
 
     severity = "fatal"
 
 
-class BaselineUndeterminedError(TorchLensInterventionError):
+class BaselineUndeterminedError(ConfigurationError, ValueError):
     """Raised when a bundle operation requires an unambiguous baseline."""
 
 
-class NoParentError(TorchLensInterventionError):
+class NoParentError(ConfigurationError, ValueError):
     """Raised when a lineage operation requires a parent run and none is recorded."""
 
 
-class DeadParentError(TorchLensInterventionError):
+class DeadParentError(ConfigurationError, ValueError):
     """Raised when a lineage operation requires a parent run whose weakref is dead."""
 
 

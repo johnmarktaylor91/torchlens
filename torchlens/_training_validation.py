@@ -8,6 +8,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from .errors._base import ConfigurationError
+
 _NON_GRAD_DTYPES = {
     torch.int8,
     torch.int16,
@@ -21,7 +23,7 @@ for _dtype_name in ("uint16", "uint32", "uint64"):
         _NON_GRAD_DTYPES.add(getattr(torch, _dtype_name))
 
 
-class TrainingModeConfigError(ValueError):
+class TrainingModeConfigError(ConfigurationError, ValueError):
     """Raised when ``train_mode=True`` conflicts with capture configuration.
 
     This is the slow/replay sibling of ``tl.fastlog.RecordingConfigError``:

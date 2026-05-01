@@ -4,27 +4,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ..errors._base import CaptureError, ConfigurationError
+
 if TYPE_CHECKING:
     from .types import PredicateFailure, RecordContext
 
 
-class RecordingConfigError(ValueError):
+class RecordingConfigError(ConfigurationError, ValueError):
     """Raised when fastlog options are internally inconsistent."""
 
 
-class RecorderStateError(RuntimeError):
+class RecorderStateError(CaptureError, RuntimeError):
     """Raised when a recorder is used outside its valid lifecycle."""
 
 
-class RecoveryError(RuntimeError):
+class RecoveryError(CaptureError, RuntimeError):
     """Raised when a partial fastlog bundle cannot be recovered."""
 
 
-class BundleNotFinalizedError(RuntimeError):
+class BundleNotFinalizedError(CaptureError, RuntimeError):
     """Raised when loading a bundle that was not finalized cleanly."""
 
 
-class RecordContextFieldError(AttributeError):
+class RecordContextFieldError(ConfigurationError, AttributeError):
     """Raised when a predicate asks for a field outside the RecordContext schema."""
 
     def __init__(self, field: str) -> None:
@@ -45,7 +47,7 @@ class RecordContextFieldError(AttributeError):
         return f"RecordContext has no field {self.field!r}"
 
 
-class PredicateError(RuntimeError):
+class PredicateError(CaptureError, RuntimeError):
     """Raised when a predicate returns an invalid value or fails during evaluation."""
 
     def __init__(
