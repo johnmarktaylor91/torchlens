@@ -244,20 +244,20 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
 
         session.calls += 1
         if session.calls % every == 0:
-            model.forward = original_forward  # type: ignore[method-assign]
+            model.forward = original_forward
             try:
                 capture_input = list(args)
                 log = torchlens.log_forward_pass(model, capture_input, kwargs or None)
                 session.logs.append(log)
             finally:
-                model.forward = wrapped_forward  # type: ignore[method-assign]
+                model.forward = wrapped_forward
         return original_forward(*args, **kwargs)
 
-    model.forward = wrapped_forward  # type: ignore[method-assign]
+    model.forward = wrapped_forward
     try:
         yield session
     finally:
-        model.forward = original_forward  # type: ignore[method-assign]
+        model.forward = original_forward
 
 
 def _active_stop_after_site() -> Any | None:

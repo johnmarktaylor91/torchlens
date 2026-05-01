@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -35,6 +35,14 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for zero ablation.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that replaces an activation with zeros.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return zeros with the same metadata as the activation."""
 
@@ -77,6 +85,14 @@ def mean_ablate(
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for mean ablation.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that fills an activation from the configured source mean.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return an activation-shaped tensor filled with the source mean."""
 
@@ -126,6 +142,14 @@ def resample_ablate(
     source_value = source if source is not None else from_
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for resample ablation.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that samples replacement activation values.
+        """
+
         generator = _make_generator(seed)
 
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
@@ -196,6 +220,14 @@ def steer(
     scale_value = magnitude if coef is None else coef
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for steering.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that adds the configured steering direction.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Add the steering vector to the activation."""
 
@@ -238,6 +270,14 @@ def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for activation scaling.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that multiplies an activation by ``factor``.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Scale the activation."""
 
@@ -282,6 +322,14 @@ def clamp(
         raise HookValueError("clamp requires min, max, or both")
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for activation clamping.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that clamps activation values.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Clamp the activation."""
 
@@ -323,6 +371,14 @@ def noise(
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for adding noise.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that adds Gaussian noise to activations.
+        """
+
         generator = _make_generator(seed)
 
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
@@ -378,6 +434,14 @@ def project_onto(
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for projection.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that projects an activation onto ``direction``.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Project activation onto the direction."""
 
@@ -432,12 +496,20 @@ def project_off(
     )
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for removing a projection.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that removes the component along ``direction``.
+        """
+
         onto_hook = onto_spec()
 
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Remove the projected component from the activation."""
 
-            return activation - onto_hook(activation, hook=hook)
+            return cast(torch.Tensor, activation - onto_hook(activation, hook=hook))
 
         return _hook
 
@@ -473,6 +545,14 @@ def swap_with(
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for swapping activations.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that resolves and returns the configured replacement.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return the resolved replacement tensor."""
 
@@ -525,6 +605,14 @@ def splice_module(
         raise HookValueError("splice_module Phase 3 only supports activation input/output routing")
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for module splicing.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that forwards the activation through ``module``.
+        """
+
         def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Call the spliced module and validate dtype/device."""
 
@@ -571,6 +659,14 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
     normalize_hook(fn, direction="backward")
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the configured backward hook.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Backward hook callable.
+        """
+
         return fn
 
     return _helper_spec(
@@ -599,6 +695,14 @@ def gradient_zero(*, force_shape_change: bool = False) -> HelperSpec:
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for zeroing gradients.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that replaces a gradient with zeros.
+        """
+
         def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return a zero gradient."""
 
@@ -634,6 +738,14 @@ def gradient_scale(factor: float, *, force_shape_change: bool = False) -> Helper
     """
 
     def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for gradient scaling.
+
+        Returns
+        -------
+        Callable[..., torch.Tensor]
+            Hook callable that multiplies a gradient by ``factor``.
+        """
+
         def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Scale the gradient."""
 
@@ -899,7 +1011,9 @@ def _align_direction(
         shape[normalized_axis] = direction.shape[0]
         return direction.reshape(shape)
     try:
-        torch.broadcast_shapes(tuple(direction.shape), tuple(activation.shape))
+        cast(Callable[..., object], torch.broadcast_shapes)(
+            tuple(direction.shape), tuple(activation.shape)
+        )
     except RuntimeError as exc:
         raise HookValueError(
             f"direction shape {tuple(direction.shape)} cannot broadcast to "

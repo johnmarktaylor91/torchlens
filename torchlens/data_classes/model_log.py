@@ -30,7 +30,7 @@ Key design patterns:
 
 import copy
 from collections import OrderedDict, defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 import difflib
 from functools import cached_property
@@ -41,7 +41,19 @@ import time
 import uuid
 import weakref
 import warnings
-from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Set, TYPE_CHECKING, Tuple
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Set,
+    TYPE_CHECKING,
+    Tuple,
+    cast,
+)
 
 import numpy as np
 import torch
@@ -159,7 +171,7 @@ _MODEL_LOG_DEFAULT_FILL = {
 _MODEL_LOG_DEFAULT_FILL["io_format_version"] = IO_FORMAT_VERSION
 
 
-def _init_module_build_data() -> dict:
+def _init_module_build_data() -> dict[str, Any]:
     """Create the transient dict used to accumulate module hierarchy data during logging.
 
     Consumed by ``_build_module_logs`` (step 17) and then cleared.
@@ -204,7 +216,7 @@ class ConditionalEvent:
     bool_layers: List[str] = field(default_factory=list)
 
 
-class _CallableList(list):
+class _CallableList(list[Any]):
     """List that returns a plain list when called.
 
     This keeps rare report surfaces callable for user ergonomics without adding
@@ -223,7 +235,7 @@ class _CallableList(list):
         return list(self)
 
 
-class _CallableDict(dict):
+class _CallableDict(dict[Any, Any]):
     """Dict that returns a plain dict when called.
 
     This preserves legacy ``log.report_by_type()`` ergonomics for budgeted
@@ -496,7 +508,7 @@ class ModelLog:
         detach_saved_tensors: bool = False,
         mark_input_output_distances: bool = True,
         num_context_lines: int = 7,
-        optimizer=None,
+        optimizer: torch.optim.Optimizer | None = None,
         save_source_context: bool = False,
         save_rng_states: bool = False,
         detect_loops: bool = True,
@@ -504,7 +516,7 @@ class ModelLog:
         train_mode: bool = False,
         module_filter_fn: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
-    ):
+    ) -> None:
         """Initialise a fresh ModelLog for a new logging session.
 
         Args:
@@ -666,7 +678,7 @@ class ModelLog:
         self.input_layers: List[str] = []
         self.output_layers: List[str] = []
         self.buffer_layers: List[str] = []
-        self.buffer_num_passes: Dict = {}
+        self.buffer_num_passes: Dict[str, int] = {}
         self._buffer_accessor = None
         self.internally_initialized_layers: List[str] = []
         self._layers_where_internal_branches_merge_with_input: List[str] = []
@@ -680,11 +692,11 @@ class ModelLog:
         self.orphan_layers: List[str] = []
         self.unlogged_layers: List[str] = []
         self.layers_with_saved_gradients: List[str] = []
-        self._saved_gradients_set: set = set()
-        self.layers_with_params: Dict[str, List] = defaultdict(list)
+        self._saved_gradients_set: set[str] = set()
+        self.layers_with_params: Dict[str, List[Any]] = defaultdict(list)
         # Maps operation_equivalence_type -> set of layer labels that share
         # that equivalence type (populated by loop_detection.py).
-        self.equivalent_operations: Dict[str, set] = defaultdict(set)
+        self.equivalent_operations: Dict[str, set[str]] = defaultdict(set)
 
         # Aggregate tensor statistics (computed during postprocessing):
         self.total_activation_memory: int = 0
@@ -706,19 +718,19 @@ class ModelLog:
         # instances. Lives on ModelLog so they're GC'd with the log - no cleanup
         # iteration over modules needed.
         self._mod_pass_num: Dict[int, int] = {}  # id(module) -> pass count
-        self._mod_pass_labels: Dict[int, list] = {}  # id(module) -> [(addr, pass_num), ...]
-        self._mod_entered: Dict[int, list] = {}  # id(module) -> [raw_label, ...]
-        self._mod_exited: Dict[int, list] = {}  # id(module) -> [raw_label, ...]
+        self._mod_pass_labels: Dict[int, list[tuple[str, int]]] = {}
+        self._mod_entered: Dict[int, list[str]] = {}  # id(module) -> [raw_label, ...]
+        self._mod_exited: Dict[int, list[str]] = {}  # id(module) -> [raw_label, ...]
 
         # Transient module build data (consumed by _build_module_logs, then cleared):
-        self._module_build_data: Dict = _init_module_build_data()
+        self._module_build_data: Dict[str, Any] = _init_module_build_data()
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
 
         # Temporary storage for module metadata capture (consumed by _build_module_logs):
-        self._module_metadata: Dict = {}
-        self._module_forward_args: Dict = {}
+        self._module_metadata: Dict[Any, Any] = {}
+        self._module_forward_args: Dict[Any, Any] = {}
 
         # Time elapsed:
         self.pass_start_time: float = 0
@@ -740,14 +752,14 @@ class ModelLog:
     # ************ Built-in Methods **************
     # ********************************************
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Number of layer-pass entries. Uses final list after postprocessing, raw dict during logging."""
         if self._pass_finished:
             return len(self.layer_list)
         else:
             return len(self._raw_layer_dict)
 
-    def __getitem__(self, ix) -> LayerPassLog:
+    def __getitem__(self, ix: Any) -> Any:
         """Returns an object logging a model layer given an index. If the pass is finished,
         it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
 
@@ -1610,6 +1622,18 @@ class ModelLog:
         """
 
         def remap_pass(value: Any) -> Any:
+            """Map a parent pass object to its forked counterpart.
+
+            Parameters
+            ----------
+            value:
+                Candidate parent-layer object or another value.
+
+            Returns
+            -------
+            Any
+                Forked layer pass when ``value`` is known, otherwise ``value``.
+            """
             return layer_map.get(id(value), value)
 
         self.layer_list = [remap_pass(layer) for layer in parent.layer_list]
@@ -1783,7 +1807,7 @@ class ModelLog:
         if hasattr(site, "to_target_spec"):
             target = site.to_target_spec()
             target.strict = strict or target.strict
-            return target
+            return cast("TargetSpec", target)
         if hasattr(site, "layer_label"):
             return TargetSpec("label", str(site.layer_label), strict=strict)
         return TargetSpec("label", site, strict=strict)
@@ -1845,7 +1869,7 @@ class ModelLog:
             "</div>"
         )
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
         """Loops through all tensors in the log."""
         if self._pass_finished:
             return iter(self.layer_list)
@@ -2363,6 +2387,13 @@ class ModelLog:
 
     @property
     def total_params_memory_str(self) -> str:
+        """Return total parameter memory in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable total parameter memory amount.
+        """
         return human_readable_size(self.total_params_memory)
 
     @property
@@ -2464,9 +2495,9 @@ class ModelLog:
         return self._module_logs
 
     @property
-    def root_module(self):
+    def root_module(self) -> "ModuleLog":
         """The root module (the model itself)."""
-        return self._module_logs["self"]
+        return cast("ModuleLog", self._module_logs["self"])
 
     @property
     def buffers(self) -> "BufferAccessor":
@@ -2497,16 +2528,16 @@ class ModelLog:
         vis_mode: VisModeLiteral = "unrolled",
         vis_nesting_depth: int = 1000,
         vis_outpath: str = "modelgraph",
-        vis_graph_overrides: Optional[Dict] = None,
+        vis_graph_overrides: Optional[Dict[str, Any]] = None,
         module: "ModuleLog | str | None" = None,
         node_mode: VisNodeModeLiteral = "default",
-        node_spec_fn: Optional[Callable] = None,
-        collapsed_node_spec_fn: Optional[Callable] = None,
-        collapse_fn: Optional[Callable] = None,
-        skip_fn: Optional[Callable] = None,
-        vis_edge_overrides: Optional[Dict] = None,
-        vis_gradient_edge_overrides: Optional[Dict] = None,
-        vis_module_overrides: Optional[Dict] = None,
+        node_spec_fn: Optional[Callable[..., Any]] = None,
+        collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
+        collapse_fn: Optional[Callable[..., Any]] = None,
+        skip_fn: Optional[Callable[..., Any]] = None,
+        vis_edge_overrides: Optional[Dict[str, Any]] = None,
+        vis_gradient_edge_overrides: Optional[Dict[str, Any]] = None,
+        vis_module_overrides: Optional[Dict[str, Any]] = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
         show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
@@ -2751,16 +2782,16 @@ class ModelLog:
             kwargs.pop("vis_opt")
         if kwargs.get("vis_mode") == "none":
             return None
-        return self.render_graph(**kwargs)
+        return cast(str | None, self.render_graph(**kwargs))
 
     def show_backward_graph(
         self,
         vis_outpath: str = "backward_modelgraph",
-        vis_graph_overrides: Optional[Dict] = None,
-        node_spec_fn: Optional[Callable] = None,
-        collapsed_node_spec_fn: Optional[Callable] = None,
+        vis_graph_overrides: Optional[Dict[str, Any]] = None,
+        node_spec_fn: Optional[Callable[..., Any]] = None,
+        collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
         vis_node_mode: VisNodeModeLiteral = "default",
-        vis_edge_overrides: Optional[Dict] = None,
+        vis_edge_overrides: Optional[Dict[str, Any]] = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
         vis_direction: VisDirectionLiteral = "topdown",
@@ -2802,9 +2833,9 @@ class ModelLog:
 
     def preview_fastlog(
         self,
-        predicate: Optional[Callable] = None,
-        keep_op: Optional[Callable] = None,
-        keep_module: Optional[Callable] = None,
+        predicate: Optional[Callable[..., Any]] = None,
+        keep_op: Optional[Callable[..., Any]] = None,
+        keep_module: Optional[Callable[..., Any]] = None,
         **kwargs: Any,
     ) -> str:
         """Render a fastlog predicate preview for this model graph.
@@ -2950,16 +2981,19 @@ class ModelLog:
         """
         from ..experimental.dagua import render_model_log_with_dagua as _impl
 
-        return _impl(
-            self,
-            vis_mode=vis_mode,
-            vis_nesting_depth=vis_nesting_depth,
-            vis_outpath=vis_outpath,
-            vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
-            vis_buffer_layers=vis_buffer_layers,
-            vis_direction=vis_direction,
-            vis_theme=vis_theme,
+        return cast(
+            str,
+            _impl(
+                self,
+                vis_mode=vis_mode,
+                vis_nesting_depth=vis_nesting_depth,
+                vis_outpath=vis_outpath,
+                vis_save_only=vis_save_only,
+                vis_fileformat=vis_fileformat,
+                vis_buffer_layers=vis_buffer_layers,
+                vis_direction=vis_direction,
+                vis_theme=vis_theme,
+            ),
         )
 
     def to_dagua_graph(
@@ -3219,8 +3253,8 @@ class ModelLog:
         model: torch.nn.Module,
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
-        layers_to_save: str | List = "all",
-        gradients_to_save: str | List | None = "all",
+        layers_to_save: str | List[str] = "all",
+        gradients_to_save: str | List[str] | None = "all",
         random_seed: Optional[int] = None,
         train_mode: bool | None = None,
     ) -> None:
@@ -3494,7 +3528,7 @@ class ModelLog:
         """
         from ..capture.backward import log_backward as _impl
 
-        return _impl(self, loss, **backward_kwargs)
+        return cast("ModelLog", _impl(self, loss, **backward_kwargs))
 
     def recording_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls.

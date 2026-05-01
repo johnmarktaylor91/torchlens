@@ -30,7 +30,7 @@ import inspect
 import random
 import time
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -57,11 +57,11 @@ from ..utils.display import _vprint, _vtimed
 def save_new_activations(
     self: "ModelLog",
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
-    layers_to_save: Union[str, List] = "all",
-    gradients_to_save: Union[str, List, None] = "all",
-    random_seed: Optional[int] = None,
+    input_args: torch.Tensor | list[Any],
+    input_kwargs: dict[Any, Any] | None = None,
+    layers_to_save: str | list[Any] = "all",
+    gradients_to_save: str | list[Any] | None = "all",
+    random_seed: int | None = None,
     train_mode: bool | None = None,
 ) -> None:
     """Re-run the model with new inputs, saving only activations (fast pass).
@@ -186,7 +186,7 @@ def save_new_activations(
     )
 
 
-def _get_input_arg_names(model, input_args) -> List[str]:
+def _get_input_arg_names(model: nn.Module, input_args: list[Any]) -> list[str]:
     """Extract parameter names from the model's forward() signature for the given input args.
 
     Inspects the forward method's argspec, strips 'self', and generates synthetic
@@ -205,8 +205,8 @@ def _get_input_arg_names(model, input_args) -> List[str]:
 
 
 def _get_op_nums_from_user_labels(
-    self: "ModelLog", which_layers: Union[str, List[Union[str, int]]]
-) -> Union[List[int], str]:
+    self: "ModelLog", which_layers: str | list[str | int] | None
+) -> list[int] | str:
     """Resolve user-provided layer identifiers to internal creation_order values.
 
     Supports exact key match, substring match across all lookup keys, and the
@@ -263,11 +263,11 @@ def _get_op_nums_from_user_labels(
 
 
 def _fetch_label_move_input_tensors(
-    input_args: List[Any],
-    input_arg_names: List[str],
-    input_kwargs: Dict,
+    input_args: list[Any],
+    input_arg_names: list[str],
+    input_kwargs: dict[Any, Any],
     model_device: str,
-) -> Tuple[List[torch.Tensor], List[str]]:
+) -> tuple[list[torch.Tensor], list[str]]:
     """Extract all tensors from input args/kwargs, move to model device, and build addresses.
 
     Handles nested structures (lists, tuples, dicts) up to ``search_depth=5``.
@@ -336,9 +336,9 @@ def _fetch_label_move_input_tensors(
 
 def _setup_inputs_and_device(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Optional[Dict[Any, Any]],
-) -> Tuple[List[Any], Dict[Any, Any], List[str], str]:
+    input_args: torch.Tensor | list[Any],
+    input_kwargs: dict[Any, Any] | None,
+) -> tuple[list[Any], dict[Any, Any], list[str], str]:
     """Normalize inputs, detect model device, copy args, and extract input arg names.
 
     This is the single place where user-provided inputs are transformed into
@@ -384,7 +384,7 @@ def _setup_inputs_and_device(
 def _extract_and_mark_outputs(
     self: "ModelLog",
     outputs: Any,
-) -> Tuple[List[torch.Tensor], List[str]]:
+) -> tuple[list[torch.Tensor], list[str]]:
     """Extract output tensors from model outputs, deduplicate, and mark in ModelLog.
 
     Called AFTER the forward pass completes (outside ``active_logging``), so
@@ -471,11 +471,11 @@ def _output_path_to_address(path: tuple[Any, ...]) -> str:
 def run_and_log_inputs_through_model(
     self: "ModelLog",
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
-    layers_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
-    gradients_to_save: Optional[Union[str, List[Union[str, int]]]] = "all",
-    random_seed: Optional[int] = None,
+    input_args: torch.Tensor | list[Any],
+    input_kwargs: dict[Any, Any] | None = None,
+    layers_to_save: str | list[str | int] | None = "all",
+    gradients_to_save: str | list[str | int] | None = "all",
+    random_seed: int | None = None,
 ) -> None:
     """Core orchestration: run a forward pass and log everything into ModelLog.
 
@@ -501,13 +501,14 @@ def run_and_log_inputs_through_model(
     self.random_seed_used = random_seed  # type: ignore[assignment]
     set_random_seed(random_seed)
 
-    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment, arg-type]
-    self._gradient_layer_nums_to_save = _get_op_nums_from_user_labels(self, gradients_to_save)  # type: ignore[assignment, arg-type]
+    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
+    self._gradient_layer_nums_to_save = _get_op_nums_from_user_labels(self, gradients_to_save)
 
     # In fast mode, output layers' activation are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must
     # also include output-layer parents so their activations are available (#46).
-    if self._layer_nums_to_save != "all" and self._pass_finished:
+    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
+    if layer_nums_to_save != "all" and self._pass_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
             output_entry = self[output_label]
@@ -515,7 +516,7 @@ def run_and_log_inputs_through_model(
                 parent_entry = self[parent_label]
                 output_parent_nums.add(parent_entry.creation_order)
         if output_parent_nums:
-            combined = set(self._layer_nums_to_save) | output_parent_nums
+            combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
 
     input_args, input_kwargs, input_arg_names, model_device = _setup_inputs_and_device(
@@ -525,7 +526,7 @@ def run_and_log_inputs_through_model(
     )
 
     self.pass_start_time = time.time()
-    input_tensors: List[torch.Tensor] = []
+    input_tensors: list[torch.Tensor] = []
 
     try:
         (

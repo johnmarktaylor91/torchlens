@@ -41,9 +41,10 @@ import sys
 import time
 import types
 import warnings
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from functools import wraps
-from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple
+from typing import Any, TYPE_CHECKING, cast
 
 import torch
 
@@ -86,7 +87,7 @@ def _nvtx_range_push(name: str) -> bool:
     """
 
     try:
-        torch.cuda.nvtx.range_push(name)
+        torch.cuda.nvtx.range_push(name)  # type: ignore[no-untyped-call]
     except Exception:
         return False
     return True
@@ -104,7 +105,7 @@ def _nvtx_range_pop(enabled: bool) -> None:
     if not enabled:
         return
     try:
-        torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_pop()  # type: ignore[no-untyped-call]
     except Exception:
         return
 
@@ -217,14 +218,14 @@ print_funcs = ["__repr__", "__str__", "_str"]
 # When a ``torch.device`` context manager is active (TorchFunctionMode),
 # normal C dispatch injects the device automatically — but our Python
 # wrappers bypass that dispatch, so we must inject it ourselves.
-_DEVICE_CONSTRUCTOR_NAMES: set = set()
+_DEVICE_CONSTRUCTOR_NAMES: set[str] = set()
 
 # Lazy imports cached at first use.
 _torch_function_mode_len = None
 _DeviceContext = None
 
 
-def _get_active_device() -> Optional[str]:
+def _get_active_device() -> str | None:
     """Return the device from the innermost active ``DeviceContext``, or ``None``.
 
     Walks the ``TorchFunctionMode`` stack in reverse (innermost first) to find
@@ -240,7 +241,7 @@ def _get_active_device() -> Optional[str]:
     try:
         from torch.overrides import _get_current_function_mode_stack
 
-        for mode in reversed(_get_current_function_mode_stack()):
+        for mode in reversed(_get_current_function_mode_stack()):  # type: ignore[no-untyped-call]
             if isinstance(mode, _DeviceContext):
                 return str(mode.device)
     except (ImportError, AttributeError):
@@ -248,7 +249,7 @@ def _get_active_device() -> Optional[str]:
     return None
 
 
-def _maybe_inject_device_kwarg(func_name: str, kwargs: dict) -> dict:
+def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
     """Inject ``device`` kwarg for factory functions when a ``DeviceContext`` is active.
 
     Python wrappers bypass PyTorch's C-level ``TorchFunctionMode`` dispatch, so
@@ -264,7 +265,7 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict) -> dict:
     if "device" in kwargs:
         return kwargs
     try:
-        from torch.overrides import _len_torch_function_stack
+        from torch.overrides import _len_torch_function_stack  # type: ignore[attr-defined]
 
         if _len_torch_function_stack() > 0:
             device = _get_active_device()
@@ -275,7 +276,7 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict) -> dict:
     return kwargs
 
 
-def _collect_tensor_args(args, kwargs):
+def _collect_tensor_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[torch.Tensor]:
     """Fast inline tensor extraction from function arguments.
 
     Most torch function calls have flat args (tensors, ints, bools, etc.).
@@ -312,7 +313,7 @@ def _collect_tensor_args(args, kwargs):
     return tensors
 
 
-def _collect_output_tensors(out):
+def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
     """Fast inline output tensor extraction.
 
     Most torch functions return a single tensor. This handles that case
@@ -336,7 +337,7 @@ def _collect_output_tensors(out):
     )
 
 
-def torch_func_decorator(func: Callable, func_name: str):
+def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[..., Any]:
     """Wrap a single torch function with toggle-gated logging.
 
     When ``_state._logging_enabled`` is ``False``, the wrapper is a near-noop
@@ -374,7 +375,7 @@ def torch_func_decorator(func: Callable, func_name: str):
     """
 
     @wraps(func)
-    def wrapped_func(*args, **kwargs):
+    def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         # ---- Fast path ----
         # When logging is off, pass through with minimal overhead.
         # DeviceContext injection is still needed even when not logging,
@@ -383,7 +384,7 @@ def torch_func_decorator(func: Callable, func_name: str):
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             return func(*args, **kwargs)
 
-        model_log = _state._active_model_log
+        model_log = cast(Any, _state._active_model_log)
         kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
         # Skip logging inside vmap/functorch transforms — internal TorchLens
@@ -553,7 +554,7 @@ def torch_func_decorator(func: Callable, func_name: str):
 # ---------------------------------------------------------------------------
 
 
-def get_func_argnames(orig_func: Callable, func_name: str):
+def get_func_argnames(orig_func: Callable[..., Any], func_name: str) -> None:
     """Extract argument names for a function and store in ``_state._func_argnames``.
 
     Tries ``inspect.signature`` first (works for Python functions). Falls back
@@ -618,7 +619,7 @@ def get_func_argnames(orig_func: Callable, func_name: str):
 # ---------------------------------------------------------------------------
 
 
-def decorate_all_once():
+def decorate_all_once() -> None:
     """Decorate all torch functions (internal, called once by ``wrap_torch``).
 
     Iterates over every ``(namespace, func_name)`` pair in ``ORIG_TORCH_FUNCS``
@@ -703,7 +704,7 @@ def decorate_all_once():
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     setattr(local_func_namespace, func_name, new_func)
-                new_func.tl_is_decorated_function = True
+                setattr(new_func, "tl_is_decorated_function", True)
                 # Bidirectional id-keyed mappings for fast lookup.
                 _state._orig_to_decorated[id(orig_func)] = new_func
                 _state._decorated_to_orig[id(new_func)] = orig_func
@@ -717,17 +718,18 @@ def decorate_all_once():
             # getset_descriptors (e.g. Tensor.real, Tensor.imag) are C-level
             # properties. We wrap getter/setter/deleter individually and
             # reassemble as a Python property.
+            orig_descriptor = cast(Any, orig_func)
             getter_orig, setter_orig, deleter_orig = (
-                orig_func.__get__,
-                orig_func.__set__,
-                orig_func.__delete__,
+                orig_descriptor.__get__,
+                orig_descriptor.__set__,
+                orig_descriptor.__delete__,
             )
             getter_dec = torch_func_decorator(getter_orig, func_name)
             setter_dec = torch_func_decorator(setter_orig, func_name)
             deleter_dec = torch_func_decorator(deleter_orig, func_name)
-            getter_dec.tl_is_decorated_function = True
-            setter_dec.tl_is_decorated_function = True
-            deleter_dec.tl_is_decorated_function = True
+            setattr(getter_dec, "tl_is_decorated_function", True)
+            setattr(setter_dec, "tl_is_decorated_function", True)
+            setattr(deleter_dec, "tl_is_decorated_function", True)
             new_property = property(getter_dec, setter_dec, deleter_dec, doc=func_name)
             try:
                 with warnings.catch_warnings():
@@ -735,10 +737,10 @@ def decorate_all_once():
                     setattr(local_func_namespace, func_name, new_property)
                 # #31: Only add mapper entries if setattr succeeded — otherwise
                 # we'd have dangling entries pointing to an uninstalled property.
-                _state._orig_to_decorated[id(orig_func)] = new_property
-                _state._decorated_to_orig[id(new_property)] = orig_func
-                _state._decorated_func_mapper[new_property] = orig_func
-                _state._decorated_func_mapper[orig_func] = new_property
+                cast(dict[int, Any], _state._orig_to_decorated)[id(orig_func)] = new_property
+                cast(dict[int, Any], _state._decorated_to_orig)[id(new_property)] = orig_func
+                cast(dict[Any, Any], _state._decorated_func_mapper)[new_property] = orig_func
+                cast(dict[Any, Any], _state._decorated_func_mapper)[orig_func] = new_property
             except (AttributeError, TypeError):
                 pass
 
@@ -750,15 +752,16 @@ def decorate_all_once():
         import torch.jit._builtins as _jit_builtins
 
         for orig_id, decorated_func in _state._orig_to_decorated.items():
-            builtin_name = _jit_builtins._builtin_table.get(orig_id)
+            builtin_table = cast(Any, _jit_builtins._builtin_table)
+            builtin_name = builtin_table.get(orig_id)
             if builtin_name is not None:
-                _jit_builtins._builtin_table[id(decorated_func)] = builtin_name
+                builtin_table[id(decorated_func)] = builtin_name
                 # For properties, also register getter/setter/deleter individually
                 # since JIT may call them directly.
                 if isinstance(decorated_func, property):
                     for accessor in (decorated_func.fget, decorated_func.fset, decorated_func.fdel):
                         if accessor is not None:
-                            _jit_builtins._builtin_table[id(accessor)] = builtin_name
+                            builtin_table[id(accessor)] = builtin_name
     except (ImportError, AttributeError):
         pass  # JIT internals may change across PyTorch versions
 
@@ -790,7 +793,7 @@ def decorate_all_once():
     _fix_tensor_sequence_slot()
 
 
-def _replace_detached_references(mapping: Dict[int, Callable]) -> None:
+def _replace_detached_references(mapping: dict[int, Any]) -> None:
     """Crawl ``sys.modules`` and replace callable references using ``mapping``.
 
     ``mapping`` may be either original->decorated or decorated->original. This
@@ -935,7 +938,7 @@ def wrap_torch() -> None:
 
 
 @contextmanager
-def wrapped():
+def wrapped() -> Iterator[None]:
     """Context manager: wrap torch on entry, unwrap on exit.
 
     Usage::
@@ -961,7 +964,7 @@ redecorate_all_globally = wrap_torch
 # ---------------------------------------------------------------------------
 
 
-def patch_detached_references():
+def patch_detached_references() -> None:
     """Crawl ``sys.modules`` and replace stale references to original torch
     functions with their decorated counterparts.
 
@@ -1068,7 +1071,7 @@ def clear_patch_detached_references_cache() -> None:
     _state._dir_cache.clear()
 
 
-def _patch_function_defaults(func, mapping) -> None:
+def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:
     """Patch ``__defaults__`` and ``__kwdefaults__`` of a function if they contain
     original torch function references.
 
@@ -1108,7 +1111,7 @@ def _patch_function_defaults(func, mapping) -> None:
                     pass
 
 
-def patch_model_instance(model):
+def patch_model_instance(model: Any) -> None:
     """Level 4 crawl: patch detached torch function references on a model instance.
 
     Scans ``vars(model)`` and all submodules for instance attributes that are

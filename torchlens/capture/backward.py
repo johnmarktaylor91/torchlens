@@ -460,7 +460,7 @@ def log_backward(
 
     def run() -> Any:
         """Run the user's requested backward call."""
-        return loss.backward(**backward_kwargs)
+        return loss.backward(**backward_kwargs)  # type: ignore[no-untyped-call]
 
     _run_backward_with_capture(self, loss, run)
     _finalize_gradient_streaming(self)
@@ -499,17 +499,17 @@ class RecordingBackward:
 
             def run() -> Any:
                 """Run the original Tensor.backward implementation."""
-                return original_backward(tensor_self, *args, **kwargs)
+                return original_backward(tensor_self, *args, **kwargs)  # type: ignore[no-untyped-call]
 
             return _run_backward_with_capture(model_log, tensor_self, run)
 
-        torch.Tensor.backward = wrapped_backward  # type: ignore[assignment]
+        torch.Tensor.backward = wrapped_backward  # type: ignore[assignment, method-assign]
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         """Restore ``torch.Tensor.backward``."""
         if self._original_backward is not None:
-            torch.Tensor.backward = self._original_backward  # type: ignore[assignment]
+            torch.Tensor.backward = self._original_backward  # type: ignore[method-assign]
         if exc_type is None:
             _finalize_gradient_streaming(self.model_log)
 

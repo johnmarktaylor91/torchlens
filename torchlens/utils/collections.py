@@ -6,7 +6,7 @@ iterable forms that the logging pipeline can iterate over.
 """
 
 import dataclasses
-from typing import Any, List
+from typing import Any
 
 
 def is_iterable(obj: Any) -> bool:
@@ -46,7 +46,7 @@ def ensure_iterable(obj: Any) -> Any:
         return [obj]
 
 
-def index_nested(x: Any, indices: List[int]) -> Any:
+def index_nested(x: Any, indices: list[int]) -> Any:
     """Index into a nested list/tuple by applying each index in sequence.
 
     ``index_nested(x, [0, 2, 1])`` is equivalent to ``x[0][2][1]``.
@@ -64,7 +64,7 @@ def index_nested(x: Any, indices: List[int]) -> Any:
     return x
 
 
-def remove_entry_from_list(list_: List, entry: Any):
+def remove_entry_from_list(list_: list[Any], entry: Any) -> None:
     """Remove *all* occurrences of ``entry`` from ``list_`` in-place.
 
     Args:

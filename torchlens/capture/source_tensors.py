@@ -23,7 +23,7 @@ recognized as the same layer).
 
 from collections import defaultdict
 import time
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -46,7 +46,9 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 
-def log_source_tensor(self, t: torch.Tensor, source: str, extra_address: Optional[str] = None):
+def log_source_tensor(
+    self: "ModelLog", t: torch.Tensor, source: str, extra_address: str | None = None
+) -> None:
     """Dispatch source tensor logging to exhaustive or fast mode.
 
     Called explicitly for model inputs (from ``run_and_log_inputs_through_model``)
@@ -67,10 +69,10 @@ def log_source_tensor(self, t: torch.Tensor, source: str, extra_address: Optiona
 
 
 def log_source_tensor_predicate(
-    self,
+    self: "ModelLog",
     t: torch.Tensor,
     source: str,
-    extra_addr: Optional[str] = None,
+    extra_addr: str | None = None,
 ) -> None:
     """Predicate-mode source tensor logging for inputs and buffers."""
 
@@ -154,8 +156,8 @@ def log_source_tensor_predicate(
 
 
 def log_source_tensor_exhaustive(
-    self, t: torch.Tensor, source: str, extra_addr: Optional[str] = None
-):
+    self: "ModelLog", t: torch.Tensor, source: str, extra_addr: str | None = None
+) -> None:
     """Takes in an input or buffer tensor, marks it in-place with relevant information, and
     adds it to the log.
 
@@ -216,7 +218,7 @@ def log_source_tensor_exhaustive(
 
     tensor_memory = get_tensor_memory_amount(t)
 
-    fields_dict = {
+    fields_dict: dict[str, Any] = {
         # General info:
         "tensor_label_raw": tensor_label,
         "layer_label_raw": tensor_label,
@@ -405,7 +407,7 @@ def log_source_tensor_exhaustive(
         _add_backward_hook(self, t, t.tl_tensor_label_raw)  # type: ignore[attr-defined]
 
 
-def log_source_tensor_fast(self, t: torch.Tensor, source: str):
+def log_source_tensor_fast(self: "ModelLog", t: torch.Tensor, source: str) -> None:
     """Fast-path source tensor logging: save new activation into existing entry.
 
     Mirrors the exhaustive pass's counter increments for alignment, then
@@ -436,9 +438,8 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
         return
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
     previous_shape = orig_layer_entry.tensor_shape
-    if (self._layer_nums_to_save == "all") or (
-        orig_layer_entry.creation_order in self._layer_nums_to_save
-    ):
+    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
+    if (layer_nums_to_save == "all") or (orig_layer_entry.creation_order in layer_nums_to_save):
         self.layers_with_saved_activations.append(orig_layer_entry.layer_label)
         orig_layer_entry.save_tensor_data(
             t, [], {}, self.save_function_args, self.activation_postfunc
@@ -460,7 +461,7 @@ def log_source_tensor_fast(self, t: torch.Tensor, source: str):
     orig_layer_entry.tensor_memory = memory
 
 
-def _get_input_module_info(self, arg_tensors: List[torch.Tensor]) -> List[str]:
+def _get_input_module_info(self: "ModelLog", arg_tensors: list[torch.Tensor]) -> list[str]:
     """Determine the module nesting context for a new tensor from its parents.
 
     Finds the most deeply nested parent tensor and returns its current

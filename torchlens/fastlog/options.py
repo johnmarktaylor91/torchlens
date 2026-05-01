@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Final, Literal, Mapping, cast
+from typing import Any, Callable, Final, Literal, Mapping
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ..options import StreamingOptions
@@ -164,7 +164,7 @@ class RecordingOptions:
         for field_name in _RECORDING_FIELDS:
             object.__setattr__(instance, field_name, values[field_name])
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("RecordingOptions", instance)
+        return instance
 
 
 def _validate_recording_values(values: Mapping[str, Any]) -> None:

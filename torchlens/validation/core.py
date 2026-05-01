@@ -22,7 +22,7 @@ import torch
 from ..data_classes.layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
-    pass
+    from ..data_classes.model_log import ModelLog
 
 from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.collections import assign_to_sequence_or_dict
@@ -157,7 +157,7 @@ def _ground_truth_output_matches_saved(
 
 
 def validate_saved_activations(
-    self,
+    self: "ModelLog",
     ground_truth_output_tensors: List[torch.Tensor],
     verbose: bool = False,
     validate_metadata: bool = True,
@@ -241,7 +241,7 @@ def validate_saved_activations(
 
 
 def validate_parents_of_saved_layer(
-    self,
+    self: "ModelLog",
     layer_to_validate_parents_for_label: str,
     validated_layers: Set[str],
     validated_child_edges_for_each_layer: Dict[str, Set[str]],
@@ -333,7 +333,7 @@ def validate_parents_of_saved_layer(
     return True
 
 
-def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bool:
+def _check_layer_arguments_logged_correctly(self: "ModelLog", target_layer_label: str) -> bool:
     """Check whether the activations of the parent layers match the saved arguments of
     the target layer, and that the argument locations have been logged correctly.
 
@@ -373,7 +373,14 @@ def _check_layer_arguments_logged_correctly(self, target_layer_label: str) -> bo
     return True
 
 
-def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key, val) -> bool:
+def _validate_layer_against_arg(
+    self: "ModelLog",
+    target_layer: LayerPassLog,
+    parent_layer: LayerPassLog,
+    arg_type: str,
+    key: Any,
+    val: Any,
+) -> bool:
     """Validate whether a parent layer is correctly logged for a specific argument of a target layer.
 
     Handles nested argument structures (lists, tuples, dicts) by recursing into them
@@ -441,11 +448,11 @@ def _parent_logged_for_any_arg(target_layer: LayerPassLog, parent_layer_label: s
 
 
 def _check_arglocs_correct_for_arg(
-    self,
+    self: "ModelLog",
     target_layer: LayerPassLog,
     parent_layer: LayerPassLog,
     arg_type: str,
-    argloc_key: Union[str, tuple],
+    argloc_key: str | tuple[Any, ...],
     saved_arg_val: Any,
 ) -> bool:
     """Check bidirectional consistency between a parent's tensor and a child's arg slot.
@@ -543,7 +550,7 @@ def _check_arglocs_correct_for_arg(
 
 
 def _check_perturbation_exemptions(
-    self,
+    self: "ModelLog",
     layer: LayerPassLog,
     layers_to_perturb: List[str],
 ) -> bool:
@@ -584,7 +591,7 @@ def _check_perturbation_exemptions(
 
 def _execute_func_with_restored_state(
     layer: LayerPassLog,
-    input_args: Dict,
+    input_args: dict[str, Any],
     layers_to_perturb: List[str],
     layer_label: str,
     verbose: bool,
@@ -717,7 +724,7 @@ def _deep_numeric_replay_matches_saved(
 
 
 def _check_whether_func_on_saved_parents_yields_saved_tensor(
-    self,
+    self: "ModelLog",
     layer_to_validate_parents_for_label: str,
     perturb: bool = False,
     layers_to_perturb: Optional[List[str]] = None,
@@ -806,10 +813,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
 
 def _prepare_input_args_for_validating_layer(
-    self,
+    self: "ModelLog",
     layer_to_validate_parents_for: LayerPassLog,
     layers_to_perturb: List[str],
-) -> Dict:
+) -> dict[str, Any] | None:
     """Build the input argument dict for replaying a layer's function.
 
     Starts from the layer's saved ``captured_args`` / ``captured_kwargs``,
@@ -830,7 +837,7 @@ def _prepare_input_args_for_validating_layer(
         was not saved (can't validate without them).
     """
     if layer_to_validate_parents_for.captured_args is None:
-        return None  # type: ignore[return-value]  # Can't validate without saved args (#131)
+        return None  # Can't validate without saved args (#131)
     input_args = {
         "args": list(layer_to_validate_parents_for.captured_args[:]),
         "kwargs": layer_to_validate_parents_for.captured_kwargs.copy(),
@@ -892,7 +899,7 @@ def _deep_clone_tensors(val: Any) -> Any:
     return val
 
 
-def _copy_validation_args(input_args: Dict) -> Dict:
+def _copy_validation_args(input_args: dict[str, Any]) -> dict[str, Any]:
     """Deep-clone all tensors in the input argument dict to avoid in-place mutation during validation.
 
     Args:

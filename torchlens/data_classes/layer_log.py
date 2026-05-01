@@ -31,8 +31,9 @@ All other 78+ fields use the first pass's values only.
 """
 
 import weakref
+from collections.abc import Iterator
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..utils.display import human_readable_size
@@ -142,7 +143,7 @@ class LayerLog:
         "pass_labels": FieldPolicy.KEEP,
     }
 
-    def __init__(self, first_pass: "LayerPassLog"):
+    def __init__(self, first_pass: "LayerPassLog") -> None:
         """Initialize from the first pass of this layer.
 
         Args:
@@ -157,7 +158,7 @@ class LayerLog:
         self.num_passes = first_pass.num_passes
         # Store as weakref to break circular reference (ModelLog -> layer_logs -> LayerLog -> ModelLog).
         _sml = first_pass.source_model_log
-        self._source_model_log_ref: Optional[weakref.ref] = (
+        self._source_model_log_ref: weakref.ReferenceType["ModelLog"] | None = (
             weakref.ref(_sml) if _sml is not None else None
         )
 
@@ -312,10 +313,24 @@ class LayerLog:
 
     @property
     def tensor_memory_str(self) -> str:
+        """Return the activation tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable tensor memory amount.
+        """
         return human_readable_size(self.tensor_memory)
 
     @property
     def params_memory_str(self) -> str:
+        """Return the parameter tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable parameter memory amount.
+        """
         return human_readable_size(self.params_memory)
 
     @property
@@ -327,10 +342,17 @@ class LayerLog:
         obj = ref()
         if obj is None:
             raise RuntimeError("ModelLog has been garbage-collected.")
-        return obj
+        return cast("ModelLog", obj)
 
     @source_model_log.setter
-    def source_model_log(self, value):
+    def source_model_log(self, value: "ModelLog | None") -> None:
+        """Set the owning ModelLog back-reference.
+
+        Parameters
+        ----------
+        value:
+            Owning model log, or ``None`` to clear the reference.
+        """
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
     def __getstate__(self) -> Dict[str, Any]:
@@ -369,7 +391,7 @@ class LayerLog:
     # on the LayerLog itself.  For multi-pass layers, attempting to access
     # these fields raises ValueError directing the user to a specific pass.
 
-    def _single_pass_or_error(self, field_name):
+    def _single_pass_or_error(self, field_name: str) -> Any:
         """Access a per-pass field, requiring exactly one pass.
 
         Raises ValueError (not AttributeError) for multi-pass layers.
@@ -386,7 +408,14 @@ class LayerLog:
         return getattr(self.passes[1], field_name)
 
     @property
-    def activation(self):
+    def activation(self) -> Any:
+        """Return the saved activation for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            Saved activation from the only pass.
+        """
         return self._single_pass_or_error("activation")
 
     @property
@@ -402,19 +431,47 @@ class LayerLog:
         return self._single_pass_or_error("transformed_activation")
 
     @property
-    def has_saved_activations(self):
-        return self._single_pass_or_error("has_saved_activations")
+    def has_saved_activations(self) -> bool:
+        """Return whether the single pass has a saved activation.
+
+        Returns
+        -------
+        bool
+            ``True`` when an activation was saved for the only pass.
+        """
+        return cast(bool, self._single_pass_or_error("has_saved_activations"))
 
     @property
-    def captured_args(self):
+    def captured_args(self) -> Any:
+        """Return captured positional arguments for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            Captured positional arguments from the only pass.
+        """
         return self._single_pass_or_error("captured_args")
 
     @property
-    def captured_kwargs(self):
+    def captured_kwargs(self) -> Any:
+        """Return captured keyword arguments for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            Captured keyword arguments from the only pass.
+        """
         return self._single_pass_or_error("captured_kwargs")
 
     @property
-    def gradient(self):
+    def gradient(self) -> Any:
+        """Return the saved gradient for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            Saved gradient from the only pass.
+        """
         return self._single_pass_or_error("gradient")
 
     @property
@@ -424,36 +481,92 @@ class LayerLog:
         return self._single_pass_or_error("transformed_gradient")
 
     @property
-    def has_gradient(self):
-        return self._single_pass_or_error("has_gradient")
+    def has_gradient(self) -> bool:
+        """Return whether the single pass has a saved gradient.
+
+        Returns
+        -------
+        bool
+            ``True`` when a gradient was saved for the only pass.
+        """
+        return cast(bool, self._single_pass_or_error("has_gradient"))
 
     @property
-    def func_call_stack(self):
+    def func_call_stack(self) -> Any:
+        """Return the captured call stack for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            Function call stack from the only pass.
+        """
         return self._single_pass_or_error("func_call_stack")
 
     @property
-    def func_time(self):
+    def func_time(self) -> Any:
+        """Return function execution time for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            Function timing value from the only pass.
+        """
         return self._single_pass_or_error("func_time")
 
     @property
-    def func_rng_states(self):
+    def func_rng_states(self) -> Any:
+        """Return RNG states captured for a single-pass layer.
+
+        Returns
+        -------
+        Any
+            RNG state snapshot from the only pass.
+        """
         return self._single_pass_or_error("func_rng_states")
 
     @property
-    def operation_num(self):
-        return self._single_pass_or_error("operation_num")
+    def operation_num(self) -> int:
+        """Return the operation number for a single-pass layer.
+
+        Returns
+        -------
+        int
+            Operation number from the only pass.
+        """
+        return cast(int, self._single_pass_or_error("operation_num"))
 
     @property
-    def pass_num(self):
-        return self._single_pass_or_error("pass_num")
+    def pass_num(self) -> int:
+        """Return the pass number for a single-pass layer.
+
+        Returns
+        -------
+        int
+            Pass number from the only pass.
+        """
+        return cast(int, self._single_pass_or_error("pass_num"))
 
     @property
-    def creation_order(self):
-        return self._single_pass_or_error("creation_order")
+    def creation_order(self) -> int:
+        """Return the creation-order index for a single-pass layer.
+
+        Returns
+        -------
+        int
+            Creation-order value from the only pass.
+        """
+        return cast(int, self._single_pass_or_error("creation_order"))
 
     @property
-    def lookup_keys(self):
-        return self._single_pass_or_error("lookup_keys")
+    def lookup_keys(self) -> list[str]:
+        """Return lookup keys for a single-pass layer.
+
+        Returns
+        -------
+        list[str]
+            Lookup keys from the only pass.
+        """
+        return cast(list[str], self._single_pass_or_error("lookup_keys"))
 
     # ********************************************
     # ***** Aggregate graph properties ***********
@@ -464,7 +577,7 @@ class LayerLog:
     # iterations.  Order is preserved (first-seen insertion order).
 
     @property
-    def child_layers(self):
+    def child_layers(self) -> list[str]:
         """Union of child layers (no-pass labels) across all passes."""
         result = []
         seen = set()
@@ -477,7 +590,7 @@ class LayerLog:
         return result
 
     @property
-    def parent_layers(self):
+    def parent_layers(self) -> list[str]:
         """Union of parent layers (no-pass labels) across all passes."""
         result = []
         seen = set()
@@ -490,15 +603,29 @@ class LayerLog:
         return result
 
     @property
-    def has_children(self):
+    def has_children(self) -> bool:
+        """Return whether any pass has child layers.
+
+        Returns
+        -------
+        bool
+            ``True`` when at least one pass has graph children.
+        """
         return any(p.has_children for p in self.passes.values())
 
     @property
-    def has_parents(self):
+    def has_parents(self) -> bool:
+        """Return whether any pass has parent layers.
+
+        Returns
+        -------
+        bool
+            ``True`` when at least one pass has graph parents.
+        """
         return any(p.has_parents for p in self.passes.values())
 
     @property
-    def sibling_layers(self):
+    def sibling_layers(self) -> list[str]:
         """Union of sibling layers (no-pass labels) across all passes."""
         result = []
         seen = set()
@@ -511,11 +638,18 @@ class LayerLog:
         return result
 
     @property
-    def has_siblings(self):
+    def has_siblings(self) -> bool:
+        """Return whether any pass has sibling layers.
+
+        Returns
+        -------
+        bool
+            ``True`` when at least one pass has graph siblings.
+        """
         return any(p.has_siblings for p in self.passes.values())
 
     @property
-    def co_parent_layers(self):
+    def co_parent_layers(self) -> list[str]:
         """Union of spouse layers (no-pass labels) across all passes."""
         result = []
         seen = set()
@@ -528,11 +662,18 @@ class LayerLog:
         return result
 
     @property
-    def has_co_parents(self):
+    def has_co_parents(self) -> bool:
+        """Return whether any pass has co-parent layers.
+
+        Returns
+        -------
+        bool
+            ``True`` when at least one pass has graph co-parents.
+        """
         return any(p.has_co_parents for p in self.passes.values())
 
     @property
-    def _pass_finished(self):
+    def _pass_finished(self) -> bool:
         sml = self.source_model_log
         if sml is None:
             return True
@@ -543,27 +684,27 @@ class LayerLog:
     # ********************************************
 
     @property
-    def layer_label_no_pass(self):
+    def layer_label_no_pass(self) -> str:
         """Alias so code expecting layer_label_no_pass works on LayerLog."""
-        return self.layer_label
+        return cast(str, self.layer_label)
 
     @property
-    def layer_label_no_pass_short(self):
+    def layer_label_no_pass_short(self) -> str:
         """Alias so code expecting layer_label_no_pass_short works on LayerLog."""
-        return self.layer_label_short
+        return cast(str, self.layer_label_short)
 
     @property
-    def layer_label_w_pass(self):
+    def layer_label_w_pass(self) -> str:
         """For single-pass layers, return the pass-qualified label."""
-        return self._single_pass_or_error("layer_label_w_pass")
+        return cast(str, self._single_pass_or_error("layer_label_w_pass"))
 
     @property
-    def layer_label_w_pass_short(self):
+    def layer_label_w_pass_short(self) -> str:
         """For single-pass layers, return the short pass-qualified label."""
-        return self._single_pass_or_error("layer_label_w_pass_short")
+        return cast(str, self._single_pass_or_error("layer_label_w_pass_short"))
 
     @property
-    def params(self):
+    def params(self) -> Any:
         """Access parameter metadata by address, short name, or index."""
         from .param_log import ParamAccessor
 
@@ -578,7 +719,7 @@ class LayerLog:
     # Used by the visualization renderer to draw pass-annotated edges.
 
     @property
-    def child_layers_per_pass(self):
+    def child_layers_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: child layer labels (no-pass) for each pass."""
         result = {}
         for pass_num, pass_log in self.passes.items():
@@ -591,7 +732,7 @@ class LayerLog:
         return result
 
     @property
-    def parent_layers_per_pass(self):
+    def parent_layers_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: parent layer labels (no-pass) for each pass."""
         result = {}
         for pass_num, pass_log in self.passes.items():
@@ -604,11 +745,11 @@ class LayerLog:
         return result
 
     @property
-    def child_passes_per_layer(self):
+    def child_passes_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each child layer, which passes connect to it."""
         from collections import defaultdict
 
-        result = defaultdict(list)
+        result: defaultdict[str, list[int]] = defaultdict(list)
         for pass_num, pass_log in self.passes.items():
             for label in pass_log.child_layers:
                 no_pass = self.source_model_log[label].layer_label_no_pass
@@ -617,11 +758,11 @@ class LayerLog:
         return dict(result)
 
     @property
-    def parent_passes_per_layer(self):
+    def parent_passes_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each parent layer, which passes connect from it."""
         from collections import defaultdict
 
-        result = defaultdict(list)
+        result: defaultdict[str, list[int]] = defaultdict(list)
         for pass_num, pass_log in self.passes.items():
             for label in pass_log.parent_layers:
                 no_pass = self.source_model_log[label].layer_label_no_pass
@@ -630,7 +771,7 @@ class LayerLog:
         return dict(result)
 
     @property
-    def edges_vary_across_passes(self):
+    def edges_vary_across_passes(self) -> bool:
         """Whether graph edges differ across passes."""
         if self.num_passes <= 1:
             return False
@@ -640,7 +781,7 @@ class LayerLog:
         return any(len(passes) < self.num_passes for passes in all_pass_lists)
 
     @property
-    def leaf_module_passes(self):
+    def leaf_module_passes(self) -> set[Any]:
         """Set of module passes exited across all passes."""
         result = set()
         for pass_log in self.passes.values():
@@ -649,17 +790,17 @@ class LayerLog:
         return result
 
     @property
-    def parent_layer_arg_locs(self):
+    def parent_layer_arg_locs(self) -> dict[str, dict[Any, str]]:
         """Merged parent_layer_arg_locs across passes (set-union).
 
         For single-pass layers, delegates to passes[1].
         For multi-pass, merges arg locs using set-union of no-pass labels.
         """
         if self.num_passes == 1:
-            return self.passes[1].parent_layer_arg_locs
+            return cast(dict[str, dict[Any, str]], self.passes[1].parent_layer_arg_locs)
         from collections import defaultdict
 
-        result = {"args": {}, "kwargs": {}}
+        result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
         for pass_log in self.passes.values():
             for arg_type in ["args", "kwargs"]:
                 for arg_key, layer_label in pass_log.parent_layer_arg_locs[arg_type].items():
@@ -672,7 +813,7 @@ class LayerLog:
     # ******* Fallback __getattr__ ***************
     # ********************************************
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         """Fallback attribute lookup: delegates to passes[1] for single-pass layers.
 
         Only called when normal attribute lookup has already failed (Python's
@@ -698,10 +839,24 @@ class LayerLog:
     # ************ User-facing methods ***********
     # ********************************************
 
-    def get_child_layers(self):
+    def get_child_layers(self) -> list["LayerLog"]:
+        """Return child LayerLog objects for this layer.
+
+        Returns
+        -------
+        list[LayerLog]
+            Child layers resolved through the owning model log.
+        """
         return [self.source_model_log[child_label] for child_label in self.child_layers]
 
-    def get_parent_layers(self):
+    def get_parent_layers(self) -> list["LayerLog"]:
+        """Return parent LayerLog objects for this layer.
+
+        Returns
+        -------
+        list[LayerLog]
+            Parent layers resolved through the owning model log.
+        """
         return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
 
     def show(
@@ -733,7 +888,7 @@ class LayerLog:
     # ************* Built-in Methods *************
     # ********************************************
 
-    def __str__(self):
+    def __str__(self) -> str:
         if not self._pass_finished:
             return f"LayerLog({self.layer_label}) (pass not finished)"
         s = f"Layer {self.layer_label}:"
@@ -763,11 +918,11 @@ class LayerLog:
             s += f"\n\tPasses: {', '.join(self.pass_labels)}"
         return s
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
-    def __len__(self):
-        return self.num_passes
+    def __len__(self) -> int:
+        return cast(int, self.num_passes)
 
 
 class LayerAccessor:
@@ -792,7 +947,7 @@ class LayerAccessor:
         self,
         layer_logs: Dict[str, "LayerLog"],
         source_model_log: Optional["ModelLog"] = None,
-    ):
+    ) -> None:
         self._dict = layer_logs  # no-pass label -> LayerLog
         self._list = list(layer_logs.values())  # execution-order list
         # Store as weakref to avoid preventing ModelLog GC.
@@ -826,7 +981,7 @@ class LayerAccessor:
             raise KeyError(f"Layer '{key}' not found. Did you mean {suggestion_str}?")
         raise KeyError(f"Layer '{key}' not found.")
 
-    def __contains__(self, key) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self._dict
 
     def __dir__(self) -> List[str]:
@@ -854,7 +1009,7 @@ class LayerAccessor:
     def __len__(self) -> int:
         return len(self._dict)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["LayerLog"]:
         """Iterate over LayerLog objects in execution order."""
         return iter(self._list)
 

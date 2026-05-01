@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 import torch
 
@@ -315,7 +315,7 @@ class NodeView:
         if statistic == "var":
             return stacked.var(dim=0)
         if statistic == "norm":
-            return torch.linalg.vector_norm(stacked, dim=0)
+            return cast(torch.Tensor, torch.linalg.vector_norm(stacked, dim=0))
         raise ValueError("statistic must be one of 'mean', 'std', 'var', or 'norm'.")
 
     def _tensor_dict(self, field: _TENSOR_FIELD_LITERAL) -> dict[str, torch.Tensor | None]:

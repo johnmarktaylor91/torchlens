@@ -87,7 +87,7 @@ class SubgraphInfo:
     param_nodes: Set[str] = None  # type: ignore[assignment]
     node_set: Set[str] = None  # type: ignore[assignment]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.param_nodes is None:
             self.param_nodes = set()
         if self.node_set is None:
@@ -117,15 +117,15 @@ class IsomorphicExpansionState:
             list of node labels that are isomorphic to each other.
     """
 
-    iso_node_groups: OrderedDict
-    node_to_iso_leader: OrderedDict
+    iso_node_groups: OrderedDict[str, list[str]]
+    node_to_iso_leader: OrderedDict[str, str]
     subgraph_info: Dict[str, SubgraphInfo]
     node_to_subgraph: Dict[str, SubgraphInfo]
-    adjacent_subgraphs: Dict[str, set]
-    node_stack: deque
+    adjacent_subgraphs: Dict[str, set[str]]
+    node_stack: deque[list[str]]
 
 
-def _group_by_shared_params(self) -> None:
+def _group_by_shared_params(self: "ModelLog") -> None:
     """Lightweight same-param grouping without full loop detection.
 
     Groups operations that share identical ``(func_name,
@@ -137,7 +137,7 @@ def _group_by_shared_params(self) -> None:
     Sets ``layer_label_raw``, ``recurrent_group``, ``pass_num``,
     and ``num_passes`` on each LayerPassLog.
     """
-    param_barcode_groups: Dict[tuple, list] = defaultdict(list)
+    param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for label in self._raw_layer_labels_list:
         node = self[label]
         if node.uses_params and node.parent_param_barcodes:
@@ -156,7 +156,7 @@ def _group_by_shared_params(self) -> None:
     _rebuild_pass_assignments(self)
 
 
-def _detect_and_label_loops(self) -> None:
+def _detect_and_label_loops(self: "ModelLog") -> None:
     """Phase 1: Entry point for loop detection.
 
     Iterates nodes in realtime order (earliest first) via a min-heap BFS starting
@@ -227,7 +227,7 @@ def _detect_and_label_loops(self) -> None:
     _rebuild_pass_assignments(self)
 
 
-def _rebuild_pass_assignments(self) -> None:
+def _rebuild_pass_assignments(self: "ModelLog") -> None:
     """Phase 5: Rebuild recurrent_group and pass numbers from layer_label_raw.
 
     WHY NECESSARY: Multiple rounds of ``_expand_isomorphic_subgraphs`` can reassign
@@ -245,7 +245,7 @@ def _rebuild_pass_assignments(self) -> None:
     group by realtime order, and rebuilds ``recurrent_group``, ``pass_num``,
     and ``num_passes`` from scratch. O(n), runs once.
     """
-    groups = defaultdict(list)
+    groups: dict[str, list[str]] = defaultdict(list)
     for entry in self:
         groups[entry.layer_label_raw].append(entry.tensor_label_raw)
 
@@ -258,7 +258,7 @@ def _rebuild_pass_assignments(self) -> None:
             member.num_passes = len(members_sorted)
 
 
-def _expand_isomorphic_subgraphs(self, node: LayerPassLog) -> None:
+def _expand_isomorphic_subgraphs(self: "ModelLog", node: LayerPassLog) -> None:
     """Phase 2: BFS expansion of isomorphic subgraphs from equivalent operations.
 
     Given a node with multiple equivalent operations, creates one subgraph per
@@ -283,7 +283,7 @@ def _expand_isomorphic_subgraphs(self, node: LayerPassLog) -> None:
     equivalent_operation_starting_labels = sorted(list(node.equivalent_operations))
 
     # Create one SubgraphInfo per starting node.
-    sg_info = {}
+    sg_info: dict[str, SubgraphInfo] = {}
     for starting_label in equivalent_operation_starting_labels:
         sg_info[starting_label] = SubgraphInfo(starting_node=starting_label)
         if node.uses_params:
@@ -324,7 +324,7 @@ def _expand_isomorphic_subgraphs(self, node: LayerPassLog) -> None:
 
 
 def _refine_iso_groups(
-    self,
+    self: "ModelLog",
     state: IsomorphicExpansionState,
 ) -> None:
     """Phase 3: Refine iso groups by splitting structurally unrelated members.
@@ -354,10 +354,10 @@ def _refine_iso_groups(
             continue
 
         # For each member, compute its direction-aware neighbor iso signature.
-        member_neighbor_isos = {}
+        member_neighbor_isos: dict[str, set[tuple[str, str]]] = {}
         for member_label in members:
             member_node = self[member_label]
-            neighbor_groups = set()
+            neighbor_groups: set[tuple[str, str]] = set()
             for child in member_node.child_layers:
                 if child in state.node_to_iso_leader:
                     neighbor_groups.add(("child", state.node_to_iso_leader[child]))
@@ -371,20 +371,22 @@ def _refine_iso_groups(
         # refined group. Members with zero overlap are split apart.
         uf_parent = {member: member for member in members}
 
-        def find(x, uf=uf_parent):
+        def find(x: str, uf: dict[str, str] = uf_parent) -> str:
+            """Return the union-find root for a group member."""
             while uf[x] != x:
                 uf[x] = uf[uf[x]]  # path compression
                 x = uf[x]
             return x
 
-        def union(x, y, uf=uf_parent):
+        def union(x: str, y: str, uf: dict[str, str] = uf_parent) -> None:
+            """Merge the union-find sets for two group members."""
             rx, ry = find(x), find(y)
             if rx != ry:
                 uf[rx] = ry
 
         # Reverse-index approach: union members sharing a neighbor key.
         # O(members × avg_neighbors) instead of O(members²).
-        _reverse_index = defaultdict(list)
+        _reverse_index: dict[tuple[str, str], list[str]] = defaultdict(list)
         for member_label in members:
             for neighbor_key in member_neighbor_isos[member_label]:
                 _reverse_index[neighbor_key].append(member_label)
@@ -394,7 +396,7 @@ def _refine_iso_groups(
                 for other in members_with_key[1:]:
                     union(first, other)
 
-        components = defaultdict(list)
+        components: dict[str, list[str]] = defaultdict(list)
         for member in members:
             components[find(member)].append(member)
 
@@ -412,7 +414,7 @@ def _refine_iso_groups(
 
 
 def _advance_bfs_frontier(
-    self,
+    self: "ModelLog",
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
@@ -459,7 +461,7 @@ def _advance_bfs_frontier(
 
 
 def _collect_frontier_and_detect_adjacency(
-    self,
+    self: "ModelLog",
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
@@ -484,13 +486,13 @@ def _collect_frontier_and_detect_adjacency(
     else:
         node_types_to_use = ["children", "parents"]
 
-    frontier_nodes = OrderedDict()
+    frontier_nodes: OrderedDict[str, dict[str, list[str]]] = OrderedDict()
     for node_label in current_iso_nodes:
         node = self[node_label]
         node_subgraph = state.node_to_subgraph[node_label]
         node_subgraph_label = node_subgraph.starting_node
         subgraph_successor_nodes: Dict[str, List[str]] = {"children": [], "parents": []}
-        added_neighbors = set()  # #148: prevent shared neighbor double-add
+        added_neighbors: set[str] = set()  # #148: prevent shared neighbor double-add
         for node_type in node_types_to_use:
             node_type_field = node_type_fields[node_type]
             for neighbor_label in getattr(node, node_type_field):
@@ -584,7 +586,7 @@ def _pop_frontier_node(
 
 
 def _find_isomorphic_matches(
-    self,
+    self: "ModelLog",
     candidate_node_label: str,
     candidate_node_neighbor_type: str,
     candidate_node_subgraph: str,
@@ -636,8 +638,8 @@ def _find_isomorphic_matches(
 
     # Remove collisions: if the same node appears in multiple (node, subgraph) tuples,
     # discard all occurrences to avoid assigning one node to multiple subgraphs.
-    _seen_labels = set()
-    _dupe_labels = set()
+    _seen_labels: set[str] = set()
+    _dupe_labels: set[str] = set()
     for node in new_equivalent_nodes:
         if node[0] in _seen_labels:
             _dupe_labels.add(node[0])
@@ -650,7 +652,7 @@ def _find_isomorphic_matches(
 
 
 def _register_isomorphic_group(
-    self,
+    self: "ModelLog",
     new_isomorphic_nodes: List[Tuple[str, str]],
     state: IsomorphicExpansionState,
 ) -> None:
@@ -683,7 +685,7 @@ def _register_isomorphic_group(
 
 
 def _finalize_layer_assignments(
-    self,
+    self: "ModelLog",
     state: IsomorphicExpansionState,
 ) -> None:
     """Phase 4: Assign same-layer labels based on iso groups, params, and adjacency.
@@ -731,10 +733,10 @@ def _finalize_layer_assignments(
 
 
 def _merge_iso_groups_to_layers(
-    self,
+    self: "ModelLog",
     iso_node_groups: Dict[str, List[str]],
     node_to_subgraph: Dict[str, SubgraphInfo],
-    adjacent_subgraphs: Dict[str, set],
+    adjacent_subgraphs: Dict[str, set[str]],
 ) -> Dict[str, Set[str]]:
     """Merge iso groups into same-layer groups using union-find with path compression.
 
@@ -786,12 +788,12 @@ def _merge_iso_groups_to_layers(
             uf_parent[ry] = rx
 
     # Collect all iso-group node labels
-    all_iso_nodes = set()
+    all_iso_nodes: set[str] = set()
     for iso_nodes_orig in iso_node_groups.values():
         all_iso_nodes.update(iso_nodes_orig)
 
     # Pre-compute param types per subgraph for O(1) lookup in the pair loop (O10).
-    _sg_param_types: Dict[str, frozenset] = {}
+    _sg_param_types: dict[str, frozenset[str]] = {}
     for iso_nodes_orig in iso_node_groups.values():
         for node_label in iso_nodes_orig:
             sg = node_to_subgraph[node_label]
@@ -820,7 +822,7 @@ def _merge_iso_groups_to_layers(
     # PASS 2: Cross iso-groups — unconditionally merge by (func, params) identity.
     # This is the FUNDAMENTAL INVARIANT: same function + same params = same layer,
     # regardless of structural position or iso-group membership.
-    param_barcode_groups: Dict[tuple, list] = defaultdict(list)
+    param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for node_label in all_iso_nodes:
         node = self[node_label]
         if node.uses_params and node.parent_param_barcodes:

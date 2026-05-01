@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 
-def _map_raw_labels_to_final_labels(self) -> None:
+def _map_raw_labels_to_final_labels(self: "ModelLog") -> None:
     """Step 9: Build the raw-to-final label mapping for all tensors.
 
     Iterates through all tensors in order and assigns each a human-readable label.
@@ -111,7 +111,7 @@ def _map_raw_labels_to_final_labels(self) -> None:
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
 
-def _log_final_info_for_all_layers(self) -> None:
+def _log_final_info_for_all_layers(self: "ModelLog") -> None:
     """Step 10: Log final metadata for all layers and build module hierarchy.
 
     Iterates through all layers (before unsaved ones are discarded in Step 12)
@@ -135,7 +135,7 @@ def _log_final_info_for_all_layers(self) -> None:
     # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
     # Lists are kept as primary storage (insertion order matters for downstream consumers),
     # but linear `in` checks on lists are expensive for large models.
-    _shadow_sets: dict = {
+    _shadow_sets: dict[str, Any] = {
         "module_layers": defaultdict(set),
         "module_pass_layers": defaultdict(set),
         "top_level_module_passes": set(),
@@ -191,13 +191,13 @@ def _log_final_info_for_all_layers(self) -> None:
     _build_module_hierarchy_dicts(self)
 
 
-def _finalize_output_operation_nums(self) -> None:
+def _finalize_output_operation_nums(self: "ModelLog") -> None:
     """Assign operation_num to output layers (deferred until total is known)."""
     for layer in self.output_layers:
         self[layer].operation_num = self.num_operations
 
 
-def _build_module_hierarchy_dicts(self) -> None:
+def _build_module_hierarchy_dicts(self: "ModelLog") -> None:
     """Derive top_level_modules and module_children from their pass-level counterparts."""
     mbd = self._module_build_data
     for module in mbd["top_level_module_passes"]:
@@ -272,7 +272,7 @@ def _rename_children_by_cond(
     }
 
 
-def _replace_layer_names_for_layer_entry(self, layer_entry: LayerPassLog) -> None:
+def _replace_layer_names_for_layer_entry(self: "ModelLog", layer_entry: LayerPassLog) -> None:
     """Replace all raw labels in a LayerPassLog's fields with final labels.
 
     Handles three categories of fields:
@@ -410,7 +410,7 @@ def _rename_label_dataclass(value: Any, mapping: Dict[str, str]) -> Any:
 
 
 def _log_module_hierarchy_info_for_layer(
-    self, layer_entry: LayerPassLog, _shadow_sets: dict
+    self: "ModelLog", layer_entry: LayerPassLog, _shadow_sets: dict[str, Any]
 ) -> None:
     """Populate module hierarchy data for a single layer in _module_build_data.
 
@@ -475,7 +475,7 @@ def _log_module_hierarchy_info_for_layer(
             mbd["module_passes"].append(module_pass_nice_label)
 
 
-def _remove_unwanted_entries_and_log_remaining(self) -> None:
+def _remove_unwanted_entries_and_log_remaining(self: "ModelLog") -> None:
     """Step 12: Remove unsaved layers, build lookup keys, finalize layer lists.
 
     Unless ``keep_unsaved_layers=True``, removes LayerPassLog entries that don't
@@ -555,7 +555,7 @@ def _remove_unwanted_entries_and_log_remaining(self) -> None:
         self._all_layers_saved = False
 
 
-def _labels_in_replay_ready_call_groups_to_retain(self) -> set[str]:
+def _labels_in_replay_ready_call_groups_to_retain(self: "ModelLog") -> set[str]:
     """Return labels in same-call groups that must remain replay-addressable.
 
     Args:
@@ -656,7 +656,7 @@ def _collect_parent_refs(value: Any) -> list[ParentRef]:
 
 
 def _add_lookup_keys_for_layer_entry(
-    self, layer_entry: LayerPassLog, tensor_index: int, num_tensors_to_keep: int
+    self: "ModelLog", layer_entry: LayerPassLog, tensor_index: int, num_tensors_to_keep: int
 ) -> None:
     """Build user-facing lookup keys for a LayerPassLog and register them.
 
@@ -758,7 +758,7 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
     layer_entry.__dict__ = new_dir_dict
 
 
-def _rename_model_history_layer_names(self) -> None:
+def _rename_model_history_layer_names(self: "ModelLog") -> None:
     """Step 11: Rename raw labels to final labels in all ModelLog-level fields.
 
     Updates list fields (input_layers, output_layers, etc.), dict fields
@@ -794,10 +794,10 @@ def _rename_model_history_layer_names(self) -> None:
         ]
     self.layers_with_params = new_param_tensors
 
-    new_equiv_operations_tensors = {}
-    for key, values in self.equivalent_operations.items():
+    new_equiv_operations_tensors: dict[Any, set[str]] = {}
+    for key, equiv_values in self.equivalent_operations.items():
         new_equiv_operations_tensors[key] = set(
-            [self._raw_to_final_layer_labels[tensor_label] for tensor_label in values]
+            [self._raw_to_final_layer_labels[tensor_label] for tensor_label in equiv_values]
         )
     self.equivalent_operations = new_equiv_operations_tensors
 
@@ -852,7 +852,7 @@ def _rename_model_history_layer_names(self) -> None:
         mla[module_pass] = new_arglist
 
 
-def _trim_and_reorder_model_history_fields(self) -> None:
+def _trim_and_reorder_model_history_fields(self: "ModelLog") -> None:
     """Reorder ModelLog fields into canonical display order.
 
     Like ``_trim_and_reorder_layer_entry_fields``, this PRESERVES all fields.

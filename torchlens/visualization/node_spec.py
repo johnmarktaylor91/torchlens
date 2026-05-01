@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace as dataclass_replace
 from html import escape
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..data_classes.layer_log import LayerLog
@@ -82,7 +82,7 @@ class NodeSpec:
             A copied ``NodeSpec`` with the requested field changes.
         """
 
-        return cast("NodeSpec", dataclass_replace(self, **kwargs))
+        return dataclass_replace(self, **kwargs)
 
 
 NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]

@@ -14,7 +14,6 @@ a single entry ``"add"``, since they all share the same arg-position layout.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import torch
 
@@ -26,7 +25,7 @@ def _normalize_func_name(func_name: str) -> str:
     return func_name.lower().replace("_", "")
 
 
-def _get_tensor_kwarg(kwargs: dict, name: str) -> object:
+def _get_tensor_kwarg(kwargs: dict[str, object], name: str) -> object:
     """Return a tensor-bearing kwarg by exact or normalized name.
 
     Parameters
@@ -62,23 +61,23 @@ class ArgSpec:
         tensor_kwargs: Keyword argument names that can hold tensors/parameters.
     """
 
-    positions: Tuple[int, ...] = ()
-    sequence_positions: Tuple[int, ...] = ()
-    tensor_kwargs: Tuple[str, ...] = ()
+    positions: tuple[int, ...] = ()
+    sequence_positions: tuple[int, ...] = ()
+    tensor_kwargs: tuple[str, ...] = ()
 
 
 def extract_tensors_and_params(
     spec: ArgSpec,
-    args: tuple,
-    kwargs: dict,
-) -> Tuple[List[torch.Tensor], List[torch.nn.Parameter]]:
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> tuple[list[torch.Tensor], list[torch.nn.Parameter]]:
     """Extract tensors (excluding Parameters) and Parameters from known arg positions.
 
     Returns:
         (arg_tensors, arg_parameters) — matches get_vars_of_type_from_obj output.
     """
-    tensors: List[torch.Tensor] = []
-    params: List[torch.nn.Parameter] = []
+    tensors: list[torch.Tensor] = []
+    params: list[torch.nn.Parameter] = []
 
     def _append_tensor_or_param(value: object) -> None:
         """Append tensor-like values from a known argument slot.
@@ -124,10 +123,10 @@ def extract_tensors_and_params(
 
 def _cache_dynamic_spec(
     normalized_name: str,
-    args: tuple,
-    kwargs: dict,
-    found_tensors: list,
-    found_params: list,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    found_tensors: list[torch.Tensor],
+    found_params: list[torch.nn.Parameter],
 ) -> None:
     """Construct and cache an ArgSpec from BFS crawl results (Tier 3)."""
     all_found_ids = {id(t) for t in found_tensors} | {id(p) for p in found_params}
@@ -172,7 +171,7 @@ _NONE = ArgSpec()
 # FUNC_ARG_SPECS — keyed by normalized func_name
 # ============================================================================
 
-FUNC_ARG_SPECS: Dict[str, ArgSpec] = {}
+FUNC_ARG_SPECS: dict[str, ArgSpec] = {}
 
 # ---------------------------------------------------------------------------
 # Unary: only position 0 is a tensor (self/input)

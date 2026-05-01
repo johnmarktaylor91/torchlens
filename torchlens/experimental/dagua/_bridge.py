@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Iterable
 
 import torch
 
@@ -21,7 +21,7 @@ from ...visualization.node_spec import (
 
 COMMUTATIVE_FUNCS = {"add", "mul", "cat", "eq", "ne"}
 
-MODELLOG_FIELD_USAGE: Dict[str, str] = {
+MODELLOG_FIELD_USAGE: dict[str, str] = {
     "model_name": "Graph caption title.",
     "num_tensors_total": "Graph caption tensor count.",
     "total_activation_memory": "Graph caption activation-memory summary.",
@@ -41,7 +41,7 @@ MODELLOG_FIELD_USAGE: Dict[str, str] = {
     "_has_direct_writes": "Direct-write dirty flag surfaced in graph metadata when present.",
 }
 
-ENTRY_FIELD_USAGE: Dict[str, str] = {
+ENTRY_FIELD_USAGE: dict[str, str] = {
     "layer_label": "Stable node ID and default primary label.",
     "layer_label_no_pass": "Rolled-mode primary label.",
     "layer_type": "Operation label and type differentiation.",
@@ -76,7 +76,7 @@ ENTRY_FIELD_USAGE: Dict[str, str] = {
     "intervention_log": "Per-node intervention fire-record summary.",
 }
 
-MODULE_FIELD_USAGE: Dict[str, str] = {
+MODULE_FIELD_USAGE: dict[str, str] = {
     "address": "Cluster identity.",
     "module_class_name": "Cluster label and collapsed summary text.",
     "address_parent": "Cluster hierarchy.",
@@ -95,14 +95,21 @@ MODULE_FIELD_USAGE: Dict[str, str] = {
 class TorchLensRenderAudit:
     """Explicit field-consumption report for TorchLens → Dagua rendering."""
 
-    model_log_used: Dict[str, str]
-    model_log_unused: Dict[str, str]
-    entry_used: Dict[str, str]
-    entry_unused: Dict[str, str]
-    module_used: Dict[str, str]
-    module_unused: Dict[str, str]
+    model_log_used: dict[str, str]
+    model_log_unused: dict[str, str]
+    entry_used: dict[str, str]
+    entry_unused: dict[str, str]
+    module_used: dict[str, str]
+    module_unused: dict[str, str]
 
-    def to_dict(self) -> Dict[str, Dict[str, str]]:
+    def to_dict(self) -> dict[str, dict[str, str]]:
+        """Return the audit as plain dictionaries.
+
+        Returns
+        -------
+        dict[str, dict[str, str]]
+            Used and unused field descriptions grouped by source object.
+        """
         return {
             "model_log_used": self.model_log_used,
             "model_log_unused": self.model_log_unused,
@@ -113,8 +120,8 @@ class TorchLensRenderAudit:
         }
 
 
-def _list_public_fields(obj: Any) -> List[str]:
-    names: List[str] = []
+def _list_public_fields(obj: Any) -> list[str]:
+    names: list[str] = []
     for name in dir(obj):
         if name.startswith("_"):
             continue
@@ -142,7 +149,7 @@ def _unused_justification(name: str) -> str:
     return "Currently not used by the visualization; retained for future overlays, interactivity, or debugging without being silently discarded."
 
 
-def build_render_audit(model_log) -> TorchLensRenderAudit:
+def build_render_audit(model_log: Any) -> TorchLensRenderAudit:
     """Return an explicit used/unused field audit for the bridge."""
     model_fields = _list_public_fields(model_log)
     entry_sample = model_log.layer_list[0] if getattr(model_log, "layer_list", None) else None
@@ -172,7 +179,7 @@ def build_render_audit(model_log) -> TorchLensRenderAudit:
     )
 
 
-def build_torchlens_caption(model_log) -> str:
+def build_torchlens_caption(model_log: Any) -> str:
     """Build the user-facing graph caption."""
     total_params = int(getattr(model_log, "total_params", 0) or 0)
     trainable = int(getattr(model_log, "total_params_trainable", 0) or 0)
@@ -201,7 +208,7 @@ def _to_dagua_direction(direction: str) -> str:
     return mapping.get(direction, direction)
 
 
-def _entries_for_mode(model_log, vis_mode: str):
+def _entries_for_mode(model_log: Any, vis_mode: str) -> list[Any]:
     if vis_mode == "unrolled":
         return list(model_log.layer_dict_main_keys.values())
     if vis_mode == "rolled":
@@ -209,7 +216,7 @@ def _entries_for_mode(model_log, vis_mode: str):
     raise ValueError("vis_mode must be 'unrolled' or 'rolled'")
 
 
-def _display_label(entry, vis_mode: str) -> str:
+def _display_label(entry: Any, vis_mode: str) -> str:
     if vis_mode == "rolled":
         base = getattr(entry, "layer_label_no_pass", None) or getattr(entry, "layer_label", "")
         passes = int(getattr(entry, "num_passes", 1) or 1)
@@ -218,7 +225,7 @@ def _display_label(entry, vis_mode: str) -> str:
     return str(getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", ""))
 
 
-def _shape_memory_line(entry) -> Optional[str]:
+def _shape_memory_line(entry: Any) -> str | None:
     shape = getattr(entry, "tensor_shape", None)
     if not shape:
         return None
@@ -229,7 +236,7 @@ def _shape_memory_line(entry) -> Optional[str]:
     return shape_str
 
 
-def _param_summary_line(entry) -> Optional[str]:
+def _param_summary_line(entry: Any) -> str | None:
     total = int(getattr(entry, "num_params_total", 0) or 0)
     if total <= 0:
         return None
@@ -248,7 +255,7 @@ def _param_summary_line(entry) -> Optional[str]:
     return f"{trainable:,}T/{frozen:,}F{shape_frag}"
 
 
-def _module_line(entry) -> Optional[str]:
+def _module_line(entry: Any) -> str | None:
     if getattr(entry, "is_buffer_layer", False):
         addr = getattr(entry, "buffer_address", None)
         return f"@{addr}" if addr else "@buffer"
@@ -258,8 +265,8 @@ def _module_line(entry) -> Optional[str]:
     return None
 
 
-def _build_node_label(entry, vis_mode: str) -> str:
-    lines: List[str] = []
+def _build_node_label(entry: Any, vis_mode: str) -> str:
+    lines: list[str] = []
     if getattr(entry, "is_terminal_bool_layer", False):
         val = getattr(entry, "scalar_bool_value", None)
         if val is not None:
@@ -271,7 +278,7 @@ def _build_node_label(entry, vis_mode: str) -> str:
     return "\n".join(lines)
 
 
-def _intervention_log_summary(entry) -> str:
+def _intervention_log_summary(entry: Any) -> str:
     """Return a compact summary of intervention fire records for an entry.
 
     Parameters
@@ -293,7 +300,7 @@ def _intervention_log_summary(entry) -> str:
     return f"{len(records)} fire record(s): {', '.join(engines)}"
 
 
-def _base_node_type(entry) -> str:
+def _base_node_type(entry: Any) -> str:
     if getattr(entry, "is_input_layer", False):
         return "input"
     if getattr(entry, "is_output_layer", False):
@@ -313,7 +320,7 @@ def _base_node_type(entry) -> str:
     return "default"
 
 
-def _module_chain(entry, vis_mode: str, vis_nesting_depth: int) -> List[str]:
+def _module_chain(entry: Any, vis_mode: str, vis_nesting_depth: int) -> list[str]:
     modules = list(getattr(entry, "containing_modules", None) or [])
     if vis_mode == "rolled":
         modules = [str(m).split(":")[0] for m in modules]
@@ -326,7 +333,7 @@ def _labels_match(label: str, candidate: str) -> bool:
     return label == candidate or str(label).split(":")[0] == str(candidate).split(":")[0]
 
 
-def _argument_edge_label(child, parent_label: str) -> Optional[str]:
+def _argument_edge_label(child: Any, parent_label: str) -> str | None:
     arg_locs = getattr(child, "parent_layer_arg_locs", None) or {}
     func_name = (
         getattr(child, "func_name", None) or getattr(child, "layer_type", "") or ""
@@ -335,7 +342,7 @@ def _argument_edge_label(child, parent_label: str) -> Optional[str]:
         return None
     if func_name in COMMUTATIVE_FUNCS:
         return None
-    labels: List[str] = []
+    labels: list[str] = []
     for pos, source in (arg_locs.get("args", {}) or {}).items():
         if _labels_match(str(source), parent_label):
             labels.append(f"arg {pos}")
@@ -347,7 +354,7 @@ def _argument_edge_label(child, parent_label: str) -> Optional[str]:
     return None
 
 
-def _is_skip_edge(parent, child) -> bool:
+def _is_skip_edge(parent: Any, child: Any) -> bool:
     p = getattr(parent, "min_distance_from_input", None)
     c = getattr(child, "min_distance_from_input", None)
     if p is None or c is None:
@@ -358,7 +365,7 @@ def _is_skip_edge(parent, child) -> bool:
         return False
 
 
-def _is_recurrent_edge(parent, child) -> bool:
+def _is_recurrent_edge(parent: Any, child: Any) -> bool:
     p_group = getattr(parent, "recurrent_group", None)
     c_group = getattr(child, "recurrent_group", None)
     if p_group and c_group and p_group == c_group:
@@ -369,7 +376,7 @@ def _is_recurrent_edge(parent, child) -> bool:
     )
 
 
-def _classify_forward_edge(parent, child) -> str:
+def _classify_forward_edge(parent: Any, child: Any) -> str:
     child_label = getattr(child, "layer_label", "")
     if child_label in (getattr(parent, "cond_branch_then_children", None) or []):
         return "then"
@@ -403,7 +410,7 @@ def _resolve_output_path(vis_outpath: str, vis_fileformat: str) -> str:
     return str(p.with_suffix(f".{vis_fileformat}"))
 
 
-def _torchlens_layout_config(num_nodes: int, direction: str):
+def _torchlens_layout_config(num_nodes: int, direction: str) -> Any:
     import dagua
 
     if torch.cuda.is_available() and num_nodes <= 25_000:
@@ -452,13 +459,13 @@ def _torchlens_layout_config(num_nodes: int, direction: str):
 
 
 def model_log_to_dagua_graph(
-    model_log,
+    model_log: Any,
     vis_mode: str = "unrolled",
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
-    include_gradient_edges: Optional[bool] = None,
-):
+    include_gradient_edges: bool | None = None,
+) -> Any:
     """Translate a TorchLens ModelLog into a DaguaGraph."""
     import dagua
 
@@ -554,7 +561,7 @@ def model_log_to_dagua_graph(
                 edges_seen.add(edge_key)
                 g.add_edge(child_id, parent_label, type="back")
 
-    kept_modules: Dict[str, List[str]] = {}
+    kept_modules: dict[str, list[str]] = {}
     for entry in entries:
         mods = _module_chain(entry, vis_mode, vis_nesting_depth)
         if not mods:
@@ -591,7 +598,7 @@ def model_log_to_dagua_graph(
 
 
 def render_model_log_with_dagua(
-    model_log,
+    model_log: Any,
     vis_mode: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "graph.gv",
@@ -600,7 +607,7 @@ def render_model_log_with_dagua(
     vis_buffer_layers: bool = False,
     vis_direction: str = "bottomup",
     vis_theme: str = "torchlens",
-):
+) -> Any:
     """Render a TorchLens ModelLog with Dagua."""
     import dagua
 

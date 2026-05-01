@@ -15,7 +15,7 @@ to wrapped versions.
 """
 
 import copy
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import numpy as np
 import torch
@@ -289,7 +289,7 @@ def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
     return torch.preserve_format
 
 
-def safe_copy(x, detach_tensor: bool = False):
+def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
     """Copy a tensor (or parameter) without triggering torchlens logging.
 
     Uses ``pause_logging()`` so that ``.clone()``, ``.detach()``,
@@ -353,7 +353,7 @@ def safe_copy(x, detach_tensor: bool = False):
         return copy.copy(x)
 
 
-def print_override(t: torch.Tensor, func_name: str):
+def print_override(t: torch.Tensor, func_name: str) -> str:
     """Safe ``__str__``/``__repr__`` for tensors during active logging.
 
     The default ``Tensor.__repr__`` calls decorated methods internally,
@@ -394,4 +394,4 @@ def print_override(t: torch.Tensor, func_name: str):
         np_str = np_str[0:-1] + grad_fn_str
     elif t.requires_grad:
         np_str = np_str[0:-1] + ", requires_grad=True)"
-    return np_str
+    return cast(str, np_str)

@@ -12,7 +12,7 @@ from pathlib import Path
 import shutil
 import uuid
 import warnings
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import torch
 from safetensors.torch import load_file, save_file
@@ -1203,7 +1203,7 @@ def _resolve_import_ref(import_path: str) -> Callable[..., Any]:
         obj = getattr(obj, part)
     if not callable(obj):
         raise TypeError(f"{import_path!r} did not resolve to a callable")
-    return obj
+    return cast(Callable[..., Any], obj)
 
 
 def _write_json_file(path: Path, data: dict[str, Any]) -> None:

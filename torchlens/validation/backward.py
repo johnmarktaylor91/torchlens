@@ -131,7 +131,7 @@ def validate_backward_pass(
     stock_inputs = _clone_inputs_with_grad(input_args)
     model.zero_grad(set_to_none=True)
     stock_loss = loss_fn(model(stock_inputs, **input_kwargs))
-    stock_loss.backward()
+    stock_loss.backward()  # type: ignore[no-untyped-call]
     expected_param_grads = _param_grads(model)
 
     logged_inputs = _clone_inputs_with_grad(input_args)

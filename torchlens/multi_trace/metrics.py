@@ -12,7 +12,8 @@ value.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Union
+from collections.abc import Callable
+from typing import cast
 
 import torch
 
@@ -63,7 +64,7 @@ def cosine_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         if torch.equal(fa, fb):
             return torch.tensor(0.0, dtype=fa.dtype)
         return torch.tensor(1.0, dtype=fa.dtype)
-    return 1.0 - (fa @ fb) / denom
+    return cast(torch.Tensor, 1.0 - (fa @ fb) / denom)
 
 
 def relative_l2(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -85,8 +86,8 @@ def relative_l2(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     if denom.item() < _EPS:
         # When the reference tensor is the zero tensor, fall back to absolute
         # L2 distance so we still expose the magnitude of the difference.
-        return diff
-    return diff / denom
+        return cast(torch.Tensor, diff)
+    return cast(torch.Tensor, diff / denom)
 
 
 def pearson_correlation_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -116,7 +117,7 @@ def pearson_correlation_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tens
             return torch.tensor(0.0, dtype=fa.dtype)
         return torch.tensor(1.0, dtype=fa.dtype)
     r = (fa_c @ fb_c) / denom
-    return 1.0 - r
+    return cast(torch.Tensor, 1.0 - r)
 
 
 def relative_l1_scalar(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -143,7 +144,7 @@ def relative_l1_scalar(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return diff / denom
 
 
-METRIC_REGISTRY: Dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = {
+METRIC_REGISTRY: dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = {
     "cosine": cosine_distance,
     "relative_l2": relative_l2,
     "pearson": pearson_correlation_distance,
@@ -151,7 +152,7 @@ METRIC_REGISTRY: Dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]]
 
 
 def resolve_metric(
-    metric: Union[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]],
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
 ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
     """Resolve a metric specifier to a callable.
 

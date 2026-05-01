@@ -21,7 +21,7 @@ Step 18 (_set_pass_finished): Marks ModelLog and all LayerPassLogs as finished, 
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING, Tuple, cast
+from typing import Any, Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING, Tuple, cast
 
 import torch
 
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import ModelLog
 
 
-def _undecorate_all_saved_tensors(self) -> None:
+def _undecorate_all_saved_tensors(self: "ModelLog") -> None:
     """Step 13: Remove tl_tensor_label_raw from all saved tensors.
 
     During logging, tensors are "decorated" with a tl_tensor_label_raw attribute
@@ -70,7 +70,7 @@ def _undecorate_all_saved_tensors(self) -> None:
             delattr(t, "tl_tensor_label_raw")
 
 
-def _log_time_elapsed(self) -> None:
+def _log_time_elapsed(self: "ModelLog") -> None:
     """Step 15: Record wall-clock timing for the cleanup phase and overall pass.
 
     Computes cleanup time as the residual after subtracting setup and forward
@@ -125,7 +125,9 @@ def _finalize_param_logs(self: "ModelLog") -> None:
         layer_entry.parent_params = []
 
 
-def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "ModuleLog":
+def _build_root_module_log(
+    self: "ModelLog", pass_dict: dict[str, "ModulePassLog"], mbd: dict[str, Any]
+) -> "ModuleLog":
     """Build the root ModuleLog ("self") representing the model itself.
 
     The root module encompasses all layers and params. Its address_children are
@@ -134,7 +136,8 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
     """
     from ..data_classes.param_log import ParamAccessor
 
-    root_meta = self._module_metadata.get("self", {})
+    module_metadata = cast(dict[str, dict[str, Any]], self._module_metadata)
+    root_meta = module_metadata.get("self", {})
     root_all_layers = list(self.layer_logs.keys())
 
     root_param_dict = {pl.address: pl for pl in self.param_logs}
@@ -202,13 +205,13 @@ def _build_root_module_log(self: "ModelLog", pass_dict: dict, mbd: dict) -> "Mod
     return root_module
 
 
-def _compute_nesting_depths(module_dict: dict, root_module: "ModuleLog") -> None:
+def _compute_nesting_depths(module_dict: dict[str, "ModuleLog"], root_module: "ModuleLog") -> None:
     """Assign nesting_depth to each ModuleLog via BFS from the root.
 
     Root ("self") has depth 0. Each level of call_children nesting adds 1.
     """
     visited = {"self": 0}
-    queue: deque = deque()
+    queue: deque[str] = deque()
     for child_addr in root_module.call_children:
         if child_addr in module_dict:
             module_dict[child_addr].nesting_depth = 1
@@ -390,11 +393,11 @@ def _build_submodule_pass_logs(
     self: "ModelLog",
     address: str,
     num_passes: int,
-    pass_dict: dict,
-    mbd: dict,
-    _child_to_parent_pass: Optional[dict] = None,
-    all_module_addresses: Optional[list] = None,
-) -> tuple:
+    pass_dict: dict[str, "ModulePassLog"],
+    mbd: dict[str, Any],
+    _child_to_parent_pass: dict[str, str] | None = None,
+    all_module_addresses: list[str] | None = None,
+) -> tuple[dict[int, "ModulePassLog"], list[str]]:
     """Build ModulePassLog objects for all passes of a single submodule.
 
     For each pass, derives input/output layers from LayerPassLog fields,
@@ -423,7 +426,10 @@ def _build_submodule_pass_logs(
                     pass_output_layers.append(layer_label)
 
         # Forward args for this pass
-        fwd_args = self._module_forward_args.get((address, pass_num))
+        module_forward_args = cast(
+            dict[tuple[str, int], tuple[Any, Any]], self._module_forward_args
+        )
+        fwd_args = module_forward_args.get((address, pass_num))
         fwd_positional = fwd_args[0] if fwd_args else None
         fwd_kwargs = fwd_args[1] if fwd_args else None
 
@@ -454,7 +460,9 @@ def _build_submodule_pass_logs(
     return passes, pass_labels_list
 
 
-def _resolve_call_hierarchy(passes: dict) -> tuple:
+def _resolve_call_hierarchy(
+    passes: dict[int, "ModulePassLog"],
+) -> tuple[list[str], str | None]:
     """Derive module-level call_children and call_parent from per-pass data.
 
     Unions call_children across all passes (stripping pass suffixes to get
@@ -490,11 +498,14 @@ class ModuleParamInfo(NamedTuple):
     num_trainable: int
     num_frozen: int
     memory: int
-    buffer_layers: list
+    buffer_layers: list[str]
 
 
 def _build_module_param_info(
-    self: "ModelLog", address: str, mbd: dict, _buffer_layers_by_module: Optional[dict] = None
+    self: "ModelLog",
+    address: str,
+    mbd: dict[str, Any],
+    _buffer_layers_by_module: dict[str, list[str]] | None = None,
 ) -> ModuleParamInfo:
     """Gather parameter counts, sizes, and buffer layers for a single module."""
     from ..data_classes.param_log import ParamAccessor
@@ -567,7 +578,7 @@ def _build_module_logs(self: "ModelLog") -> None:
     # under the FIRST address visited by _capture_module_metadata, but
     # tl_module_address may be overwritten to a LATER address by
     # _prepare_model_once. This map ensures all aliases resolve to the same meta.
-    _metadata_by_alias: Dict[str, dict] = {}
+    _metadata_by_alias: dict[str, dict[str, Any]] = {}
     for _primary_addr, _meta in self._module_metadata.items():
         for _alias in _meta.get("all_addresses", [_primary_addr]):
             _metadata_by_alias[_alias] = _meta
@@ -763,7 +774,7 @@ def _build_layer_logs(self: "ModelLog") -> None:
 
         layer_log.passes[pass_log.pass_num] = pass_log
         layer_log.pass_labels.append(pass_log.layer_label)
-        pass_log.parent_layer_log = layer_log  # type: ignore[assignment]
+        pass_log.parent_layer_log = layer_log
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
     total_autograd_saved_bytes = 0
@@ -803,7 +814,7 @@ def _build_layer_logs(self: "ModelLog") -> None:
     _rebuild_conditional_edge_passes(self)
 
 
-def _set_pass_finished(self) -> None:
+def _set_pass_finished(self: "ModelLog") -> None:
     """Step 18: Mark the ModelLog and all LayerPassLogs as pass-finished.
 
     Sets ``_pass_finished = True`` on the ModelLog and every retained
@@ -905,10 +916,10 @@ def _evict_streamed_gradients(self: "ModelLog") -> None:
 def _reuse_streamed_blob_ids(
     model_log: "ModelLog",
     *,
-    scrubbed_state: dict,
+    scrubbed_state: dict[str, Any],
     blob_specs: list[tuple[str, torch.Tensor, str, str]],
     writer: BundleStreamWriter,
-) -> tuple[dict, list[tuple[str, torch.Tensor, str, str]]]:
+) -> tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]]]:
     """Patch scrubbed tensor refs to reuse blob ids written during capture.
 
     Parameters
@@ -963,7 +974,7 @@ def _reuse_streamed_blob_ids(
 def _attach_streamed_tensor_refs(
     model_log: "ModelLog",
     *,
-    scrubbed_state: dict,
+    scrubbed_state: dict[str, Any],
     writer: BundleStreamWriter,
     final_path: str | Path,
 ) -> None:

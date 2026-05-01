@@ -18,7 +18,7 @@ For integer keys: direct index into ``layer_list`` (supports negative indexing).
 For slice keys: returns a list slice of ``layer_list``.
 """
 
-from typing import TYPE_CHECKING, Any, List, Tuple
+from typing import TYPE_CHECKING, Any, List, Tuple, cast
 
 import numpy as np
 
@@ -32,7 +32,7 @@ from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 
 
-def _getitem_during_pass(self: "ModelLog", ix) -> LayerPassLog:
+def _getitem_during_pass(self: "ModelLog", ix: Any) -> LayerPassLog:
     """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
     Args:
@@ -138,7 +138,7 @@ def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
     raise KeyError(ix)
 
 
-def _str_after_pass(self) -> str:
+def _str_after_pass(self: "ModelLog") -> str:
     """Readable summary of the model history after the pass is finished.
 
     Returns:
@@ -228,7 +228,7 @@ def _str_after_pass(self) -> str:
     return s
 
 
-def _str_during_pass(self) -> str:
+def _str_during_pass(self: "ModelLog") -> str:
     """Readable summary of the model history during the pass, as a debugging aid.
 
     Returns:
@@ -248,7 +248,9 @@ def _str_during_pass(self) -> str:
     return s
 
 
-def _format_list_with_line_breaks(lst, indent_chars: str, line_break_every=5) -> str:
+def _format_list_with_line_breaks(
+    lst: list[Any], indent_chars: str, line_break_every: int = 5
+) -> str:
     """
     Utility function to pretty print a list with line breaks, adding indent_chars every line.
     """
@@ -262,7 +264,7 @@ def _format_list_with_line_breaks(lst, indent_chars: str, line_break_every=5) ->
     return s
 
 
-def _module_hierarchy_str(self) -> str:
+def _module_hierarchy_str(self: "ModelLog") -> str:
     """Build a tree-formatted string of the module call hierarchy.
 
     Starts from the root module ("self") pass 1 and recursively descends
@@ -270,19 +272,20 @@ def _module_hierarchy_str(self) -> str:
     grandchildren) are printed on a single line for compactness.
     """
     s = ""
-    root_pass = self.modules["self"].passes.get(1)
+    root_module = cast(Any, self.modules["self"])
+    root_pass = root_module.passes.get(1)
     if root_pass is None:
         return s
     for module_pass in root_pass.call_children:
         module, pass_num = module_pass.split(":")
         s += f"\n\t\t{module}"
-        if self.modules[module].num_passes > 1:
+        if cast(Any, self.modules[module]).num_passes > 1:
             s += f":{pass_num}"
         s += _module_hierarchy_str_recursive(self, module_pass, 1)
     return s
 
 
-def _module_hierarchy_str_recursive(self, module_pass, level) -> str:
+def _module_hierarchy_str_recursive(self: "ModelLog", module_pass: str, level: int) -> str:
     """Recursively format child modules at the given indentation level.
 
     If any child has grandchildren (deeper nesting), each child gets its
@@ -299,14 +302,14 @@ def _module_hierarchy_str_recursive(self, module_pass, level) -> str:
         for submodule_pass in children:
             submodule, pass_num = submodule_pass.split(":")
             s += f"\n\t\t{'    ' * level}{submodule}"
-            if self.modules[submodule].num_passes > 1:
+            if cast(Any, self.modules[submodule]).num_passes > 1:
                 s += f":{pass_num}"
             s += _module_hierarchy_str_recursive(self, submodule_pass, level + 1)
     else:
         submodule_list = []
         for submodule_pass in children:
             submodule, pass_num = submodule_pass.split(":")
-            if self.modules[submodule].num_passes == 1:
+            if cast(Any, self.modules[submodule]).num_passes == 1:
                 submodule_list.append(submodule)
             else:
                 submodule_list.append(submodule_pass)

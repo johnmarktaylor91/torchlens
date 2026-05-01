@@ -12,7 +12,8 @@ tuple, bool, None — never tensors).
 Public entry point: ``extract_salient_args()``.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -22,13 +23,17 @@ from .. import _state as _st
 # Registry: normalized_layer_type -> extractor function
 # ---------------------------------------------------------------------------
 
-_EXTRACTORS: Dict[str, Callable] = {}
+Shape = tuple[int, ...]
+SalientArgs = dict[str, Any]
+Extractor = Callable[[SalientArgs, list[Shape]], SalientArgs]
+
+_EXTRACTORS: dict[str, Extractor] = {}
 
 
-def _register(*layer_types: str):
+def _register(*layer_types: str) -> Callable[[Extractor], Extractor]:
     """Decorator to register an extractor for one or more normalized layer types."""
 
-    def decorator(fn: Callable) -> Callable:
+    def decorator(fn: Extractor) -> Extractor:
         for lt in layer_types:
             _EXTRACTORS[lt] = fn
         return fn
@@ -41,7 +46,9 @@ def _register(*layer_types: str):
 # ---------------------------------------------------------------------------
 
 
-def _build_arg_name_map(func_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]:
+def _build_arg_name_map(
+    func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> SalientArgs:
     """Map argument names to values using pre-computed ``_state._func_argnames``.
 
     Returns a dict combining positional args (mapped by name) and kwargs.
@@ -73,7 +80,7 @@ def _to_simple(val: Any) -> Any:
     return val
 
 
-def _get(mapping: dict, *keys: str, default=None) -> Any:
+def _get(mapping: SalientArgs, *keys: str, default: Any = None) -> Any:
     """Get the first matching key from mapping."""
     for k in keys:
         if k in mapping:
@@ -81,7 +88,7 @@ def _get(mapping: dict, *keys: str, default=None) -> Any:
     return default
 
 
-def _is_default(val: Any, *defaults) -> bool:
+def _is_default(val: Any, *defaults: Any) -> bool:
     """Check if val matches any of the given default values."""
     return val in defaults
 
@@ -91,7 +98,7 @@ def _is_default(val: Any, *defaults) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _all_same(val, scalar_default):
+def _all_same(val: Any, scalar_default: Any) -> bool:
     """Check if val is a tuple of all the same scalar_default value, or equals scalar_default."""
     if val == scalar_default:
         return True
@@ -101,8 +108,8 @@ def _all_same(val, scalar_default):
 
 
 @_register("conv1d", "conv2d", "conv3d", "convolution")
-def _conv(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _conv(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     if len(param_shapes) >= 1:
         w = param_shapes[0]
         if len(w) >= 2:
@@ -126,7 +133,7 @@ def _conv(named: dict, param_shapes: list) -> dict:
 
 
 @_register("convtranspose1d", "convtranspose2d", "convtranspose3d")
-def _conv_transpose(named: dict, param_shapes: list) -> dict:
+def _conv_transpose(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     result = _conv(named, param_shapes)
     output_padding = _get(named, "output_padding")
     if output_padding is not None and not _all_same(output_padding, 0):
@@ -135,8 +142,8 @@ def _conv_transpose(named: dict, param_shapes: list) -> dict:
 
 
 @_register("linear")
-def _linear(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _linear(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     if len(param_shapes) >= 1:
         w = param_shapes[0]
         if len(w) == 2:
@@ -146,8 +153,8 @@ def _linear(named: dict, param_shapes: list) -> dict:
 
 
 @_register("batchnorm", "batchnorm1d", "batchnorm2d", "batchnorm3d")
-def _batch_norm(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _batch_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     eps = _get(named, "eps")
     if eps is not None:
         result["eps"] = eps
@@ -158,8 +165,8 @@ def _batch_norm(named: dict, param_shapes: list) -> dict:
 
 
 @_register("layernorm")
-def _layer_norm(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _layer_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     ns = _get(named, "normalized_shape")
     if ns is not None:
         result["normalized_shape"] = ns
@@ -170,8 +177,8 @@ def _layer_norm(named: dict, param_shapes: list) -> dict:
 
 
 @_register("groupnorm")
-def _group_norm(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _group_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     ng = _get(named, "num_groups")
     if ng is not None:
         result["num_groups"] = ng
@@ -182,8 +189,8 @@ def _group_norm(named: dict, param_shapes: list) -> dict:
 
 
 @_register("instancenorm", "instancenorm1d", "instancenorm2d", "instancenorm3d")
-def _instance_norm(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _instance_norm(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     eps = _get(named, "eps")
     if eps is not None:
         result["eps"] = eps
@@ -194,14 +201,14 @@ def _instance_norm(named: dict, param_shapes: list) -> dict:
 
 
 @_register("dropout", "dropout1d", "dropout2d", "dropout3d", "alphadropout", "featurealphadropout")
-def _dropout(named: dict, param_shapes: list) -> dict:
+def _dropout(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     p = _get(named, "p")
     return {"p": p} if p is not None else {}
 
 
 @_register("maxpool1d", "maxpool2d", "maxpool3d")
-def _max_pool(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _max_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     ks = _get(named, "kernel_size")
     if ks is not None:
         result["kernel_size"] = ks
@@ -215,8 +222,8 @@ def _max_pool(named: dict, param_shapes: list) -> dict:
 
 
 @_register("avgpool1d", "avgpool2d", "avgpool3d")
-def _avg_pool(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _avg_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     ks = _get(named, "kernel_size")
     if ks is not None:
         result["kernel_size"] = ks
@@ -230,32 +237,32 @@ def _avg_pool(named: dict, param_shapes: list) -> dict:
 
 
 @_register("adaptiveavgpool1d", "adaptiveavgpool2d", "adaptiveavgpool3d")
-def _adaptive_avg_pool(named: dict, param_shapes: list) -> dict:
+def _adaptive_avg_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     os = _get(named, "output_size")
     return {"output_size": os} if os is not None else {}
 
 
 @_register("adaptivemaxpool1d", "adaptivemaxpool2d", "adaptivemaxpool3d")
-def _adaptive_max_pool(named: dict, param_shapes: list) -> dict:
+def _adaptive_max_pool(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     os = _get(named, "output_size")
     return {"output_size": os} if os is not None else {}
 
 
 @_register("leakyrelu")
-def _leaky_relu(named: dict, param_shapes: list) -> dict:
+def _leaky_relu(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     ns = _get(named, "negative_slope")
     return {"negative_slope": ns} if ns is not None else {}
 
 
 @_register("elu")
-def _elu(named: dict, param_shapes: list) -> dict:
+def _elu(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     a = _get(named, "alpha")
     return {"alpha": a} if a is not None else {}
 
 
 @_register("hardtanh")
-def _hardtanh(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _hardtanh(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     mn = _get(named, "min_val")
     if mn is not None:
         result["min_val"] = mn
@@ -266,8 +273,8 @@ def _hardtanh(named: dict, param_shapes: list) -> dict:
 
 
 @_register("threshold")
-def _threshold(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _threshold(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     t = _get(named, "threshold")
     if t is not None:
         result["threshold"] = t
@@ -278,14 +285,14 @@ def _threshold(named: dict, param_shapes: list) -> dict:
 
 
 @_register("softmax", "logsoftmax")
-def _softmax(named: dict, param_shapes: list) -> dict:
+def _softmax(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     dim = _get(named, "dim")
     return {"dim": dim} if dim is not None else {}
 
 
 @_register("scaleddotproductattention")
-def _sdpa(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _sdpa(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     dp = _get(named, "dropout_p")
     if dp is not None and dp != 0.0:
         result["dropout_p"] = dp
@@ -299,8 +306,8 @@ def _sdpa(named: dict, param_shapes: list) -> dict:
 
 
 @_register("interpolate", "upsample", "upsamplebilinear", "upsamplenearest")
-def _interpolate(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _interpolate(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     size = _get(named, "size")
     if size is not None:
         result["size"] = size
@@ -314,8 +321,8 @@ def _interpolate(named: dict, param_shapes: list) -> dict:
 
 
 @_register("embedding")
-def _embedding(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _embedding(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     if len(param_shapes) >= 1:
         w = param_shapes[0]
         if len(w) == 2:
@@ -328,20 +335,20 @@ def _embedding(named: dict, param_shapes: list) -> dict:
 
 
 @_register("cat")
-def _cat(named: dict, param_shapes: list) -> dict:
+def _cat(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     dim = _get(named, "dim")
     return {"dim": dim} if dim is not None else {}
 
 
 @_register("stack", "hstack", "vstack", "dstack")
-def _stack(named: dict, param_shapes: list) -> dict:
+def _stack(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     dim = _get(named, "dim")
     return {"dim": dim} if dim is not None else {}
 
 
 @_register("sum", "mean", "prod", "amax", "amin", "nansum", "nanmean")
-def _reduction(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _reduction(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     dim = _get(named, "dim")
     if dim is not None:
         result["dim"] = dim
@@ -352,8 +359,8 @@ def _reduction(named: dict, param_shapes: list) -> dict:
 
 
 @_register("max", "min", "argmax", "argmin")
-def _reduction_simple(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _reduction_simple(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     dim = _get(named, "dim")
     if dim is not None:
         result["dim"] = dim
@@ -364,14 +371,14 @@ def _reduction_simple(named: dict, param_shapes: list) -> dict:
 
 
 @_register("permute")
-def _permute(named: dict, param_shapes: list) -> dict:
+def _permute(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
     dims = _get(named, "dims")
     return {"dims": dims} if dims is not None else {}
 
 
 @_register("transpose")
-def _transpose(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _transpose(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     d0 = _get(named, "dim0")
     if d0 is not None:
         result["dim0"] = d0
@@ -382,8 +389,8 @@ def _transpose(named: dict, param_shapes: list) -> dict:
 
 
 @_register("pad")
-def _pad(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _pad(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     p = _get(named, "pad")
     if p is not None:
         result["padding"] = p
@@ -397,8 +404,8 @@ def _pad(named: dict, param_shapes: list) -> dict:
 
 
 @_register("clamp", "clip")
-def _clamp(named: dict, param_shapes: list) -> dict:
-    result = {}
+def _clamp(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
+    result: SalientArgs = {}
     mn = _get(named, "min")
     if mn is not None:
         result["min"] = mn
@@ -416,10 +423,10 @@ def _clamp(named: dict, param_shapes: list) -> dict:
 def extract_salient_args(
     layer_type: str,
     func_name: str,
-    args: tuple,
-    kwargs: dict,
-    parent_param_shapes: Optional[List[Tuple]] = None,
-) -> Dict[str, Any]:
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    parent_param_shapes: list[Shape] | None = None,
+) -> SalientArgs:
     """Extract salient hyperparameters for a logged operation.
 
     Args:

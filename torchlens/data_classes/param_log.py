@@ -20,6 +20,7 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
 from os import PathLike
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
@@ -92,7 +93,7 @@ class ParamLog:
         module_type: str,
         barcode: str,
         has_optimizer: Optional[bool] = None,
-    ):
+    ) -> None:
         self.address = address  # e.g. "features.0.weight"
         self.name = name  # short name, e.g. "weight"
         self.shape = shape
@@ -122,6 +123,13 @@ class ParamLog:
 
     @property
     def memory_str(self) -> str:
+        """Return parameter size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable parameter memory amount.
+        """
         return human_readable_size(self.memory)
 
     @property
@@ -136,7 +144,7 @@ class ParamLog:
         }
         return self.dtype in _QUANTIZED_DTYPES
 
-    def _check_param_grad(self):
+    def _check_param_grad(self) -> None:
         """Lazily check if the parameter has a gradient and cache the result.
 
         Called by each grad property on first access.  Once a gradient is
@@ -153,52 +161,117 @@ class ParamLog:
 
     @property
     def has_grad(self) -> bool:
-        """Whether this parameter currently has a gradient stored."""
+        """Return whether this parameter currently has a gradient stored.
+
+        Returns
+        -------
+        bool
+            ``True`` when the referenced parameter has a gradient.
+        """
         self._check_param_grad()
         return self._has_grad
 
     @has_grad.setter
     def has_grad(self, value: bool) -> None:
+        """Set cached gradient-presence status.
+
+        Parameters
+        ----------
+        value:
+            Cached gradient-presence status.
+        """
         self._has_grad = value
 
     @property
     def grad_shape(self) -> Optional[Tuple[int, ...]]:
-        """Shape of the gradient tensor, or None if no gradient exists."""
+        """Return the gradient tensor shape.
+
+        Returns
+        -------
+        Optional[Tuple[int, ...]]
+            Shape of the gradient tensor, or ``None`` if no gradient exists.
+        """
         self._check_param_grad()
         return self._grad_shape
 
     @grad_shape.setter
     def grad_shape(self, value: Optional[Tuple[int, ...]]) -> None:
+        """Set cached gradient tensor shape.
+
+        Parameters
+        ----------
+        value:
+            Cached gradient tensor shape, or ``None`` when absent.
+        """
         self._grad_shape = value
 
     @property
     def grad_dtype(self) -> Optional[torch.dtype]:
-        """Dtype of the gradient tensor, or None if no gradient exists."""
+        """Return the gradient tensor dtype.
+
+        Returns
+        -------
+        Optional[torch.dtype]
+            Dtype of the gradient tensor, or ``None`` if no gradient exists.
+        """
         self._check_param_grad()
         return self._grad_dtype
 
     @grad_dtype.setter
     def grad_dtype(self, value: Optional[torch.dtype]) -> None:
+        """Set cached gradient tensor dtype.
+
+        Parameters
+        ----------
+        value:
+            Cached gradient tensor dtype, or ``None`` when absent.
+        """
         self._grad_dtype = value
 
     @property
     def grad_memory(self) -> int:
-        """Size of the gradient tensor in bytes."""
+        """Return the gradient tensor size in bytes.
+
+        Returns
+        -------
+        int
+            Size of the gradient tensor in bytes.
+        """
         self._check_param_grad()
         return self._grad_memory
 
     @grad_memory.setter
     def grad_memory(self, value: int) -> None:
+        """Set cached gradient tensor size in bytes.
+
+        Parameters
+        ----------
+        value:
+            Cached gradient memory amount in bytes.
+        """
         self._grad_memory = value
 
     @property
     def grad_memory_str(self) -> str:
-        """Human-readable size of the gradient tensor (e.g. '4.0 KB')."""
+        """Return gradient tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable gradient memory amount.
+        """
         self._check_param_grad()
         return self._grad_memory_str
 
     @grad_memory_str.setter
     def grad_memory_str(self, value: str) -> None:
+        """Set cached gradient tensor size in human-readable units.
+
+        Parameters
+        ----------
+        value:
+            Human-readable gradient memory amount.
+        """
         self._grad_memory_str = value
 
     def __repr__(self) -> str:
@@ -223,7 +296,7 @@ class ParamLog:
             lines.append(f"  num_passes: {self.num_passes}")
         return "\n".join(lines)
 
-    def release_param_ref(self):
+    def release_param_ref(self) -> None:
         """Cache gradient info, then null _param_ref to allow param GC."""
         self._check_param_grad()
         self._param_ref = None
@@ -280,7 +353,7 @@ class ParamAccessor:
             raise KeyError(f"Ambiguous short name '{key}' — use full address")
         raise KeyError(key)
 
-    def __contains__(self, key) -> bool:
+    def __contains__(self, key: object) -> bool:
         """Check membership by full address, short name, or integer index (#84)."""
         if isinstance(key, int):
             return 0 <= key < len(self._list)
@@ -295,7 +368,7 @@ class ParamAccessor:
         """Return the number of parameters."""
         return len(self._dict)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["ParamLog"]:
         """Iterate over ParamLog objects in insertion order."""
         return iter(self._list)
 

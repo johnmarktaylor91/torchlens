@@ -9,7 +9,7 @@ import warnings
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -376,7 +376,7 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
 
     if name is None:
         return None
-    return getattr(torch, name)
+    return cast(torch.dtype, getattr(torch, name))
 
 
 def _write_metadata(path: Path, recording: Recording, options: RecordingOptions) -> None:

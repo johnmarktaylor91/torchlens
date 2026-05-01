@@ -698,7 +698,7 @@ IGNORED_FUNCS = [
 
 
 @functools.lru_cache(None)
-def _get_torch_overridable_functions() -> List:
+def _get_torch_overridable_functions() -> list[tuple[str, str]]:
     """Return a list of (namespace_str, func_name) pairs for all torch functions
     that can be overridden via ``__torch_function__``.
 

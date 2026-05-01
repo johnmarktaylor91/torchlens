@@ -25,7 +25,7 @@ import os
 import pickle
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import torch
 from torch import nn
@@ -537,11 +537,11 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
         pass
     else:
         if isinstance(model, DistributedDataParallel):
-            return model.module
+            return cast(nn.Module, model.module)
 
     # DataParallel: the original case this helper covered.
     if isinstance(model, nn.DataParallel):
-        return model.module
+        return cast(nn.Module, model.module)
 
     return model
 
@@ -625,7 +625,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
             )
 
 
-def _move_tensors_to_device(obj, device):
+def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
     """Recursively move tensors in a nested structure (lists, tuples, dicts) to *device*.
 
     Handles common dict-like types (OrderedDict, HuggingFace BatchEncoding, etc.)
@@ -634,39 +634,39 @@ def _move_tensors_to_device(obj, device):
     if isinstance(obj, torch.Tensor):
         return obj.to(device)
     elif isinstance(obj, (list, tuple)):
-        moved = [_move_tensors_to_device(item, device) for item in obj]
-        return type(obj)(moved) if not isinstance(obj, tuple) else tuple(moved)
+        moved_sequence = [_move_tensors_to_device(item, device) for item in obj]
+        return type(obj)(moved_sequence) if not isinstance(obj, tuple) else tuple(moved_sequence)
     elif isinstance(obj, collections.abc.MutableMapping):
         # Handles dict, UserDict, BatchEncoding, OrderedDict, etc.
-        moved = {k: _move_tensors_to_device(v, device) for k, v in obj.items()}
+        moved_mapping = {k: _move_tensors_to_device(v, device) for k, v in obj.items()}
         if type(obj) is dict:
-            return moved
+            return moved_mapping
         try:
-            return type(obj)(moved)
+            return cast(Any, type(obj))(moved_mapping)
         except Exception:
-            return moved
+            return moved_mapping
     return obj
 
 
 def _run_model_and_save_specified_activations(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any]],
-    input_kwargs: Dict[Any, Any],
-    layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None,
+    layers_to_save: str | list[int | str] | None = "all",
     keep_unsaved_layers: bool = True,
     output_device: OutputDeviceLiteral = "same",
-    activation_transform: Optional[ActivationPostfunc] = None,
-    gradient_postfunc: Optional[GradientPostfunc] = None,
+    activation_transform: ActivationPostfunc | None = None,
+    gradient_postfunc: GradientPostfunc | None = None,
     save_raw_activation: bool = True,
     save_raw_gradient: bool = True,
     mark_input_output_distances: bool = False,
     detach_saved_tensors: bool = False,
     save_function_args: bool = False,
     save_gradients: bool = False,
-    gradients_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
-    random_seed: Optional[int] = None,
+    gradients_to_save: str | list[int | str] | None = "all",
+    random_seed: int | None = None,
     num_context_lines: int = 7,
-    optimizer=None,
+    optimizer: Any = None,
     save_source_context: bool = False,
     save_rng_states: bool = False,
     detect_loops: bool = True,
@@ -829,7 +829,12 @@ def _run_model_and_save_specified_activations(
         model_log._activation_writer = BundleStreamWriter(bundle_path)
     try:
         model_log._run_and_log_inputs_through_model(
-            model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
+            model,
+            cast(torch.Tensor | list[Any], input_args),
+            input_kwargs,
+            layers_to_save,
+            gradients_to_save,
+            random_seed,
         )
     except (TorchLensIOError, TorchLensPostfuncError):
         raise
@@ -845,21 +850,21 @@ def _run_model_and_save_specified_activations(
 
 def log_forward_pass(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
-    layers_to_save: Optional[Union[str, List]] | MissingType = MISSING,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    layers_to_save: str | list[Any] | None | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_transform: Optional[ActivationPostfunc] | MissingType = MISSING,
-    gradient_postfunc: Optional[GradientPostfunc] | MissingType = MISSING,
+    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+    gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     save_raw_activation: bool | MissingType = MISSING,
     save_raw_gradient: bool | MissingType = MISSING,
-    activation_postfunc: Optional[ActivationPostfunc] | MissingType = MISSING,
+    activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     mark_input_output_distances: bool | MissingType = MISSING,
     detach_saved_tensors: bool | MissingType = MISSING,
     save_function_args: bool | MissingType = MISSING,
     save_gradients: bool | MissingType = MISSING,
-    gradients_to_save: Optional[Union[str, List]] | MissingType = MISSING,
+    gradients_to_save: str | list[Any] | None | MissingType = MISSING,
     save_source_context: bool | MissingType = MISSING,
     save_rng_states: bool | MissingType = MISSING,
     vis_opt: Any | MissingType = MISSING,
@@ -885,7 +890,7 @@ def log_forward_pass(
     vis_theme: str | MissingType = MISSING,
     vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
     vis_show_cone: bool | MissingType = MISSING,
-    random_seed: Optional[int] | MissingType = MISSING,
+    random_seed: int | None | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
     optimizer: Any | MissingType = MISSING,
     detect_loops: bool | MissingType = MISSING,
@@ -1284,7 +1289,7 @@ def log_forward_pass(
         cache_path = cache_root / f"{cache_key}.pkl"
         if cache_path.exists():
             with cache_path.open("rb") as file:
-                cached_log = pickle.load(file)
+                cached_log = cast(ModelLog, pickle.load(file))
             cached_log.capture_cache_hit = True
             cached_log.capture_cache_key = cache_key
             cached_log.capture_cache_path = str(cache_path)
@@ -1307,8 +1312,8 @@ def log_forward_pass(
         # "all" or "none": no name resolution needed, so one pass suffices.
         model_log = _run_model_and_save_specified_activations(
             model=model,
-            input_args=input_args,  # type: ignore[arg-type]
-            input_kwargs=input_kwargs,  # type: ignore[arg-type]
+            input_args=input_args,
+            input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             keep_unsaved_layers=keep_unsaved_layers,
             output_device=output_device,
@@ -1320,7 +1325,7 @@ def log_forward_pass(
             detach_saved_tensors=detach_saved_tensors,
             save_function_args=save_function_args,
             save_gradients=save_gradients,
-            gradients_to_save=gradients_to_save_resolved,  # type: ignore[arg-type]
+            gradients_to_save=gradients_to_save_resolved,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -1358,8 +1363,8 @@ def log_forward_pass(
             print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
         model_log = _run_model_and_save_specified_activations(
             model=model,
-            input_args=input_args,  # type: ignore[arg-type]
-            input_kwargs=input_kwargs,  # type: ignore[arg-type]
+            input_args=input_args,
+            input_kwargs=input_kwargs,
             layers_to_save=None,
             keep_unsaved_layers=True,
             output_device=output_device,
@@ -1403,10 +1408,10 @@ def log_forward_pass(
         model_log.gradients_to_save = gradients_to_save_resolved
         model_log.save_new_activations(
             model=model,
-            input_args=input_args,  # type: ignore[arg-type]
+            input_args=cast(torch.Tensor | list[Any], input_args),
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
-            gradients_to_save=gradients_to_save_resolved,  # type: ignore[arg-type]
+            gradients_to_save=gradients_to_save_resolved,
             random_seed=random_seed,
             train_mode=train_mode_value,
         )
@@ -1441,8 +1446,8 @@ def log_forward_pass(
 
 def log_model_metadata(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
 ) -> ModelLog:
     """Return model metadata without saving any activations.
 
@@ -1469,8 +1474,8 @@ def log_model_metadata(
 
 def get_model_metadata(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
 ) -> ModelLog:
     """Deprecated alias for :func:`log_model_metadata`."""
 
@@ -1480,8 +1485,8 @@ def get_model_metadata(
 
 def summary(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
     **summary_kwargs: Any,
 ) -> str:
     """Run a metadata-only forward pass and return a rendered summary string.
@@ -1510,7 +1515,7 @@ def summary(
 
     model_log = _run_model_and_save_specified_activations(
         model=model,
-        input_args=input_args,  # type: ignore[arg-type]
+        input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
         keep_unsaved_layers=True,
@@ -1524,8 +1529,8 @@ def summary(
 
 def show_model_graph(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List, Tuple],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
     view: VisModeLiteral | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
@@ -1550,7 +1555,7 @@ def show_model_graph(
     vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
-    random_seed: Optional[int] = None,
+    random_seed: int | None = None,
     detect_loops: bool | MissingType = MISSING,
     verbose: bool = False,
     detect_recurrent_patterns: bool | MissingType = MISSING,
@@ -1659,7 +1664,7 @@ def show_model_graph(
 
     model_log = _run_model_and_save_specified_activations(
         model=model,
-        input_args=input_args,  # type: ignore[arg-type]
+        input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
         activation_transform=None,
@@ -2078,9 +2083,9 @@ def show_bundle_graph(
 
 def validate_forward_pass(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
-    random_seed: Union[int, None] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    random_seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
@@ -2139,7 +2144,7 @@ def validate_forward_pass(
     # Save state_dict first because requires_grad forcing during logging can
     # alter parameter metadata; we restore it afterward.
     state_dict = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    model_log: Optional[ModelLog] = None
+    model_log: ModelLog | None = None
     activations_are_valid = False
     try:
         ground_truth_output_all = get_vars_of_type_from_obj(
@@ -2190,9 +2195,9 @@ def validate_forward_pass(
 
 def validate_backward_pass(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
-    loss_fn: Optional[Callable[[Any], torch.Tensor]] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     perturb_saved_gradients: bool = False,
     atol: float = 1e-5,
@@ -2238,9 +2243,9 @@ def validate_backward_pass(
 
 def validate_saved_activations(
     model: nn.Module,
-    input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
-    input_kwargs: Optional[Dict[Any, Any]] = None,
-    random_seed: Union[int, None] = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    random_seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
@@ -2258,7 +2263,7 @@ def validate_saved_activations(
 
 
 def validate_batch_of_models_and_inputs(
-    models_and_inputs_dict: Dict[str, Dict[str, Union[str, Callable, Dict]]],
+    models_and_inputs_dict: dict[str, dict[str, Any]],
     out_path: str,
     redo_model_if_already_run: bool = True,
 ) -> "pd.DataFrame":

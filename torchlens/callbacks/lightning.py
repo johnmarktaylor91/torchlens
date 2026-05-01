@@ -28,7 +28,7 @@ def _lightning_callback_base() -> Any:
 _LightningCallback: Any = _lightning_callback_base()
 
 
-class LayerProfilerCallback(_LightningCallback):
+class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
     """Log TorchLens layer summaries from Lightning batch hooks."""
 
     def __init__(

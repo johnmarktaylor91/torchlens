@@ -13,6 +13,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    cast,
 )
 
 from ...utils.display import format_flops, human_readable_size
@@ -1366,8 +1367,8 @@ def _iter_operation_entries(
     """
     effective_mode = _effective_mode(model_log, mode)
     if effective_mode == "rolled":
-        return model_log.layer_logs.values()
-    return model_log.layer_list
+        return cast(Iterable["LayerLog | LayerPassLog"], model_log.layer_logs.values())
+    return cast(Iterable["LayerLog | LayerPassLog"], model_log.layer_list)
 
 
 def _effective_mode(model_log: "ModelLog", mode: SummaryMode) -> Literal["rolled", "unrolled"]:
@@ -1502,7 +1503,7 @@ def _event_bool_layer(event: "ConditionalEvent") -> str:
     if not event.bool_layers:
         return "-"
     if len(event.bool_layers) == 1:
-        return event.bool_layers[0]
+        return str(event.bool_layers[0])
     return f"{event.bool_layers[0]} +{len(event.bool_layers) - 1}"
 
 

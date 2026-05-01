@@ -1814,7 +1814,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
 
     # Build same-layer groups from the authoritative recurrent_group lists
     # Key: frozenset of labels, Value: list of LayerPassLogs in the group
-    groups_seen: dict[frozenset, list] = {}
+    groups_seen: dict[frozenset[str], list[str]] = {}
 
     for lpl in ml.layer_list:
         slo = lpl.recurrent_group
@@ -1915,7 +1915,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
     # different passes).  The func_name is included in the grouping key
     # because different operations (e.g., isinf, expand, nantonum) can consume
     # the same parameter tensor without being the same logical layer.
-    param_groups: dict[tuple, list] = defaultdict(list)
+    param_groups: dict[tuple[str, tuple[str, ...]], list[LayerPassLog]] = defaultdict(list)
     for lpl in ml.layer_list:
         if lpl.uses_params and lpl.parent_param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl.parent_param_barcodes)))
@@ -2147,8 +2147,8 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
         addr = mod_log.address
 
         # Address tree acyclicity: walk address_parent to root
-        visited = set()
-        current = addr
+        visited: set[str] = set()
+        current: str | None = addr
         while current is not None:
             if current in visited:
                 raise MetadataInvariantError(

@@ -800,8 +800,8 @@ def _resolve_single_origin(
     """
 
     if hasattr(site, "layer_label") and hasattr(site, "activation"):
-        return site
-    return log.resolve_sites(site, strict=strict, max_fanout=1).first()
+        return cast("LayerPassLog", site)
+    return cast("LayerPassLog", log.resolve_sites(site, strict=strict, max_fanout=1).first())
 
 
 def _func_call_groups(log: "ModelLog") -> dict[int | None, tuple["LayerPassLog", ...]]:
@@ -945,7 +945,7 @@ def _final_label_for_ref(log: "ModelLog", label: str) -> str:
 
     if label in log.layer_dict_all_keys:
         return label
-    return getattr(log, "_raw_to_final_layer_labels", {}).get(label, label)
+    return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
 
 
 def _warn_if_unexpected_parent(

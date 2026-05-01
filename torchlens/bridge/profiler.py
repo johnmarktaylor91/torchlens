@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
@@ -99,7 +99,7 @@ def _load_trace(kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     if isinstance(kineto_trace, dict):
         return kineto_trace
     path = Path(kineto_trace)
-    return json.loads(path.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
 
 
 def _trace_events(trace: dict[str, Any]) -> list[dict[str, Any]]:

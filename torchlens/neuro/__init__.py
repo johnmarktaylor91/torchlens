@@ -5,7 +5,7 @@ Gated by `pip install torchlens[neuro]`.
 import importlib
 
 _REQUIRED_DEPS = ("rsatoolbox", "brainscore_core")
-_missing_deps = []
+_missing_deps: list[str] = []
 
 for _dep in _REQUIRED_DEPS:
     try:
@@ -20,4 +20,4 @@ if _missing_deps:
         f"`pip install torchlens[neuro]`. Missing deps: {_missing}"
     )
 
-__all__ = []
+__all__: list[str] = []

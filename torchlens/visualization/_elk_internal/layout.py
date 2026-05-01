@@ -11,6 +11,8 @@ Graphviz ``dot`` engine can hang or crash.  This module provides:
 3. Graceful fallback to Graphviz ``sfdp`` when Node.js/elkjs is unavailable.
 """
 
+from __future__ import annotations
+
 import functools
 import gc
 import json
@@ -20,7 +22,7 @@ import resource
 import subprocess
 import tempfile
 import warnings
-from typing import Optional
+from typing import Any, Optional, cast
 
 # Set the soft stack limit to match the hard limit once at import time.
 # Child processes (Node.js) inherit this, removing the need for preexec_fn
@@ -114,7 +116,7 @@ if (jsonPath) {
 """
 
 
-def _find_node_binary() -> "Optional[str]":
+def _find_node_binary() -> Optional[str]:
     """Locate the ``node`` binary, probing nvm paths if not on PATH."""
     import os
     import shutil
@@ -137,7 +139,7 @@ def _find_node_binary() -> "Optional[str]":
     return None
 
 
-def _node_env() -> dict:
+def _node_env() -> dict[str, str]:
     """Build environment dict for Node.js subprocesses.
 
     Sets NODE_PATH to include the global node_modules directory so that
@@ -219,11 +221,11 @@ def get_node_placement_engine(vis_node_placement: str, num_nodes: int) -> str:
 
 
 def build_elk_graph_hierarchical(
-    entries_to_plot,
+    entries_to_plot: dict[str, Any],
     show_buffer_layers: bool = False,
-    edge_map: Optional[dict] = None,
+    edge_map: Optional[dict[str, Any]] = None,
     skipped_labels: Optional[set[str]] = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build an ELK JSON graph with module hierarchy from model entries.
 
     Creates nested ELK compound nodes that mirror the module containment
@@ -301,10 +303,10 @@ def build_elk_graph_hierarchical(
             root_nodes.append(label)
 
     # Step 4: Build ELK graph recursively.
-    def _make_elk_node(label):
+    def _make_elk_node(label: str) -> dict[str, Any]:
         return {"id": label, "width": _DEFAULT_NODE_WIDTH, "height": _DEFAULT_NODE_HEIGHT}
 
-    def _make_elk_group(module_addr, visited=None):
+    def _make_elk_group(module_addr: str, visited: set[str] | None = None) -> dict[str, Any] | None:
         if visited is None:
             visited = set()
         if module_addr in visited:
@@ -378,7 +380,7 @@ def build_elk_graph_hierarchical(
     }
 
 
-def build_elk_graph(dot_source: str) -> dict:
+def build_elk_graph(dot_source: str) -> dict[str, Any]:
     """Parse a Graphviz DOT source string and build an ELK JSON graph.
 
     Extracts node IDs and edges from the DOT source to build a flat ELK graph
@@ -443,7 +445,7 @@ def build_elk_graph(dot_source: str) -> dict:
     }
 
 
-def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
+def run_elk_layout(elk_graph: dict[str, Any], timeout: Optional[int] = None) -> dict[str, Any]:
     """Run ELK layout via Node.js subprocess.
 
     Args:
@@ -530,10 +532,10 @@ def run_elk_layout(elk_graph: dict, timeout: Optional[int] = None) -> dict:
         )
         raise RuntimeError(f"ELK layout failed: {detail}")
 
-    return json.loads(result.stdout)
+    return cast(dict[str, Any], json.loads(result.stdout))
 
 
-def inject_elk_positions(dot_source: str, positioned_graph: dict) -> str:
+def inject_elk_positions(dot_source: str, positioned_graph: dict[str, Any]) -> str:
     """Inject ELK-computed positions into a DOT source string.
 
     Adds ``pos="x,y!"`` attributes to each node so that ``neato -n`` will
@@ -547,9 +549,9 @@ def inject_elk_positions(dot_source: str, positioned_graph: dict) -> str:
         Modified DOT source with position attributes injected.
     """
     # Build position lookup from ELK output, recursing into compound nodes.
-    positions = {}
+    positions: dict[str, tuple[float, float]] = {}
 
-    def _collect_positions(node, offset_x=0, offset_y=0):
+    def _collect_positions(node: dict[str, Any], offset_x: float = 0, offset_y: float = 0) -> None:
         """Recurse into ELK compound nodes, accumulating absolute positions."""
         for child in node.get("children", []):
             abs_x = offset_x + child.get("x", 0)
@@ -573,7 +575,7 @@ def inject_elk_positions(dot_source: str, positioned_graph: dict) -> str:
 
     _DOT_KEYWORDS = {"graph", "digraph", "subgraph", "node", "edge", "strict"}
 
-    def _inject_pos(match):
+    def _inject_pos(match: re.Match[str]) -> str:
         # match has groups: (quoted_id, unquoted_id, attrs)
         node_id = match.group(1) or match.group(2)
         attrs = match.group(3)
@@ -630,7 +632,7 @@ def render_with_elk(
     vis_outpath: str,
     vis_fileformat: str,
     vis_save_only: bool = False,
-    entries_to_plot=None,
+    entries_to_plot: dict[str, Any] | None = None,
     show_buffer_layers: bool = False,
 ) -> None:
     """Render using ELK for layout and neato -n for drawing.
@@ -680,7 +682,7 @@ def render_with_elk(
             os.remove(positioned_path)
 
 
-def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
+def _seed_stress_positions(elk_graph: dict[str, Any], edges: list[dict[str, Any]]) -> None:
     """Assign initial positions to ELK nodes via topological sort.
 
     For the stress algorithm, initial positions bias the final layout.
@@ -694,9 +696,9 @@ def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
     from collections import defaultdict, deque
 
     # Collect all leaf node IDs from the ELK graph.
-    leaf_ids = set()
+    leaf_ids: set[str] = set()
 
-    def _collect_leaves(node):
+    def _collect_leaves(node: dict[str, Any]) -> None:
         for ch in node.get("children", []):
             if ch["id"].startswith("group_"):
                 _collect_leaves(ch)
@@ -748,7 +750,7 @@ def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
     spacing_y = 100  # points between ranks
     spacing_x = 250  # points between nodes in same rank
 
-    positions = {}
+    positions: dict[str, tuple[int, int]] = {}
     for d, nodes in ranks.items():
         for i, nid in enumerate(nodes):
             x = i * spacing_x
@@ -756,7 +758,7 @@ def _seed_stress_positions(elk_graph: dict, edges: list) -> None:
             positions[nid] = (x, y)
 
     # Inject positions into ELK leaf nodes.
-    def _inject(node):
+    def _inject(node: dict[str, Any]) -> None:
         for ch in node.get("children", []):
             if ch["id"].startswith("group_"):
                 _inject(ch)
@@ -783,12 +785,12 @@ _ELK_STRESS_LIMIT = 100_000  # nodes — above this, ELK stress cannot allocate
 
 
 def _compute_topological_layout(
-    node_data: dict,
-    all_edges: list,
-    elk_id_sizes: dict,
-    module_direct_nodes: dict,
-    module_child_map: dict,
-) -> tuple:
+    node_data: dict[str, dict[str, Any]],
+    all_edges: list[dict[str, Any]],
+    elk_id_sizes: dict[str, tuple[float, float]],
+    module_direct_nodes: dict[str, list[str]],
+    module_child_map: dict[str, set[str]],
+) -> tuple[dict[str, tuple[float, float]], dict[str, tuple[float, float, float, float]], float]:
     """Compute node positions via topological rank layout.
 
     Returns ``(positions, compound_bboxes, max_y)`` with the same interface
@@ -807,28 +809,35 @@ def _compute_topological_layout(
     from collections import defaultdict, deque
 
     # Map elk_id -> dot_name for reverse lookup.
-    elk_to_dot = {}
+    elk_to_dot: dict[str, str] = {}
     for dot_name, nd in node_data.items():
         elk_to_dot[nd["elk_id"]] = dot_name
 
     all_elk_ids = set(nd["elk_id"] for nd in node_data.values())
 
     # Build adjacency from DOT-level edges.
-    children_of = defaultdict(list)
-    in_degree: dict = defaultdict(int)
+    children_of: dict[str, list[str]] = defaultdict(list)
+    in_degree: dict[str, int] = defaultdict(int)
     for e in all_edges:
         src = e.get("tail_name") or e["tail_name"]
         tgt = e.get("head_name") or e["head_name"]
+        if not isinstance(src, str) or not isinstance(tgt, str):
+            continue
         # Map dot_name -> elk_id
         src_eid = node_data.get(src, {}).get("elk_id")
         tgt_eid = node_data.get(tgt, {}).get("elk_id")
-        if src_eid in all_elk_ids and tgt_eid in all_elk_ids:
+        if (
+            isinstance(src_eid, str)
+            and isinstance(tgt_eid, str)
+            and src_eid in all_elk_ids
+            and tgt_eid in all_elk_ids
+        ):
             children_of[src_eid].append(tgt_eid)
             in_degree[tgt_eid] += 1
 
     # Kahn's algorithm for topological depth assignment.
-    depth: dict = {}
-    queue: deque = deque()
+    depth: dict[str, int] = {}
+    queue: deque[str] = deque()
     for nid in all_elk_ids:
         if in_degree[nid] == 0:
             depth[nid] = 0
@@ -850,18 +859,18 @@ def _compute_topological_layout(
             depth[nid] = 0
 
     # Group by depth rank.
-    ranks = defaultdict(list)
+    ranks: dict[int, list[str]] = defaultdict(list)
     for nid, d in depth.items():
         ranks[d].append(nid)
 
     # Sort nodes within each rank by module membership for visual grouping.
     # Build elk_id -> module_key lookup.
-    elk_id_module = {}
+    elk_id_module: dict[str, str] = {}
     for mod_key, dot_names in module_direct_nodes.items():
         for dn in dot_names:
-            nd = node_data.get(dn)
-            if nd:
-                elk_id_module[nd["elk_id"]] = mod_key
+            node_info = node_data.get(dn)
+            if node_info:
+                elk_id_module[node_info["elk_id"]] = mod_key
 
     for d in ranks:
         ranks[d].sort(key=lambda nid: elk_id_module.get(nid, ""))
@@ -869,7 +878,7 @@ def _compute_topological_layout(
     # Compute positions.  Y = depth rank, X = position within rank.
     spacing_y = 120  # points between ranks
     spacing_x = 30  # points between node edges within a rank
-    positions = {}
+    positions: dict[str, tuple[float, float]] = {}
 
     for d, nodes in sorted(ranks.items()):
         x_cursor = 0.0
@@ -884,8 +893,8 @@ def _compute_topological_layout(
 
     # Compute module bounding boxes from node positions.
     # Collect all elk_ids in each module (including nested children).
-    def _collect_module_elk_ids(mod_key):
-        ids = set()
+    def _collect_module_elk_ids(mod_key: str) -> set[str]:
+        ids: set[str] = set()
         for dn in module_direct_nodes.get(mod_key, []):
             nd = node_data.get(dn)
             if nd and nd["elk_id"] in positions:
@@ -924,7 +933,7 @@ def _compute_topological_layout(
     return positions, compound_bboxes, max_y
 
 
-def _estimate_node_size(label: str) -> tuple:
+def _estimate_node_size(label: str) -> tuple[float, float]:
     """Estimate graphviz node dimensions in points from an HTML label.
 
     Splits on ``<br/>`` to count lines, strips HTML tags to measure character
@@ -970,19 +979,19 @@ def _dot_id(name: str) -> str:
 
 
 def render_elk_direct(
-    model_log,
-    entries_to_plot: dict,
+    model_log: Any,
+    entries_to_plot: dict[str, Any],
     vis_mode: str,
     vis_nesting_depth: int,
     show_buffer_layers: bool,
-    overrides,
-    node_mode,
-    node_spec_fn,
-    collapsed_node_spec_fn,
-    collapse_fn,
-    skip_fn,
-    edge_map,
-    skipped_labels,
+    overrides: Any,
+    node_mode: Any,
+    node_spec_fn: Any,
+    collapsed_node_spec_fn: Any,
+    collapse_fn: Any,
+    skip_fn: Any,
+    edge_map: dict[str, Any] | None,
+    skipped_labels: set[str],
     vis_outpath: str,
     vis_fileformat: str,
     vis_save_only: bool,
@@ -1058,7 +1067,7 @@ def render_elk_direct(
     collapsed_set = set()
     edges_used = set()
 
-    def _module_keys_for_node(node, is_collapsed_mod):
+    def _module_keys_for_node(node: Any, is_collapsed_mod: bool) -> list[str]:
         """Get module hierarchy keys for a node."""
         if is_collapsed_mod:
             mods = list(node.containing_modules[: vis_nesting_depth - 1])
@@ -1068,7 +1077,7 @@ def render_elk_direct(
             return list(dict.fromkeys(m.split(":")[0] for m in mods))
         return mods
 
-    def _assign_to_hierarchy(node_name, mod_keys, has_ancestor):
+    def _assign_to_hierarchy(node_name: str, mod_keys: list[str], has_ancestor: bool) -> None:
         """Place a node into the module tree."""
         if mod_keys:
             module_direct_nodes[mod_keys[-1]].append(node_name)
@@ -1125,7 +1134,7 @@ def render_elk_direct(
                 else:
                     title = f"<b>@{mod_addr} (x{np_})</b>"
 
-                out_shape: tuple = mod_out.tensor_shape or ()
+                out_shape: tuple[Any, ...] = mod_out.tensor_shape or ()
                 if len(out_shape) > 1:
                     ss = "x".join(str(s) for s in out_shape)
                 elif len(out_shape) == 1:
@@ -1218,7 +1227,7 @@ def render_elk_direct(
             _assign_to_hierarchy(node_name, mod_keys, node.has_input_ancestor)
 
         # ── Collect edges (this node -> skip-filtered children) ──
-        for render_edge in edge_map.get(node.layer_label, []):
+        for render_edge in (edge_map or {}).get(node.layer_label, []):
             child_node = render_edge.target
             metadata_child = render_edge.metadata_child
             if child_node.is_buffer_layer and not show_buffer_layers:
@@ -1314,7 +1323,7 @@ def render_elk_direct(
         # ── ELK layout (Node.js subprocess) ──
         elk_graph = build_elk_graph_hierarchical(entries_to_plot, show_buffer_layers)
 
-        def _patch_sizes(elk_node):
+        def _patch_sizes(elk_node: dict[str, Any]) -> None:
             for ch in elk_node.get("children", []):
                 if ch["id"].startswith("group_"):
                     _patch_sizes(ch)
@@ -1348,7 +1357,7 @@ def render_elk_direct(
             )
         else:
 
-            def _collect_pos(elk_node, ox=0, oy=0):
+            def _collect_pos(elk_node: dict[str, Any], ox: float = 0, oy: float = 0) -> None:
                 for ch in elk_node.get("children", []):
                     ax = ox + ch.get("x", 0)
                     ay = oy + ch.get("y", 0)
@@ -1375,7 +1384,7 @@ def render_elk_direct(
     )
     lines.append("  node [ordering=out]")
 
-    def _node_line(name, indent=1):
+    def _node_line(name: str, indent: int = 1) -> str:
         """Generate a DOT node declaration with position and size."""
         nd = node_data[name]
         parts = []
@@ -1392,7 +1401,7 @@ def render_elk_direct(
     # Compute max module depth for penwidth scaling
     all_mod_keys = set(module_direct_nodes.keys()) | set(module_child_map.keys())
 
-    def _max_depth(mod_key, depth=0, visited=None):
+    def _max_depth(mod_key: str, depth: int = 0, visited: set[str] | None = None) -> int:
         if visited is None:
             visited = set()
         if mod_key in visited:
@@ -1411,7 +1420,7 @@ def render_elk_direct(
 
     max_nest = max((_max_depth(m) for m in top_modules), default=0) + 1
 
-    def _write_cluster(mod_key, depth, indent):
+    def _write_cluster(mod_key: str, depth: int, indent: int) -> None:
         """Recursively write a cluster subgraph with its nodes and children."""
         prefix = "  " * indent
         safe = mod_key.replace(":", "_pass").replace(".", "_")
@@ -1539,13 +1548,20 @@ def render_elk_direct(
     return dot_source
 
 
-def _add_arg_label(parent_node, child_node, edge_dict, model_log, show_buffer_layers):
+def _add_arg_label(
+    parent_node: Any,
+    child_node: Any,
+    edge_dict: dict[str, Any],
+    model_log: Any,
+    show_buffer_layers: bool,
+) -> None:
     """Add argument position labels to an edge when the child has multiple parents.
 
     Simplified version of ``rendering._label_node_arguments_if_needed`` for the
     fast ELK path.
     """
-    from ..rendering import LayerPassLog, LayerLog
+    from ...data_classes.layer_log import LayerLog
+    from ...data_classes.layer_pass_log import LayerPassLog
 
     # Count visible parents
     num_parents = len(child_node.parent_layers)

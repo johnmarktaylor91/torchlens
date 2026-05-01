@@ -13,8 +13,9 @@ can access these fields via ``__getattr__`` delegation.
 """
 
 import weakref
+from collections.abc import Iterator
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
 
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
@@ -23,6 +24,8 @@ from .layer_pass_log import LayerPassLog
 
 if TYPE_CHECKING:
     import pandas as pd
+
+    from .model_log import ModelLog
 
 
 def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
@@ -62,7 +65,7 @@ class BufferLog(LayerPassLog):
         addr = self.buffer_address
         if addr is None:
             return ""
-        return addr.rsplit(".", 1)[-1]
+        return cast(str, addr.rsplit(".", 1)[-1])
 
     @property
     def module_address(self) -> str:
@@ -70,7 +73,7 @@ class BufferLog(LayerPassLog):
         addr = self.buffer_address
         if addr is None:
             return ""
-        return addr.rsplit(".", 1)[0] if "." in addr else ""
+        return cast(str, addr.rsplit(".", 1)[0]) if "." in addr else ""
 
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
@@ -121,7 +124,7 @@ class BufferAccessor:
     def __init__(
         self,
         buffer_dict: Dict[str, "BufferLog"],
-        source_model_log=None,
+        source_model_log: "ModelLog | None" = None,
     ) -> None:
         self._dict = buffer_dict  # address -> BufferLog
         self._list = list(buffer_dict.values())  # insertion-order list
@@ -153,7 +156,7 @@ class BufferAccessor:
         """Return the number of buffers."""
         return len(self._dict)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["BufferLog"]:
         """Iterate over BufferLog objects in insertion order."""
         return iter(self._list)
 

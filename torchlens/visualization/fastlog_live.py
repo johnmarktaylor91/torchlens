@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from html import escape
-from typing import Any
+from typing import Any, cast
 
 import graphviz
 
@@ -192,7 +192,7 @@ def show_graph(
             dot.edge(f"event_{op_contexts[op_number - 1].event_index}", f"event_{ctx.event_index}")
     if vis_outpath is not None:
         dot.render(vis_outpath, format=vis_fileformat, cleanup=True, view=not vis_save_only)
-    return dot.source
+    return cast(str, dot.source)
 
 
 def summary(trace: RecordingTrace) -> str:
@@ -248,4 +248,5 @@ def timeline_html(trace: RecordingTrace) -> Any:
         "background:#f2f2f2;border-radius:4px;white-space:nowrap}"
         "</style><div>" + "".join(row_html) + "</div>"
     )
-    return HTML(html)
+    html_factory = cast(Any, HTML)
+    return html_factory(html)

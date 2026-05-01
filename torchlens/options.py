@@ -752,7 +752,7 @@ class CaptureOptions:
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("CaptureOptions", instance)
+        return instance
 
 
 @dataclass(frozen=True, init=False)
@@ -862,7 +862,7 @@ class SaveOptions:
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _SAVE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("SaveOptions", instance)
+        return instance
 
 
 @dataclass(frozen=True, init=False)
@@ -1148,7 +1148,7 @@ class VisualizationOptions:
         _validate_buffer_visibility(values["show_buffers"])
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("VisualizationOptions", instance)
+        return instance
 
 
 @dataclass(frozen=True, init=False)
@@ -1231,7 +1231,7 @@ class ReplayOptions:
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _REPLAY_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("ReplayOptions", instance)
+        return instance
 
 
 @dataclass(frozen=True, init=False)
@@ -1330,7 +1330,7 @@ class InterventionOptions:
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _INTERVENTION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("InterventionOptions", instance)
+        return instance
 
 
 @dataclass(frozen=True, init=False)
@@ -1429,7 +1429,7 @@ class StreamingOptions:
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _STREAMING_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
-        return cast("StreamingOptions", instance)
+        return instance
 
 
 def merge_capture_options(

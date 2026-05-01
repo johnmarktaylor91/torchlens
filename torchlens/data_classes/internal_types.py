@@ -9,7 +9,7 @@ attribute access (no per-instance ``__dict__``).
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -29,8 +29,8 @@ class FuncExecutionContext:
     """
 
     time_elapsed: float
-    rng_states: Dict
-    autocast_state: Dict
+    rng_states: dict[str, Any]
+    autocast_state: dict[str, Any]
 
 
 @dataclass(slots=True)
@@ -51,7 +51,7 @@ class VisualizationOverrides:
         module: Overrides for module subgraph clusters (e.g. label style).
     """
 
-    graph: Optional[Dict] = None
-    edge: Optional[Dict] = None
-    gradient_edge: Optional[Dict] = None
-    module: Optional[Dict] = None
+    graph: dict[str, Any] | None = None
+    edge: dict[str, Any] | None = None
+    gradient_edge: dict[str, Any] | None = None
+    module: dict[str, Any] | None = None

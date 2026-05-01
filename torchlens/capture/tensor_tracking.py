@@ -31,7 +31,7 @@ Key concepts:
 
 import itertools as it
 import weakref
-from typing import Any, Dict, List, Set, Tuple, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -61,13 +61,13 @@ def _add_backward_hook(self: "ModelLog", t: torch.Tensor, tensor_label: str) -> 
     # Weak reference prevents ModelLog → tensor → hook → ModelLog ref cycle.
     self_ref = weakref.ref(self)
 
-    def log_grad_to_model_history(grad):
+    def log_grad_to_model_history(grad: torch.Tensor) -> None:
         model_log = self_ref()
         if model_log is not None:
             _log_tensor_grad(model_log, grad, tensor_label)
 
     if (t.grad_fn is not None) or t.requires_grad:
-        t.register_hook(log_grad_to_model_history)
+        t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
 
 
 def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str) -> None:
@@ -106,10 +106,10 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
 
 def _locate_parent_tensors_in_args(
     self: "ModelLog",
-    parent_log_entries: List[LayerPassLog],
-    args: Tuple[Any],
-    kwargs: Dict[Any, Any],
-) -> Dict:
+    parent_log_entries: list[LayerPassLog],
+    args: tuple[Any, ...],
+    kwargs: dict[Any, Any],
+) -> dict[str, dict[Any, str]]:
     """Map each parent tensor to its position in the function's args/kwargs.
 
     Supports up to 2 levels of nesting:
@@ -125,7 +125,7 @@ def _locate_parent_tensors_in_args(
     Returns:
         ``{"args": {pos: label, ...}, "kwargs": {key: label, ...}}``
     """
-    tensor_all_arg_positions: Dict[str, Dict] = {"args": {}, "kwargs": {}}
+    tensor_all_arg_positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     arg_struct_dict = {"args": args, "kwargs": kwargs}
 
     for parent_entry in parent_log_entries:
@@ -144,8 +144,8 @@ def _locate_parent_tensors_in_args(
 def _find_arg_positions_for_single_parent(
     parent_entry: LayerPassLog,
     arg_type: str,
-    arg_struct: Union[List, Tuple, Dict],
-    tensor_all_arg_positions: Dict,
+    arg_struct: list[Any] | tuple[Any, ...] | dict[Any, Any],
+    tensor_all_arg_positions: dict[str, dict[Any, str]],
 ) -> None:
     """Locate a single parent tensor within args or kwargs (up to 2 nesting levels).
 
@@ -183,8 +183,8 @@ def _find_arg_positions_for_single_parent(
 
 
 def _get_ancestors_from_parents(
-    parent_entries: List[LayerPassLog],
-) -> Tuple[Set[str], Set[str]]:
+    parent_entries: list[LayerPassLog],
+) -> tuple[set[str], set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
     Args:
@@ -226,8 +226,8 @@ def _update_tensor_family_links(self: "ModelLog", entry_to_update: LayerPassLog)
 
 
 def _process_parent_param_passes(
-    arg_parameters: List[torch.nn.Parameter],
-) -> Dict[str, int]:
+    arg_parameters: list[torch.nn.Parameter],
+) -> dict[str, int]:
     """Assign persistent barcodes to parameters and track their pass number.
 
     On first encounter, each parameter gets a random barcode (``tl_param_barcode``)
@@ -262,7 +262,7 @@ def _process_parent_param_passes(
     return parent_param_passes
 
 
-def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: str) -> str:
+def _make_raw_param_group_barcode(indiv_param_barcodes: list[str], layer_type: str) -> str:
     """Build an operation_equivalence_type string for a parameterized operation.
 
     Combines the layer type with sorted parameter barcodes to produce a
@@ -287,7 +287,11 @@ def _make_raw_param_group_barcode(indiv_param_barcodes: List[str], layer_type: s
 
 
 def _get_operation_equivalence_type(
-    args: Tuple, kwargs: Dict, i: int, layer_type: str, fields_dict: Dict
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    i: int,
+    layer_type: str,
+    fields_dict: dict[str, Any],
 ) -> str:
     """Build an operation_equivalence_type string for a NON-parameterized operation.
 
@@ -325,7 +329,7 @@ def _get_operation_equivalence_type(
     return operation_equivalence_type
 
 
-def _get_hash_from_args(args, kwargs) -> str:
+def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
     """Compute a structural hash of non-tensor arguments for equivalence fingerprinting.
 
     Tensor arguments are excluded (they define graph edges, not structural identity).
@@ -337,7 +341,7 @@ def _get_hash_from_args(args, kwargs) -> str:
         A short deterministic hash string, or ``"no_args"`` if no non-tensor
         arguments are present.
     """
-    args_to_hash: List[Any] = []
+    args_to_hash: list[Any] = []
     for a, arg in enumerate(args):
         _append_arg_hash(arg, f"pos{a}", args_to_hash)
     for key, arg in kwargs.items():
@@ -348,7 +352,7 @@ def _get_hash_from_args(args, kwargs) -> str:
     return make_short_barcode_from_input(args_to_hash)
 
 
-def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> None:
+def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int = 0) -> None:
     """Append structural fingerprint tokens for a single argument to the accumulator list.
 
     Builds an ``operation_equivalence_type`` -- a structural fingerprint of the operation's
@@ -384,7 +388,7 @@ def _append_arg_hash(arg, prefix: str, args_to_hash: list, _depth: int = 0) -> N
         args_to_hash.append(f"{prefix}_{arg}")
 
 
-def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> List[str]:
+def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> list[str]:
     """Compute a tensor's current module nesting by replaying entry/exit transitions.
 
     Each tensor records:
@@ -409,4 +413,4 @@ def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> List[str]:
             containing_modules.append(thread_module[1:])
         elif (thread_module[0] == "-") and (thread_module[1:] in containing_modules):
             containing_modules.remove(thread_module[1:])
-    return containing_modules
+    return cast(list[str], containing_modules)

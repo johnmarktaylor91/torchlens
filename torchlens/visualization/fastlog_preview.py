@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from ..fastlog._predicate import _normalize_capture_decision
 from ..fastlog._record_context import _build_record_context
@@ -296,4 +296,4 @@ def preview_fastlog(
         show_predicate_inputs=show_predicate_inputs,
         show_module_events=show_module_events,
     )
-    return model_log.render_graph(node_spec_fn=node_spec_fn, **render_kwargs)
+    return cast(str, model_log.render_graph(node_spec_fn=node_spec_fn, **render_kwargs))

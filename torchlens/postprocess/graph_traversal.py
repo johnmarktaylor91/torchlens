@@ -10,7 +10,7 @@ Step 4 (_mark_input_output_distances): Optional forward/backward BFS recording
 """
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, cast
 
 import torch
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 def _add_output_layers(
-    self: "ModelLog", output_tensors: List[torch.Tensor], output_addresses: List[str]
+    self: "ModelLog", output_tensors: list[torch.Tensor], output_addresses: list[str]
 ) -> None:
     """Step 1: Add dedicated output nodes to the graph.
 
@@ -43,7 +43,7 @@ def _add_output_layers(
     new_output_layers = []
     for i, output_layer_label in enumerate(self.output_layers):
         output_node = self[output_layer_label]
-        new_output_node = output_node.copy()
+        new_output_node = cast(LayerPassLog, output_node.copy())
         new_output_node.layer_type = "output"
         new_output_node.is_output_layer = True
         new_output_node.is_input_layer = False
@@ -190,7 +190,7 @@ def _add_output_layers(
     self.output_layers = new_output_layers
 
 
-def _find_output_ancestors(self) -> None:
+def _find_output_ancestors(self: "ModelLog") -> None:
     """Step 2: Mark every node that is an ancestor of an output node.
 
     Uses a LIFO stack (DFS) starting from output nodes. For each node popped,
@@ -222,7 +222,7 @@ def _find_output_ancestors(self) -> None:
                 node_stack.append(parent_node_label)
 
 
-def _remove_orphan_nodes(self) -> None:
+def _remove_orphan_nodes(self: "ModelLog") -> None:
     """Step 3: Remove orphan nodes unreachable from both inputs and outputs.
 
     Floods BIDIRECTIONALLY from input and output nodes simultaneously. A node is
@@ -268,7 +268,9 @@ def _remove_orphan_nodes(self) -> None:
     self._raw_layer_dict = new_layer_dict
 
 
-def _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen: set[str]) -> set[str]:
+def _expand_seen_nodes_to_complete_func_call_groups(
+    self: "ModelLog", nodes_seen: set[str]
+) -> set[str]:
     """Add raw-label siblings for any surviving ``func_call_id`` group.
 
     Parameters
@@ -300,7 +302,7 @@ def _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen: set[str]) 
     return expanded_seen
 
 
-def _mark_input_output_distances(self) -> None:
+def _mark_input_output_distances(self: "ModelLog") -> None:
     """Step 4: Compute min/max hop distances from inputs and outputs.
 
     Runs two unidirectional floods: forward from inputs (following child_layers)
@@ -316,7 +318,7 @@ def _mark_input_output_distances(self) -> None:
     _flood_graph_from_input_or_output_nodes(self, "output")
 
 
-def _flood_graph_from_input_or_output_nodes(self, mode: str) -> None:
+def _flood_graph_from_input_or_output_nodes(self: "ModelLog", mode: str) -> None:
     """Flood the graph from input or output nodes, tracking min/max distance.
 
     Traverses unidirectionally from starting nodes (input or output), recording
@@ -423,14 +425,14 @@ def _update_node_distance_vals(
 
 
 def _check_whether_to_add_node_to_flood_stack(
-    self,
+    self: "ModelLog",
     candidate_node_label: str,
     orig_node_label: str,
     nodes_since_start: int,
     min_field: str,
     max_field: str,
     layer_logging_field: str,
-    nodes_seen: set,
+    nodes_seen: set[str],
 ) -> bool:
     """Decide whether to push a candidate node onto the flood stack.
 
@@ -461,7 +463,7 @@ def _check_whether_to_add_node_to_flood_stack(
     return False
 
 
-def _log_internally_terminated_tensor(self, tensor_label: str) -> None:
+def _log_internally_terminated_tensor(self: "ModelLog", tensor_label: str) -> None:
     """Mark a tensor as terminated inside the model (no children reaching an output node)."""
     layer_entry = self[tensor_label]
     layer_entry.is_internally_terminated = True

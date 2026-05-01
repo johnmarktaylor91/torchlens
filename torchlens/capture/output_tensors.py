@@ -37,8 +37,9 @@ import dataclasses
 import time
 import warnings
 from collections import defaultdict
+from collections.abc import Callable
 from math import prod
-from typing import Any, Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Tuple, Union
+from typing import TYPE_CHECKING, Any, Iterator, cast
 
 import torch
 
@@ -422,7 +423,7 @@ def _walk_output_tensors_with_paths(
     yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
 
 
-def _function_registry_key(func: Callable) -> FunctionRegistryKey:
+def _function_registry_key(func: Callable[..., Any]) -> FunctionRegistryKey:
     """Build a portable registry key for a captured function.
 
     Parameters
@@ -496,7 +497,7 @@ def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
 
 
 def _build_captured_arg_template(
-    func: Callable,
+    func: Callable[..., Any],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> CapturedArgTemplate:
@@ -603,13 +604,13 @@ def _build_edge_use_records(
 
 
 def log_function_output_tensors(
-    self,
-    func: Callable,
+    self: "ModelLog",
+    func: Callable[..., Any],
     func_name: str,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
-    arg_copies: Tuple[Any],
-    kwarg_copies: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
@@ -659,11 +660,11 @@ def log_function_output_tensors(
 
 
 def apply_live_hooks_to_outputs(
-    self,
-    func: Callable,
+    self: "ModelLog",
+    func: Callable[..., Any],
     func_name: str,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
@@ -901,7 +902,7 @@ def _set_saved_activation_metadata(entry: LayerPassLog, tensor: torch.Tensor) ->
 
 
 def _record_predicate_output(
-    ctx,
+    ctx: Any,
     out: torch.Tensor,
     spec: CaptureSpec,
 ) -> None:
@@ -934,9 +935,9 @@ def _record_predicate_output(
 
 
 def log_function_output_tensors_predicate(
-    self,
+    self: "ModelLog",
     func_name: str,
-    args: Tuple[Any],
+    args: tuple[Any, ...],
     out_orig: Any,
     is_bottom_level_func: bool,
 ) -> None:
@@ -1006,12 +1007,12 @@ def log_function_output_tensors_predicate(
 
 
 def _build_graph_relationship_fields(
-    self,
-    fields_dict: Dict[str, Any],
-    parent_layer_labels: List[str],
-    parent_layer_entries: List,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
+    self: "ModelLog",
+    fields_dict: dict[str, Any],
+    parent_layer_labels: list[str],
+    parent_layer_entries: list[LayerPassLog],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
     out_orig: Any,
 ) -> None:
     """Populate graph structure fields: parents, children, ancestors, buffer/IO flags."""
@@ -1073,9 +1074,9 @@ def _build_graph_relationship_fields(
 
 def _extract_arg_tensors_and_params(
     normalized_name: str,
-    args: tuple,
-    kwargs: dict,
-) -> Tuple[List, List]:
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> tuple[list[torch.Tensor], list[torch.nn.Parameter]]:
     """O(1) tensor/param extraction via lookup table, with BFS fallback."""
     spec = FUNC_ARG_SPECS.get(normalized_name) or _st._dynamic_arg_specs.get(normalized_name)
     if spec is not None:
@@ -1090,10 +1091,10 @@ def _extract_arg_tensors_and_params(
 
 
 def _build_param_fields(
-    self,
-    fields_dict: Dict[str, Any],
-    arg_parameters: List,
-) -> Dict:
+    self: "ModelLog",
+    fields_dict: dict[str, Any],
+    arg_parameters: list[torch.nn.Parameter],
+) -> dict[str, int]:
     """Populate parameter-involvement fields. Returns parent_param_passes dict."""
     parent_param_passes = _process_parent_param_passes(arg_parameters)
     indiv_param_barcodes = list(parent_param_passes.keys())
@@ -1124,10 +1125,10 @@ def _build_param_fields(
 
 
 def _build_module_context_fields(
-    self,
-    fields_dict: Dict[str, Any],
-    arg_tensors: List,
-    parent_layer_entries: List,
+    self: "ModelLog",
+    fields_dict: dict[str, Any],
+    arg_tensors: list[torch.Tensor],
+    parent_layer_entries: list[LayerPassLog],
 ) -> None:
     """Populate module nesting, address, and input/output status fields."""
     containing_modules = _get_input_module_info(self, arg_tensors)
@@ -1150,15 +1151,15 @@ def _build_module_context_fields(
 
 
 def _build_shared_fields_dict(
-    self,
-    func: Callable,
+    self: "ModelLog",
+    func: Callable[..., Any],
     func_name: str,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     func_call_id: int,
-) -> Tuple[Dict[str, Any], List, List, Dict]:
+) -> tuple[dict[str, Any], list[LayerPassLog], list[torch.Tensor], dict[str, int]]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
     When a function produces multiple output tensors (e.g. ``torch.split``),
@@ -1183,7 +1184,7 @@ def _build_shared_fields_dict(
     parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl_tensor_label_raw")
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
-    fields_dict: Dict[str, Any] = {}
+    fields_dict: dict[str, Any] = {}
 
     # General info
     fields_dict["layer_type"] = layer_type
@@ -1243,7 +1244,7 @@ def _build_shared_fields_dict(
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
 
     # Function config — lightweight hyperparameter extraction, always on.
-    param_shapes: Optional[List[Tuple]] = fields_dict.get("parent_param_shapes")
+    param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("parent_param_shapes"))
     fields_dict["func_config"] = extract_salient_args(
         layer_type,
         func_name,
@@ -1256,9 +1257,9 @@ def _build_shared_fields_dict(
 
 
 def _classify_new_tensor_in_model_log(
-    self,
-    fields_dict: Dict[str, Any],
-    fields_dict_onetensor: Dict[str, Any],
+    self: "ModelLog",
+    fields_dict: dict[str, Any],
+    fields_dict_onetensor: dict[str, Any],
     new_tensor_label: str,
 ) -> None:
     """Update ModelLog categories (internally_initialized, merge points) for a new tensor."""
@@ -1275,12 +1276,12 @@ def _classify_new_tensor_in_model_log(
 
 
 def _tag_tensor_and_track_variations(
-    self,
+    self: "ModelLog",
     out: torch.Tensor,
-    new_layer_entry,
-    fields_dict_onetensor: Dict[str, Any],
-    arg_copies: Tuple[Any],
-    kwarg_copies: Dict[str, Any],
+    new_layer_entry: LayerPassLog,
+    fields_dict_onetensor: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
 ) -> None:
     """Tag the output tensor with its label, add backward hook, and track parent content variations.
 
@@ -1311,13 +1312,13 @@ def _tag_tensor_and_track_variations(
 
 
 def log_function_output_tensors_exhaustive(
-    self,
-    func: Callable,
+    self: "ModelLog",
+    func: Callable[..., Any],
     func_name: str,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
-    arg_copies: Tuple[Any],
-    kwarg_copies: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
@@ -1429,7 +1430,12 @@ def log_function_output_tensors_exhaustive(
         )
 
 
-def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_arg_locs) -> Any:
+def _get_parent_contents(
+    parent_label: str,
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    parent_layer_arg_locs: dict[str, dict[Any, str]],
+) -> Any:
     """Retrieve a parent tensor's pre-call value from the saved argument copies.
 
     Used for child tensor variation tracking: if a parent's value in arg_copies
@@ -1446,12 +1452,12 @@ def _get_parent_contents(parent_label, arg_copies, kwarg_copies, parent_layer_ar
 
 
 def log_function_output_tensors_fast(
-    self,
+    self: "ModelLog",
     func_name: str,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
-    arg_copies: Tuple[Any],
-    kwarg_copies: Dict[str, Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     is_bottom_level_func: bool,
@@ -1538,9 +1544,8 @@ def log_function_output_tensors_fast(
             )
 
         # Save activation data if this layer is in the save list.
-        if (self._layer_nums_to_save == "all") or (
-            orig_layer_entry.creation_order in self._layer_nums_to_save
-        ):
+        layer_nums_to_save = cast(Any, self._layer_nums_to_save)
+        if (layer_nums_to_save == "all") or (orig_layer_entry.creation_order in layer_nums_to_save):
             self.layers_with_saved_activations.append(orig_layer_entry.layer_label)
             orig_layer_entry.save_tensor_data(
                 out,
@@ -1665,7 +1670,7 @@ def _check_if_tensor_arg(arg: Any) -> bool:
         return False
 
 
-def _iter_autograd_saved_candidates(grad_fn: Any) -> List[Any]:
+def _iter_autograd_saved_candidates(grad_fn: Any) -> list[Any]:
     """Return accessible autograd-saved values from a grad_fn object.
 
     Parameters
@@ -1680,7 +1685,7 @@ def _iter_autograd_saved_candidates(grad_fn: Any) -> List[Any]:
         Attribute access failures are ignored because PyTorch may release or
         guard some saved values.
     """
-    saved_values: List[Any] = []
+    saved_values: list[Any] = []
     try:
         saved_values.extend(getattr(grad_fn, "saved_tensors", ()))
     except Exception:
@@ -1696,7 +1701,7 @@ def _iter_autograd_saved_candidates(grad_fn: Any) -> List[Any]:
     return saved_values
 
 
-def _collect_tensor_values(value: Any) -> List[torch.Tensor]:
+def _collect_tensor_values(value: Any) -> list[torch.Tensor]:
     """Collect tensor values from a shallow autograd-saved object.
 
     Parameters
@@ -1749,7 +1754,7 @@ def _add_autograd_saved_tensor(
 
 def _get_autograd_saved_stats_by_output(
     output: Any,
-) -> dict[int, tuple[Optional[int], Optional[int]]]:
+) -> dict[int, tuple[int | None, int | None]]:
     """Measure autograd-saved tensor bytes/counts for each tensor output.
 
     Parameters
@@ -1764,7 +1769,7 @@ def _get_autograd_saved_stats_by_output(
         autograd_saved_tensor_count)``. Non-tensor outputs and tensors without
         ``grad_fn`` are omitted and handled by callers as ``None`` values.
     """
-    stats_by_index: dict[int, tuple[Optional[int], Optional[int]]] = {}
+    stats_by_index: dict[int, tuple[int | None, int | None]] = {}
     seen_grad_fns: set[int] = set()
     seen_data_ptrs: set[int] = set()
 
@@ -1795,7 +1800,7 @@ def _get_autograd_saved_stats_by_output_entries(
     output_entries: list[
         tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
     ],
-) -> dict[int, tuple[Optional[int], Optional[int]]]:
+) -> dict[int, tuple[int | None, int | None]]:
     """Measure autograd-saved tensor bytes/counts for path-aware outputs.
 
     Parameters
@@ -1809,7 +1814,7 @@ def _get_autograd_saved_stats_by_output_entries(
         Mapping from output entry index to autograd saved-byte/count stats.
     """
 
-    stats_by_index: dict[int, tuple[Optional[int], Optional[int]]] = {}
+    stats_by_index: dict[int, tuple[int | None, int | None]] = {}
     seen_grad_fns: set[int] = set()
     seen_data_ptrs: set[int] = set()
 
@@ -1838,7 +1843,7 @@ def _get_autograd_saved_stats_by_output_entries(
 
 def _get_autograd_saved_stats_for_tensor(
     tensor: torch.Tensor,
-) -> tuple[Optional[int], Optional[int]]:
+) -> tuple[int | None, int | None]:
     """Measure autograd-saved tensor bytes/counts for a single tensor output.
 
     Parameters
@@ -1859,14 +1864,14 @@ def _get_autograd_saved_stats_for_tensor(
 
 
 def _log_output_tensor_info(
-    self,
+    self: "ModelLog",
     t: torch.Tensor,
     i: int,
-    args: Tuple[Any],
-    kwargs: Dict[str, Any],
-    parent_param_passes: Dict[str, int],
-    fields_dict: Dict[str, Any],
-    autograd_saved_stats: tuple[Optional[int], Optional[int]],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    parent_param_passes: dict[str, int],
+    fields_dict: dict[str, Any],
+    autograd_saved_stats: tuple[int | None, int | None],
 ) -> None:
     """Populate per-tensor fields that differ across outputs of a single function call.
 
@@ -2020,13 +2025,13 @@ def _log_output_tensor_info(
 
 
 def _make_layer_log_entry(
-    self,
+    self: "ModelLog",
     t: torch.Tensor,
-    fields_dict: Dict,
-    t_args: Optional[Tuple] = None,
-    t_kwargs: Optional[Dict] = None,
-    activation_postfunc: Optional[Callable] = None,
-):
+    fields_dict: dict[str, Any],
+    t_args: tuple[Any, ...] | None = None,
+    t_kwargs: dict[str, Any] | None = None,
+    activation_postfunc: Callable[..., Any] | None = None,
+) -> LayerPassLog:
     """Create a LayerPassLog (or BufferLog) entry and register it in ModelLog.
 
     Instantiates the appropriate log class from ``fields_dict``, conditionally
@@ -2041,7 +2046,7 @@ def _make_layer_log_entry(
         activation_postfunc: Optional transform applied to activations before saving.
     """
     if t_args is None:
-        t_args = []  # type: ignore[assignment]
+        t_args = ()
     if t_kwargs is None:
         t_kwargs = {}
 
@@ -2053,13 +2058,13 @@ def _make_layer_log_entry(
     module_filter_fn = getattr(self, "module_filter_fn", None)
     if module_filter_fn is not None:
         keep_by_predicate = bool(module_filter_fn(new_entry))
+    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     if keep_by_predicate and (
-        (self._layer_nums_to_save == "all")
-        or (new_entry.creation_order in self._layer_nums_to_save)
+        (layer_nums_to_save == "all") or (new_entry.creation_order in layer_nums_to_save)
     ):
         new_entry.save_tensor_data(
             t,
-            t_args,  # type: ignore[arg-type]
+            t_args,
             t_kwargs,
             self.save_function_args,
             activation_postfunc,

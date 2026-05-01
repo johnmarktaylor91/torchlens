@@ -20,7 +20,7 @@ This module provides the helper stack behind ModelLog cleanup operations:
 """
 
 from dataclasses import fields, is_dataclass, replace
-from typing import Any, Dict, Iterable, List, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Set, Tuple, cast
 
 import torch
 
@@ -30,8 +30,11 @@ from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
 from .layer_pass_log import LayerPassLog
 
+if TYPE_CHECKING:
+    from .model_log import ModelLog
 
-def cleanup(self) -> None:
+
+def cleanup(self: "ModelLog") -> None:
     """Delete all log entries, break circular references, and free GPU memory.
 
     Called explicitly by the user or automatically at the end of a logging
@@ -120,10 +123,10 @@ def _label_for_reference_removal(log_entry: LayerPassLog, pass_finished: bool) -
         Final layer label when available, otherwise the raw tensor label.
     """
     if pass_finished:
-        return log_entry.layer_label
+        return cast(str, log_entry.layer_label)
     if getattr(log_entry, "layer_label", None):
-        return log_entry.layer_label
-    return log_entry.tensor_label_raw
+        return cast(str, log_entry.layer_label)
+    return cast(str, log_entry.tensor_label_raw)
 
 
 def _filter_cond_branch_children_by_cond(
@@ -259,7 +262,9 @@ def _scrub_layer_entry_conditional_fields(
     ]
 
 
-def _scrub_layer_log_conditional_fields(self, labels_to_remove_no_pass: Set[str]) -> None:
+def _scrub_layer_log_conditional_fields(
+    self: "ModelLog", labels_to_remove_no_pass: Set[str]
+) -> None:
     """Remove deleted labels from aggregate LayerLog conditional fields.
 
     Args:
@@ -293,7 +298,7 @@ def _scrub_layer_log_conditional_fields(self, labels_to_remove_no_pass: Set[str]
 
 
 def _scrub_conditional_fields_after_removal(
-    self,
+    self: "ModelLog",
     labels_to_remove: Set[str],
     surviving_entries: Iterable[LayerPassLog],
 ) -> None:
@@ -464,7 +469,7 @@ _LIST_FIELDS_TO_CLEAN = [
 ]
 
 
-def _remove_log_entry_references(self, layer_to_remove: str) -> None:
+def _remove_log_entry_references(self: "ModelLog", layer_to_remove: str) -> None:
     """Removes all references to a single LayerPassLog from the ModelLog's list/dict fields.
 
     This is the single-entry counterpart to the reference-cleaning logic in
@@ -502,9 +507,9 @@ def _remove_log_entry_references(self, layer_to_remove: str) -> None:
         if len(tensor_labels) > 0
     }
 
-    for equiv_group, tensor_labels in self.equivalent_operations.items():
-        if layer_to_remove in tensor_labels:
-            tensor_labels.remove(layer_to_remove)
+    for equiv_group, equiv_tensor_labels in self.equivalent_operations.items():
+        if layer_to_remove in equiv_tensor_labels:
+            equiv_tensor_labels.remove(layer_to_remove)
     self.equivalent_operations = {
         equiv_group: tensor_labels
         for equiv_group, tensor_labels in self.equivalent_operations.items()

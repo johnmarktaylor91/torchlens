@@ -625,7 +625,7 @@ def _get_gained_branch_entries(
     return child_stack[shared_prefix_len:]
 
 
-def _fix_modules_for_internal_tensors(self) -> None:
+def _fix_modules_for_internal_tensors(self: "ModelLog") -> None:
     """Step 6: Infer module containment for internally-generated tensors.
 
     Internally-initialized tensors (constants, torch.arange results, etc.) are
@@ -740,7 +740,7 @@ def _fix_modules_for_single_internal_tensor(
     nodes_seen.add(node_to_fix_label)
 
 
-def _fix_buffer_layers(self) -> None:
+def _fix_buffer_layers(self: "ModelLog") -> None:
     """Step 7: Connect buffer parents, merge duplicates, and assign pass numbers.
 
     Buffer tensors (nn.Module registered buffers) are logged as source tensors
@@ -815,7 +815,7 @@ def _fix_buffer_layers(self) -> None:
 
 
 def _merge_buffer_entries(
-    self, source_buffer: LayerPassLog, buffer_to_remove: LayerPassLog
+    self: "ModelLog", source_buffer: LayerPassLog, buffer_to_remove: LayerPassLog
 ) -> None:
     """Merge a duplicate buffer into a source buffer, rewiring all edges.
 

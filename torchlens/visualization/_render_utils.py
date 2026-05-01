@@ -18,7 +18,7 @@ import os
 import subprocess
 import warnings
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable, cast
 
 import graphviz
 
@@ -316,4 +316,4 @@ def render_dot_to_file(
     finally:
         if os.path.exists(source_path):
             os.remove(source_path)
-    return dot.source
+    return cast(str, dot.source)

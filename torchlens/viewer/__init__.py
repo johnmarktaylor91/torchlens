@@ -2,4 +2,4 @@
 minimap, and bookmarks. Gated by `pip install torchlens[viewer]`.
 """
 
-__all__ = []
+__all__: list[str] = []

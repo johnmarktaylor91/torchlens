@@ -105,7 +105,7 @@ class FuncCallLocation:
         func_name: str,
         # New-path args
         num_context_lines_requested: int = _SENTINEL,
-        _frame_func_obj=_SENTINEL,
+        _frame_func_obj: Any = _SENTINEL,
         # Legacy-path args (all default to sentinel)
         func_signature: Optional[str] = _SENTINEL,
         func_docstring: Optional[str] = _SENTINEL,
@@ -238,65 +238,163 @@ class FuncCallLocation:
 
     @property
     def code_context(self) -> Optional[List[str]]:
+        """Return source lines around this call site.
+
+        Returns
+        -------
+        Optional[List[str]]
+            Source context lines, or ``None`` when unavailable.
+        """
         self._ensure_source_loaded()
         return self._code_context
 
     @code_context.setter
     def code_context(self, value: Optional[List[str]]) -> None:
+        """Set source lines around this call site.
+
+        Parameters
+        ----------
+        value:
+            Source context lines, or ``None`` when unavailable.
+        """
         self._code_context = value
 
     @property
     def source_context(self) -> str:
+        """Return source context as a single string.
+
+        Returns
+        -------
+        str
+            Joined source context string.
+        """
         self._ensure_source_loaded()
         return self._source_context
 
     @source_context.setter
     def source_context(self, value: str) -> None:
+        """Set source context as a single string.
+
+        Parameters
+        ----------
+        value:
+            Joined source context string.
+        """
         self._source_context = value
 
     @property
     def code_context_labeled(self) -> str:
+        """Return labeled source context with the call line marked.
+
+        Returns
+        -------
+        str
+            Source context annotated with a marker on the captured call line.
+        """
         self._ensure_source_loaded()
         return self._code_context_labeled
 
     @code_context_labeled.setter
     def code_context_labeled(self, value: str) -> None:
+        """Set labeled source context with the call line marked.
+
+        Parameters
+        ----------
+        value:
+            Source context annotated with a marker on the captured call line.
+        """
         self._code_context_labeled = value
 
     @property
     def call_line(self) -> str:
+        """Return the exact source line that triggered this frame.
+
+        Returns
+        -------
+        str
+            Stripped source line for the captured call.
+        """
         self._ensure_source_loaded()
         return self._call_line
 
     @call_line.setter
     def call_line(self, value: str) -> None:
+        """Set the exact source line that triggered this frame.
+
+        Parameters
+        ----------
+        value:
+            Stripped source line for the captured call.
+        """
         self._call_line = value
 
     @property
     def num_context_lines(self) -> int:
+        """Return the number of loaded source context lines.
+
+        Returns
+        -------
+        int
+            Count of source lines available for this call site.
+        """
         self._ensure_source_loaded()
         return self._num_context_lines
 
     @num_context_lines.setter
     def num_context_lines(self, value: int) -> None:
+        """Set the number of loaded source context lines.
+
+        Parameters
+        ----------
+        value:
+            Count of source lines available for this call site.
+        """
         self._num_context_lines = value
 
     @property
     def func_signature(self) -> Optional[str]:
+        """Return the captured function signature string.
+
+        Returns
+        -------
+        Optional[str]
+            Stringified function signature, or ``None`` when unavailable.
+        """
         self._ensure_source_loaded()
         return self._func_signature
 
     @func_signature.setter
     def func_signature(self, value: Optional[str]) -> None:
+        """Set the captured function signature string.
+
+        Parameters
+        ----------
+        value:
+            Stringified function signature, or ``None`` when unavailable.
+        """
         self._func_signature = value
 
     @property
     def func_docstring(self) -> Optional[str]:
+        """Return the captured function docstring.
+
+        Returns
+        -------
+        Optional[str]
+            Function docstring, or ``None`` when unavailable.
+        """
         self._ensure_source_loaded()
         return self._func_docstring
 
     @func_docstring.setter
     def func_docstring(self, value: Optional[str]) -> None:
+        """Set the captured function docstring.
+
+        Parameters
+        ----------
+        value:
+            Function docstring, or ``None`` when unavailable.
+        """
         self._func_docstring = value
 
     def __repr__(self) -> str:

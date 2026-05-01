@@ -118,7 +118,7 @@ def _model_has_quantized_modules(model: nn.Module) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _iter_tensors(obj: Any, _seen: set | None = None) -> Iterator[torch.Tensor]:
+def _iter_tensors(obj: Any, _seen: set[int] | None = None) -> Iterator[torch.Tensor]:
     """Yield every ``torch.Tensor`` reachable via list/tuple/dict traversal.
 
     Doesn't descend into ``nn.Module`` instances (those are handled by
@@ -164,7 +164,7 @@ def _docs_pointer() -> str:
 def check_model_and_input_variants(
     model: nn.Module,
     input_args: Any = None,
-    input_kwargs: dict | None = None,
+    input_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """Pre-flight check for ``log_forward_pass``.
 
@@ -244,7 +244,7 @@ def check_model_and_input_variants(
 
     if offenses:
         # Dedupe while preserving order of first appearance.
-        seen: set = set()
+        seen: set[str] = set()
         unique: List[Tuple[str, str]] = []
         for name, why in offenses:
             if name in seen:

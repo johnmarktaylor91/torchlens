@@ -527,7 +527,7 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
     if kind == "label":
         return _live_label_matches(site, str(value))
     if kind == "func":
-        return getattr(site, "func_name", None) == value
+        return bool(getattr(site, "func_name", None) == value)
     if kind == "module":
         return _live_module_matches(site, str(value))
     if kind == "contains":

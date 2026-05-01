@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -29,7 +29,7 @@ def source_model(log: Any) -> nn.Module:
     """
 
     source_ref = getattr(log, "_source_model_ref", None)
-    model = source_ref() if source_ref is not None else None
+    model = cast(nn.Module | None, source_ref() if source_ref is not None else None)
     if model is None:
         raise ValueError(
             "This bridge requires a live source model. Re-run log_forward_pass and keep "

@@ -22,7 +22,8 @@ mixed-precision ops can be replayed under the same dtype context.
 
 import random
 from collections.abc import Callable
-from typing import Any, Dict, List, TypeVar
+from types import TracebackType
+from typing import Any, Dict, List, TypeVar, cast
 
 import numpy as np
 import torch
@@ -151,7 +152,7 @@ def set_rng_from_saved_states(rng_states: Dict[str, Any]) -> None:
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 
-def log_current_autocast_state() -> Dict:
+def log_current_autocast_state() -> dict[str, dict[str, Any]]:
     """Capture the current ``torch.amp.autocast`` enabled/dtype state.
 
     Checked for each device in :data:`_AUTOCAST_DEVICES`.  If a device
@@ -160,7 +161,7 @@ def log_current_autocast_state() -> Dict:
     Returns:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
     """
-    state = {}
+    state: dict[str, dict[str, Any]] = {}
     for device in _AUTOCAST_DEVICES:
         try:
             state[device] = {
@@ -187,19 +188,25 @@ class AutocastRestore:
 
     __slots__ = ("_autocast_state", "_contexts")
 
-    def __init__(self, autocast_state: Dict):
+    def __init__(self, autocast_state: dict[str, dict[str, Any]]) -> None:
         self._autocast_state = autocast_state
         self._contexts: List[Any] = []
 
-    def __enter__(self):
+    def __enter__(self) -> "AutocastRestore":
         for device, state in self._autocast_state.items():
             if state["enabled"]:
-                ctx = torch.amp.autocast(device, dtype=state["dtype"])
+                autocast = cast(Any, getattr(torch.amp, "autocast"))
+                ctx = autocast(device, dtype=state["dtype"])
                 ctx.__enter__()
                 self._contexts.append(ctx)
         return self
 
-    def __exit__(self, *exc_info):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         # Exit in reverse order to mirror the nesting order of __enter__.
         for ctx in reversed(self._contexts):
-            ctx.__exit__(*exc_info)
+            ctx.__exit__(exc_type, exc_value, traceback)

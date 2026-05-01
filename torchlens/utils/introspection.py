@@ -8,8 +8,9 @@ nested attribute traversal and call-stack capture.
 import dis
 import sys
 import warnings
+from collections.abc import Callable, Iterator
 from types import CodeType, FrameType
-from typing import Any, Callable, Dict, List, Optional, Set, Type
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -40,6 +41,8 @@ _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
 _COL_OFFSET_CACHE: Dict[int, Dict[int, Optional[int]]] = {}
 _COL_OFFSET_CACHE_SIZE_CAP = 100_000
 _col_offset_cache_warned = False
+_AddressPath = list[tuple[str, Any]]
+_SearchEntry = tuple[Any, Any, _AddressPath]
 
 
 def _build_col_offset_map(code: CodeType) -> Dict[int, Optional[int]]:
@@ -140,12 +143,12 @@ def _get_col_offset(frame: FrameType) -> Optional[int]:
 
 def get_vars_of_type_from_obj(
     obj: Any,
-    which_type: Type,
-    subclass_exceptions: Optional[List] = None,
+    which_type: type[Any],
+    subclass_exceptions: list[type[Any]] | None = None,
     search_depth: int = 3,
-    return_addresses=False,
-    allow_repeats=False,
-) -> List:
+    return_addresses: bool = False,
+    allow_repeats: bool = False,
+) -> list[Any]:
     """Recursively find all instances of ``which_type`` inside a nested object.
 
     Uses breadth-first expansion with a fixed depth limit to avoid
@@ -174,11 +177,11 @@ def get_vars_of_type_from_obj(
     if subclass_exceptions is None:
         subclass_exceptions = []
     # Each stack entry is (item, human_readable_address, programmatic_address).
-    this_stack: List[Any] = [(obj, "", [])]
-    found_items: List[Any] = []
-    found_addresses: List[Any] = []
-    found_addresses_full: List[Any] = []
-    found_ids: Set[Any] = set()
+    this_stack: list[_SearchEntry] = [(obj, "", [])]
+    found_items: list[Any] = []
+    found_addresses: list[Any] = []
+    found_addresses_full: list[_AddressPath] = []
+    found_ids: set[int] = set()
     # BFS: each iteration processes one depth level.
     # Hoist warnings context manager to avoid ~77K per-attribute entries.
     with warnings.catch_warnings():
@@ -202,15 +205,15 @@ def get_vars_of_type_from_obj(
 
 
 def _search_stack_for_vars_of_type(
-    current_stack: List,
-    which_type: Type,
-    found_items: List,
-    found_addresses: List,
-    found_addresses_full: List,
-    found_ids: Set,
-    subclass_exceptions: List,
+    current_stack: list[_SearchEntry],
+    which_type: type[Any],
+    found_items: list[Any],
+    found_addresses: list[Any],
+    found_addresses_full: list[_AddressPath],
+    found_ids: set[int],
+    subclass_exceptions: list[type[Any]],
     allow_repeats: bool,
-):
+) -> list[_SearchEntry]:
     """Process one BFS depth level: classify items, collect matches, build next level.
 
     Items in ``current_stack`` are either:
@@ -234,7 +237,7 @@ def _search_stack_for_vars_of_type(
     Returns:
         ``next_stack`` — items to process in the next depth iteration.
     """
-    next_stack: List[Any] = []
+    next_stack: list[_SearchEntry] = []
     if len(current_stack) == 0:
         return current_stack
     while len(current_stack) > 0:
@@ -260,7 +263,12 @@ def _search_stack_for_vars_of_type(
     return next_stack
 
 
-def _extend_search_stack_from_item(item: Any, address: str, address_full, next_stack: List):
+def _extend_search_stack_from_item(
+    item: Any,
+    address: Any,
+    address_full: _AddressPath,
+    next_stack: list[_SearchEntry],
+) -> None:
     """Expand a single non-leaf item's children onto ``next_stack``.
 
     Handles three kinds of containers:
@@ -406,7 +414,7 @@ def nested_getattr(obj: Any, attr: str) -> Any:
     return obj
 
 
-def nested_assign(obj: Any, addr: List[tuple], val: Any) -> None:
+def nested_assign(obj: Any, addr: list[tuple[Any, Any]], val: Any) -> None:
     """Walk into a nested structure following an address path and assign a value.
 
     The address path is the ``address_full`` format produced by
@@ -439,7 +447,7 @@ def nested_assign(obj: Any, addr: List[tuple], val: Any) -> None:
 
 def iter_accessible_attributes(
     obj: Any, *, short_circuit: Optional[Callable[[Any, str], bool]] = None
-):
+) -> Iterator[tuple[str, Any]]:
     """Yield ``(attr_name, attr_value)`` for every accessible attribute of ``obj``.
 
     Gracefully skips attributes that raise on access (common with C-level
@@ -491,7 +499,7 @@ def _get_func_call_stack(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
     disable_col_offset: bool = False,
-) -> List:
+) -> list[Any]:
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
@@ -516,7 +524,7 @@ def _get_func_call_stack(
     """
     import os
 
-    from ..data_classes import FuncCallLocation
+    from ..data_classes import FuncCallLocation  # type: ignore[attr-defined]
 
     # Use directory-based check instead of hardcoded suffixes so that
     # refactoring the package layout doesn't break stack filtering.

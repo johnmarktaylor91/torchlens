@@ -2,4 +2,4 @@
 Gated by `pip install torchlens[paper]`.
 """
 
-__all__ = []
+__all__: list[str] = []

@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 import importlib
 import operator
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 import warnings
 
 import torch
@@ -87,13 +87,13 @@ def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any
 
     try:
         if key.namespace == "torch":
-            return getattr(torch, key.qualname)
+            return cast(Callable[..., Any], getattr(torch, key.qualname))
         if key.namespace == "torch.Tensor":
-            return getattr(torch.Tensor, key.qualname)
+            return cast(Callable[..., Any], getattr(torch.Tensor, key.qualname))
         if key.namespace == "torch.nn.functional":
-            return getattr(torch.nn.functional, key.qualname)
+            return cast(Callable[..., Any], getattr(torch.nn.functional, key.qualname))
         if key.namespace == "operator":
-            return getattr(operator, key.qualname)
+            return cast(Callable[..., Any], getattr(operator, key.qualname))
         if key.namespace == "custom":
             if not key.import_path:
                 raise AttributeError("custom key is missing import_path")
@@ -104,7 +104,7 @@ def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any
                 obj = getattr(obj, part)
             if not callable(obj):
                 raise TypeError(f"{key.import_path!r} resolved to non-callable {obj!r}")
-            return obj
+            return cast(Callable[..., Any], obj)
     except (AttributeError, ImportError, TypeError) as exc:
         raise ReplayPreconditionError(f"Could not resolve function registry key {key!r}") from exc
 
@@ -289,7 +289,7 @@ def resolve_sites(
         If no site resolves or the query shape is unsupported.
     """
 
-    if max_fanout is None:  # type: ignore[comparison-overlap]
+    if max_fanout is None:
         raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
     if max_fanout < 1:
         raise SiteAmbiguityError("max_fanout must be at least 1.")

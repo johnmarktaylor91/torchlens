@@ -7,9 +7,9 @@ plus environment checks (Jupyter detection, parallel-processing guard).
 import multiprocessing as mp
 import sys
 import time
-from contextlib import contextmanager
 from collections.abc import Iterable
-from typing import Any, List, TYPE_CHECKING, TypeVar
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Iterator, List, TypeVar, cast
 
 import torch
 
@@ -284,10 +284,13 @@ def progress_bar(
         if in_notebook():
             from tqdm.notebook import tqdm
 
-            return tqdm(iterable, total=total, desc=desc)
+            return cast(Iterable[_T], tqdm(iterable, total=total, desc=desc))
         from tqdm import tqdm
 
-        return tqdm(iterable, total=total, desc=desc, disable=not sys.stderr.isatty())
+        return cast(
+            Iterable[_T],
+            tqdm(iterable, total=total, desc=desc, disable=not sys.stderr.isatty()),
+        )
     except ImportError:
         return iterable
 
@@ -300,9 +303,9 @@ def in_notebook() -> bool:
     IPython is not installed.
     """
     try:
-        from IPython import get_ipython
+        from IPython import get_ipython  # type: ignore[attr-defined]
 
-        ipython = get_ipython()
+        ipython = get_ipython()  # type: ignore[no-untyped-call]
         if ipython is None or "IPKernelApp" not in ipython.config:
             return False
     except (ImportError, AttributeError):
@@ -317,7 +320,7 @@ def _vprint(model_log: "ModelLog", message: str) -> None:
 
 
 @contextmanager
-def _vtimed(model_log: "ModelLog", description: str):
+def _vtimed(model_log: "ModelLog", description: str) -> Iterator[None]:
     """Context manager that prints a timed progress message if verbose mode is enabled.
 
     Prints ``[torchlens] description...`` on entry, then appends `` done (X.XXs)``
@@ -335,7 +338,7 @@ def _vtimed(model_log: "ModelLog", description: str):
         print(f" done ({elapsed:.2f}s)")
 
 
-def warn_parallel():
+def warn_parallel() -> None:
     """Raise ``RuntimeError`` if called from a child process.
 
     TorchLens is single-threaded by design — its global toggle state and

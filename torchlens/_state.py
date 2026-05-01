@@ -21,8 +21,9 @@ Design rationale:
 """
 
 import weakref
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set
+from typing import TYPE_CHECKING, Any, Iterator
 
 # TYPE_CHECKING is False at runtime, so this import only exists for static
 # analysis / IDE support — it will never trigger the circular-import problem.
@@ -46,7 +47,7 @@ duration of a forward pass inside ``active_logging()``.
 # Session state — reset every forward pass
 # ---------------------------------------------------------------------------
 
-_active_model_log: Optional["ModelLog"] = None
+_active_model_log: "ModelLog | None" = None
 """The ModelLog accumulating data for the current forward pass.
 
 Set at the start of ``active_logging()`` and cleared on exit.  Wrappers read
@@ -334,7 +335,7 @@ to False at the end of ``unwrap_torch()``.  Checked by ``_ensure_decorated()``
 to decide whether (re-)decoration is needed before a logging session.
 """
 
-_decorated_identity: Optional[Callable] = None
+_decorated_identity: Callable[..., Any] | None = None
 """Decorated version of the ``identity`` no-op, used at module boundaries.
 
 When ``nn.Identity`` is encountered or a module's output tensor is the same
@@ -352,19 +353,19 @@ in PyTorch's type stubs.
 # wrapper code can look up argument names and original functions without
 # importing the decoration subpackage.
 
-_func_argnames: Dict[str, tuple] = {}
+_func_argnames: dict[str, tuple[str, ...]] = {}
 """func_name -> tuple of argument names, pre-computed via ``inspect.signature``
 for every torch function at decoration time.  Used by the wrapper to build
 keyword-argument metadata for logged operations.
 """
 
-_orig_to_decorated: Dict[int, Callable] = {}
+_orig_to_decorated: dict[int, Callable[..., Any]] = {}
 """id(original_func) -> decorated wrapper.  Used by ``patch_detached_references``
 to replace bare references (e.g. ``from torch import cos``) in sys.modules with
 the decorated version.  Keyed by id() for O(1) lookup.
 """
 
-_decorated_to_orig: Dict[int, Callable] = {}
+_decorated_to_orig: dict[int, Callable[..., Any]] = {}
 """id(decorated_func) -> original_func.  The reverse of ``_orig_to_decorated``.
 Keyed by id() for fast lookup when a wrapper needs the unwrapped callable.
 """
@@ -372,7 +373,7 @@ Keyed by id() for fast lookup when a wrapper needs the unwrapped callable.
 # Also keep a version keyed by the decorated func object itself (not id),
 # for use in model_funcs where we need ``func in decorated_func_mapper``
 # (i.e. the ``in`` operator needs the actual object, not its id).
-_decorated_func_mapper: Dict[Callable, Callable] = {}
+_decorated_func_mapper: dict[Callable[..., Any], Callable[..., Any]] = {}
 """Bidirectional map: decorated -> original AND original -> decorated.
 
 Keyed by actual callable objects (not ids) so that ``func in _decorated_func_mapper``
@@ -387,20 +388,20 @@ works.  Used in model_funcs to determine whether a callable is already wrapped.
 # with decorated versions.  These caches avoid re-scanning already-visited
 # modules on subsequent calls.
 
-_crawled_module_keys: Set[str] = set()
+_crawled_module_keys: set[str] = set()
 """sys.modules keys already scanned by ``patch_detached_references``.
 
 Only new keys (modules imported after the last crawl) are scanned on each call,
 making repeated crawls cheap.
 """
 
-_dir_cache: Dict[type, list] = {}
+_dir_cache: dict[type, list[str]] = {}
 """Per-type cache of filtered ``dir()`` results for ``extend_search_stack_from_item``.
 
 Avoids repeated introspection of the same type's attributes during the
 recursive sys.modules crawl.
 """
-_prepared_models: "weakref.WeakSet" = weakref.WeakSet()
+_prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 
 Using a WeakSet ensures that if the user discards a model, it can be
@@ -422,10 +423,10 @@ _functorch_warning_emitted: bool = False
 the current logging session.  Reset to False at the start of every
 ``active_logging()`` context so each forward pass gets at most one warning."""
 
-_function_call_counts: Dict[str, int] = {}
+_function_call_counts: dict[str, int] = {}
 """func_name -> total calls across all logged forward passes."""
 
-_function_call_models: Dict[str, Set[str]] = {}
+_function_call_models: dict[str, set[str]] = {}
 """func_name -> set of model names that called this function."""
 
 _current_model_name: str = ""
@@ -435,7 +436,7 @@ _current_model_name: str = ""
 # Dynamic ArgSpec cache — Tier 3 of the O(1) extraction strategy
 # ---------------------------------------------------------------------------
 
-_dynamic_arg_specs: Dict[str, object] = {}
+_dynamic_arg_specs: dict[str, object] = {}
 """Normalized func_name -> ArgSpec, populated by BFS fallback on first
 call to an uncovered function.  Subsequent calls reuse the cached spec."""
 
@@ -443,7 +444,7 @@ call to an uncovered function.  Subsequent calls reuse the cached spec."""
 # Tagged tensor tracking — for fast cleanup
 # ---------------------------------------------------------------------------
 
-_tagged_buffer_ids: Set[int] = set()
+_tagged_buffer_ids: set[int] = set()
 """ids of tensors tagged with tl_buffer_address during prepare_buffer_tensors.
 Used by _undecorate_model_tensors for O(n) cleanup instead of re-scanning
 all module attributes."""

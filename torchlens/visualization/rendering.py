@@ -379,16 +379,16 @@ def render_graph(
     vis_mode: VisModeLiteral = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
-    vis_graph_overrides: Optional[Dict] = None,
+    vis_graph_overrides: Optional[Dict[str, Any]] = None,
     module: "ModuleLog | str | None" = None,
     node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     collapse_fn: CollapseFn | None = None,
     skip_fn: SkipFn | None = None,
-    vis_edge_overrides: Optional[Dict] = None,
-    vis_gradient_edge_overrides: Optional[Dict] = None,
-    vis_module_overrides: Optional[Dict] = None,
+    vis_edge_overrides: Optional[Dict[str, Any]] = None,
+    vis_gradient_edge_overrides: Optional[Dict[str, Any]] = None,
+    vis_module_overrides: Optional[Dict[str, Any]] = None,
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
     show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
@@ -708,7 +708,7 @@ def render_graph(
     # Edge deduplication: (tail_name, head_name) pairs already added.
     # Critical when collapsed modules cause many layers to map to the same
     # node name -- without this, we'd get duplicate edges.
-    edges_used: Set[str] = set()
+    edges_used: Set[tuple[str, str]] = set()
 
     for node_barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
@@ -757,7 +757,8 @@ def render_graph(
                 "`pip install torchlens[notebook]`."
             ) from e
 
-        display(dot)
+        display_fn = cast(Any, display)
+        display_fn(dot)
 
     # ELK was already handled above (early return). Only dot/sfdp reach here.
     from ._elk_internal.layout import render_with_sfdp
@@ -829,11 +830,11 @@ def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) ->
 def render_backward_graph(
     self: "ModelLog",
     vis_outpath: str = "backward_modelgraph",
-    vis_graph_overrides: Optional[Dict] = None,
+    vis_graph_overrides: Optional[Dict[str, Any]] = None,
     node_spec_fn: BackwardNodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
     vis_node_mode: VisNodeModeLiteral = "default",
-    vis_edge_overrides: Optional[Dict] = None,
+    vis_edge_overrides: Optional[Dict[str, Any]] = None,
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
     direction: VisDirectionLiteral = "topdown",
@@ -965,7 +966,8 @@ def render_backward_graph(
                 "`pip install torchlens[notebook]`."
             ) from e
 
-        display(dot)
+        display_fn = cast(Any, display)
+        display_fn(dot)
 
     _RENDER_TIMEOUT = 120
     source_path = dot.save(vis_outpath)
@@ -988,7 +990,7 @@ def render_backward_graph(
 
         if os.path.exists(source_path):
             os.remove(source_path)
-    return dot.source
+    return cast(str, dot.source)
 
 
 def _backward_dot_node_name(grad_fn: "GradFnLog") -> str:
@@ -1010,7 +1012,7 @@ def _backward_dot_node_name(grad_fn: "GradFnLog") -> str:
 
 def _add_backward_node_to_graphviz(
     grad_fn: "GradFnLog",
-    graphviz_graph,
+    graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
 ) -> None:
     """Add one backward grad_fn node to a Graphviz graph.
@@ -1541,11 +1543,11 @@ def _get_node_by_label(model_log: "ModelLog", label: str, vis_mode: str) -> Grap
 def _add_node_to_graphviz(
     self: "ModelLog",
     node: GraphNode,
-    graphviz_graph,
-    module_edge_dict: Dict,
-    edges_used: Set,
+    graphviz_graph: graphviz.Digraph,
+    module_edge_dict: Dict[str, Any],
+    edges_used: Set[tuple[str, str]],
     vis_mode: str,
-    collapsed_modules: Set,
+    collapsed_modules: Set[str],
     vis_nesting_depth: int = 1000,
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     overrides: Optional[VisualizationOverrides] = None,
@@ -1697,7 +1699,7 @@ def _collapse_module_address_for_node(
     if collapse_fn is None:
         if max_module_depth == 0 or len(containing_modules) < max_module_depth:
             return None
-        return containing_modules[max_module_depth - 1]
+            return cast(str, containing_modules[max_module_depth - 1])
 
     for module_address_w_pass in containing_modules:
         module_address = module_address_w_pass.rsplit(":", 1)[0]
@@ -1706,7 +1708,7 @@ def _collapse_module_address_for_node(
             collapse_fn=collapse_fn,
             max_module_depth=max_module_depth,
         ):
-            return module_address_w_pass
+            return str(module_address_w_pass)
     return None
 
 
@@ -1764,7 +1766,7 @@ def _is_collapsed_module(
 def _build_layer_node(
     self: "ModelLog",
     node: GraphNode,
-    graphviz_graph,
+    graphviz_graph: graphviz.Digraph,
     show_buffer_layers: BufferVisibilityLiteral,
     vis_mode: str,
     overrides: VisualizationOverrides,
@@ -1936,8 +1938,8 @@ def _add_intervention_hook_nodes(
 def _build_collapsed_module_node(
     self: "ModelLog",
     node: GraphNode,
-    graphviz_graph,
-    collapsed_modules,
+    graphviz_graph: graphviz.Digraph,
+    collapsed_modules: set[str],
     vis_mode: str,
     vis_nesting_depth: int,
     collapse_address: str | None,
@@ -2170,7 +2172,7 @@ def _is_only_non_buffer_in_module(
         if isinstance(source_node, LayerPassLog):
             parent_layer = self[parent_layer_label]
         else:
-            parent_layer = self.layer_logs[parent_layer_label]  # type: ignore[assignment]
+            parent_layer = self.layer_logs[parent_layer_label]
         if (
             (not parent_layer.is_buffer_layer)
             or _is_buffer_visible(parent_layer, show_buffer_layers)
@@ -2515,7 +2517,7 @@ def _make_node_label(
     return node_label
 
 
-def _format_shape_str(shape: tuple) -> str:
+def _format_shape_str(shape: tuple[Any, ...]) -> str:
     """Formats a shape tuple as a compact string like '3x3x64'."""
     if len(shape) > 1:
         return "x".join(str(s) for s in shape)
@@ -2725,9 +2727,9 @@ def _add_edges_for_node(
     parent_is_collapsed_module: bool,
     vis_nesting_depth: int,
     node_color: str,
-    module_edge_dict: Dict,
-    edges_used: Set,
-    graphviz_graph,
+    module_edge_dict: Dict[str, Any],
+    edges_used: Set[tuple[str, str]],
+    graphviz_graph: graphviz.Digraph,
     vis_mode: str = "unrolled",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     overrides: Optional[VisualizationOverrides] = None,
@@ -2951,9 +2953,10 @@ def _add_edges_for_node(
                 vis_nesting_depth,
             )
         if containing_module != -1:
-            module_edge_dict[containing_module]["edges"].append(edge_dict)
+            containing_module_key = cast(str, containing_module)
+            module_edge_dict[containing_module_key]["edges"].append(edge_dict)
             if parent_node.has_input_ancestor or child_node.has_input_ancestor:
-                module_edge_dict[containing_module]["has_input_ancestor"] = True
+                module_edge_dict[containing_module_key]["has_input_ancestor"] = True
                 for module in parent_node.containing_modules:
                     module_key = module.split(":")[0] if vis_mode == "rolled" else module
                     module_edge_dict[module_key]["has_input_ancestor"] = True
@@ -3409,7 +3412,7 @@ def _label_node_arguments_if_needed(
     self: "ModelLog",
     parent_node: Union["LayerPassLog", "LayerLog"],
     child_node: Union["LayerPassLog", "LayerLog"],
-    edge_dict: Dict,
+    edge_dict: Dict[str, Any],
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> None:
     """Add argument position labels to an edge when the child has multiple non-commutative parents.
@@ -3447,7 +3450,7 @@ def _label_node_arguments_if_needed(
     _set_argument_edge_label(edge_dict, arg_label)
 
 
-def _set_argument_edge_label(edge_dict: Dict, arg_label: str) -> None:
+def _set_argument_edge_label(edge_dict: Dict[str, Any], arg_label: str) -> None:
     """Attach an argument-position label without overwriting semantic edge labels.
 
     Args:
@@ -3555,7 +3558,7 @@ def _should_mark_arguments_on_rolled_edge(
 def _label_rolled_pass_nums(
     child_node: "LayerLog",
     parent_node: "LayerLog",
-    edge_dict: Dict,
+    edge_dict: Dict[str, Any],
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
 
@@ -3655,14 +3658,14 @@ def _get_lowest_containing_module_for_two_nodes(
             containing_module = node1_modules[-2]
         else:
             containing_module = node1_modules[-1]
-        return containing_module
+        return cast(str, containing_module)
 
     if both_nodes_collapsed_modules:
         if (vis_nesting_depth == 1) or (len(node1_nested_modules) == 1):
             return -1
         if node1_modules[vis_nesting_depth - 1] == node2_modules[vis_nesting_depth - 1]:
             containing_module = node1_modules[vis_nesting_depth - 2]
-            return containing_module
+            return cast(str, containing_module)
 
     containing_module = node1_modules[0]
     for m in range(min(len(node1_modules), len(node2_modules))):
@@ -3670,17 +3673,17 @@ def _get_lowest_containing_module_for_two_nodes(
             break
         containing_module = node1_modules[m]
 
-    return containing_module
+    return cast(str, containing_module)
 
 
 def _add_gradient_edge(
     self: "ModelLog",
-    parent_layer,
-    child_layer,
-    edge_style,
-    containing_module,
-    module_edge_dict,
-    graphviz_graph,
+    parent_layer: GraphNode,
+    child_layer: GraphNode,
+    edge_style: str,
+    containing_module: str | int,
+    module_edge_dict: Dict[str, Any],
+    graphviz_graph: graphviz.Digraph,
     overrides: VisualizationOverrides,
 ) -> None:
     """Add a backward (gradient) edge if both layers have saved gradients.
@@ -3716,7 +3719,7 @@ def _add_gradient_edge(
                 edge_dict[arg_name] = str(arg_val)
 
         if containing_module != -1:
-            module_edge_dict[containing_module]["edges"].append(edge_dict)
+            module_edge_dict[cast(str, containing_module)]["edges"].append(edge_dict)
         else:
             graphviz_graph.edge(**edge_dict)
 
@@ -3760,9 +3763,9 @@ def _gradient_node_name(layer: Any) -> str:
 
 def _setup_subgraphs(
     self: "ModelLog",
-    graphviz_graph,
+    graphviz_graph: graphviz.Digraph,
     vis_mode: str,
-    module_edge_dict: Dict,
+    module_edge_dict: Dict[str, Any],
     overrides: Optional[VisualizationOverrides] = None,
 ) -> None:
     """Build nested Graphviz subgraphs for module clusters.
@@ -3822,14 +3825,14 @@ def _setup_subgraphs(
 
 def _setup_subgraphs_recurse(
     self: "ModelLog",
-    starting_subgraph,
-    parent_graph_list: List,
-    module_edge_dict,
-    module_submodule_dict,
-    subgraph_stack,
-    nesting_depth,
-    max_nesting_depth,
-    vis_mode,
+    starting_subgraph: graphviz.Digraph,
+    parent_graph_list: List[str],
+    module_edge_dict: Dict[str, Any],
+    module_submodule_dict: Dict[str, list[str]],
+    subgraph_stack: list[list[str]],
+    nesting_depth: int,
+    max_nesting_depth: int,
+    vis_mode: str,
     overrides: VisualizationOverrides,
 ) -> None:
     """Recursively build a single branch of the module subgraph hierarchy.
@@ -3925,7 +3928,11 @@ def _setup_subgraphs_recurse(
                 subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
 
 
-def _get_max_nesting_depth(top_modules, module_edge_dict, module_submodule_dict) -> int:
+def _get_max_nesting_depth(
+    top_modules: list[str],
+    module_edge_dict: Dict[str, Any],
+    module_submodule_dict: Dict[str, list[str]],
+) -> int:
     """Recursively computes the maximum module nesting depth in the model hierarchy.
 
     Used to determine subgraph layout depth for graphviz rendering. Works by

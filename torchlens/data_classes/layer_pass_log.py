@@ -37,7 +37,7 @@ import copy
 import hashlib
 import weakref
 import warnings
-from typing import Any, Callable, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Union, cast
 
 import torch
 
@@ -425,7 +425,7 @@ class LayerPassLog:
         if isinstance(current_value, torch.Tensor) and isinstance(other_value, torch.Tensor):
             self._internal_set(field_name, concatenate_batch_tensors(current_value, other_value))
 
-    def __init__(self, fields_dict: Dict):
+    def __init__(self, fields_dict: Dict[str, Any]) -> None:
         """Initialise from a complete fields dictionary.
 
         Args:
@@ -662,7 +662,7 @@ class LayerPassLog:
         return len(self.parent_layers) > 0
 
     @property
-    def sibling_layers(self) -> list:
+    def sibling_layers(self) -> list[str]:
         """Layers sharing at least one parent (excluding output layers)."""
         ml = self.source_model_log
         if ml is None:
@@ -686,7 +686,7 @@ class LayerPassLog:
         return len(self.sibling_layers) > 0
 
     @property
-    def co_parent_layers(self) -> list:
+    def co_parent_layers(self) -> list[str]:
         """Layers sharing at least one child (excluding output layers)."""
         ml = self.source_model_log
         if ml is None:
@@ -736,10 +736,24 @@ class LayerPassLog:
 
     @property
     def tensor_memory_str(self) -> str:
+        """Return activation tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable activation memory amount.
+        """
         return human_readable_size(self.tensor_memory)
 
     @property
     def grad_memory_str(self) -> str:
+        """Return gradient tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable gradient memory amount.
+        """
         return human_readable_size(self.grad_memory)
 
     @property
@@ -762,6 +776,13 @@ class LayerPassLog:
 
     @property
     def params_memory_str(self) -> str:
+        """Return parameter tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable parameter memory amount.
+        """
         return human_readable_size(self.params_memory)
 
     @property
@@ -791,10 +812,17 @@ class LayerPassLog:
         if ref is None:
             return None  # type: ignore[return-value]
         obj = ref()
-        return obj  # type: ignore[return-value]
+        return cast("ModelLog", obj)
 
     @source_model_log.setter
-    def source_model_log(self, value):
+    def source_model_log(self, value: "ModelLog | None") -> None:
+        """Set the owning ModelLog back-reference.
+
+        Parameters
+        ----------
+        value:
+            Owning model log, or ``None`` to clear the reference.
+        """
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
     def materialize_activation(
@@ -833,7 +861,7 @@ class LayerPassLog:
         if self.activation_ref is None:
             raise TorchLensIOError("no activation_ref to materialize from")
         self._internal_set("activation", self.activation_ref.materialize(map_location=map_location))
-        return self.activation
+        return cast(torch.Tensor, self.activation)
 
     def materialize_gradient(
         self,
@@ -872,7 +900,7 @@ class LayerPassLog:
         if self.gradient_ref is None:
             raise TorchLensIOError("no gradient_ref to materialize from")
         self._internal_set("gradient", self.gradient_ref.materialize(map_location=map_location))
-        return self.gradient
+        return cast(torch.Tensor, self.gradient)
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
@@ -897,7 +925,7 @@ class LayerPassLog:
         object.__setattr__(self, "_construction_done", bool(state.get("_construction_done", True)))
 
     @property
-    def activation_transform(self) -> Optional[Callable]:
+    def activation_transform(self) -> Optional[Callable[..., Any]]:
         """Canonical activation transform callable used for this pass.
 
         Returns
@@ -906,10 +934,10 @@ class LayerPassLog:
             Transform callable, or ``None`` when activations are stored unchanged.
         """
 
-        return self.activation_postfunc
+        return cast("Callable[..., Any] | None", self.activation_postfunc)
 
     @activation_transform.setter
-    def activation_transform(self, value: Optional[Callable]) -> None:
+    def activation_transform(self, value: Optional[Callable[..., Any]]) -> None:
         """Set the canonical activation transform callable.
 
         Parameters
@@ -928,7 +956,7 @@ class LayerPassLog:
     # ************* Logging Functions ************
     # ********************************************
 
-    def copy(self):
+    def copy(self) -> "LayerPassLog":
         """Return a selective-depth copy of this entry.
 
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
@@ -975,10 +1003,10 @@ class LayerPassLog:
     def save_tensor_data(
         self,
         t: torch.Tensor,
-        t_args: Union[List, Tuple],
-        t_kwargs: Dict,
+        t_args: Union[List[Any], Tuple[Any, ...]],
+        t_kwargs: Dict[str, Any],
         save_function_args: bool,
-        activation_postfunc: Optional[Callable] = None,
+        activation_postfunc: Optional[Callable[..., Any]] = None,
     ) -> None:
         """Save the output tensor (and optionally args) for this operation.
 
@@ -1163,7 +1191,7 @@ class LayerPassLog:
     def _apply_postfunc(
         self,
         tensor: torch.Tensor,
-        postfunc: Callable,
+        postfunc: Callable[..., Any],
         *,
         postfunc_kind: str,
         streaming_active: bool,
@@ -1272,10 +1300,24 @@ class LayerPassLog:
     # ************* Fetcher Functions ************
     # ********************************************
 
-    def get_child_layers(self):
+    def get_child_layers(self) -> list["LayerPassLog"]:
+        """Return child LayerPassLog objects for this pass.
+
+        Returns
+        -------
+        list[LayerPassLog]
+            Child passes resolved through the owning model log.
+        """
         return [self.source_model_log[child_label] for child_label in self.child_layers]
 
-    def get_parent_layers(self):
+    def get_parent_layers(self) -> list["LayerPassLog"]:
+        """Return parent LayerPassLog objects for this pass.
+
+        Returns
+        -------
+        list[LayerPassLog]
+            Parent passes resolved through the owning model log.
+        """
         return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
 
     def show(
@@ -1304,7 +1346,7 @@ class LayerPassLog:
         return show_tensor(self, method=method, **kwargs)
 
     @property
-    def params(self):
+    def params(self) -> Any:
         """Access parameter metadata by address, short name, or index."""
         from .param_log import ParamAccessor
 
@@ -1315,7 +1357,7 @@ class LayerPassLog:
     # ************* Built-in Methods *************
     # ********************************************
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self._pass_finished:
             return self._str_after_pass()
         else:
@@ -1466,7 +1508,7 @@ class LayerPassLog:
 
         return s
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
 

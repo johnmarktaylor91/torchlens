@@ -8,7 +8,7 @@ the ``list`` form expected by ``model(*input_args)``.
 
 import inspect
 from collections import defaultdict
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import torch
 from torch import nn
@@ -56,7 +56,7 @@ def _safe_copy_arg(arg: Any) -> Any:
         return arg
 
 
-def safe_copy_args(args: list) -> list:
+def safe_copy_args(args: list[Any]) -> list[Any]:
     """Safely copy a list of positional arguments.
 
     Each element is copied via :func:`_safe_copy_arg`: tensors are cloned,
@@ -65,7 +65,7 @@ def safe_copy_args(args: list) -> list:
     return [_safe_copy_arg(arg) for arg in args]
 
 
-def safe_copy_kwargs(kwargs: dict) -> dict:
+def safe_copy_kwargs(kwargs: dict[Any, Any]) -> dict[Any, Any]:
     """Safely copy a dict of keyword arguments.
 
     Same semantics as :func:`safe_copy_args` but for ``**kwargs``.
@@ -95,7 +95,7 @@ def _model_expects_single_arg(model: nn.Module) -> Optional[bool]:
     return len(named_args) == 1
 
 
-def normalize_input_args(input_args, model: nn.Module) -> list:
+def normalize_input_args(input_args: Any, model: nn.Module) -> list[Any]:
     """Normalize ``input_args`` into a list suitable for ``model(*input_args)``.
 
     Handles the ambiguity when the user passes a tuple or list: it could be
@@ -124,4 +124,4 @@ def normalize_input_args(input_args, model: nn.Module) -> list:
         input_args = [input_args]
     if not input_args:
         input_args = []
-    return input_args
+    return cast(list[Any], input_args)

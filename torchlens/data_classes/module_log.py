@@ -23,8 +23,9 @@ This matches each accessor's natural granularity.
 """
 
 import weakref
+from collections.abc import Iterator
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import torch
 
@@ -35,6 +36,7 @@ from ..utils.display import human_readable_size
 if TYPE_CHECKING:
     import pandas as pd
 
+    from .buffer_log import BufferAccessor
     from .model_log import ModelLog
     from .param_log import ParamAccessor
 
@@ -90,8 +92,8 @@ class ModulePassLog:
         layers: List[str],
         input_layers: List[str],
         output_layers: List[str],
-        forward_args: Optional[tuple] = None,
-        forward_kwargs: Optional[dict] = None,
+        forward_args: tuple[Any, ...] | None = None,
+        forward_kwargs: dict[str, Any] | None = None,
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
         all_module_addresses: Optional[List[str]] = None,
@@ -343,11 +345,11 @@ class ModuleLog:
         is_training: bool = True,
         has_forward_hooks: bool = False,
         has_backward_hooks: bool = False,
-        extra_attributes: Optional[Dict] = None,
+        extra_attributes: Optional[Dict[str, Any]] = None,
         methods: Optional[List[str]] = None,
         # Back-reference
-        _source_model_log=None,
-    ):
+        _source_model_log: "ModelLog | None" = None,
+    ) -> None:
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
         self.name = name
@@ -387,7 +389,7 @@ class ModuleLog:
         self.requires_grad = requires_grad
 
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
-        self._buffer_accessor = None  # populated by _build_module_logs
+        self._buffer_accessor: Any = None  # populated by _build_module_logs
 
         self.is_training = is_training
         self.has_forward_hooks = has_forward_hooks
@@ -412,18 +414,25 @@ class ModuleLog:
 
     @property
     def params_memory_str(self) -> str:
+        """Return parameter tensor size in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable parameter memory amount.
+        """
         return human_readable_size(self.params_memory)
 
     @property
-    def _source_model_log(self):
+    def _source_model_log(self) -> "ModelLog | None":
         """Back-reference to the owning ModelLog (stored as weakref)."""
         ref = self.__dict__.get("_source_model_log_ref")
         if ref is None:
             return None
-        return ref()
+        return cast("ModelLog | None", ref())
 
     @_source_model_log.setter
-    def _source_model_log(self, value):
+    def _source_model_log(self, value: "ModelLog | None") -> None:
         self._source_model_log_ref = weakref.ref(value) if value is not None else None
 
     def __getstate__(self) -> Dict[str, Any]:
@@ -446,7 +455,7 @@ class ModuleLog:
     # Mirror the LayerLog delegation pattern: single-pass modules transparently
     # expose per-pass fields; multi-pass modules raise with guidance.
 
-    def _single_pass_or_error(self, field_name: str):
+    def _single_pass_or_error(self, field_name: str) -> Any:
         """Return a field from the single pass, or raise if the module has multiple passes.
 
         For modules invoked once, transparently delegates to passes[1].
@@ -465,16 +474,37 @@ class ModuleLog:
 
     @property
     def layers(self) -> List[str]:
+        """Module layer labels for a single-pass module.
+
+        Returns
+        -------
+        List[str]
+            Layer labels belonging to the only module pass.
+        """
         result = self._single_pass_or_error("layers")
         return result if result is not None else []
 
     @property
     def input_layers(self) -> List[str]:
+        """Module input layer labels for a single-pass module.
+
+        Returns
+        -------
+        List[str]
+            Input layer labels belonging to the only module pass.
+        """
         result = self._single_pass_or_error("input_layers")
         return result if result is not None else []
 
     @property
     def output_layers(self) -> List[str]:
+        """Module output layer labels for a single-pass module.
+
+        Returns
+        -------
+        List[str]
+            Output layer labels belonging to the only module pass.
+        """
         result = self._single_pass_or_error("output_layers")
         return result if result is not None else []
 
@@ -491,24 +521,38 @@ class ModuleLog:
         return self.output_layers
 
     @property
-    def forward_args(self) -> Optional[tuple]:
-        return self._single_pass_or_error("forward_args")
+    def forward_args(self) -> tuple[Any, ...] | None:
+        """Return captured forward positional arguments for one module pass.
+
+        Returns
+        -------
+        tuple[Any, ...] | None
+            Captured positional arguments, or ``None`` when unavailable.
+        """
+        return cast("tuple[Any, ...] | None", self._single_pass_or_error("forward_args"))
 
     @property
-    def forward_kwargs(self) -> Optional[dict]:
-        return self._single_pass_or_error("forward_kwargs")
+    def forward_kwargs(self) -> dict[str, Any] | None:
+        """Return captured forward keyword arguments for one module pass.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Captured keyword arguments, or ``None`` when unavailable.
+        """
+        return cast("dict[str, Any] | None", self._single_pass_or_error("forward_kwargs"))
 
     @property
-    def buffers(self):
+    def buffers(self) -> "BufferAccessor":
         """Scoped BufferAccessor for buffers belonging to this module."""
         if self._buffer_accessor is not None:
-            return self._buffer_accessor
+            return cast("BufferAccessor", self._buffer_accessor)
         # Build on first access from the source ModelLog
         from .buffer_log import BufferAccessor
 
         if self._source_model_log is None or self._source_model_log._buffer_accessor is None:
             self._buffer_accessor = BufferAccessor({})
-            return self._buffer_accessor
+            return cast("BufferAccessor", self._buffer_accessor)
         parent_accessor = self._source_model_log._buffer_accessor
         scoped = {
             addr: bl
@@ -516,7 +560,7 @@ class ModuleLog:
             if bl.module_address == self.address
         }
         self._buffer_accessor = BufferAccessor(scoped, source_model_log=self._source_model_log)
-        return self._buffer_accessor
+        return cast("BufferAccessor", self._buffer_accessor)
 
     def _sum_layer_field(self, field: str) -> int:
         """Sum a numeric field across all layers in this module (skipping None)."""
@@ -603,7 +647,7 @@ class ModuleLog:
         """Return the total number of layers across all passes of this module."""
         return self.num_layers
 
-    def __getitem__(self, ix):
+    def __getitem__(self, ix: int | str) -> Any:
         """Return the LayerPassLog at position ix within this module's layer list.
 
         Supports int indexing and string label lookup (#120).
@@ -626,7 +670,7 @@ class ModuleLog:
             raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
         return self._source_model_log[self.all_layers[ix]]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
         """Iterate over LayerPassLog entries for all layers in this module."""
         if self._source_model_log is None:
             return iter(self.all_layers)
@@ -654,7 +698,7 @@ class ModuleLog:
         model_log: ModelLog | None = self._source_model_log
         if model_log is None:
             raise RuntimeError("ModuleLog not bound to a ModelLog")
-        return model_log.render_graph(module=self, **kwargs)
+        return cast(str, model_log.render_graph(module=self, **kwargs))
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.
@@ -771,7 +815,7 @@ class ModuleAccessor:
         module_dict: Dict[str, "ModuleLog"],
         module_list: Optional[List["ModuleLog"]] = None,
         pass_dict: Optional[Dict[str, "ModulePassLog"]] = None,
-    ):
+    ) -> None:
         self._dict = module_dict  # primary address -> ModuleLog
         self._list = module_list if module_list is not None else list(module_dict.values())
         self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModulePassLog
@@ -801,7 +845,7 @@ class ModuleAccessor:
             return self._pass_dict[key]
         raise KeyError(f"Module '{key}' not found.")
 
-    def __contains__(self, key) -> bool:
+    def __contains__(self, key: object) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
         if key == "":
             key = "self"
@@ -836,7 +880,7 @@ class ModuleAccessor:
             list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
         )
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["ModuleLog"]:
         """Iterate over ModuleLog objects in address order."""
         return iter(self._list)
 
@@ -942,6 +986,13 @@ class ModuleAccessor:
         self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
     def summary(self) -> str:
+        """Return a compact text table of all modules.
+
+        Returns
+        -------
+        str
+            Summary table with module address, class, depth, params, layers, and passes.
+        """
         if len(self) == 0:
             return "No modules."
         lines = [

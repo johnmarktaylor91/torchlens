@@ -249,7 +249,26 @@ def load(
     lazy: Literal[False] = False,
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
-) -> "ModelLog | Bundle | InterventionSpec": ...
+) -> "ModelLog | Bundle | InterventionSpec":
+    """Load a ``.tlspec`` object with eager tensor materialization.
+
+    Parameters
+    ----------
+    path:
+        ``.tlspec`` directory path.
+    lazy:
+        Eager-loading overload marker.
+    map_location:
+        Target device for eager tensor materialization.
+    materialize_nested:
+        Whether nested blob refs should be materialized.
+
+    Returns
+    -------
+    ModelLog | Bundle | InterventionSpec
+        Rehydrated object selected by the bundle manifest.
+    """
+    ...
 
 
 @overload
@@ -259,7 +278,26 @@ def load(
     lazy: Literal[True],
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
-) -> "ModelLog | Bundle | InterventionSpec": ...
+) -> "ModelLog | Bundle | InterventionSpec":
+    """Load a ``.tlspec`` object while leaving direct tensors lazy.
+
+    Parameters
+    ----------
+    path:
+        ``.tlspec`` directory path.
+    lazy:
+        Lazy-loading overload marker.
+    map_location:
+        Target device for deferred tensor materialization.
+    materialize_nested:
+        Whether nested blob refs should be materialized.
+
+    Returns
+    -------
+    ModelLog | Bundle | InterventionSpec
+        Rehydrated object selected by the bundle manifest.
+    """
+    ...
 
 
 def load(
@@ -321,7 +359,7 @@ def load(
         if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
             from ..intervention.save import load_intervention_spec
 
-            return load_intervention_spec(bundle_path)  # type: ignore[return-value]
+            return load_intervention_spec(bundle_path)
         if tlspec_format == "v2.0_unified":
             return _load_unified_tlspec(
                 bundle_path,
@@ -332,7 +370,7 @@ def load(
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
 
-        return load_intervention_spec(bundle_path)  # type: ignore[return-value]
+        return load_intervention_spec(bundle_path)
     _reject_symlink_path(bundle_path, context="bundle path")
     manifest_path = bundle_path / "manifest.json"
     metadata_path = bundle_path / "metadata.pkl"
@@ -462,7 +500,7 @@ def _load_unified_tlspec(
     if kind == "intervention":
         from ..intervention.save import load_intervention_spec
 
-        return load_intervention_spec(bundle_path)  # type: ignore[return-value]
+        return load_intervention_spec(bundle_path)
     if kind == "model_log":
         return _load_model_log_payload(
             bundle_path,

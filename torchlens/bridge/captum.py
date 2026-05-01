@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from torch import nn
 
@@ -97,7 +97,7 @@ def layer(log: Any, site: Any) -> nn.Module:
     if isinstance(site, str):
         address = site.rsplit(":", maxsplit=1)[0]
         if address in modules:
-            return modules[address]
+            return cast(nn.Module, modules[address])
 
     resolved = resolve_one_site(log, site)
     candidates = list(getattr(resolved, "module_passes_exited", ()) or [])
@@ -107,7 +107,7 @@ def layer(log: Any, site: Any) -> nn.Module:
     for candidate in reversed(candidates):
         address = str(candidate).rsplit(":", maxsplit=1)[0]
         if address in modules:
-            return modules[address]
+            return cast(nn.Module, modules[address])
     raise ValueError(f"Could not resolve Captum layer for site {site!r}.")
 
 
