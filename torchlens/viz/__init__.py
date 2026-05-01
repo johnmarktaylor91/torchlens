@@ -1,6 +1,10 @@
 """Visualization convenience namespace reserved for TorchLens 2.0."""
 
-__all__: list[str] = []
+from __future__ import annotations
+
+from ..visualization.bundle_diff import bundle_diff
+
+__all__ = ["bundle_diff", "causal_trace_heatmap"]
 
 
 def causal_trace_heatmap(

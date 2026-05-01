@@ -156,6 +156,7 @@ class Bundle:
             "delta_map": _bundle_delta_map,
             "norm_delta": _bundle_norm_delta,
             "output_delta": _bundle_output_delta,
+            "show_diff": _bundle_show_diff,
         }
         helper = dynamic_methods.get(name)
         if helper is None:
@@ -1437,6 +1438,43 @@ def _bundle_aligned_pairs(
             available_right.remove(best_index)
             pairs.append((left_layer, right_layers[best_index]))
     return pairs
+
+
+def _bundle_show_diff(
+    self: Bundle,
+    *,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+    layout: Literal["paired"] = "paired",
+    **kwargs: Any,
+) -> str:
+    """Render a two-column bundle diff for a clean/intervention pair.
+
+    Examples
+    --------
+    >>> model_log = tl.log_forward_pass(model, x, intervention_ready=True)
+    >>> ablated = model_log.fork("ablated")
+    >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
+    >>> bundle = tl.bundle({"clean": model_log, "ablated": ablated}, baseline="clean")
+    >>> bundle.show_diff(vis_outpath="bundle_diff_clean_vs_zero_relu")
+
+    Parameters
+    ----------
+    metric:
+        Metric forwarded to ``tl.viz.bundle_diff``.
+    layout:
+        Layout strategy forwarded to ``tl.viz.bundle_diff``.
+    **kwargs:
+        Additional renderer options forwarded unchanged.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source for the rendered diff.
+    """
+
+    from ..visualization.bundle_diff import bundle_diff
+
+    return bundle_diff(self, metric=metric, layout=layout, **kwargs)
 
 
 __all__ = ["Bundle"]

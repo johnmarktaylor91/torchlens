@@ -16,6 +16,11 @@ Eager dynamic control flow is a feature, not a limitation. TorchLens records the
 module behavior that occurred for the concrete input you supplied. It does not claim to enumerate
 branches that did not execute.
 
+## Bundle Diff Rendering
+
+`Bundle.show_diff()` is static for v1. Interactive bundle comparison belongs in
+`torchlens.viewer` later.
+
 ## Compatibility Truth Table
 
 Phase 13 will fill in the full `tl.compat.report` truth table. Until then, known-broken rows are
