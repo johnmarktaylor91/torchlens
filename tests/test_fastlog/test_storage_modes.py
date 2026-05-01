@@ -12,6 +12,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.fastlog import CaptureSpec, PredicateError, RecordContext, RecordingConfigError
+from torchlens.options import StreamingOptions
 
 
 class StorageModel(nn.Module):
@@ -73,7 +74,7 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
         StorageModel(),
         torch.ones(1, 3),
         default_op=CaptureSpec(keep_grad=True),
-        streaming=tl.StreamingOptions(
+        streaming=StreamingOptions(
             bundle_path=tmp_path / "mirror.tlfast",
             retain_in_memory=True,
         ),
@@ -93,7 +94,7 @@ def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) ->
         tl.fastlog.Recorder(
             StorageModel(),
             default_op=CaptureSpec(keep_grad=True),
-            streaming=tl.StreamingOptions(
+            streaming=StreamingOptions(
                 bundle_path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
@@ -117,7 +118,7 @@ def test_disk_only_predicate_keep_grad_rejected_before_record_write(
             StorageModel(),
             torch.ones(1, 3),
             keep_op=keep_op,
-            streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     partials = list(tmp_path.glob("disk.tlfast.tmp.*"))
@@ -145,7 +146,7 @@ def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> 
             StorageModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(keep_grad=True, device="cpu"),
-            streaming=tl.StreamingOptions(
+            streaming=StreamingOptions(
                 bundle_path=tmp_path / "mirror.tlfast",
                 retain_in_memory=True,
             ),

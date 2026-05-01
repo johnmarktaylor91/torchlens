@@ -196,13 +196,17 @@ def test_get_model_metadata_warns_once(monkeypatch: pytest.MonkeyPatch) -> None:
     assert first is sentinel
     assert second is sentinel
     assert _deprecation_messages(records) == [
+        "torchlens.get_model_metadata is deprecated; use torchlens.io.get_model_metadata "
+        "instead. Removed in v2.NN.",
         "`get_model_metadata` is deprecated; use `log_model_metadata` instead. "
-        "The old name continues to work but will be removed in a future release."
+        "The old name continues to work but will be removed in a future release.",
+        "torchlens.get_model_metadata is deprecated; use torchlens.io.get_model_metadata "
+        "instead. Removed in v2.NN.",
     ]
 
 
 def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The canonical metadata helper should not emit deprecation warnings."""
+    """The namespaced metadata helper should not emit deprecation warnings."""
 
     sentinel = object()
 
@@ -216,7 +220,7 @@ def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPa
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        result = tl.log_model_metadata(_TinyModel(), _tiny_input())
+        result = tl.io.log_model_metadata(_TinyModel(), _tiny_input())
 
     assert result is sentinel
     assert _deprecation_messages(records) == []
@@ -240,7 +244,7 @@ def test_validate_saved_activations_alias_warns_and_forwards(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        result = tl.validate_saved_activations(
+        result = tl.validation.validate_saved_activations(
             _TinyModel(),
             _tiny_input(),
             validate_metadata=False,
@@ -392,7 +396,9 @@ def test_show_model_graph_new_detect_recurrent_patterns_has_no_warning(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.show_model_graph(_TinyModel(), _tiny_input(), detect_recurrent_patterns=False)
+        tl.visualization.show_model_graph(
+            _TinyModel(), _tiny_input(), detect_recurrent_patterns=False
+        )
 
     assert captured["detect_loops"] is False
     assert _deprecation_messages(records) == []
@@ -407,7 +413,7 @@ def test_show_model_graph_old_detect_loops_warns(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.show_model_graph(_TinyModel(), _tiny_input(), detect_loops=False)
+        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), detect_loops=False)
 
     assert captured["detect_loops"] is False
     assert len(_deprecation_messages(records)) == 1
@@ -420,7 +426,7 @@ def test_show_model_graph_mixing_detect_loop_names_raises() -> None:
         TypeError,
         match="kwarg detect_loops deprecated, use detect_recurrent_patterns; do not pass both",
     ):
-        tl.show_model_graph(
+        tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
             detect_loops=True,
@@ -480,7 +486,7 @@ def test_visualization_flat_aliases_warn_and_route(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.show_model_graph(_TinyModel(), _tiny_input(), **{flat_name: value})
+        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), **{flat_name: value})
 
     assert dummy_log.render_calls[-1][render_key] == value
     assert len(_deprecation_messages(records)) == 1
@@ -490,7 +496,7 @@ def test_visualization_group_and_flat_same_field_raise() -> None:
     """Same-field grouped and flat visualization inputs should conflict."""
 
     with pytest.raises(TypeError, match="Do not pass both `vis_mode` and `visualization.mode`."):
-        tl.show_model_graph(
+        tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
             visualization=VisualizationOptions(mode="rolled"),
@@ -505,7 +511,7 @@ def test_visualization_group_and_flat_same_field_raise_for_explicit_default() ->
         TypeError,
         match="Do not pass both `vis_nesting_depth` and `visualization.max_module_depth`.",
     ):
-        tl.show_model_graph(
+        tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
             visualization=VisualizationOptions(mode="rolled", max_module_depth=1000),
@@ -523,7 +529,7 @@ def test_visualization_group_and_flat_different_fields_merge_without_mutation(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.show_model_graph(
+        tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
             visualization=visualization,
@@ -546,7 +552,7 @@ def test_visualization_defaults_preserve_per_function_behavior(
     tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None)
     assert dummy_log.render_calls == []
 
-    tl.show_model_graph(_TinyModel(), _tiny_input())
+    tl.visualization.show_model_graph(_TinyModel(), _tiny_input())
     assert dummy_log.render_calls[-1]["vis_mode"] == "unrolled"
 
 

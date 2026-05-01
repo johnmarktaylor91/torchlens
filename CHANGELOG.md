@@ -8,6 +8,11 @@
   as a substrate dependency for the broader ML ecosystem.
 - Update the package classifier from Alpha to Beta per the TorchLens 2.0 Q23
   release-positioning lock.
+- Codify the TorchLens 2.0 top-level API ledger at 40 names. Moved legacy
+  top-level helpers and rare-use types to namespaced homes with deprecation
+  shims; `TensorLog`, `ModulePassLog`, `ParamLog`, `BufferLog`, `GradFnLog`,
+  and `GradFnPassLog` are no longer in `torchlens.__all__` but remain
+  importable from `torchlens.types` for the migration window.
 
 
 ## v2.16.0 (2026-04-30)
