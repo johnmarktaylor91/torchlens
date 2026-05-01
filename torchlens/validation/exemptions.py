@@ -82,6 +82,8 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
     "embedding": {1},  # index tensor — random indices cause CUDA OOB
     "index_select": {2},  # index tensor
     "scatter_": {2},  # index tensor
+    "maskedfill": {1},  # mask tensor; TorchLens canonical name for Tensor.masked_fill
+    "masked_fill": {1},  # mask tensor
     "masked_fill_": {1},  # mask tensor
     "_pad_packed_sequence": {1},  # lengths tensor
     "type_as": {1},  # type template tensor (value irrelevant)

@@ -69,6 +69,46 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # CPython slot fixup for Tensor sequence protocol
 # ---------------------------------------------------------------------------
+
+
+def _nvtx_range_push(name: str) -> bool:
+    """Push an NVTX range if CUDA NVTX support is available.
+
+    Parameters
+    ----------
+    name:
+        Range label.
+
+    Returns
+    -------
+    bool
+        Whether a corresponding pop should be attempted.
+    """
+
+    try:
+        torch.cuda.nvtx.range_push(name)
+    except Exception:
+        return False
+    return True
+
+
+def _nvtx_range_pop(enabled: bool) -> None:
+    """Pop a previously pushed NVTX range.
+
+    Parameters
+    ----------
+    enabled:
+        Whether a push succeeded.
+    """
+
+    if not enabled:
+        return
+    try:
+        torch.cuda.nvtx.range_pop()
+    except Exception:
+        return
+
+
 #
 # When __getitem__ is replaced on a C extension type (like torch.Tensor) with
 # a Python function, CPython sets the sq_item slot in tp_as_sequence.  This
@@ -414,7 +454,15 @@ def torch_func_decorator(func: Callable, func_name: str):
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
-        out_orig = func(*args, **kwargs)
+        nvtx_pushed = (
+            _nvtx_range_push(f"torchlens::{func_name}")
+            if getattr(model_log, "emit_nvtx", False)
+            else False
+        )
+        try:
+            out_orig = func(*args, **kwargs)
+        finally:
+            _nvtx_range_pop(nvtx_pushed)
         exec_ctx = FuncExecutionContext(
             time_elapsed=time.time() - start_time,
             rng_states=rng_states,

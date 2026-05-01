@@ -134,6 +134,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "input_shape_hash": None,
     "graph_shape_hash": None,
     "module_filter_fn": None,
+    "emit_nvtx": False,
     "raise_on_nan": False,
     "capture_kpis": {},
     "report_values": {},
@@ -356,6 +357,7 @@ class ModelLog:
         "detach_saved_tensors": FieldPolicy.KEEP,
         "train_mode": FieldPolicy.DROP,
         "module_filter_fn": FieldPolicy.DROP,
+        "emit_nvtx": FieldPolicy.KEEP,
         "raise_on_nan": FieldPolicy.KEEP,
         "capture_kpis": FieldPolicy.KEEP,
         "report_values": FieldPolicy.KEEP,
@@ -500,6 +502,7 @@ class ModelLog:
         verbose: bool = False,
         train_mode: bool = False,
         module_filter_fn: Callable[[Any], bool] | None = None,
+        emit_nvtx: bool = False,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -525,6 +528,7 @@ class ModelLog:
             verbose: If True, print timed progress messages at each major pipeline stage.
             train_mode: Session-time flag for training-compatible activation retention.
                 Portable bundle load restores the default ``False`` value.
+            emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -574,6 +578,7 @@ class ModelLog:
         self.detach_saved_tensors = detach_saved_tensors
         self.train_mode = train_mode
         self.module_filter_fn = module_filter_fn
+        self.emit_nvtx = emit_nvtx
         self.raise_on_nan: bool = False
         self.capture_kpis: Dict[str, Any] = {}
         self.manual_tensor_connections: List[Tuple[str, str]] = []
@@ -3128,7 +3133,14 @@ class ModelLog:
         **kwargs:
             Additional keyword arguments forwarded to ``DataFrame.to_csv``.
         """
-        self.to_pandas().to_csv(filepath, index=False, **kwargs)
+        warnings.warn(
+            "ModelLog.to_csv() is deprecated; use torchlens.export.csv(log, path) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from ..export import csv as export_csv
+
+        export_csv(self, Path(filepath), **kwargs)
 
     def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
         """Write the layer table to Parquet.
@@ -3145,13 +3157,19 @@ class ModelLog:
         ImportError
             If ``pyarrow`` is unavailable.
         """
+        warnings.warn(
+            "ModelLog.to_parquet() is deprecated; use torchlens.export.parquet(log, path) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from ..export import parquet as export_parquet
+
         try:
-            import pyarrow  # noqa: F401
+            export_parquet(self, Path(filepath), **kwargs)
         except ImportError as exc:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
 
     def to_json(
         self,
@@ -3171,7 +3189,14 @@ class ModelLog:
         **kwargs:
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
-        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+        warnings.warn(
+            "ModelLog.to_json() is deprecated; use torchlens.export.json(log, path) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from ..export import json as export_json
+
+        export_json(self, Path(filepath), orient=orient, **kwargs)
 
     def save_new_activations(
         self,

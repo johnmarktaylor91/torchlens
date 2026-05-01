@@ -1033,7 +1033,9 @@ class LayerAccessor:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
 
     def to_json(
         self,

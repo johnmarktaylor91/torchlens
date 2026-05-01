@@ -1,5 +1,5 @@
 """External-tool bridge namespace."""
 
-from . import profiler
+from . import depyf, huggingface, profiler
 
-__all__ = ["profiler"]
+__all__ = ["depyf", "huggingface", "profiler"]

@@ -48,6 +48,7 @@ MODEL_LOG_FIELD_ORDER = [
     "output_device",
     "train_mode",
     "module_filter_fn",
+    "emit_nvtx",
     "raise_on_nan",
     "capture_kpis",
     "report_values",
