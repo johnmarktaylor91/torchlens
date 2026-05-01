@@ -31,6 +31,13 @@ MAX_FLOATING_POINT_TOLERANCE = 1e-5
 # while still matching the saved operation numerically.
 REL_FLOATING_POINT_TOLERANCE = 1e-4
 
+_DTYPE_FLOAT_TOLERANCES: dict[torch.dtype, tuple[float, float]] = {
+    torch.float16: (1e-3, 1e-3),
+    torch.bfloat16: (1e-2, 1e-2),
+    torch.float32: (REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE),
+    torch.float64: (REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE),
+}
+
 # Cached result of torch.cuda.is_available().  Evaluated once per process
 # because CUDA availability cannot change at runtime.  Avoids repeated
 # calls into the CUDA runtime (which involve driver queries).
@@ -50,12 +57,68 @@ def _is_cuda_available() -> bool:
     return _cuda_available
 
 
+def _tolerances_for_dtype(dtype: torch.dtype) -> tuple[float, float]:
+    """Return replay comparison tolerances for ``dtype``.
+
+    Parameters
+    ----------
+    dtype:
+        Tensor dtype being compared.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(rtol, atol)`` pair for ``torch.allclose``.
+    """
+
+    return _DTYPE_FLOAT_TOLERANCES.get(
+        dtype,
+        (REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE),
+    )
+
+
 def tensor_all_nan(tensor: torch.Tensor) -> bool:
     """Return True if every element in the tensor is NaN."""
     if torch.isnan(tensor).int().sum() == tensor.numel():
         return True
     else:
         return False
+
+
+def _quantized_tensor_equal(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> bool:
+    """Return exact equality for quantized tensors without floating ops.
+
+    Parameters
+    ----------
+    tensor_a:
+        First quantized tensor.
+    tensor_b:
+        Second quantized tensor.
+
+    Returns
+    -------
+    bool
+        True if quantization metadata and integer payloads match.
+    """
+
+    if not (tensor_a.is_quantized and tensor_b.is_quantized):
+        return False
+    if tensor_a.qscheme() != tensor_b.qscheme():
+        return False
+    if not torch.equal(tensor_a.int_repr(), tensor_b.int_repr()):
+        return False
+    if tensor_a.qscheme() in (torch.per_tensor_affine, torch.per_tensor_symmetric):
+        return tensor_a.q_scale() == tensor_b.q_scale() and (
+            tensor_a.q_zero_point() == tensor_b.q_zero_point()
+        )
+    return (
+        tensor_a.q_per_channel_axis() == tensor_b.q_per_channel_axis()
+        and torch.equal(tensor_a.q_per_channel_scales(), tensor_b.q_per_channel_scales())
+        and torch.equal(
+            tensor_a.q_per_channel_zero_points(),
+            tensor_b.q_per_channel_zero_points(),
+        )
+    )
 
 
 def tensor_nanequal(
@@ -93,6 +156,9 @@ def tensor_nanequal(
         return False
 
     with pause_logging():
+        if tensor_a.is_quantized or tensor_b.is_quantized:
+            return _quantized_tensor_equal(tensor_a, tensor_b)
+
         # Inf positions must match exactly (inf != -inf).
         if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
             return False
@@ -122,14 +188,10 @@ def tensor_nanequal(
             allow_tolerance
             and (tensor_a_nonan.dtype != torch.bool)
             and (tensor_b_nonan.dtype != torch.bool)
-            and torch.allclose(
-                tensor_a_nonan,
-                tensor_b_nonan,
-                rtol=REL_FLOATING_POINT_TOLERANCE,
-                atol=MAX_FLOATING_POINT_TOLERANCE,
-            )
         ):
-            return True
+            rtol, atol = _tolerances_for_dtype(tensor_a_nonan.dtype)
+            if torch.allclose(tensor_a_nonan, tensor_b_nonan, rtol=rtol, atol=atol):
+                return True
 
     return False
 

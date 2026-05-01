@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -16,7 +15,8 @@ from typing import (
     Sequence,
 )
 
-from ..utils.display import human_readable_size
+from ...utils.display import format_flops, human_readable_size
+from ..._source_links import terminal_file_line_link
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
@@ -25,7 +25,9 @@ if TYPE_CHECKING:
     from ..data_classes.module_log import ModuleLog
 
 
-SummaryLevel = Literal["overview", "graph", "memory", "control_flow", "compute", "cost"]
+SummaryLevel = Literal[
+    "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall"
+]
 SummaryMode = Literal["auto", "rolled", "unrolled"]
 
 _LEVEL_ALIASES: Dict[str, str] = {"cost": "compute"}
@@ -43,6 +45,9 @@ _COLUMN_LABELS: Dict[str, str] = {
     "flops": "Fwd FLOPs",
     "macs": "MACs",
     "time_ms": "Time (ms)",
+    "start_ms": "Start (ms)",
+    "end_ms": "End (ms)",
+    "memory": "Memory",
     "site": "Site",
     "source": "Source",
     "taken": "Taken",
@@ -57,6 +62,7 @@ _LEVEL_DEFAULT_FIELDS: Dict[str, List[str]] = {
     "memory": ["name", "shape", "dtype", "tensor_mb", "running_mb"],
     "control_flow": ["site", "source", "taken", "bool_layer", "branch_ops", "notes"],
     "compute": ["name", "params", "flops", "macs", "time_ms", "dtype"],
+    "waterfall": ["name", "start_ms", "time_ms", "end_ms", "memory"],
 }
 
 
@@ -863,6 +869,7 @@ def _level_title(*, model_log: "ModelLog", level: str) -> str:
         "memory": f"Memory Summary: {model_log.model_name}",
         "control_flow": f"Control-Flow Summary: {model_log.model_name}",
         "compute": f"Compute Summary: {model_log.model_name}",
+        "waterfall": f"Waterfall Summary: {model_log.model_name}",
     }
     return title_map[level]
 
@@ -897,6 +904,8 @@ def _build_level_rows(
         return _build_memory_rows(model_log, mode=mode)
     if level == "control_flow":
         return _build_control_flow_rows(model_log)
+    if level == "waterfall":
+        return _build_waterfall_rows(model_log, mode=mode)
     return _build_compute_rows(model_log)
 
 
@@ -938,6 +947,8 @@ def _build_overview_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], L
         f"Saved activations: {human_readable_size(model_log.saved_activation_memory)}",
         f"Forward FLOPs: {_human_flops(model_log.total_flops_forward)}  "
         f"MACs: {_human_flops(model_log.total_macs_forward)}",
+        "FLOP convention: counts use the captured TorchLens convention; "
+        "MACs are reported as FLOPs // 2.",
     ]
     return rows, footer_lines
 
@@ -1078,6 +1089,50 @@ def _build_compute_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], Li
         f"Forward FLOPs: {_human_flops(model_log.total_flops_forward)}",
         f"MACs: {_human_flops(model_log.total_macs_forward)}",
         f"Forward time: {model_log.time_forward_pass * 1000:.2f} ms",
+    ]
+    return rows, footer_lines
+
+
+def _build_waterfall_rows(
+    model_log: "ModelLog",
+    *,
+    mode: SummaryMode,
+) -> tuple[List[Dict[str, str]], List[str]]:
+    """Build timing and memory waterfall rows.
+
+    Parameters
+    ----------
+    model_log:
+        Finalized log object.
+    mode:
+        Operation aggregation mode.
+
+    Returns
+    -------
+    tuple[list[dict[str, str]], list[str]]
+        Waterfall rows and footer lines.
+    """
+
+    elapsed = 0.0
+    peak_memory = 0
+    rows: List[Dict[str, str]] = []
+    for entry in _iter_operation_entries(model_log, mode=mode):
+        duration = float(getattr(entry, "func_time", 0.0) or 0.0)
+        memory = int(getattr(entry, "tensor_memory", 0) or 0)
+        peak_memory = max(peak_memory, memory)
+        rows.append(
+            {
+                "name": _entry_name(entry),
+                "start_ms": f"{elapsed * 1000:.2f}",
+                "time_ms": f"{duration * 1000:.2f}",
+                "end_ms": f"{(elapsed + duration) * 1000:.2f}",
+                "memory": human_readable_size(memory),
+            }
+        )
+        elapsed += duration
+    footer_lines = [
+        f"Accumulated op time: {elapsed * 1000:.2f} ms",
+        f"Max single tensor memory: {human_readable_size(peak_memory)}",
     ]
     return rows, footer_lines
 
@@ -1428,7 +1483,7 @@ def _event_source(event: "ConditionalEvent") -> str:
     str
         Source locator.
     """
-    return f"{Path(event.source_file).name}:{event.if_stmt_span[0]}"
+    return terminal_file_line_link(event.source_file, event.if_stmt_span[0])
 
 
 def _event_bool_layer(event: "ConditionalEvent") -> str:
@@ -1581,7 +1636,7 @@ def _human_flops(value: int) -> str:
     str
         Compact FLOP string.
     """
-    return _human_count(value)
+    return format_flops(value)
 
 
 def _int_with_commas(value: int) -> str:

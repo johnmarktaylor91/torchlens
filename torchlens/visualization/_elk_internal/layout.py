@@ -1025,7 +1025,7 @@ def render_elk_direct(
     from collections import defaultdict
 
     # Late imports to avoid circular dependency
-    from .rendering import (
+    from ..rendering import (
         _collapse_module_address_for_node,
         _get_node_address_shape_color,
         _get_node_bg_color,
@@ -1037,9 +1037,9 @@ def render_elk_direct(
         DEFAULT_BG_COLOR,
         COMMUTE_FUNCS,
     )
-    from ._render_utils import compute_module_penwidth
-    from .modes import COLLAPSED_MODE_REGISTRY
-    from .node_spec import NodeSpec
+    from .._render_utils import compute_module_penwidth
+    from ..modes import COLLAPSED_MODE_REGISTRY
+    from ..node_spec import NodeSpec
 
     # ── Phase 1: Collect node styling, module assignments, and edges ──
 
@@ -1545,7 +1545,7 @@ def _add_arg_label(parent_node, child_node, edge_dict, model_log, show_buffer_la
     Simplified version of ``rendering._label_node_arguments_if_needed`` for the
     fast ELK path.
     """
-    from .rendering import LayerPassLog, LayerLog
+    from ..rendering import LayerPassLog, LayerLog
 
     # Count visible parents
     num_parents = len(child_node.parent_layers)

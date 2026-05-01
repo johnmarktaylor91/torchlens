@@ -256,8 +256,9 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
             for p in group["params"]:
                 optimized_param_ids.add(id(p))
 
-    param_logs = {}
+    param_logs: dict[str, ParamLog] = {}
     seen_param_ids: set = set()
+    param_id_to_address: dict[int, str] = {}
     for module in model.modules():
         module_address = getattr(module, "tl_module_address", "")
         module_type = type(module).__name__
@@ -267,10 +268,15 @@ def _create_session_param_logs(model_log: "ModelLog", model: nn.Module, optimize
             # Shared parameters: only create one ParamLog per unique tensor.
             pid = id(param)
             if pid in seen_param_ids:
+                existing_address = param_id_to_address[pid]
+                alias_address = f"{module_address}.{param_name}" if module_address else param_name
+                if alias_address not in param_logs[existing_address].linked_params:
+                    param_logs[existing_address].linked_params.append(alias_address)
                 continue
             seen_param_ids.add(pid)
 
             address = f"{module_address}.{param_name}" if module_address else param_name
+            param_id_to_address[pid] = address
 
             # Save original requires_grad before forcing True.
             param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]

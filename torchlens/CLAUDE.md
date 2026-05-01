@@ -67,4 +67,4 @@ semantics.
 - **[postprocess/](postprocess/)** — 18-step pipeline: graph cleanup, loop detection, labeling (6 files)
 - **[utils/](utils/)** — Arg handling, tensor ops, RNG, hashing, display helpers (7 files)
 - **[validation/](validation/)** — Forward replay, perturbation checks, metadata invariants (3 files)
-- **[visualization/](visualization/)** — Graphviz + ELK + dagua rendering (3 files)
+- **[visualization/](visualization/)** — Graphviz rendering, internal ELK layout backend, experimental dagua opt-in

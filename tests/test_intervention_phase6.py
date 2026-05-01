@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import importlib
 from typing import Any
 
 import pytest
@@ -12,6 +13,8 @@ import torchlens as tl
 from torchlens import RunState
 from torchlens.intervention.errors import ControlFlowDivergenceWarning, ReplayPreconditionError
 from torchlens.intervention.replay import cone_of_effect
+
+replay_mod = importlib.import_module("torchlens.intervention.replay")
 
 
 def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
@@ -175,6 +178,44 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     assert log.run_state is RunState.REPLAY_PROPAGATED
     assert log.last_run_ctx["engine"] == "replay"
     assert relu_site.intervention_log[-1].engine == "replay"
+
+
+def test_replay_failure_rolls_back_partial_activation_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replay failures leave activations and intervention records unchanged."""
+
+    torch.manual_seed(0)
+    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    original_tensors = {
+        layer.layer_label: layer.activation.clone()
+        for layer in log.layer_list
+        if isinstance(layer.activation, torch.Tensor)
+    }
+    original_records = {layer.layer_label: list(layer.intervention_log) for layer in log.layer_list}
+    original_state = log.run_state
+    real_execute = replay_mod._execute_replay_func_strict
+    execute_count = 0
+
+    def flaky_execute(site: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+        """Raise after the replay has computed an upstream update."""
+
+        nonlocal execute_count
+        execute_count += 1
+        if execute_count == 2:
+            raise RuntimeError("replay boom")
+        return real_execute(site, args, kwargs)
+
+    monkeypatch.setattr(replay_mod, "_execute_replay_func_strict", flaky_execute)
+
+    with pytest.raises(RuntimeError, match="replay boom"):
+        log.replay(hooks={tl.func("relu"): _zero_hook})
+
+    assert log.run_state is original_state
+    for layer in log.layer_list:
+        if layer.layer_label in original_tensors:
+            assert torch.equal(layer.activation, original_tensors[layer.layer_label])
+        assert list(layer.intervention_log) == original_records[layer.layer_label]
 
 
 def test_replay_from_preserves_origin_activation_and_recomputes_children() -> None:

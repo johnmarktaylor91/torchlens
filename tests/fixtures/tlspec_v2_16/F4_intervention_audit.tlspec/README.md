@@ -1,0 +1,8 @@
+# TorchLens intervention spec
+
+- format_version: 1
+- helper_registry_version: 1
+- save_level: audit
+- executable: False
+- targets: 1
+- tensor_sidecars: 0

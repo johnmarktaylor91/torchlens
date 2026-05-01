@@ -14,14 +14,15 @@ can access these fields via ``__getattr__`` delegation.
 
 import weakref
 from os import PathLike
-from typing import Any, Dict, List, Literal, Optional, Union
-
-import pandas as pd
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 from .layer_pass_log import LayerPassLog
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
@@ -176,6 +177,13 @@ class BufferAccessor:
         pd.DataFrame
             One row per buffer, ordered by ``BUFFER_LOG_FIELD_ORDER``.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         rows = [_buffer_log_to_row(buffer_log) for buffer_log in self._list]
         return pd.DataFrame(rows, columns=BUFFER_LOG_FIELD_ORDER)
 
@@ -212,7 +220,9 @@ class BufferAccessor:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
 
     def to_json(
         self,

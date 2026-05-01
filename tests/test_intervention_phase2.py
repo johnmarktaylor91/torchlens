@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 import warnings
 
 import pytest
@@ -187,14 +188,22 @@ def test_target_specs_and_empty_site_table_behave_clearly(phase2_log: tl.ModelLo
     """Selectors convert to target specs and empty tables reject ``first``."""
 
     target_spec = tl.func("relu").to_target_spec()
+    target_spec.selector_value = ["relu"]
+    target_spec.metadata["nested"] = {"labels": ["relu_1_2"]}
     frozen_spec = target_spec.freeze()
     empty_table = SiteTable(())
 
-    assert phase2_log.resolve_sites(target_spec, max_fanout=4).labels() == (
+    assert frozen_spec.selector_value == ("relu",)
+    assert frozen_spec.metadata == (("nested", (("labels", ("relu_1_2",)),)),)
+    with pytest.raises(FrozenInstanceError):
+        frozen_spec.selector_kind = "label"  # type: ignore[misc]
+
+    portable_target_spec = tl.func("relu").to_target_spec()
+    assert phase2_log.resolve_sites(portable_target_spec, max_fanout=4).labels() == (
         "relu_1_2",
         "relu_2_3",
     )
-    assert phase2_log.resolve_sites(frozen_spec, max_fanout=4).labels() == (
+    assert phase2_log.resolve_sites(portable_target_spec.freeze(), max_fanout=4).labels() == (
         "relu_1_2",
         "relu_2_3",
     )

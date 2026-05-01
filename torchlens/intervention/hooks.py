@@ -18,7 +18,7 @@ from .errors import (
     LiveModeLabelError,
     SiteResolutionError,
 )
-from .selectors import BaseSelector, CompositeSelector, SelectorLike, in_module
+from .selectors import BaseSelector, CompositeSelector, NotSelector, SelectorLike, in_module
 from .types import HelperSpec, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec
 
 HookTiming: TypeAlias = Literal["pre", "post"]
@@ -487,6 +487,8 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
             return selector
     if target.selector_kind == "predicate" and callable(target.selector_value):
         return where(target.selector_value, name_hint=target.metadata.get("name_hint"))
+    if target.selector_kind == "not":
+        return ~_normalize_live_selector(target.selector_value)
     raise SiteResolutionError(f"Unsupported live hook selector kind {target.selector_kind!r}.")
 
 
@@ -517,6 +519,10 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
         return any(
             _live_selector_matches_unchecked(_normalize_live_selector(child), site)
             for child in selector.selectors
+        )
+    if kind == "not" and isinstance(selector, NotSelector):
+        return not _live_selector_matches_unchecked(
+            _normalize_live_selector(selector.selector), site
         )
     if kind == "label":
         return _live_label_matches(site, str(value))
@@ -728,7 +734,13 @@ def _dispatch_hook_pairs(
     """
 
     if hook is not None:
+        if hasattr(hooks_or_site, "to_hook_pairs"):
+            return list(hooks_or_site.to_hook_pairs(hook))
         return [(hooks_or_site, hook)]
+
+    observer_site = getattr(hooks_or_site, "site", None)
+    if observer_site is not None and _is_hook_like(hooks_or_site):
+        return [(observer_site, hooks_or_site)]
 
     if _is_hook_like(hooks_or_site):
         if default_site_target is None:
@@ -828,6 +840,9 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
     ------
     HookSignatureError
         If the callable cannot be called as ``fn(activation, *, hook=ctx)``.
+        Backward hooks receive a gradient as the first positional argument; the
+        parameter name is conventional only, so ``g`` or any other name is
+        accepted.
     """
 
     try:

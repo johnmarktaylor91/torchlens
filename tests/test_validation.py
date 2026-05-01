@@ -260,6 +260,15 @@ class _MaskedFillModel(nn.Module):
         return x.masked_fill_(mask, 0.0)
 
 
+class _FunctionalMaskedFillModel(nn.Module):
+    """Model that uses masked_fill."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply a boolean mask through the non-in-place masked_fill method."""
+        mask = x > 0.5
+        return x.masked_fill(mask, 0.0)
+
+
 class _ZerosLikeModel(nn.Module):
     """Model that uses zeros_like."""
 
@@ -291,6 +300,13 @@ def test_validation_with_scatter():
 
 def test_validation_with_masked_fill():
     model = _MaskedFillModel()
+    x = torch.randn(4, 4)
+    assert validate_forward_pass(model, x)
+
+
+def test_validation_with_functional_masked_fill() -> None:
+    """Validate non-in-place masked_fill boolean masks as structural args."""
+    model = _FunctionalMaskedFillModel()
     x = torch.randn(4, 4)
     assert validate_forward_pass(model, x)
 

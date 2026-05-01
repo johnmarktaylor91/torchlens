@@ -1,11 +1,17 @@
 # <img src="images/logo.png" width=8% height=8%> TorchLens
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+
 **Quick Links**
 
 - [Paper introducing TorchLens](https://www.nature.com/articles/s41598-023-40807-0)
 - [CoLab tutorial](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing)
+- [5-minute notebook gallery](examples/5min/README.md)
+- [50-minute workflow notebook gallery](examples/50min/README.md)
 - [\"Menagerie\" of model visualizations](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb)
 - [Metadata provided by TorchLens](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf)
+- License: [Apache 2.0](LICENSE); functional docs: [limitations](LIMITATIONS.md),
+  [roadmap](ROADMAP.md), and [migration tables](docs/migration/).
 
 ## Overview
 
@@ -59,6 +65,25 @@ in its forward pass; you can grab the saved outputs of every last one:
 
 The goal of *TorchLens* is to do this for any PyTorch model whatsoever. You can see a bunch of example model
 visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
+
+## Compatibility report
+
+Before filing a bug for a model-specific failure, run the runtime compatibility
+report on the exact model wrapper and example input you plan to log:
+
+```python
+import torchlens as tl
+
+compat = tl.compat.report(model, x)
+print(compat.show())
+print(compat.to_markdown())  # useful in issues and README snippets
+```
+
+`tl.compat.report(model, x)` does not execute the model. It inspects the model
+wrapper, modules, parameter sharing, input tensors, CUDA visibility, and common
+framework markers, then reports each row as `pass`, `known_broken`, `scope`, or
+`not_tested`. Known-broken and out-of-scope rows are cross-referenced in
+[`LIMITATIONS.md`](LIMITATIONS.md).
 
 ## Interventions (v2.0+)
 

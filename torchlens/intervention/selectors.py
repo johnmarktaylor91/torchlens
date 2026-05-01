@@ -17,6 +17,7 @@ SelectorKind: TypeAlias = Literal[
     "in_module",
     "and",
     "or",
+    "not",
 ]
 
 
@@ -59,6 +60,17 @@ class BaseSelector:
 
         return CompositeSelector("or", (self, other))
 
+    def __invert__(self) -> "NotSelector":
+        """Return a selector that matches the complement of this selector.
+
+        Returns
+        -------
+        NotSelector
+            Negated selector.
+        """
+
+        return NotSelector(self)
+
     def to_target_spec(self) -> TargetSpec:
         """Convert the selector to a mutable target spec.
 
@@ -72,6 +84,29 @@ class BaseSelector:
             selector_kind=self.selector_kind,
             selector_value=self.selector_value,
         )
+
+    def __dir__(self) -> list[str]:
+        """Return selector attributes for tab completion.
+
+        Returns
+        -------
+        list[str]
+            Standard selector attributes. Selectors are not bound to a
+            ``ModelLog``, so layer-name completion lives on log accessors.
+        """
+
+        return sorted(set(super().__dir__()) | {"selector_kind", "selector_value"})
+
+    def _ipython_key_completions_(self) -> list[str]:
+        """Return key completions for IPython.
+
+        Returns
+        -------
+        list[str]
+            Empty list because selector instances have no bound layer universe.
+        """
+
+        return []
 
     def __repr__(self) -> str:
         """Return a concise constructor-style representation.
@@ -338,6 +373,59 @@ class CompositeSelector(BaseSelector):
         return f"({left!r} {symbol} {right!r})"
 
 
+@dataclass(frozen=True, repr=False)
+class NotSelector(BaseSelector):
+    """Selector composed with unary ``~``.
+
+    Parameters
+    ----------
+    selector:
+        Selector to negate.
+    """
+
+    selector: SelectorLike
+
+    def __init__(self, selector: SelectorLike) -> None:
+        """Create a negated selector.
+
+        Parameters
+        ----------
+        selector:
+            Selector to negate.
+        """
+
+        object.__setattr__(self, "selector_kind", "not")
+        object.__setattr__(self, "selector_value", selector)
+        object.__setattr__(self, "selector", selector)
+
+    def to_target_spec(self) -> TargetSpec:
+        """Convert the negated selector to a target spec.
+
+        Returns
+        -------
+        TargetSpec
+            Target spec with a nested selector payload.
+        """
+
+        nested = (
+            self.selector.to_target_spec()
+            if isinstance(self.selector, BaseSelector)
+            else self.selector
+        )
+        return TargetSpec(selector_kind=self.selector_kind, selector_value=nested)
+
+    def __repr__(self) -> str:
+        """Return a unary representation of the negated selector.
+
+        Returns
+        -------
+        str
+            Repr with ``~``.
+        """
+
+        return f"(~{self.selector!r})"
+
+
 SelectorLike: TypeAlias = BaseSelector | TargetSpec
 
 
@@ -519,6 +607,7 @@ __all__ = [
     "InModuleSelector",
     "LabelSelector",
     "ModuleSelector",
+    "NotSelector",
     "SelectorLike",
     "WhereSelector",
     "contains",

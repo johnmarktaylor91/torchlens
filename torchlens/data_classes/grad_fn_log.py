@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, Union
 
-import pandas as pd
 import torch
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
@@ -13,6 +12,8 @@ from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from .grad_fn_pass_log import GradFnPassLog
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .layer_log import LayerLog
 
 
@@ -123,7 +124,7 @@ class GradFnLog:
             time_finished=timestamp,
         )
 
-    def to_pandas(self) -> pd.DataFrame:
+    def to_pandas(self) -> "pd.DataFrame":
         """Export this grad_fn as a one-row DataFrame.
 
         Returns
@@ -131,6 +132,13 @@ class GradFnLog:
         pd.DataFrame
             One-row DataFrame ordered by ``GRAD_FN_LOG_FIELD_ORDER``.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         row = {field_name: getattr(self, field_name) for field_name in GRAD_FN_LOG_FIELD_ORDER}
         return pd.DataFrame([row], columns=GRAD_FN_LOG_FIELD_ORDER)
 

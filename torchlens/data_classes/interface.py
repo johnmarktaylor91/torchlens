@@ -185,6 +185,9 @@ def _str_after_pass(self) -> str:
         f"computed in forward pass."
     )
     s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.saved_activation_memory_str}) with saved activations."
+    nonfinite = self.first_nonfinite()
+    if not nonfinite.startswith("No non-finite"):
+        s += f"\n\t\t- NaN/Inf: {nonfinite}"
 
     # Model parameters:
 
@@ -192,6 +195,7 @@ def _str_after_pass(self) -> str:
         f"\n\tParameters: {self.total_param_layers} parameter operations ({self.total_params} params total; "
         f"{self.total_params_memory_str})"
     )
+    s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 
     # Print the module hierarchy.
     s += "\n\tModule Hierarchy:"

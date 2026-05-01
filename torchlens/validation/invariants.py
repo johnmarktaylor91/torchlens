@@ -34,6 +34,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..errors._base import ValidationError
+
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
     from ..data_classes.layer_pass_log import LayerPassLog
@@ -41,14 +43,24 @@ if TYPE_CHECKING:
     from ..data_classes.module_log import ModuleLog
 
 
-class MetadataInvariantError(ValueError):
+class MetadataInvariantError(ValidationError, ValueError):
     """Raised when a metadata invariant check fails.
 
     Embeds the check name (e.g., ``"graph_topology"``) in the message prefix
     and stores it as an attribute for programmatic inspection in tests.
     """
 
-    def __init__(self, check_name: str, message: str):
+    def __init__(self, check_name: str, message: str) -> None:
+        """Initialize a metadata invariant failure.
+
+        Parameters
+        ----------
+        check_name:
+            Invariant check group name.
+        message:
+            Human-readable failure detail.
+        """
+
         super().__init__(f"[{check_name}] {message}")
         self.check_name = check_name
 
@@ -534,8 +546,8 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
             if not lpl.func_name:
                 raise MetadataInvariantError(name, f"Layer {label}: func_name is empty")
 
-        # Operation numbering (input/buffer layers have operation_num=0)
-        if not (lpl.is_input_layer or lpl.is_buffer_layer):
+        # Operation numbering (input/buffer/output bookkeeping layers have operation_num=0)
+        if not (lpl.is_input_layer or lpl.is_buffer_layer or lpl.is_output_layer):
             if lpl.operation_num is not None and lpl.operation_num < 1:
                 raise MetadataInvariantError(
                     name, f"Layer {label}: operation_num={lpl.operation_num} < 1"
@@ -921,49 +933,7 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
                             f"but conditional_arm_edges[{(conditional_id, branch_kind)}]={model_edges}",
                         )
 
-    # Invariant 2: derived views are exact projections of the primary structures.
-    expected_then_edges = [
-        (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items()
-        if branch_kind == "then"
-        for parent_label, child_label in edge_list
-    ]
-    if ml.conditional_then_edges != expected_then_edges:
-        _fail_conditional_invariant(
-            name,
-            2,
-            f"ModelLog.conditional_then_edges={ml.conditional_then_edges} != "
-            f"expected projection {expected_then_edges}",
-        )
-
-    expected_elif_edges = [
-        (conditional_id, int(branch_kind.split("_", 1)[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items()
-        if branch_kind.startswith("elif_")
-        for parent_label, child_label in edge_list
-    ]
-    if ml.conditional_elif_edges != expected_elif_edges:
-        _fail_conditional_invariant(
-            name,
-            2,
-            f"ModelLog.conditional_elif_edges={ml.conditional_elif_edges} != "
-            f"expected projection {expected_elif_edges}",
-        )
-
-    expected_else_edges = [
-        (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items()
-        if branch_kind == "else"
-        for parent_label, child_label in edge_list
-    ]
-    if ml.conditional_else_edges != expected_else_edges:
-        _fail_conditional_invariant(
-            name,
-            2,
-            f"ModelLog.conditional_else_edges={ml.conditional_else_edges} != "
-            f"expected projection {expected_else_edges}",
-        )
-
+    # Invariant 2: per-layer derived views are exact projections of the primary structures.
     for layer in ml.layer_list:
         expected_then_children, expected_elif_children, expected_else_children = (
             _expected_layer_pass_child_views(layer.cond_branch_children_by_cond)
@@ -1076,30 +1046,15 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
                 f"ModelLog.conditional_branch_edges contains missing child label {child_label!r} "
                 f"for parent {parent_label!r}",
             )
-    for parent_label, child_label in ml.conditional_then_edges:
-        if child_label not in valid_child_labels:
-            _fail_conditional_invariant(
-                name,
-                3,
-                f"ModelLog.conditional_then_edges contains missing child label {child_label!r} "
-                f"for parent {parent_label!r}",
-            )
-    for conditional_id, elif_index, parent_label, child_label in ml.conditional_elif_edges:
-        if child_label not in valid_child_labels:
-            _fail_conditional_invariant(
-                name,
-                3,
-                f"ModelLog.conditional_elif_edges contains missing child label {child_label!r} "
-                f"for edge {(conditional_id, elif_index, parent_label)}",
-            )
-    for conditional_id, parent_label, child_label in ml.conditional_else_edges:
-        if child_label not in valid_child_labels:
-            _fail_conditional_invariant(
-                name,
-                3,
-                f"ModelLog.conditional_else_edges contains missing child label {child_label!r} "
-                f"for edge {(conditional_id, parent_label)}",
-            )
+    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items():
+        for parent_label, child_label in edge_list:
+            if child_label not in valid_child_labels:
+                _fail_conditional_invariant(
+                    name,
+                    3,
+                    f"ModelLog.conditional_arm_edges contains missing child label "
+                    f"{child_label!r} for edge {(conditional_id, branch_kind, parent_label)}",
+                )
 
     # Invariant 4: bool classification fields are mutually consistent.
     for layer in ml.layer_list:

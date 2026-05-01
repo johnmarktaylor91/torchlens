@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## Unreleased
+
+### Changed
+
+- Switch project licensing from GPL-3.0-only to Apache-2.0 so TorchLens can serve
+  as a substrate dependency for the broader ML ecosystem.
+- Update the package classifier from Alpha to Beta per the TorchLens 2.0 Q23
+  release-positioning lock.
+- Codify the TorchLens 2.0 top-level API ledger at 40 names. Moved legacy
+  top-level helpers and rare-use types to namespaced homes with deprecation
+  shims; `TensorLog`, `ModulePassLog`, `ParamLog`, `BufferLog`, `GradFnLog`,
+  and `GradFnPassLog` are no longer in `torchlens.__all__` but remain
+  importable from `torchlens.types` for the migration window.
+- Add grouped option classes under `torchlens.options` for capture, save,
+  visualization, replay, intervention, and streaming settings.
+- Introduce canonical visualization vocabulary: `view`, `depth`, `renderer`,
+  `layout`, and `node_style`, with legacy `vis_*` spellings still accepted.
+- Collapse TorchLens-specific exceptions under `torchlens.errors` domain bases:
+  `InterventionError`, `CaptureError`, `ConfigurationError`,
+  `CompatibilityError`, and `ValidationError`, with legacy exception names
+  preserved for the migration window.
+- Move `print_all_fields` to private `torchlens._debug.print_all_fields`; it is
+  no longer a public method/API surface. Consolidate conditional arm edge views
+  around `conditional_arm_edges`, with `conditional_then_edges`,
+  `conditional_elif_edges`, and `conditional_else_edges` retained as deprecated
+  aliases for one minor cycle. Rename the activation-save option spelling to
+  `activation_transform`, with `activation_postfunc` accepted as a deprecated
+  alias.
+- Move summary builder internals under
+  `torchlens.visualization._summary_internal`; public `summary()` behavior is
+  unchanged. `_robustness.py` and fastlog visualization helpers remain private
+  implementation details after audit.
+
 
 ## v2.16.0 (2026-04-30)
 

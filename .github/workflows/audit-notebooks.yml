@@ -1,0 +1,47 @@
+name: Total Audit Nightly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * *"
+
+concurrency:
+  group: "${{ github.ref }}-total-audit-nightly"
+  cancel-in-progress: true
+
+jobs:
+  full-audit-notebooks:
+    name: Full Total Audit notebooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install torchlens and notebook runner
+        run: |
+          uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system -e ".[dev]"
+          uv pip install --system papermill nbformat ipykernel
+
+      - name: Check Total Audit coverage
+        run: |
+          python scripts/generate_audit_coverage_manifest.py
+          python scripts/check_audit_coverage.py --strict
+          python scripts/check_coverage_delta.py
+
+      - name: Run all Total Audit notebooks
+        run: |
+          for nb in notebooks/total_audit/[0-9][0-9]_*.ipynb
+          do
+            papermill "$nb" "/tmp/$(basename "$nb")" -k python3
+          done

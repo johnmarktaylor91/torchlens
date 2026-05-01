@@ -44,6 +44,7 @@ import torch
 
 from .. import _state as _st
 from .._state import pause_logging
+from ..errors import CaptureError
 from ..utils.introspection import (
     _get_func_call_stack,
     get_attr_values_from_tensor_list,
@@ -1597,6 +1598,8 @@ def log_function_output_tensors_fast(
             orig_layer_entry.autograd_saved_bytes,
             orig_layer_entry.autograd_saved_tensor_count,
         ) = _get_autograd_saved_stats_for_tensor(out)
+        orig_layer_entry.bytes_delta_at_call = 0
+        orig_layer_entry.bytes_peak_at_call = 0
         orig_layer_entry.func_time = exec_ctx.time_elapsed
         orig_layer_entry.func_rng_states = exec_ctx.rng_states
         orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
@@ -1984,6 +1987,8 @@ def _log_output_tensor_info(
     with pause_logging():
         fields_dict["tensor_memory"] = t.nelement() * t.element_size()
     fields_dict["transformed_activation_memory"] = None
+    fields_dict["bytes_delta_at_call"] = 0
+    fields_dict["bytes_peak_at_call"] = 0
     (
         fields_dict["autograd_saved_bytes"],
         fields_dict["autograd_saved_tensor_count"],
@@ -2044,8 +2049,13 @@ def _make_layer_log_entry(
         new_entry = BufferLog(fields_dict)
     else:
         new_entry = LayerPassLog(fields_dict)  # type: ignore[assignment]
-    if (self._layer_nums_to_save == "all") or (
-        new_entry.creation_order in self._layer_nums_to_save
+    keep_by_predicate = True
+    module_filter_fn = getattr(self, "module_filter_fn", None)
+    if module_filter_fn is not None:
+        keep_by_predicate = bool(module_filter_fn(new_entry))
+    if keep_by_predicate and (
+        (self._layer_nums_to_save == "all")
+        or (new_entry.creation_order in self._layer_nums_to_save)
     ):
         new_entry.save_tensor_data(
             t,
@@ -2058,5 +2068,56 @@ def _make_layer_log_entry(
     _apply_live_fire_records_to_entry(new_entry)
     self._raw_layer_dict[new_entry.tensor_label_raw] = new_entry
     self._raw_layer_labels_list.append(new_entry.tensor_label_raw)
+    _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry
+
+
+def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: LayerPassLog) -> None:
+    """Raise a structured capture error if ``raise_on_nan`` finds a non-finite tensor.
+
+    Parameters
+    ----------
+    self:
+        Active ``ModelLog`` instance.
+    tensor:
+        Tensor output produced by the just-logged operation.
+    entry:
+        Newly registered layer pass log for ``tensor``.
+
+    Raises
+    ------
+    CaptureError
+        If ``self.raise_on_nan`` is enabled and ``tensor`` contains NaN or Inf.
+    """
+
+    if not getattr(self, "raise_on_nan", False) or tensor.numel() == 0:
+        return
+    try:
+        with pause_logging():
+            has_nonfinite = bool(
+                (~torch.isfinite(safe_copy(tensor, detach_tensor=True))).any().item()
+            )
+    except (RuntimeError, TypeError):
+        return
+    if not has_nonfinite:
+        return
+
+    raw_label = getattr(entry, "tensor_label_raw", getattr(entry, "layer_label_raw", "unknown"))
+    func_name = getattr(entry, "func_name", "unknown")
+    shape = tuple(tensor.shape)
+    dtype = tensor.dtype
+    parents = list(getattr(entry, "parent_layers", []) or [])
+    message = (
+        "TorchLens capture stopped at first non-finite tensor: "
+        f"op={func_name!r}, layer={raw_label!r}, shape={shape}, dtype={dtype}."
+    )
+    raise CaptureError(
+        message,
+        affected_sites=[raw_label],
+        op=func_name,
+        layer=raw_label,
+        shape=shape,
+        dtype=str(dtype),
+        parents=parents,
+    )

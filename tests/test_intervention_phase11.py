@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import model_log_to_dagua_graph
+from torchlens.experimental import dagua
 
 
 class _ReluAdd(nn.Module):
@@ -116,7 +116,7 @@ def test_dagua_bridge_exposes_intervention_metadata() -> None:
 
     log = _intervention_log()
     try:
-        graph = model_log_to_dagua_graph(log, vis_mode="unrolled")
+        graph = dagua.model_log_to_dagua_graph(log, vis_mode="unrolled")
         assert hasattr(graph, "is_intervention_site")
         assert hasattr(graph, "is_in_cone")
         assert hasattr(graph, "intervention_log_summary")

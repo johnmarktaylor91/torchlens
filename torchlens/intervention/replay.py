@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._deprecations import MISSING, MissingType
 from .._run_state import RunState
+from ..options import ReplayOptions, merge_replay_options
+from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
 from .errors import (
     ControlFlowDivergenceError,
@@ -48,7 +51,11 @@ if TYPE_CHECKING:
 
 
 def replay(
-    log: "ModelLog", *, strict: bool = False, hooks: dict[Any, Any] | None = None
+    log: "ModelLog",
+    *,
+    strict: bool | MissingType = MISSING,
+    hooks: dict[Any, Any] | None | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
 ) -> "ModelLog":
     """Replay the saved DAG cone affected by hooks.
 
@@ -68,19 +75,28 @@ def replay(
         The same model log, mutated in place.
     """
 
+    replay_options = merge_replay_options(replay=replay, strict=strict, hooks=hooks)
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
-    hook_entries = _normalize_replay_hooks(log, hooks)
-    origins = _origin_sites_for_hooks(log, hook_entries, strict=strict)
+    hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
+    origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
     if not origins:
         raise ReplayPreconditionError("replay requires at least one hook target in Phase 6")
     return _run_replay(
-        log, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+        log,
+        origins,
+        hook_entries=hook_entries,
+        strict=replay_options.strict,
+        preserve_origins=False,
     )
 
 
 def replay_from(
-    log: "ModelLog", site: "SelectorLike | str | LayerPassLog", *, strict: bool = False
+    log: "ModelLog",
+    site: "SelectorLike | str | LayerPassLog",
+    *,
+    strict: bool | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
 ) -> "ModelLog":
     """Replay the downstream cone from a pre-mutated site.
 
@@ -100,12 +116,15 @@ def replay_from(
         The same model log, mutated in place.
     """
 
+    replay_options = merge_replay_options(replay=replay, strict=strict)
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
-    origin = _resolve_single_origin(log, site, strict=strict)
+    origin = _resolve_single_origin(log, site, strict=replay_options.strict)
     if not isinstance(origin.activation, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor activation")
-    return _run_replay(log, [origin], hook_entries=[], strict=strict, preserve_origins=True)
+    return _run_replay(
+        log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
+    )
 
 
 def cone_of_effect(
@@ -204,10 +223,12 @@ def _run_replay(
     executed_call_ids: set[int] = set()
     call_groups = _func_call_groups(log)
     errors_non_fatal = 0
+    pending_updates: dict[str, torch.Tensor] = {}
+    pending_records: dict[str, list[FireRecord]] = {}
 
-    for site in cone:
+    for site in progress_bar(cone, total=len(cone), desc="torchlens.replay"):
         if preserve_origins and site.layer_label in origin_labels:
-            _apply_activation_update(site, overlay[site.layer_label])
+            pending_updates[site.layer_label] = overlay[site.layer_label]
             continue
         if site.func_call_id is not None and site.func_call_id in executed_call_ids:
             continue
@@ -232,16 +253,19 @@ def _run_replay(
             if preserve_origins and member.layer_label in origin_labels:
                 continue
             tensor = _slice_output_by_path(output, tuple(member.output_path or ()))
-            tensor = _apply_replay_hooks(
+            tensor, records = _apply_replay_hooks(
                 tensor,
                 site=member,
                 hook_entries=hook_targets.get(member.layer_label, ()),
                 run_ctx=_ensure_replay_run_ctx(log),
             )
             overlay[member.layer_label] = tensor
-            _apply_activation_update(member, tensor)
+            pending_updates[member.layer_label] = tensor
+            if records:
+                pending_records.setdefault(member.layer_label, []).extend(records)
             _check_edge_expectations(member, strict=strict)
 
+    _commit_replay_updates(log, pending_updates, pending_records)
     log.run_state = RunState.REPLAY_PROPAGATED
     log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
     log.last_run_ctx = {
@@ -465,7 +489,7 @@ def _apply_replay_hooks(
     site: "LayerPassLog",
     hook_entries: Sequence[NormalizedHookEntry],
     run_ctx: dict[str, Any],
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, list[FireRecord]]:
     """Apply replay hooks to one recomputed activation.
 
     Parameters
@@ -481,11 +505,12 @@ def _apply_replay_hooks(
 
     Returns
     -------
-    torch.Tensor
-        Hook-composed activation.
+    tuple[torch.Tensor, list[FireRecord]]
+        Hook-composed activation and fire records to commit if replay succeeds.
     """
 
     current = activation
+    records: list[FireRecord] = []
     for entry in hook_entries:
         context = make_hook_context(
             name=_hook_name(entry),
@@ -502,8 +527,51 @@ def _apply_replay_hooks(
             context,
             force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
         )
-        site.intervention_log.append(_replay_fire_record(entry, site))
-    return current
+        records.append(_replay_fire_record(entry, site))
+    return current, records
+
+
+def _commit_replay_updates(
+    log: "ModelLog",
+    pending_updates: Mapping[str, torch.Tensor],
+    pending_records: Mapping[str, Sequence[FireRecord]],
+) -> None:
+    """Commit replay activation updates, rolling back if final writes fail.
+
+    Parameters
+    ----------
+    log:
+        Model log whose layer-pass entries are updated.
+    pending_updates:
+        Replacement activations keyed by layer label.
+    pending_records:
+        Hook fire records keyed by layer label.
+    """
+
+    snapshots: dict[str, dict[str, Any]] = {}
+    try:
+        for label, tensor in pending_updates.items():
+            site = log[label]
+            snapshots[label] = {
+                "activation": site.activation,
+                "transformed_activation": site.transformed_activation,
+                "tensor_shape": site.tensor_shape,
+                "transformed_activation_shape": site.transformed_activation_shape,
+                "tensor_dtype": site.tensor_dtype,
+                "transformed_activation_dtype": site.transformed_activation_dtype,
+                "tensor_memory": site.tensor_memory,
+                "transformed_activation_memory": site.transformed_activation_memory,
+                "intervention_log": list(site.intervention_log),
+            }
+            _apply_activation_update(site, tensor)
+            if label in pending_records:
+                site.intervention_log.extend(pending_records[label])
+    except Exception:
+        for label, state in snapshots.items():
+            site = log[label]
+            for field_name, value in state.items():
+                site._internal_set(field_name, value)
+        raise
 
 
 def _apply_activation_update(site: "LayerPassLog", tensor: torch.Tensor) -> None:

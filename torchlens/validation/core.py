@@ -418,6 +418,28 @@ def _validate_layer_against_arg(self, target_layer, parent_layer, arg_type, key,
     return True
 
 
+def _parent_logged_for_any_arg(target_layer: LayerPassLog, parent_layer_label: str) -> bool:
+    """Return whether ``parent_layer_label`` is logged at any arg location.
+
+    Parameters
+    ----------
+    target_layer:
+        Child layer whose parent-arg map is being inspected.
+    parent_layer_label:
+        Parent layer label to find.
+
+    Returns
+    -------
+    bool
+        True when any positional or keyword arg location points to this parent.
+    """
+
+    return any(
+        parent_layer_label in target_layer.parent_layer_arg_locs[arg_type].values()
+        for arg_type in ("args", "kwargs")
+    )
+
+
 def _check_arglocs_correct_for_arg(
     self,
     target_layer: LayerPassLog,
@@ -478,6 +500,7 @@ def _check_arglocs_correct_for_arg(
     if (
         parent_layer_matches_arg
         and (not parent_layer_logged_as_arg)
+        and (not _parent_logged_for_any_arg(target_layer, parent_layer_label))
         and (parent_activations.numel() != 0)
         and (parent_activations.dtype != torch.bool)
         and (not tensor_all_nan(parent_activations))

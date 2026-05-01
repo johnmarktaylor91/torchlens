@@ -162,7 +162,7 @@ def test_log_forward_pass_defaults_are_stable(
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["keep_unsaved_layers"] is True
     assert captured_calls[-1]["output_device"] == "same"
-    assert captured_calls[-1]["activation_postfunc"] is None
+    assert captured_calls[-1]["activation_transform"] is None
     assert captured_calls[-1]["mark_input_output_distances"] is False
     assert captured_calls[-1]["detach_saved_tensors"] is False
     assert captured_calls[-1]["save_function_args"] is False
@@ -311,7 +311,7 @@ def test_validate_forward_pass_uses_validation_overrides(
     assert result is True
     assert captured_calls[-1]["layers_to_save"] == "all"
     assert captured_calls[-1]["keep_unsaved_layers"] is True
-    assert captured_calls[-1]["activation_postfunc"] is None
+    assert captured_calls[-1]["activation_transform"] is None
     assert captured_calls[-1]["mark_input_output_distances"] is False
     assert captured_calls[-1]["detach_saved_tensors"] is False
     assert captured_calls[-1]["save_gradients"] is False

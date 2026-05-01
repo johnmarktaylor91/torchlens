@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
@@ -131,6 +132,67 @@ class Bundle:
             raise TypeError(f"Bundle indices must be member names, got {type(name).__name__}.")
         return self._members[name]
 
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+    ) -> None:
+        """Save this bundle as a unified ``.tlspec`` directory.
+
+        Parameters
+        ----------
+        path:
+            Destination ``.tlspec`` directory path.
+        level:
+            Save level: ``"audit"``, ``"executable_with_callables"``, or
+            ``"portable"``.
+        overwrite:
+            Whether an existing destination may be replaced.
+        """
+
+        from .._io.tlspec import _TlSpecWriter
+
+        _TlSpecWriter.write_bundle(
+            bundle=self,
+            path=path,
+            save_level=level,
+            overwrite=overwrite,
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        """Return budget-preserving Phase 8 helper methods.
+
+        Parameters
+        ----------
+        name:
+            Requested attribute name.
+
+        Returns
+        -------
+        Any
+            Callable helper bound to this bundle.
+
+        Raises
+        ------
+        AttributeError
+            If ``name`` is not a dynamic bundle helper.
+        """
+
+        dynamic_methods: dict[str, Callable[..., Any]] = {
+            "aligned_pairs": _bundle_aligned_pairs,
+            "compare": _bundle_compare,
+            "delta_map": _bundle_delta_map,
+            "norm_delta": _bundle_norm_delta,
+            "output_delta": _bundle_output_delta,
+            "show_diff": _bundle_show_diff,
+        }
+        helper = dynamic_methods.get(name)
+        if helper is None:
+            raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        return helper.__get__(self, type(self))
+
     @property
     def names(self) -> list[str]:
         """Return member names in bundle order.
@@ -166,6 +228,18 @@ class Bundle:
         """
 
         return self._baseline_name
+
+    @property
+    def supergraph(self) -> Supergraph:
+        """Return the lazily built bundle supergraph.
+
+        Returns
+        -------
+        Supergraph
+            Cached union graph for the bundle members.
+        """
+
+        return self._ensure_supergraph()
 
     def node(self, site: Any) -> NodeView:
         """Return a view of one resolved site across all members.
@@ -412,11 +486,13 @@ class Bundle:
 
         return fn(self)
 
-    def show(self, **kwargs: Any) -> dict[str, str | None]:
+    def show(self, method: str = "graph", **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.
 
         Parameters
         ----------
+        method:
+            Display method forwarded to each member's :meth:`ModelLog.show`.
         **kwargs:
             Forwarded to each member's :meth:`ModelLog.show`. When an output
             path is supplied, member names are appended to produce one artifact
@@ -439,7 +515,7 @@ class Bundle:
             member_kwargs = dict(kwargs)
             if isinstance(base_outpath, str):
                 member_kwargs["vis_outpath"] = f"{base_outpath}_{name}"
-            results[name] = member.show(**member_kwargs)
+            results[name] = member.show(method=method, **member_kwargs)  # type: ignore[arg-type]
         return results
 
     def compare_at(self, site: Any) -> torch.Tensor:
@@ -984,6 +1060,451 @@ class Bundle:
             return ref()
         except TypeError:
             return None
+
+
+def _metric_label(metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> str:
+    """Return a stable label for a metric specifier.
+
+    Parameters
+    ----------
+    metric:
+        Metric name or callable.
+
+    Returns
+    -------
+    str
+        Human-readable metric label.
+    """
+
+    return metric if isinstance(metric, str) else getattr(metric, "__name__", "callable")
+
+
+def _tensor_field(layer: Any, field: Literal["activation", "gradient"]) -> torch.Tensor | None:
+    """Return a tensor field from a layer-like object.
+
+    Parameters
+    ----------
+    layer:
+        LayerLog or LayerPassLog-like object.
+    field:
+        Tensor field to read.
+
+    Returns
+    -------
+    torch.Tensor | None
+        Tensor value when available.
+    """
+
+    value = getattr(layer, field, None)
+    return value if isinstance(value, torch.Tensor) else None
+
+
+def _distance_value(
+    reference: torch.Tensor,
+    candidate: torch.Tensor,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+) -> float:
+    """Return a Python float distance between two tensors.
+
+    Parameters
+    ----------
+    reference:
+        Reference tensor.
+    candidate:
+        Compared tensor.
+    metric:
+        Metric name or callable.
+
+    Returns
+    -------
+    float
+        Scalar distance.
+    """
+
+    metric_fn = resolve_metric(metric)
+    value = (
+        relative_l1_scalar(reference, candidate)
+        if is_scalar_like(reference)
+        else metric_fn(reference, candidate)
+    )
+    return float(value.detach().item())
+
+
+def _resolve_member_name(bundle: Bundle, member: str | "ModelLog" | None) -> str:
+    """Resolve a member name or ModelLog reference within a bundle.
+
+    Parameters
+    ----------
+    bundle:
+        Bundle being queried.
+    member:
+        Member name, ModelLog reference, or ``None``.
+
+    Returns
+    -------
+    str
+        Resolved member name.
+    """
+
+    if member is None:
+        return next(iter(bundle.names))
+    if isinstance(member, str):
+        if member not in bundle:
+            raise KeyError(f"Unknown bundle member {member!r}.")
+        return member
+    for name, log in bundle.members.items():
+        if log is member:
+            return name
+    raise KeyError("ModelLog is not a member of this Bundle.")
+
+
+def _bundle_delta_map(
+    self: Bundle,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+    *,
+    baseline: str | "ModelLog" | None = None,
+    on: Literal["activation", "gradient"] = "activation",
+) -> dict[str, dict[str, float]]:
+    """Return per-node tensor deltas from a baseline trace.
+
+    Parameters
+    ----------
+    metric:
+        Metric name from ``torchlens.multi_trace.metrics`` or a callable.
+    baseline:
+        Baseline member name or log. Defaults to the configured baseline, then
+        the first member.
+    on:
+        Tensor field to compare.
+
+    Returns
+    -------
+    dict[str, dict[str, float]]
+        Mapping of supergraph node name to member-name distance values. Members
+        without a tensor at a node are omitted for that node.
+    """
+
+    baseline_name = (
+        self._baseline_or_raise(baseline)
+        if baseline is not None or self.baseline_name is not None
+        else next(iter(self.names))
+    )
+    result: dict[str, dict[str, float]] = {}
+    supergraph = self.supergraph
+    for node_name in supergraph.topological_order:
+        node = supergraph.nodes[node_name]
+        reference_layer = node.layer_refs.get(baseline_name)
+        if reference_layer is None:
+            continue
+        reference = _tensor_field(reference_layer, on)
+        if reference is None:
+            continue
+        values: dict[str, float] = {}
+        for member_name in self.names:
+            layer = node.layer_refs.get(member_name)
+            candidate = _tensor_field(layer, on) if layer is not None else None
+            if candidate is None:
+                continue
+            values[member_name] = (
+                0.0
+                if member_name == baseline_name
+                else _distance_value(
+                    reference,
+                    candidate,
+                    metric,
+                )
+            )
+        if values:
+            result[node_name] = values
+    return result
+
+
+def _bundle_norm_delta(
+    self: Bundle,
+    *,
+    baseline: str | "ModelLog" | None = None,
+    on: Literal["activation", "gradient"] = "activation",
+) -> dict[str, dict[str, float]]:
+    """Return relative L2 deltas for every comparable bundle node.
+
+    Parameters
+    ----------
+    baseline:
+        Baseline member name or log.
+    on:
+        Tensor field to compare.
+
+    Returns
+    -------
+    dict[str, dict[str, float]]
+        Per-node relative L2 distances keyed by member name.
+    """
+
+    return _bundle_delta_map(self, "relative_l2", baseline=baseline, on=on)
+
+
+def _output_layer_pairs(
+    target_log: "ModelLog",
+    candidate_log: "ModelLog",
+) -> list[tuple[Any, Any]]:
+    """Return paired output layers by output index.
+
+    Parameters
+    ----------
+    target_log:
+        Reference model log.
+    candidate_log:
+        Compared model log.
+
+    Returns
+    -------
+    list[tuple[Any, Any]]
+        Paired output layer-like objects.
+    """
+
+    target_labels = list(getattr(target_log, "output_layers", []) or [])
+    candidate_labels = list(getattr(candidate_log, "output_layers", []) or [])
+    if target_labels and candidate_labels:
+        pairs: list[tuple[Any, Any]] = []
+        for target_label, candidate_label in zip(target_labels, candidate_labels):
+            try:
+                pairs.append((target_log[target_label], candidate_log[candidate_label]))
+            except (KeyError, IndexError):
+                continue
+        return pairs
+    target_layers = list(getattr(target_log, "layer_list", []))
+    candidate_layers = list(getattr(candidate_log, "layer_list", []))
+    return [(target_layers[-1], candidate_layers[-1])] if target_layers and candidate_layers else []
+
+
+def _bundle_output_delta(
+    self: Bundle,
+    target: str | "ModelLog",
+    *,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+    on: Literal["activation", "gradient"] = "activation",
+) -> dict[str, dict[str, float]]:
+    """Return output divergence for every member versus a target trace.
+
+    Parameters
+    ----------
+    target:
+        Target member name or ``ModelLog`` reference.
+    metric:
+        Metric name or callable.
+    on:
+        Tensor field to compare.
+
+    Returns
+    -------
+    dict[str, dict[str, float]]
+        Member-keyed output distance mapping.
+    """
+
+    target_name = _resolve_member_name(self, target)
+    target_log = self[target_name]
+    result: dict[str, dict[str, float]] = {}
+    for member_name, member_log in self.members.items():
+        output_values: dict[str, float] = {}
+        for output_index, (target_layer, member_layer) in enumerate(
+            _output_layer_pairs(target_log, member_log)
+        ):
+            reference = _tensor_field(target_layer, on)
+            candidate = _tensor_field(member_layer, on)
+            if reference is None or candidate is None:
+                continue
+            label = str(getattr(target_layer, "layer_label", f"output_{output_index}"))
+            output_values[label] = (
+                0.0 if member_name == target_name else _distance_value(reference, candidate, metric)
+            )
+        result[member_name] = output_values
+    return result
+
+
+def _bundle_motif_occurrences(self: Bundle) -> dict[str, list[tuple[str, str]]]:
+    """Return repeated operation-equivalence motifs across bundle traces.
+
+    Parameters
+    ----------
+    self:
+        Bundle being inspected.
+
+    Returns
+    -------
+    dict[str, list[tuple[str, str]]]
+        Operation-equivalence key to ``(member_name, layer_label)`` occurrences.
+    """
+
+    motifs: dict[str, list[tuple[str, str]]] = {}
+    for member_name, member in self.members.items():
+        for layer in getattr(member, "layer_list", []):
+            key = getattr(layer, "operation_equivalence_type", None)
+            if not key:
+                continue
+            motifs.setdefault(str(key), []).append((member_name, str(layer.layer_label)))
+    return {key: rows for key, rows in motifs.items() if len(rows) > 1}
+
+
+def _bundle_compare(
+    self: Bundle,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+    *,
+    baseline: str | "ModelLog" | None = None,
+    on: Literal["activation", "gradient"] = "activation",
+) -> dict[str, Any]:
+    """Return a unified bundle comparison payload.
+
+    Parameters
+    ----------
+    metric:
+        Metric name or callable.
+    baseline:
+        Baseline member name or log. Defaults like :meth:`delta_map`.
+    on:
+        Tensor field to compare.
+
+    Returns
+    -------
+    dict[str, Any]
+        Uniform payload with metric metadata, node deltas, output deltas, and
+        repeated motif occurrences.
+    """
+
+    baseline_name = (
+        self._baseline_or_raise(baseline)
+        if baseline is not None or self.baseline_name is not None
+        else next(iter(self.names))
+    )
+    return {
+        "baseline": baseline_name,
+        "metric": _metric_label(metric),
+        "on": on,
+        "nodes": _bundle_delta_map(self, metric, baseline=baseline_name, on=on),
+        "outputs": _bundle_output_delta(self, baseline_name, metric=metric, on=on),
+        "motifs": _bundle_motif_occurrences(self),
+    }
+
+
+def _alignment_score(left: Any, right: Any, left_index: int, right_index: int) -> float:
+    """Return a conservative cross-architecture alignment score.
+
+    Parameters
+    ----------
+    left:
+        Left layer-like object.
+    right:
+        Right layer-like object.
+    left_index:
+        Topological index of ``left``.
+    right_index:
+        Topological index of ``right``.
+
+    Returns
+    -------
+    float
+        Heuristic score in ``[0, 1]``.
+    """
+
+    score = 0.0
+    if getattr(left, "containing_module", None) == getattr(right, "containing_module", None):
+        score += 0.35
+    if getattr(left, "func_name", None) == getattr(right, "func_name", None):
+        score += 0.35
+    if getattr(left, "tensor_shape", None) == getattr(right, "tensor_shape", None):
+        score += 0.2
+    distance = abs(left_index - right_index)
+    score += max(0.0, 0.1 - (distance * 0.01))
+    return min(score, 1.0)
+
+
+def _bundle_aligned_pairs(
+    self: Bundle,
+    left: str | "ModelLog" | None = None,
+    right: str | "ModelLog" | None = None,
+    *,
+    min_score: float = 0.45,
+) -> list[tuple[Any, Any]]:
+    """Return best-match layer pairs across two bundle members.
+
+    Alignment rules are intentionally conservative:
+
+    1. Prefer exact module path and operation name matches.
+    2. Use tensor shape and topological proximity to break ties.
+    3. Pair each right-side layer at most once.
+
+    Parameters
+    ----------
+    left:
+        Left member name or log. Defaults to the first bundle member.
+    right:
+        Right member name or log. Defaults to the second bundle member.
+    min_score:
+        Minimum heuristic score required to emit a pair.
+
+    Returns
+    -------
+    list[tuple[Any, Any]]
+        Paired layer-like objects, ordered by the left trace.
+    """
+
+    names = self.names
+    if len(names) < 2 and (left is None or right is None):
+        raise ValueError("aligned_pairs requires at least two bundle members.")
+    left_name = _resolve_member_name(self, left if left is not None else names[0])
+    right_name = _resolve_member_name(self, right if right is not None else names[1])
+    left_layers = list(getattr(self[left_name], "layer_list", []))
+    right_layers = list(getattr(self[right_name], "layer_list", []))
+    available_right = set(range(len(right_layers)))
+    pairs: list[tuple[Any, Any]] = []
+    for left_index, left_layer in enumerate(left_layers):
+        best_index: int | None = None
+        best_score = 0.0
+        for right_index in available_right:
+            score = _alignment_score(left_layer, right_layers[right_index], left_index, right_index)
+            if score > best_score:
+                best_index = right_index
+                best_score = score
+        if best_index is not None and best_score >= min_score:
+            available_right.remove(best_index)
+            pairs.append((left_layer, right_layers[best_index]))
+    return pairs
+
+
+def _bundle_show_diff(
+    self: Bundle,
+    *,
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+    layout: Literal["paired"] = "paired",
+    **kwargs: Any,
+) -> str:
+    """Render a two-column bundle diff for a clean/intervention pair.
+
+    Examples
+    --------
+    >>> model_log = tl.log_forward_pass(model, x, intervention_ready=True)
+    >>> ablated = model_log.fork("ablated")
+    >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
+    >>> bundle = tl.bundle({"clean": model_log, "ablated": ablated}, baseline="clean")
+    >>> bundle.show_diff(vis_outpath="bundle_diff_clean_vs_zero_relu")
+
+    Parameters
+    ----------
+    metric:
+        Metric forwarded to ``tl.viz.bundle_diff``.
+    layout:
+        Layout strategy forwarded to ``tl.viz.bundle_diff``.
+    **kwargs:
+        Additional renderer options forwarded unchanged.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source for the rendered diff.
+    """
+
+    from ..visualization.bundle_diff import bundle_diff
+
+    return bundle_diff(self, metric=metric, layout=layout, **kwargs)
 
 
 __all__ = ["Bundle"]

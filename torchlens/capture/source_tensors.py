@@ -260,6 +260,8 @@ def log_source_tensor_exhaustive(
         "transformed_activation_memory": None,
         "autograd_saved_bytes": None,
         "autograd_saved_tensor_count": None,
+        "bytes_delta_at_call": 0,
+        "bytes_peak_at_call": 0,
         # Child tensor variation tracking
         "has_child_tensor_variations": False,
         "children_tensor_versions": {},

@@ -4,12 +4,14 @@ from types import SimpleNamespace
 from typing import Dict, Iterator, List, Optional
 
 import pandas as pd
+import pytest
 import torch
 import torch.nn as nn
 
 from torchlens import log_forward_pass
+from torchlens._deprecations import _WARNED_DEPRECATIONS
 from torchlens.data_classes.cleanup import _remove_log_entry_references
-from torchlens.data_classes.model_log import ConditionalEvent
+from torchlens.data_classes.model_log import ConditionalEvent, ModelLog
 from torchlens.postprocess.labeling import (
     _rename_model_history_layer_names,
     _replace_layer_names_for_layer_entry,
@@ -211,9 +213,6 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
         }
     }
     assert model_log.conditional_branch_edges == [("gt_1_2", "linear_1_1")]
-    assert model_log.conditional_then_edges == [("linear_1_1", "relu_1_3")]
-    assert model_log.conditional_elif_edges == [(0, 1, "linear_1_1", "sigmoid_1_4")]
-    assert model_log.conditional_else_edges == [(0, "linear_1_1", "add_1_5")]
     assert model_log.conditional_arm_edges == {
         (0, "then"): [("linear_1_1", "relu_1_3")],
         (0, "elif_1"): [("linear_1_1", "sigmoid_1_4")],
@@ -278,9 +277,6 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     _remove_log_entry_references(model_log, "removed_child:2")
 
     assert model_log.conditional_branch_edges == [("kept_start:1", "parent:1")]
-    assert model_log.conditional_then_edges == [("parent:1", "kept_child:1")]
-    assert model_log.conditional_elif_edges == []
-    assert model_log.conditional_else_edges == []
     assert model_log.conditional_arm_edges == {
         (0, "then"): [("parent:1", "kept_child:1")],
     }
@@ -348,3 +344,22 @@ def test_to_pandas_exports_conditional_columns() -> None:
     assert target_row["cond_branch_elif_children"] == {1: ["elif_child"]}
     assert target_row["cond_branch_else_children"] == ["else_child"]
     assert target_row["func_config"] == {"alpha": 1}
+
+
+def test_conditional_edge_legacy_aliases_warn() -> None:
+    """Legacy conditional edge views warn while projecting canonical arm edges."""
+
+    model_log = ModelLog("Tiny")
+    _WARNED_DEPRECATIONS.clear()
+    model_log.conditional_arm_edges = {
+        (0, "then"): [("parent", "then_child")],
+        (0, "elif_1"): [("parent", "elif_child")],
+        (0, "else"): [("parent", "else_child")],
+    }
+
+    with pytest.warns(DeprecationWarning):
+        assert model_log.conditional_then_edges == [("parent", "then_child")]
+    with pytest.warns(DeprecationWarning):
+        assert model_log.conditional_elif_edges == [(0, 1, "parent", "elif_child")]
+    with pytest.warns(DeprecationWarning):
+        assert model_log.conditional_else_edges == [(0, "parent", "else_child")]

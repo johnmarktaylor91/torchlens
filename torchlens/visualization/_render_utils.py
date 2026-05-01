@@ -17,7 +17,8 @@ from __future__ import annotations
 import os
 import subprocess
 import warnings
-from typing import TYPE_CHECKING, Iterable
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable
 
 import graphviz
 
@@ -172,6 +173,98 @@ def make_module_cluster_attrs(
         "fillcolor": fillcolor,
         "penwidth": str(penwidth),
     }
+
+
+StyleOverride = Mapping[str, str] | Callable[[Any], Mapping[str, str] | None]
+
+
+def resolve_style_override(
+    override: StyleOverride | None,
+    context: Any,
+) -> dict[str, str]:
+    """Resolve a per-node or per-edge style override.
+
+    Parameters
+    ----------
+    override:
+        Static attribute mapping or callable receiving ``context``.
+    context:
+        Node or edge context passed to callable overrides.
+
+    Returns
+    -------
+    dict[str, str]
+        Graphviz attributes with string values.
+    """
+
+    if override is None:
+        return {}
+    resolved = override(context) if callable(override) else override
+    if resolved is None:
+        return {}
+    return {str(key): str(value) for key, value in resolved.items()}
+
+
+def merge_node_style(
+    base_style: Mapping[str, str],
+    node_overrides: Mapping[str, StyleOverride] | None,
+    node_name: str,
+    context: Any,
+) -> dict[str, str]:
+    """Return merged Graphviz node style attributes.
+
+    Parameters
+    ----------
+    base_style:
+        Default node attributes.
+    node_overrides:
+        Optional mapping from node names to static or callable overrides.
+    node_name:
+        Node key to look up in ``node_overrides``.
+    context:
+        Node context passed to callable overrides.
+
+    Returns
+    -------
+    dict[str, str]
+        Merged node attributes.
+    """
+
+    merged = {str(key): str(value) for key, value in base_style.items()}
+    if node_overrides is not None:
+        merged.update(resolve_style_override(node_overrides.get(node_name), context))
+    return merged
+
+
+def merge_edge_style(
+    base_style: Mapping[str, str],
+    edge_overrides: Mapping[tuple[str, str], StyleOverride] | None,
+    edge_key: tuple[str, str],
+    context: Any,
+) -> dict[str, str]:
+    """Return merged Graphviz edge style attributes.
+
+    Parameters
+    ----------
+    base_style:
+        Default edge attributes.
+    edge_overrides:
+        Optional mapping from ``(source, target)`` keys to overrides.
+    edge_key:
+        Edge key to look up.
+    context:
+        Edge context passed to callable overrides.
+
+    Returns
+    -------
+    dict[str, str]
+        Merged edge attributes.
+    """
+
+    merged = {str(key): str(value) for key, value in base_style.items()}
+    if edge_overrides is not None:
+        merged.update(resolve_style_override(edge_overrides.get(edge_key), context))
+    return merged
 
 
 def render_dot_to_file(

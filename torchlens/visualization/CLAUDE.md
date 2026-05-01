@@ -1,8 +1,8 @@
 # visualization/ — Computational Graph Rendering
 
 ## What This Does
-Renders computational graphs using Python's `graphviz` library, an optional ELK
-layout engine for large graphs, and an optional dagua renderer. Called via
+Renders computational graphs using Python's `graphviz` library, an internal ELK
+layout backend for large graphs, and the experimental dagua renderer. Called via
 `show_model_graph()` or `log_forward_pass(..., vis_mode='rolled')`.
 
 ## Files
@@ -10,17 +10,18 @@ layout engine for large graphs, and an optional dagua renderer. Called via
 | File | ~Lines | Purpose |
 |------|--------|---------|
 | `rendering.py` | 1900+ | Graphviz rendering: nodes, skip-aware edges, module subgraphs, IF/THEN labels, NodeSpec callbacks |
-| `elk_layout.py` | 1300+ | ELK-based layout engine for large graphs (150k+ nodes), Worker thread, sfdp fallback |
+| `_elk_internal/layout.py` | 1300+ | Internal ELK-based layout backend for large graphs (150k+ nodes), Worker thread, sfdp fallback |
 | `code_panel.py` | n/a | Source-code capture and Graphviz side-panel rendering helpers |
 | `node_spec.py` | — | Public NodeSpec dataclass and HTML-label row renderer |
-| `modes.py` | — | NodeSpec preset registry for default/profiling/vision/attention node modes |
-| `dagua_bridge.py` | — | ModelLog → DaguaGraph conversion for dagua renderer (opt-in) |
+| `modes.py` | — | NodeSpec preset registry for default/profiling plus deprecated domain node modes |
+| `experimental/dagua/_bridge.py` | — | ModelLog → DaguaGraph conversion for experimental dagua renderer (opt-in) |
 
 ## How It Connects
 
 Called by `user_funcs.py:show_model_graph()`. Reads LayerLog/LayerPassLog from ModelLog
-to build graph nodes and edges. Two independent rendering paths (Graphviz vs dagua),
-with Graphviz using an optional ELK layout backend for large graphs.
+to build graph nodes and edges. Graphviz is the public renderer, with an internal
+ELK layout backend for large graphs; dagua is experimental and requires explicit
+`from torchlens.experimental import dagua` opt-in.
 
 ## Code Panel
 `ModelLog.render_graph(code_panel=...)` and `show_model_graph(..., code_panel=...)`
@@ -68,9 +69,9 @@ user-supplied `node_spec_fn`, so user callbacks always win. Public flat alias:
 - **`default`**: identity preset; Phase 1 default important-args rows remain.
 - **`profiling`**: appends available timing, output bytes, call site, and function
   name rows. Collapsed modules get aggregate timing/output rows.
-- **`vision`**: appends input/output shape rows for spatial layers such as conv,
+- **`vision`**: experimental/deprecated-in-core; appends input/output shape rows for spatial layers such as conv,
   pooling, adaptive pooling, upsample, interpolate, and resize.
-- **`attention`**: appends heads/embed/head_dim/dropout details for attention ops
+- **`attention`**: experimental/deprecated-in-core; appends heads/embed/head_dim/dropout details for attention ops
   and role annotations for attention projection Linear layers.
 
 ## Node Styling
@@ -104,7 +105,7 @@ legacy `max_module_depth`/`vis_nesting_depth` collapse decision when supplied.
 output layers, and chains edges through skipped nodes before both Graphviz and
 ELK layout consume the graph.
 
-## ELK Layout Engine
+## Internal ELK Layout Backend
 - Worker thread runs Node.js ELK subprocess (prevents stack overflow)
 - Stress algorithm for >150k nodes with Kahn's topological sort for initial positions
 - **>100k nodes bypass ELK entirely** → Python topological layout (O(n+m))

@@ -22,6 +22,7 @@ from .types import (
     Recording,
     RecordingTrace,
 )
+from ..visualization.fastlog_preview import preview_fastlog as preview
 
 __all__ = [
     "ActivationRecord",
@@ -41,6 +42,7 @@ __all__ = [
     "cleanup_partial",
     "dry_run",
     "load",
+    "preview",
     "recover",
     "record",
 ]

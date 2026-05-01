@@ -1,0 +1,4064 @@
+{
+  "classes": {
+    "BufferLog": [
+      {
+        "kind": "attribute",
+        "name": "DEFAULT_FILL_STATE"
+      },
+      {
+        "kind": "attribute",
+        "name": "FORK_POLICY"
+      },
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "property",
+        "name": "activation_transform"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_address"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_parent"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_pass"
+      },
+      {
+        "kind": "property",
+        "name": "co_parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "containing_module"
+      },
+      {
+        "kind": "field",
+        "name": "containing_modules"
+      },
+      {
+        "kind": "method",
+        "name": "copy"
+      },
+      {
+        "kind": "method",
+        "name": "get_child_layers"
+      },
+      {
+        "kind": "method",
+        "name": "get_parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "grad_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "grad_memory"
+      },
+      {
+        "kind": "property",
+        "name": "grad_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "grad_shape"
+      },
+      {
+        "kind": "property",
+        "name": "has_co_parents"
+      },
+      {
+        "kind": "field",
+        "name": "has_gradient"
+      },
+      {
+        "kind": "property",
+        "name": "has_parents"
+      },
+      {
+        "kind": "field",
+        "name": "has_saved_activations"
+      },
+      {
+        "kind": "property",
+        "name": "has_siblings"
+      },
+      {
+        "kind": "property",
+        "name": "is_computed_inside_submodule"
+      },
+      {
+        "kind": "property",
+        "name": "is_submodule_input"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label"
+      },
+      {
+        "kind": "method",
+        "name": "log_tensor_grad"
+      },
+      {
+        "kind": "property",
+        "name": "macs_backward"
+      },
+      {
+        "kind": "property",
+        "name": "macs_forward"
+      },
+      {
+        "kind": "method",
+        "name": "materialize_activation"
+      },
+      {
+        "kind": "method",
+        "name": "materialize_gradient"
+      },
+      {
+        "kind": "property",
+        "name": "module_address"
+      },
+      {
+        "kind": "property",
+        "name": "module_nesting_depth"
+      },
+      {
+        "kind": "property",
+        "name": "name"
+      },
+      {
+        "kind": "property",
+        "name": "num_param_tensors"
+      },
+      {
+        "kind": "property",
+        "name": "params"
+      },
+      {
+        "kind": "property",
+        "name": "params_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "pass_num"
+      },
+      {
+        "kind": "property",
+        "name": "passes"
+      },
+      {
+        "kind": "method",
+        "name": "save_tensor_data"
+      },
+      {
+        "kind": "method",
+        "name": "show"
+      },
+      {
+        "kind": "property",
+        "name": "sibling_layers"
+      },
+      {
+        "kind": "property",
+        "name": "source_model_log"
+      },
+      {
+        "kind": "property",
+        "name": "tensor"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_memory"
+      },
+      {
+        "kind": "property",
+        "name": "tensor_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_shape"
+      },
+      {
+        "kind": "property",
+        "name": "uses_params"
+      }
+    ],
+    "Bundle": [
+      {
+        "kind": "method",
+        "name": "add"
+      },
+      {
+        "kind": "method",
+        "name": "attach_hooks"
+      },
+      {
+        "kind": "property",
+        "name": "baseline_name"
+      },
+      {
+        "kind": "method",
+        "name": "clear"
+      },
+      {
+        "kind": "method",
+        "name": "cluster"
+      },
+      {
+        "kind": "method",
+        "name": "compare_at"
+      },
+      {
+        "kind": "method",
+        "name": "diff"
+      },
+      {
+        "kind": "method",
+        "name": "do"
+      },
+      {
+        "kind": "method",
+        "name": "evict_all_but"
+      },
+      {
+        "kind": "method",
+        "name": "fork"
+      },
+      {
+        "kind": "method",
+        "name": "help"
+      },
+      {
+        "kind": "method",
+        "name": "joint_metric"
+      },
+      {
+        "kind": "property",
+        "name": "members"
+      },
+      {
+        "kind": "method",
+        "name": "metric"
+      },
+      {
+        "kind": "method",
+        "name": "most_changed"
+      },
+      {
+        "kind": "property",
+        "name": "names"
+      },
+      {
+        "kind": "method",
+        "name": "node"
+      },
+      {
+        "kind": "method",
+        "name": "pop"
+      },
+      {
+        "kind": "method",
+        "name": "relationship"
+      },
+      {
+        "kind": "property",
+        "name": "relationship_matrix"
+      },
+      {
+        "kind": "method",
+        "name": "replay"
+      },
+      {
+        "kind": "method",
+        "name": "rerun"
+      },
+      {
+        "kind": "method",
+        "name": "save"
+      },
+      {
+        "kind": "method",
+        "name": "set_capacity"
+      },
+      {
+        "kind": "method",
+        "name": "show"
+      },
+      {
+        "kind": "property",
+        "name": "supergraph"
+      }
+    ],
+    "GradFnLog": [
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "attribute",
+        "name": "corresponding_layer"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_id"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_total_num"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_type"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_type_num"
+      },
+      {
+        "kind": "field",
+        "name": "is_custom"
+      },
+      {
+        "kind": "attribute",
+        "name": "is_intervening"
+      },
+      {
+        "kind": "field",
+        "name": "label"
+      },
+      {
+        "kind": "method",
+        "name": "log_pass"
+      },
+      {
+        "kind": "field",
+        "name": "module_path"
+      },
+      {
+        "kind": "field",
+        "name": "name"
+      },
+      {
+        "kind": "field",
+        "name": "next_grad_fn_ids"
+      },
+      {
+        "kind": "property",
+        "name": "num_passes"
+      },
+      {
+        "kind": "property",
+        "name": "pass_labels"
+      },
+      {
+        "kind": "field",
+        "name": "passes"
+      },
+      {
+        "kind": "method",
+        "name": "to_pandas"
+      }
+    ],
+    "GradFnPassLog": [
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "attribute",
+        "name": "grad_inputs"
+      },
+      {
+        "kind": "attribute",
+        "name": "grad_outputs"
+      },
+      {
+        "kind": "field",
+        "name": "pass_num"
+      },
+      {
+        "kind": "attribute",
+        "name": "time_finished"
+      },
+      {
+        "kind": "attribute",
+        "name": "time_started"
+      },
+      {
+        "kind": "method",
+        "name": "to_pandas"
+      }
+    ],
+    "LayerLog": [
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "property",
+        "name": "activation"
+      },
+      {
+        "kind": "field",
+        "name": "activation_postfunc"
+      },
+      {
+        "kind": "property",
+        "name": "activation_transform"
+      },
+      {
+        "kind": "field",
+        "name": "autograd_saved_bytes"
+      },
+      {
+        "kind": "field",
+        "name": "autograd_saved_tensor_count"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_address"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_parent"
+      },
+      {
+        "kind": "property",
+        "name": "captured_args"
+      },
+      {
+        "kind": "property",
+        "name": "captured_kwargs"
+      },
+      {
+        "kind": "property",
+        "name": "child_layers"
+      },
+      {
+        "kind": "property",
+        "name": "child_layers_per_pass"
+      },
+      {
+        "kind": "property",
+        "name": "child_passes_per_layer"
+      },
+      {
+        "kind": "property",
+        "name": "co_parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_children_by_cond"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_elif_children"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_else_children"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_start_children"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_then_children"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_branch_stack_passes"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_branch_stacks"
+      },
+      {
+        "kind": "field",
+        "name": "containing_module"
+      },
+      {
+        "kind": "field",
+        "name": "containing_modules"
+      },
+      {
+        "kind": "field",
+        "name": "corresponding_grad_fn"
+      },
+      {
+        "kind": "property",
+        "name": "creation_order"
+      },
+      {
+        "kind": "field",
+        "name": "detach_saved_tensor"
+      },
+      {
+        "kind": "property",
+        "name": "edges_vary_across_passes"
+      },
+      {
+        "kind": "field",
+        "name": "equivalent_operations"
+      },
+      {
+        "kind": "field",
+        "name": "extra_data"
+      },
+      {
+        "kind": "field",
+        "name": "flops_backward"
+      },
+      {
+        "kind": "field",
+        "name": "flops_forward"
+      },
+      {
+        "kind": "field",
+        "name": "func_applied"
+      },
+      {
+        "kind": "field",
+        "name": "func_argnames"
+      },
+      {
+        "kind": "property",
+        "name": "func_call_stack"
+      },
+      {
+        "kind": "field",
+        "name": "func_config"
+      },
+      {
+        "kind": "field",
+        "name": "func_is_inplace"
+      },
+      {
+        "kind": "field",
+        "name": "func_name"
+      },
+      {
+        "kind": "property",
+        "name": "func_rng_states"
+      },
+      {
+        "kind": "property",
+        "name": "func_time"
+      },
+      {
+        "kind": "method",
+        "name": "get_child_layers"
+      },
+      {
+        "kind": "method",
+        "name": "get_parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_id"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_name"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_object"
+      },
+      {
+        "kind": "property",
+        "name": "gradient"
+      },
+      {
+        "kind": "property",
+        "name": "has_children"
+      },
+      {
+        "kind": "property",
+        "name": "has_co_parents"
+      },
+      {
+        "kind": "property",
+        "name": "has_gradient"
+      },
+      {
+        "kind": "property",
+        "name": "has_parents"
+      },
+      {
+        "kind": "property",
+        "name": "has_saved_activations"
+      },
+      {
+        "kind": "property",
+        "name": "has_siblings"
+      },
+      {
+        "kind": "field",
+        "name": "is_buffer_layer"
+      },
+      {
+        "kind": "property",
+        "name": "is_computed_inside_submodule"
+      },
+      {
+        "kind": "field",
+        "name": "is_final_output"
+      },
+      {
+        "kind": "field",
+        "name": "is_input_layer"
+      },
+      {
+        "kind": "field",
+        "name": "is_internally_initialized"
+      },
+      {
+        "kind": "field",
+        "name": "is_internally_terminated"
+      },
+      {
+        "kind": "field",
+        "name": "is_output_layer"
+      },
+      {
+        "kind": "field",
+        "name": "is_part_of_iterable_output"
+      },
+      {
+        "kind": "field",
+        "name": "is_scalar_bool"
+      },
+      {
+        "kind": "field",
+        "name": "is_terminal_bool_layer"
+      },
+      {
+        "kind": "field",
+        "name": "iterable_output_index"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label"
+      },
+      {
+        "kind": "property",
+        "name": "layer_label_no_pass"
+      },
+      {
+        "kind": "property",
+        "name": "layer_label_no_pass_short"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_short"
+      },
+      {
+        "kind": "property",
+        "name": "layer_label_w_pass"
+      },
+      {
+        "kind": "property",
+        "name": "layer_label_w_pass_short"
+      },
+      {
+        "kind": "field",
+        "name": "layer_total_num"
+      },
+      {
+        "kind": "field",
+        "name": "layer_type"
+      },
+      {
+        "kind": "field",
+        "name": "layer_type_num"
+      },
+      {
+        "kind": "property",
+        "name": "leaf_module_passes"
+      },
+      {
+        "kind": "property",
+        "name": "lookup_keys"
+      },
+      {
+        "kind": "property",
+        "name": "macs_backward"
+      },
+      {
+        "kind": "property",
+        "name": "macs_forward"
+      },
+      {
+        "kind": "property",
+        "name": "module_nesting_depth"
+      },
+      {
+        "kind": "field",
+        "name": "num_args"
+      },
+      {
+        "kind": "field",
+        "name": "num_keyword_args"
+      },
+      {
+        "kind": "property",
+        "name": "num_param_tensors"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_frozen"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_total"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_trainable"
+      },
+      {
+        "kind": "field",
+        "name": "num_passes"
+      },
+      {
+        "kind": "field",
+        "name": "num_positional_args"
+      },
+      {
+        "kind": "field",
+        "name": "operation_equivalence_type"
+      },
+      {
+        "kind": "property",
+        "name": "operation_num"
+      },
+      {
+        "kind": "field",
+        "name": "output_device"
+      },
+      {
+        "kind": "property",
+        "name": "params"
+      },
+      {
+        "kind": "field",
+        "name": "params_memory"
+      },
+      {
+        "kind": "property",
+        "name": "params_memory_str"
+      },
+      {
+        "kind": "property",
+        "name": "parent_layer_arg_locs"
+      },
+      {
+        "kind": "property",
+        "name": "parent_layers"
+      },
+      {
+        "kind": "property",
+        "name": "parent_layers_per_pass"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_barcodes"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_logs"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_shapes"
+      },
+      {
+        "kind": "property",
+        "name": "parent_passes_per_layer"
+      },
+      {
+        "kind": "field",
+        "name": "pass_labels"
+      },
+      {
+        "kind": "property",
+        "name": "pass_num"
+      },
+      {
+        "kind": "field",
+        "name": "passes"
+      },
+      {
+        "kind": "field",
+        "name": "save_gradients"
+      },
+      {
+        "kind": "field",
+        "name": "scalar_bool_value"
+      },
+      {
+        "kind": "method",
+        "name": "show"
+      },
+      {
+        "kind": "property",
+        "name": "sibling_layers"
+      },
+      {
+        "kind": "property",
+        "name": "source_model_log"
+      },
+      {
+        "kind": "property",
+        "name": "tensor"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_memory"
+      },
+      {
+        "kind": "property",
+        "name": "tensor_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_shape"
+      },
+      {
+        "kind": "property",
+        "name": "transformed_activation"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation_memory"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation_shape"
+      },
+      {
+        "kind": "property",
+        "name": "transformed_gradient"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient_memory"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient_shape"
+      },
+      {
+        "kind": "property",
+        "name": "uses_params"
+      }
+    ],
+    "LayerPassLog": [
+      {
+        "kind": "attribute",
+        "name": "DEFAULT_FILL_STATE"
+      },
+      {
+        "kind": "attribute",
+        "name": "FORK_POLICY"
+      },
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "field",
+        "name": "_construction_done"
+      },
+      {
+        "kind": "field",
+        "name": "_pass_finished"
+      },
+      {
+        "kind": "field",
+        "name": "activation"
+      },
+      {
+        "kind": "field",
+        "name": "activation_postfunc"
+      },
+      {
+        "kind": "property",
+        "name": "activation_transform"
+      },
+      {
+        "kind": "field",
+        "name": "args_captured"
+      },
+      {
+        "kind": "field",
+        "name": "autograd_saved_bytes"
+      },
+      {
+        "kind": "field",
+        "name": "autograd_saved_tensor_count"
+      },
+      {
+        "kind": "field",
+        "name": "bool_conditional_id"
+      },
+      {
+        "kind": "field",
+        "name": "bool_context_kind"
+      },
+      {
+        "kind": "field",
+        "name": "bool_is_branch"
+      },
+      {
+        "kind": "field",
+        "name": "bool_wrapper_kind"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_address"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_parent"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_pass"
+      },
+      {
+        "kind": "field",
+        "name": "bytes_delta_at_call"
+      },
+      {
+        "kind": "field",
+        "name": "bytes_peak_at_call"
+      },
+      {
+        "kind": "field",
+        "name": "captured_arg_template"
+      },
+      {
+        "kind": "field",
+        "name": "captured_args"
+      },
+      {
+        "kind": "field",
+        "name": "captured_kwarg_template"
+      },
+      {
+        "kind": "field",
+        "name": "captured_kwargs"
+      },
+      {
+        "kind": "field",
+        "name": "child_layers"
+      },
+      {
+        "kind": "field",
+        "name": "children_tensor_versions"
+      },
+      {
+        "kind": "property",
+        "name": "co_parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_children_by_cond"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_elif_children"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_else_children"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_start_children"
+      },
+      {
+        "kind": "field",
+        "name": "cond_branch_then_children"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_branch_depth"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_branch_stack"
+      },
+      {
+        "kind": "field",
+        "name": "container_spec"
+      },
+      {
+        "kind": "field",
+        "name": "containing_module"
+      },
+      {
+        "kind": "field",
+        "name": "containing_modules"
+      },
+      {
+        "kind": "method",
+        "name": "copy"
+      },
+      {
+        "kind": "field",
+        "name": "corresponding_grad_fn"
+      },
+      {
+        "kind": "field",
+        "name": "creation_order"
+      },
+      {
+        "kind": "field",
+        "name": "detach_saved_tensor"
+      },
+      {
+        "kind": "field",
+        "name": "edge_uses"
+      },
+      {
+        "kind": "field",
+        "name": "equivalent_operations"
+      },
+      {
+        "kind": "field",
+        "name": "extra_data"
+      },
+      {
+        "kind": "field",
+        "name": "feeds_output"
+      },
+      {
+        "kind": "field",
+        "name": "flops_backward"
+      },
+      {
+        "kind": "field",
+        "name": "flops_forward"
+      },
+      {
+        "kind": "field",
+        "name": "func_applied"
+      },
+      {
+        "kind": "field",
+        "name": "func_argnames"
+      },
+      {
+        "kind": "field",
+        "name": "func_autocast_state"
+      },
+      {
+        "kind": "field",
+        "name": "func_call_id"
+      },
+      {
+        "kind": "field",
+        "name": "func_call_stack"
+      },
+      {
+        "kind": "field",
+        "name": "func_config"
+      },
+      {
+        "kind": "field",
+        "name": "func_is_inplace"
+      },
+      {
+        "kind": "field",
+        "name": "func_kwargs_non_tensor"
+      },
+      {
+        "kind": "field",
+        "name": "func_name"
+      },
+      {
+        "kind": "field",
+        "name": "func_non_tensor_args"
+      },
+      {
+        "kind": "field",
+        "name": "func_positional_args_non_tensor"
+      },
+      {
+        "kind": "field",
+        "name": "func_rng_states"
+      },
+      {
+        "kind": "field",
+        "name": "func_time"
+      },
+      {
+        "kind": "method",
+        "name": "get_child_layers"
+      },
+      {
+        "kind": "method",
+        "name": "get_parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "grad_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_id"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_name"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_object"
+      },
+      {
+        "kind": "field",
+        "name": "grad_memory"
+      },
+      {
+        "kind": "property",
+        "name": "grad_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "grad_shape"
+      },
+      {
+        "kind": "field",
+        "name": "gradient"
+      },
+      {
+        "kind": "field",
+        "name": "has_child_tensor_variations"
+      },
+      {
+        "kind": "field",
+        "name": "has_children"
+      },
+      {
+        "kind": "property",
+        "name": "has_co_parents"
+      },
+      {
+        "kind": "field",
+        "name": "has_gradient"
+      },
+      {
+        "kind": "field",
+        "name": "has_input_ancestor"
+      },
+      {
+        "kind": "field",
+        "name": "has_internally_initialized_ancestor"
+      },
+      {
+        "kind": "property",
+        "name": "has_parents"
+      },
+      {
+        "kind": "field",
+        "name": "has_saved_activations"
+      },
+      {
+        "kind": "property",
+        "name": "has_siblings"
+      },
+      {
+        "kind": "field",
+        "name": "in_cond_branch"
+      },
+      {
+        "kind": "field",
+        "name": "input_ancestors"
+      },
+      {
+        "kind": "field",
+        "name": "internally_initialized_ancestors"
+      },
+      {
+        "kind": "field",
+        "name": "internally_initialized_parents"
+      },
+      {
+        "kind": "field",
+        "name": "intervention_log"
+      },
+      {
+        "kind": "field",
+        "name": "io_role"
+      },
+      {
+        "kind": "field",
+        "name": "is_buffer_layer"
+      },
+      {
+        "kind": "property",
+        "name": "is_computed_inside_submodule"
+      },
+      {
+        "kind": "field",
+        "name": "is_final_output"
+      },
+      {
+        "kind": "field",
+        "name": "is_input_layer"
+      },
+      {
+        "kind": "field",
+        "name": "is_internally_initialized"
+      },
+      {
+        "kind": "field",
+        "name": "is_internally_terminated"
+      },
+      {
+        "kind": "field",
+        "name": "is_leaf_module_output"
+      },
+      {
+        "kind": "field",
+        "name": "is_output_ancestor"
+      },
+      {
+        "kind": "field",
+        "name": "is_output_layer"
+      },
+      {
+        "kind": "field",
+        "name": "is_part_of_iterable_output"
+      },
+      {
+        "kind": "field",
+        "name": "is_scalar_bool"
+      },
+      {
+        "kind": "property",
+        "name": "is_submodule_input"
+      },
+      {
+        "kind": "field",
+        "name": "is_submodule_output"
+      },
+      {
+        "kind": "field",
+        "name": "is_terminal_bool_layer"
+      },
+      {
+        "kind": "field",
+        "name": "iterable_output_index"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_no_pass"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_no_pass_short"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_raw"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_short"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_w_pass"
+      },
+      {
+        "kind": "field",
+        "name": "layer_label_w_pass_short"
+      },
+      {
+        "kind": "field",
+        "name": "layer_total_num"
+      },
+      {
+        "kind": "field",
+        "name": "layer_type"
+      },
+      {
+        "kind": "field",
+        "name": "layer_type_num"
+      },
+      {
+        "kind": "field",
+        "name": "leaf_module_pass"
+      },
+      {
+        "kind": "method",
+        "name": "log_tensor_grad"
+      },
+      {
+        "kind": "field",
+        "name": "lookup_keys"
+      },
+      {
+        "kind": "property",
+        "name": "macs_backward"
+      },
+      {
+        "kind": "property",
+        "name": "macs_forward"
+      },
+      {
+        "kind": "method",
+        "name": "materialize_activation"
+      },
+      {
+        "kind": "method",
+        "name": "materialize_gradient"
+      },
+      {
+        "kind": "field",
+        "name": "max_distance_from_input"
+      },
+      {
+        "kind": "field",
+        "name": "max_distance_from_output"
+      },
+      {
+        "kind": "field",
+        "name": "min_distance_from_input"
+      },
+      {
+        "kind": "field",
+        "name": "min_distance_from_output"
+      },
+      {
+        "kind": "field",
+        "name": "module_address_normalized"
+      },
+      {
+        "kind": "field",
+        "name": "module_entry_exit_thread_output"
+      },
+      {
+        "kind": "field",
+        "name": "module_entry_exit_threads_inputs"
+      },
+      {
+        "kind": "property",
+        "name": "module_nesting_depth"
+      },
+      {
+        "kind": "field",
+        "name": "module_passes_entered"
+      },
+      {
+        "kind": "field",
+        "name": "module_passes_exited"
+      },
+      {
+        "kind": "field",
+        "name": "modules_entered"
+      },
+      {
+        "kind": "field",
+        "name": "modules_entered_argnames"
+      },
+      {
+        "kind": "field",
+        "name": "modules_exited"
+      },
+      {
+        "kind": "field",
+        "name": "num_args"
+      },
+      {
+        "kind": "field",
+        "name": "num_keyword_args"
+      },
+      {
+        "kind": "property",
+        "name": "num_param_tensors"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_frozen"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_total"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_trainable"
+      },
+      {
+        "kind": "field",
+        "name": "num_passes"
+      },
+      {
+        "kind": "field",
+        "name": "num_positional_args"
+      },
+      {
+        "kind": "field",
+        "name": "operation_equivalence_type"
+      },
+      {
+        "kind": "field",
+        "name": "operation_num"
+      },
+      {
+        "kind": "field",
+        "name": "output_descendants"
+      },
+      {
+        "kind": "field",
+        "name": "output_device"
+      },
+      {
+        "kind": "field",
+        "name": "output_path"
+      },
+      {
+        "kind": "property",
+        "name": "params"
+      },
+      {
+        "kind": "field",
+        "name": "params_memory"
+      },
+      {
+        "kind": "property",
+        "name": "params_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "parent_layer_arg_locs"
+      },
+      {
+        "kind": "field",
+        "name": "parent_layers"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_barcodes"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_logs"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_passes"
+      },
+      {
+        "kind": "field",
+        "name": "parent_param_shapes"
+      },
+      {
+        "kind": "field",
+        "name": "parent_params"
+      },
+      {
+        "kind": "field",
+        "name": "pass_num"
+      },
+      {
+        "kind": "property",
+        "name": "passes"
+      },
+      {
+        "kind": "field",
+        "name": "recurrent_group"
+      },
+      {
+        "kind": "field",
+        "name": "root_ancestors"
+      },
+      {
+        "kind": "field",
+        "name": "save_gradients"
+      },
+      {
+        "kind": "method",
+        "name": "save_tensor_data"
+      },
+      {
+        "kind": "field",
+        "name": "scalar_bool_value"
+      },
+      {
+        "kind": "method",
+        "name": "show"
+      },
+      {
+        "kind": "property",
+        "name": "sibling_layers"
+      },
+      {
+        "kind": "property",
+        "name": "source_model_log"
+      },
+      {
+        "kind": "property",
+        "name": "tensor"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_label_raw"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_memory"
+      },
+      {
+        "kind": "property",
+        "name": "tensor_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "tensor_shape"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation_memory"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_activation_shape"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient_dtype"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient_memory"
+      },
+      {
+        "kind": "field",
+        "name": "transformed_gradient_shape"
+      },
+      {
+        "kind": "property",
+        "name": "uses_params"
+      }
+    ],
+    "ModelLog": [
+      {
+        "kind": "attribute",
+        "name": "DEFAULT_FILL_STATE"
+      },
+      {
+        "kind": "attribute",
+        "name": "FORK_POLICY"
+      },
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "field",
+        "name": "_activation_hash_cache"
+      },
+      {
+        "kind": "field",
+        "name": "_activation_recipe_revision"
+      },
+      {
+        "kind": "field",
+        "name": "_all_layers_logged"
+      },
+      {
+        "kind": "field",
+        "name": "_all_layers_saved"
+      },
+      {
+        "kind": "field",
+        "name": "_append_sequence_id"
+      },
+      {
+        "kind": "field",
+        "name": "_final_to_raw_layer_labels"
+      },
+      {
+        "kind": "field",
+        "name": "_gradient_layer_nums_to_save"
+      },
+      {
+        "kind": "field",
+        "name": "_has_direct_writes"
+      },
+      {
+        "kind": "field",
+        "name": "_intervention_spec"
+      },
+      {
+        "kind": "field",
+        "name": "_last_hook_handle_ids"
+      },
+      {
+        "kind": "field",
+        "name": "_layer_counter"
+      },
+      {
+        "kind": "field",
+        "name": "_layer_num_to_lookup_keys_dict"
+      },
+      {
+        "kind": "field",
+        "name": "_layer_nums_to_save"
+      },
+      {
+        "kind": "field",
+        "name": "_layers_where_internal_branches_merge_with_input"
+      },
+      {
+        "kind": "field",
+        "name": "_lookup_keys_to_layer_num_dict"
+      },
+      {
+        "kind": "field",
+        "name": "_pass_finished"
+      },
+      {
+        "kind": "field",
+        "name": "_raw_layer_dict"
+      },
+      {
+        "kind": "field",
+        "name": "_raw_layer_labels_list"
+      },
+      {
+        "kind": "field",
+        "name": "_raw_layer_type_counter"
+      },
+      {
+        "kind": "field",
+        "name": "_raw_to_final_layer_labels"
+      },
+      {
+        "kind": "field",
+        "name": "_source_code_blob"
+      },
+      {
+        "kind": "field",
+        "name": "_source_model_ref"
+      },
+      {
+        "kind": "field",
+        "name": "_spec_revision"
+      },
+      {
+        "kind": "field",
+        "name": "_unsaved_layers_lookup_keys"
+      },
+      {
+        "kind": "field",
+        "name": "_warned_direct_write"
+      },
+      {
+        "kind": "field",
+        "name": "_warned_mutate_in_place"
+      },
+      {
+        "kind": "field",
+        "name": "activation_postfunc"
+      },
+      {
+        "kind": "field",
+        "name": "activation_postfunc_repr"
+      },
+      {
+        "kind": "property",
+        "name": "activation_transform"
+      },
+      {
+        "kind": "method",
+        "name": "add_node_overlay"
+      },
+      {
+        "kind": "method",
+        "name": "animate_passes"
+      },
+      {
+        "kind": "method",
+        "name": "append_run_state_from"
+      },
+      {
+        "kind": "method",
+        "name": "attach_hooks"
+      },
+      {
+        "kind": "field",
+        "name": "backward_memory_backend"
+      },
+      {
+        "kind": "field",
+        "name": "backward_num_passes"
+      },
+      {
+        "kind": "field",
+        "name": "backward_peak_memory_bytes"
+      },
+      {
+        "kind": "field",
+        "name": "backward_root_grad_fn_id"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_layers"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_num_passes"
+      },
+      {
+        "kind": "property",
+        "name": "buffers"
+      },
+      {
+        "kind": "field",
+        "name": "capture_cache_hit"
+      },
+      {
+        "kind": "field",
+        "name": "capture_cache_key"
+      },
+      {
+        "kind": "field",
+        "name": "capture_cache_path"
+      },
+      {
+        "kind": "field",
+        "name": "capture_full_args"
+      },
+      {
+        "kind": "field",
+        "name": "capture_kpis"
+      },
+      {
+        "kind": "method",
+        "name": "check_metadata_invariants"
+      },
+      {
+        "kind": "method",
+        "name": "cleanup"
+      },
+      {
+        "kind": "method",
+        "name": "clear_hooks"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_arm_edges"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_branch_edges"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_edge_passes"
+      },
+      {
+        "kind": "property",
+        "name": "conditional_elif_edges"
+      },
+      {
+        "kind": "property",
+        "name": "conditional_else_edges"
+      },
+      {
+        "kind": "field",
+        "name": "conditional_events"
+      },
+      {
+        "kind": "property",
+        "name": "conditional_then_edges"
+      },
+      {
+        "kind": "field",
+        "name": "current_function_call_barcode"
+      },
+      {
+        "kind": "method",
+        "name": "detach_hooks"
+      },
+      {
+        "kind": "field",
+        "name": "detach_saved_tensors"
+      },
+      {
+        "kind": "field",
+        "name": "detect_loops"
+      },
+      {
+        "kind": "method",
+        "name": "do"
+      },
+      {
+        "kind": "field",
+        "name": "emit_nvtx"
+      },
+      {
+        "kind": "field",
+        "name": "equivalent_operations"
+      },
+      {
+        "kind": "method",
+        "name": "find_layers"
+      },
+      {
+        "kind": "method",
+        "name": "find_sites"
+      },
+      {
+        "kind": "method",
+        "name": "first_nonfinite"
+      },
+      {
+        "kind": "property",
+        "name": "flops_by_type"
+      },
+      {
+        "kind": "method",
+        "name": "fork"
+      },
+      {
+        "kind": "field",
+        "name": "forward_lineno"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_logs"
+      },
+      {
+        "kind": "field",
+        "name": "grad_fn_order"
+      },
+      {
+        "kind": "property",
+        "name": "grad_fns"
+      },
+      {
+        "kind": "field",
+        "name": "gradient_postfunc"
+      },
+      {
+        "kind": "field",
+        "name": "gradient_postfunc_repr"
+      },
+      {
+        "kind": "field",
+        "name": "gradients_to_save"
+      },
+      {
+        "kind": "field",
+        "name": "graph_shape_hash"
+      },
+      {
+        "kind": "field",
+        "name": "has_backward_log"
+      },
+      {
+        "kind": "property",
+        "name": "has_conditional_branching"
+      },
+      {
+        "kind": "field",
+        "name": "has_gradients"
+      },
+      {
+        "kind": "field",
+        "name": "input_id_at_capture"
+      },
+      {
+        "kind": "field",
+        "name": "input_layers"
+      },
+      {
+        "kind": "field",
+        "name": "input_metadata"
+      },
+      {
+        "kind": "field",
+        "name": "input_shape_hash"
+      },
+      {
+        "kind": "field",
+        "name": "internally_initialized_layers"
+      },
+      {
+        "kind": "field",
+        "name": "internally_terminated_bool_layers"
+      },
+      {
+        "kind": "field",
+        "name": "internally_terminated_layers"
+      },
+      {
+        "kind": "field",
+        "name": "intervention_ready"
+      },
+      {
+        "kind": "attribute",
+        "name": "intervention_spec"
+      },
+      {
+        "kind": "field",
+        "name": "io_format_version"
+      },
+      {
+        "kind": "field",
+        "name": "is_appended"
+      },
+      {
+        "kind": "property",
+        "name": "is_branching"
+      },
+      {
+        "kind": "property",
+        "name": "is_recurrent"
+      },
+      {
+        "kind": "field",
+        "name": "keep_unsaved_layers"
+      },
+      {
+        "kind": "field",
+        "name": "last_run_ctx"
+      },
+      {
+        "kind": "method",
+        "name": "last_run_records"
+      },
+      {
+        "kind": "field",
+        "name": "layer_dict_all_keys"
+      },
+      {
+        "kind": "field",
+        "name": "layer_dict_main_keys"
+      },
+      {
+        "kind": "field",
+        "name": "layer_labels"
+      },
+      {
+        "kind": "field",
+        "name": "layer_labels_no_pass"
+      },
+      {
+        "kind": "field",
+        "name": "layer_labels_w_pass"
+      },
+      {
+        "kind": "field",
+        "name": "layer_list"
+      },
+      {
+        "kind": "field",
+        "name": "layer_logs"
+      },
+      {
+        "kind": "field",
+        "name": "layer_num_passes"
+      },
+      {
+        "kind": "property",
+        "name": "layers"
+      },
+      {
+        "kind": "field",
+        "name": "layers_with_params"
+      },
+      {
+        "kind": "field",
+        "name": "layers_with_saved_activations"
+      },
+      {
+        "kind": "field",
+        "name": "layers_with_saved_gradients"
+      },
+      {
+        "kind": "classmethod",
+        "name": "load"
+      },
+      {
+        "kind": "method",
+        "name": "log_backward"
+      },
+      {
+        "kind": "field",
+        "name": "logging_mode"
+      },
+      {
+        "kind": "property",
+        "name": "macs_by_type"
+      },
+      {
+        "kind": "field",
+        "name": "manual_tensor_connections"
+      },
+      {
+        "kind": "field",
+        "name": "mark_input_output_distances"
+      },
+      {
+        "kind": "property",
+        "name": "max_recurrent_loops"
+      },
+      {
+        "kind": "field",
+        "name": "model_name"
+      },
+      {
+        "kind": "field",
+        "name": "module_filter_fn"
+      },
+      {
+        "kind": "property",
+        "name": "modules"
+      },
+      {
+        "kind": "field",
+        "name": "name"
+      },
+      {
+        "kind": "field",
+        "name": "num_context_lines"
+      },
+      {
+        "kind": "property",
+        "name": "num_grad_fns"
+      },
+      {
+        "kind": "property",
+        "name": "num_intervening_grad_fns"
+      },
+      {
+        "kind": "field",
+        "name": "num_operations"
+      },
+      {
+        "kind": "field",
+        "name": "num_streamed_passes"
+      },
+      {
+        "kind": "field",
+        "name": "num_tensors_saved"
+      },
+      {
+        "kind": "property",
+        "name": "num_tensors_total"
+      },
+      {
+        "kind": "field",
+        "name": "observer_spans"
+      },
+      {
+        "kind": "field",
+        "name": "operation_history"
+      },
+      {
+        "kind": "field",
+        "name": "orphan_layers"
+      },
+      {
+        "kind": "field",
+        "name": "output_device"
+      },
+      {
+        "kind": "field",
+        "name": "output_layers"
+      },
+      {
+        "kind": "field",
+        "name": "param_logs"
+      },
+      {
+        "kind": "property",
+        "name": "params"
+      },
+      {
+        "kind": "field",
+        "name": "parent_run"
+      },
+      {
+        "kind": "field",
+        "name": "pass_end_time"
+      },
+      {
+        "kind": "field",
+        "name": "pass_start_time"
+      },
+      {
+        "kind": "method",
+        "name": "preview_fastlog"
+      },
+      {
+        "kind": "field",
+        "name": "raise_on_nan"
+      },
+      {
+        "kind": "field",
+        "name": "random_seed_used"
+      },
+      {
+        "kind": "method",
+        "name": "recording_backward"
+      },
+      {
+        "kind": "field",
+        "name": "recording_kept"
+      },
+      {
+        "kind": "field",
+        "name": "relationship_evidence"
+      },
+      {
+        "kind": "method",
+        "name": "release_param_refs"
+      },
+      {
+        "kind": "method",
+        "name": "remove"
+      },
+      {
+        "kind": "method",
+        "name": "render_dagua_graph"
+      },
+      {
+        "kind": "method",
+        "name": "render_graph"
+      },
+      {
+        "kind": "method",
+        "name": "replace_run_state_from"
+      },
+      {
+        "kind": "method",
+        "name": "replay"
+      },
+      {
+        "kind": "method",
+        "name": "replay_from"
+      },
+      {
+        "kind": "field",
+        "name": "report_values"
+      },
+      {
+        "kind": "method",
+        "name": "rerun"
+      },
+      {
+        "kind": "method",
+        "name": "resolve_sites"
+      },
+      {
+        "kind": "property",
+        "name": "root_module"
+      },
+      {
+        "kind": "field",
+        "name": "run_state"
+      },
+      {
+        "kind": "method",
+        "name": "save"
+      },
+      {
+        "kind": "field",
+        "name": "save_function_args"
+      },
+      {
+        "kind": "field",
+        "name": "save_gradients"
+      },
+      {
+        "kind": "method",
+        "name": "save_intervention"
+      },
+      {
+        "kind": "method",
+        "name": "save_new_activations"
+      },
+      {
+        "kind": "field",
+        "name": "save_raw_activation"
+      },
+      {
+        "kind": "field",
+        "name": "save_raw_gradient"
+      },
+      {
+        "kind": "field",
+        "name": "save_rng_states"
+      },
+      {
+        "kind": "field",
+        "name": "save_source_context"
+      },
+      {
+        "kind": "field",
+        "name": "saved_activation_memory"
+      },
+      {
+        "kind": "property",
+        "name": "saved_activation_memory_str"
+      },
+      {
+        "kind": "method",
+        "name": "set"
+      },
+      {
+        "kind": "method",
+        "name": "show"
+      },
+      {
+        "kind": "method",
+        "name": "show_backward_graph"
+      },
+      {
+        "kind": "field",
+        "name": "source_model_class"
+      },
+      {
+        "kind": "field",
+        "name": "source_model_id"
+      },
+      {
+        "kind": "field",
+        "name": "streaming_pass_logs"
+      },
+      {
+        "kind": "method",
+        "name": "suggest"
+      },
+      {
+        "kind": "method",
+        "name": "summary"
+      },
+      {
+        "kind": "field",
+        "name": "time_cleanup"
+      },
+      {
+        "kind": "field",
+        "name": "time_forward_pass"
+      },
+      {
+        "kind": "field",
+        "name": "time_function_calls"
+      },
+      {
+        "kind": "property",
+        "name": "time_logging"
+      },
+      {
+        "kind": "field",
+        "name": "time_setup"
+      },
+      {
+        "kind": "property",
+        "name": "time_total"
+      },
+      {
+        "kind": "method",
+        "name": "to_csv"
+      },
+      {
+        "kind": "method",
+        "name": "to_dagua_graph"
+      },
+      {
+        "kind": "method",
+        "name": "to_json"
+      },
+      {
+        "kind": "method",
+        "name": "to_pandas"
+      },
+      {
+        "kind": "method",
+        "name": "to_parquet"
+      },
+      {
+        "kind": "field",
+        "name": "total_activation_memory"
+      },
+      {
+        "kind": "property",
+        "name": "total_activation_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "total_autograd_saved_bytes"
+      },
+      {
+        "kind": "property",
+        "name": "total_flops"
+      },
+      {
+        "kind": "property",
+        "name": "total_flops_backward"
+      },
+      {
+        "kind": "property",
+        "name": "total_flops_forward"
+      },
+      {
+        "kind": "property",
+        "name": "total_macs"
+      },
+      {
+        "kind": "property",
+        "name": "total_macs_backward"
+      },
+      {
+        "kind": "property",
+        "name": "total_macs_forward"
+      },
+      {
+        "kind": "field",
+        "name": "total_param_layers"
+      },
+      {
+        "kind": "field",
+        "name": "total_param_tensors"
+      },
+      {
+        "kind": "field",
+        "name": "total_params"
+      },
+      {
+        "kind": "field",
+        "name": "total_params_frozen"
+      },
+      {
+        "kind": "field",
+        "name": "total_params_memory"
+      },
+      {
+        "kind": "property",
+        "name": "total_params_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "total_params_trainable"
+      },
+      {
+        "kind": "field",
+        "name": "train_mode"
+      },
+      {
+        "kind": "property",
+        "name": "uncalled_modules"
+      },
+      {
+        "kind": "field",
+        "name": "unlogged_layers"
+      },
+      {
+        "kind": "property",
+        "name": "unsupported_ops"
+      },
+      {
+        "kind": "method",
+        "name": "validate_forward_pass"
+      },
+      {
+        "kind": "method",
+        "name": "validate_saved_activations"
+      },
+      {
+        "kind": "field",
+        "name": "verbose"
+      },
+      {
+        "kind": "method",
+        "name": "visualization_field_audit"
+      },
+      {
+        "kind": "field",
+        "name": "weight_fingerprint_at_capture"
+      },
+      {
+        "kind": "field",
+        "name": "weight_fingerprint_full"
+      }
+    ],
+    "ModuleLog": [
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "field",
+        "name": "address"
+      },
+      {
+        "kind": "field",
+        "name": "address_children"
+      },
+      {
+        "kind": "field",
+        "name": "address_depth"
+      },
+      {
+        "kind": "field",
+        "name": "address_parent"
+      },
+      {
+        "kind": "field",
+        "name": "all_addresses"
+      },
+      {
+        "kind": "field",
+        "name": "all_layers"
+      },
+      {
+        "kind": "field",
+        "name": "buffer_layers"
+      },
+      {
+        "kind": "property",
+        "name": "buffers"
+      },
+      {
+        "kind": "field",
+        "name": "call_children"
+      },
+      {
+        "kind": "field",
+        "name": "call_parent"
+      },
+      {
+        "kind": "field",
+        "name": "class_docstring"
+      },
+      {
+        "kind": "field",
+        "name": "extra_attributes"
+      },
+      {
+        "kind": "property",
+        "name": "flops"
+      },
+      {
+        "kind": "property",
+        "name": "flops_backward"
+      },
+      {
+        "kind": "property",
+        "name": "flops_forward"
+      },
+      {
+        "kind": "property",
+        "name": "forward_args"
+      },
+      {
+        "kind": "field",
+        "name": "forward_docstring"
+      },
+      {
+        "kind": "property",
+        "name": "forward_kwargs"
+      },
+      {
+        "kind": "field",
+        "name": "forward_signature"
+      },
+      {
+        "kind": "property",
+        "name": "gradient"
+      },
+      {
+        "kind": "field",
+        "name": "has_backward_hooks"
+      },
+      {
+        "kind": "field",
+        "name": "has_forward_hooks"
+      },
+      {
+        "kind": "field",
+        "name": "init_docstring"
+      },
+      {
+        "kind": "field",
+        "name": "init_signature"
+      },
+      {
+        "kind": "property",
+        "name": "input_layers"
+      },
+      {
+        "kind": "property",
+        "name": "inputs"
+      },
+      {
+        "kind": "property",
+        "name": "is_shared"
+      },
+      {
+        "kind": "field",
+        "name": "is_training"
+      },
+      {
+        "kind": "property",
+        "name": "layers"
+      },
+      {
+        "kind": "property",
+        "name": "macs"
+      },
+      {
+        "kind": "property",
+        "name": "macs_backward"
+      },
+      {
+        "kind": "property",
+        "name": "macs_forward"
+      },
+      {
+        "kind": "field",
+        "name": "methods"
+      },
+      {
+        "kind": "field",
+        "name": "module_class_name"
+      },
+      {
+        "kind": "field",
+        "name": "name"
+      },
+      {
+        "kind": "field",
+        "name": "nesting_depth"
+      },
+      {
+        "kind": "property",
+        "name": "num_layers"
+      },
+      {
+        "kind": "field",
+        "name": "num_params"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_frozen"
+      },
+      {
+        "kind": "field",
+        "name": "num_params_trainable"
+      },
+      {
+        "kind": "field",
+        "name": "num_passes"
+      },
+      {
+        "kind": "property",
+        "name": "output_layers"
+      },
+      {
+        "kind": "property",
+        "name": "outputs"
+      },
+      {
+        "kind": "field",
+        "name": "params"
+      },
+      {
+        "kind": "field",
+        "name": "params_memory"
+      },
+      {
+        "kind": "property",
+        "name": "params_memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "pass_labels"
+      },
+      {
+        "kind": "field",
+        "name": "passes"
+      },
+      {
+        "kind": "field",
+        "name": "requires_grad"
+      },
+      {
+        "kind": "method",
+        "name": "show_graph"
+      },
+      {
+        "kind": "field",
+        "name": "source_file"
+      },
+      {
+        "kind": "field",
+        "name": "source_line"
+      },
+      {
+        "kind": "method",
+        "name": "to_csv"
+      },
+      {
+        "kind": "method",
+        "name": "to_json"
+      },
+      {
+        "kind": "method",
+        "name": "to_pandas"
+      },
+      {
+        "kind": "method",
+        "name": "to_parquet"
+      }
+    ],
+    "ModulePassLog": [
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "field",
+        "name": "all_module_addresses"
+      },
+      {
+        "kind": "field",
+        "name": "call_children"
+      },
+      {
+        "kind": "field",
+        "name": "call_parent"
+      },
+      {
+        "kind": "field",
+        "name": "forward_args"
+      },
+      {
+        "kind": "field",
+        "name": "forward_args_summary"
+      },
+      {
+        "kind": "field",
+        "name": "forward_kwargs"
+      },
+      {
+        "kind": "field",
+        "name": "forward_kwargs_summary"
+      },
+      {
+        "kind": "field",
+        "name": "input_layers"
+      },
+      {
+        "kind": "property",
+        "name": "inputs"
+      },
+      {
+        "kind": "property",
+        "name": "is_shared_module"
+      },
+      {
+        "kind": "field",
+        "name": "layers"
+      },
+      {
+        "kind": "field",
+        "name": "module_address"
+      },
+      {
+        "kind": "property",
+        "name": "num_layers"
+      },
+      {
+        "kind": "field",
+        "name": "output_layers"
+      },
+      {
+        "kind": "property",
+        "name": "outputs"
+      },
+      {
+        "kind": "field",
+        "name": "pass_label"
+      },
+      {
+        "kind": "field",
+        "name": "pass_num"
+      },
+      {
+        "kind": "method",
+        "name": "to_csv"
+      },
+      {
+        "kind": "method",
+        "name": "to_json"
+      },
+      {
+        "kind": "method",
+        "name": "to_pandas"
+      },
+      {
+        "kind": "method",
+        "name": "to_parquet"
+      }
+    ],
+    "ParamLog": [
+      {
+        "kind": "attribute",
+        "name": "PORTABLE_STATE_SPEC"
+      },
+      {
+        "kind": "field",
+        "name": "address"
+      },
+      {
+        "kind": "field",
+        "name": "barcode"
+      },
+      {
+        "kind": "field",
+        "name": "dtype"
+      },
+      {
+        "kind": "property",
+        "name": "grad_dtype"
+      },
+      {
+        "kind": "property",
+        "name": "grad_memory"
+      },
+      {
+        "kind": "property",
+        "name": "grad_memory_str"
+      },
+      {
+        "kind": "property",
+        "name": "grad_shape"
+      },
+      {
+        "kind": "property",
+        "name": "has_grad"
+      },
+      {
+        "kind": "field",
+        "name": "has_optimizer"
+      },
+      {
+        "kind": "property",
+        "name": "is_quantized"
+      },
+      {
+        "kind": "field",
+        "name": "linked_params"
+      },
+      {
+        "kind": "field",
+        "name": "memory"
+      },
+      {
+        "kind": "property",
+        "name": "memory_str"
+      },
+      {
+        "kind": "field",
+        "name": "module_address"
+      },
+      {
+        "kind": "field",
+        "name": "module_type"
+      },
+      {
+        "kind": "field",
+        "name": "name"
+      },
+      {
+        "kind": "field",
+        "name": "num_params"
+      },
+      {
+        "kind": "field",
+        "name": "num_passes"
+      },
+      {
+        "kind": "method",
+        "name": "release_param_ref"
+      },
+      {
+        "kind": "field",
+        "name": "shape"
+      },
+      {
+        "kind": "field",
+        "name": "trainable"
+      },
+      {
+        "kind": "field",
+        "name": "used_by_layers"
+      }
+    ]
+  },
+  "compat_aliases": [
+    {
+      "kind": "object_alias",
+      "name": "ActivationPostfunc",
+      "target": "torchlens.types.ActivationPostfunc"
+    },
+    {
+      "kind": "object_alias",
+      "name": "BufferLog",
+      "target": "torchlens.types.BufferLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "FuncCallLocation",
+      "target": "torchlens.types.FuncCallLocation"
+    },
+    {
+      "kind": "object_alias",
+      "name": "GradFnAccessor",
+      "target": "torchlens.accessors.GradFnAccessor"
+    },
+    {
+      "kind": "object_alias",
+      "name": "GradFnLog",
+      "target": "torchlens.types.GradFnLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "GradFnPassLog",
+      "target": "torchlens.types.GradFnPassLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "GradientPostfunc",
+      "target": "torchlens.types.GradientPostfunc"
+    },
+    {
+      "kind": "object_alias",
+      "name": "LayerAccessor",
+      "target": "torchlens.accessors.LayerAccessor"
+    },
+    {
+      "kind": "object_alias",
+      "name": "MetadataInvariantError",
+      "target": "torchlens.errors.MetadataInvariantError"
+    },
+    {
+      "kind": "object_alias",
+      "name": "ModuleAccessor",
+      "target": "torchlens.accessors.ModuleAccessor"
+    },
+    {
+      "kind": "object_alias",
+      "name": "ModuleLog",
+      "target": "torchlens.types.ModuleLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "ModulePassLog",
+      "target": "torchlens.types.ModulePassLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "NodeSpec",
+      "target": "torchlens.experimental.dagua.NodeSpec"
+    },
+    {
+      "kind": "object_alias",
+      "name": "ParamLog",
+      "target": "torchlens.types.ParamLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "RunState",
+      "target": "torchlens.io.RunState"
+    },
+    {
+      "kind": "object_alias",
+      "name": "SaveLevel",
+      "target": "torchlens.types.SaveLevel"
+    },
+    {
+      "kind": "object_alias",
+      "name": "SiteTable",
+      "target": "torchlens.types.SiteTable"
+    },
+    {
+      "kind": "object_alias",
+      "name": "SpecCompat",
+      "target": "torchlens.types.SpecCompat"
+    },
+    {
+      "kind": "object_alias",
+      "name": "StreamingOptions",
+      "target": "torchlens.options.StreamingOptions"
+    },
+    {
+      "kind": "object_alias",
+      "name": "TargetManifestDiff",
+      "target": "torchlens.types.TargetManifestDiff"
+    },
+    {
+      "kind": "object_alias",
+      "name": "TensorLog",
+      "target": "torchlens.types.TensorLog"
+    },
+    {
+      "kind": "object_alias",
+      "name": "TensorSliceSpec",
+      "target": "torchlens.types.TensorSliceSpec"
+    },
+    {
+      "kind": "object_alias",
+      "name": "TorchLensPostfuncError",
+      "target": "torchlens.errors.TorchLensPostfuncError"
+    },
+    {
+      "kind": "object_alias",
+      "name": "TrainingModeConfigError",
+      "target": "torchlens.errors.TrainingModeConfigError"
+    },
+    {
+      "kind": "object_alias",
+      "name": "VisualizationOptions",
+      "target": "torchlens.options.VisualizationOptions"
+    },
+    {
+      "kind": "object_alias",
+      "name": "build_render_audit",
+      "target": "torchlens.experimental.dagua.build_render_audit"
+    },
+    {
+      "kind": "object_alias",
+      "name": "check_metadata_invariants",
+      "target": "torchlens.validation.check_metadata_invariants"
+    },
+    {
+      "kind": "object_alias",
+      "name": "check_spec_compat",
+      "target": "torchlens.validation.check_spec_compat"
+    },
+    {
+      "kind": "object_alias",
+      "name": "cleanup_tmp",
+      "target": "torchlens.io.cleanup_tmp"
+    },
+    {
+      "kind": "object_alias",
+      "name": "get_model_metadata",
+      "target": "torchlens.io.get_model_metadata"
+    },
+    {
+      "kind": "object_alias",
+      "name": "list_logs",
+      "target": "torchlens.io.list_logs"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "load_intervention_spec",
+      "target": "torchlens.io"
+    },
+    {
+      "kind": "object_alias",
+      "name": "log_model_metadata",
+      "target": "torchlens.io.log_model_metadata"
+    },
+    {
+      "kind": "object_alias",
+      "name": "model_log_to_dagua_graph",
+      "target": "torchlens.experimental.dagua.model_log_to_dagua_graph"
+    },
+    {
+      "kind": "object_alias",
+      "name": "preview_fastlog",
+      "target": "torchlens.fastlog.preview"
+    },
+    {
+      "kind": "object_alias",
+      "name": "rehydrate_nested",
+      "target": "torchlens.io.rehydrate_nested"
+    },
+    {
+      "kind": "object_alias",
+      "name": "render_lines_to_html",
+      "target": "torchlens.experimental.dagua.render_lines_to_html"
+    },
+    {
+      "kind": "object_alias",
+      "name": "render_model_log_with_dagua",
+      "target": "torchlens.experimental.dagua.render_model_log_with_dagua"
+    },
+    {
+      "kind": "object_alias",
+      "name": "reset_naming_counter",
+      "target": "torchlens.io.reset_naming_counter"
+    },
+    {
+      "kind": "object_alias",
+      "name": "resolve_sites",
+      "target": "torchlens.validation.resolve_sites"
+    },
+    {
+      "kind": "object_alias",
+      "name": "save_intervention",
+      "target": "torchlens.io.save_intervention"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "show_backward_graph",
+      "target": "torchlens.user_funcs"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "show_model_graph",
+      "target": "torchlens.user_funcs"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "summary",
+      "target": "torchlens.user_funcs"
+    },
+    {
+      "kind": "object_alias",
+      "name": "suppress_mutate_warnings",
+      "target": "torchlens.io.suppress_mutate_warnings"
+    },
+    {
+      "kind": "object_alias",
+      "name": "unwrap_torch",
+      "target": "torchlens.decoration.unwrap_torch"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "validate_backward_pass",
+      "target": "torchlens.user_funcs"
+    },
+    {
+      "kind": "object_alias",
+      "name": "validate_batch_of_models_and_inputs",
+      "target": "torchlens.validation.validate_batch_of_models_and_inputs"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "validate_forward_pass",
+      "target": "torchlens.user_funcs"
+    },
+    {
+      "kind": "wrapper_function",
+      "name": "validate_saved_activations",
+      "target": "torchlens.user_funcs"
+    },
+    {
+      "kind": "object_alias",
+      "name": "wrap_torch",
+      "target": "torchlens.decoration.wrap_torch"
+    },
+    {
+      "kind": "object_alias",
+      "name": "wrapped",
+      "target": "torchlens.decoration.wrapped"
+    }
+  ],
+  "schema_version": 1,
+  "submodules": {
+    "accessors": {
+      "names": [
+        "GradFnAccessor",
+        "LayerAccessor",
+        "ModuleAccessor"
+      ],
+      "source": "__all__"
+    },
+    "bridge": {
+      "names": [
+        "brain_score",
+        "captum",
+        "depyf",
+        "dialz",
+        "gradcam",
+        "huggingface",
+        "inseq",
+        "lit",
+        "nnsight",
+        "profiler",
+        "repeng",
+        "rsatoolbox",
+        "sae_lens",
+        "shap",
+        "steering_vectors"
+      ],
+      "source": "__all__"
+    },
+    "callbacks": {
+      "names": [
+        "lightning"
+      ],
+      "source": "__all__"
+    },
+    "capture": {
+      "names": [
+        "arg_positions",
+        "flops",
+        "output_tensors",
+        "salient_args",
+        "source_tensors",
+        "tensor_tracking"
+      ],
+      "source": "dir"
+    },
+    "compat": {
+      "names": [
+        "CompatReport",
+        "CompatRow",
+        "Extractor",
+        "from_fx",
+        "from_huggingface",
+        "from_ilg",
+        "from_sentence_transformers",
+        "from_timm",
+        "from_torchextractor",
+        "lovely",
+        "report",
+        "torchextractor",
+        "torchshow"
+      ],
+      "source": "__all__"
+    },
+    "constants": {
+      "names": [
+        "BUFFER_LOG_FIELD_ORDER",
+        "FUNC_CALL_LOCATION_FIELD_ORDER",
+        "GRAD_FN_LOG_FIELD_ORDER",
+        "GRAD_FN_PASS_LOG_FIELD_ORDER",
+        "IGNORED_FUNCS",
+        "LAYER_LOG_FIELD_ORDER",
+        "LAYER_PASS_LOG_FIELD_ORDER",
+        "List",
+        "MODEL_LOG_FIELD_ORDER",
+        "MODULE_LOG_FIELD_ORDER",
+        "MODULE_PASS_LOG_FIELD_ORDER",
+        "ORIG_TORCH_FUNCS",
+        "OVERRIDABLE_FUNCS",
+        "PARAM_LOG_FIELD_ORDER",
+        "TENSOR_LOG_FIELD_ORDER",
+        "TORCHVISION_FUNCS",
+        "functools",
+        "get_ignored_functions",
+        "get_testing_overrides",
+        "torch",
+        "torchvision",
+        "types",
+        "warnings"
+      ],
+      "source": "dir"
+    },
+    "data_classes": {
+      "names": [
+        "BufferAccessor",
+        "BufferLog",
+        "FuncCallLocation",
+        "FuncExecutionContext",
+        "GradFnAccessor",
+        "GradFnLog",
+        "GradFnPassLog",
+        "ModuleAccessor",
+        "ModuleLog",
+        "ModulePassLog",
+        "ParamAccessor",
+        "ParamLog",
+        "VisualizationOverrides",
+        "buffer_log",
+        "cleanup",
+        "func_call_location",
+        "grad_fn_log",
+        "grad_fn_pass_log",
+        "interface",
+        "internal_types",
+        "layer_log",
+        "layer_pass_log",
+        "model_log",
+        "module_log",
+        "param_log"
+      ],
+      "source": "dir"
+    },
+    "decoration": {
+      "names": [
+        "clear_patch_detached_references_cache",
+        "decorate_all_once",
+        "patch_detached_references",
+        "patch_model_instance",
+        "unwrap_torch",
+        "wrap_torch",
+        "wrapped"
+      ],
+      "source": "__all__"
+    },
+    "errors": {
+      "names": [
+        "AppendBatchDependenceError",
+        "AppendMismatchError",
+        "AxisAmbiguityError",
+        "BaselineUndeterminedError",
+        "BatchNormTrainModeWarning",
+        "BundleMemberError",
+        "BundleNotFinalizedError",
+        "BundleRelationshipError",
+        "CaptureError",
+        "CompatibilityError",
+        "ConfigurationError",
+        "ControlFlowDivergenceError",
+        "ControlFlowDivergenceWarning",
+        "DeadParentError",
+        "DirectActivationWriteWarning",
+        "DirectWriteIgnoredWarning",
+        "DirectWriteInExecutableSaveError",
+        "EngineDispatchError",
+        "GraphShapeMismatchError",
+        "HookSignatureError",
+        "HookSiteCoverageError",
+        "HookValueError",
+        "InterventionAuditWarning",
+        "InterventionError",
+        "InterventionReadyConflictError",
+        "LiveModeLabelError",
+        "MetadataInvariantError",
+        "ModelMismatchError",
+        "MultiMatchWarning",
+        "MutateInPlaceWarning",
+        "NoParentError",
+        "OpaqueCallableInExecutableSaveError",
+        "PredicateError",
+        "RecordContextFieldError",
+        "RecorderStateError",
+        "RecordingConfigError",
+        "RecoveryError",
+        "RecursiveTracingError",
+        "ReplayPreconditionError",
+        "Severity",
+        "SiteAmbiguityError",
+        "SiteResolutionError",
+        "SpecMutationError",
+        "SpecPortabilityError",
+        "SpliceModuleDeviceError",
+        "SpliceModuleDtypeError",
+        "TorchLensError",
+        "TorchLensIOError",
+        "TorchLensInterventionError",
+        "TorchLensInterventionWarning",
+        "TorchLensPostfuncError",
+        "TorchLensWarning",
+        "TrainingModeConfigError",
+        "UnsupportedTensorVariantError",
+        "ValidationError"
+      ],
+      "source": "__all__"
+    },
+    "examples": {
+      "names": [
+        "load"
+      ],
+      "source": "__all__"
+    },
+    "experimental": {
+      "names": [
+        "AutoCaptureSession",
+        "Session",
+        "attribute_walk",
+        "auto_capture",
+        "dagua",
+        "freeze_module",
+        "node_styles",
+        "session",
+        "stop_after"
+      ],
+      "source": "__all__"
+    },
+    "export": {
+      "names": [
+        "aim",
+        "chrome_trace",
+        "chrome_trace_diff",
+        "csv",
+        "flamegraph",
+        "html",
+        "json",
+        "memory_timeline",
+        "mlflow",
+        "model_explorer",
+        "netron",
+        "parquet",
+        "speedscope",
+        "svg",
+        "tensorboard",
+        "wandb",
+        "xarray"
+      ],
+      "source": "__all__"
+    },
+    "fastlog": {
+      "names": [
+        "ActivationRecord",
+        "BundleNotFinalizedError",
+        "CaptureSpec",
+        "ModuleStackFrame",
+        "PredicateError",
+        "RecordContext",
+        "RecordContextFieldError",
+        "Recorder",
+        "RecorderStateError",
+        "Recording",
+        "RecordingConfigError",
+        "RecordingOptions",
+        "RecordingTrace",
+        "RecoveryError",
+        "cleanup_partial",
+        "dry_run",
+        "load",
+        "preview",
+        "record",
+        "recover"
+      ],
+      "source": "__all__"
+    },
+    "grad": {
+      "names": [
+        "autograd_saved_bytes",
+        "grad_fn_memory_cost"
+      ],
+      "source": "__all__"
+    },
+    "intervene": {
+      "names": [],
+      "source": "__all__"
+    },
+    "intervention": {
+      "names": [
+        "AppendBatchDependenceError",
+        "AppendMismatchError",
+        "ArgComponent",
+        "AxisAmbiguityError",
+        "BaselineUndeterminedError",
+        "BatchNormTrainModeWarning",
+        "Bundle",
+        "BundleMemberError",
+        "BundleRelationshipError",
+        "CapturedArgTemplate",
+        "ContainerSpec",
+        "ControlFlowDivergenceError",
+        "ControlFlowDivergenceWarning",
+        "DataclassField",
+        "DeadParentError",
+        "DictKey",
+        "DirectActivationWriteWarning",
+        "DirectWriteInExecutableSaveError",
+        "EdgeUseRecord",
+        "EngineDispatchError",
+        "FireRecord",
+        "ForkFieldPolicy",
+        "FrozenInterventionSpec",
+        "FrozenTargetSpec",
+        "FunctionRegistryKey",
+        "GraphShapeMismatchError",
+        "HFKey",
+        "HelperSpec",
+        "HookContext",
+        "HookHandle",
+        "HookSignatureError",
+        "HookSiteCoverageError",
+        "HookValueError",
+        "InterventionReadyConflictError",
+        "InterventionSpec",
+        "LiteralTensor",
+        "LiteralValue",
+        "LiveModeLabelError",
+        "ModelMismatchError",
+        "MultiMatchWarning",
+        "MutateInPlaceWarning",
+        "NamedField",
+        "NoParentError",
+        "NormalizedHookEntry",
+        "OpaqueCallableInExecutableSaveError",
+        "ParentRef",
+        "RecursiveTracingError",
+        "Relationship",
+        "ReplayPreconditionError",
+        "SaveLevel",
+        "SiteAmbiguityError",
+        "SiteCollection",
+        "SiteResolutionError",
+        "SiteSpec",
+        "SiteTable",
+        "SpecCompat",
+        "SpecMutationError",
+        "SpecPortabilityError",
+        "SpliceModuleDeviceError",
+        "SpliceModuleDtypeError",
+        "TargetManifestDiff",
+        "TargetSpec",
+        "TensorSliceSpec",
+        "TupleIndex",
+        "Unsupported",
+        "bwd_hook",
+        "check_spec_compat",
+        "clamp",
+        "contains",
+        "do",
+        "func",
+        "gradient_scale",
+        "gradient_zero",
+        "in_module",
+        "label",
+        "load_intervention_spec",
+        "make_hook_context",
+        "mean_ablate",
+        "module",
+        "noise",
+        "normalize_hook",
+        "normalize_hook_plan",
+        "project_off",
+        "project_onto",
+        "replay",
+        "replay_from",
+        "rerun",
+        "resample_ablate",
+        "resolve_sites",
+        "save_intervention",
+        "scale",
+        "sites",
+        "splice_module",
+        "steer",
+        "swap_with",
+        "where",
+        "zero_ablate"
+      ],
+      "source": "__all__"
+    },
+    "io": {
+      "names": [
+        "RunState",
+        "cleanup_tmp",
+        "detect_tlspec_format",
+        "get_model_metadata",
+        "inspect_tlspec",
+        "list_logs",
+        "load",
+        "load_intervention_spec",
+        "log_model_metadata",
+        "rehydrate_nested",
+        "reset_naming_counter",
+        "save",
+        "save_intervention",
+        "suppress_mutate_warnings"
+      ],
+      "source": "__all__"
+    },
+    "llm": {
+      "names": [],
+      "source": "__all__"
+    },
+    "multi_trace": {
+      "names": [
+        "METRIC_REGISTRY",
+        "NodeView",
+        "Supergraph",
+        "SupergraphNode",
+        "TopologyDiff",
+        "build_supergraph",
+        "compare_topology",
+        "cosine_distance",
+        "pearson_correlation_distance",
+        "relative_l1_scalar",
+        "relative_l2",
+        "resolve_metric"
+      ],
+      "source": "__all__"
+    },
+    "neuro": {
+      "names": [],
+      "source": "__all__"
+    },
+    "notebook": {
+      "names": [],
+      "source": "__all__"
+    },
+    "observers": {
+      "names": [
+        "TapObserver",
+        "TapRecord",
+        "active_span_records",
+        "record_span",
+        "tap"
+      ],
+      "source": "__all__"
+    },
+    "options": {
+      "names": [
+        "CaptureOptions",
+        "InterventionOptions",
+        "ReplayOptions",
+        "SaveOptions",
+        "StreamingOptions",
+        "VisualizationOptions",
+        "merge_capture_options",
+        "merge_intervention_options",
+        "merge_replay_options",
+        "merge_save_options",
+        "merge_streaming_options",
+        "merge_visualization_options",
+        "suppress_mutate_warnings",
+        "visualization_to_render_kwargs"
+      ],
+      "source": "__all__"
+    },
+    "paper": {
+      "names": [],
+      "source": "__all__"
+    },
+    "partial": {
+      "names": [
+        "PartialModelLog",
+        "from_failed_capture"
+      ],
+      "source": "__all__"
+    },
+    "postprocess": {
+      "names": [
+        "List",
+        "TYPE_CHECKING",
+        "ast_branches",
+        "compute_graph_shape_hash",
+        "control_flow",
+        "finalization",
+        "graph_traversal",
+        "labeling",
+        "loop_detection",
+        "postprocess",
+        "postprocess_fast",
+        "safe_copy",
+        "time",
+        "torch"
+      ],
+      "source": "dir"
+    },
+    "report": {
+      "names": [
+        "explain",
+        "log_value"
+      ],
+      "source": "__all__"
+    },
+    "stats": {
+      "names": [
+        "Aggregator",
+        "Covariance",
+        "Mean",
+        "PCA",
+        "Quantile",
+        "StreamingStat",
+        "TopK",
+        "aggregate"
+      ],
+      "source": "__all__"
+    },
+    "types": {
+      "names": [
+        "ActivationPostfunc",
+        "BufferLog",
+        "FuncCallLocation",
+        "GradFnLog",
+        "GradFnPassLog",
+        "GradientPostfunc",
+        "ModuleLog",
+        "ModulePassLog",
+        "ParamLog",
+        "SaveLevel",
+        "SiteTable",
+        "SpecCompat",
+        "TargetManifestDiff",
+        "TensorLog",
+        "TensorSliceSpec"
+      ],
+      "source": "__all__"
+    },
+    "user_funcs": {
+      "names": [
+        "ActivationPostfunc",
+        "Any",
+        "BufferVisibilityLiteral",
+        "BundleStreamWriter",
+        "Callable",
+        "CaptureOptions",
+        "CodePanelOption",
+        "Dict",
+        "GradientPostfunc",
+        "InterventionReadyConflictError",
+        "List",
+        "MISSING",
+        "MissingType",
+        "ModelLog",
+        "Optional",
+        "OutputDeviceLiteral",
+        "Path",
+        "RunState",
+        "SaveOptions",
+        "StreamingOptions",
+        "TYPE_CHECKING",
+        "TorchLensIOError",
+        "TorchLensPostfuncError",
+        "TrainingModeConfigError",
+        "Tuple",
+        "Union",
+        "VisDirectionLiteral",
+        "VisInterventionModeLiteral",
+        "VisModeLiteral",
+        "VisNodeModeLiteral",
+        "VisNodePlacementLiteral",
+        "VisRendererLiteral",
+        "VisualizationOptions",
+        "capture_model_source_code",
+        "cast",
+        "check_model_and_input_variants",
+        "collections",
+        "decide_recording_of_batch",
+        "get_model_metadata",
+        "get_vars_of_type_from_obj",
+        "hashlib",
+        "json",
+        "list_logs",
+        "log_forward_pass",
+        "log_model_metadata",
+        "make_weak_model_ref",
+        "merge_capture_options",
+        "merge_save_options",
+        "merge_streaming_options",
+        "merge_visualization_options",
+        "nn",
+        "normalize_hook_plan",
+        "normalize_input_args",
+        "os",
+        "pickle",
+        "random",
+        "record_kpi_in_graph",
+        "register_tensor_connection",
+        "reset_naming_counter",
+        "resolve_renamed_kwarg",
+        "safe_copy_args",
+        "safe_copy_kwargs",
+        "set_random_seed",
+        "show_backward_graph",
+        "show_bundle_graph",
+        "show_model_graph",
+        "summary",
+        "torch",
+        "tqdm",
+        "validate_backward_pass",
+        "validate_batch_of_models_and_inputs",
+        "validate_forward_pass",
+        "validate_saved_activations",
+        "validate_training_compatibility",
+        "visualization_to_render_kwargs",
+        "warn_deprecated_alias",
+        "warn_parallel"
+      ],
+      "source": "dir"
+    },
+    "utils": {
+      "names": [
+        "AutocastRestore",
+        "DoctorCheck",
+        "DoctorReport",
+        "MAX_FLOATING_POINT_TOLERANCE",
+        "_ATTR_SKIP_SET",
+        "_AUTOCAST_DEVICES",
+        "_cuda_available",
+        "_get_func_call_stack",
+        "_is_cuda_available",
+        "_model_expects_single_arg",
+        "_safe_copy_arg",
+        "assign_to_sequence_or_dict",
+        "doctor",
+        "ensure_iterable",
+        "find_executable_save_set",
+        "flop_count",
+        "format_flops",
+        "format_size",
+        "get_attr_values_from_tensor_list",
+        "get_tensor_memory_amount",
+        "get_vars_of_type_from_obj",
+        "human_readable_size",
+        "identity",
+        "in_notebook",
+        "index_nested",
+        "int_list_to_compact_str",
+        "is_iterable",
+        "iter_accessible_attributes",
+        "list_modules",
+        "list_ops",
+        "log_current_autocast_state",
+        "log_current_rng_states",
+        "log_forward_pass_streaming",
+        "make_random_barcode",
+        "make_short_barcode_from_input",
+        "nested_assign",
+        "nested_getattr",
+        "normalize_input_args",
+        "peek_graph",
+        "print_override",
+        "progress_bar",
+        "register_op_rule",
+        "remove_attributes_with_prefix",
+        "remove_entry_from_list",
+        "safe_copy",
+        "safe_copy_args",
+        "safe_copy_kwargs",
+        "safe_to",
+        "set_random_seed",
+        "set_rng_from_saved_states",
+        "synthetic_input",
+        "tensor_all_nan",
+        "tensor_nanequal",
+        "tensor_stats_summary",
+        "warn_parallel"
+      ],
+      "source": "__all__"
+    },
+    "validation": {
+      "names": [
+        "InterventionValidationReport",
+        "MetadataInvariantError",
+        "check_metadata_invariants",
+        "check_spec_compat",
+        "resolve_sites",
+        "validate",
+        "validate_backward_pass",
+        "validate_batch_of_models_and_inputs",
+        "validate_forward_pass",
+        "validate_model_log_saved_activations",
+        "validate_saved_activations",
+        "validate_tlspec"
+      ],
+      "source": "__all__"
+    },
+    "viewer": {
+      "names": [],
+      "source": "__all__"
+    },
+    "visualization": {
+      "names": [
+        "NodeSpec",
+        "render_lines_to_html",
+        "show_backward_graph",
+        "show_bundle_graph",
+        "show_model_graph",
+        "summary"
+      ],
+      "source": "__all__"
+    },
+    "viz": {
+      "names": [
+        "bundle_diff",
+        "causal_trace_heatmap"
+      ],
+      "source": "__all__"
+    }
+  },
+  "top_level": [
+    {
+      "kind": "class",
+      "module": "torchlens.intervention.bundle",
+      "name": "Bundle",
+      "qualname": "Bundle"
+    },
+    {
+      "kind": "class",
+      "module": "torchlens.data_classes.layer_log",
+      "name": "LayerLog",
+      "qualname": "LayerLog"
+    },
+    {
+      "kind": "class",
+      "module": "torchlens.data_classes.layer_pass_log",
+      "name": "LayerPassLog",
+      "qualname": "LayerPassLog"
+    },
+    {
+      "kind": "class",
+      "module": "torchlens.data_classes.model_log",
+      "name": "ModelLog",
+      "qualname": "ModelLog"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens",
+      "name": "batched_extract",
+      "qualname": "batched_extract"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens",
+      "name": "bundle",
+      "qualname": "bundle"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "bwd_hook",
+      "qualname": "bwd_hook"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "clamp",
+      "qualname": "clamp"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.selectors",
+      "name": "contains",
+      "qualname": "contains"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.runtime",
+      "name": "do",
+      "qualname": "do"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens",
+      "name": "extract",
+      "qualname": "extract"
+    },
+    {
+      "kind": "module",
+      "module": null,
+      "name": "fastlog",
+      "qualname": null
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.selectors",
+      "name": "func",
+      "qualname": "func"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "gradient_scale",
+      "qualname": "gradient_scale"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "gradient_zero",
+      "qualname": "gradient_zero"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.selectors",
+      "name": "in_module",
+      "qualname": "in_module"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.selectors",
+      "name": "label",
+      "qualname": "label"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens._io.bundle",
+      "name": "load",
+      "qualname": "load"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.user_funcs",
+      "name": "log_forward_pass",
+      "qualname": "log_forward_pass"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "mean_ablate",
+      "qualname": "mean_ablate"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.selectors",
+      "name": "module",
+      "qualname": "module"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "noise",
+      "qualname": "noise"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens",
+      "name": "peek",
+      "qualname": "peek"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "project_off",
+      "qualname": "project_off"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "project_onto",
+      "qualname": "project_onto"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.observers",
+      "name": "record_span",
+      "qualname": "record_span"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.replay",
+      "name": "replay",
+      "qualname": "replay"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.replay",
+      "name": "replay_from",
+      "qualname": "replay_from"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.rerun",
+      "name": "rerun",
+      "qualname": "rerun"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "resample_ablate",
+      "qualname": "resample_ablate"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens._io.bundle",
+      "name": "save",
+      "qualname": "save"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "scale",
+      "qualname": "scale"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.sites",
+      "name": "sites",
+      "qualname": "sites"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "splice_module",
+      "qualname": "splice_module"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "steer",
+      "qualname": "steer"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "swap_with",
+      "qualname": "swap_with"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.observers",
+      "name": "tap",
+      "qualname": "tap"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.validation.consolidated",
+      "name": "validate",
+      "qualname": "validate"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.selectors",
+      "name": "where",
+      "qualname": "where"
+    },
+    {
+      "kind": "function",
+      "module": "torchlens.intervention.helpers",
+      "name": "zero_ablate",
+      "qualname": "zero_ablate"
+    }
+  ]
+}

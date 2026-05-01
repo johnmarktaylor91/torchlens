@@ -22,7 +22,6 @@ ModuleLog vs ModulePassLog label convention:
 This matches each accessor's natural granularity.
 """
 
-import pandas as pd
 import weakref
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
@@ -34,6 +33,8 @@ from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .model_log import ModelLog
     from .param_log import ParamAccessor
 
@@ -121,6 +122,18 @@ class ModulePassLog:
         """Whether this module appears at multiple addresses."""
         return len(self.all_module_addresses) > 1
 
+    @property
+    def inputs(self) -> List[str]:
+        """Module-pass input layer labels."""
+
+        return self.input_layers
+
+    @property
+    def outputs(self) -> List[str]:
+        """Module-pass output layer labels."""
+
+        return self.output_layers
+
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
         lines = [
@@ -147,6 +160,13 @@ class ModulePassLog:
         pd.DataFrame
             Single-row DataFrame ordered by ``MODULE_PASS_LOG_FIELD_ORDER``.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         row = _module_pass_log_to_row(self)
         return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
 
@@ -183,7 +203,9 @@ class ModulePassLog:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
 
     def to_json(
         self,
@@ -457,6 +479,18 @@ class ModuleLog:
         return result if result is not None else []
 
     @property
+    def inputs(self) -> List[str]:
+        """Module input layer labels."""
+
+        return self.input_layers
+
+    @property
+    def outputs(self) -> List[str]:
+        """Module output layer labels."""
+
+        return self.output_layers
+
+    @property
     def forward_args(self) -> Optional[tuple]:
         return self._single_pass_or_error("forward_args")
 
@@ -632,6 +666,13 @@ class ModuleLog:
         """
         if self._source_model_log is None:
             raise RuntimeError("No source ModelLog reference; cannot build DataFrame.")
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         rows = []
         for label in self.all_layers:
             entry = self._source_model_log[label]
@@ -680,7 +721,9 @@ class ModuleLog:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
 
     def to_json(
         self,
@@ -756,9 +799,7 @@ class ModuleAccessor:
             return self._alias_dict[key]
         if key in self._pass_dict:
             return self._pass_dict[key]
-        raise KeyError(
-            f"Module '{key}' not found. Valid addresses: {list(self._dict.keys())[:10]}..."
-        )
+        raise KeyError(f"Module '{key}' not found.")
 
     def __contains__(self, key) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
@@ -769,6 +810,31 @@ class ModuleAccessor:
     def __len__(self) -> int:
         """Return the number of modules in this accessor."""
         return len(self._dict)
+
+    def __dir__(self) -> List[str]:
+        """Return Python attributes plus module addresses for tab completion.
+
+        Returns
+        -------
+        List[str]
+            Attribute names and valid module addresses.
+        """
+
+        keys = set(self._dict.keys()) | set(self._alias_dict.keys()) | set(self._pass_dict.keys())
+        return sorted(set(super().__dir__()) | keys)
+
+    def _ipython_key_completions_(self) -> List[str]:
+        """Return module addresses for IPython ``obj[...]`` completion.
+
+        Returns
+        -------
+        List[str]
+            Valid module addresses and pass labels.
+        """
+
+        return (
+            list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
+        )
 
     def __iter__(self):
         """Iterate over ModuleLog objects in address order."""
@@ -796,6 +862,13 @@ class ModuleAccessor:
         pd.DataFrame
             One row per module in address order.
         """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
         rows = []
         for ml in self._list:
             rows.append(
@@ -844,7 +917,9 @@ class ModuleAccessor:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
 
     def to_json(
         self,

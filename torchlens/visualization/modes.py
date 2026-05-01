@@ -52,6 +52,7 @@ ATTENTION_PROJECTION_ROLES: Final[dict[str, str]] = {
     "out_proj": "out",
     "qkv_proj": "qkv",
 }
+DOMAIN_NODE_MODES: Final[frozenset[str]] = frozenset({"vision", "attention"})
 
 
 def default_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:

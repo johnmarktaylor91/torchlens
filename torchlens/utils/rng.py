@@ -33,14 +33,16 @@ _AUTOCAST_DEVICES = ("cpu", "cuda")
 _T = TypeVar("_T")
 
 
-def set_random_seed(seed: int):
+def set_random_seed(seed: int) -> None:
     """Set the random seed for all RNG engines simultaneously.
 
     Ensures deterministic behavior across Python, NumPy, and PyTorch
     (CPU + all CUDA devices).
 
-    Args:
-        seed: Seed value to set.
+    Parameters
+    ----------
+    seed:
+        Seed value to set.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -93,37 +95,48 @@ def execute_with_restored_rng_autocast(
         set_rng_from_saved_states(current_rng_states)
 
 
-def log_current_rng_states(torch_only: bool = False) -> Dict:
+def log_current_rng_states(torch_only: bool = False) -> Dict[str, Any]:
     """Snapshot the current state of all RNG engines.
 
     The returned dict can be passed to :func:`set_rng_from_saved_states`
     to restore the exact same RNG position later (e.g. during validation
     replay).
 
-    Args:
-        torch_only: If True, only capture PyTorch RNG state (skip Python
-            ``random`` and NumPy). This is faster and sufficient for most
-            torch operations (dropout, randn, etc.).
+    Parameters
+    ----------
+    torch_only:
+        If True, only capture PyTorch RNG state (skip Python ``random`` and
+        NumPy). This is faster and sufficient for most torch operations
+        (dropout, randn, etc.).
 
-    Returns:
+    Returns
+    -------
+    dict[str, Any]
         Dict with keys ``"random"``, ``"np"``, ``"torch"``, and optionally
-        ``"torch_cuda"``, each holding the opaque state object for that engine.
+        ``"torch_cuda_all"``, each holding the opaque state object for that
+        engine. ``"torch_cuda"`` is also populated for backward compatibility
+        with older single-device snapshots.
     """
-    rng_dict: Dict[str, object] = {"torch": torch.random.get_rng_state()}
+    rng_dict: Dict[str, Any] = {"torch": torch.random.get_rng_state()}
     if not torch_only:
         rng_dict["random"] = random.getstate()
         rng_dict["np"] = np.random.get_state()
     if _is_cuda_available():
-        rng_dict["torch_cuda"] = torch.cuda.get_rng_state("cuda")
+        cuda_states = torch.cuda.get_rng_state_all()
+        rng_dict["torch_cuda_all"] = cuda_states
+        if cuda_states:
+            rng_dict["torch_cuda"] = cuda_states[0]
     return rng_dict
 
 
-def set_rng_from_saved_states(rng_states: Dict):
+def set_rng_from_saved_states(rng_states: Dict[str, Any]) -> None:
     """Restore RNG engines to a previously captured state.
 
-    Args:
-        rng_states: Dict produced by :func:`log_current_rng_states`.
-            If empty (RNG capture was disabled), this is a no-op.
+    Parameters
+    ----------
+    rng_states:
+        Dict produced by :func:`log_current_rng_states`. If empty (RNG capture
+        was disabled), this is a no-op.
     """
     if not rng_states:
         return
@@ -132,7 +145,9 @@ def set_rng_from_saved_states(rng_states: Dict):
     if "np" in rng_states:
         np.random.set_state(rng_states["np"])
     torch.random.set_rng_state(rng_states["torch"])
-    if _is_cuda_available() and "torch_cuda" in rng_states:
+    if _is_cuda_available() and "torch_cuda_all" in rng_states:
+        torch.cuda.set_rng_state_all(rng_states["torch_cuda_all"])
+    elif _is_cuda_available() and "torch_cuda" in rng_states:
         torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
 
 

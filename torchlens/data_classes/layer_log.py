@@ -257,6 +257,30 @@ class LayerLog:
         self.pass_labels: List[str] = []
 
     @property
+    def activation_transform(self) -> Any:
+        """Canonical activation transform callable inherited from the first pass.
+
+        Returns
+        -------
+        Any
+            Transform callable, or ``None`` when activations are stored unchanged.
+        """
+
+        return self.activation_postfunc
+
+    @activation_transform.setter
+    def activation_transform(self, value: Any) -> None:
+        """Set the canonical activation transform callable.
+
+        Parameters
+        ----------
+        value:
+            Transform callable, or ``None``.
+        """
+
+        self.activation_postfunc = value
+
+    @property
     def macs_forward(self) -> Optional[int]:
         """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
         return self.flops_forward // 2 if self.flops_forward is not None else None
@@ -674,19 +698,36 @@ class LayerLog:
     # ************ User-facing methods ***********
     # ********************************************
 
-    def print_all_fields(self):
-        """Print all data fields in the layer."""
-        fields_to_exclude = ["source_model_log", "func_rng_states"]
-        for field in dir(self):
-            attr = getattr(self, field)
-            if not any([field.startswith("_"), field in fields_to_exclude, callable(attr)]):
-                print(f"{field}: {attr}")
-
     def get_child_layers(self):
         return [self.source_model_log[child_label] for child_label in self.child_layers]
 
     def get_parent_layers(self):
         return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
+
+    def show(
+        self,
+        method: Literal["auto", "heatmap", "channels", "rgb", "hist"] = "auto",
+        **kwargs: Any,
+    ) -> Any:
+        """Display this layer's saved activation.
+
+        Parameters
+        ----------
+        method:
+            Display method. ``"auto"`` chooses from tensor shape.
+        **kwargs:
+            Forwarded to the tensor display helper.
+
+        Returns
+        -------
+        Any
+            Matplotlib figure when plotting is available, otherwise a text
+            fallback explaining why no plot was produced.
+        """
+
+        from ..viz._tensor_display import show_tensor
+
+        return show_tensor(self, method=method, **kwargs)
 
     # ********************************************
     # ************* Built-in Methods *************
@@ -776,10 +817,39 @@ class LayerAccessor:
                     return self._dict[base].passes[pass_num]
                 except (ValueError, KeyError):
                     pass
-        raise KeyError(f"Layer '{key}' not found. Valid labels: {list(self._dict.keys())[:10]}...")
+        suggestions = []
+        source = self._source_ref() if self._source_ref is not None else None
+        if source is not None and hasattr(source, "suggest"):
+            suggestions = source.suggest(str(key))
+        if suggestions:
+            suggestion_str = ", ".join(repr(item) for item in suggestions)
+            raise KeyError(f"Layer '{key}' not found. Did you mean {suggestion_str}?")
+        raise KeyError(f"Layer '{key}' not found.")
 
     def __contains__(self, key) -> bool:
         return key in self._dict
+
+    def __dir__(self) -> List[str]:
+        """Return Python attributes plus layer labels for tab completion.
+
+        Returns
+        -------
+        List[str]
+            Attribute names and valid layer labels.
+        """
+
+        return sorted(set(super().__dir__()) | set(self._dict.keys()))
+
+    def _ipython_key_completions_(self) -> List[str]:
+        """Return layer labels for IPython ``obj[...]`` completion.
+
+        Returns
+        -------
+        List[str]
+            Valid layer labels.
+        """
+
+        return list(self._dict.keys())
 
     def __len__(self) -> int:
         return len(self._dict)
@@ -787,6 +857,106 @@ class LayerAccessor:
     def __iter__(self):
         """Iterate over LayerLog objects in execution order."""
         return iter(self._list)
+
+    def by_operator(self, operator: str | None = None) -> Dict[str, int] | List[str]:
+        """Group layers by Torch operator name.
+
+        Parameters
+        ----------
+        operator:
+            Optional operator name. When supplied, matching layer labels are returned.
+
+        Returns
+        -------
+        Dict[str, int] | List[str]
+            Counts by operator, or labels for one operator.
+        """
+
+        if operator is not None:
+            return [
+                layer.layer_label
+                for layer in self._list
+                if (layer.func_name or layer.layer_type) == operator
+            ]
+        counts: Dict[str, int] = {}
+        for layer in self._list:
+            key = str(layer.func_name or layer.layer_type)
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def by_module(self, module: str | None = None) -> Dict[str, int] | List[str]:
+        """Group layers by containing module address.
+
+        Parameters
+        ----------
+        module:
+            Optional module address. When supplied, matching layer labels are returned.
+
+        Returns
+        -------
+        Dict[str, int] | List[str]
+            Counts by module, or labels for one module.
+        """
+
+        if module is not None:
+            return [
+                layer.layer_label
+                for layer in self._list
+                if layer.containing_module == module
+                or module in getattr(layer, "containing_modules", [])
+            ]
+        counts: Dict[str, int] = {}
+        for layer in self._list:
+            key = str(layer.containing_module or "self")
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def by_module_and_operator(
+        self,
+        module: str | None = None,
+        operator: str | None = None,
+    ) -> Dict[Tuple[str, str], int] | List[str]:
+        """Group layers by module and operator.
+
+        Parameters
+        ----------
+        module:
+            Optional module address filter.
+        operator:
+            Optional operator-name filter.
+
+        Returns
+        -------
+        Dict[Tuple[str, str], int] | List[str]
+            Counts by ``(module, operator)`` or labels matching both filters.
+        """
+
+        if module is not None and operator is not None:
+            return [
+                layer.layer_label
+                for layer in self._list
+                if (
+                    layer.containing_module == module
+                    or module in getattr(layer, "containing_modules", [])
+                )
+                and (layer.func_name or layer.layer_type) == operator
+            ]
+        counts: Dict[Tuple[str, str], int] = {}
+        for layer in self._list:
+            key = (str(layer.containing_module or "self"), str(layer.func_name or layer.layer_type))
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def total(self) -> int:
+        """Return the number of aggregate layers.
+
+        Returns
+        -------
+        int
+            Number of layer logs.
+        """
+
+        return len(self)
 
     def __repr__(self) -> str:
         if len(self) == 0:
@@ -803,7 +973,12 @@ class LayerAccessor:
 
     def to_pandas(self) -> "pd.DataFrame":
         """One row per unique layer (aggregate view)."""
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
 
         rows = []
         for ll in self._list:
@@ -858,7 +1033,9 @@ class LayerAccessor:
             raise ImportError(
                 "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
             ) from exc
-        self.to_pandas().to_parquet(filepath, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
 
     def to_json(
         self,

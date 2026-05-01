@@ -1,4 +1,4 @@
-"""Dagua-backed visualization bridge for TorchLens ModelLog objects.
+"""Experimental Dagua-backed visualization bridge for TorchLens ModelLog objects.
 
 This module translates TorchLens semantics into Dagua graph elements and
 documents exactly which ModelLog fields are consumed by the visualization.
@@ -12,8 +12,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import torch
 
-from ..utils.display import human_readable_size
-from .node_spec import (
+from ...utils.display import human_readable_size
+from ...visualization.node_spec import (
     INTERVENTION_CONE_COLOR,
     INTERVENTION_SITE_COLOR,
     intervention_site_and_cone_labels,

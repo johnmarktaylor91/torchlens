@@ -33,6 +33,7 @@ Key mechanisms:
 
 import copy
 import subprocess
+import sys
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -66,7 +67,7 @@ from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.layer_pass_log import LayerPassLog
 from ..data_classes.layer_log import LayerLog
-from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
+from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from .node_spec import (
     INTERVENTION_HOOK_BORDER_COLOR,
     INTERVENTION_HOOK_FILL_COLOR,
@@ -76,6 +77,16 @@ from .node_spec import (
     intervention_site_and_cone_labels,
     make_intervention_node_spec_fn,
     render_lines_to_html,
+)
+from .overlays import OverlayScores, overlay_border_attrs, overlay_line
+from .themes import (
+    VisualizationTheme,
+    apply_theme_to_spec,
+    legend_lines,
+    resolve_theme,
+    theme_edge_attrs,
+    theme_graph_attrs,
+    theme_node_attrs,
 )
 from .code_panel import CodePanelOption, render_code_panel_subgraph, resolve_code_panel_source
 from ._render_utils import (
@@ -388,7 +399,14 @@ def render_graph(
     vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
     vis_show_cone: bool = True,
     code_panel: CodePanelOption = False,
-) -> str:
+    node_overlay: str | OverlayScores | None = None,
+    node_label_fields: list[str] | None = None,
+    show_legend: bool = False,
+    font_size: int | None = None,
+    dpi: int | None = None,
+    for_paper: bool = False,
+    return_graph: bool = False,
+) -> Any:
     """Render the computational graph as a Graphviz Digraph.
 
     Orchestrates the full rendering pipeline:
@@ -430,9 +448,11 @@ def render_graph(
             ``False`` maps to ``"never"``.
         direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
         vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
-            or ``'sfdp'``.  ``'auto'`` uses dot for small graphs and ELK (or sfdp
-            fallback) for large ones.
-        vis_renderer: Renderer backend: ``'graphviz'`` or ``'dagua'``.
+            or ``'sfdp'``. ``'elk'`` remains accepted as an internal backend escape
+            hatch; the public API default is ``'auto'``.
+        vis_renderer: Renderer backend: ``'graphviz'`` or experimental
+            ``'dagua'``. Import ``torchlens.experimental.dagua`` before using
+            the Dagua renderer.
         vis_theme: Renderer theme name for backends that support themes.
         vis_intervention_mode: Intervention overlay mode. ``"node_mark"``
             marks sites and cones; ``"as_node"`` inserts hook nodes after
@@ -442,6 +462,19 @@ def render_graph(
         code_panel: Optional source-code panel. ``True`` is equivalent to
             ``"forward"``; callable values receive the live model object when
             it is still available.
+        node_overlay: Built-in overlay name or external mapping from node label
+            to score. Supported built-ins include ``"flops"``, ``"time"``,
+            ``"bytes"``, ``"magnitude"``, ``"grad_norm"``, ``"nan"``,
+            ``"intervention"``, and ``"bundle_delta"``.
+        node_label_fields: Optional label field picker. When omitted, the
+            default TorchLens label rows are used.
+        show_legend: Whether to render a compact colorblind-safe legend with
+            the graph.
+        font_size: Optional Graphviz font size.
+        dpi: Optional Graphviz output DPI.
+        for_paper: Whether to force the paper theme preset.
+        return_graph: If True, return the underlying ``graphviz.Digraph`` on
+            the Graphviz path or DOT text for direct text renderers.
 
     Returns:
         The Graphviz DOT source string.
@@ -452,8 +485,16 @@ def render_graph(
     """
     if node_mode not in MODE_REGISTRY:
         raise ValueError(
-            "Visualization node_mode must be one of 'default', 'profiling', "
-            "'vision', or 'attention'."
+            "Visualization node_style/node_mode must be one of 'default', "
+            "'profiling', 'vision', or 'attention'."
+        )
+    if node_mode in DOMAIN_NODE_MODES:
+        warnings.warn(
+            f"node_style={node_mode!r} is moving out of core; use the equivalent "
+            f"recipe at examples/recipes/{node_mode}.py or wait for the "
+            f"torchlens.{node_mode} plugin",
+            DeprecationWarning,
+            stacklevel=2,
         )
     if vis_intervention_mode not in {"node_mark", "as_node"}:
         raise ValueError("vis_intervention_mode must be either 'node_mark' or 'as_node'.")
@@ -467,7 +508,13 @@ def render_graph(
     )
 
     if vis_renderer == "dagua":
-        from .dagua_bridge import render_model_log_with_dagua
+        opted_in_module = sys.modules.get("torchlens.experimental.dagua")
+        if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
+            raise RuntimeError(
+                "dagua renderer is experimental; opt in via "
+                "`from torchlens.experimental import dagua` first"
+            )
+        from ..experimental.dagua import render_model_log_with_dagua
 
         return render_model_log_with_dagua(
             self,
@@ -482,6 +529,9 @@ def render_graph(
         )
     if vis_renderer not in {"graphviz", "dagua"}:
         raise ValueError("vis_renderer must be 'graphviz' or 'dagua'")
+    theme = resolve_theme(vis_theme, for_paper=for_paper)
+    if node_overlay is None:
+        node_overlay = getattr(self, "_node_overlay_scores", None)
 
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(vis_graph_overrides),
@@ -537,7 +587,7 @@ def render_graph(
     rankdir = direction_to_rankdir(direction)
 
     # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
-    from .elk_layout import get_node_placement_engine
+    from ._elk_internal.layout import get_node_placement_engine
 
     edge_map, skipped_labels = _build_skip_filtered_edge_map(
         self,
@@ -593,7 +643,7 @@ def render_graph(
     # If ELK layout fails (OOM, timeout), render_elk_direct falls back internally
     # to sfdp — still using the fast DOT-text path, never graphviz.Digraph.
     if engine == "elk":
-        from .elk_layout import render_elk_direct
+        from ._elk_internal.layout import render_elk_direct
 
         result = render_elk_direct(
             self,
@@ -631,6 +681,7 @@ def render_graph(
         "labeljust": "left",
         "ordering": "out",
     }
+    graph_args.update(theme_graph_attrs(theme, font_size=font_size, dpi=dpi))
 
     # Override system: callers can pass dicts of Graphviz attributes to
     # customize rendering.  Values can be static (str) or dynamic (callable
@@ -642,7 +693,8 @@ def render_graph(
             graph_args[arg_name] = str(arg_val)
 
     dot.graph_attr.update(graph_args)
-    dot.node_attr.update({"ordering": "out"})
+    dot.node_attr.update({"ordering": "out", **theme_node_attrs(theme, font_size=font_size)})
+    dot.edge_attr.update(theme_edge_attrs(theme, font_size=font_size))
 
     # Accumulate edges per module cluster; actual Graphviz subgraphs are
     # created at the end in _setup_subgraphs to ensure proper nesting.
@@ -681,6 +733,9 @@ def render_graph(
             edge_map,
             vis_intervention_mode,
             site_labels,
+            theme,
+            node_overlay,
+            node_label_fields,
         )
 
     if vis_intervention_mode == "as_node":
@@ -688,16 +743,24 @@ def render_graph(
 
     # Finally, set up the subgraphs.
     _setup_subgraphs(self, dot, vis_mode, module_cluster_dict, overrides)
+    if show_legend:
+        _add_legend_to_graphviz(dot, theme)
     if source_text is not None:
         render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
-        from IPython.display import display  # #72: lazy import
+        try:
+            from IPython.display import display  # #72: lazy import
+        except ImportError as e:
+            raise ImportError(
+                "IPython is required for this feature. Install with "
+                "`pip install torchlens[notebook]`."
+            ) from e
 
         display(dot)
 
     # ELK was already handled above (early return). Only dot/sfdp reach here.
-    from .elk_layout import render_with_sfdp
+    from ._elk_internal.layout import render_with_sfdp
 
     _RENDER_TIMEOUT = 120  # seconds
     source_path = dot.save(vis_outpath)
@@ -726,7 +789,41 @@ def render_graph(
 
         if os.path.exists(source_path):
             os.remove(source_path)
+    if return_graph:
+        return dot
     return dot.source
+
+
+def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) -> None:
+    """Add a compact color legend subgraph to a Graphviz graph.
+
+    Parameters
+    ----------
+    dot:
+        Graphviz graph being rendered.
+    theme:
+        Resolved visualization theme.
+    """
+
+    with dot.subgraph(name="cluster_torchlens_legend") as legend:
+        legend.attr(
+            label="TorchLens legend",
+            labelloc="t",
+            color=theme.default_border,
+            fontcolor=theme.default_font,
+            style="rounded",
+        )
+        for index, line in enumerate(legend_lines(theme)):
+            label, color = line.split(": ", 1)
+            legend.node(
+                f"tl_legend_{index}",
+                label=label,
+                shape="box",
+                style="filled,rounded",
+                fillcolor=color,
+                fontcolor="black",
+                color=theme.default_border,
+            )
 
 
 def render_backward_graph(
@@ -860,7 +957,13 @@ def render_backward_graph(
         render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
-        from IPython.display import display
+        try:
+            from IPython.display import display
+        except ImportError as e:
+            raise ImportError(
+                "IPython is required for this feature. Install with "
+                "`pip install torchlens[notebook]`."
+            ) from e
 
         display(dot)
 
@@ -1453,6 +1556,9 @@ def _add_node_to_graphviz(
     edge_map: Optional[dict[str, list[RenderEdge]]] = None,
     vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
     intervention_site_labels: set[str] | None = None,
+    theme: VisualizationTheme | None = None,
+    node_overlay: str | OverlayScores | None = None,
+    node_label_fields: list[str] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -1486,6 +1592,7 @@ def _add_node_to_graphviz(
             overrides,  # type: ignore[arg-type]
             node_mode,
             collapsed_node_spec_fn,
+            theme,
         )
         node_color = "black"
     else:
@@ -1498,6 +1605,9 @@ def _add_node_to_graphviz(
             overrides,  # type: ignore[arg-type]
             node_mode,
             node_spec_fn,
+            theme,
+            node_overlay,
+            node_label_fields,
         )
 
     _add_edges_for_node(
@@ -1660,6 +1770,9 @@ def _build_layer_node(
     overrides: VisualizationOverrides,
     node_mode: VisNodeModeLiteral,
     node_spec_fn: NodeSpecFn | None = None,
+    theme: VisualizationTheme | None = None,
+    node_overlay: str | OverlayScores | None = None,
+    node_label_fields: list[str] | None = None,
 ) -> str:
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
@@ -1684,6 +1797,8 @@ def _build_layer_node(
             style="filled,solid",
             extra_attrs={"ordering": "out"},
         )
+        if theme is not None:
+            spec = apply_theme_to_spec(spec, theme)
         node_args = _node_spec_to_graphviz_args(spec)
         node_args["name"] = node.layer_label
         graphviz_graph.node(**node_args)
@@ -1702,7 +1817,13 @@ def _build_layer_node(
         line_style = "dashed"
 
     default_spec = NodeSpec(
-        lines=compute_default_node_lines(node, node_address, vis_mode),
+        lines=compute_default_node_lines(
+            node,
+            node_address,
+            vis_mode,
+            node_label_fields=node_label_fields,
+            node_overlay=node_overlay,
+        ),
         shape=node_shape,
         fillcolor=node_bg_color,
         fontcolor=node_color,
@@ -1710,6 +1831,8 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
+    if theme is not None:
+        default_spec = apply_theme_to_spec(default_spec, theme)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
 
     # Graphviz node names can't contain colons (used for port syntax), so
@@ -1727,6 +1850,7 @@ def _build_layer_node(
     # Graphviz requires gradientangle to render gradients.
     if spec.fillcolor is not None and ":" in spec.fillcolor:
         node_args["gradientangle"] = "0"
+    node_args.update(overlay_border_attrs(node, node_overlay))
 
     graphviz_graph.node(**node_args)
 
@@ -1820,6 +1944,7 @@ def _build_collapsed_module_node(
     overrides: VisualizationOverrides,
     node_mode: VisNodeModeLiteral,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
+    theme: VisualizationTheme | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -1927,6 +2052,8 @@ def _build_collapsed_module_node(
         style=f"filled,{line_style}",
         extra_attrs={"ordering": "out"},
     )
+    if theme is not None:
+        default_spec = apply_theme_to_spec(default_spec, theme)
     mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
     mode_result = mode_fn(ml, default_spec)  # type: ignore[arg-type]
     mode_spec = default_spec if mode_result is None else mode_result
@@ -2195,6 +2322,9 @@ def compute_default_node_lines(
     layer_log: GraphNode,
     node_address: str = "",
     vis_mode: str = "unrolled",
+    *,
+    node_label_fields: list[str] | None = None,
+    node_overlay: str | OverlayScores | None = None,
 ) -> list[str]:
     """Build default plain-text rows for a layer node.
 
@@ -2206,6 +2336,10 @@ def compute_default_node_lines(
         Existing address suffix from TorchLens node address logic.
     vis_mode:
         ``"unrolled"`` or ``"rolled"``.
+    node_label_fields:
+        Optional label fields to render instead of the default field set.
+    node_overlay:
+        Optional overlay to append as an additional label row.
 
     Returns
     -------
@@ -2216,6 +2350,15 @@ def compute_default_node_lines(
     layer_log = _unwrap_focus_node(layer_log)
     if isinstance(layer_log, BoundaryNode):
         return [layer_log.display_label]
+
+    if node_label_fields is not None:
+        selected_lines = _compute_selected_node_lines(
+            layer_log, node_address, vis_mode, node_label_fields
+        )
+        overlay = overlay_line(layer_log, node_overlay)
+        if overlay is not None:
+            selected_lines.append(overlay)
+        return selected_lines
 
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         pass_label = f":{layer_log.pass_num}"
@@ -2249,7 +2392,73 @@ def compute_default_node_lines(
     address_line = node_address.replace("<br/>", "")
     if address_line:
         lines.append(address_line)
+    overlay = overlay_line(layer_log, node_overlay)
+    if overlay is not None:
+        lines.append(overlay)
     return lines
+
+
+def _compute_selected_node_lines(
+    layer_log: GraphNode,
+    node_address: str,
+    vis_mode: str,
+    node_label_fields: list[str],
+) -> list[str]:
+    """Build node-label rows from an explicit field picker.
+
+    Parameters
+    ----------
+    layer_log:
+        LayerPassLog or LayerLog to render.
+    node_address:
+        Existing address suffix from TorchLens node address logic.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    node_label_fields:
+        Requested field names.
+
+    Returns
+    -------
+    list[str]
+        Selected label rows.
+
+    Raises
+    ------
+    ValueError
+        If an unknown field is requested.
+    """
+
+    rows: list[str] = []
+    for field_name in node_label_fields:
+        if field_name in {"label", "name"}:
+            rows.append(str(getattr(layer_log, "layer_label", "")))
+        elif field_name in {"type", "op", "operation"}:
+            rows.append(str(getattr(layer_log, "func_name", None) or layer_log.layer_type))
+        elif field_name == "shape":
+            rows.append(_format_shape_str(layer_log.tensor_shape))
+        elif field_name in {"memory", "bytes"}:
+            rows.append(str(getattr(layer_log, "tensor_memory_str", "")))
+        elif field_name == "module":
+            rows.append(node_address.replace("<br/>", "") or "@root")
+        elif field_name == "params":
+            param_line = _make_param_line(layer_log)
+            if param_line:
+                rows.append(param_line)
+        elif field_name == "pass":
+            rows.append(
+                str(
+                    getattr(layer_log, "pass_num", 1)
+                    if vis_mode == "unrolled"
+                    else getattr(layer_log, "num_passes", 1)
+                )
+            )
+        elif field_name == "flops":
+            rows.append(str(getattr(layer_log, "flops_forward", 0) or 0))
+        elif field_name == "time":
+            rows.append(f"{float(getattr(layer_log, 'func_time', 0.0) or 0.0) * 1000:.3g} ms")
+        else:
+            raise ValueError(f"Unsupported node label field: {field_name!r}.")
+    return rows or compute_default_node_lines(layer_log, node_address, vis_mode)
 
 
 def _make_node_label(
@@ -2759,9 +2968,7 @@ def _add_edges_for_node(
             graphviz_graph.edge(**edge_dict)
 
         # Finally, add a backwards edge if both tensors have stored gradients.
-        if vis_mode == "unrolled" and not (
-            isinstance(parent_node, BoundaryNode) or isinstance(child_node, BoundaryNode)
-        ):
+        if not (isinstance(parent_node, BoundaryNode) or isinstance(child_node, BoundaryNode)):
             _add_gradient_edge(
                 self,
                 parent_node,
@@ -3479,22 +3686,23 @@ def _add_gradient_edge(
     """Add a backward (gradient) edge if both layers have saved gradients.
 
     Gradient edges flow child -> parent (opposite of data flow), drawn in
-    ``GRADIENT_ARROW_COLOR`` to distinguish from forward edges.  Only added
-    in unrolled mode (rolled mode doesn't show gradients).
+    ``GRADIENT_ARROW_COLOR`` to distinguish from forward edges.  In rolled
+    mode, an aggregate edge is shown when either rolled endpoint has a gradient
+    on any pass.
 
     Args:
-        parent_layer: The parent LayerPassLog (gradient destination).
-        child_layer: The child LayerPassLog (gradient source).
+        parent_layer: The parent LayerPassLog or LayerLog (gradient destination).
+        child_layer: The child LayerPassLog or LayerLog (gradient source).
         edge_style: ``'solid'`` or ``'dashed'`` (matches the forward edge style).
         containing_module: Module cluster name, or -1 for top-level.
         module_edge_dict: Dict mapping each module cluster to its edges.
         graphviz_graph: The graphviz Digraph object.
         overrides: Graphviz attribute overrides for gradient edges.
     """
-    if parent_layer.has_gradient and child_layer.has_gradient:
+    if _node_has_gradient(parent_layer) and _node_has_gradient(child_layer):
         edge_dict = {
-            "tail_name": child_layer.layer_label.replace(":", "pass"),
-            "head_name": parent_layer.layer_label.replace(":", "pass"),
+            "tail_name": _gradient_node_name(child_layer),
+            "head_name": _gradient_node_name(parent_layer),
             "color": GRADIENT_ARROW_COLOR,
             "fontcolor": GRADIENT_ARROW_COLOR,
             "style": edge_style,
@@ -3511,6 +3719,43 @@ def _add_gradient_edge(
             module_edge_dict[containing_module]["edges"].append(edge_dict)
         else:
             graphviz_graph.edge(**edge_dict)
+
+
+def _node_has_gradient(layer: Any) -> bool:
+    """Return whether a rendered node has any saved gradient.
+
+    Parameters
+    ----------
+    layer:
+        ``LayerPassLog`` or rolled ``LayerLog``.
+
+    Returns
+    -------
+    bool
+        True if the node has at least one saved gradient tensor.
+    """
+
+    passes = getattr(layer, "passes", None)
+    if isinstance(passes, dict):
+        return any(bool(getattr(pass_log, "has_gradient", False)) for pass_log in passes.values())
+    return bool(getattr(layer, "has_gradient", False))
+
+
+def _gradient_node_name(layer: Any) -> str:
+    """Return the Graphviz node name for a gradient edge endpoint.
+
+    Parameters
+    ----------
+    layer:
+        Rendered graph node.
+
+    Returns
+    -------
+    str
+        Graphviz-safe node name.
+    """
+
+    return str(layer.layer_label).replace(":", "pass")
 
 
 def _setup_subgraphs(
