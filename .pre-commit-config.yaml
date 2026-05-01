@@ -18,3 +18,18 @@ repos:
       - id: ruff-format
       - id: ruff
         args: [--fix]
+  - repo: local
+    hooks:
+      - id: no-breaking-markers-commit-msg
+        name: Block semantic-release major-bump triggers (commit-msg)
+        entry: python scripts/check_no_breaking_markers.py --commit-msg
+        language: system
+        stages: [commit-msg]
+        pass_filenames: true
+      - id: no-breaking-markers-pre-push
+        name: Block semantic-release major-bump triggers (pre-push)
+        entry: python scripts/check_no_breaking_markers.py --pre-push
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true

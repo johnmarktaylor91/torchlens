@@ -150,6 +150,17 @@ line-length = 100
 [tool.ruff.lint]
 ignore = ["E721", "F401"]
 
+# =============================================================================
+# RELEASE POLICY (locked): TorchLens stays on the 2.x family on PyPI.
+# Major version bumps require explicit JMT authorization in the same turn and
+# must be cut manually via `semantic-release version --force-level major`.
+# Three layers of defense prevent accidental major bumps:
+#   1. commit-msg hook (rejects `!:` / `BREAKING CHANGE:` at commit time)
+#   2. pre-push hook   (rejects them at push time)
+#   3. custom parser   (downgrades MAJOR -> MINOR if anything slips past 1+2)
+# See scripts/check_no_breaking_markers.py and scripts/no_major_parser.py.
+# Background: ~/.claude/.../memory/feedback_version_bumps.md (THREE incidents).
+# =============================================================================
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["torchlens/__init__.py:__version__"]
@@ -157,6 +168,8 @@ branch = "main"
 major_on_zero = true
 build_command = "pip install build && python -m build"
 commit_message = "chore(release): {version}"
+# Layer 3: custom parser that refuses to emit LevelBump.MAJOR.
+commit_parser = "scripts/no_major_parser.py:NoMajorAngularParser"
 
 [tool.semantic_release.remote]
 type = "github"
