@@ -52,3 +52,43 @@ jobs:
       - name: Run smoke tests
         run: |
           pytest tests/ -m smoke -x --tb=short -q
+
+  audit-notebooks:
+    name: Total Audit smoke notebooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install torchlens and notebook runner
+        run: |
+          uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system -e ".[dev]"
+          uv pip install --system papermill nbformat ipykernel
+
+      - name: Check Total Audit coverage manifest delta
+        run: |
+          python scripts/generate_audit_coverage_manifest.py
+          python scripts/check_coverage_delta.py
+
+      - name: Run Total Audit smoke subset
+        run: |
+          for nb in \
+            notebooks/total_audit/00_install_and_smoke.ipynb \
+            notebooks/total_audit/01_basic_capture.ipynb \
+            notebooks/total_audit/02_layer_indexing.ipynb \
+            notebooks/total_audit/19_bundles_advanced.ipynb \
+            notebooks/total_audit/25_compat_truth_table.ipynb
+          do
+            papermill "$nb" "/tmp/$(basename "$nb")" -k python3
+          done
