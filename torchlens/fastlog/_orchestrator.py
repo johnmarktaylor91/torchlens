@@ -49,7 +49,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         keep_module_repr=repr(options.keep_module) if options.keep_module is not None else None,
         history_size=options.history_size,
         activation_postfunc_repr=(
-            repr(options.activation_postfunc) if options.activation_postfunc is not None else None
+            repr(options.activation_transform) if options.activation_transform is not None else None
         ),
     )
 

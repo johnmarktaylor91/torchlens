@@ -267,6 +267,18 @@ class Recording:
     recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
 
+    @property
+    def activation_transform_repr(self) -> str | None:
+        """Canonical repr for the activation transform callable.
+
+        Returns
+        -------
+        str | None
+            Callable repr captured at recording time, if any.
+        """
+
+        return self.activation_postfunc_repr
+
     def __getitem__(self, key: int | str) -> ActivationRecord | list[ActivationRecord]:
         """Return records by integer index or raw/final label."""
 

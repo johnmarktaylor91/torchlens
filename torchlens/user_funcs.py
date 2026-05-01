@@ -395,7 +395,7 @@ def _run_model_and_save_specified_activations(
     layers_to_save: Optional[Union[str, List[Union[int, str]]]] = "all",
     keep_unsaved_layers: bool = True,
     output_device: OutputDeviceLiteral = "same",
-    activation_postfunc: Optional[ActivationPostfunc] = None,
+    activation_transform: Optional[ActivationPostfunc] = None,
     gradient_postfunc: Optional[GradientPostfunc] = None,
     save_raw_activation: bool = True,
     save_raw_gradient: bool = True,
@@ -442,10 +442,10 @@ def _run_model_and_save_specified_activations(
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
             requested saved activations in the returned log.
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
-        activation_postfunc: Optional transform applied to each activation before storage
+        activation_transform: Optional transform applied to each activation before storage
             (e.g., channel-wise averaging to reduce memory).
         gradient_postfunc: Optional transform applied to each gradient before storage.
-        save_raw_activation: Whether raw activations are retained when ``activation_postfunc``
+        save_raw_activation: Whether raw activations are retained when ``activation_transform``
             is set. Metadata always describes the raw activation.
         save_raw_gradient: Whether raw gradients are retained when ``gradient_postfunc`` is set.
             Metadata always describes the raw gradient.
@@ -518,7 +518,7 @@ def _run_model_and_save_specified_activations(
     model_log = ModelLog(
         model_name=model_name,
         output_device=output_device,
-        activation_postfunc=activation_postfunc,
+        activation_postfunc=activation_transform,
         gradient_postfunc=gradient_postfunc,
         save_raw_activation=save_raw_activation,
         save_raw_gradient=save_raw_gradient,
@@ -579,10 +579,11 @@ def log_forward_pass(
     layers_to_save: Optional[Union[str, List]] | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_postfunc: Optional[ActivationPostfunc] | MissingType = MISSING,
+    activation_transform: Optional[ActivationPostfunc] | MissingType = MISSING,
     gradient_postfunc: Optional[GradientPostfunc] | MissingType = MISSING,
     save_raw_activation: bool | MissingType = MISSING,
     save_raw_gradient: bool | MissingType = MISSING,
+    activation_postfunc: Optional[ActivationPostfunc] | MissingType = MISSING,
     mark_input_output_distances: bool | MissingType = MISSING,
     detach_saved_tensors: bool | MissingType = MISSING,
     save_function_args: bool | MissingType = MISSING,
@@ -676,13 +677,14 @@ def log_forward_pass(
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
             requested saved activations in the final log.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
-        activation_postfunc: Optional function applied to each activation before saving. The
+        activation_transform: Optional function applied to each activation before saving. The
             raw activation remains in ``layer.tensor``/``layer.activation`` by default, and
-            the postfunc result is stored in ``layer.transformed_activation``.
+            the transform result is stored in ``layer.transformed_activation``.
         gradient_postfunc: Optional function applied to each gradient before saving. The raw
             gradient remains in ``layer.gradient`` by default, and the postfunc result is stored
             in ``layer.transformed_gradient``.
-        save_raw_activation: When ``False`` and ``activation_postfunc`` is set, do not retain
+        activation_postfunc: Deprecated alias for ``activation_transform``.
+        save_raw_activation: When ``False`` and ``activation_transform`` is set, do not retain
             raw activation tensors in memory; raw activation metadata is still populated.
         save_raw_gradient: When ``False`` and ``gradient_postfunc`` is set, do not retain raw
             gradient tensors in memory; raw gradient metadata is still populated.
@@ -773,7 +775,7 @@ def log_forward_pass(
             relies on TorchLens' single active logging session guard.
 
     Postfunc behavior:
-        ``activation_postfunc`` and ``gradient_postfunc`` both take a tensor, should return a
+        ``activation_transform`` and ``gradient_postfunc`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
 
@@ -793,6 +795,14 @@ def log_forward_pass(
     _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
     check_model_and_input_variants(model, input_args, input_kwargs)
+
+    if activation_postfunc is not MISSING:
+        if activation_transform is not MISSING:
+            raise TypeError(
+                "kwarg activation_postfunc deprecated, use activation_transform; do not pass both"
+            )
+        warn_deprecated_alias("activation_postfunc", "activation_transform")
+        activation_transform = activation_postfunc
 
     capture_options = merge_capture_options(
         capture=capture,
@@ -822,7 +832,7 @@ def log_forward_pass(
     )
     save_options = merge_save_options(
         save=save,
-        activation_postfunc=activation_postfunc,
+        activation_transform=activation_transform,
         gradient_postfunc=gradient_postfunc,
         save_raw_activation=save_raw_activation,
         save_raw_gradient=save_raw_gradient,
@@ -864,7 +874,7 @@ def log_forward_pass(
     layers_to_save = capture_options.layers_to_save
     keep_unsaved_layers = capture_options.keep_unsaved_layers
     output_device = capture_options.output_device
-    activation_postfunc = save_options.activation_transform
+    activation_transform = save_options.activation_transform
     gradient_postfunc = save_options.gradient_postfunc
     save_raw_activation = save_options.save_raw_activation
     save_raw_gradient = save_options.save_raw_gradient
@@ -979,7 +989,7 @@ def log_forward_pass(
             layers_to_save=layers_to_save,
             keep_unsaved_layers=keep_unsaved_layers,
             output_device=output_device,
-            activation_postfunc=activation_postfunc,
+            activation_transform=activation_transform,
             gradient_postfunc=gradient_postfunc,
             save_raw_activation=save_raw_activation,
             save_raw_gradient=save_raw_gradient,
@@ -1021,7 +1031,7 @@ def log_forward_pass(
             layers_to_save=None,
             keep_unsaved_layers=True,
             output_device=output_device,
-            activation_postfunc=activation_postfunc,
+            activation_transform=activation_transform,
             gradient_postfunc=gradient_postfunc,
             save_raw_activation=save_raw_activation,
             save_raw_gradient=save_raw_gradient,
@@ -1308,7 +1318,7 @@ def show_model_graph(
         input_args=input_args,  # type: ignore[arg-type]
         input_kwargs=input_kwargs,
         layers_to_save=None,
-        activation_postfunc=None,
+        activation_transform=None,
         mark_input_output_distances=False,
         detach_saved_tensors=False,
         save_gradients=False,
@@ -1524,7 +1534,7 @@ def validate_forward_pass(
         input_kwargs=input_kwargs,
         layers_to_save="all",
         keep_unsaved_layers=True,
-        activation_postfunc=None,
+        activation_transform=None,
         mark_input_output_distances=False,
         detach_saved_tensors=False,
         save_gradients=False,

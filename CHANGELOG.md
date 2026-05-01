@@ -21,6 +21,17 @@
   `InterventionError`, `CaptureError`, `ConfigurationError`,
   `CompatibilityError`, and `ValidationError`, with legacy exception names
   preserved for the migration window.
+- Move `print_all_fields` to private `torchlens._debug.print_all_fields`; it is
+  no longer a public method/API surface. Consolidate conditional arm edge views
+  around `conditional_arm_edges`, with `conditional_then_edges`,
+  `conditional_elif_edges`, and `conditional_else_edges` retained as deprecated
+  aliases for one minor cycle. Rename the activation-save option spelling to
+  `activation_transform`, with `activation_postfunc` accepted as a deprecated
+  alias.
+- Move summary builder internals under
+  `torchlens.visualization._summary_internal`; public `summary()` behavior is
+  unchanged. `_robustness.py` and fastlog visualization helpers remain private
+  implementation details after audit.
 
 
 ## v2.16.0 (2026-04-30)

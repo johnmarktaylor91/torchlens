@@ -9,7 +9,7 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from .._deprecations import MISSING, MissingType
+from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..decoration.model_prep import _ensure_model_prepared
 from ..options import StreamingOptions
@@ -137,9 +137,10 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activation: bool | MissingType = MISSING,
         train_mode: bool = False,
+        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -151,13 +152,13 @@ class Recorder:
         include_source_events, max_predicate_failures, on_predicate_error, streaming,
         random_seed:
             Fastlog recording options.
-        activation_postfunc:
+        activation_transform:
             Optional callable applied to each retained activation copy after
             dtype/device transforms. The callable runs under ``pause_logging``
             and must return a ``torch.Tensor``. Errors are wrapped in
             :class:`torchlens.TorchLensPostfuncError`.
         save_raw_activation:
-            When ``False`` and ``activation_postfunc`` is set, only the
+            When ``False`` and ``activation_transform`` is set, only the
             transformed payload is retained on the record. Defaults to
             ``True`` to mirror the slow path.
         train_mode:
@@ -176,6 +177,14 @@ class Recorder:
             value=default_module,
             train_mode=train_mode,
         )
+        if activation_postfunc is not MISSING:
+            if activation_transform is not MISSING:
+                raise TypeError(
+                    "kwarg activation_postfunc deprecated, use activation_transform; "
+                    "do not pass both"
+                )
+            warn_deprecated_alias("activation_postfunc", "activation_transform")
+            activation_transform = activation_postfunc
         self.model = unwrapped_model
         self.options = merge_recording_options(
             recording=None,
@@ -189,7 +198,7 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             streaming=streaming,
             random_seed=random_seed,
-            activation_postfunc=activation_postfunc,
+            activation_transform=activation_transform,
             save_raw_activation=save_raw_activation,
         )
         validate_recording_options(self.options)

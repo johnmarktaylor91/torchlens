@@ -257,6 +257,30 @@ class LayerLog:
         self.pass_labels: List[str] = []
 
     @property
+    def activation_transform(self) -> Any:
+        """Canonical activation transform callable inherited from the first pass.
+
+        Returns
+        -------
+        Any
+            Transform callable, or ``None`` when activations are stored unchanged.
+        """
+
+        return self.activation_postfunc
+
+    @activation_transform.setter
+    def activation_transform(self, value: Any) -> None:
+        """Set the canonical activation transform callable.
+
+        Parameters
+        ----------
+        value:
+            Transform callable, or ``None``.
+        """
+
+        self.activation_postfunc = value
+
+    @property
     def macs_forward(self) -> Optional[int]:
         """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
         return self.flops_forward // 2 if self.flops_forward is not None else None
@@ -673,14 +697,6 @@ class LayerLog:
     # ********************************************
     # ************ User-facing methods ***********
     # ********************************************
-
-    def print_all_fields(self):
-        """Print all data fields in the layer."""
-        fields_to_exclude = ["source_model_log", "func_rng_states"]
-        for field in dir(self):
-            attr = getattr(self, field)
-            if not any([field.startswith("_"), field in fields_to_exclude, callable(attr)]):
-                print(f"{field}: {attr}")
 
     def get_child_layers(self):
         return [self.source_model_log[child_label] for child_label in self.child_layers]

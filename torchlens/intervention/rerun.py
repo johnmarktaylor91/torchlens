@@ -605,7 +605,7 @@ def _capture_with_active_spec(
         layers_to_save="all",
         keep_unsaved_layers=True,
         output_device=getattr(log, "output_device", "same"),
-        activation_postfunc=getattr(log, "activation_postfunc", None),
+        activation_transform=getattr(log, "activation_transform", None),
         gradient_postfunc=getattr(log, "gradient_postfunc", None),
         save_raw_activation=getattr(log, "save_raw_activation", True),
         save_raw_gradient=getattr(log, "save_raw_gradient", True),

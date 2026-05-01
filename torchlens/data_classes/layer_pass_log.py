@@ -860,18 +860,33 @@ class LayerPassLog:
         self.__dict__.update(state)
         object.__setattr__(self, "_construction_done", bool(state.get("_construction_done", True)))
 
+    @property
+    def activation_transform(self) -> Optional[Callable]:
+        """Canonical activation transform callable used for this pass.
+
+        Returns
+        -------
+        Optional[Callable]
+            Transform callable, or ``None`` when activations are stored unchanged.
+        """
+
+        return self.activation_postfunc
+
+    @activation_transform.setter
+    def activation_transform(self, value: Optional[Callable]) -> None:
+        """Set the canonical activation transform callable.
+
+        Parameters
+        ----------
+        value:
+            Transform callable, or ``None``.
+        """
+
+        self._internal_set("activation_postfunc", value)
+
     # ********************************************
     # *********** User-Facing Functions **********
     # ********************************************
-
-    def print_all_fields(self):
-        """Print all data fields in the layer."""
-        fields_to_exclude = ["source_model_log", "func_rng_states"]
-
-        for field in dir(self):
-            attr = getattr(self, field)
-            if not any([field.startswith("_"), field in fields_to_exclude, callable(attr)]):
-                print(f"{field}: {attr}")
 
     # ********************************************
     # ************* Logging Functions ************

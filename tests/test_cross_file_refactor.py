@@ -11,7 +11,6 @@ EXPECTED_MODELLOG_METHODS = {
     "render_dagua_graph",
     "to_dagua_graph",
     "visualization_field_audit",
-    "print_all_fields",
     "to_pandas",
     "to_csv",
     "to_parquet",

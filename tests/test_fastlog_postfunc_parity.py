@@ -91,6 +91,27 @@ def test_postfunc_replaces_transformed_payload_with_raw_kept() -> None:
         assert record.transformed_disk_payload is None
 
 
+def test_activation_transform_canonical_name_matches_postfunc_alias() -> None:
+    """Fastlog accepts activation_transform as the canonical transform name."""
+
+    recording = tl.fastlog.record(
+        _PostfuncModel(),
+        torch.ones(1, 3),
+        default_op=True,
+        activation_transform=lambda t: t.float() * 2,
+    )
+
+    records = _activation_records(recording)
+    assert records, "expected at least one activation record"
+    for record in records:
+        assert record.ram_payload is not None
+        assert record.transformed_ram_payload is not None
+        torch.testing.assert_close(
+            record.transformed_ram_payload,
+            record.ram_payload.float() * 2,
+        )
+
+
 def test_save_raw_activation_false_drops_raw_payload() -> None:
     """Disabling raw save retains only the transformed RAM payload."""
 

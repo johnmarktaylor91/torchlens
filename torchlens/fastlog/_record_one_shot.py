@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from torch import nn
 
-from .._deprecations import MISSING, MissingType
+from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import reject_compiled_model
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc
@@ -33,9 +33,10 @@ def record(
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
-    activation_postfunc: ActivationPostfunc | None = None,
+    activation_transform: ActivationPostfunc | None = None,
     save_raw_activation: bool = True,
     train_mode: bool = False,
+    activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with fastlog predicates.
 
@@ -51,12 +52,12 @@ def record(
     include_source_events, max_predicate_failures, on_predicate_error, streaming,
     random_seed:
         Fastlog recording options.
-    activation_postfunc:
+    activation_transform:
         Optional callable applied to each retained activation copy after
         dtype/device transforms. Errors propagate as
         :class:`torchlens.TorchLensPostfuncError`.
     save_raw_activation:
-        When ``False`` and ``activation_postfunc`` is set, only transformed
+        When ``False`` and ``activation_transform`` is set, only transformed
         payloads are retained. Defaults to ``True`` to mirror the slow path.
     train_mode:
         If True, omitted defaults are promoted to keep-grad capture specs.
@@ -73,6 +74,13 @@ def record(
 
     reject_compiled_model(model, api_name="torchlens.fastlog.record")
     validate_postprocess(postprocess)
+    if activation_postfunc is not MISSING:
+        if activation_transform is not None:
+            raise TypeError(
+                "kwarg activation_postfunc deprecated, use activation_transform; do not pass both"
+            )
+        warn_deprecated_alias("activation_postfunc", "activation_transform")
+        activation_transform = cast(ActivationPostfunc | None, activation_postfunc)
     with Recorder(
         model,
         keep_op=keep_op,
@@ -85,7 +93,7 @@ def record(
         on_predicate_error=on_predicate_error,
         streaming=streaming,
         random_seed=random_seed,
-        activation_postfunc=activation_postfunc,
+        activation_transform=activation_transform,
         save_raw_activation=save_raw_activation,
         train_mode=train_mode,
     ) as recorder:

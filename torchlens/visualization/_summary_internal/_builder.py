@@ -16,7 +16,7 @@ from typing import (
     Sequence,
 )
 
-from ..utils.display import human_readable_size
+from ...utils.display import human_readable_size
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog

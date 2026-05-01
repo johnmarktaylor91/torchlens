@@ -182,6 +182,78 @@ class ConditionalEvent:
     bool_layers: List[str] = field(default_factory=list)
 
 
+def _legacy_conditional_then_edges(
+    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+) -> List[Tuple[str, str]]:
+    """Return the legacy THEN-edge view from canonical conditional arm edges.
+
+    Parameters
+    ----------
+    conditional_arm_edges:
+        Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
+
+    Returns
+    -------
+    List[Tuple[str, str]]
+        Legacy ``(parent, child)`` THEN-edge view.
+    """
+
+    return [
+        edge
+        for (_conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        if branch_kind == "then"
+        for edge in edges
+    ]
+
+
+def _legacy_conditional_elif_edges(
+    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+) -> List[Tuple[int, int, str, str]]:
+    """Return the legacy ELIF-edge view from canonical conditional arm edges.
+
+    Parameters
+    ----------
+    conditional_arm_edges:
+        Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
+
+    Returns
+    -------
+    List[Tuple[int, int, str, str]]
+        Legacy ``(cond_id, elif_index, parent, child)`` ELIF-edge view.
+    """
+
+    return [
+        (conditional_id, int(branch_kind.split("_", 1)[1]), parent, child)
+        for (conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        if branch_kind.startswith("elif_")
+        for parent, child in edges
+    ]
+
+
+def _legacy_conditional_else_edges(
+    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+) -> List[Tuple[int, str, str]]:
+    """Return the legacy ELSE-edge view from canonical conditional arm edges.
+
+    Parameters
+    ----------
+    conditional_arm_edges:
+        Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
+
+    Returns
+    -------
+    List[Tuple[int, str, str]]
+        Legacy ``(cond_id, parent, child)`` ELSE-edge view.
+    """
+
+    return [
+        (conditional_id, parent, child)
+        for (conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        if branch_kind == "else"
+        for parent, child in edges
+    ]
+
+
 class ModelLog:
     """Top-level container for a logged forward pass.
 
@@ -281,9 +353,6 @@ class ModelLog:
         "internally_terminated_layers": FieldPolicy.KEEP,
         "internally_terminated_bool_layers": FieldPolicy.KEEP,
         "conditional_branch_edges": FieldPolicy.KEEP,
-        "conditional_then_edges": FieldPolicy.KEEP,
-        "conditional_elif_edges": FieldPolicy.KEEP,
-        "conditional_else_edges": FieldPolicy.KEEP,
         "conditional_events": FieldPolicy.KEEP,
         "conditional_arm_edges": FieldPolicy.KEEP,
         "conditional_edge_passes": FieldPolicy.KEEP,
@@ -509,9 +578,6 @@ class ModelLog:
         self.internally_terminated_layers: List[str] = []
         self.internally_terminated_bool_layers: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []
-        self.conditional_then_edges: List[Tuple[str, str]] = []
-        self.conditional_elif_edges: List[Tuple[int, int, str, str]] = []
-        self.conditional_else_edges: List[Tuple[int, str, str]] = []
         self.conditional_events: List[ConditionalEvent] = []
         self.conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
         self.conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = {}
@@ -1477,7 +1543,7 @@ class ModelLog:
 
     def __repr__(self) -> str:
         """Short identity-card representation for REPL display."""
-        from .._summary import format_model_repr
+        from ..visualization._summary_internal import format_model_repr
 
         return format_model_repr(self)
 
@@ -1606,6 +1672,18 @@ class ModelLog:
             }
         if state["train_mode"] is None:
             state["train_mode"] = False
+        conditional_arm_edges = dict(state.get("conditional_arm_edges") or {})
+        for parent, child in state.pop("conditional_then_edges", []) or []:
+            conditional_arm_edges.setdefault((0, "then"), []).append((parent, child))
+        for conditional_id, elif_index, parent, child in (
+            state.pop("conditional_elif_edges", []) or []
+        ):
+            conditional_arm_edges.setdefault((conditional_id, f"elif_{elif_index}"), []).append(
+                (parent, child)
+            )
+        for conditional_id, parent, child in state.pop("conditional_else_edges", []) or []:
+            conditional_arm_edges.setdefault((conditional_id, "else"), []).append((parent, child))
+        state["conditional_arm_edges"] = conditional_arm_edges
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
@@ -1814,6 +1892,127 @@ class ModelLog:
     # ********************************************
     # ********** Computed Properties *************
     # ********************************************
+
+    @property
+    def activation_transform(self) -> Optional[ActivationPostfunc]:
+        """Canonical activation transform callable used during capture.
+
+        Returns
+        -------
+        Optional[ActivationPostfunc]
+            Transform callable, or ``None`` when activations are stored unchanged.
+        """
+
+        return self.activation_postfunc
+
+    @activation_transform.setter
+    def activation_transform(self, value: Optional[ActivationPostfunc]) -> None:
+        """Set the canonical activation transform callable.
+
+        Parameters
+        ----------
+        value:
+            Transform callable, or ``None``.
+        """
+
+        self.activation_postfunc = value
+
+    @property
+    def conditional_then_edges(self) -> List[Tuple[str, str]]:
+        """Deprecated THEN-edge view derived from ``conditional_arm_edges``.
+
+        Returns
+        -------
+        List[Tuple[str, str]]
+            Legacy ``(parent, child)`` edge view.
+        """
+
+        warn_deprecated_alias("conditional_then_edges", "conditional_arm_edges")
+        return _legacy_conditional_then_edges(self.conditional_arm_edges)
+
+    @conditional_then_edges.setter
+    def conditional_then_edges(self, value: List[Tuple[str, str]]) -> None:
+        """Set the deprecated THEN-edge view by updating canonical arm edges.
+
+        Parameters
+        ----------
+        value:
+            Legacy ``(parent, child)`` edge list. Edges are assigned to
+            conditional id 0 because the legacy view did not carry ids.
+        """
+
+        warn_deprecated_alias("conditional_then_edges", "conditional_arm_edges")
+        self.conditional_arm_edges = {
+            key: edges for key, edges in self.conditional_arm_edges.items() if key[1] != "then"
+        }
+        if value:
+            self.conditional_arm_edges[(0, "then")] = list(value)
+
+    @property
+    def conditional_elif_edges(self) -> List[Tuple[int, int, str, str]]:
+        """Deprecated ELIF-edge view derived from ``conditional_arm_edges``.
+
+        Returns
+        -------
+        List[Tuple[int, int, str, str]]
+            Legacy ``(cond_id, elif_index, parent, child)`` edge view.
+        """
+
+        warn_deprecated_alias("conditional_elif_edges", "conditional_arm_edges")
+        return _legacy_conditional_elif_edges(self.conditional_arm_edges)
+
+    @conditional_elif_edges.setter
+    def conditional_elif_edges(self, value: List[Tuple[int, int, str, str]]) -> None:
+        """Set the deprecated ELIF-edge view by updating canonical arm edges.
+
+        Parameters
+        ----------
+        value:
+            Legacy ``(cond_id, elif_index, parent, child)`` edge list.
+        """
+
+        warn_deprecated_alias("conditional_elif_edges", "conditional_arm_edges")
+        self.conditional_arm_edges = {
+            key: edges
+            for key, edges in self.conditional_arm_edges.items()
+            if not key[1].startswith("elif_")
+        }
+        for conditional_id, elif_index, parent, child in value:
+            self.conditional_arm_edges.setdefault(
+                (conditional_id, f"elif_{elif_index}"), []
+            ).append((parent, child))
+
+    @property
+    def conditional_else_edges(self) -> List[Tuple[int, str, str]]:
+        """Deprecated ELSE-edge view derived from ``conditional_arm_edges``.
+
+        Returns
+        -------
+        List[Tuple[int, str, str]]
+            Legacy ``(cond_id, parent, child)`` edge view.
+        """
+
+        warn_deprecated_alias("conditional_else_edges", "conditional_arm_edges")
+        return _legacy_conditional_else_edges(self.conditional_arm_edges)
+
+    @conditional_else_edges.setter
+    def conditional_else_edges(self, value: List[Tuple[int, str, str]]) -> None:
+        """Set the deprecated ELSE-edge view by updating canonical arm edges.
+
+        Parameters
+        ----------
+        value:
+            Legacy ``(cond_id, parent, child)`` edge list.
+        """
+
+        warn_deprecated_alias("conditional_else_edges", "conditional_arm_edges")
+        self.conditional_arm_edges = {
+            key: edges for key, edges in self.conditional_arm_edges.items() if key[1] != "else"
+        }
+        for conditional_id, parent, child in value:
+            self.conditional_arm_edges.setdefault((conditional_id, "else"), []).append(
+                (parent, child)
+            )
 
     @property
     def is_recurrent(self) -> bool:
@@ -2246,7 +2445,7 @@ class ModelLog:
         str
             Rendered summary string.
         """
-        from .._summary import render_model_summary
+        from ..visualization._summary_internal import render_model_summary
 
         return render_model_summary(
             self,
@@ -2343,27 +2542,6 @@ class ModelLog:
         from ..experimental.dagua import build_render_audit as _impl
 
         return _impl(self)
-
-    def print_all_fields(self) -> None:
-        """Print all public non-callable fields on this model log.
-
-        Returns
-        -------
-        None
-            This method prints directly to stdout.
-        """
-        fields_to_exclude = [
-            "layer_list",
-            "layer_dict_main_keys",
-            "layer_dict_all_keys",
-            "raw_layer_dict",
-            "decorated_to_orig_funcs_dict",
-        ]
-
-        for attr_name in dir(self):
-            attr = getattr(self, attr_name)
-            if not any([attr_name.startswith("_"), attr_name in fields_to_exclude, callable(attr)]):
-                print(f"{attr_name}: {attr}")
 
     def to_pandas(self) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass.
@@ -2900,11 +3078,6 @@ class ModelLog:
         self.conditional_branch_edges = [
             edge
             for edge in self.conditional_branch_edges
-            if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
-        ]
-        self.conditional_then_edges = [
-            edge
-            for edge in self.conditional_then_edges
             if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
         ]
 

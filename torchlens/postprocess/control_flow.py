@@ -96,11 +96,9 @@ def _can_fast_skip_step5(self: "ModelLog") -> bool:
     would resolve to its empty default. Skipping the slow path is then
     semantically equivalent to running it.
 
-    The function also checks the derived ModelLog-level conditional
-    collections (``conditional_events``, ``conditional_branch_edges``,
-    ``conditional_then_edges``, ``conditional_elif_edges``,
-    ``conditional_else_edges``, ``conditional_arm_edges``,
-    ``conditional_edge_passes``). They are initialized empty in
+    The function also checks the ModelLog-level conditional collections
+    (``conditional_events``, ``conditional_branch_edges``,
+    ``conditional_arm_edges``, ``conditional_edge_passes``). They are initialized empty in
     :meth:`ModelLog.__init__`, and the slow path resets them on entry.
     Any caller that pre-populated these would change the user-visible
     output if we skipped, so we conservatively run the slow path in that
@@ -112,12 +110,6 @@ def _can_fast_skip_step5(self: "ModelLog") -> bool:
     if self.conditional_events:
         return False
     if self.conditional_branch_edges:
-        return False
-    if self.conditional_then_edges:
-        return False
-    if self.conditional_elif_edges:
-        return False
-    if self.conditional_else_edges:
         return False
     if self.conditional_arm_edges:
         return False
@@ -396,24 +388,6 @@ def _materialize_derived_views(self: "ModelLog") -> None:
         Model log being postprocessed.
     """
 
-    self.conditional_then_edges = [
-        (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items()
-        if branch_kind == "then"
-        for parent_label, child_label in edge_list
-    ]
-    self.conditional_elif_edges = [
-        (conditional_id, int(branch_kind.split("_")[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items()
-        if branch_kind.startswith("elif_")
-        for parent_label, child_label in edge_list
-    ]
-    self.conditional_else_edges = [
-        (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items()
-        if branch_kind == "else"
-        for parent_label, child_label in edge_list
-    ]
     self.conditional_edge_passes = {
         key: sorted(set(pass_nums)) for key, pass_nums in self.conditional_edge_passes.items()
     }

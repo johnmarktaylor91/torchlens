@@ -158,7 +158,7 @@ class DiskStorageBackend:
             tensor,
             spec,
             intent,
-            activation_postfunc=options.activation_postfunc,
+            activation_postfunc=options.activation_transform,
             save_raw_activation=options.save_raw_activation,
             ctx=ctx,
         )

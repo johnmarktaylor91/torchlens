@@ -808,27 +808,6 @@ def _rename_model_history_layer_names(self) -> None:
         )
         self.conditional_branch_edges[t] = (new_child, new_parent)
 
-    for t, (parent, child) in enumerate(self.conditional_then_edges):
-        self.conditional_then_edges[t] = (
-            self._raw_to_final_layer_labels[parent],
-            self._raw_to_final_layer_labels[child],
-        )
-
-    for t, (cond_id, elif_ix, parent, child) in enumerate(self.conditional_elif_edges):
-        self.conditional_elif_edges[t] = (
-            cond_id,
-            elif_ix,
-            self._raw_to_final_layer_labels[parent],
-            self._raw_to_final_layer_labels[child],
-        )
-
-    for t, (cond_id, parent, child) in enumerate(self.conditional_else_edges):
-        self.conditional_else_edges[t] = (
-            cond_id,
-            self._raw_to_final_layer_labels[parent],
-            self._raw_to_final_layer_labels[child],
-        )
-
     self.conditional_arm_edges = {
         (cond_id, branch_kind): [
             (

@@ -933,49 +933,7 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
                             f"but conditional_arm_edges[{(conditional_id, branch_kind)}]={model_edges}",
                         )
 
-    # Invariant 2: derived views are exact projections of the primary structures.
-    expected_then_edges = [
-        (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items()
-        if branch_kind == "then"
-        for parent_label, child_label in edge_list
-    ]
-    if ml.conditional_then_edges != expected_then_edges:
-        _fail_conditional_invariant(
-            name,
-            2,
-            f"ModelLog.conditional_then_edges={ml.conditional_then_edges} != "
-            f"expected projection {expected_then_edges}",
-        )
-
-    expected_elif_edges = [
-        (conditional_id, int(branch_kind.split("_", 1)[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items()
-        if branch_kind.startswith("elif_")
-        for parent_label, child_label in edge_list
-    ]
-    if ml.conditional_elif_edges != expected_elif_edges:
-        _fail_conditional_invariant(
-            name,
-            2,
-            f"ModelLog.conditional_elif_edges={ml.conditional_elif_edges} != "
-            f"expected projection {expected_elif_edges}",
-        )
-
-    expected_else_edges = [
-        (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items()
-        if branch_kind == "else"
-        for parent_label, child_label in edge_list
-    ]
-    if ml.conditional_else_edges != expected_else_edges:
-        _fail_conditional_invariant(
-            name,
-            2,
-            f"ModelLog.conditional_else_edges={ml.conditional_else_edges} != "
-            f"expected projection {expected_else_edges}",
-        )
-
+    # Invariant 2: per-layer derived views are exact projections of the primary structures.
     for layer in ml.layer_list:
         expected_then_children, expected_elif_children, expected_else_children = (
             _expected_layer_pass_child_views(layer.cond_branch_children_by_cond)
@@ -1088,30 +1046,15 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
                 f"ModelLog.conditional_branch_edges contains missing child label {child_label!r} "
                 f"for parent {parent_label!r}",
             )
-    for parent_label, child_label in ml.conditional_then_edges:
-        if child_label not in valid_child_labels:
-            _fail_conditional_invariant(
-                name,
-                3,
-                f"ModelLog.conditional_then_edges contains missing child label {child_label!r} "
-                f"for parent {parent_label!r}",
-            )
-    for conditional_id, elif_index, parent_label, child_label in ml.conditional_elif_edges:
-        if child_label not in valid_child_labels:
-            _fail_conditional_invariant(
-                name,
-                3,
-                f"ModelLog.conditional_elif_edges contains missing child label {child_label!r} "
-                f"for edge {(conditional_id, elif_index, parent_label)}",
-            )
-    for conditional_id, parent_label, child_label in ml.conditional_else_edges:
-        if child_label not in valid_child_labels:
-            _fail_conditional_invariant(
-                name,
-                3,
-                f"ModelLog.conditional_else_edges contains missing child label {child_label!r} "
-                f"for edge {(conditional_id, parent_label)}",
-            )
+    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items():
+        for parent_label, child_label in edge_list:
+            if child_label not in valid_child_labels:
+                _fail_conditional_invariant(
+                    name,
+                    3,
+                    f"ModelLog.conditional_arm_edges contains missing child label "
+                    f"{child_label!r} for edge {(conditional_id, branch_kind, parent_label)}",
+                )
 
     # Invariant 4: bool classification fields are mutually consistent.
     for layer in ml.layer_list:

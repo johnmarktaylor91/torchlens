@@ -321,13 +321,16 @@ def test_invariant_1_arm_edges_bidirectional_consistency() -> None:
         model_log.cleanup()
 
 
-def test_invariant_2_derived_views_match_primary_structures() -> None:
-    """Invariant 2 fails when a derived model-level edge view is corrupted."""
+def test_invariant_2_derived_child_views_match_primary_structures() -> None:
+    """Invariant 2 fails when a derived layer child view is corrupted."""
 
     model_log = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
-        model_log.conditional_then_edges = []
-        _assert_invariant_error(model_log, ("Invariant 2", "conditional_then_edges"))
+        event = _get_only_event(model_log)
+        parent_label, _child_label = model_log.conditional_arm_edges[(event.id, "then")][0]
+        parent_layer = model_log[parent_label]
+        parent_layer.cond_branch_then_children = []
+        _assert_invariant_error(model_log, ("Invariant 2", "cond_branch_then_children"))
     finally:
         model_log.cleanup()
 

@@ -13,7 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import user_funcs
 from torchlens._deprecations import _WARNED_DEPRECATIONS
-from torchlens.options import CaptureOptions, StreamingOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, SaveOptions, StreamingOptions, VisualizationOptions
 from torchlens.validation import core as validation_core
 
 
@@ -354,6 +354,78 @@ def test_log_forward_pass_new_renamed_kwargs_do_not_warn(
 
     assert captured[captured_key] == value
     assert len(_deprecation_messages(records)) == 1
+
+
+def test_activation_transform_flat_kwarg_routes_to_runner(
+    stubbed_runner: tuple[dict[str, Any], _DummyLog],
+) -> None:
+    """Canonical activation transform kwarg should route through save options."""
+
+    captured, _dummy_log = stubbed_runner
+
+    def transform(tensor: torch.Tensor) -> torch.Tensor:
+        """Return a transformed tensor for routing assertions."""
+
+        return tensor + 1
+
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save="all"),
+            activation_transform=transform,
+        )
+
+    assert captured["activation_transform"] is transform
+    assert len(_deprecation_messages(records)) == 1
+
+
+def test_activation_postfunc_flat_kwarg_warns_and_routes_to_transform(
+    stubbed_runner: tuple[dict[str, Any], _DummyLog],
+) -> None:
+    """Deprecated activation postfunc kwarg should forward to activation_transform."""
+
+    captured, _dummy_log = stubbed_runner
+
+    def transform(tensor: torch.Tensor) -> torch.Tensor:
+        """Return a transformed tensor for routing assertions."""
+
+        return tensor + 1
+
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save="all"),
+            activation_postfunc=transform,
+        )
+
+    assert captured["activation_transform"] is transform
+    assert _deprecation_messages(records)[0] == (
+        "`activation_postfunc` is deprecated; use `activation_transform` instead. "
+        "The old name continues to work but will be removed in a future release."
+    )
+
+
+def test_save_options_activation_postfunc_alias_warns() -> None:
+    """Deprecated SaveOptions activation_postfunc alias should still work."""
+
+    def transform(tensor: torch.Tensor) -> torch.Tensor:
+        """Return a transformed tensor for routing assertions."""
+
+        return tensor + 1
+
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        options = SaveOptions(activation_postfunc=transform)
+
+    assert options.activation_transform is transform
+    assert _deprecation_messages(records) == [
+        "`activation_postfunc` is deprecated; use `save.activation_transform` instead. "
+        "The old name continues to work but will be removed in a future release."
+    ]
 
 
 @pytest.mark.parametrize(

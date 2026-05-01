@@ -320,21 +320,6 @@ def _scrub_conditional_fields_after_removal(
         self.conditional_edge_passes,
         labels_to_remove_no_pass,
     )
-    self.conditional_then_edges = [
-        edge
-        for edge in self.conditional_then_edges
-        if edge[0] not in labels_to_remove and edge[1] not in labels_to_remove
-    ]
-    self.conditional_elif_edges = [
-        edge
-        for edge in self.conditional_elif_edges
-        if edge[2] not in labels_to_remove and edge[3] not in labels_to_remove
-    ]
-    self.conditional_else_edges = [
-        edge
-        for edge in self.conditional_else_edges
-        if edge[1] not in labels_to_remove and edge[2] not in labels_to_remove
-    ]
     for conditional_event in self.conditional_events:
         conditional_event.bool_layers = [
             layer_label
@@ -506,16 +491,6 @@ def _remove_log_entry_references(self, layer_to_remove: str) -> None:
     self.conditional_branch_edges = [
         edge for edge in self.conditional_branch_edges if layer_to_remove not in edge
     ]
-    self.conditional_then_edges = [
-        edge for edge in self.conditional_then_edges if layer_to_remove not in edge
-    ]
-    self.conditional_elif_edges = [
-        edge for edge in self.conditional_elif_edges if layer_to_remove not in (edge[2], edge[3])
-    ]
-    self.conditional_else_edges = [
-        edge for edge in self.conditional_else_edges if layer_to_remove not in (edge[1], edge[2])
-    ]
-
     # Now any nested fields.
 
     for param_group, tensor_labels in self.layers_with_params.items():
