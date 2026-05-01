@@ -1316,6 +1316,27 @@ BACKWARD_MULTIPLIERS: Dict[str, float] = {
 
 # Default backward multiplier for ops not in the dict
 _DEFAULT_BACKWARD_MULTIPLIER = 1.0
+_CUSTOM_OP_RULES: dict[str, tuple[Callable[..., int | None], Callable[..., int | None] | None]] = {}
+
+
+def register_op_rule(
+    op_name: str,
+    flops_fn: Callable[..., int | None],
+    mem_fn: Callable[..., int | None] | None = None,
+) -> None:
+    """Register a custom operation cost rule.
+
+    Parameters
+    ----------
+    op_name:
+        Captured operation name.
+    flops_fn:
+        Callable receiving ``(output_shape, parent_param_shapes, args, kwargs)``.
+    mem_fn:
+        Optional memory-cost callable retained for external callers.
+    """
+
+    _CUSTOM_OP_RULES[op_name] = (flops_fn, mem_fn)
 
 
 # ============================================================================
@@ -1350,6 +1371,9 @@ def compute_forward_flops(
     """
     if func_name is None:
         return None
+    if func_name in _CUSTOM_OP_RULES:
+        flops_fn, _mem_fn = _CUSTOM_OP_RULES[func_name]
+        return flops_fn(output_shape, parent_param_shapes, captured_args, captured_kwargs)
 
     # Tier 1: zero-cost memory/layout ops
     if func_name in ZERO_FLOPS_OPS:

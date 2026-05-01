@@ -21,8 +21,9 @@ from torch import nn as _nn
 
 __version__ = "2.16.0"
 
-from . import fastlog, options
+from . import bridge, experimental, fastlog, options, stats
 from ._io.bundle import load, save
+from .stats import aggregate
 from .data_classes.layer_log import LayerLog
 from .data_classes.layer_pass_log import LayerPassLog
 from .data_classes.model_log import ModelLog
@@ -54,7 +55,10 @@ from .intervention import (
     zero_ablate,
 )
 from .user_funcs import (
+    decide_recording_of_batch,
     log_forward_pass,
+    record_kpi_in_graph,
+    register_tensor_connection,
     show_backward_graph as _moved_show_backward_graph,
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
@@ -303,7 +307,7 @@ def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]
     return [str(label)]
 
 
-def peek(model: _nn.Module, x: Any, layer: str) -> _torch.Tensor:
+def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -> _torch.Tensor:
     """Return the saved activation for one layer.
 
     Parameters
@@ -314,6 +318,9 @@ def peek(model: _nn.Module, x: Any, layer: str) -> _torch.Tensor:
         Positional input argument or argument container for ``model.forward``.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
+    stop_after:
+        Experimental stop-early site. Currently validated for ``peek`` and
+        captured via the normal safe full-forward path.
 
     Returns
     -------
@@ -326,6 +333,9 @@ def peek(model: _nn.Module, x: Any, layer: str) -> _torch.Tensor:
         If ``layer`` does not resolve or did not produce a saved tensor.
     """
 
+    from .experimental import _active_stop_after_site
+
+    _ = stop_after if stop_after is not None else _active_stop_after_site()
     model_log = log_forward_pass(
         model,
         x,

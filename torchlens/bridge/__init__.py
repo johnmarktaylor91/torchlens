@@ -1,3 +1,5 @@
-"""External-tool bridge namespace reserved for TorchLens 2.0."""
+"""External-tool bridge namespace."""
 
-__all__: list[str] = []
+from . import profiler
+
+__all__ = ["profiler"]

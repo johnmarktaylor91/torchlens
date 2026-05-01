@@ -17,7 +17,7 @@ from .errors import (
     SiteAmbiguityError,
     SiteResolutionError,
 )
-from .selectors import BaseSelector, CompositeSelector, in_module
+from .selectors import BaseSelector, CompositeSelector, NotSelector, in_module
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 
 if TYPE_CHECKING:
@@ -414,6 +414,9 @@ def _resolve_unchecked(
         left_sites = set(_resolve_unchecked(sites, left, strict=strict))
         right_sites = set(_resolve_unchecked(sites, right, strict=strict))
         return tuple(site for site in sites if site in left_sites or site in right_sites)
+    if kind == "not" and isinstance(selector, NotSelector):
+        excluded_sites = set(_resolve_unchecked(sites, selector.selector, strict=strict))
+        return tuple(site for site in sites if site not in excluded_sites)
 
     if kind == "label":
         return tuple(site for site in sites if _label_matches(site, str(value)))
@@ -505,6 +508,9 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
             return selector
     if kind == "predicate" and callable(value):
         return where(value, name_hint=metadata.get("name_hint"))
+    if kind == "not":
+        nested = _normalize_query(value)
+        return ~nested
     raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
 
 

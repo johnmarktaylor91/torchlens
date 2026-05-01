@@ -72,6 +72,7 @@ from .display import (
     tensor_stats_summary,
     warn_parallel,
 )
+from ..capture.flops import register_op_rule
 
 
 @dataclass(frozen=True)
@@ -641,6 +642,36 @@ def find_executable_save_set(
     return selected
 
 
+def log_forward_pass_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any) -> Any:
+    """Capture an iterable of inputs as a stacked multi-pass log.
+
+    Parameters
+    ----------
+    model:
+        Model to capture.
+    inputs_iter:
+        Iterable producing model inputs.
+    **kwargs:
+        Keyword arguments forwarded to ``torchlens.log_forward_pass``.
+
+    Returns
+    -------
+    Any
+        First ``ModelLog`` with ``streaming_pass_logs`` and
+        ``num_streamed_passes`` attributes.
+    """
+
+    import torchlens
+
+    logs = [torchlens.log_forward_pass(model, inputs, **kwargs) for inputs in inputs_iter]
+    if not logs:
+        raise ValueError("inputs_iter must yield at least one input.")
+    root = logs[0]
+    root.streaming_pass_logs = logs
+    root.num_streamed_passes = len(logs)
+    return root
+
+
 __all__ = [
     "AutocastRestore",
     "DoctorCheck",
@@ -672,6 +703,7 @@ __all__ = [
     "format_size",
     "list_modules",
     "list_ops",
+    "log_forward_pass_streaming",
     "log_current_autocast_state",
     "log_current_rng_states",
     "make_random_barcode",
@@ -682,6 +714,7 @@ __all__ = [
     "print_override",
     "peek_graph",
     "progress_bar",
+    "register_op_rule",
     "remove_attributes_with_prefix",
     "remove_entry_from_list",
     "safe_copy",

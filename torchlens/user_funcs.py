@@ -20,7 +20,9 @@ two-pass path (save specific layers).
 
 import collections.abc
 import hashlib
+import json
 import os
+import pickle
 import random
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, cast
@@ -102,6 +104,87 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     """
 
     _state.reset_naming_counter(class_name)
+
+
+def record_kpi_in_graph(name: str, value: Any) -> None:
+    """Record a user KPI on the active capture graph.
+
+    Parameters
+    ----------
+    name:
+        KPI name.
+    value:
+        JSON-like value to attach to the current ``ModelLog``.
+
+    Raises
+    ------
+    RuntimeError
+        If no forward pass is being captured.
+    """
+
+    model_log = _state._active_model_log
+    if model_log is None:
+        raise RuntimeError("record_kpi_in_graph() must be called during log_forward_pass.")
+    model_log.capture_kpis[str(name)] = value
+
+
+def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> None:
+    """Register a manual parent-child tensor edge during capture.
+
+    Parameters
+    ----------
+    parent:
+        Parent tensor already tagged by TorchLens.
+    child:
+        Child tensor already tagged by TorchLens.
+
+    Raises
+    ------
+    RuntimeError
+        If no forward pass is being captured.
+    ValueError
+        If either tensor has not been tagged by TorchLens.
+    """
+
+    model_log = _state._active_model_log
+    if model_log is None:
+        raise RuntimeError("register_tensor_connection() must be called during log_forward_pass.")
+    parent_label = getattr(parent, "tl_tensor_label_raw", None)
+    child_label = getattr(child, "tl_tensor_label_raw", None)
+    if parent_label is None or child_label is None:
+        raise ValueError("Both tensors must have TorchLens labels before registering an edge.")
+    model_log.manual_tensor_connections.append((parent_label, child_label))
+    if parent_label in model_log._raw_layer_dict and child_label in model_log._raw_layer_dict:
+        parent_entry = model_log._raw_layer_dict[parent_label]
+        child_entry = model_log._raw_layer_dict[child_label]
+        if child_label not in parent_entry.child_layers:
+            parent_entry.child_layers.append(child_label)
+            parent_entry.has_children = True
+        if parent_label not in child_entry.parent_layers:
+            child_entry.parent_layers.append(parent_label)
+
+
+def decide_recording_of_batch(model_log: ModelLog, predicate: Callable[[ModelLog], bool]) -> bool:
+    """Retroactively keep or discard a captured batch log.
+
+    Parameters
+    ----------
+    model_log:
+        Captured log to decide on.
+    predicate:
+        Callable receiving the log and returning whether to keep it.
+
+    Returns
+    -------
+    bool
+        True when the log was kept.
+    """
+
+    keep = bool(predicate(model_log))
+    if not keep:
+        model_log.cleanup()
+    model_log.recording_kept = keep
+    return keep
 
 
 def _layers_to_save_conflicts_with_intervention_ready(layers_to_save: Any) -> bool:
@@ -230,6 +313,183 @@ def _hash_input_shapes(input_args: Any, input_kwargs: Any) -> str:
     tensors = _iter_tensor_inputs((input_args, input_kwargs))
     entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
+
+
+def _hash_tensor_content(tensor: torch.Tensor) -> str:
+    """Return a content hash for a tensor.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to hash.
+
+    Returns
+    -------
+    str
+        SHA-256 digest over tensor metadata and CPU bytes.
+    """
+
+    with _state.pause_logging():
+        cpu = tensor.detach().cpu().contiguous()
+        if cpu.dtype is torch.bfloat16:
+            cpu = cpu.to(torch.float32)
+        payload = cpu.numpy().tobytes()
+    hasher = hashlib.sha256()
+    hasher.update(repr((tuple(cpu.shape), str(cpu.dtype))).encode("utf-8"))
+    hasher.update(payload)
+    return hasher.hexdigest()
+
+
+def _hash_nested_tensor_content(value: Any) -> str:
+    """Return a deterministic content hash for nested tensor inputs.
+
+    Parameters
+    ----------
+    value:
+        Nested tensor container.
+
+    Returns
+    -------
+    str
+        SHA-256 digest.
+    """
+
+    tensors = _iter_tensor_inputs(value)
+    entries = [_hash_tensor_content(tensor) for tensor in tensors]
+    return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
+
+
+def _fingerprint_model_content(model: nn.Module) -> str:
+    """Fingerprint model tensor contents for the capture cache.
+
+    Parameters
+    ----------
+    model:
+        Model to fingerprint.
+
+    Returns
+    -------
+    str
+        SHA-256 digest.
+    """
+
+    hasher = hashlib.sha256()
+    for name, tensor in model.state_dict().items():
+        hasher.update(name.encode("utf-8"))
+        hasher.update(_hash_tensor_content(tensor).encode("utf-8"))
+    return hasher.hexdigest()
+
+
+def _capture_cache_dir(cache_dir: str | Path | None) -> Path:
+    """Resolve the capture-cache directory.
+
+    Parameters
+    ----------
+    cache_dir:
+        Optional user-specified directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Cache directory path.
+    """
+
+    if cache_dir is not None:
+        return Path(cache_dir)
+    return Path(os.environ.get("TORCHLENS_CACHE_DIR", "~/.cache/torchlens")).expanduser()
+
+
+def _capture_cache_key(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: Any,
+    config: dict[str, Any],
+) -> str:
+    """Build a content-hash capture-cache key.
+
+    Parameters
+    ----------
+    model:
+        Model being captured.
+    input_args:
+        Positional inputs.
+    input_kwargs:
+        Keyword inputs.
+    config:
+        Capture configuration values.
+
+    Returns
+    -------
+    str
+        SHA-256 cache key.
+    """
+
+    payload = {
+        "schema": 1,
+        "torch": torch.__version__,
+        "model": _fingerprint_model_content(model),
+        "inputs": _hash_nested_tensor_content((input_args, input_kwargs)),
+        "config": config,
+    }
+    encoded = json.dumps(payload, sort_keys=True, default=repr).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _prepare_log_for_capture_cache(model_log: ModelLog) -> None:
+    """Detach non-leaf tensors and autograd objects before cache serialization.
+
+    Parameters
+    ----------
+    model_log:
+        Log to make pickle-compatible in place.
+    """
+
+    for layer in getattr(model_log, "layer_list", []):
+        for field_name in (
+            "activation",
+            "transformed_activation",
+            "gradient",
+            "transformed_gradient",
+        ):
+            value = getattr(layer, field_name, None)
+            if isinstance(value, torch.Tensor):
+                layer._internal_set(field_name, value.detach().cpu())
+        layer.grad_fn_object = None
+        layer.corresponding_grad_fn = None
+        layer._internal_set("captured_args", _detach_nested_for_cache(layer.captured_args))
+        layer._internal_set("captured_kwargs", _detach_nested_for_cache(layer.captured_kwargs))
+    for layer_log in getattr(model_log, "layer_logs", {}).values():
+        for field_name in ("transformed_activation", "transformed_gradient"):
+            value = getattr(layer_log, field_name, None)
+            if isinstance(value, torch.Tensor):
+                setattr(layer_log, field_name, value.detach().cpu())
+        layer_log.grad_fn_object = None
+        layer_log.corresponding_grad_fn = None
+
+
+def _detach_nested_for_cache(value: Any) -> Any:
+    """Detach tensors inside a nested cache payload.
+
+    Parameters
+    ----------
+    value:
+        Nested value.
+
+    Returns
+    -------
+    Any
+        Value with tensors detached to CPU.
+    """
+
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu()
+    if isinstance(value, tuple):
+        return tuple(_detach_nested_for_cache(item) for item in value)
+    if isinstance(value, list):
+        return [_detach_nested_for_cache(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _detach_nested_for_cache(item) for key, item in value.items()}
+    return value
 
 
 if TYPE_CHECKING:
@@ -422,6 +682,7 @@ def _run_model_and_save_specified_activations(
     verbose: bool = False,
     train_mode: bool = False,
     name: str | None = None,
+    module_filter_fn: Callable[[Any], bool] | None = None,
 ) -> ModelLog:
     """Run a forward pass with logging enabled, returning a populated ModelLog.
 
@@ -535,8 +796,11 @@ def _run_model_and_save_specified_activations(
         detect_loops=detect_loops,
         verbose=verbose,
         train_mode=train_mode,
+        module_filter_fn=module_filter_fn,
     )
     model_log.name = name
+    forward_code = getattr(model.forward, "__code__", None)
+    model_log.forward_lineno = getattr(forward_code, "co_firstlineno", None)
     model_log.intervention_ready = intervention_ready
     if hook_plan:
         model_log.run_state = RunState.LIVE_CAPTURED
@@ -636,6 +900,10 @@ def log_forward_pass(
     streaming: StreamingOptions | None = None,
     train_mode: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
+    cache: bool | MissingType = MISSING,
+    cache_dir: str | Path | None | MissingType = MISSING,
+    module_filter_fn: Callable[[Any], bool] | None | MissingType = MISSING,
+    stop_after: Any | None | MissingType = MISSING,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -773,6 +1041,11 @@ def log_forward_pass(
             TorchLens uses a process-local counter based on the model class name after
             stripping common HuggingFace suffixes. The counter is not thread-safe; it
             relies on TorchLens' single active logging session guard.
+        cache: Whether to use the content-hash capture cache.
+        cache_dir: Optional cache directory.
+        module_filter_fn: Optional predicate receiving each op log. Returning ``False`` keeps
+            metadata but skips activation saving for that op.
+        stop_after: Experimental stop-early site. Unsupported for ``log_forward_pass``.
 
     Postfunc behavior:
         ``activation_transform`` and ``gradient_postfunc`` both take a tensor, should return a
@@ -790,6 +1063,8 @@ def log_forward_pass(
     Returns:
         A ``ModelLog`` containing layer activations (if requested) and full metadata.
     """
+    if os.environ.get("TORCHLENS_AUTO") == "1":
+        raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     _reject_opaque_wrappers(model)
@@ -829,6 +1104,10 @@ def log_forward_pass(
         verbose=verbose,
         train_mode=train_mode,
         name=name,
+        cache=cache,
+        cache_dir=cache_dir,
+        module_filter_fn=module_filter_fn,
+        stop_after=stop_after,
     )
     save_options = merge_save_options(
         save=save,
@@ -893,6 +1172,11 @@ def log_forward_pass(
     unwrap_when_done = capture_options.unwrap_when_done
     verbose = capture_options.verbose
     name = capture_options.name
+    cache_enabled = capture_options.cache
+    cache_dir_value = capture_options.cache_dir
+    module_filter_fn_value = capture_options.module_filter_fn
+    if capture_options.stop_after is not None:
+        raise NotImplementedError("stop_after is only supported by torchlens.peek.")
     save_gradients_to_value = (
         None if isinstance(save_gradients_to, MissingType) else save_gradients_to
     )
@@ -966,6 +1250,35 @@ def log_forward_pass(
         gradients_to_save_resolved not in ["all", "none", None, []]
     )
     log_name = name if name is not None else _state._auto_name(model)
+    cache_path: Path | None = None
+    cache_key: str | None = None
+    if cache_enabled:
+        cache_config = {
+            "layers_to_save": layers_to_save,
+            "keep_unsaved_layers": keep_unsaved_layers,
+            "output_device": output_device,
+            "save_function_args": save_function_args,
+            "save_gradients": save_gradients,
+            "gradients_to_save": gradients_to_save_resolved,
+            "save_source_context": save_source_context,
+            "save_rng_states": save_rng_states,
+            "source_context_lines": source_context_lines,
+            "compute_input_output_distances": compute_input_output_distances,
+            "detach_saved_tensors": detach_saved_tensors,
+            "detect_recurrent_patterns": detect_recurrent_patterns,
+            "train_mode": train_mode_value,
+        }
+        cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
+        cache_root = _capture_cache_dir(cache_dir_value) / "capture"
+        cache_root.mkdir(parents=True, exist_ok=True)
+        cache_path = cache_root / f"{cache_key}.pkl"
+        if cache_path.exists():
+            with cache_path.open("rb") as file:
+                cached_log = pickle.load(file)
+            cached_log.capture_cache_hit = True
+            cached_log.capture_cache_key = cache_key
+            cached_log.capture_cache_path = str(cache_path)
+            return cached_log
     if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
             'save_activations_to is only supported with layers_to_save="all" in this '
@@ -1016,6 +1329,7 @@ def log_forward_pass(
             verbose=verbose,
             train_mode=train_mode_value,
             name=log_name,
+            module_filter_fn=module_filter_fn_value,
         )
     else:
         # --- TWO-PASS path ---
@@ -1064,6 +1378,7 @@ def log_forward_pass(
             verbose=verbose,
             train_mode=train_mode_value,
             name=log_name,
+            module_filter_fn=module_filter_fn_value,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
@@ -1098,6 +1413,14 @@ def log_forward_pass(
         from .decoration import unwrap_torch
 
         unwrap_torch()
+
+    if cache_path is not None and cache_key is not None:
+        model_log.capture_cache_hit = False
+        model_log.capture_cache_key = cache_key
+        model_log.capture_cache_path = str(cache_path)
+        _prepare_log_for_capture_cache(model_log)
+        with cache_path.open("wb") as file:
+            pickle.dump(model_log, file)
 
     return model_log
 

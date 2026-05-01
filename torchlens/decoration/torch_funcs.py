@@ -952,6 +952,11 @@ def patch_detached_references():
 
     for mod_key in new_keys:
         _state._crawled_module_keys.add(mod_key)
+        if (
+            mod_key.startswith(("torch.", "numpy.", "pytest", "pluggy", "setuptools"))
+            or ".dist-info" in mod_key
+        ):
+            continue
         mod = sys.modules.get(mod_key)
         if mod is None:
             continue
@@ -999,6 +1004,19 @@ def patch_detached_references():
                 is_callable = False
             if is_callable:
                 _patch_function_defaults(attr_val, mapping)
+
+
+def clear_patch_detached_references_cache() -> None:
+    """Clear caches used by ``patch_detached_references``.
+
+    Returns
+    -------
+    None
+        Cache state is cleared in place.
+    """
+
+    _state._crawled_module_keys.clear()
+    _state._dir_cache.clear()
 
 
 def _patch_function_defaults(func, mapping) -> None:

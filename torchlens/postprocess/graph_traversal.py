@@ -88,6 +88,8 @@ def _add_output_layers(
         new_output_node.grad_fn_name = None
         new_output_node.autograd_saved_bytes = None
         new_output_node.autograd_saved_tensor_count = None
+        new_output_node.bytes_delta_at_call = 0
+        new_output_node.bytes_peak_at_call = 0
         new_output_node._internal_set("captured_args", [output_tensors[i]])
         new_output_node._internal_set("captured_kwargs", {})
 

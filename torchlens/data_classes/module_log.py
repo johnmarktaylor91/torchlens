@@ -122,6 +122,18 @@ class ModulePassLog:
         """Whether this module appears at multiple addresses."""
         return len(self.all_module_addresses) > 1
 
+    @property
+    def inputs(self) -> List[str]:
+        """Module-pass input layer labels."""
+
+        return self.input_layers
+
+    @property
+    def outputs(self) -> List[str]:
+        """Module-pass output layer labels."""
+
+        return self.output_layers
+
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
         lines = [
@@ -463,6 +475,18 @@ class ModuleLog:
     def output_layers(self) -> List[str]:
         result = self._single_pass_or_error("output_layers")
         return result if result is not None else []
+
+    @property
+    def inputs(self) -> List[str]:
+        """Module input layer labels."""
+
+        return self.input_layers
+
+    @property
+    def outputs(self) -> List[str]:
+        """Module output layer labels."""
+
+        return self.output_layers
 
     @property
     def forward_args(self) -> Optional[tuple]:

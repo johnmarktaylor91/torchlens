@@ -397,7 +397,6 @@ _dir_cache: Dict[type, list] = {}
 Avoids repeated introspection of the same type's attributes during the
 recursive sys.modules crawl.
 """
-
 _prepared_models: "weakref.WeakSet" = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.
 

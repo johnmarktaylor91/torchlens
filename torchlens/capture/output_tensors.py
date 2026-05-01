@@ -1597,6 +1597,8 @@ def log_function_output_tensors_fast(
             orig_layer_entry.autograd_saved_bytes,
             orig_layer_entry.autograd_saved_tensor_count,
         ) = _get_autograd_saved_stats_for_tensor(out)
+        orig_layer_entry.bytes_delta_at_call = 0
+        orig_layer_entry.bytes_peak_at_call = 0
         orig_layer_entry.func_time = exec_ctx.time_elapsed
         orig_layer_entry.func_rng_states = exec_ctx.rng_states
         orig_layer_entry.func_autocast_state = exec_ctx.autocast_state
@@ -1984,6 +1986,8 @@ def _log_output_tensor_info(
     with pause_logging():
         fields_dict["tensor_memory"] = t.nelement() * t.element_size()
     fields_dict["transformed_activation_memory"] = None
+    fields_dict["bytes_delta_at_call"] = 0
+    fields_dict["bytes_peak_at_call"] = 0
     (
         fields_dict["autograd_saved_bytes"],
         fields_dict["autograd_saved_tensor_count"],
@@ -2044,8 +2048,13 @@ def _make_layer_log_entry(
         new_entry = BufferLog(fields_dict)
     else:
         new_entry = LayerPassLog(fields_dict)  # type: ignore[assignment]
-    if (self._layer_nums_to_save == "all") or (
-        new_entry.creation_order in self._layer_nums_to_save
+    keep_by_predicate = True
+    module_filter_fn = getattr(self, "module_filter_fn", None)
+    if module_filter_fn is not None:
+        keep_by_predicate = bool(module_filter_fn(new_entry))
+    if keep_by_predicate and (
+        (self._layer_nums_to_save == "all")
+        or (new_entry.creation_order in self._layer_nums_to_save)
     ):
         new_entry.save_tensor_data(
             t,

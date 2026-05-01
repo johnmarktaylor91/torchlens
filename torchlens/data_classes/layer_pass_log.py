@@ -34,6 +34,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 """
 
 import copy
+import hashlib
 import weakref
 import warnings
 from typing import Any, Callable, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Union
@@ -86,6 +87,8 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "extra_data": {},
     "autograd_saved_bytes": None,
     "autograd_saved_tensor_count": None,
+    "bytes_delta_at_call": None,
+    "bytes_peak_at_call": None,
     "transformed_activation": None,
     "transformed_activation_shape": None,
     "transformed_activation_dtype": None,
@@ -137,6 +140,31 @@ def _tensor_memory_or_none(value: Any) -> int | None:
     """Return tensor memory in bytes, or ``None`` for non-tensor values."""
 
     return get_tensor_memory_amount(value) if isinstance(value, torch.Tensor) else None
+
+
+def _tensor_content_hash(value: torch.Tensor) -> str:
+    """Return a CPU content hash for a tensor.
+
+    Parameters
+    ----------
+    value:
+        Tensor to hash.
+
+    Returns
+    -------
+    str
+        SHA-256 digest.
+    """
+
+    with pause_logging():
+        tensor = safe_copy(value, detach_tensor=True).cpu().contiguous()
+        if tensor.dtype is torch.bfloat16:
+            tensor = tensor.to(torch.float32)
+        payload = tensor.numpy().tobytes()
+    hasher = hashlib.sha256()
+    hasher.update(repr((tuple(tensor.shape), str(tensor.dtype))).encode("utf-8"))
+    hasher.update(payload)
+    return hasher.hexdigest()
 
 
 if TYPE_CHECKING:
@@ -209,6 +237,8 @@ class LayerPassLog:
         "transformed_activation_memory": FieldPolicy.KEEP,
         "autograd_saved_bytes": FieldPolicy.KEEP,
         "autograd_saved_tensor_count": FieldPolicy.KEEP,
+        "bytes_delta_at_call": FieldPolicy.KEEP,
+        "bytes_peak_at_call": FieldPolicy.KEEP,
         "has_child_tensor_variations": FieldPolicy.KEEP,
         "children_tensor_versions": FieldPolicy.BLOB_RECURSIVE,
         "gradient": FieldPolicy.BLOB,
@@ -466,6 +496,8 @@ class LayerPassLog:
         self.transformed_activation_memory = fields_dict["transformed_activation_memory"]
         self.autograd_saved_bytes: Optional[int] = fields_dict["autograd_saved_bytes"]
         self.autograd_saved_tensor_count: Optional[int] = fields_dict["autograd_saved_tensor_count"]
+        self.bytes_delta_at_call: Optional[int] = fields_dict["bytes_delta_at_call"]
+        self.bytes_peak_at_call: Optional[int] = fields_dict["bytes_peak_at_call"]
 
         # Child tensor variation tracking - stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
@@ -846,6 +878,9 @@ class LayerPassLog:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
         state["_source_model_log_ref"] = None
+        state["func_applied"] = None
+        state["grad_fn_object"] = None
+        state["corresponding_grad_fn"] = None
         state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
@@ -978,6 +1013,22 @@ class LayerPassLog:
 
             save_raw_activation = getattr(model_log, "save_raw_activation", True)
             store_raw = save_raw_activation or activation_postfunc is None
+            if (
+                model_log is not None
+                and store_raw
+                and not getattr(model_log, "save_function_args", False)
+            ):
+                hash_cache = getattr(model_log, "_activation_hash_cache", None)
+                if hash_cache is None:
+                    hash_cache = {}
+                    setattr(model_log, "_activation_hash_cache", hash_cache)
+                activation_hash = _tensor_content_hash(raw_activation)
+                if activation_hash in hash_cache:
+                    self.extra_data["dedup_activation_hash"] = activation_hash
+                    self.extra_data["dedup_reference_label"] = hash_cache[activation_hash][0]
+                    raw_activation = hash_cache[activation_hash][1]
+                else:
+                    hash_cache[activation_hash] = (self.layer_label_raw, raw_activation)
             self._internal_set("activation", raw_activation if store_raw else None)
 
             self._internal_set("transformed_activation", None)

@@ -128,6 +128,17 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "input_id_at_capture": None,
     "input_shape_hash": None,
     "graph_shape_hash": None,
+    "module_filter_fn": None,
+    "capture_kpis": {},
+    "manual_tensor_connections": [],
+    "forward_lineno": None,
+    "capture_cache_hit": False,
+    "capture_cache_key": None,
+    "capture_cache_path": None,
+    "recording_kept": True,
+    "streaming_pass_logs": [],
+    "num_streamed_passes": 1,
+    "_activation_hash_cache": {},
     "is_appended": False,
     "relationship_evidence": {},
 }
@@ -336,6 +347,17 @@ class ModelLog:
         "output_device": FieldPolicy.KEEP,
         "detach_saved_tensors": FieldPolicy.KEEP,
         "train_mode": FieldPolicy.DROP,
+        "module_filter_fn": FieldPolicy.DROP,
+        "capture_kpis": FieldPolicy.KEEP,
+        "manual_tensor_connections": FieldPolicy.KEEP,
+        "forward_lineno": FieldPolicy.KEEP,
+        "capture_cache_hit": FieldPolicy.KEEP,
+        "capture_cache_key": FieldPolicy.KEEP,
+        "capture_cache_path": FieldPolicy.KEEP,
+        "recording_kept": FieldPolicy.KEEP,
+        "streaming_pass_logs": FieldPolicy.DROP,
+        "num_streamed_passes": FieldPolicy.KEEP,
+        "_activation_hash_cache": FieldPolicy.DROP,
         "save_function_args": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
         "gradients_to_save": FieldPolicy.KEEP,
@@ -465,6 +487,7 @@ class ModelLog:
         detect_loops: bool = True,
         verbose: bool = False,
         train_mode: bool = False,
+        module_filter_fn: Callable[[Any], bool] | None = None,
     ):
         """Initialise a fresh ModelLog for a new logging session.
 
@@ -538,6 +561,17 @@ class ModelLog:
         self.output_device = output_device
         self.detach_saved_tensors = detach_saved_tensors
         self.train_mode = train_mode
+        self.module_filter_fn = module_filter_fn
+        self.capture_kpis: Dict[str, Any] = {}
+        self.manual_tensor_connections: List[Tuple[str, str]] = []
+        self.forward_lineno: int | None = None
+        self.capture_cache_hit: bool = False
+        self.capture_cache_key: str | None = None
+        self.capture_cache_path: str | None = None
+        self.recording_kept: bool = True
+        self.streaming_pass_logs: List["ModelLog"] = []
+        self.num_streamed_passes: int = 1
+        self._activation_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self.save_function_args = save_function_args
         self.save_gradients = save_gradients
         self.gradients_to_save = gradients_to_save
@@ -1764,6 +1798,8 @@ class ModelLog:
         state["_source_model_ref"] = None
         state["parent_run"] = None
         state["last_run_ctx"] = None
+        state["streaming_pass_logs"] = []
+        state["_activation_hash_cache"] = {}
         state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
         state["activation_postfunc_repr"] = (
             repr(self.activation_postfunc) if self.activation_postfunc is not None else None
@@ -1807,6 +1843,17 @@ class ModelLog:
                 "_source_code_blob": {},
                 "_source_model_ref": None,
                 "train_mode": False,
+                "module_filter_fn": None,
+                "capture_kpis": {},
+                "manual_tensor_connections": [],
+                "forward_lineno": None,
+                "capture_cache_hit": False,
+                "capture_cache_key": None,
+                "capture_cache_path": None,
+                "recording_kept": True,
+                "streaming_pass_logs": [],
+                "num_streamed_passes": 1,
+                "_activation_hash_cache": {},
             },
         )
         if state.get("_intervention_spec") is None:

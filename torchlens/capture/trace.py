@@ -218,10 +218,34 @@ def _get_op_nums_from_user_labels(
     elif which_layers in [None, "none", "None", "NONE", []]:
         return []
 
+    from ..intervention.selectors import BaseSelector
+
+    if isinstance(which_layers, BaseSelector):
+        return sorted(
+            {
+                site.creation_order
+                for site in self.resolve_sites(
+                    which_layers,
+                    strict=False,
+                    max_fanout=max(1, len(getattr(self, "layer_list", []))),
+                )
+            }
+        )
+
     if type(which_layers) != list:
         which_layers = [which_layers]  # type: ignore[list-item]
-    raw_layer_nums_to_save = set()
+    raw_layer_nums_to_save: set[int] = set()
     for layer_key in which_layers:
+        if isinstance(layer_key, BaseSelector):
+            raw_layer_nums_to_save.update(
+                site.creation_order
+                for site in self.resolve_sites(
+                    layer_key,
+                    strict=False,
+                    max_fanout=max(1, len(getattr(self, "layer_list", []))),
+                )
+            )
+            continue
         if layer_key in self._lookup_keys_to_layer_num_dict:
             raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])  # type: ignore[index]
             continue

@@ -52,6 +52,9 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "train_mode",
     "name",
     "cache",
+    "cache_dir",
+    "module_filter_fn",
+    "stop_after",
     "emit_nvtx",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
@@ -133,6 +136,10 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "verbose": "verbose",
     "train_mode": "train_mode",
     "name": "name",
+    "cache": "cache",
+    "cache_dir": "cache_dir",
+    "module_filter_fn": "module_filter_fn",
+    "stop_after": "stop_after",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_postfunc": "activation_transform",
@@ -540,7 +547,14 @@ class CaptureOptions:
     name:
         Optional user-facing name for the returned log.
     cache:
-        Placeholder toggle for the future capture cache; currently inert.
+        Whether to use the content-hash capture cache.
+    cache_dir:
+        Optional directory for content-hash cache entries.
+    module_filter_fn:
+        Optional predicate receiving a ``LayerPassLog`` after construction.
+        Returning ``False`` keeps metadata but skips activation saving.
+    stop_after:
+        Experimental stop-early site. Only supported by ``torchlens.peek``.
     emit_nvtx:
         Placeholder toggle for future NVTX ranges; currently inert.
 
@@ -572,6 +586,9 @@ class CaptureOptions:
     train_mode: bool = False
     name: str | None = None
     cache: bool = False
+    cache_dir: str | Path | None = None
+    module_filter_fn: Callable[[Any], bool] | None = None
+    stop_after: Any | None = None
     emit_nvtx: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
@@ -598,6 +615,9 @@ class CaptureOptions:
         train_mode: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
+        cache_dir: str | Path | None | MissingType = MISSING,
+        module_filter_fn: Callable[[Any], bool] | None | MissingType = MISSING,
+        stop_after: Any | None | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         *,
         mark_input_output_distances: bool | MissingType = MISSING,
@@ -687,6 +707,11 @@ class CaptureOptions:
             "train_mode": _resolve_option_value("train_mode", train_mode, False, specified_fields),
             "name": _resolve_option_value("name", name, None, specified_fields),
             "cache": _resolve_option_value("cache", cache, False, specified_fields),
+            "cache_dir": _resolve_option_value("cache_dir", cache_dir, None, specified_fields),
+            "module_filter_fn": _resolve_option_value(
+                "module_filter_fn", module_filter_fn, None, specified_fields
+            ),
+            "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
             "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
         }
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)

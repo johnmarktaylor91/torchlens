@@ -769,6 +769,13 @@ def _build_layer_logs(self: "ModelLog") -> None:
     total_autograd_saved_bytes = 0
     has_autograd_saved_value = False
     for layer_log in layer_logs.values():
+        for pass_log in layer_log.passes.values():
+            linked_labels = []
+            for param_log in getattr(pass_log, "parent_param_logs", []):
+                for linked_address in getattr(param_log, "linked_params", []):
+                    linked_labels.append(f"{param_log.address} → {linked_address}")
+            if linked_labels:
+                pass_log.extra_data["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [
             pass_log.autograd_saved_bytes
             for pass_log in layer_log.passes.values()
