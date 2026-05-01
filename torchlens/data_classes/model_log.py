@@ -1877,6 +1877,8 @@ class ModelLog:
         from .._io.bundle import load as load_bundle
 
         loaded = load_bundle(path, **kwargs)
+        if not isinstance(loaded, cls):
+            raise TypeError(f"ModelLog.load expected a ModelLog, got {type(loaded).__name__}.")
         return loaded
 
     def __getstate__(self) -> Dict[str, Any]:

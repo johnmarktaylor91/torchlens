@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
@@ -130,6 +131,35 @@ class Bundle:
         if not isinstance(name, str):
             raise TypeError(f"Bundle indices must be member names, got {type(name).__name__}.")
         return self._members[name]
+
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+    ) -> None:
+        """Save this bundle as a unified ``.tlspec`` directory.
+
+        Parameters
+        ----------
+        path:
+            Destination ``.tlspec`` directory path.
+        level:
+            Save level: ``"audit"``, ``"executable_with_callables"``, or
+            ``"portable"``.
+        overwrite:
+            Whether an existing destination may be replaced.
+        """
+
+        from .._io.tlspec import _TlSpecWriter
+
+        _TlSpecWriter.write_bundle(
+            bundle=self,
+            path=path,
+            save_level=level,
+            overwrite=overwrite,
+        )
 
     def __getattr__(self, name: str) -> Any:
         """Return budget-preserving Phase 8 helper methods.

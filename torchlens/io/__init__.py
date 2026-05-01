@@ -80,6 +80,43 @@ def _read_json_object_if_present(path: Path) -> dict[str, Any] | None:
     return data
 
 
+def inspect_tlspec(path: str | Path) -> dict[str, Any]:
+    """Return the parsed public manifest for a TorchLens ``.tlspec`` directory.
+
+    Parameters
+    ----------
+    path:
+        Directory path to inspect.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed manifest object. Legacy intervention specs without a manifest
+        return ``spec.json`` with ``"_inspected_from": "spec.json"``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no inspectable ``.tlspec`` metadata file exists.
+    ValueError
+        If the metadata file is not a JSON object.
+    """
+
+    tlspec_path = Path(path)
+    manifest_path = tlspec_path / "manifest.json"
+    manifest = _read_json_object_if_present(manifest_path)
+    if manifest is not None:
+        return manifest
+
+    spec_path = tlspec_path / "spec.json"
+    spec = _read_json_object_if_present(spec_path)
+    if spec is not None:
+        inspected = dict(spec)
+        inspected["_inspected_from"] = "spec.json"
+        return inspected
+    raise FileNotFoundError(f"No TorchLens .tlspec manifest found at {tlspec_path}.")
+
+
 def load_intervention_spec(path: str | Path) -> InterventionSpec:
     """Load an intervention spec through the canonical polymorphic loader.
 
@@ -110,6 +147,7 @@ __all__ = [
     "cleanup_tmp",
     "detect_tlspec_format",
     "get_model_metadata",
+    "inspect_tlspec",
     "list_logs",
     "load",
     "load_intervention_spec",

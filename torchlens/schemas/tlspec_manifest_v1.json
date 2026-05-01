@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/tlspec_manifest_v1.json",
+  "title": "TorchLens unified .tlspec manifest v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "tlspec_version",
+    "kind",
+    "created_at",
+    "torchlens_version",
+    "python_version",
+    "torch_version",
+    "schema_version",
+    "model_signature",
+    "model_fingerprint",
+    "sites",
+    "spec_compat_info",
+    "body_format",
+    "body_index",
+    "save_level",
+    "optional_dependencies",
+    "intervention_compat_metadata"
+  ],
+  "properties": {
+    "tlspec_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["intervention", "model_log", "bundle"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "torchlens_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "python_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"
+    },
+    "torch_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "model_signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parameter_meta_hash",
+        "buffer_meta_hash",
+        "class_qualname",
+        "extra_metadata"
+      ],
+      "properties": {
+        "parameter_meta_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "buffer_meta_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "class_qualname": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extra_metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "sites": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "function_path",
+          "module_path",
+          "layer_label",
+          "pass_index",
+          "op_kind"
+        ],
+        "properties": {
+          "function_path": {
+            "type": ["string", "null"]
+          },
+          "module_path": {
+            "type": ["string", "null"]
+          },
+          "layer_label": {
+            "type": "string"
+          },
+          "pass_index": {
+            "type": ["integer", "null"]
+          },
+          "op_kind": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "spec_compat_info": {
+      "type": ["object", "null"]
+    },
+    "body_format": {
+      "type": "string",
+      "enum": ["safetensors"]
+    },
+    "body_index": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["filename", "dtype", "shape", "num_elements", "intended_use"],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dtype": {
+            "type": "string",
+            "minLength": 1
+          },
+          "shape": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "num_elements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "intended_use": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "save_level": {
+      "type": "string",
+      "enum": ["audit", "executable_with_callables", "portable"]
+    },
+    "optional_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "intervention_compat_metadata": {
+      "type": ["object", "null"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "intervention"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "spec_compat_info": {
+            "type": "object"
+          },
+          "intervention_compat_metadata": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  ]
+}

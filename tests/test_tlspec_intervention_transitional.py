@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -91,37 +90,35 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def _copy_as_unified(source: Path, dest: Path) -> None:
-    """Copy a transitional spec and mark it as unified.
+def _remove_unified_marker(path: Path) -> None:
+    """Convert a unified intervention manifest into transitional form.
 
     Parameters
     ----------
-    source:
-        Transitional source path.
-    dest:
-        Unified destination path.
+    path:
+        Intervention spec directory.
     """
 
-    shutil.copytree(source, dest)
-    manifest = _read_json(dest / "manifest.json")
-    manifest["tlspec_version"] = 1
-    _write_json(dest / "manifest.json", manifest)
+    manifest = _read_json(path / "manifest.json")
+    manifest.pop("tlspec_version", None)
+    _write_json(path / "manifest.json", manifest)
 
 
 @pytest.mark.smoke
-def test_transitional_intervention_writer_adds_kind_without_removing_legacy_fields(
+def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     tmp_path: Path,
 ) -> None:
-    """The writer should emit ``kind`` while preserving 2.16.0 fields."""
+    """The writer should emit unified fields while preserving 2.16.0 fields."""
 
-    path = tmp_path / "transitional.tlspec"
+    path = tmp_path / "unified.tlspec"
     _intervention_log().save_intervention(path, level="portable")
 
     manifest = _read_json(path / "manifest.json")
+    assert manifest["tlspec_version"] == 1
     assert manifest["kind"] == "intervention"
     assert manifest["format_version"] == "1"
     assert manifest["tensor_entries"] == []
-    assert tl.io.detect_tlspec_format(path) == "v2.16_intervention_with_kind"
+    assert tl.io.detect_tlspec_format(path) == "v2.0_unified"
 
 
 @pytest.mark.smoke
@@ -130,6 +127,7 @@ def test_new_loader_reads_transitional_intervention_spec(tmp_path: Path) -> None
 
     path = tmp_path / "transitional.tlspec"
     _intervention_log().save_intervention(path, level="portable")
+    _remove_unified_marker(path)
 
     loaded = tl.load(path)
 
@@ -143,6 +141,7 @@ def test_legacy_intervention_reader_ignores_transitional_kind(tmp_path: Path) ->
 
     path = tmp_path / "transitional.tlspec"
     _intervention_log().save_intervention(path, level="executable_with_callables")
+    _remove_unified_marker(path)
 
     loaded = legacy_load_intervention_spec(path)
 
@@ -154,10 +153,8 @@ def test_legacy_intervention_reader_ignores_transitional_kind(tmp_path: Path) ->
 def test_new_loader_reads_intervention_with_unified_manifest_marker(tmp_path: Path) -> None:
     """The Phase 11.0 loader should dispatch unified intervention manifests by kind."""
 
-    transitional_path = tmp_path / "transitional.tlspec"
     unified_path = tmp_path / "unified.tlspec"
-    _intervention_log().save_intervention(transitional_path, level="portable")
-    _copy_as_unified(transitional_path, unified_path)
+    _intervention_log().save_intervention(unified_path, level="portable")
 
     assert tl.io.detect_tlspec_format(unified_path) == "v2.0_unified"
     loaded = tl.load(unified_path)

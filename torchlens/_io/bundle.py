@@ -21,7 +21,7 @@ import uuid
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 from safetensors import SafetensorError
@@ -34,8 +34,13 @@ from .paths import resolve_bundle_blob_path
 from .rehydrate import rehydrate_model_log
 from .scrub import scrub_for_save
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
+from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
 from ..data_classes.model_log import ModelLog
+
+if TYPE_CHECKING:
+    from ..intervention.bundle import Bundle
+    from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
@@ -68,6 +73,7 @@ def save(
     model_log: ModelLog,
     path: str | Path,
     *,
+    level: str = "portable",
     include_activations: bool = True,
     include_gradients: bool = True,
     include_captured_args: bool = False,
@@ -83,6 +89,9 @@ def save(
         Completed model log to save.
     path:
         Output bundle directory path.
+    level:
+        Public ``.tlspec`` save level: ``"audit"``,
+        ``"executable_with_callables"``, or ``"portable"``.
     include_activations:
         Whether activations should be saved as blobs.
     include_gradients:
@@ -119,6 +128,16 @@ def save(
     Portable bundles contain a pickle file. Only load bundles from trusted
     sources. Loading an untrusted bundle can execute arbitrary code.
     """
+
+    save_level = coerce_tlspec_save_level(level)
+    if save_level == "audit":
+        include_activations = False
+        include_gradients = False
+        include_captured_args = False
+        include_rng_states = False
+    elif save_level == "executable_with_callables":
+        include_captured_args = True
+        include_rng_states = True
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
@@ -199,7 +218,12 @@ def save(
             tensor_entries=tensor_entries,
             unsupported_tensors=unsupported_tensors,
         )
-        manifest.write(tmp_path / "manifest.json")
+        _TlSpecWriter.write_model_log_manifest(
+            path=tmp_path / "manifest.json",
+            model_log=model_log,
+            legacy_manifest=manifest,
+            save_level=save_level,
+        )
         with (tmp_path / "metadata.pkl").open("wb") as handle:
             pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -218,19 +242,39 @@ def save(
         raise TorchLensIOError(f"Failed to save bundle at {bundle_path}.") from exc
 
 
+@overload
+def load(
+    path: str | Path,
+    *,
+    lazy: Literal[False] = False,
+    map_location: str | torch.device = "cpu",
+    materialize_nested: bool = True,
+) -> "ModelLog | Bundle | InterventionSpec": ...
+
+
+@overload
+def load(
+    path: str | Path,
+    *,
+    lazy: Literal[True],
+    map_location: str | torch.device = "cpu",
+    materialize_nested: bool = True,
+) -> "ModelLog | Bundle | InterventionSpec": ...
+
+
 def load(
     path: str | Path,
     *,
     lazy: bool = False,
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
-) -> ModelLog:
-    """Load a portable TorchLens bundle into a ``ModelLog``.
+) -> "ModelLog | Bundle | InterventionSpec":
+    """Load a TorchLens ``.tlspec`` object polymorphically.
 
     Parameters
     ----------
     path:
-        Bundle directory path.
+        ``.tlspec`` directory path.
     lazy:
         Whether direct activation/gradient blobs should remain lazy placeholders.
     map_location:
@@ -241,8 +285,9 @@ def load(
 
     Returns
     -------
-    ModelLog
-        Rehydrated model log.
+    ModelLog | Bundle | InterventionSpec
+        Rehydrated object selected by ``manifest.kind`` for unified Phase 11
+        files, or by legacy format detection for older files.
 
     Raises
     ------
@@ -252,13 +297,15 @@ def load(
     Examples
     --------
     >>> import torchlens as tl
-    >>> model_log = tl.load("demo_bundle", lazy=True)
+    >>> model_log = tl.load("demo_model_log.tlspec", lazy=True)
     >>> layer = model_log["linear_1_1"]
     >>> layer.activation is None
     True
     >>> activation = layer.materialize_activation()
     >>> activation.shape
     torch.Size([2, 3])
+    >>> spec = tl.load("demo_intervention.tlspec")
+    >>> bundle = tl.load("demo_bundle.tlspec")
 
     Warnings
     --------
@@ -296,6 +343,51 @@ def load(
 
     try:
         manifest = Manifest.read(manifest_path)
+    except TorchLensIOError:
+        raise
+    return _load_model_log_payload(
+        bundle_path,
+        manifest,
+        lazy=lazy,
+        map_location=map_location,
+        materialize_nested=materialize_nested,
+    )
+
+
+def _load_model_log_payload(
+    bundle_path: Path,
+    manifest: Manifest,
+    *,
+    lazy: bool,
+    map_location: str | torch.device,
+    materialize_nested: bool,
+) -> "ModelLog | Bundle | InterventionSpec":
+    """Load a portable ModelLog payload after manifest dispatch.
+
+    Parameters
+    ----------
+    bundle_path:
+        Directory containing ``manifest.json``, ``metadata.pkl``, and blobs.
+    manifest:
+        Parsed portable manifest.
+    lazy:
+        Whether direct activation/gradient blobs should remain lazy placeholders.
+    map_location:
+        Target device for eager tensor materialization.
+    materialize_nested:
+        Whether nested blob refs should be materialized when ``lazy=True``.
+
+    Returns
+    -------
+    ModelLog
+        Rehydrated model log.
+    """
+
+    manifest_path = bundle_path / "manifest.json"
+    metadata_path = bundle_path / "metadata.pkl"
+    blobs_path = bundle_path / "blobs"
+    python_major_mismatch = False
+    try:
         enforce_version_policy(manifest)
         _validate_manifest_blob_paths(manifest, bundle_path)
         _check_unknown_blob_entries(manifest, blobs_path)
@@ -340,7 +432,7 @@ def _load_unified_tlspec(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
-) -> ModelLog:
+) -> "ModelLog | Bundle | InterventionSpec":
     """Load a Phase-11 unified ``.tlspec`` bundle by manifest kind.
 
     Parameters
@@ -356,9 +448,8 @@ def _load_unified_tlspec(
 
     Returns
     -------
-    ModelLog
-        Loaded model log, or an intervention spec during the Phase 11.0
-        compatibility bridge.
+    ModelLog | Bundle | InterventionSpec
+        Loaded object selected by unified manifest kind.
 
     Raises
     ------
@@ -372,7 +463,119 @@ def _load_unified_tlspec(
         from ..intervention.save import load_intervention_spec
 
         return load_intervention_spec(bundle_path)  # type: ignore[return-value]
+    if kind == "model_log":
+        return _load_model_log_payload(
+            bundle_path,
+            Manifest.from_dict(manifest),
+            lazy=lazy,
+            map_location=map_location,
+            materialize_nested=materialize_nested,
+        )
+    if kind == "bundle":
+        return _load_unified_bundle(bundle_path)
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
+
+
+def _load_unified_bundle(bundle_path: Path) -> "Bundle":
+    """Load a unified ``Bundle`` payload.
+
+    Parameters
+    ----------
+    bundle_path:
+        Directory containing a unified bundle manifest and metadata payload.
+
+    Returns
+    -------
+    Bundle
+        Loaded bundle.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the bundle payload cannot be loaded or has the wrong type.
+    """
+
+    metadata_path = bundle_path / "bundle.json"
+    _reject_symlink_path(metadata_path, context="bundle metadata")
+    if metadata_path.exists():
+        return _load_unified_bundle_directory(bundle_path, metadata_path)
+
+    legacy_pickle_path = bundle_path / "metadata.pkl"
+    _reject_symlink_path(legacy_pickle_path, context="bundle metadata")
+    try:
+        with legacy_pickle_path.open("rb") as handle:
+            bundle = pickle.load(handle)
+    except (
+        pickle.UnpicklingError,
+        EOFError,
+        OSError,
+        AttributeError,
+        ImportError,
+        ValueError,
+    ) as exc:
+        raise TorchLensIOError(
+            f"Failed to load bundle metadata from {legacy_pickle_path}."
+        ) from exc
+
+    from ..intervention.bundle import Bundle
+
+    if not isinstance(bundle, Bundle):
+        raise TorchLensIOError(f"Unified bundle payload at {legacy_pickle_path} is not a Bundle.")
+    return bundle
+
+
+def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "Bundle":
+    """Load a unified bundle container from nested member specs.
+
+    Parameters
+    ----------
+    bundle_path:
+        Bundle root directory.
+    metadata_path:
+        ``bundle.json`` metadata path.
+
+    Returns
+    -------
+    Bundle
+        Reconstructed bundle.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the nested bundle metadata or members are invalid.
+    """
+
+    try:
+        with metadata_path.open("r", encoding="utf-8") as handle:
+            metadata = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TorchLensIOError(f"Failed to read bundle metadata from {metadata_path}.") from exc
+    if not isinstance(metadata, dict):
+        raise TorchLensIOError("Unified bundle metadata must be a JSON object.")
+    raw_members = metadata.get("members")
+    if not isinstance(raw_members, list):
+        raise TorchLensIOError("Unified bundle metadata must include a members list.")
+
+    members: dict[str, ModelLog] = {}
+    for index, entry in enumerate(raw_members):
+        if not isinstance(entry, dict):
+            raise TorchLensIOError(f"Unified bundle member {index} must be an object.")
+        name = entry.get("name")
+        relative_path = entry.get("path")
+        if not isinstance(name, str) or not isinstance(relative_path, str):
+            raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
+        member_path = bundle_path / relative_path
+        loaded = load(member_path)
+        if not isinstance(loaded, ModelLog):
+            raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a ModelLog.")
+        members[name] = loaded
+
+    from ..intervention.bundle import Bundle
+
+    baseline_name = metadata.get("baseline_name")
+    if baseline_name is not None and not isinstance(baseline_name, str):
+        raise TorchLensIOError("Unified bundle baseline_name must be a string or null.")
+    return Bundle(members, baseline=baseline_name)
 
 
 def _read_manifest_object(path: Path) -> dict[str, Any]:

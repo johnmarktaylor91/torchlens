@@ -112,7 +112,7 @@ def test_delta_map_norm_delta_output_delta_on_three_model_pairs() -> None:
 
 
 def test_bundle_method_count_stays_within_phase_budget() -> None:
-    """Phase 8 keeps Bundle public method/property count at the agreed budget."""
+    """Bundle public method/property count includes Phase 11 persistence."""
 
     members = [
         name
@@ -120,5 +120,6 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
         if not name.startswith("_") and (inspect.isfunction(value) or isinstance(value, property))
     ]
 
-    assert len(members) <= 25
+    assert len(members) <= 26
+    assert "save" in members
     assert "supergraph" in members

@@ -19,6 +19,7 @@ from safetensors.torch import load_file, save_file
 
 from .._io.manifest import TensorEntry, sha256_of_file
 from .._io.tensor_policy import Ok, is_supported_for_save
+from .._io.tlspec import _TlSpecWriter
 from .errors import (
     DirectActivationWriteWarning,
     DirectWriteInExecutableSaveError,
@@ -152,14 +153,15 @@ def save_intervention(
             "intervention_spec": serialized_spec,
             "function_registry_keys": function_keys,
         }
-        manifest_json = {
-            "format_version": TLSPEC_FORMAT_VERSION,
-            "kind": "intervention",
-            "tensor_entries": [entry.to_dict() for entry in tensor_entries],
-        }
-
         _write_json_file(tmp_path / _SPEC_FILE, spec_json)
-        _write_json_file(tmp_path / _MANIFEST_FILE, manifest_json)
+        _TlSpecWriter.write_intervention_manifest(
+            path=tmp_path / _MANIFEST_FILE,
+            log=log,
+            spec_json=spec_json,
+            tensor_entries=tensor_entries,
+            legacy_format_version=TLSPEC_FORMAT_VERSION,
+            save_level=save_level.value,
+        )
         _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
         _fsync_directory(tmp_path)
         if target_path.exists():
