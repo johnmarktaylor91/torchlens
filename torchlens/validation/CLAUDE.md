@@ -1,45 +1,50 @@
-# validation/ — Forward Replay & Metadata Invariants
+# validation/ - Replay, Invariants, and Schema Checks
 
 ## What This Does
-Validates that logged activations are correct by replaying each operation with saved
-parent tensors and checking outputs match. Also provides 18 metadata invariant checks
-(A-R) that verify structural consistency of the entire ModelLog.
+Validates TorchLens captures at several levels: saved forward activations, backward capture,
+metadata invariants, intervention readiness, and unified `.tlspec` manifest schema.
 
 ## Files
 
-| File | ~Lines | Purpose |
-|------|--------|---------|
-| `core.py` | 808 | BFS orchestration, forward replay, perturbation, arg preparation |
-| `exemptions.py` | 482 | 4 data-driven exemption registries + posthoc checks (16 exemption conditions) |
-| `invariants.py` | 1505 | 18 metadata invariant categories (A-R), Phase 1 structural + Phase 2 semantic |
+| File | Purpose |
+|------|---------|
+| `core.py` | Saved-activation replay, perturbation checks, arg reconstruction |
+| `backward.py` | Backward capture validation against stock autograd |
+| `consolidated.py` | Public `validate(..., scope=...)` dispatcher and intervention report |
+| `invariants.py` | Metadata invariant categories and `MetadataInvariantError` |
+| `exemptions.py` | Replay/perturbation exemption registries and dynamic checks |
+| `__init__.py` | Public validation exports plus `.tlspec` manifest schema validation |
 
-## Validation Flow
+## Validation Scopes
+`torchlens.validate(model, x, scope=...)` accepts:
+- `"forward"` - calls `validate_forward_pass()`.
+- `"saved"` - validates saved activations on a `ModelLog` path.
+- `"backward"` - validates first-class backward capture.
+- `"intervention"` - currently runs forward-like checks and returns intervention-axis details.
 
-```
-1. Run model(input) for ground truth output
-2. Run log_forward_pass(model, input, layers_to_save="all", save_function_args=True)
-3. Verify ground truth matches logged output
-4. Backward BFS from outputs — for each layer:
-   a. Verify parent layers match saved args (arg position check)
-   b. Replay function with saved parents -> check output matches
-   c. Perturb each parent -> verify output changes
-5. Return True if all checks pass
-```
+Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, and
+`validate_saved_activations` forward to this package.
+
+## Forward Replay Flow
+1. Run the model for ground truth output.
+2. Run `log_forward_pass(..., layers_to_save="all", save_function_args=True)`.
+3. Check logged output matches ground truth.
+4. Walk backward from outputs, replaying each saved operation from saved parents.
+5. Perturb parents to ensure output sensitivity unless exempt.
+6. Optionally run metadata invariants.
+
+## Invariants
+`check_metadata_invariants(model_log)` checks structural and semantic consistency: model-log
+self consistency, graph topology, LayerPassLog/LayerLog fields, recurrence, branching,
+module hierarchy, params, buffers, equivalence, ordering, distances, connectivity, and lookup
+keys. Invariants are part of the postprocess regression net.
+
+## .tlspec Validation
+`validate_tlspec(path)` validates unified manifests against `schemas/tlspec_manifest_v1.json`.
+Older 2.16 intervention/model-log formats are accepted without schema validation so legacy
+artifacts remain loadable.
 
 ## How It Connects
-
-Called by `user_funcs.py:validate_forward_pass()` and `validate_saved_activations()`.
-Reads data from `data_classes/` (ModelLog, LayerPassLog). Uses original torch functions
-for replay (not decorated versions). The 18 invariant checks (A-R) serve as a structural
-regression test for the entire postprocess pipeline.
-
-## Invariants (A-R)
-
-**Phase 1 (A-L) — Structural:**
-A: model_log self-consistency, B: special layer lists, C: graph topology,
-D: layer_pass_log fields, E: recurrence, F: branching, G: LayerPassLog↔LayerLog,
-H: module-layer containment, I: module hierarchy, J: params, K: buffers, L: equivalence
-
-**Phase 2 (M-R) — Semantic:**
-M: graph ordering, N: loop detection consistency, O: distances, P: connectivity,
-Q: module containment logic, R: lookup key consistency
+Validation reads `data_classes/`, uses original torch functions for replay, and calls public
+user functions for fresh captures. It must stay independent of visualization and optional
+bridge extras.

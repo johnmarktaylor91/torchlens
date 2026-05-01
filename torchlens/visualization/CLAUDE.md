@@ -1,112 +1,57 @@
-# visualization/ — Computational Graph Rendering
+# visualization/ - Graph Rendering and Visual Helpers
 
 ## What This Does
-Renders computational graphs using Python's `graphviz` library, an internal ELK
-layout backend for large graphs, and the experimental dagua renderer. Called via
-`show_model_graph()` or `log_forward_pass(..., vis_mode='rolled')`.
+Renders TorchLens graph structures and related previews. Graphviz is the primary public
+renderer. Large graph layout can use the internal ELK backend. Experimental Dagua rendering
+lives under `torchlens.experimental.dagua` and requires explicit opt-in.
 
 ## Files
 
-| File | ~Lines | Purpose |
-|------|--------|---------|
-| `rendering.py` | 1900+ | Graphviz rendering: nodes, skip-aware edges, module subgraphs, IF/THEN labels, NodeSpec callbacks |
-| `_elk_internal/layout.py` | 1300+ | Internal ELK-based layout backend for large graphs (150k+ nodes), Worker thread, sfdp fallback |
-| `code_panel.py` | n/a | Source-code capture and Graphviz side-panel rendering helpers |
-| `node_spec.py` | — | Public NodeSpec dataclass and HTML-label row renderer |
-| `modes.py` | — | NodeSpec preset registry for default/profiling plus deprecated domain node modes |
-| `experimental/dagua/_bridge.py` | — | ModelLog → DaguaGraph conversion for experimental dagua renderer (opt-in) |
+| File | Purpose |
+|------|---------|
+| `rendering.py` | Main Graphviz forward/backward rendering, module focus, skip/collapse, intervention nodes |
+| `_elk_internal/layout.py` | ELK/sfdp/topological layout backend for large graphs |
+| `code_panel.py` | Source-code side panel helpers for Graphviz |
+| `node_spec.py` | Public `NodeSpec`, HTML label rendering, intervention node specs |
+| `modes.py` | Node mode presets: default, profiling, vision, attention |
+| `themes.py` | Built-in themes and semantic node/edge attrs |
+| `overlays.py` | Overlay score normalization, node lines, border attrs |
+| `bundle_diff.py` | SVG bundle diff renderer used by demos/tests |
+| `fastlog_preview.py` | Predicate preview graph overlay for fastlog |
+| `fastlog_live.py` | Live fastlog helper rendering |
+| `_render_utils.py` | Shared render helpers |
+| `_summary_internal/` | Internal summary builders |
 
-## How It Connects
-
-Called by `user_funcs.py:show_model_graph()`. Reads LayerLog/LayerPassLog from ModelLog
-to build graph nodes and edges. Graphviz is the public renderer, with an internal
-ELK layout backend for large graphs; dagua is experimental and requires explicit
-`from torchlens.experimental import dagua` opt-in.
+## Entry Points
+- `ModelLog.render_graph()` and `show_model_graph()` call `rendering.render_graph()`.
+- `show_backward_graph()` calls `rendering.render_backward_graph()`.
+- `torchlens.viz.bundle_diff()` calls `visualization.bundle_diff.bundle_diff()`.
+- `torchlens.fastlog.preview()` uses `visualization.fastlog_preview.preview_fastlog()`.
 
 ## Code Panel
-`ModelLog.render_graph(code_panel=...)` and `show_model_graph(..., code_panel=...)`
-can add a right-side source-code panel next to the computational graph.
-
-- `False`: no panel.
-- `True` / `"forward"`: use captured `model.forward` source.
-- `"class"`: use captured full model class source.
-- `"init+forward"`: use captured `__init__` plus `forward` source.
-- Callable: called as `fn(model)` at render time. This only works while the
-  original model object is still alive; saved ModelLogs should use built-in modes.
-
-Built-in source snippets are captured at `log_forward_pass()` time and stored on
-`ModelLog._source_code_blob`. The panel is pure Graphviz: `code_panel.py` adds a
-`cluster_torchlens_code_panel` subgraph with an HTML-like monospace table label,
-expands tabs to 4 spaces, escapes `<`, `>`, and `&`, and truncates after
-`MAX_CODE_PANEL_LINES` lines. Because ELK direct rendering bypasses `Digraph`
-construction, code-panel renders stay on the Graphviz path.
+`code_panel=True`, `"forward"`, `"class"`, or `"init+forward"` adds a Graphviz side panel
+from source captured at logging time. Callable code panels require a live model. ELK direct
+rendering bypasses this path.
 
 ## Visualization Modes
-- **`vis_mode='unrolled'`**: Shows every pass separately (uses LayerPassLog entries)
-- **`vis_mode='rolled'`**: Collapses repeated layers into single nodes (uses LayerLog)
+- `vis_mode="unrolled"` renders per-pass `LayerPassLog` nodes.
+- `vis_mode="rolled"` renders aggregate `LayerLog` nodes.
+- `module=...` focuses a submodule and inserts synthetic boundary nodes.
+- `skip_fn` can hide layers while chaining edges through them.
+- `collapse_fn` or module-depth options collapse module subgraphs.
 
-## Module Focus
-`ModelLog.render_graph(module=...)` and `show_model_graph(..., module=...)` can
-render one module's subgraph in the same visual format as the full model.
+## Node Customization
+`VisualizationOptions.node_spec_fn` receives `(layer_log, default_spec)` and returns a
+`NodeSpec` or `None`. `collapsed_node_spec_fn` customizes collapsed module nodes. Node mode
+presets are applied before user callbacks, so callbacks win.
 
-- `module=None`: render the whole model.
-- `module="block.address"`: focus the ModuleLog with that address.
-- `module=module_log`: focus that ModuleLog; it must belong to the rendered ModelLog.
-- `ModuleLog.show_graph(**kwargs)`: convenience wrapper for
-  `module_log._source_model_log.render_graph(module=module_log, **kwargs)`.
+Graph, edge, gradient-edge, and module styling use dict/callable override options.
 
-The focus pass runs before `skip_fn` and `collapse_fn`. It keeps layers whose
-`containing_modules` path includes the target module address, drops outside
-layers, and inserts synthetic green/red boundary nodes for external upstreams
-and downstreams. Child module clusters inside the focused module are still
-available for normal collapse behavior.
+## Conditional and Intervention Rendering
+Graphviz renders IF/THEN/ELIF/ELSE arm labels from cond-id-aware metadata. Intervention-ready
+logs can render hook nodes and cone/site styling through `node_spec.py` helpers.
 
-## Node Mode Presets
-`VisualizationOptions.node_mode` applies a built-in NodeSpec preset before any
-user-supplied `node_spec_fn`, so user callbacks always win. Public flat alias:
-`vis_node_mode`.
-
-- **`default`**: identity preset; Phase 1 default important-args rows remain.
-- **`profiling`**: appends available timing, output bytes, call site, and function
-  name rows. Collapsed modules get aggregate timing/output rows.
-- **`vision`**: experimental/deprecated-in-core; appends input/output shape rows for spatial layers such as conv,
-  pooling, adaptive pooling, upsample, interpolate, and resize.
-- **`attention`**: experimental/deprecated-in-core; appends heads/embed/head_dim/dropout details for attention ops
-  and role annotations for attention projection Linear layers.
-
-## Node Styling
-| Type | Color |
-|------|-------|
-| Input layers | Green (#98FB98) |
-| Output layers | Red (#ff9999) |
-| Parameter nodes | Gray (#E6E6E6) |
-| Boolean layers | Yellow (#F7D460) |
-| Regular layers | White/default |
-| Collapsed modules | box3d shape |
-
-## Override System
-Node labels and node-level attributes use the callable NodeSpec API:
-
-- `VisualizationOptions.node_spec_fn`: receives `(layer_log, default_spec)` and
-  returns a `NodeSpec` or `None`. In unrolled mode the callback still receives
-  the parent aggregate `LayerLog`, not the per-pass `LayerPassLog`.
-- `VisualizationOptions.collapsed_node_spec_fn`: receives
-  `(module_log, default_spec)` for collapsed module nodes.
-- `NodeSpec.lines` are plain text rows; `render_lines_to_html()` is the only
-  place that converts them to Graphviz HTML-like table labels.
-
-Graph, edge, gradient-edge, and module styling remain dict/callable based:
-`vis_graph_overrides`, `vis_edge_overrides`, `vis_gradient_edge_overrides`,
-`vis_module_overrides`.
-
-`VisualizationOptions.collapse_fn` receives a `ModuleLog` and replaces the
-legacy `max_module_depth`/`vis_nesting_depth` collapse decision when supplied.
-`VisualizationOptions.skip_fn` receives a `LayerLog`, may not skip input or
-output layers, and chains edges through skipped nodes before both Graphviz and
-ELK layout consume the graph.
-
-## Internal ELK Layout Backend
-- Worker thread runs Node.js ELK subprocess (prevents stack overflow)
-- Stress algorithm for >150k nodes with Kahn's topological sort for initial positions
-- **>100k nodes bypass ELK entirely** → Python topological layout (O(n+m))
-- sfdp fallback when Node.js unavailable (loses module cluster structure)
+## ELK Backend
+`_elk_internal/layout.py` uses Node.js ELK when available, falls back to sfdp/topological
+layout when needed, and bypasses ELK for very large graphs. Some Graphviz-only features
+remain unavailable or less complete on the ELK path.

@@ -1,48 +1,58 @@
-# visualization/ — Implementation Guide
+# visualization/ - Implementation Guide
 
 ## Key Internal Functions
 
-### `render_graph()` (rendering.py)
-Main entry. Creates graphviz.Digraph, iterates entries, builds nodes with appropriate
-styling, adds edges from parent layers, sets up module subgraphs. Guard at line 71:
-`_all_layers_logged` check prevents rendering when `keep_unsaved_layers=False` and
-not all layers are saved.
+### `render_graph()` in `rendering.py`
+Main forward graph entry point. It normalizes buffer visibility, applies module focus, skip
+and collapse decisions, builds Graphviz nodes/edges, styles modules, optionally adds legends
+and code panels, and writes/renders output.
 
-### `_is_collapsed_module()` (rendering.py, lines 226-234)
-**THE single guard point for IndexError safety.** Returns True when module nesting
-exceeds `vis_nesting_depth`. All downstream indexing into
-`containing_modules[vis_nesting_depth - 1]` relies on this. Do not weaken.
+### `render_backward_graph()` in `rendering.py`
+Renders `GradFnLog` nodes and gradient edges captured by `capture/backward.py`.
 
-### Edge Logic (rendering.py)
-- **Deduplication**: `edges_used` set prevents duplicate edges (lines 956-958)
-- **Collapsed module intra-edge skip**: When both parent and child are in same collapsed
-  module, edge is hidden
-- **Edge labels**: Arg position numbers, "IF" markers for `cond_branch_start_children`,
-  "THEN" markers for `cond_branch_then_children`, pass numbers for rolled graphs
+### Collapse and Focus
+- `_should_collapse_module()` is the central collapse decision.
+- `_is_collapsed_module()` protects indexing into `containing_modules`; keep its guard strict.
+- `_build_module_focus_entries()` inserts boundary nodes for module-scoped renders.
+- Focus runs before skip/collapse.
 
-### `render_elk_direct()` (`_elk_internal/layout.py`)
-Alternative rendering path for large graphs. Node.js ELK subprocess via Worker thread.
-Kahn's topological sort for stress seeding. sfdp fallback when Node.js/ELK unavailable.
+### Edge Logic
+- `_build_skip_filtered_edge_map()` chains edges through skipped nodes.
+- `_compute_edge_label()` combines arg labels, conditional arm labels, and pass labels.
+- `_get_arm_edge_entries()` reads cond-id-aware conditional metadata.
+- Duplicate-edge filtering can affect labels; check conditional and collapsed-module tests
+  when editing edge construction.
 
-### ELK Layout Details
-- **Heap sizing**: 48x node count with 16GB floor for V8 heap
-- **Spline cutoff**: Curved splines up to 1000 nodes, straight lines above
-- `vis_node_placement`: `'dot'` (default), `'elk'` (large graphs), auto-selected above 3500 nodes
-- `vis_direction`: `'bottomup'` (default), `'topdown'`, or `'leftright'`
+### NodeSpec and Modes
+- `compute_default_node_lines()` builds default label rows.
+- `_apply_node_spec_fn()` applies mode presets and user callbacks.
+- `node_spec.py` owns `NodeSpec`, `render_lines_to_html()`, and intervention node specs.
+- `modes.py` owns default/profiling/vision/attention preset functions.
 
-## Known Bugs
-- **ELK-IF-THEN**: ELK path has ZERO conditional branch code. IF/THEN edge labels only
-  appear in the Graphviz path (rendering.py:970-982), not ELK.
-- **ELK-EDGE-LABEL-DEDUP**: Edge dedup (`_elk_internal/layout.py`) keeps first edge between a
-  pair, dropping later edges' arg labels.
-- **Edge dedup before labels**: rendering.py:956-958 dedup happens BEFORE IF/THEN label
-  assignment at 970-982. Can silently drop labels for collapsed modules.
+### ELK
+`_elk_internal/layout.py` exposes `render_elk_direct()`, `render_with_elk()`,
+`render_with_sfdp()`, and `get_node_placement_engine()`. It uses Node.js workers, V8 heap
+sizing, topological seeding, and fallback layout for unavailable ELK.
+
+## Other Modules
+- `themes.py`: theme registry and semantic attrs.
+- `overlays.py`: overlay lines and borders for score maps/nonfinite markers.
+- `bundle_diff.py`: multi-log SVG diff renderer for `torchlens.viz.bundle_diff`.
+- `fastlog_preview.py`: overlays predicate decisions on a full log.
+- `fastlog_live.py`: live fastlog preview helpers.
+- `code_panel.py`: Graphviz code side panel.
 
 ## Gotchas
-- **Extra file**: graphviz `render()` creates a DOT source file alongside the rendered output
-- **Substring false positive risk**: `parent_node.layer_label in arg_label` for unrolled
-  nodes does substring check. Relies on `type_num` uniqueness. Fragile.
-- **Module addresses assumed to never contain colons**: `split(":")` assumes no embedded colons
-- **`show_buffer_layers` not forwarded** to rolled edge check — always assumes False (cosmetic)
-- **`show_model_graph` memory leak (FIXED)**: Now calls `model_log.cleanup()` in try/finally
-- **ELK stress O(n^2)**: allocates two n^2 × 8-byte distance matrices. 100k nodes = 160GB.
+- Graphviz render writes a DOT source file alongside rendered output.
+- ELK paths do not support every Graphviz feature; verify conditional labels, module clusters,
+  and code panels after layout changes.
+- `show_model_graph()` should cleanup temporary logs in `finally`.
+- Buffer visibility has multiple modes; use `_normalize_buffer_visibility()`.
+- Intervention node rendering depends on `intervention_ready` metadata.
+- Bundle diff rendering is SVG-string based; compare snapshots after visual changes.
+
+## Tests to Run After Changes
+- `pytest tests/test_conditional_rendering.py -x --tb=short`
+- `pytest tests/test_node_spec_api.py tests/test_node_modes.py -x --tb=short`
+- `pytest tests/test_bundle_diff_renderer.py -x --tb=short`
+- `pytest tests/test_large_graphs.py -x --tb=short` for layout backend changes

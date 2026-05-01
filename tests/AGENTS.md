@@ -1,108 +1,59 @@
-# tests/ — Test Suite
+# tests/ - Test Suite
 
 ## Overview
-~1,004 tests across 16 test files + 2 support files. Uses pytest with deterministic torch seeding.
+The test suite is broad and 2.x-heavy: core capture, postprocess, validation, visualization,
+portable I/O, intervention, fastlog, bridges, examples, and train-mode behavior. Default
+pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 
-## Test Files
+## Main Areas
 
-| File | Tests | What It Covers |
-|------|-------|----------------|
-| `conftest.py` | — | Fixtures, deterministic seeding, output directory setup, coverage reporting |
-| `example_models.py` | — | ~5,400 lines, model definitions for controlled testing |
-| `test_toy_models.py` | 258 | Validation + visualization for toy models (14 sections by category) |
-| `test_real_world_models.py` | 185 | Real-world architectures (20 fast, 165 `@pytest.mark.slow`) |
-| `test_metadata.py` | 129 | Field-level metadata tests, conditional branch detection |
-| `test_param_log.py` | 70 | ParamLog/ParamAccessor |
-| `test_decoration.py` | 61 | Permanent decoration architecture (toggle, crawl, JIT, signals) |
-| `test_validation.py` | 59 | Validation subpackage (registries, perturbation, invariants A-R) |
-| `test_module_log.py` | 45 | ModuleLog/ModulePassLog/ModuleAccessor |
-| `test_large_graphs.py` | 43 | Large graph rendering, RandomGraphModel, ELK layout engine |
-| `test_internals.py` | 41 | Internal implementation details |
-| `test_func_config.py` | 34 | func_config / salient_args metadata |
-| `test_layer_log.py` | 34 | LayerLog aggregate class |
-| `test_save_new_activations.py` | 21 | `save_new_activations()` re-logging |
-| `test_output_aesthetics.py` | 12 | Aesthetic report + vis PDFs for human review |
-| `test_gc.py` | 10 | GC correctness, memory leak detection, param ref release |
-| `test_profiling.py` | 1 | Performance profiling + decoration overhead benchmarks |
-| `test_arg_positions.py` | 1 | ArgSpec lookup table coverage (runs last) |
+| Area | Representative files |
+|------|----------------------|
+| Core capture and metadata | `test_toy_models.py`, `test_metadata.py`, `test_layer_log.py`, `test_module_log.py`, `test_param_log.py` |
+| Decoration and wrappers | `test_decoration.py`, `test_arg_positions.py`, `test_two_pass_inplace_fix.py` |
+| Postprocess conditionals | `test_conditional_*.py`, `test_ast_branches.py`, `test_field_lifecycle_matrix.py` |
+| Visualization | `test_large_graphs.py`, `test_node_spec_api.py`, `test_node_modes.py`, `test_themes.py`, `test_overlays.py`, `test_bundle_diff_renderer.py` |
+| Validation/backward | `test_validation.py`, `test_validate_consolidated.py`, `test_backward.py`, `test_backward_streaming.py` |
+| Portable I/O | `test_io_*.py`, `test_tlspec_*.py`, `fixtures/tlspec_v2_16/` |
+| Intervention | `test_intervention_phase*.py`, `test_sites.py`, `test_selector_unification_phase4.py`, `test_bundle_*.py` |
+| Fastlog | `test_fastlog/` |
+| Bridges/compat/export | `test_bridges_*.py`, `test_compat_report.py`, `test_exports.py`, `test_extractor_compat.py` |
+| Examples/audit | `test_examples.py`, `test_examples_load.py`, `test_not_mvp_audit.py` |
+| Train mode | `test_train_mode/` |
 
 ## Running Tests
 
 ```bash
-pytest tests/                              # all tests
-pytest tests/ -m smoke                     # smoke tests (~6s, 18 tests across 9 files)
+pytest tests/                              # default suite excluding rare
+pytest tests/ -m smoke                     # critical path
 pytest tests/ -m "not slow"                # skip slow real-world tests
 pytest tests/test_toy_models.py            # single file
 pytest tests/test_toy_models.py::test_name # single test
 pytest tests/ -k "loop"                    # keyword filter
 ```
 
-**Important**: Use `timeout: 600000` or `run_in_background: true` for long-running tests.
-Run memory-heavy real-world tests SEQUENTIALLY.
+Run memory-heavy real-world tests sequentially. Optional dependency tests should use
+`pytest.importorskip()` or extras-aware skips.
 
 ## Markers
-- `@pytest.mark.slow` — Tests taking >5 min (mostly real-world models)
-- `@pytest.mark.smoke` — 18 critical-path tests for fast validation during dev
+- `slow` - long-running real-world or heavy tests.
+- `smoke` - fast critical-path checks.
+- `rare` - excluded by default unless explicitly selected.
 
-## Fixtures (conftest.py)
-
-| Fixture | Shape | Use |
-|---------|-------|-----|
-| `default_input1-4` | `(6,3,224,224)` | Standard image input |
-| `zeros_input` | `(6,3,224,224)` | All-zeros edge case |
-| `ones_input` | `(6,3,224,224)` | All-ones edge case |
-| `vector_input` | `(5,)` | 1D models |
-| `input_2d` | `(5,5)` | 2D models (recurrent, LSTM) |
-| `input_complex` | `(3,3)` complex | Complex tensor edge case |
-| `small_input` | `(2,3,32,32)` | Fast metadata tests |
-
-## Test Patterns
-
-### Toy model test (test_toy_models.py)
-```python
-def test_model_descriptive_name(default_input1):
-    model = example_models.MyNewModel()
-    assert validate_saved_activations(model, default_input1)
-    show_model_graph(
-        model, default_input1, vis_save_only=True, vis_mode="unrolled",
-        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "my_new_model"),
-    )
-```
-Every toy test validates activations AND generates a visualization.
-
-### Real-world model test (test_real_world_models.py)
-```python
-def test_architecture_name(default_input1):
-    lib = pytest.importorskip("some_library")
-    model = lib.SomeModel()
-    assert validate_saved_activations(model, default_input1)
-```
-Optional deps use `pytest.importorskip()` inside the test function.
-
-### Metadata test (test_metadata.py)
-```python
-class TestSomeFields:
-    def test_field(self, small_input):
-        model = example_models.SomeModel()
-        mh = log_forward_pass(model, small_input)
-        assert isinstance(mh.some_field, expected_type)
-```
-Uses `log_forward_pass()` directly, not `validate_saved_activations`.
+## Fixtures
+`tests/conftest.py` owns deterministic seeding and common inputs such as image tensors,
+small inputs, vector/2D/complex inputs, and output directories. Model fixtures/classes live
+primarily in `tests/example_models.py`.
 
 ## Output Directories
-All test outputs go to `tests/test_outputs/` (gitignored):
-- `reports/` — coverage reports (text + HTML), aesthetic report, profiling report
-- `visualizations/` — vis PDFs organized by model family (19 subdirs)
+All generated outputs go under `tests/test_outputs/` (gitignored):
+- `reports/` for coverage, aesthetics, profiling.
+- `visualizations/` for rendered graph artifacts.
 
 ## Adding Tests
-1. Model class → `example_models.py`
-2. Test function → appropriate `test_*.py` file
-3. New fields → add test in `test_metadata.py`, update constants.py FIELD_ORDER
-4. After changing vis/repr → run `test_output_aesthetics.py` and inspect outputs
-
-## Aesthetic Testing
-After changing user-facing features (reprs, accessors, error messages, visualization):
-```bash
-pytest tests/test_output_aesthetics.py -v
-```
-Then inspect `tests/test_outputs/reports/aesthetic_report.pdf` visually.
+- New model class: add to `tests/example_models.py` unless the test needs a one-off local class.
+- New fields: test metadata, FIELD_ORDER consistency, pandas/export behavior when user-facing.
+- Visualization changes: run targeted render tests and inspect generated artifacts when needed.
+- Portable I/O changes: include save/load, lazy, corruption/security, and backcompat coverage.
+- Intervention changes: test selector resolution, hook behavior, save-level behavior, and bundle
+  comparisons where relevant.

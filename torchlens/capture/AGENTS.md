@@ -1,42 +1,50 @@
-# capture/ — Implementation Guide
+# capture/ - Implementation Guide
 
 ## Label Formats
-- Source tensors: `{type}_{num}_raw` (e.g., `"input_0_raw"`, `"buffer_1_raw"`)
-- Function outputs: `{type}_{num}_{counter}_raw` (e.g., `"conv2d_1_5_raw"`)
-- Labels are raw during capture; renamed to final labels in postprocess/labeling.py
+- Source tensors: `{type}_{num}_raw`, for example `input_0_raw` or `buffer_1_raw`.
+- Function outputs: `{type}_{num}_{counter}_raw`, for example `conv2d_1_5_raw`.
+- Labels are raw during capture and become final labels in `postprocess/labeling.py`.
+- Pass-qualified final labels use `{label}:{pass_num}`.
 
 ## arg_positions.py
-- 3-tier O(1) lookup: static `FUNC_ARG_SPECS` table → dynamic `_DYNAMIC_SPEC_CACHE` → BFS fallback
-- `ArgSpec` frozen dataclass: `tensor_args`, `tensor_kwargs`, `param_args`, `param_kwargs`
-- `extract_tensors_and_params()` — Main entry point, returns (tensors, params) from args/kwargs
+- Main entry point: `extract_tensors_and_params(args, kwargs, func_name)`.
+- Lookup order: `FUNC_ARG_SPECS` static table -> `_DYNAMIC_SPEC_CACHE` -> BFS fallback.
+- `ArgSpec` stores tensor arg indexes, tensor kwarg names, param arg indexes, and param kwarg names.
+- Keep keyword handling accurate; stale entries can hide graph parents.
 
 ## salient_args.py
-- `@_register()` pattern for extractors per layer type
-- `_build_arg_name_map()` maps positional args to named params
-- Failure-safe: try-except returns `{}` on any error
-- `_get()` helper returns `None` on missing keys (graceful degradation)
+- Uses `@_register()` per function/layer family.
+- `_build_arg_name_map()` maps positional args to names.
+- Extractors are failure-safe and return `{}` on unexpected errors.
+- Metadata is display-oriented; never let it affect graph correctness.
 
 ## flops.py
-- 3-tier system: ZERO_FLOPS_OPS (view, reshape = 0), ELEMENTWISE_FLOPS (relu, sigmoid),
-  SPECIALTY_HANDLERS (conv2d, matmul — shape-aware computation)
-- MAC = 2 FLOPs convention
+- Zero-FLOPs ops, elementwise ops, and specialty handlers feed
+  `compute_forward_flops()` and `compute_backward_flops()`.
+- `register_op_rule()` is the extension point.
+- MAC convention is 2 FLOPs.
 
-## Known Bugs
-- **ARG-KWARGS-MISSING**: `extract_tensors_and_params()` doesn't extract tensors passed as
-  keyword args for many common functions (linear, cat, where). `tensor_kwargs=()` in static
-  entries means `linear(x, weight=w, bias=b)` only finds `x`.
-- **salient_args silent drop**: `*args` silently dropped in `_build_arg_name_map` (lines 52-56)
+## output_tensors.py Gotchas
+- In-place ops rely on `safe_copy()` stripping `tl_tensor_label_raw` from clones so the
+  mutation is logged as a new operation.
+- Barcode nesting detection distinguishes bottom-level ops from wrapper-level composites.
+- `activation_postfunc` must run under `pause_logging()`.
+- Live intervention hooks run in this layer; hook output validation lives under
+  `intervention/runtime.py`.
+- Fast-path validation must check tensor existence, execution order, and parent alignment.
 
-## Gotchas
-- **In-place ops**: `safe_copy` strips `tl_tensor_label_raw` from clone, ensuring
-  in-place ops are always logged as new operations. Label propagated back after logging.
-- **Barcode nesting detection**: Random barcodes detect bottom-level vs wrapper functions.
-  If barcode unchanged after call → no nested torch calls → log it.
-- **Buffer guard**: `torch_funcs.py:108` must check `not hasattr(t, "tl_tensor_label_raw")`
-  to prevent duplicate buffer entries when multiple functions use the same buffer.
-- **Fast-path validation**: 3 levels — tensor existence, execution order, parent sets.
-  Graph divergence between passes raises an error.
-- **pause_logging()**: Must wrap `activation_postfunc` calls and `get_tensor_memory_amount()`
-  to prevent recursive logging of internal torch operations.
-- **arg_positions dynamic cache**: Never cleared on torch version upgrades — could serve
-  stale specs if torch updates function signatures.
+## source_tensors.py Gotchas
+- Input and buffer roots must increment counters consistently with exhaustive and fast paths.
+- Buffer duplicate guards prevent repeated buffer source nodes when many ops read one buffer.
+
+## backward.py Gotchas
+- Backward capture walks autograd `grad_fn` links and installs hooks after forward capture.
+- Gradient streaming reuses `_io` bundle refs and must finalize/evict in postprocess finalization.
+- Validation for backward lives in `validation/backward.py`.
+
+## Known Risks
+- Dynamic `arg_positions` cache is process-local and is not automatically invalidated across
+  torch version changes.
+- Keyword tensor coverage should be checked whenever adding static specs.
+- Fast capture assumes deterministic graph shape between passes; random/control-flow drift is
+  a hard error.
