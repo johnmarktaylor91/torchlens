@@ -1,0 +1,738 @@
+{
+  "io_format_version": 2,
+  "torchlens_version": "2.16.0",
+  "torch_version": "2.8.0+cu128",
+  "python_version": "3.11.6",
+  "platform": "linux-x86_64",
+  "created_at": "2026-05-01T12:49:08Z",
+  "bundle_format": "directory",
+  "n_layers": 42,
+  "n_activation_blobs": 42,
+  "n_gradient_blobs": 0,
+  "n_auxiliary_blobs": 0,
+  "tensors": [
+    {
+      "blob_id": "0000000001",
+      "kind": "activation",
+      "label": "input_1:1",
+      "relative_path": "blobs/0000000001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        5
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 240,
+      "sha256": "b31447d3c7f63fd2d30428dc374ea3d54a95c1d38db2c09e3e075fe36c3d1bed"
+    },
+    {
+      "blob_id": "0000000002",
+      "kind": "activation",
+      "label": "linear_1_1:1",
+      "relative_path": "blobs/0000000002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "9ffdcc905ec13cb56d794396de0e2977c5826866416709bfda2faa108687b585"
+    },
+    {
+      "blob_id": "0000000003",
+      "kind": "activation",
+      "label": "transpose_1_2:1",
+      "relative_path": "blobs/0000000003.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "6c41a59bbaf2f64fd5f760f95cfb907c7fef8f287f966510d57189f05198efe8"
+    },
+    {
+      "blob_id": "0000000004",
+      "kind": "activation",
+      "label": "linear_2_3:1",
+      "relative_path": "blobs/0000000004.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        18
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 864,
+      "sha256": "dd53cbded550946b8c57dc260878d12f0272130a378a9e8131e223fbba7b8ab4"
+    },
+    {
+      "blob_id": "0000000005",
+      "kind": "activation",
+      "label": "unflatten_1_4:1",
+      "relative_path": "blobs/0000000005.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 864,
+      "sha256": "254052c1fa0f3935f69df2f9c537464ad609cca9d54890656d19d08768de49a6"
+    },
+    {
+      "blob_id": "0000000006",
+      "kind": "activation",
+      "label": "unsqueeze_1_5:1",
+      "relative_path": "blobs/0000000006.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        3,
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 864,
+      "sha256": "691a0a59daf66ca3a5950ed47904577351adcdb0d5dc7823c6ffeebd426b7abc"
+    },
+    {
+      "blob_id": "0000000007",
+      "kind": "activation",
+      "label": "transpose_2_6:1",
+      "relative_path": "blobs/0000000007.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        3,
+        2,
+        1,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 864,
+      "sha256": "5386a8683e680fd84fe85bfcd81c8001b457be685313b2967e337114d38ae5b2"
+    },
+    {
+      "blob_id": "0000000008",
+      "kind": "activation",
+      "label": "squeeze_1_7:1",
+      "relative_path": "blobs/0000000008.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 864,
+      "sha256": "7fc39c57ec0e03754ccf3d6b6fc5fd81bc2bbd324bffe4e2dd2300936c710af2"
+    },
+    {
+      "blob_id": "0000000009",
+      "kind": "activation",
+      "label": "contiguous_1_8:1",
+      "relative_path": "blobs/0000000009.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 864,
+      "sha256": "7fc39c57ec0e03754ccf3d6b6fc5fd81bc2bbd324bffe4e2dd2300936c710af2"
+    },
+    {
+      "blob_id": "0000000010",
+      "kind": "activation",
+      "label": "getitem_1_9:1",
+      "relative_path": "blobs/0000000010.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "75bc948b6ee7231817dfbc6319d3f0cd21aea71f3a34bb4e1980152b3b2b9268"
+    },
+    {
+      "blob_id": "0000000011",
+      "kind": "activation",
+      "label": "getitem_2_10:1",
+      "relative_path": "blobs/0000000011.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "6256a139d1c9324dee4b78d6398cabd4d92a06b50c2962f60c86fd658b8b6f7d"
+    },
+    {
+      "blob_id": "0000000012",
+      "kind": "activation",
+      "label": "getitem_3_11:1",
+      "relative_path": "blobs/0000000012.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "6bd712ca8c8a22edf55097917a76ddf8b800cc98ca65e9ed4f825534b7d76cbc"
+    },
+    {
+      "blob_id": "0000000013",
+      "kind": "activation",
+      "label": "view_1_12:1",
+      "relative_path": "blobs/0000000013.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        4,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "3b6d23369a97156f01923b44bf3f8518b9b4874e13d14e30d62f4378bf280b81"
+    },
+    {
+      "blob_id": "0000000014",
+      "kind": "activation",
+      "label": "transpose_3_13:1",
+      "relative_path": "blobs/0000000014.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        4,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "6c771751b78941294dee7412c08f2b3bd747fd77a0378d1fc300ceb1844ba0ad"
+    },
+    {
+      "blob_id": "0000000015",
+      "kind": "activation",
+      "label": "view_2_14:1",
+      "relative_path": "blobs/0000000015.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        4,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "d5c5ba7f26a6fbdda0c5973c8b4f9a27184ba9e2c4ff0c659f2f453a83806d38"
+    },
+    {
+      "blob_id": "0000000016",
+      "kind": "activation",
+      "label": "transpose_4_15:1",
+      "relative_path": "blobs/0000000016.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        4,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "af7008f43df080090e12be2b98877cd75bc7742b83938bbfddbef70e3ada2691"
+    },
+    {
+      "blob_id": "0000000017",
+      "kind": "activation",
+      "label": "view_3_16:1",
+      "relative_path": "blobs/0000000017.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        4,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "c60830bda8281a6d994ad9231b10074126f103829c172e15df92d9404a4260e3"
+    },
+    {
+      "blob_id": "0000000018",
+      "kind": "activation",
+      "label": "transpose_5_17:1",
+      "relative_path": "blobs/0000000018.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        4,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "181a851b84ed52f2d300b320ab1a58ecbd18a472bf57db3b011b6b8366a14980"
+    },
+    {
+      "blob_id": "0000000019",
+      "kind": "activation",
+      "label": "view_4_18:1",
+      "relative_path": "blobs/0000000019.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        2,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "0fb7637357b31176fd6e5917ad131921c52f9fd9943e9fdbddde8830c85cb3ae"
+    },
+    {
+      "blob_id": "0000000020",
+      "kind": "activation",
+      "label": "view_5_19:1",
+      "relative_path": "blobs/0000000020.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        2,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "1eac41804adf221f55421a8b59920a552b4e2de4935f9b5b6f63f6b7a8af97c5"
+    },
+    {
+      "blob_id": "0000000021",
+      "kind": "activation",
+      "label": "view_6_20:1",
+      "relative_path": "blobs/0000000021.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        2,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "1ca00befd5d510a1bdb4be8f85b388f54219bfbf2e5913726c63ec3a93fc011c"
+    },
+    {
+      "blob_id": "0000000022",
+      "kind": "activation",
+      "label": "scaleddotproductattention_1_21:1",
+      "relative_path": "blobs/0000000022.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        2,
+        3,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "5e684a49f29545d6d25aea7f990731a7e0d02070c521188bf44daac0898260f3"
+    },
+    {
+      "blob_id": "0000000023",
+      "kind": "activation",
+      "label": "permute_1_22:1",
+      "relative_path": "blobs/0000000023.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        2,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "0854e6cc9a10219cc699bf9a8cc7ae70aeb919d097e6369de87e4186ff75df46"
+    },
+    {
+      "blob_id": "0000000024",
+      "kind": "activation",
+      "label": "contiguous_2_23:1",
+      "relative_path": "blobs/0000000024.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        2,
+        3
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "0854e6cc9a10219cc699bf9a8cc7ae70aeb919d097e6369de87e4186ff75df46"
+    },
+    {
+      "blob_id": "0000000025",
+      "kind": "activation",
+      "label": "view_7_24:1",
+      "relative_path": "blobs/0000000025.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        6,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "3fe2e687850d9cdc2ef7ebc3b70f972f5724870eafe05937f2b3415b160051ba"
+    },
+    {
+      "blob_id": "0000000026",
+      "kind": "activation",
+      "label": "linear_3_25:1",
+      "relative_path": "blobs/0000000026.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        6,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "5f3755109f2661f10c282e1db1b342860ce5d1aff1ab4296965bad09bb9d8c30"
+    },
+    {
+      "blob_id": "0000000027",
+      "kind": "activation",
+      "label": "view_8_26:1",
+      "relative_path": "blobs/0000000027.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "9877617a1a91f9fdc19dd08f27322366a20dc8b0b5240e55527e32efed83ad13"
+    },
+    {
+      "blob_id": "0000000028",
+      "kind": "activation",
+      "label": "transpose_6_27:1",
+      "relative_path": "blobs/0000000028.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "ee1f78ae0e9ba962ec7b36eafbab13fdf53db4c21496845971c609b58cbe2215"
+    },
+    {
+      "blob_id": "0000000029",
+      "kind": "activation",
+      "label": "dropout_1_28:1",
+      "relative_path": "blobs/0000000029.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "ee1f78ae0e9ba962ec7b36eafbab13fdf53db4c21496845971c609b58cbe2215"
+    },
+    {
+      "blob_id": "0000000030",
+      "kind": "activation",
+      "label": "add_1_29:1",
+      "relative_path": "blobs/0000000030.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "84748b5fbd5b8311970ab363d9a9f463eec0be75344d94578c746ca127e3e1da"
+    },
+    {
+      "blob_id": "0000000031",
+      "kind": "activation",
+      "label": "layernorm_1_30:1",
+      "relative_path": "blobs/0000000031.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "feb03084e748c33b71fef76bd79c714846ce5368496b5f875132a177136b0b35"
+    },
+    {
+      "blob_id": "0000000032",
+      "kind": "activation",
+      "label": "linear_4_31:1",
+      "relative_path": "blobs/0000000032.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        8
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 384,
+      "sha256": "828027cc28776e1692a7190c2b5097ef95deb4721bdad72b7565a26283d2d834"
+    },
+    {
+      "blob_id": "0000000033",
+      "kind": "activation",
+      "label": "gelu_1_32:1",
+      "relative_path": "blobs/0000000033.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        8
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 384,
+      "sha256": "41cddff62187adfe5fbd70ffe56fce2d9e28af666b09924ab5e06ed05896f161"
+    },
+    {
+      "blob_id": "0000000034",
+      "kind": "activation",
+      "label": "dropout_2_33:1",
+      "relative_path": "blobs/0000000034.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        8
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 384,
+      "sha256": "41cddff62187adfe5fbd70ffe56fce2d9e28af666b09924ab5e06ed05896f161"
+    },
+    {
+      "blob_id": "0000000035",
+      "kind": "activation",
+      "label": "linear_5_34:1",
+      "relative_path": "blobs/0000000035.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "350df6525e29c627da540f28a2407c64cb44b33fabfef574253d338bf9412b5c"
+    },
+    {
+      "blob_id": "0000000036",
+      "kind": "activation",
+      "label": "dropout_3_35:1",
+      "relative_path": "blobs/0000000036.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "350df6525e29c627da540f28a2407c64cb44b33fabfef574253d338bf9412b5c"
+    },
+    {
+      "blob_id": "0000000037",
+      "kind": "activation",
+      "label": "add_2_36:1",
+      "relative_path": "blobs/0000000037.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "9b94f4dfc6a99205ac01d6b07ed48780fd71e6cc7d130080f68159ea90d1073e"
+    },
+    {
+      "blob_id": "0000000038",
+      "kind": "activation",
+      "label": "layernorm_2_37:1",
+      "relative_path": "blobs/0000000038.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "6aa4884e294247c88f6754762b1339b1a8f7b9fb0a1209243da1f22a84e5144b"
+    },
+    {
+      "blob_id": "0000000039",
+      "kind": "activation",
+      "label": "layernorm_3_38:1",
+      "relative_path": "blobs/0000000039.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 288,
+      "sha256": "f0c993e679affe3718191f33f77454a05ba22294dccbad006f11c70e84a91e53"
+    },
+    {
+      "blob_id": "0000000040",
+      "kind": "activation",
+      "label": "getitem_4_39:1",
+      "relative_path": "blobs/0000000040.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        6
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 96,
+      "sha256": "2dce1190567a906548d1729d13b4bf1758ef63b289f6639f5870af0817959ec4"
+    },
+    {
+      "blob_id": "0000000041",
+      "kind": "activation",
+      "label": "linear_6_40:1",
+      "relative_path": "blobs/0000000041.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "d4032fcce6deb3310ab4cee43ad9a78e12c6460c4d5216674f9e010916d6c614"
+    },
+    {
+      "blob_id": "0000000042",
+      "kind": "activation",
+      "label": "output_1:1",
+      "relative_path": "blobs/0000000042.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float64",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "d4032fcce6deb3310ab4cee43ad9a78e12c6460c4d5216674f9e010916d6c614"
+    }
+  ],
+  "unsupported_tensors": []
+}

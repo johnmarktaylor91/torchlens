@@ -154,6 +154,7 @@ def save_intervention(
         }
         manifest_json = {
             "format_version": TLSPEC_FORMAT_VERSION,
+            "kind": "intervention",
             "tensor_entries": [entry.to_dict() for entry in tensor_entries],
         }
 

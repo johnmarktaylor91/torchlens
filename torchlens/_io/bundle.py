@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
+import json
 import os
 import platform
 import pickle
@@ -266,6 +267,21 @@ def load(
     """
 
     bundle_path = Path(path)
+    if bundle_path.is_dir():
+        from ..io import detect_tlspec_format
+
+        tlspec_format = detect_tlspec_format(bundle_path)
+        if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
+            from ..intervention.save import load_intervention_spec
+
+            return load_intervention_spec(bundle_path)  # type: ignore[return-value]
+        if tlspec_format == "v2.0_unified":
+            return _load_unified_tlspec(
+                bundle_path,
+                lazy=lazy,
+                map_location=map_location,
+                materialize_nested=materialize_nested,
+            )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
 
@@ -316,6 +332,76 @@ def load(
     setattr(model_log, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
     setattr(model_log, "_source_bundle_path", bundle_path)
     return model_log
+
+
+def _load_unified_tlspec(
+    bundle_path: Path,
+    *,
+    lazy: bool,
+    map_location: str | torch.device,
+    materialize_nested: bool,
+) -> ModelLog:
+    """Load a Phase-11 unified ``.tlspec`` bundle by manifest kind.
+
+    Parameters
+    ----------
+    bundle_path:
+        Directory containing a unified ``manifest.json``.
+    lazy:
+        Whether direct activation/gradient blobs should remain lazy placeholders.
+    map_location:
+        Target device for eager tensor materialization.
+    materialize_nested:
+        Whether nested blob refs should be materialized when ``lazy=True``.
+
+    Returns
+    -------
+    ModelLog
+        Loaded model log, or an intervention spec during the Phase 11.0
+        compatibility bridge.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the unified kind is unsupported in this runtime.
+    """
+
+    manifest = _read_manifest_object(bundle_path / "manifest.json")
+    kind = manifest.get("kind")
+    if kind == "intervention":
+        from ..intervention.save import load_intervention_spec
+
+        return load_intervention_spec(bundle_path)  # type: ignore[return-value]
+    raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
+
+
+def _read_manifest_object(path: Path) -> dict[str, Any]:
+    """Read one manifest as a JSON object without schema validation.
+
+    Parameters
+    ----------
+    path:
+        Manifest file path.
+
+    Returns
+    -------
+    dict[str, Any]
+        Decoded manifest object.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the manifest cannot be read as a JSON object.
+    """
+
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TorchLensIOError(f"Failed to read manifest at {path}.") from exc
+    if not isinstance(data, dict):
+        raise TorchLensIOError("Manifest root must be a JSON object.")
+    return data
 
 
 def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:

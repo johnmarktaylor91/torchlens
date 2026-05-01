@@ -1,0 +1,140 @@
+{
+  "append_state": {
+    "append_sequence_id": 0,
+    "is_appended": false,
+    "operation_history": []
+  },
+  "executable": false,
+  "format_version": "1",
+  "function_registry_keys": [
+    {
+      "key": {
+        "dispatch_kind": "function",
+        "import_path": null,
+        "namespace": "torch",
+        "qualname": "conv2d",
+        "version": 1
+      },
+      "layer_label": "conv2d_1_1"
+    },
+    {
+      "key": {
+        "dispatch_kind": "function",
+        "import_path": null,
+        "namespace": "torch",
+        "qualname": "relu",
+        "version": 1
+      },
+      "layer_label": "relu_1_2"
+    },
+    {
+      "key": {
+        "dispatch_kind": "function",
+        "import_path": null,
+        "namespace": "torch.nn.functional",
+        "qualname": "adaptive_avg_pool2d",
+        "version": 1
+      },
+      "layer_label": "adaptiveavgpool2d_1_3"
+    },
+    {
+      "key": {
+        "dispatch_kind": "function",
+        "import_path": null,
+        "namespace": "torch",
+        "qualname": "flatten",
+        "version": 1
+      },
+      "layer_label": "flatten_1_4"
+    },
+    {
+      "key": {
+        "dispatch_kind": "function",
+        "import_path": "torch._C._nn:linear",
+        "namespace": "custom",
+        "qualname": "linear",
+        "version": 1
+      },
+      "layer_label": "linear_1_5"
+    },
+    {
+      "key": {
+        "dispatch_kind": "function",
+        "import_path": "torch._C._nn:linear",
+        "namespace": "custom",
+        "qualname": "linear",
+        "version": 1
+      },
+      "layer_label": "output_1"
+    }
+  ],
+  "helper_registry_version": "1",
+  "helpers": [
+    {
+      "args": [],
+      "batch_independent": true,
+      "compatible_with_append": true,
+      "kind": "forward",
+      "kwargs": {
+        "force_shape_change": false
+      },
+      "metadata": {},
+      "name": "zero_ablate",
+      "portability": "builtin"
+    }
+  ],
+  "intervention_spec": {
+    "helper": null,
+    "hook": null,
+    "hook_specs": [],
+    "metadata": {},
+    "records": [],
+    "target_value_specs": [
+      {
+        "metadata": {
+          "created_by": "set_callable_one_shot"
+        },
+        "site_target": {
+          "metadata": {},
+          "selector_kind": "func",
+          "selector_value": "relu",
+          "slice_spec": null,
+          "strict": false
+        },
+        "value": {
+          "__helper__": {
+            "args": [],
+            "batch_independent": true,
+            "compatible_with_append": true,
+            "kind": "forward",
+            "kwargs": {
+              "force_shape_change": false
+            },
+            "metadata": {},
+            "name": "zero_ablate",
+            "portability": "builtin"
+          }
+        }
+      }
+    ],
+    "targets": [],
+    "value": null
+  },
+  "save_level": "audit",
+  "target_manifest": [
+    {
+      "graph_shape_hash": "e44fe77987b6d8791ef095c0e98e87b10d6988b9c063fe6ccde796bf1e60e1e7",
+      "module_address_normalized": null,
+      "resolved_labels": [
+        "relu_1_2"
+      ],
+      "selector": {
+        "metadata": {},
+        "selector_kind": "func",
+        "selector_value": "relu",
+        "slice_spec": null,
+        "strict": false
+      }
+    }
+  ]
+}
