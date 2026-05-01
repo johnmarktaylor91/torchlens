@@ -1,37 +1,829 @@
 # CHANGELOG
 
-## Unreleased
 
-### Changed
+## v3.0.0 (2026-05-01)
 
-- Switch project licensing from GPL-3.0-only to Apache-2.0 so TorchLens can serve
-  as a substrate dependency for the broader ML ecosystem.
-- Update the package classifier from Alpha to Beta per the TorchLens 2.0 Q23
-  release-positioning lock.
-- Codify the TorchLens 2.0 top-level API ledger at 40 names. Moved legacy
-  top-level helpers and rare-use types to namespaced homes with deprecation
-  shims; `TensorLog`, `ModulePassLog`, `ParamLog`, `BufferLog`, `GradFnLog`,
-  and `GradFnPassLog` are no longer in `torchlens.__all__` but remain
-  importable from `torchlens.types` for the migration window.
-- Add grouped option classes under `torchlens.options` for capture, save,
-  visualization, replay, intervention, and streaming settings.
-- Introduce canonical visualization vocabulary: `view`, `depth`, `renderer`,
-  `layout`, and `node_style`, with legacy `vis_*` spellings still accepted.
-- Collapse TorchLens-specific exceptions under `torchlens.errors` domain bases:
-  `InterventionError`, `CaptureError`, `ConfigurationError`,
-  `CompatibilityError`, and `ValidationError`, with legacy exception names
-  preserved for the migration window.
-- Move `print_all_fields` to private `torchlens._debug.print_all_fields`; it is
-  no longer a public method/API surface. Consolidate conditional arm edge views
-  around `conditional_arm_edges`, with `conditional_then_edges`,
-  `conditional_elif_edges`, and `conditional_else_edges` retained as deprecated
-  aliases for one minor cycle. Rename the activation-save option spelling to
-  `activation_transform`, with `activation_postfunc` accepted as a deprecated
-  alias.
-- Move summary builder internals under
-  `torchlens.visualization._summary_internal`; public `summary()` behavior is
-  unchanged. `_robustness.py` and fastlog visualization helpers remain private
-  implementation details after audit.
+### Features
+
+- **2.0**: Torchlens 2.0 feature overhaul (28 commits, 17 phases)
+  ([#175](https://github.com/johnmarktaylor91/torchlens/pull/175),
+  [`b55e16b`](https://github.com/johnmarktaylor91/torchlens/commit/b55e16b3865d419a2eb0d6ed6ca6b1bd44249c81))
+
+* chore(release): switch to Apache 2.0, declare [extras], promote to Beta
+
+Per TorchLens 2.0 04_DECISIONS Q29/Q23 + Phase 0 of the implementation plan:
+
+- License: GPL-3.0-only → Apache-2.0 (PEP 639 expression form; dropped the GPL classifier, since
+  modern setuptools rejects classifier+expression pairs). - README license badge updated. - PyPI
+  Development Status :: 3 - Alpha → 4 - Beta. - pyproject.toml [project.optional-dependencies]:
+  declare 25 extras groups covering appliance subfolders (viewer/paper/notebook/llm/neuro), bridges
+  (captum/sae/lightning/wandb/hf/...), STRETCH bridges (gradcam/shap/inseq/
+  steering/repeng/dialz/nnsight/lit/depyf/compat-shims/vision-shims), and capability extras
+  (viz/tabular/profiler). Default deps unchanged in this commit; pandas/IPython move to extras in
+  Phase 1e.
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+* feat(subfolders): scaffold five appliance subfolders gated by [extras]
+
+Per Phase 0.3 + Q27 lock (single torchlens package; appliances become subfolders gated by opt-in
+  extras, not separate PyPI namespaces):
+
+- torchlens/viewer/ — interactive HTML viewer (extras: [viewer], empty for now; impl arrives later)
+  - torchlens/paper/ — 3D cuboid renderer (extras: [paper], empty for now) - torchlens/notebook/ —
+  Treescope-grade HTML repr (extras: [notebook] → ipython + jupyter-client) - torchlens/llm/ — logit
+  lens, sequence selectors (extras: [llm], empty for now) - torchlens/neuro/ — RDM/CKA/Brain-Score
+  helpers (extras: [neuro] → rsatoolbox + brain-score + thingsvision)
+
+Each __init__.py: docstring stating intended scope, eager-imports its declared deps, raises
+  ImportError("install with pip install torchlens[X]") on miss, exposes empty __all__ until phase
+  work fills in.
+
+tests/test_subfolder_imports.py asserts the import-success / ImportError matrix per subfolder.
+
+* docs(planning): exception taxonomy proposal, §6 audit, method ledger pre-work
+
+Phase 0.4 + 0.5 + 0.7 deliverables (planning artifacts; not user-facing code yet):
+
+- exception_taxonomy_proposal.md: 46 current exception classes inventoried, mapped to a 5-base-class
+  taxonomy (TorchLensError + InterventionError / CaptureError / ConfigurationError /
+  CompatibilityError / ValidationError) with payload contract and per-class deprecation alias plan.
+  Implementation in Phase 1c. - phase_0_5_audit_report.md: §6 of CURATED_FEATURE_LIST verified
+  consistent with shipped 2.16.0 + planned NEW work. No vault-level drift. - method_ledger.md: every
+  public method on ModelLog, LayerLog, LayerPassLog, ModuleLog, Bundle inventoried + classified
+  KEEP/MOVE/DROP/NEW. Final method counts within budgets: ModelLog 67 → 35 (≤ 40) LayerLog 49 → 30
+  (≤ 30, exact) LayerPassLog 30 → 23 (≤ 25) ModuleLog 22 → 16 (≤ 20) Bundle 24 → 24 (≤ 25; +1 for
+  Phase 9 show_diff = 25 exact) This ledger is the authoritative input to Phase 1a's API
+  codification.
+
+* feat(api)!: codify TorchLens 2.0 API ledger — 84 → 40 names with deprecation shims
+
+Phase 1a: the largest single-PR scope in the TorchLens 2.0 push. Implements the §A1 API Ledger from
+  IMPLEMENTATION_PLAN_FINAL.md, plus a detect-secrets baseline to whitelist the audit notebook's
+  nbformat-generated cell IDs.
+
+Top-level surface (`torchlens.__all__`): - 84 names → 40 (exact). Slim per substrate identity
+  guardrail. - 45 names moved via module-level `__getattr__` object aliases that emit
+  `DeprecationWarning` on first attribute access. - 7 wrapper functions preserved via
+  `functools.wraps`-decorated forwarders with the moved impls living at the canonical new path:
+  `validate_forward_pass` (6 params; positional `random_seed` preserved) `validate_backward_pass` (4
+  positional incl. `loss_fn`; kw-only tail) `validate_saved_activations` (alias of forward; same
+  6-param shape) `summary` (model+input shape; runs temp capture) `show_model_graph` (25-param)
+  `show_backward_graph` (11-param; takes `model_log`) `load_intervention_spec` (forwards to
+  polymorphic `torchlens.load`) `inspect.signature(torchlens.X)` follows `__wrapped__` and returns
+  the moved impl's signature exactly. - 1 hard-dropped: `print_all_fields` (debug-only). - 7 NEW
+  slots reserved as stubs raising `NotImplementedError(<phase>)`: `peek/extract/batched_extract`
+  (Phase 2); `validate/tap/record_span/sites` (Phase 5a).
+
+New namespace submodules (each with explicit `__all__`): `torchlens.accessors`, `.bridge`,
+  `.callbacks`, `.compat`, `.errors`, `.examples`, `.experimental` (+ `.experimental.dagua`),
+  `.export`, `.grad`, `.intervene`, `.io`, `.partial`, `.report`, `.stats`, `.viz`. Existing
+  namespaces extended: `.types`, `.options`, `.utils`, `.validation`, `.visualization`, `.fastlog`.
+  `torchlens.visualization` exposes graph functions lazily (`__getattr__`) to avoid circular
+  imports.
+
+Tests: - `tests/test_api_surface.py` — 4 invariants on the public surface. -
+  `tests/test_api_surface_deprecation.py` — 59 per-name regressions including representative LEGACY
+  POSITIONAL calls and `inspect.signature` equality checks. - `tests/test_api_renames.py` +
+  `tests/test_fastlog/test_storage_modes.py` updated for the new canonical paths.
+
+Docs: - `docs/migration/v2.0_api_changes.md` — 91-row table of every old → new name with mechanism
+  and removal version. - `CHANGELOG.md` updated.
+
+Total Audit (Phase 17 progressive growth): - `notebooks/total_audit/00_install_and_smoke.ipynb`
+  skeleton. - `notebooks/total_audit/_shared.py` with `tiny_model()` factory. -
+  `notebooks/total_audit/README.md` placeholder.
+
+Tooling: - `.secrets.baseline` + `.pre-commit-config.yaml` `--baseline` arg — whitelists nbformat
+  random hex cell IDs (false-positive "Hex High Entropy String" matches) so the audit notebook can
+  scaffold without tripping the secrets hook.
+
+Quality gates: - ruff: PASS. mypy: PASS (0 errors). - Tier-1 smoke: 143 passed. Tier-2 full pytest:
+  1920 passed, 27 skipped, 9 deselected, 2 xfailed. - Clean install + `len(torchlens.__all__) ==
+  40`: PASS.
+
+BREAKING CHANGE: 53 names removed from `torchlens.__all__`. All remain importable for one minor
+  cycle via deprecation shims; `DeprecationWarning` fires on each access naming the canonical new
+  path.
+
+* feat(api): grouped option classes + canonical visualization vocabulary
+
+Phase 1b: refactor capture/save/visualization/replay/intervention/streaming kwargs into 6 grouped
+  option classes per §13.3, and rename visualization kwargs to the canonical vocabulary per §13.4.
+  Behavior preserved; old kwargs accepted for one minor cycle with DeprecationWarning.
+
+Option classes (`torchlens.options.*`, frozen dataclasses): - CaptureOptions (22), SaveOptions (7),
+  VisualizationOptions (21, extended), ReplayOptions (6), InterventionOptions (7), StreamingOptions
+  (3, extended). Some fields are inert placeholders for later phases.
+
+Canonical vocabulary (§13.4): vis_mode → view, vis_nesting_depth → depth, vis_renderer → renderer,
+  vis_node_placement → layout, vis_node_mode → node_style. Old spellings still accepted;
+  DeprecationWarning fires once per call naming the canonical replacement.
+
+Entry-point wiring: log_forward_pass, show_model_graph, show_backward_graph,
+  ModelLog.do/replay/replay_from/rerun, intervention/replay.py, intervention/rerun.py all accept
+  their respective option class AND continue accepting individual kwargs for back-compat. Conflict
+  detection raises ValueError when both styles passed for same field.
+
+Tests: tests/test_options.py (18) + tests/test_options_wiring.py (5); tests/test_api_renames.py
+  extended (+67/-37).
+
+Total Audit growth (Phase 17 progressive): - notebooks/total_audit/03_save_load_basics.ipynb
+  skeleton. - .secrets.baseline updated to whitelist the new notebook's cell IDs.
+
+Migration: docs/migration/v2.0_api_changes.md adds Phase 1b mapping. CHANGELOG entry added.
+
+Quality gates: ruff PASS, mypy PASS (0 errors), Tier-1 smoke 143/143, new tests 23/23, clean install
+  + len(__all__)==40 PASS.
+
+* refactor(errors): collapse exception classes to 5-base taxonomy
+
+Phase 1c: 47 existing exception classes folded under a single 5-base taxonomy per §13.8 + the Phase
+  0.4 design doc.
+
+New base hierarchy (`torchlens/errors/_base.py`): - TorchLensError (root) ├─ InterventionError ├─
+  CaptureError ├─ ConfigurationError ├─ CompatibilityError └─ ValidationError - TorchLensWarning
+  (warning base)
+
+Payload contract: file_path, line_no, affected_sites, severity (`recoverable` | `informational` |
+  `fatal`), plus extra `fields` for case-specific structured data.
+
+Migration: - 46/47 old exception classes preserved as subclasses of the right new base —
+  pre-existing `except OldClass:` continues to work. - 1 alias: `SpecPortabilityError =
+  OpaqueCallableInExecutableSaveError`. - Old modules OWN the compatibility class objects where
+  runtime code raises them; `torchlens/errors/__init__.py` lazily surfaces legacy names via
+  `__getattr__` to avoid import-cycle risk.
+
+Tests: tests/test_exception_taxonomy.py — 56 tests covering payload contract, base hierarchy,
+  issubclass mapping for every old class.
+
+Total Audit growth: notebooks/total_audit/21_validation.ipynb skeleton. .secrets.baseline updated.
+
+Migration doc: docs/migration/v2.0_api_changes.md adds Phase 1c table.
+
+Quality gates: ruff PASS, mypy PASS (138 files clean), Tier-1 smoke 143/143, new tests 56/56,
+  len(__all__)==40 PASS.
+
+* refactor(visualization): retire ELK from public API + dagua to experimental opt-in
+
+Phase 1d: tightens the rendering surface per §13.6.
+
+Dagua → experimental: - `torchlens/visualization/dagua_bridge.py` →
+  `torchlens/experimental/dagua/_bridge.py`. - `vis_renderer="dagua"` raises RuntimeError unless
+  `from torchlens.experimental import dagua` was imported (sets opt-in marker).
+
+ELK → internal layout backend only: - `torchlens/visualization/elk_layout.py` →
+  `_elk_internal/layout.py`. - Public docs say `layout="auto"`; `layout="elk"` accepted as internal
+  escape hatch but not promoted. - ELK-IF-THEN edge-label dedup bug logged in
+  `.project-context/known_bugs.md` (no fix in this phase per plan).
+
+Source code panel: `code_panel` kwarg stays in core (lightweight stdlib + graphviz only).
+
+Domain-specific node modes: `vision`, `attention` moved to `torchlens.experimental.node_styles`; old
+  core path forwards with DeprecationWarning for one minor cycle.
+
+Total Audit growth: notebooks/total_audit/16_visualization_advanced.ipynb skeleton.
+  .secrets.baseline regenerated.
+
+Quality gates: ruff PASS, mypy PASS (140 files clean), Tier-1 smoke 143/143, visualization-adjacent
+  tests 34 + 4 dagua all PASS, len(__all__)==40 PASS.
+
+* feat(packaging): pandas + IPython move to opt-in extras
+
+Phase 1e: removes pandas + IPython from default deps; lazy-imports them inside the methods that need
+  them; ImportError carries install hint.
+
+Pyproject.toml: - Removed `pandas` and `ipython` from default `dependencies`; pins live under
+  `[tabular]` and `[notebook]` extras. - Added `packaging` to default deps (TorchLens runtime +
+  safetensors.torch needed it; hidden by dev env until clean-venv test exposed it).
+
+Lazy-import refactor (pandas): user_funcs.py, data_classes/model_log.py, buffer_log.py,
+  param_log.py, module_log.py, grad_fn_log.py, grad_fn_pass_log.py, layer_log.py,
+  intervention/resolver.py. Pattern: try/except ImportError with install hint; type hints via
+  TYPE_CHECKING + forward-ref strings.
+
+IPython: existing lazy paths now raise `[notebook]` install hint on miss. Added minimal
+  `ModelLog._repr_html_()` so Phase 1e test target exists.
+
+Tests: tests/test_packaging_diet.py — 5 tests including
+
+`patch.dict('sys.modules', {'pandas': None, 'IPython': None})` to assert the ImportError messages
+  fire correctly.
+
+Total Audit growth: notebooks/total_audit/00_install_and_smoke.ipynb adds extras-install
+  demonstration section. .secrets.baseline regenerated.
+
+Quality gates: ruff PASS, mypy PASS (0 errors), Tier-1 smoke 143/143, new tests 5/5, clean-venv `pip
+  install -e .` (no extras) + smoke PASS, [tabular] + to_pandas() PASS, [notebook] + _repr_html_()
+  PASS, len(__all__)==40 PASS.
+
+* chore(api): Phase 1f misc cuts — print_all_fields, conditional fields, activation_transform
+
+Final Phase 1 sub-phase. Mops up the remaining §13.8 cuts.
+
+print_all_fields: implementation moved to torchlens/_debug.py (private); removed public methods on
+  ModelLog/LayerLog/LayerPassLog. No alias — hard-dropped per §13.8.
+
+Conditional view fields: conditional_then_edges / _elif_edges / _else_edges consolidated into a
+  single canonical mapping `conditional_arm_edges[(cond_id, arm)]`. Old field names preserved as
+  ModelLog computed properties with DeprecationWarning for one minor cycle. Per-layer canonical
+  structure remains `cond_branch_children_by_cond`.
+
+activation_postfunc → activation_transform rename: across user_funcs.py, fastlog,
+  ModelLog/LayerLog/LayerPassLog, fastlog RecordingOptions/record. SaveOptions.activation_transform
+  already canonical from Phase 1b. Old name accepted as alias with DeprecationWarning + forward.
+
+_summary internal move: torchlens/_summary/_builder.py →
+  torchlens/visualization/_summary_internal/_builder.py. Old path retained as private compat shim.
+
+_robustness + fastlog viz coupling audits: no public exposure found in either; no code change needed
+  beyond CHANGELOG note.
+
+Tests: rename tests 66/66, conditional lifecycle/invariants 22/22, summary 11/11, fastlog postfunc
+  parity 15/15. Tier-1 smoke 143/143.
+
+Quality gates: ruff PASS, mypy PASS (0 errors), len(__all__)==40 PASS.
+
+* feat(onramp): peek/extract/batched_extract + site discovery + quickstart
+
+Phase 2: ships the §2 onramp APIs. Replaces Phase 1a stubs (peek, extract, batched_extract) with
+  real implementations.
+
+Tiered ladder: - tl.peek(model, x, layer) → Tensor - tl.extract(model, x, layers={...}) → dict (list
+  OR dict input) - tl.batched_extract(model, stimuli, layers, batch_size=32, ...) → in-memory dict
+  OR per-batch disk write - torchlens.compat.torchextractor.Extractor — migration facade -
+  torchlens.utils.flop_count — uses TorchLens FLOP metadata
+
+Site discovery: - torchlens.utils.list_modules / list_ops (with mode="both") - log.find_layers /
+  suggest — fuzzy matching; "Layer not found" error now suggestion-based - Tab completion: __dir__ /
+  _ipython_key_completions_ on accessors + selectors - Programmatic queries: by_operator / by_module
+  / by_module_and_operator / total - log.unsupported_ops() / log.uncalled_modules() -
+  find_executable_save_set — smallest-first heuristic - tl.experimental.attribute_walk
+
+Quickstart: - torchlens.utils.peek_graph — opinionated wrapper - torchlens.utils.synthetic_input —
+  infers from forward sig - examples/recipes/ placeholder
+
+ModelLog public-method count: 40/40 exactly.
+
+Total Audit growth: notebooks/total_audit/01_basic_capture.ipynb + 02_layer_indexing.ipynb
+  skeletons. .secrets.baseline regenerated.
+
+Tests: 30 new pass (tests/test_onramp.py 28 + test_extractor_compat.py 2). Tier-1 smoke 143/143.
+  mypy clean (143 files). len(__all__)==40 holds.
+
+* feat(reprs): Lovely-style stats + _repr_html_ + LayerLog.show + doctor
+
+Phase 3: ergonomic polish for reprs, displays, and notebook UX.
+
+Object reprs: - Lovely-style stats in torchlens/utils/display.py wired into LayerPassLog:
+  shape/dtype/device/mean/std/min/max/%nan/%inf/%neg/%zero with inline NaN/Inf flags. - _repr_html_
+  for ModelLog: informative HTML card with text fallback when IPython isn't available. -
+  ModelLog.show / LayerLog.show / LayerPassLog.show / Bundle.show all polymorphic. -
+  log.first_nonfinite() — text answer with layer + op + module + shape + dtype + parents + source
+  file:line. ModelLog method count: 40/40.
+
+Tensor display: - LayerLog.show(method="auto"|"heatmap"|"channels"|"rgb"|"hist") — single
+  polymorphic method (no separate .plt/.rgb/.chans aliases). - tl.compat.torchshow / lovely interop
+  under [viz] extra. - Captum-style heatmap params: signs, outlier_perc, cmap. -
+  tl.viz.causal_trace_heatmap skeleton for the Phase 5b causal-trace recipe.
+
+Notebook integration: - tqdm progress bars via shared progress_bar helper. Auto-detects notebook vs
+  terminal. Threshold 10 iterations. Applied to batched_extract, replay cone iteration, two-pass
+  capture wiring.
+
+Trust / errors: - LIMITATIONS.md created with substrate identity statement,
+  single-threaded-by-design declaration, eager-dynamic-control-flow feature note, placeholders for
+  Phase 13 truth-table rows. - tl.utils.doctor() — DoctorReport with PyTorch / CUDA / graphviz /
+  safetensors / extras / fingerprint health checks. - FLOP/MAC convention footer in summary/repr
+  text paths. - count_fma_as_two arg added to format_flops, flop_count, summary. -
+  tl.utils.format_size / format_flops human-readable formatters.
+
+Total Audit growth: notebooks/total_audit/05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb,
+  07_layerlog_anatomy.ipynb, 08_layerpasslog_anatomy.ipynb, 09_other_log_types.ipynb skeletons.
+  .secrets.baseline regenerated.
+
+Tests: tests/test_reprs.py (9) + test_doctor.py (1) + test_format_helpers.py (5) — 15 new tests, all
+  pass. Tier-1 smoke 143/143. Tier-2-equivalent (`pytest -m "not slow"`) 1863 passed / 22 skipped /
+  2 xfailed. mypy clean. len(__all__)==40 PASS.
+
+* feat(capture): streaming stats + new fields + perf + multi-pass
+
+Phase 4 §7. Substantial capture-side expansion.
+
+Selectors (§7.1): 6 selectors verified composing across capture/extract/ hooks/overlays.
+  module_filter_fn predicate added under CaptureOptions.
+
+Streaming stats (§7.3) — new torchlens.stats.* namespace: Mean, Quantile (reservoir sampling), TopK,
+  Covariance, PCA (covariance/eigendecomp fallback), Aggregator. torchlens.aggregate(model,
+  dataloader, metrics). 10k-batch Mean stress: peak memory 0.001 MB.
+
+New capture targets (§7.4): - LayerPassLog fields: bytes_delta_at_call, bytes_peak_at_call (in
+  FIELD_ORDER + portable state). - Tied-param detection with → notation. - record_kpi_in_graph for
+  user KPI annotations. - register_tensor_connection autograd escape hatch. - Hash-based dedupe
+  (disabled when function args saved for validation safety). - Content-hash capture cache via
+  CaptureOptions(cache=True); ~/.cache/torchlens/capture default dir. - ModuleLog/ModulePassLog
+  inputs/outputs aliases. - forward_lineno capture (~332 ns overhead). - Static autograd_saved_bytes
+  estimator; per-grad_fn memory cost.
+
+Misc capture (§7.8): - torchlens.utils.register_op_rule for custom op rules. -
+  decide_recording_of_batch retroactive predicate filter. - Fastlog gradient via predicate keep_grad
+  path. - patch_detached_references optimization: simulated-old 0.338s → current cold 0.204s,
+  incremental 0.000269s. Hard LRU cap rolled back (broke incremental crawl invariants); clear API +
+  skip filters kept. - torchlens.bridge.profiler.execution_trace for ExecutionTraceObserver.
+
+Stop-early (§7.2): experimental.stop_after on tl.peek only; log_forward_pass raises.
+
+Auto-capture (§7.6): experimental.auto_capture context manager; TORCHLENS_AUTO=1 env var rejected.
+
+Multi-pass (§7.7): torchlens.utils.log_forward_pass_streaming for stacked multi-pass; module
+  multi-output smoke audit passes.
+
+Total Audit growth: notebooks/total_audit/26_perf_and_scaling.ipynb skeleton. .secrets.baseline
+  regenerated.
+
+Tests: 8 new test files, 20 Phase 4 tests pass + selector unification
+
+coverage. Full non-slow sweep: 1883 passed / 22 skipped / 2 xfailed. mypy clean. Tier-1 smoke
+  143/143. len(__all__)==40 PASS.
+
+* feat(intervention): §6.3 LAUNCH extensions + consolidated tl.validate(scope=)
+
+Phase 5a — implements every §6.3 NEW intervention API item that wasn't shipped at 2.16.0, plus the
+  consolidated `tl.validate(scope=...)` per §13.5/§5a.6.
+
+Sequential hooks: attach_hooks(hook1, hook2, hook3) returns HookHandle; single-hook
+  attach_hooks(...) is log preserved for back-compat. Scoped handles with removable hook IDs +
+  context-manager cleanup.
+
+tl.sites + SiteCollection (Phase 1a stub replaced): tl.sites(layer_pattern, ops, modes) returns
+  SiteCollection / SiteSpec with hook-pair expansion for sweeps. Conservative selector mapping:
+  dot-path → tl.module, other string → tl.contains, optional tl.func(op) intersection.
+
+tl.tap / tl.record_span / report.log_value (stubs replaced): observer that records without
+  modifying; phase-boundary context manager; scalar recorder under torchlens.report (NOT in
+  __all__).
+
+torchlens.experimental.session(model): invoke + bundle for clean-vs-corrupt.
+
+torchlens.experimental.freeze_module: observe without changing output.
+
+Consolidated tl.validate(scope=...) (Phase 1a stub replaced): signature exactly per FINAL plan
+  §5a.6. All 4 scopes work (forward/backward/saved/ intervention). Per-scope keyword visibility
+  enforced. scope="intervention" returns InterventionValidationReport (5-axis:
+  invariance/specificity/ completeness/consistency/locality). Phase 1a functools.wraps validator
+  wrappers updated to forward via legacy-arg mapping rule. Existing test_api_surface_deprecation.py
+  STILL PASSES — every legacy positional call site preserved end-to-end.
+
+Total Audit growth: notebooks/total_audit/17_intervention_helpers, 18_intervention_verbs,
+  27_taps_and_observers, 28_sites_and_sweeps skeletons; 21_validation extended. .secrets.baseline
+  regenerated.
+
+Tests: 6 new Phase 5a test files; 14 phase tests + 77 combined new/API surface pass. Tier-1 smoke
+  143/143. mypy clean. len(__all__)==40 PASS.
+
+* docs(recipes): 5 intervention recipes (causal-trace, contrastive, faithfulness, trainable,
+  generation)
+
+Phase 5b §6.3 RECIPE-only items. All 5 recipes self-contained, runnable end-to-end via papermill, no
+  network downloads.
+
+- causal_trace_recipe.ipynb — full causal trace on tiny transformer -
+  contrastive_direction_recipe.ipynb — repeng-style direction - measure_faithfulness_recipe.ipynb —
+  ROAD/output_drop/locality via tl.validate(scope="intervention") -
+  trainable_intervention_recipe.ipynb — gradient-based parameter learning -
+  generation_step_iterator_recipe.ipynb — per-step intervention during model.generate()
+
+Each uses public TorchLens API only; papermill 5/5 PASS.
+
+examples/recipes/README.md updated with recipe list + difficulty ratings.
+
+notebooks/total_audit/_shared.py extended with TinyTransformer + tiny_transformer() for the
+  causal-trace recipe.
+
+Quality gates: ruff PASS, mypy PASS (0 errors), Tier-1 smoke 143/143, len(__all__)==40 PASS.
+
+* feat: Phases 5c + 6 + 7 — intervention maintenance, NaN/Inf debug, visualization core
+
+Bundled commit (pre-commit re-stash collapsed three phases into a single rev). Each phase's
+  acceptance criteria pass independently.
+
+== Phase 5c: Intervention API maintenance == 10 items from .project-context/todos.md addressed: hook
+  signature doc, attribution-patching formula, FrozenTargetSpec, cached_property invalidation tests,
+  object.__setattr__ for _construction_done, atomic state-swap, list_logs snapshot (already
+  complete), suppress_mutate_warnings ctx-mgr tests, §20.1 cohort migration row. Naming items
+  deferred to post-overhaul naming pass per Q14.
+
+== Phase 6: NaN/Inf debugging floor (§5.1) == log.first_nonfinite() verified; print(model_log)
+  NaN/Inf summary line. torchlens.partial.PartialModelLog: failed captures attach e.partial_log;
+  PartialModelLog.render_graph() returns minimal Graphviz DOT with failure node. raise_on_nan kwarg
+  + CaptureOptions field; raises CaptureError with op/layer/shape/dtype/parents metadata on first
+  nonfinite. tests/ test_nan_debugging.py covers 4 NaN behaviors.
+
+== Phase 7: Visualization core + tl.export.html (§4) == Graph overlays: 8 stock per-node overlays
+  (flops/time/bytes/magnitude/ grad_norm/nan/intervention/bundle_delta) + ModelLog.add_node_overlay.
+  Theme presets: paper/dark/colorblind/high_contrast (shared palette), colorblind-safe legend,
+  node_label_fields, font_size, dpi, for_paper, return_graph. ModelLog.animate_passes(site) +
+  summary("waterfall"). tl.export.svg(log, path, editable=True) with stable tl-node-* IDs + semantic
+  CSS classes. tl.export.html(log, path) — static self-contained HTML with pan/zoom/hover, no CDN,
+  works WITHOUT [viewer]/[notebook] extras (verified by tests/test_export_html_minimal.py). Fastlog
+  guardrail bug caught: bare detach() → safe_copy(..., detach_tensor=True).
+
+Total Audit growth across phases: notebooks/total_audit/03_save_load_basics deepened,
+  15_visualization_options.ipynb + 29_edge_cases.ipynb new. .secrets.baseline regenerated.
+
+Quality gates: ruff PASS, mypy PASS (151+ source files clean), Tier-1 smoke 143/143, Tier-2-equiv
+  (pytest -m "not slow") 1923 passed / 22 skipped / 2 xfailed, deprecation+validation 64/64 + new
+  tests 5+ from Phase 6 + Phase 7 visualization tests all pass. len(__all__)==40 PASS.
+
+** PHASE 5 (5a/5b/5c), PHASE 6, PHASE 7 ALL COMPLETE. **
+
+* feat(bundle): comparison primitives polish + multi-trace follow-ons
+
+Phase 8 §8.
+
+Bundle methods polish: delta_map / norm_delta / output_delta / compare / aligned_pairs uniform
+  return shape, exposed via Bundle.__getattr__ to preserve the 25-method budget. Only added public
+  attr: supergraph. Bundle public method/property count: exactly 25.
+
+Multi-trace follow-ons: TraceBundle.supergraph accessor; module-type cluster labels;
+  tl.show_bundle_graph rolled mode + forward/backward/both/ overlay; per-node/edge style merge
+  primitives in _render_utils.py; tl.export.chrome_trace_diff(bundle, path).
+
+aligned_pairs: cross-architecture alignment via best-match heuristics (module path → op → shape →
+  topological proximity).
+
+Total Audit growth: notebooks/total_audit/10_bundle_anatomy.ipynb skeleton. .secrets.baseline
+  regenerated.
+
+Quality gates: ruff PASS, mypy PASS (153 src clean), Tier-1 smoke 143/143, Tier-2-equiv 1929 passed
+  / 22 skipped / 2 xfailed, Phase 8 tests 6/6, len(__all__)==40 PASS.
+
+* feat(viz)!: Bundle diff renderer (Q33 launch hero) — bundle.show_diff + tl.viz.bundle_diff
+
+Phase 9 — launch-blocking hero demo. Side-by-side comparison of two ModelLogs in a Bundle with
+  delta-colored aligned pairs.
+
+UX brief: examples/demos/bundle_diff_UX_brief.md (acceptance contract).
+
+Renderer: torchlens/visualization/bundle_diff.py. - bundle.show_diff(metric, layout) via
+  Bundle.__getattr__ (preserves 25-method budget). - tl.viz.bundle_diff(bundle, ...) static helper.
+  - Graphviz layout, cluster-per-side, paper theme default. - max_pairs default 16 hits ~50KB target
+  on full ResNet; max_pairs=None renders the full graph. - SVG: <title> per node, aria-label on
+  figure (accessible). - Diverging palette (blue→white→red) keyed to per-node L2 norm delta. -
+  Unmatched nodes get a gray border on the missing side.
+
+Demo: examples/demos/bundle_diff_clean_vs_zero_relu.ipynb +
+  examples/demos/bundle_diff_clean_vs_zero_relu.svg (56,315 bytes). papermill PASS in ~8s on CPU.
+  Random-weight ResNet-18, torch.manual_seed(0), zero_ablate(layer1.0.relu).
+
+Snapshot test: tests/test_bundle_diff_renderer.py +
+  tests/snapshots/bundle_diff_clean_vs_zero_relu.svg golden. Strategy: semantic SVG normalization
+  (strip Graphviz random IDs, timestamps, whitespace) → byte compare; OR image rasterize + pixel
+  similarity ≥ 0.95.
+
+Documentation: bundle.show_diff docstring with canonical 5-line pattern.
+
+LIMITATIONS.md updated: "static for v1; interactive in torchlens.viewer later."
+
+Total Audit growth: notebooks/total_audit/19_bundles_advanced.ipynb demonstrates bundle.show_diff.
+  .secrets.baseline regenerated.
+
+The "!" mark reflects launch-blocking hero status, not API breakage — bundle.show_diff is a new
+  feature, not a removal.
+
+Quality gates: ruff PASS, mypy PASS, snapshot test 1/1, demo notebook + audit notebook 19 PASS via
+  papermill, Tier-1 smoke 143/143, Tier-2-equiv 1930 passed / 22 skipped / 2 xfailed,
+  len(__all__)==40 PASS, Bundle methods 25/25.
+
+* feat(export): tl.export.* surface — chrome_trace, xarray, trackers, tabular, model_explorer,
+  netron + bridges
+
+Phase 10 §9.1-9.7 (excluding §9.8 .tlspec → Phase 11). Ships the full tl.export.* hand-off surface,
+  plus HF Hub push_to_hub + depyf companion.
+
+Trace/timeline (§9.1): chrome_trace, speedscope, flamegraph, memory_timeline (tensor scope, not
+  allocator). CaptureOptions.emit_nvtx wired through op wrappers.
+
+Scientific (§9.2): xarray() — NeuroidAssembly-shaped DataArray with presentation/neuroid dims for
+  rsatoolbox/Brain-Score handoff.
+
+Trackers (§9.3) — object-passed: tensorboard, wandb, mlflow, aim. Heavy extras fail soft with
+  install hints.
+
+Tabular cuts (§9.4): csv/parquet/json under tl.export.*. ModelLog.to_* methods now delegate with
+  DeprecationWarning. Parquet-safe object sanitization (torch.dtype et al. → string-safe).
+
+Static graph adapters (§9.5): model_explorer; netron (lossy ONNX-shaped JSON; doc disclaimer that
+  it's NOT runnable).
+
+Hub publishing (§9.6): bridge.huggingface.push_to_hub with dry-run + pickle-to-manifest fallback.
+  examples.load() minimal loader (replaces deprecated hub.list_examples).
+
+Compile-stack (§9.7): bridge.depyf.dump companion (torch.compile capture remains SCOPE in
+  tl.compat.report).
+
+Total Audit growth: notebooks/total_audit/23_export_formats.ipynb skeleton. .secrets.baseline
+  regenerated.
+
+Side discovery during full-gate sweep: - maskedfill validation alias added (matches masked_fill_
+  exemption) - Mamba ABI-incompatibility skip helper for real-world tests
+
+Quality gates: ruff PASS, mypy PASS (156 src clean), Tier-1 smoke 143/143, Tier-2-equiv 1945 passed
+  / 17 skipped / 2 xfailed in 1070s, len(__all__)==40 PASS.
+
+* feat(io): .tlspec 2.16.0 backward-compat — format detection + 6 golden fixtures + transitional
+  writer
+
+Phase 11.0 — backward-compat layer landing BEFORE Phase 11 unified .tlspec graduation. Per FINAL
+  plan §11.0, every .tlspec written by shipped 2.16.0 readers must continue to load forever.
+
+Format detection (11.0.1): torchlens.io.detect_tlspec_format first-match-wins: v2.0_unified →
+  v2.16_intervention_with_kind → v2.16_intervention → v2.16_modellog_portable → unknown.
+
+Golden fixtures (11.0.2): F1-F6 generated using shipped 2.16.0 writers, ~528K in
+  tests/fixtures/tlspec_v2_16/. Covers all 3 intervention save levels (default, audit,
+  executable_with_callables, portable) + 2 ModelLog portable bundles (tiny CNN, tiny transformer
+  with varied shape/dtype).
+
+Read-compat (11.0.3): tests/test_tlspec_backcompat.py — per fixture detect format, torchlens.load
+  returns expected kind, round-trip identical. 6 tests PASS.
+
+Migration policy (11.0.4): MIGRATIONS.md — permanent 2.16.0 readability (no auto-migration).
+
+Transitional writer (11.0.5): intervention/save.py emits `kind: "intervention"` alongside legacy
+  fields. Old readers ignore; new polymorphic loader dispatches by kind without needing
+  tlspec_version. 4 transitional tests PASS.
+
+.secrets.baseline regenerated to include the F3 transformer fixture's manifest.json hashes
+  (content-hash strings inside the fixtures look like "high entropy" to detect-secrets — they're
+  tensor IDs/shape hashes from the 2.16.0 writer).
+
+Quality gates: ruff PASS, mypy PASS, Tier-1 smoke 158/158, new tests 15/15, len(__all__)==40 PASS.
+
+* feat(io): .tlspec unified graduation — schema-locked manifest + writer/reader/validator
+
+Phase 11. Schema design landed FIRST per R2 Critical #7.
+
+Manifest schema (11.1): torchlens/schemas/tlspec_manifest_v1.json — 16 required fields
+  (tlspec_version, kind, created_at, torchlens_version, python_version, torch_version,
+  schema_version, model_signature, model_fingerprint with param + buffer hashes, sites,
+  spec_compat_info, body_format, body_index, save_level, optional_dependencies,
+  intervention_compat_metadata).
+
+Schema validator (11.4): torchlens.validation.validate_tlspec(path) — JSON Schema 2020-12.
+
+Writers (11.2): - ModelLog.save(path) — unified format, default save_level="portable". -
+  Bundle.save(path) — NEW; nested member .tlspec dirs (avoids live autograd-state issues). -
+  Intervention writer — full unified format (tlspec_version=1 + kind="intervention") + legacy fields
+  for old readers. Transitional v2.16_intervention_with_kind deprecated; readers support it forever.
+  - Routed through torchlens/_io/tlspec.py.
+
+Polymorphic reader (11.3): torchlens.load(path) dispatches by manifest.kind for new format AND by
+  Phase 11.0 detect_tlspec_format for old formats. Returns ModelLog | Bundle | InterventionSpec.
+  @overload typing.
+
+Manifest tooling (11.4): torchlens.io.inspect_tlspec / torchlens.validation.validate_tlspec.
+
+Save levels (11.5): audit + executable_with_callables + portable round-trip per kind.
+
+Total Audit growth: notebooks/total_audit/17_intervention_helpers deepened;
+  20_save_load_advanced.ipynb created. .secrets.baseline regenerated.
+
+Tests: tests/test_tlspec_unified.py 11/11. Phase 11.0 back-compat STILL
+
+PASS. Public API gate: 1971 passed / 17 skipped / 2 xfailed. Tier-1 smoke 169/169. ruff PASS, mypy
+  PASS (157 src clean), len(__all__)==40.
+
+* feat(bridge): LAUNCH tier — Captum, SAE Lens, rsatoolbox, Brain-Score, Lightning, HF,
+  profiler.join, nnsight
+
+Phase 12a — LAUNCH-tier bridges with declared [extras], version pins, offline fixtures + invariant
+  tests.
+
+8 bridges shipped (under torchlens.bridge.* + torchlens.compat.* + torchlens.callbacks.*):
+
+- captum: bridge.captum.attribute / .layer (pin captum~=0.7; test skip when extra missing) -
+  sae_lens: bridge.sae_lens.encode (pin sae-lens~=4.0; skip) - rsatoolbox: bridge.rsatoolbox.dataset
+  (pin rsatoolbox~=0.1.5; tested with REAL rsatoolbox 0.1.5; RDM invariant PASS) - brain_score:
+  bridge.brain_score.per_layer (pin brain-score~=2.2; mocked offline fixture; TODO connect real) -
+  lightning: callbacks.lightning.LayerProfilerCallback (pin lightning~=2.4; tested via fallback
+  because env has lightning 2.1.0 with pkg_resources issue) - hf: compat.from_huggingface +
+  compat.from_timm (pins transformers~=4.45, timm~=1.0; offline mock fallback for DistilBERT) -
+  profiler.join: bridge.profiler.join (torch built-in; cached Kineto trace fixture; per-op timing
+  merge invariant PASS) - nnsight: bridge.nnsight.from_trace (pin nnsight~=0.4; STRETCH-real-
+  integration; offline contract test passes)
+
+All bridges lazy-import extras; helpful ImportError("install torchlens[X]") on miss.
+
+Total Audit growth: notebooks/total_audit/24_bridges.ipynb skeleton. .secrets.baseline regenerated.
+
+Tests: tests/test_bridges_launch.py 8 tests, 6 PASS / 2 skipped (extras genuinely missing).
+
+Quality gates: ruff PASS, mypy PASS (164 src clean), Tier-1 smoke 169/169, Tier-2-equiv 1976 passed
+  / 20 skipped / 2 xfailed, len(__all__)==40 PASS.
+
+* feat(bridge): STRETCH tier — gradcam, shap, inseq, steering, repeng, dialz, lit, compat-shims
+
+Phase 12b — STRETCH-tier bridges as offline contract tests. Each mocks downstream tool's API +
+  verifies bridge output shape; tests pass when extra is not installed.
+
+7 STRETCH bridges (under torchlens.bridge.*, lazy __getattr__): - gradcam.cam / .layer (pin
+  pytorch-grad-cam~=1.5) - shap.explain (pin shap~=0.46) - inseq.attribute (pin inseq~=0.6) -
+  steering_vectors.vector (pin steering-vectors~=0.1) - repeng.* (pin repeng~=0.4) - dialz.* (pin
+  dialz~=0.2) - lit.model(log) — contract test mocks LIT browser (pin lit-nlp~=1.3)
+
+4 migration helpers (under torchlens.compat.*): - compat.from_torchextractor(model, layers) →
+  Extractor facade - compat.from_fx(graph_module, layers) → migration payload -
+  compat.from_ilg(model, return_layers) → Extractor (via [vision-shims]) -
+  compat.from_sentence_transformers(model, prompt) → migration payload
+
+torchlens.bridge namespace gains lazy __getattr__ dispatch so sub-bridges import on first attribute
+  access.
+
+pyproject.toml: stretch extras pinned + [all-stretch] rollup populated.
+
+Tests: tests/test_bridges_stretch.py — 10 contract tests, all PASS.
+
+Helpful ImportError("install torchlens[X]") on miss for every bridge.
+
+len(__all__)==40 (bridges live under torchlens.bridge.*).
+
+* feat(compat): tl.compat.report truth-table + 3 known-broken bug fixes
+
+Phase 13 — runtime compatibility report. Marketing's "any PyTorch model" claim gates on this.
+
+tl.compat.report(model, input) → CompatReport (torchlens/compat/_report.py): - 17 truth-table rows
+  probed: HF transformers, accelerate (device_map + offload), bitsandbytes 8/4-bit, tied params,
+  multi-GPU RNG (now FIXED; see below), DataParallel (broken-by-design), DDP (works), FSDP/
+  DeepSpeed (SCOPE), torch.compile (SCOPE; suggests depyf), FX-traced (SCOPE), Lightning
+  training_step, vmap/functorch, quantized tensors (was broken; now FIXED), DeviceContext factory
+  (was broken; now FIXED), single-thread design statement. - CompatReport dataclass with per-row
+  status (pass | known_broken | scope | not_tested), severity, explanatory text. -
+  compat_report.show() — pretty table; .to_markdown() — for issue templates / README. - Inspects
+  without executing; safe to run on any model.
+
+Bug fixes (opportunistic per Phase 13.4): - RNG-MULTI-GPU FIXED: CUDA RNG capture/restore now uses
+  torch.cuda.get_rng_state_all() / set_rng_state_all() across all devices, while preserving old
+  single-device snapshot back-compat. - QUANTIZED-CRASH FIXED: tensor_nanequal() guards quantized
+  tensors (no longer calls unsupported .isinf() on quantized). - DEVICE-CONTEXT-LOGGING FIXED:
+  factory kwarg injection now runs during active logging too.
+
+README + LIMITATIONS: - README adds "Run tl.compat.report(model, x) before filing bugs" section. -
+  LIMITATIONS.md + docs/LIMITATIONS.md cross-reference each known-broken / SCOPE row.
+
+Total Audit growth: notebooks/total_audit/25_compat_truth_table.ipynb skeleton. .secrets.baseline
+  regenerated.
+
+Tests: tests/test_compat_report.py — 6 tests on 5+ reference scenarios (small CNN, mocked HF
+  transformer, quantized input, multi-GPU CPU emulation, FSDP placeholder, renderers, all-CUDA RNG,
+  DeviceContext active logging) all pass.
+
+Quality gates: ruff PASS, mypy PASS (172 src clean), Tier-1 smoke 169/169, public API gate (pytest
+  -m "not slow") 1993 passed / 19 skipped / 2 xfailed, len(__all__)==40.
+
+* fix: Phase 14 — 8 named bugs swept + validation issues + §15.10 audit triage
+
+8 named bugs from §11.11 (remaining after Phase 13 sweep): - BFLOAT16-TOL: dtype-aware tolerances
+  for bfloat16/float16. - FUNC-CALL-LOC-LEAK: snapshot signature/docstring + release _frame_func_obj
+  after capture (memory leak fix). - ARG-KWARGS-MISSING: FUNC_ARG_SPECS audited for kwarg tensors on
+  linear/convs/norms/attention/cat/stack/where. - COND-THEN-MULTIPASS: rolled LayerLog THEN/ELSE
+  child views. - INVARIANT-COND-THEN: invariant rejects stale derived THEN children. -
+  HASH-COLLISION: replaced Python hash() truncation with SHA-256 prefix. - CLEANUP-DOCS:
+  FuncCallLocation lifetime + stable hashing notes. - VALIDATE-STATE-RESTORE: cloned state_dict +
+  try/finally restore.
+
+Validation (§11.9): LSTM exemption (hidden/cell only; params no longer mis-exempted); arglocs
+  duplicate same-parent slots; Output identity synthetic node operation_num=0 invariant.
+
+§15.10 audit items — bucketed: - Multi-torch CI / MLX / torch.compile-FX / S4-S5 specific / _trim_
+  elimination / PERF-30 lazy fields / Direct SVG 1M+ / PERF-36-39 model prep: DEFERRED with reasons.
+
+- Gradient arrows in rolled mode: SHIPPED. - JIT compatibility, DOT empty PDF, forward_lineno, ELSE
+  branch, SSM/ Mamba: VERIFIED via existing coverage.
+
+Tests: tests/test_bug_fixes_phase14.py — 11 regression tests PASS.
+
+Quality gates: ruff PASS, mypy PASS (172 src clean), Tier-1 smoke 170/170, public API gate 2004
+  passed / 19 skipped / 2 xfailed, len(__all__)==40.
+
+* docs+feat(report): migration tables + reference docs + tl.report.explain + ROADMAP + public
+  CLAUDE.md
+
+Phase 15 — non-marketing documentation. Per R2 H7, marketing copy deferred to post-naming sprint.
+
+Migration tables (15.1) — docs/migration/: 7 files
+  (from_nnsight/transformerlens/captum/thingsvision/pyvene/torchextractor/ fx).
+  Tests/test_migrations.py — 9 PASS / 6 skipped (skipped = optional tool missing).
+
+Reference docs (15.3) — docs/method_x_model_compatibility.md, speed_optimized_defaults.md,
+  elk_setup.md, activation_transform_persistence.md (callable-drop / repr-keep).
+
+Source click-through (15.4) — torchlens/_source_links.py: OSC 8 terminal + VS Code URI HTML links
+  for FuncCallLocation, non-finite failures, control-flow summaries, code panel.
+
+tl.report.explain (15.5) — torchlens/report/_explain.py: explain(log,
+  audience="researcher"|"practitioner"|"auto") → plain-language report (model + capture + anomalies
+  + interventions + patterns). NOT in __all__.
+
+ROADMAP.md (15.6): coarse buckets per Q11.
+
+Public CLAUDE.md (15.7): concise agent guide replacing internal-style root CLAUDE.md.
+
+NOTICE (15.8) for Apache-2.0 redistribution context.
+
+LIMITATIONS.md verified (Phase 13 truth-table rows already there). README.md: license badge + Apache
+  2.0 + LIMITATIONS/ROADMAP/migration links ONLY (no marketing copy per R2 H7).
+
+Tests: 20 PASS / 6 skipped (focused). Tier-1 smoke 170/170. T1 non-slow 2017 passed / 25 skipped / 2
+  xfailed. mypy clean. len(__all__)==40.
+
+* docs(examples): 5-minute user-facing notebook gallery (7 quickstarts)
+
+Phase 16a — 5-min user-facing track. 7 quickstart notebooks at examples/5min/: peek, find_first_nan,
+  visualize, intervention, save_load, extract_activations, cog_neuro_rdm. Each ≤10 cells,
+  self-contained with tiny shared MLP, deterministic seeded, checked in with outputs, papermill ≤30s
+  on CPU, 7/7 PASS.
+
+examples/5min/README.md indexes with suggested reading order; linked from main README.
+  .secrets.baseline regenerated.
+
+Quality gates: ruff PASS, mypy PASS (174 src clean), Tier-1 smoke 170/170, papermill 7/7,
+  len(__all__)==40.
+
+* docs(examples): 50-minute user-facing notebook gallery (9 workflows)
+
+Phase 16b — 9 longer workflow notebooks at examples/50min/: ablations_grid, causal_trace_recipe,
+  cog_neuro_extraction (offline brain_score), custom_hooks, intervention_fork_replay, iou_heatmap,
+  paired_prompt_patching, steering, transformer_migration (local mock + swap-in comment for real
+  HookedTransformer).
+
+Each: self-contained with notebook-local toy models; public API only; deterministic; checked in with
+  outputs; papermill 9/9 PASS ≤5 min/CPU.
+
+examples/50min/README.md indexes; README.md links alongside 5-min. .secrets.baseline regenerated for
+  the new notebook cell IDs.
+
+Quality gates: ruff PASS, mypy PASS (174 src clean), Tier-1 smoke 170/170, papermill 9/9, T1
+  non-slow 2017 passed / 25 skipped / 2 xfailed. len(__all__)==40.
+
+* feat(audit): Total Audit Notebook System — coverage manifest + 24 polished notebooks +
+  REGEN_PROMPT
+
+Phase 17 — biggest single phase. Maintainer's sandbox bulletproofing every public name + automated
+  coverage enforcement.
+
+Coverage manifest infrastructure (scripts/): - generate_audit_coverage_manifest.py (320 lines) —
+  runtime introspection (NOT AST-only); walks torchlens.__all__, every submodule (preferring
+  mod.__all__), every Log type via inspect.getmembers (handles inherited methods, properties,
+  classmethods, FIELD_ORDER). Generates compat_aliases section for deletion-protection. -
+  check_audit_coverage.py (319 lines) — three coverage levels: mentioned (regex), called (cell
+  metadata coverage_calls), expected_ failure (try/except metadata). Strict mode requires every
+  public item reaches `called`. compat_aliases ignored in strict. - check_coverage_delta.py (121
+  lines) — fails on new uncovered public name OR silent removal of compat alias.
+
+Inventory: 1,280 public items (40 top-level + 17 submodules + 10 Log
+
+types). Coverage gaps: 0. Compat aliases: 52.
+
+24 audit notebooks polished (notebooks/total_audit/00-29): - ≥5 cell types from the catalog per
+  notebook. - Structured coverage_calls metadata on executable cells. - Outputs checked in (max cell
+  output 170B, max notebook 17.4KB). - Papermill 24/24 PASS. Smoke subset (00, 01, 02, 19, 25): PASS
+  in 39.77s.
+
+REGEN_PROMPT.md SELF-CONTAINED — embeds folder layout, per-notebook content outlines, cell-type
+  catalog, coverage requirements, regeneration procedure, substrate identity guardrails. NO external
+  vault references.
+
+_shared.py polish: tiny_cnn, tiny_recurrent, tiny_dynamic_model, tiny_branched_model,
+  pretty_print_fields, inline_show, make_clean_corrupt_pair.
+
+CI integration: - Tier-0 audit smoke (5 notebooks) + manifest delta in .github/workflows/tests.yml.
+  - Tier-2 nightly full Total Audit papermill in .github/workflows/audit-notebooks.yml.
+
+Acceptance: check_audit_coverage --strict PASS; check_coverage_delta PASS; all 24 notebooks PASS via
+  papermill; len(__all__)==40.
+
+Quality gates: ruff PASS, mypy PASS, Tier-1 smoke 170/170.
+
+Five capture/postprocess internal modules (capture, constants, data_classes, postprocess,
+  user_funcs) lack __all__ — generator falls back to dir() with warning.
+
+** PHASE 17 COMPLETE. Only FINAL phase remains. **
+
+---------
+
+Co-authored-by: Claude <noreply@anthropic.com>
+
+Co-authored-by: Happy <yesreply@happy.engineering>
+
+### Breaking Changes
+
+- **2.0**: 53 names removed from `torchlens.__all__`. All remain importable for one minor cycle via
+  deprecation shims; `DeprecationWarning` fires on each access naming the canonical new path.
 
 
 ## v2.16.0 (2026-04-30)
