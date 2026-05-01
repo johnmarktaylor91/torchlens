@@ -16,7 +16,7 @@ from typing import Any
 
 __version__ = "2.16.0"
 
-from . import fastlog
+from . import fastlog, options
 from ._io.bundle import load, save
 from .data_classes.layer_log import LayerLog
 from .data_classes.layer_pass_log import LayerPassLog

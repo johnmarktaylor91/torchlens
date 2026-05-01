@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._deprecations import MISSING, MissingType
 from .._run_state import RunState
+from ..options import ReplayOptions, merge_replay_options
 from ..utils.rng import execute_with_restored_rng_autocast
 from .errors import (
     ControlFlowDivergenceError,
@@ -48,7 +50,11 @@ if TYPE_CHECKING:
 
 
 def replay(
-    log: "ModelLog", *, strict: bool = False, hooks: dict[Any, Any] | None = None
+    log: "ModelLog",
+    *,
+    strict: bool | MissingType = MISSING,
+    hooks: dict[Any, Any] | None | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
 ) -> "ModelLog":
     """Replay the saved DAG cone affected by hooks.
 
@@ -68,19 +74,28 @@ def replay(
         The same model log, mutated in place.
     """
 
+    replay_options = merge_replay_options(replay=replay, strict=strict, hooks=hooks)
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
-    hook_entries = _normalize_replay_hooks(log, hooks)
-    origins = _origin_sites_for_hooks(log, hook_entries, strict=strict)
+    hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
+    origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
     if not origins:
         raise ReplayPreconditionError("replay requires at least one hook target in Phase 6")
     return _run_replay(
-        log, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+        log,
+        origins,
+        hook_entries=hook_entries,
+        strict=replay_options.strict,
+        preserve_origins=False,
     )
 
 
 def replay_from(
-    log: "ModelLog", site: "SelectorLike | str | LayerPassLog", *, strict: bool = False
+    log: "ModelLog",
+    site: "SelectorLike | str | LayerPassLog",
+    *,
+    strict: bool | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
 ) -> "ModelLog":
     """Replay the downstream cone from a pre-mutated site.
 
@@ -100,12 +115,15 @@ def replay_from(
         The same model log, mutated in place.
     """
 
+    replay_options = merge_replay_options(replay=replay, strict=strict)
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
-    origin = _resolve_single_origin(log, site, strict=strict)
+    origin = _resolve_single_origin(log, site, strict=replay_options.strict)
     if not isinstance(origin.activation, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor activation")
-    return _run_replay(log, [origin], hook_entries=[], strict=strict, preserve_origins=True)
+    return _run_replay(
+        log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
+    )
 
 
 def cone_of_effect(

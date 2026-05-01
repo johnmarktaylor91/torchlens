@@ -51,8 +51,12 @@ from .data_classes.model_log import (
     ModelLog,
 )
 from .options import (
+    CaptureOptions,
+    SaveOptions,
     StreamingOptions,
     VisualizationOptions,
+    merge_capture_options,
+    merge_save_options,
     merge_streaming_options,
     merge_visualization_options,
     visualization_to_render_kwargs,
@@ -571,21 +575,26 @@ def log_forward_pass(
     model: nn.Module,
     input_args: Union[torch.Tensor, List[Any], Tuple[Any]],
     input_kwargs: Optional[Dict[Any, Any]] = None,
-    layers_to_save: Optional[Union[str, List]] = "all",
-    keep_unsaved_layers: bool = True,
-    output_device: OutputDeviceLiteral = "same",
-    activation_postfunc: Optional[ActivationPostfunc] = None,
-    gradient_postfunc: Optional[GradientPostfunc] = None,
-    save_raw_activation: bool = True,
-    save_raw_gradient: bool = True,
+    layers_to_save: Optional[Union[str, List]] | MissingType = MISSING,
+    keep_unsaved_layers: bool | MissingType = MISSING,
+    output_device: OutputDeviceLiteral | MissingType = MISSING,
+    activation_postfunc: Optional[ActivationPostfunc] | MissingType = MISSING,
+    gradient_postfunc: Optional[GradientPostfunc] | MissingType = MISSING,
+    save_raw_activation: bool | MissingType = MISSING,
+    save_raw_gradient: bool | MissingType = MISSING,
     mark_input_output_distances: bool | MissingType = MISSING,
-    detach_saved_tensors: bool = False,
-    save_function_args: bool = False,
-    save_gradients: bool = False,
+    detach_saved_tensors: bool | MissingType = MISSING,
+    save_function_args: bool | MissingType = MISSING,
+    save_gradients: bool | MissingType = MISSING,
     gradients_to_save: Optional[Union[str, List]] | MissingType = MISSING,
-    save_source_context: bool = False,
-    save_rng_states: bool = False,
+    save_source_context: bool | MissingType = MISSING,
+    save_rng_states: bool | MissingType = MISSING,
     vis_opt: Any | MissingType = MISSING,
+    view: VisModeLiteral | MissingType = MISSING,
+    depth: int | MissingType = MISSING,
+    renderer: VisRendererLiteral | MissingType = MISSING,
+    layout: VisNodePlacementLiteral | MissingType = MISSING,
+    node_style: VisNodeModeLiteral | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
     vis_nesting_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
@@ -603,26 +612,28 @@ def log_forward_pass(
     vis_theme: str | MissingType = MISSING,
     vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
     vis_show_cone: bool | MissingType = MISSING,
-    random_seed: Optional[int] = None,
+    random_seed: Optional[int] | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
-    optimizer=None,
+    optimizer: Any | MissingType = MISSING,
     detect_loops: bool | MissingType = MISSING,
     save_activations_to: str | Path | None | MissingType = MISSING,
     keep_activations_in_memory: bool | MissingType = MISSING,
     save_gradients_to: str | Path | None | MissingType = MISSING,
     keep_gradients_in_memory: bool | MissingType = MISSING,
     activation_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
-    intervention_ready: bool = False,
-    hooks: Any | None = None,
-    unwrap_when_done: bool = False,
-    verbose: bool = False,
+    intervention_ready: bool | MissingType = MISSING,
+    hooks: Any | None | MissingType = MISSING,
+    unwrap_when_done: bool | MissingType = MISSING,
+    verbose: bool | MissingType = MISSING,
     source_context_lines: int | MissingType = MISSING,
     compute_input_output_distances: bool | MissingType = MISSING,
     detect_recurrent_patterns: bool | MissingType = MISSING,
+    capture: CaptureOptions | None = None,
+    save: SaveOptions | None = None,
     visualization: VisualizationOptions | None = None,
     streaming: StreamingOptions | None = None,
     train_mode: bool | MissingType = MISSING,
-    name: str | None = None,
+    name: str | None | MissingType = MISSING,
 ) -> ModelLog:
     """Run a forward pass through *model*, log every operation, and return a ModelLog.
 
@@ -778,32 +789,49 @@ def log_forward_pass(
     model = _unwrap_data_parallel(model)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
-    source_context_lines = resolve_renamed_kwarg(
-        old_name="num_context_lines",
-        new_name="source_context_lines",
-        old_value=num_context_lines,
-        new_value=source_context_lines,
-        default=7,
+    capture_options = merge_capture_options(
+        capture=capture,
+        layers_to_save=layers_to_save,
+        keep_unsaved_layers=keep_unsaved_layers,
+        output_device=output_device,
+        save_function_args=save_function_args,
+        save_gradients=save_gradients,
+        gradients_to_save=gradients_to_save,
+        save_source_context=save_source_context,
+        save_rng_states=save_rng_states,
+        random_seed=random_seed,
+        source_context_lines=source_context_lines,
+        num_context_lines=num_context_lines,
+        optimizer=optimizer,
+        compute_input_output_distances=compute_input_output_distances,
+        mark_input_output_distances=mark_input_output_distances,
+        detach_saved_tensors=detach_saved_tensors,
+        detect_recurrent_patterns=detect_recurrent_patterns,
+        detect_loops=detect_loops,
+        intervention_ready=intervention_ready,
+        hooks=hooks,
+        unwrap_when_done=unwrap_when_done,
+        verbose=verbose,
+        train_mode=train_mode,
+        name=name,
     )
-    compute_input_output_distances = resolve_renamed_kwarg(
-        old_name="mark_input_output_distances",
-        new_name="compute_input_output_distances",
-        old_value=mark_input_output_distances,
-        new_value=compute_input_output_distances,
-        default=False,
-    )
-    detect_recurrent_patterns = resolve_renamed_kwarg(
-        old_name="detect_loops",
-        new_name="detect_recurrent_patterns",
-        old_value=detect_loops,
-        new_value=detect_recurrent_patterns,
-        default=True,
+    save_options = merge_save_options(
+        save=save,
+        activation_postfunc=activation_postfunc,
+        gradient_postfunc=gradient_postfunc,
+        save_raw_activation=save_raw_activation,
+        save_raw_gradient=save_raw_gradient,
     )
     if vis_opt is not MISSING:
         vis_mode = vis_opt
     visualization_options = merge_visualization_options(
         function_default_mode="none",
         visualization=visualization,
+        view=view,
+        depth=depth,
+        renderer=renderer,
+        layout=layout,
+        node_style=node_style,
         vis_mode=vis_mode,
         vis_nesting_depth=vis_nesting_depth,
         vis_outpath=vis_outpath,
@@ -828,6 +856,28 @@ def log_forward_pass(
         keep_activations_in_memory=keep_activations_in_memory,
         activation_sink=activation_sink,
     )
+    layers_to_save = capture_options.layers_to_save
+    keep_unsaved_layers = capture_options.keep_unsaved_layers
+    output_device = capture_options.output_device
+    activation_postfunc = save_options.activation_transform
+    gradient_postfunc = save_options.gradient_postfunc
+    save_raw_activation = save_options.save_raw_activation
+    save_raw_gradient = save_options.save_raw_gradient
+    save_function_args = capture_options.save_function_args
+    save_gradients = capture_options.save_gradients
+    save_source_context = capture_options.save_source_context
+    save_rng_states = capture_options.save_rng_states
+    random_seed = capture_options.random_seed
+    source_context_lines = capture_options.source_context_lines
+    optimizer = capture_options.optimizer
+    compute_input_output_distances = capture_options.compute_input_output_distances
+    detach_saved_tensors = capture_options.detach_saved_tensors
+    detect_recurrent_patterns = capture_options.detect_recurrent_patterns
+    intervention_ready = capture_options.intervention_ready
+    hooks = capture_options.hooks
+    unwrap_when_done = capture_options.unwrap_when_done
+    verbose = capture_options.verbose
+    name = capture_options.name
     save_gradients_to_value = (
         None if isinstance(save_gradients_to, MissingType) else save_gradients_to
     )
@@ -845,12 +895,9 @@ def log_forward_pass(
         and streaming_options.activation_callback is not None
     ):
         raise ValueError("save_activations_to and activation_sink are mutually exclusive.")
-    train_mode_explicit = train_mode is not MISSING
-    if isinstance(train_mode, MissingType):
-        train_mode_value = False
-    else:
-        train_mode_value = train_mode
-    backward_opted_in = gradients_to_save is not MISSING
+    train_mode_explicit = capture_options.is_field_explicit("train_mode")
+    train_mode_value = capture_options.train_mode
+    backward_opted_in = capture_options.is_field_explicit("gradients_to_save")
     gradient_streaming_requested = save_gradients_to_value is not None
     if gradient_streaming_requested:
         save_gradients = True
@@ -863,7 +910,7 @@ def log_forward_pass(
         train_mode_value = True
         save_gradients = True
     gradients_to_save_resolved = (
-        layers_to_save if gradients_to_save is MISSING else gradients_to_save
+        capture_options.gradients_to_save if backward_opted_in else layers_to_save
     )
     if (
         save_gradients
@@ -1120,6 +1167,11 @@ def show_model_graph(
     model: nn.Module,
     input_args: Union[torch.Tensor, List, Tuple],
     input_kwargs: Optional[Dict[Any, Any]] = None,
+    view: VisModeLiteral | MissingType = MISSING,
+    depth: int | MissingType = MISSING,
+    renderer: VisRendererLiteral | MissingType = MISSING,
+    layout: VisNodePlacementLiteral | MissingType = MISSING,
+    node_style: VisNodeModeLiteral | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
     vis_nesting_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
@@ -1215,6 +1267,11 @@ def show_model_graph(
     visualization_options = merge_visualization_options(
         function_default_mode="unrolled",
         visualization=visualization,
+        view=view,
+        depth=depth,
+        renderer=renderer,
+        layout=layout,
+        node_style=node_style,
         vis_mode=vis_mode,
         vis_nesting_depth=vis_nesting_depth,
         vis_outpath=vis_outpath,
@@ -1275,6 +1332,7 @@ def show_backward_graph(
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     node_spec_fn: Callable[[Any, Any], Any] | None = None,
     collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
+    node_style: VisNodeModeLiteral | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     visualization: VisualizationOptions | None = None,
@@ -1333,7 +1391,7 @@ def show_backward_graph(
         direction = visualization.direction
         graph_overrides = visualization.graph_overrides
         edge_overrides = visualization.edge_overrides
-        node_mode = visualization.node_mode
+        node_mode = visualization.node_style
 
     if vis_outpath is not MISSING:
         output_path = cast(str, vis_outpath)
@@ -1348,7 +1406,10 @@ def show_backward_graph(
     if vis_edge_overrides is not MISSING:
         edge_overrides = cast(dict[str, Any] | None, vis_edge_overrides)
     if vis_node_mode is not MISSING:
+        warn_deprecated_alias("vis_node_mode", "node_style")
         node_mode = cast(VisNodeModeLiteral, vis_node_mode)
+    if node_style is not MISSING:
+        node_mode = cast(VisNodeModeLiteral, node_style)
 
     return model_log.show_backward_graph(
         vis_outpath=output_path,

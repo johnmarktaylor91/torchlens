@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from .module_log import ModuleLog
     from ..visualization.dagua_bridge import TorchLensRenderAudit
 
-from .._deprecations import warn_deprecated_alias
+from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
 from .._run_state import RunState
 from .._training_validation import reject_compiled_model
@@ -68,6 +68,12 @@ from .._literals import (
 )
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODEL_LOG_FIELD_ORDER
+from ..options import (
+    InterventionOptions,
+    ReplayOptions,
+    merge_intervention_options,
+    merge_replay_options,
+)
 from ..intervention.types import (
     ForkFieldPolicy,
     MODEL_LOG_FORK_POLICY,
@@ -871,9 +877,10 @@ class ModelLog:
         *,
         model: nn.Module | None = None,
         x: Any = None,
-        engine: str = "auto",
-        confirm_mutation: bool = False,
-        strict: bool = False,
+        engine: str | MissingType = MISSING,
+        confirm_mutation: bool | MissingType = MISSING,
+        strict: bool | MissingType = MISSING,
+        intervention: InterventionOptions | None = None,
     ) -> "ModelLog":
         """Apply an intervention and dispatch to replay, rerun, or set-only.
 
@@ -903,12 +910,22 @@ class ModelLog:
 
         from ..intervention.errors import EngineDispatchError
 
-        if engine not in {"auto", "replay", "rerun", "set_only"}:
+        intervention_options = merge_intervention_options(
+            intervention=intervention,
+            engine=engine,
+            confirm_mutation=confirm_mutation,
+            strict=strict,
+        )
+        engine_value = intervention_options.engine
+        confirm_mutation_value = intervention_options.confirm_mutation
+        strict_value = intervention_options.strict
+
+        if engine_value not in {"auto", "replay", "rerun", "set_only"}:
             raise ValueError(
                 "do(..., engine=...) must be 'auto', 'replay', 'rerun', or 'set_only'."
             )
 
-        selected_engine = self._select_do_engine(engine, model=model, x=x)
+        selected_engine = self._select_do_engine(engine_value, model=model, x=x)
         if selected_engine == "rerun":
             if model is None:
                 raise EngineDispatchError("do(..., engine='rerun') requires model= and x=.")
@@ -917,25 +934,25 @@ class ModelLog:
             hooks_or_site,
             value_or_hook,
             engine=selected_engine,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
+            strict=strict_value,
+            confirm_mutation=confirm_mutation_value,
         )
         self._record_operation(
             "do",
             mutation_kind=mutation_kind,
             engine=selected_engine,
-            requested_engine=engine,
+            requested_engine=engine_value,
             model_supplied=model is not None,
             x_supplied=x is not None,
-            strict=strict,
+            strict=strict_value,
         )
 
         if selected_engine == "set_only":
             return self
         if selected_engine == "replay":
-            return self.replay(strict=strict)
+            return self.replay(strict=strict_value)
         assert model is not None
-        return self.rerun(model, x, strict=strict)
+        return self.rerun(model, x, strict=strict_value)
 
     def fork(self, name: str | None = None) -> "ModelLog":
         """Create a copy-on-write intervention fork of this log.
@@ -2593,7 +2610,12 @@ class ModelLog:
             validate_metadata=validate_metadata,
         )
 
-    def replay(self, strict: bool = False, hooks: dict[Any, Any] | None = None) -> "ModelLog":
+    def replay(
+        self,
+        strict: bool | MissingType = MISSING,
+        hooks: dict[Any, Any] | None | MissingType = MISSING,
+        replay: ReplayOptions | None = None,
+    ) -> "ModelLog":
         """Replay the saved DAG cone affected by hooks.
 
         Parameters
@@ -2609,11 +2631,18 @@ class ModelLog:
             This model log, mutated in place.
         """
 
+        replay_options = merge_replay_options(replay=replay, strict=strict, hooks=hooks)
+
         from ..intervention.replay import replay as _impl
 
-        return _impl(self, strict=strict, hooks=hooks)
+        return _impl(self, replay=replay_options)
 
-    def replay_from(self, site: Any, strict: bool = False) -> "ModelLog":
+    def replay_from(
+        self,
+        site: Any,
+        strict: bool | MissingType = MISSING,
+        replay: ReplayOptions | None = None,
+    ) -> "ModelLog":
         """Replay downstream from a pre-mutated site.
 
         Parameters
@@ -2630,17 +2659,20 @@ class ModelLog:
             This model log, mutated in place.
         """
 
+        replay_options = merge_replay_options(replay=replay, strict=strict)
+
         from ..intervention.replay import replay_from as _impl
 
-        return _impl(self, site, strict=strict)
+        return _impl(self, site, replay=replay_options)
 
     def rerun(
         self,
         model: nn.Module,
         x: Any = None,
         *,
-        append: bool = False,
-        strict: bool = False,
+        append: bool | MissingType = MISSING,
+        strict: bool | MissingType = MISSING,
+        replay: ReplayOptions | None = None,
     ) -> "ModelLog":
         """Re-execute a model with this log's active intervention spec.
 
@@ -2661,9 +2693,11 @@ class ModelLog:
             This model log, mutated in place after a validated atomic swap.
         """
 
+        replay_options = merge_replay_options(replay=replay, append=append, strict=strict)
+
         from ..intervention.rerun import rerun as _impl
 
-        return _impl(self, model, x, append=append, strict=strict)
+        return _impl(self, model, x, replay=replay_options)
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.

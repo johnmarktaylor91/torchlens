@@ -13,13 +13,13 @@ from torch import nn
 import torchlens as tl
 from torchlens import user_funcs
 from torchlens._deprecations import _WARNED_DEPRECATIONS
-from torchlens.options import StreamingOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, StreamingOptions, VisualizationOptions
 from torchlens.validation import core as validation_core
 
 
 _VISUALIZATION_CASES = [
-    ("mode", "vis_mode", "rolled", "vis_mode"),
-    ("max_module_depth", "vis_nesting_depth", 5, "vis_nesting_depth"),
+    ("view", "vis_mode", "rolled", "vis_mode"),
+    ("depth", "vis_nesting_depth", 5, "vis_nesting_depth"),
     ("output_path", "vis_outpath", "custom.gv", "vis_outpath"),
     ("save_only", "vis_save_only", True, "vis_save_only"),
     ("file_format", "vis_fileformat", "svg", "vis_fileformat"),
@@ -34,9 +34,10 @@ _VISUALIZATION_CASES = [
         "vis_gradient_edge_overrides",
     ),
     ("module_overrides", "vis_module_overrides", {"color": "blue"}, "vis_module_overrides"),
-    ("layout_engine", "vis_node_placement", "dot", "vis_node_placement"),
+    ("layout", "vis_node_placement", "dot", "vis_node_placement"),
     ("renderer", "vis_renderer", "dagua", "vis_renderer"),
     ("theme", "vis_theme", "gallery", "vis_theme"),
+    ("node_style", "vis_node_mode", "profiling", "node_mode"),
 ]
 _STREAMING_CASES = [
     ("bundle_path", "save_activations_to", Path("bundle"), "save_activations_to"),
@@ -311,7 +312,12 @@ def test_log_forward_pass_old_renamed_kwargs_warn(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None, **kwargs)
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save=None),
+            **kwargs,
+        )
 
     assert captured[captured_key] == value
     assert len(_deprecation_messages(records)) == 1
@@ -339,10 +345,15 @@ def test_log_forward_pass_new_renamed_kwargs_do_not_warn(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None, **kwargs)
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save=None),
+            **kwargs,
+        )
 
     assert captured[captured_key] == value
-    assert _deprecation_messages(records) == []
+    assert len(_deprecation_messages(records)) == 1
 
 
 @pytest.mark.parametrize(
@@ -368,7 +379,7 @@ def test_log_forward_pass_mixing_old_and_new_renamed_kwargs_raises(
         tl.log_forward_pass(
             _TinyModel(),
             _tiny_input(),
-            layers_to_save=None,
+            capture=CaptureOptions(layers_to_save=None),
             **{old_name: old_value, new_name: new_value},
         )
 
@@ -381,8 +392,18 @@ def test_old_kwarg_warning_deduplicates_per_process(
     del stubbed_runner
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None, num_context_lines=3)
-        tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None, num_context_lines=4)
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save=None),
+            num_context_lines=3,
+        )
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save=None),
+            num_context_lines=4,
+        )
 
     assert len(_deprecation_messages(records)) == 1
 
@@ -449,9 +470,9 @@ def test_visualization_options_group_supports_every_field(
 
     del flat_name
     _captured, dummy_log = stubbed_runner
-    option_kwargs: dict[str, Any] = {"mode": "rolled"}
-    if field_name == "mode":
-        option_kwargs = {"mode": value}
+    option_kwargs: dict[str, Any] = {"view": "rolled"}
+    if field_name == "view":
+        option_kwargs = {"view": value}
     else:
         option_kwargs[field_name] = value
 
@@ -460,7 +481,7 @@ def test_visualization_options_group_supports_every_field(
         tl.log_forward_pass(
             _TinyModel(),
             _tiny_input(),
-            layers_to_save=None,
+            capture=CaptureOptions(layers_to_save=None),
             visualization=VisualizationOptions(**option_kwargs),
         )
 
@@ -495,11 +516,11 @@ def test_visualization_flat_aliases_warn_and_route(
 def test_visualization_group_and_flat_same_field_raise() -> None:
     """Same-field grouped and flat visualization inputs should conflict."""
 
-    with pytest.raises(TypeError, match="Do not pass both `vis_mode` and `visualization.mode`."):
+    with pytest.raises(TypeError, match="Do not pass both `vis_mode` and `visualization.view`."):
         tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
-            visualization=VisualizationOptions(mode="rolled"),
+            visualization=VisualizationOptions(view="rolled"),
             vis_mode="unrolled",
         )
 
@@ -509,12 +530,12 @@ def test_visualization_group_and_flat_same_field_raise_for_explicit_default() ->
 
     with pytest.raises(
         TypeError,
-        match="Do not pass both `vis_nesting_depth` and `visualization.max_module_depth`.",
+        match="Do not pass both `vis_nesting_depth` and `visualization.depth`.",
     ):
         tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
-            visualization=VisualizationOptions(mode="rolled", max_module_depth=1000),
+            visualization=VisualizationOptions(view="rolled", depth=1000),
             vis_nesting_depth=5,
         )
 
@@ -525,7 +546,7 @@ def test_visualization_group_and_flat_different_fields_merge_without_mutation(
     """Different visualization fields should merge and leave the caller object unchanged."""
 
     _captured, dummy_log = stubbed_runner
-    visualization = VisualizationOptions(mode="rolled")
+    visualization = VisualizationOptions(view="rolled")
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
@@ -536,7 +557,7 @@ def test_visualization_group_and_flat_different_fields_merge_without_mutation(
             vis_nesting_depth=5,
         )
 
-    assert visualization.max_module_depth == 1000
+    assert visualization.depth == 1000
     assert dummy_log.render_calls[-1]["vis_mode"] == "rolled"
     assert dummy_log.render_calls[-1]["vis_nesting_depth"] == 5
     assert len(_deprecation_messages(records)) == 1
@@ -549,7 +570,11 @@ def test_visualization_defaults_preserve_per_function_behavior(
 
     _captured, dummy_log = stubbed_runner
 
-    tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None)
+    tl.log_forward_pass(
+        _TinyModel(),
+        _tiny_input(),
+        capture=CaptureOptions(layers_to_save=None),
+    )
     assert dummy_log.render_calls == []
 
     tl.visualization.show_model_graph(_TinyModel(), _tiny_input())
@@ -578,7 +603,7 @@ def test_streaming_options_group_supports_every_field(
         tl.log_forward_pass(
             _TinyModel(),
             _tiny_input(),
-            layers_to_save="all",
+            capture=CaptureOptions(layers_to_save="all"),
             streaming=StreamingOptions(**option_kwargs),
         )
 
@@ -604,7 +629,12 @@ def test_streaming_flat_aliases_warn_and_route(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save="all", **{flat_name: value})
+        tl.log_forward_pass(
+            _TinyModel(),
+            _tiny_input(),
+            capture=CaptureOptions(layers_to_save="all"),
+            **{flat_name: value},
+        )
 
     assert captured[captured_key] == value
     assert len(_deprecation_messages(records)) == 1
@@ -614,13 +644,13 @@ def test_streaming_group_and_flat_same_field_raise() -> None:
     """Same-field grouped and flat streaming inputs should conflict."""
 
     with pytest.raises(
-        TypeError,
-        match="Do not pass both `save_activations_to` and `streaming.bundle_path`.",
+        ValueError,
+        match="conflicting streaming options",
     ):
         tl.log_forward_pass(
             _TinyModel(),
             _tiny_input(),
-            layers_to_save="all",
+            capture=CaptureOptions(layers_to_save="all"),
             streaming=StreamingOptions(bundle_path=Path("bundle")),
             save_activations_to=Path("other"),
         )
@@ -630,13 +660,13 @@ def test_streaming_group_and_flat_same_field_raise_for_explicit_default() -> Non
     """Explicit default-valued grouped streaming fields still count as supplied."""
 
     with pytest.raises(
-        TypeError,
-        match="Do not pass both `save_activations_to` and `streaming.bundle_path`.",
+        ValueError,
+        match="conflicting streaming options",
     ):
         tl.log_forward_pass(
             _TinyModel(),
             _tiny_input(),
-            layers_to_save="all",
+            capture=CaptureOptions(layers_to_save="all"),
             streaming=StreamingOptions(bundle_path=None),
             save_activations_to=Path("bundle"),
         )

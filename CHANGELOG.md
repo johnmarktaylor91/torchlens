@@ -13,6 +13,10 @@
   shims; `TensorLog`, `ModulePassLog`, `ParamLog`, `BufferLog`, `GradFnLog`,
   and `GradFnPassLog` are no longer in `torchlens.__all__` but remain
   importable from `torchlens.types` for the migration window.
+- Add grouped option classes under `torchlens.options` for capture, save,
+  visualization, replay, intervention, and streaming settings.
+- Introduce canonical visualization vocabulary: `view`, `depth`, `renderer`,
+  `layout`, and `node_style`, with legacy `vis_*` spellings still accepted.
 
 
 ## v2.16.0 (2026-04-30)

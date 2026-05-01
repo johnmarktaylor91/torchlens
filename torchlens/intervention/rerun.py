@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from .._deprecations import MISSING, MissingType
 from .._run_state import RunState
+from ..options import ReplayOptions, merge_replay_options
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -31,8 +33,9 @@ def rerun(
     model: nn.Module,
     x: Any = None,
     *,
-    append: bool = False,
-    strict: bool = False,
+    append: bool | MissingType = MISSING,
+    strict: bool | MissingType = MISSING,
+    replay: ReplayOptions | None = None,
 ) -> "ModelLog":
     """Full-forward rerun with the active intervention spec from ``log``.
 
@@ -64,8 +67,9 @@ def rerun(
         The same ``log`` object after atomic run-state replacement.
     """
 
-    if append:
-        return _append_rerun(log, model, x, strict=strict)
+    replay_options = merge_replay_options(replay=replay, append=append, strict=strict)
+    if replay_options.append:
+        return _append_rerun(log, model, x, strict=replay_options.strict)
     _preflight(log, model, x)
     _warn_if_direct_writes_will_be_overlaid(log)
 
@@ -83,7 +87,7 @@ def rerun(
             hook_plan=hook_plan,
         )
 
-    divergence_count = _validate_rerun_result(new_log, log, strict=strict)
+    divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
     log.replace_run_state_from(new_log)
 
     history_record = _build_operation_history_record(
@@ -92,7 +96,7 @@ def rerun(
         old_hash=old_hash,
         new_hash=getattr(new_log, "graph_shape_hash", None),
         hook_plan=hook_plan,
-        strict=strict,
+        strict=replay_options.strict,
         divergence_count=divergence_count,
     )
     log.run_state = RunState.RERUN_PROPAGATED
@@ -102,7 +106,7 @@ def rerun(
         "started_at": started_at,
         "duration_s": time.monotonic() - started_at,
         "spec_revision": getattr(log, "_spec_revision", 0),
-        "strict": strict,
+        "strict": replay_options.strict,
         "append": False,
         "hooks": len(hook_plan),
         "divergence_count": divergence_count,
