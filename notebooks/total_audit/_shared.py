@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import importlib
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -467,13 +468,19 @@ def _resolve_audit_item(item: str, namespace: Mapping[str, object]) -> object:
     tl_module = namespace["tl"]
     parts = item.split(".")[1:]
     if len(parts) == 1:
-        return getattr(tl_module, parts[0])
+        try:
+            return getattr(tl_module, parts[0])
+        except AttributeError:
+            return importlib.import_module(f"torchlens.{parts[0]}")
 
     owner_name, member_name = parts[0], parts[1]
     try:
         owner = getattr(tl_module, owner_name)
     except AttributeError:
-        owner = getattr(tl_module.types, owner_name)
+        try:
+            owner = getattr(tl_module.types, owner_name)
+        except AttributeError:
+            owner = importlib.import_module(f"torchlens.{owner_name}")
     instance = namespace.get(owner_name)
     if instance is not None:
         try:
