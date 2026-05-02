@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import inspect
+from collections.abc import Callable, Mapping
+from typing import Any
+
 import torch
 from torch import nn
 
@@ -351,3 +355,123 @@ def inline_show(label: str, value: object) -> None:
     """
 
     print(f"{label}: {value}")
+
+
+def summarize_value(value: object) -> str:
+    """Return a compact, deterministic summary for notebook audit output.
+
+    Parameters
+    ----------
+    value:
+        Object to summarize.
+
+    Returns
+    -------
+    str
+        Short human-readable summary.
+    """
+
+    if isinstance(value, torch.Tensor):
+        return (
+            f"Tensor(shape={tuple(value.shape)}, dtype={value.dtype}, device={value.device.type})"
+        )
+    if isinstance(value, Mapping):
+        return f"{type(value).__name__}(len={len(value)})"
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return f"{type(value).__name__}(len={len(value)})"
+    if inspect.ismodule(value):
+        return f"module {value.__name__}"
+    if inspect.isclass(value):
+        return f"class {value.__name__}"
+    if callable(value):
+        return f"callable {getattr(value, '__name__', type(value).__name__)}"
+    text = repr(value)
+    if len(text) > 120:
+        text = text[:117] + "..."
+    return text
+
+
+def audit_touch_items(
+    label: str,
+    items: list[str] | tuple[str, ...],
+    namespace: Mapping[str, object],
+    *,
+    examples: Mapping[str, Callable[[], object]] | None = None,
+    max_samples: int = 8,
+) -> None:
+    """Resolve and touch coverage items against live TorchLens objects.
+
+    Parameters
+    ----------
+    label:
+        Label printed for the demonstrated cluster.
+    items:
+        Coverage item names such as ``"tl.ModelLog.layer_list"``.
+    namespace:
+        Mapping containing ``tl`` and representative instances keyed by class name.
+    examples:
+        Optional exact-item call examples for methods that need arguments.
+    max_samples:
+        Maximum number of compact item summaries to print.
+    """
+
+    examples = examples or {}
+    touched: list[str] = []
+    skipped: list[str] = []
+    samples: list[str] = []
+
+    for item in items:
+        try:
+            if item in examples:
+                value = examples[item]()
+            else:
+                value = _resolve_audit_item(item, namespace)
+            touched.append(item)
+            if len(samples) < max_samples:
+                samples.append(f"{item} -> {summarize_value(value)}")
+        except Exception as exc:  # pragma: no cover - notebooks print skipped items.
+            skipped.append(f"{item} ({type(exc).__name__}: {str(exc).splitlines()[0][:80]})")
+
+    print(f"{label}: touched {len(touched)}/{len(items)}")
+    for sample in samples:
+        print(f"  {sample}")
+    for item in skipped[:max_samples]:
+        print(f"  # skipped: {item}")
+
+
+def _resolve_audit_item(item: str, namespace: Mapping[str, object]) -> object:
+    """Resolve one coverage item against a TorchLens namespace.
+
+    Parameters
+    ----------
+    item:
+        Coverage item name.
+    namespace:
+        Mapping containing ``tl`` and representative instances.
+
+    Returns
+    -------
+    object
+        Resolved value.
+    """
+
+    if not item.startswith("tl."):
+        raise ValueError(f"Unsupported audit item {item!r}")
+
+    tl_module = namespace["tl"]
+    parts = item.split(".")[1:]
+    if len(parts) == 1:
+        return getattr(tl_module, parts[0])
+
+    owner_name, member_name = parts[0], parts[1]
+    try:
+        owner = getattr(tl_module, owner_name)
+    except AttributeError:
+        owner = getattr(tl_module.types, owner_name)
+    instance = namespace.get(owner_name)
+    if instance is not None:
+        try:
+            return getattr(instance, member_name)
+        except AttributeError:
+            pass
+    return getattr(owner, member_name)
