@@ -385,6 +385,12 @@ def summarize_value(value: object) -> str:
         return f"class {value.__name__}"
     if callable(value):
         return f"callable {getattr(value, '__name__', type(value).__name__)}"
+    if (
+        isinstance(value, str)
+        and len(value) >= 32
+        and all(character in "0123456789abcdefABCDEF" for character in value)
+    ):
+        return f"<hex-string len={len(value)}>"
     text = repr(value)
     if len(text) > 120:
         text = text[:117] + "..."
