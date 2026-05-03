@@ -102,6 +102,10 @@ class ParamLog:
         self.memory = memory
         self.trainable = trainable
         self.module_address = module_address
+        self.all_addresses = [address]
+        self.all_module_addresses = [module_address]
+        self.module_class_name = module_type
+        self.module_class_qualname = module_type
         self.module_type = module_type
         self.barcode = barcode
         self.has_optimizer = has_optimizer
@@ -143,6 +147,30 @@ class ParamLog:
             torch.quint2x4,
         }
         return self.dtype in _QUANTIZED_DTYPES
+
+    @property
+    def is_shared(self) -> bool:
+        """Return whether this parameter is registered at multiple addresses.
+
+        Returns
+        -------
+        bool
+            Whether multiple parameter addresses share this tensor.
+        """
+
+        return len(self.all_addresses) > 1 or bool(self.linked_params)
+
+    @property
+    def grad(self) -> torch.Tensor | None:
+        """Return the live gradient tensor for this parameter.
+
+        Returns
+        -------
+        torch.Tensor | None
+            Live ``nn.Parameter.grad`` value, if available.
+        """
+
+        return None if self._param_ref is None else self._param_ref.grad
 
     def _check_param_grad(self) -> None:
         """Lazily check if the parameter has a grad and cache the result.

@@ -23,7 +23,7 @@ from .metrics import (
     relative_l2,
     resolve_metric,
 )
-from .super_op import SuperOp
+from .super_op import SuperLayer, SuperLayerAccessor, SuperOp, SuperOpAccessor, TraceAccessor
 from .topology import (
     Supergraph,
     SupergraphNode,
@@ -35,7 +35,11 @@ from .topology import (
 
 __all__ = [
     "METRIC_REGISTRY",
+    "SuperLayer",
+    "SuperLayerAccessor",
     "SuperOp",
+    "SuperOpAccessor",
+    "TraceAccessor",
     "Supergraph",
     "SupergraphNode",
     "TopologyDiff",

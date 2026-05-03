@@ -99,6 +99,66 @@ class GradFnLog:
         return len(self.ops)
 
     @property
+    def cls(self) -> type[Any] | None:
+        """Return the runtime Python class for this grad_fn when available.
+
+        Returns
+        -------
+        type[Any] | None
+            Runtime class object, if an op or autograd object exposes one.
+        """
+
+        return None
+
+    @property
+    def class_name(self) -> str:
+        """Return the grad_fn class name.
+
+        Returns
+        -------
+        str
+            Grad-fn class name.
+        """
+
+        return self.name
+
+    @property
+    def class_qualname(self) -> str:
+        """Return the best-known qualified grad_fn class name.
+
+        Returns
+        -------
+        str
+            Qualified class name when known, otherwise ``class_name``.
+        """
+
+        return self.name
+
+    @property
+    def grad_fn_label(self) -> str:
+        """Return the canonical grad_fn label.
+
+        Returns
+        -------
+        str
+            Grad-fn label.
+        """
+
+        return self.label
+
+    @property
+    def child_grad_fn_labels(self) -> list[str]:
+        """Return labels of child grad_fn nodes.
+
+        Returns
+        -------
+        list[str]
+            Child grad-fn labels when resolvable from stored ids.
+        """
+
+        return [str(grad_fn_id) for grad_fn_id in self.next_grad_fn_ids]
+
+    @property
     def call_labels(self) -> list[str]:
         """Pass-qualified labels for this grad_fn."""
         return [f"{self.label}:{call_index}" for call_index in self.ops]

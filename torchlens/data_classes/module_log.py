@@ -266,8 +266,9 @@ class ModuleLog:
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
-        "name": FieldPolicy.KEEP,
+        "cls": FieldPolicy.DROP,
         "class_name": FieldPolicy.KEEP,
+        "class_qualname": FieldPolicy.KEEP,
         "source_file": FieldPolicy.KEEP,
         "source_line": FieldPolicy.KEEP,
         "class_docstring": FieldPolicy.KEEP,
@@ -307,7 +308,9 @@ class ModuleLog:
         address: str,
         all_addresses: Optional[List[str]] = None,
         name: str = "",
+        cls: type[Any] | None = None,
         class_name: str = "",
+        class_qualname: str = "",
         # Source info
         source_file: Optional[str] = None,
         source_line: Optional[int] = None,
@@ -350,8 +353,9 @@ class ModuleLog:
     ) -> None:
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
-        self.name = name
+        self.cls = cls
         self.class_name = class_name
+        self.class_qualname = class_qualname
 
         self.source_file = source_file
         self.source_line = source_line
@@ -397,6 +401,18 @@ class ModuleLog:
 
         # Store as weakref to break circular reference (Trace -> _module_logs -> ModuleLog -> Trace).
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
+
+    @property
+    def name(self) -> str:
+        """Return the final segment of the primary module address.
+
+        Returns
+        -------
+        str
+            Module name within its parent module.
+        """
+
+        return "" if self.address == "self" else self.address.rsplit(".", 1)[-1]
 
     @property
     def is_shared(self) -> bool:

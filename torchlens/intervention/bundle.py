@@ -11,7 +11,12 @@ import torch
 
 from .._run_state import RunState
 from ..multi_trace.metrics import is_scalar_like, relative_l1_scalar, resolve_metric
-from ..multi_trace.super_op import SuperOp
+from ..multi_trace.super_op import (
+    SuperLayerAccessor,
+    SuperOp,
+    SuperOpAccessor,
+    TraceAccessor,
+)
 from ..multi_trace.topology import Supergraph, build_supergraph
 from .errors import (
     BaselineUndeterminedError,
@@ -218,6 +223,42 @@ class Bundle:
         return dict(self._members)
 
     @property
+    def traces(self) -> TraceAccessor:
+        """Return dict-like access to member traces.
+
+        Returns
+        -------
+        TraceAccessor
+            Bundle trace accessor.
+        """
+
+        return TraceAccessor(dict(self._members))
+
+    @property
+    def ops(self) -> SuperOpAccessor:
+        """Return cross-member access to pass-qualified Op labels.
+
+        Returns
+        -------
+        SuperOpAccessor
+            Bundle op accessor.
+        """
+
+        return SuperOpAccessor(self)
+
+    @property
+    def layers(self) -> SuperLayerAccessor:
+        """Return cross-member access to aggregate Layer labels.
+
+        Returns
+        -------
+        SuperLayerAccessor
+            Bundle layer accessor.
+        """
+
+        return SuperLayerAccessor(self)
+
+    @property
     def baseline_name(self) -> str | None:
         """Return the configured baseline member name, if any.
 
@@ -269,6 +310,24 @@ class Bundle:
             detail = "; ".join(f"{name}: {message}" for name, message in failures.items())
             raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
         return SuperOp.from_members(site, layer_members)
+
+    def at(self, label: str) -> SuperOp | Any:
+        """Return a cross-member view by label.
+
+        Parameters
+        ----------
+        label:
+            Pass-qualified Op label or aggregate Layer label.
+
+        Returns
+        -------
+        SuperOp | Any
+            Op view for pass-qualified labels, otherwise Layer view.
+        """
+
+        if ":" in label:
+            return self.ops[label]
+        return self.layers[label]
 
     def add(self, log: "Trace", name: str | None = None) -> "Bundle":
         """Add one member log and invalidate the cached supergraph.

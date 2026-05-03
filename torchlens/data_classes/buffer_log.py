@@ -60,6 +60,30 @@ class BufferLog(OpLog):
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(OpLog.PORTABLE_STATE_SPEC)
 
     @property
+    def all_buffer_addresses(self) -> list[str]:
+        """Return all addresses associated with this buffer.
+
+        Returns
+        -------
+        list[str]
+            Buffer addresses.
+        """
+
+        return [] if self.buffer_address is None else [self.buffer_address]
+
+    @property
+    def is_shared(self) -> bool:
+        """Return whether this buffer is registered at multiple addresses.
+
+        Returns
+        -------
+        bool
+            Whether this buffer is shared.
+        """
+
+        return len(self.all_buffer_addresses) > 1
+
+    @property
     def name(self) -> str:
         """Buffer name (last segment of address), e.g. 'running_mean'."""
         addr = self.buffer_address

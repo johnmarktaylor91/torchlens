@@ -338,6 +338,8 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
 
     meta: dict[str, Any] = {}
     meta["class_name"] = module_class.__name__
+    meta["class_qualname"] = f"{module_class.__module__}.{module_class.__qualname__}"
+    meta["cls"] = module_class
     meta["class_docstring"] = module_class.__doc__
 
     # Cache user-defined custom_methods from class __dict__ (same for all instances of this class).

@@ -3,7 +3,7 @@ run: torchlens-rename-impl
 created: 2026-05-03T00:19:14-04:00
 state: RUNNING
 current_round: 1
-current_phase: 2
+current_phase: 3
 branch: naming-sprint-impl
 ---
 
@@ -69,3 +69,4 @@ When all phases complete or final timeout:
 |---|---|---|---|---|---|
 | 1 | 1 | 2026-05-03T00:19:14-04:00 | 2026-05-03T00:23:06-04:00 | PASS | Branch created; class/top-level entrypoint rename applied; `import torchlens` and `torchlens.__all__` verified. |
 | 1 | 2 | 2026-05-03T00:23:07-04:00 | 2026-05-03T00:30:44-04:00 | PASS | Locked field-name sweep applied for Trace/Op/Layer/Module/Param/GradFn clusters where unambiguous; deferred clusters left alone; import and a tiny `tl.trace` capture verified. |
+| 1 | 3 | 2026-05-03T00:30:45-04:00 | 2026-05-03T00:41:54-04:00 | PASS | Added Trace/SuperOp/SuperLayer bundle accessors, `bundle.at(label)`, and minimal new Module/Param/Buffer/GradFn fields; verified tiny Bundle cross-member lookup. |
