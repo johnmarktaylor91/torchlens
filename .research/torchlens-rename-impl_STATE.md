@@ -1,7 +1,7 @@
 ---
 run: torchlens-rename-impl
 created: 2026-05-03T00:19:14-04:00
-state: RUNNING
+state: DONE
 current_round: 1
 current_phase: 6
 branch: naming-sprint-impl
