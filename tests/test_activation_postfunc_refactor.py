@@ -93,7 +93,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
 
     trace = tl.trace(
         _TinyModel(),
-        torch.randn(2, 4, has_trainable_params=True),
+        torch.randn(2, 4, requires_grad=True),
         grads_to_save="all",
         grad_transform=lambda t: t.mean(),
     )
@@ -115,7 +115,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
 
     trace = tl.trace(
         _TinyModel(),
-        torch.randn(2, 4, has_trainable_params=True),
+        torch.randn(2, 4, requires_grad=True),
         grads_to_save="all",
         grad_transform=lambda t: t.mean(),
         save_raw_grads=False,
@@ -136,7 +136,7 @@ def test_train_mode_out_postfunc_detach_rejected() -> None:
     with pytest.raises(tl.TrainingModeConfigError, match="disconnected from the autograd graph"):
         tl.trace(
             _TinyModel(),
-            torch.randn(2, 4, has_trainable_params=True),
+            torch.randn(2, 4, requires_grad=True),
             train_mode=True,
             out_postfunc=lambda t: t.detach(),
         )
@@ -148,7 +148,7 @@ def test_train_mode_out_postfunc_int_rejected() -> None:
     with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):
         tl.trace(
             _TinyModel(),
-            torch.randn(2, 4, has_trainable_params=True),
+            torch.randn(2, 4, requires_grad=True),
             train_mode=True,
             out_postfunc=lambda t: t.to(torch.int64),
         )
@@ -159,7 +159,7 @@ def test_train_mode_out_postfunc_connected_ops() -> None:
 
     trace = tl.trace(
         _TinyModel(),
-        torch.randn(2, 4, has_trainable_params=True),
+        torch.randn(2, 4, requires_grad=True),
         train_mode=True,
         out_postfunc=lambda t: t * 2,
     )

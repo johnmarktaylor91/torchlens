@@ -57,7 +57,7 @@ def _logged_model(
         Model, input tensor, and model log.
     """
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         model,
         x,
@@ -131,7 +131,7 @@ def test_grad_fn_naming_and_indexing() -> None:
 def test_grads_to_save_default_matches_layers_to_save() -> None:
     """save_grads uses layers_to_save when grads_to_save is omitted."""
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, layers_to_save=["relu"], save_grads=True)
     trace.log_backward(_output_loss(trace))
     assert trace.ops_with_saved_grads
@@ -158,7 +158,7 @@ def test_auto_train_mode_when_backward_opted_in() -> None:
 def test_auto_train_mode_conflict_with_explicit_false() -> None:
     """Explicit train_mode=False conflicts with backward capture."""
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     with pytest.raises(ValueError, match="requires train_mode=True"):
         tl.trace(model, x, grads_to_save="all", train_mode=False)
 
@@ -167,7 +167,7 @@ def test_auto_train_mode_conflict_with_explicit_false() -> None:
 def test_grad_transform_applied() -> None:
     """grad_transform writes transformed grads separately."""
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         model,
         x,
@@ -213,7 +213,7 @@ def test_param_layer_grad_access() -> None:
 def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     """Custom autograd.Function grad_fns are captured and flagged."""
     model = _CustomModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, grads_to_save="all")
     trace.log_backward(_output_loss(trace))
     assert any(grad_fn.is_custom for grad_fn in trace.grad_fn_logs.values())
@@ -223,7 +223,7 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
 def test_implicit_hook_firing_preserved() -> None:
     """Calling backward outside log_backward still populates LayerLog grads."""
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, save_grads=True)
     _output_loss(trace).backward()
     assert trace.ops_with_saved_grads
@@ -233,7 +233,7 @@ def test_implicit_hook_firing_preserved() -> None:
 def test_validate_backward_pass_correct() -> None:
     """validate_backward_pass returns True for correct capture."""
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     assert tl.validate_backward_pass(model, x)
 
 
@@ -241,7 +241,7 @@ def test_validate_backward_pass_correct() -> None:
 def test_validate_backward_pass_perturbed() -> None:
     """validate_backward_pass returns False after perturbation sanity check."""
     model = _TinyBackwardModel()
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     assert not tl.validate_backward_pass(model, x, perturb_saved_grads=True)
 
 

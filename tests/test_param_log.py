@@ -39,14 +39,14 @@ def _make_simple_model():
 def _make_frozen_first_layer():
     model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
     for p in model[0].parameters():
-        p.has_trainable_params = False
+        p.requires_grad = False
     return model
 
 
 def _make_all_frozen():
     model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
     for p in model.parameters():
-        p.has_trainable_params = False
+        p.requires_grad = False
     return model
 
 
@@ -516,7 +516,7 @@ class TestVisualizationParams:
         # Create a model with mixed trainable/frozen in the same layer
         model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
         # Freeze only the weight, keep bias trainable
-        model[0].weight.has_trainable_params = False
+        model[0].weight.requires_grad = False
         dot, mh = self._get_dot_source(model, _simple_input())
         # Gradient fill uses "color1:color2" syntax
         assert "#D9D9D9:#B0B0B0" in dot
@@ -549,7 +549,7 @@ class TestVisualizationParams:
     def test_collapsed_module_mixed_grad(self):
         """Collapsed module with mixed frozen/trainable should use grad fill."""
         model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-        model[0].weight.has_trainable_params = False
+        model[0].weight.requires_grad = False
         dot, mh = self._get_dot_source(model, _simple_input(), vis_call_depth=1)
         # The collapsed "0" module has mixed params
         assert "#D9D9D9:#B0B0B0" in dot or "#D9D9D9" in dot  # at least one color appears

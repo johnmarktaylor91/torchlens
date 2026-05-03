@@ -280,17 +280,15 @@ class TestToggleState:
         assert y.shape == (3,)
         assert not hasattr(y, "tl__label_raw")
 
-    def test_has_trainable_params_restored_after_exception(self):
-        """has_trainable_params must be restored even when forward raises."""
+    def test_requires_grad_restored_after_exception(self):
+        """requires_grad must be restored even when forward raises."""
         model = TwoLayerModel()
-        orig_grads = {n: p.has_trainable_params for n, p in model.named_parameters()}
+        orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
         with pytest.raises(RuntimeError):
             # Force an error by passing wrong shape
             trace_fn(model, torch.randn(0))
         for name, param in model.named_parameters():
-            assert param.has_trainable_params == orig_grads[name], (
-                f"{name} has_trainable_params changed"
-            )
+            assert param.requires_grad == orig_grads[name], f"{name} requires_grad changed"
 
 
 class TestWrapUnwrap:
@@ -676,18 +674,18 @@ class TestPermanentModelPrep:
         gc.collect()
         assert ref() is None  # model should be collected
 
-    def test_has_trainable_params_restored(self):
-        """All params should have original has_trainable_params after logging."""
+    def test_requires_grad_restored(self):
+        """All params should have original requires_grad after logging."""
         model = TwoLayerModel()
         # Freeze some params
-        model.linear.bias.has_trainable_params_(False)
-        orig_grads = {n: p.has_trainable_params for n, p in model.named_parameters()}
+        model.linear.bias.requires_grad_(False)
+        orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
 
         trace_fn(model, torch.randn(5))
 
         for name, param in model.named_parameters():
-            assert param.has_trainable_params == orig_grads[name], (
-                f"{name}: expected has_trainable_params={orig_grads[name]}"
+            assert param.requires_grad == orig_grads[name], (
+                f"{name}: expected requires_grad={orig_grads[name]}"
             )
 
 

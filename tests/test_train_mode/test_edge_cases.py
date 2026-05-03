@@ -56,7 +56,7 @@ class MixedGradModel(nn.Module):
         self.frozen = nn.Linear(4, 4)
         self.trainable = nn.Linear(4, 2)
         for param in self.frozen.parameters():
-            param.has_trainable_params = False
+            param.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run frozen then trainable layers."""
@@ -97,7 +97,7 @@ def test_autocast_wrapping_slow_keeps_grad() -> None:
     with torch.autocast("cpu", dtype=torch.bfloat16):
         trace = tl.trace(
             model,
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
@@ -120,7 +120,7 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
 
     trace = tl.trace(
         ddp_model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -139,7 +139,7 @@ def test_view_reshape_ops_keep_grad() -> None:
     model = ViewModel()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -158,7 +158,7 @@ def test_inplace_relu_keeps_grad_slow() -> None:
     model = InplaceReluModel()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -179,7 +179,7 @@ def test_no_grad_wrapping_forward_severs_grad_slow() -> None:
     with no_grad():
         trace = tl.trace(
             model,
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
@@ -197,7 +197,7 @@ def test_mixed_grad_model_slow() -> None:
     model = MixedGradModel()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -217,6 +217,6 @@ def test_compile_wrapped_model_rejected_cross_link() -> None:
     with pytest.raises(RuntimeError, match="torch.compile"):
         tl.trace(
             _compile_model(nn.Linear(4, 2)),
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
         )

@@ -231,12 +231,12 @@ def test_safe_copy_preserves_channels_last_3d() -> None:
 
 def test_safe_copy_detach_preserves_channels_last() -> None:
     """The detach-path branch also preserves memory format."""
-    t = torch.randn(2, 4, 8, 8, has_trainable_params=True).to(memory_format=torch.channels_last)
+    t = torch.randn(2, 4, 8, 8, requires_grad=True).to(memory_format=torch.channels_last)
     assert t.is_contiguous(memory_format=torch.channels_last)
 
     copied = safe_copy(t, detach_tensor=True)
     assert copied.is_contiguous(memory_format=torch.channels_last)
-    assert not copied.has_trainable_params
+    assert not copied.requires_grad
 
 
 @pytest.mark.smoke

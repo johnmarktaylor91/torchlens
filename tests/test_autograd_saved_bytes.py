@@ -55,11 +55,11 @@ class SaveInputFunction(torch.autograd.Function):
         return grad_output * saved_x
 
 
-def _log_sequential(has_trainable_params: bool = True) -> Trace:
+def _log_sequential(requires_grad: bool = True) -> Trace:
     """Return a logged pass through the tiny sequential model."""
     torch.manual_seed(0)
     model = TinySequentialModel()
-    x = torch.randn(4, 10, has_trainable_params=has_trainable_params)
+    x = torch.randn(4, 10, requires_grad=requires_grad)
     return tl.trace(model, x, layers_to_save="all", random_seed=0)
 
 
@@ -90,7 +90,7 @@ def _sum_layer_autograd_bytes(trace: Trace) -> Optional[int]:
 @pytest.mark.smoke
 def test_autograd_saved_memory_basic_shape_model() -> None:
     """Linear and ReLU ops should report autograd saved tensor memory."""
-    trace = _log_sequential(has_trainable_params=True)
+    trace = _log_sequential(requires_grad=True)
 
     linear_ops = [layer for layer in trace.layer_list if layer.layer_type == "linear"]
     relu_ops = [layer for layer in trace.layer_list if layer.layer_type == "relu"]
@@ -110,8 +110,8 @@ def test_autograd_saved_memory_basic_shape_model() -> None:
 def test_add_op_reports_zero_autograd_saved_memory() -> None:
     """Add should have a grad_fn but save no tensors for backward."""
     model = TinyAddModel()
-    x = torch.ones(2, 3, has_trainable_params=True)
-    y = torch.ones(2, 3, has_trainable_params=True)
+    x = torch.ones(2, 3, requires_grad=True)
+    y = torch.ones(2, 3, requires_grad=True)
     trace = tl.trace(model, (x, y), layers_to_save="all")
     add_pass = next(layer for layer in trace.layer_list if layer.layer_type == "add")
 
@@ -126,7 +126,7 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     """torch.no_grad should produce None autograd saved fields at every level."""
     torch.manual_seed(0)
     model = TinySequentialModel()
-    x = torch.randn(4, 10, has_trainable_params=True)
+    x = torch.randn(4, 10, requires_grad=True)
 
     with torch.no_grad():
         trace = tl.trace(model, x, layers_to_save="all", random_seed=0)
@@ -138,13 +138,13 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     assert trace.autograd_saved_memory is None
 
 
-def test_has_trainable_params_false_sets_autograd_saved_fields_to_none() -> None:
-    """Inputs without has_trainable_params should not create grad_fn-backed saved fields."""
+def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
+    """Inputs without requires_grad should not create grad_fn-backed saved fields."""
     torch.manual_seed(0)
     model = TinySequentialModel()
     for parameter in model.parameters():
-        parameter.has_trainable_params_(False)
-    x = torch.randn(4, 10, has_trainable_params=False)
+        parameter.requires_grad_(False)
+    x = torch.randn(4, 10, requires_grad=False)
     trace = tl.trace(model, x, layers_to_save="all", random_seed=0, train_mode=True)
 
     assert all(layer.autograd_saved_memory is None for layer in _non_source_ops(trace))
@@ -155,7 +155,7 @@ def test_has_trainable_params_false_sets_autograd_saved_fields_to_none() -> None
 
 def test_layer_log_autograd_saved_rollup_matches_pass_values() -> None:
     """LayerLog values should equal the sum of their pass-level values."""
-    trace = _log_sequential(has_trainable_params=True)
+    trace = _log_sequential(requires_grad=True)
 
     for pass_log in _non_source_ops(trace):
         layer_log = _single_layer_log_for_pass(trace, pass_log)
@@ -165,14 +165,14 @@ def test_layer_log_autograd_saved_rollup_matches_pass_values() -> None:
 
 def test_trace_autograd_saved_rollup_matches_layer_values() -> None:
     """Trace total should equal the sum of non-None layer-level values."""
-    trace = _log_sequential(has_trainable_params=True)
+    trace = _log_sequential(requires_grad=True)
 
     assert trace.autograd_saved_memory == _sum_layer_autograd_bytes(trace)
 
 
 def test_custom_autograd_function_saved_tensor_bytes() -> None:
     """Custom autograd.Function saved_tensors should be measured by introspection."""
-    x = torch.randn(2, 3, has_trainable_params=True)
+    x = torch.randn(2, 3, requires_grad=True)
     output = SaveInputFunction.apply(x)
     expected_bytes = x.numel() * x.element_size()
 
@@ -184,7 +184,7 @@ def test_custom_autograd_function_saved_tensor_bytes() -> None:
 
 def test_autograd_saved_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -> None:
     """Autograd saved byte fields should survive portable bundle save/load."""
-    trace = _log_sequential(has_trainable_params=True)
+    trace = _log_sequential(requires_grad=True)
     bundle_path = tmp_path / "autograd_saved_memory.tl"
 
     tl.save(trace, bundle_path)

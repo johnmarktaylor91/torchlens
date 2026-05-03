@@ -65,7 +65,7 @@ def test_grad_norm_overlay_renders_after_backward(tmp_path: Path) -> None:
     """grad-norm overlay should read saved grads when available."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 4, has_trainable_params=True), save_grads=True)
+    log = tl.trace(model, torch.randn(2, 4, requires_grad=True), save_grads=True)
     loss = log[log.output_layers[0]].out.sum()
     log.log_backward(loss)
 

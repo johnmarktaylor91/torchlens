@@ -43,7 +43,7 @@ def test_ram_only_keep_grad_false_records_detached_tensor() -> None:
     payload = _first_payload_record(recording).ram_payload
 
     assert payload is not None
-    assert payload.has_trainable_params is False
+    assert payload.requires_grad is False
     assert payload.grad_fn is None
 
 
@@ -59,7 +59,7 @@ def test_ram_only_keep_grad_true_records_attached_tensor_and_backpropagates() ->
     payload = _first_payload_record(recording).ram_payload
 
     assert payload is not None
-    assert payload.has_trainable_params is True
+    assert payload.requires_grad is True
     assert payload.grad_fn is not None
     payload.sum().backward()
     assert model.linear.weight.grad is not None
@@ -173,14 +173,14 @@ def test_safe_copy_is_only_detach_lever_in_fastlog() -> None:
     assert offenders == []
 
 
-def test_model_parameter_has_trainable_params_flags_preserved() -> None:
-    """Fastlog does not mutate mixed parameter has_trainable_params flags."""
+def test_model_parameter_requires_grad_flags_preserved() -> None:
+    """Fastlog does not mutate mixed parameter requires_grad flags."""
 
     model = StorageModel()
-    model.linear.bias.has_trainable_params_(False)
-    before = {name: param.has_trainable_params for name, param in model.named_parameters()}
+    model.linear.bias.requires_grad_(False)
+    before = {name: param.requires_grad for name, param in model.named_parameters()}
 
     tl.fastlog.record(model, torch.ones(1, 3), default_op=True)
 
-    after = {name: param.has_trainable_params for name, param in model.named_parameters()}
+    after = {name: param.requires_grad for name, param in model.named_parameters()}
     assert after == before

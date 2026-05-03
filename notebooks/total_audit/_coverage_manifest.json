@@ -229,7 +229,7 @@
       },
       {
         "kind": "method",
-        "name": "evict_all_but"
+        "name": "remove_all_but"
       },
       {
         "kind": "method",
@@ -241,7 +241,7 @@
       },
       {
         "kind": "method",
-        "name": "joint_metric"
+        "name": "apply"
       },
       {
         "kind": "property",
@@ -273,7 +273,7 @@
       },
       {
         "kind": "property",
-        "name": "relationship_matrix"
+        "name": "relationships"
       },
       {
         "kind": "method",
@@ -289,7 +289,7 @@
       },
       {
         "kind": "method",
-        "name": "set_capacity"
+        "name": "capacity"
       },
       {
         "kind": "method",
@@ -2179,7 +2179,7 @@
       },
       {
         "kind": "method",
-        "name": "render_graph"
+        "name": "draw"
       },
       {
         "kind": "method",
@@ -2267,7 +2267,7 @@
       },
       {
         "kind": "method",
-        "name": "show_backward_graph"
+        "name": "draw_backward"
       },
       {
         "kind": "field",
@@ -2641,7 +2641,7 @@
       },
       {
         "kind": "method",
-        "name": "show_graph"
+        "name": "draw"
       },
       {
         "kind": "field",
@@ -3061,7 +3061,7 @@
     },
     {
       "kind": "wrapper_function",
-      "name": "show_backward_graph",
+      "name": "draw_backward",
       "target": "torchlens.user_funcs"
     },
     {
@@ -3697,7 +3697,7 @@
         "safe_copy_args",
         "safe_copy_kwargs",
         "set_random_seed",
-        "show_backward_graph",
+        "draw_backward",
         "show_bundle_graph",
         "show_model_graph",
         "summary",
@@ -3799,7 +3799,7 @@
       "names": [
         "NodeSpec",
         "render_lines_to_html",
-        "show_backward_graph",
+        "draw_backward",
         "show_bundle_graph",
         "show_model_graph",
         "summary"

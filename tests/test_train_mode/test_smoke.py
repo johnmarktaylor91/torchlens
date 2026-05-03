@@ -15,7 +15,7 @@ def test_trace_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
 
     trace = tl.trace(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -35,13 +35,13 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
 
     trace = tl.trace(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         detach_saved_tensorss=True,
         random_seed=0,
     )
     trace.save_new_outs(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -60,7 +60,7 @@ def test_fastlog_record_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
 
     recording = tl.fastlog.record(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
     )
     payload = next(record.ram_payload for record in recording if record.ram_payload is not None)

@@ -21,13 +21,13 @@ def _assert_backward_populates_grad(model: torch.nn.Module, loss: torch.Tensor) 
 def test_a1_save_new_outs_output_layer_keeps_grad(two_layer_mlp: TwoLayerMlp) -> None:
     """save_new_outs keeps the fast-postprocessed output attached."""
 
-    x = torch.randn(3, 4, has_trainable_params=True)
+    x = torch.randn(3, 4, requires_grad=True)
     trace = tl.trace(two_layer_mlp, x, random_seed=0)
     output_label = trace.output_layers[0]
 
     trace.save_new_outs(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         layers_to_save=[output_label],
         random_seed=0,
     )
@@ -48,7 +48,7 @@ def test_a1_two_pass_selective_save_output_layer_keeps_grad(two_layer_mlp: TwoLa
 
     trace = tl.trace(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         layers_to_save=[output_label],
         random_seed=0,
     )

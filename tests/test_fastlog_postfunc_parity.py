@@ -231,7 +231,7 @@ def test_train_mode_well_behaved_postfunc_keeps_graph_connected_payload() -> Non
     assert grad_records, "expected at least one keep_grad record"
     for record in grad_records:
         assert record.transformed_ram_payload is not None
-        assert record.transformed_ram_payload.has_trainable_params is True
+        assert record.transformed_ram_payload.requires_grad is True
         assert record.transformed_ram_payload.grad_fn is not None
     grad_records[0].transformed_ram_payload.sum().backward()
     assert model.linear.weight.grad is not None

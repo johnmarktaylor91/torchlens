@@ -23,7 +23,7 @@ class SharedFrozenModule(nn.Module):
         self.shared = nn.Linear(4, 4)
         self.head = nn.Linear(4, 1)
         for param in self.shared.parameters():
-            param.has_trainable_params = False
+            param.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Reuse the shared module twice in one forward pass."""
@@ -52,9 +52,9 @@ class BranchMismatchModel(nn.Module):
 
 
 def _assert_params_require_grad(module: nn.Module, expected: bool) -> None:
-    """Assert all parameters in a module have the expected has_trainable_params value."""
+    """Assert all parameters in a module have the expected requires_grad value."""
 
-    assert all(param.has_trainable_params is expected for param in module.parameters())
+    assert all(param.requires_grad is expected for param in module.parameters())
 
 
 def _first_payload_by_layer_type(
@@ -82,7 +82,7 @@ def _assert_no_grad(module: nn.Module) -> None:
     assert all(param.grad is None for param in module.parameters())
 
 
-def test_train_mode_preserves_user_has_trainable_params(
+def test_train_mode_preserves_user_requires_grad(
     tiny_resnet_with_probe: TinyResnetWithProbe,
 ) -> None:
     """train_mode preserves frozen backbone params during and after capture."""
@@ -90,11 +90,11 @@ def test_train_mode_preserves_user_has_trainable_params(
     observed_backbone_states: list[bool] = []
 
     def hook(_module: nn.Module, _inputs: tuple[torch.Tensor, ...]) -> None:
-        """Record backbone has_trainable_params state during the forward pass."""
+        """Record backbone requires_grad state during the forward pass."""
 
         observed_backbone_states.append(
             all(
-                param.has_trainable_params is False
+                param.requires_grad is False
                 for param in tiny_resnet_with_probe.backbone.parameters()
             )
         )
@@ -103,7 +103,7 @@ def test_train_mode_preserves_user_has_trainable_params(
     try:
         trace = tl.trace(
             tiny_resnet_with_probe,
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
@@ -129,7 +129,7 @@ def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
 
     trace = tl.trace(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -151,7 +151,7 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     trace = tl.trace(two_layer_mlp, torch.randn(3, 4), random_seed=0)
     trace.save_new_outs(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -172,7 +172,7 @@ def test_aux_loss_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
 
     output, recording = tl.fastlog.record(
         two_layer_mlp,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         return_output=True,
     )
@@ -190,7 +190,7 @@ def test_probe_frozen_backbone_slow(tiny_resnet_with_probe: TinyResnetWithProbe)
 
     trace = tl.trace(
         tiny_resnet_with_probe,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -210,7 +210,7 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
     trace = tl.trace(tiny_resnet_with_probe, torch.randn(3, 4), random_seed=0)
     trace.save_new_outs(
         tiny_resnet_with_probe,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -229,7 +229,7 @@ def test_probe_frozen_backbone_fastlog(tiny_resnet_with_probe: TinyResnetWithPro
 
     output, recording = tl.fastlog.record(
         tiny_resnet_with_probe,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         return_output=True,
     )
@@ -247,7 +247,7 @@ def test_multi_tap_loss_slow(multi_tap_model: MultiTapModel) -> None:
 
     trace = tl.trace(
         multi_tap_model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -267,7 +267,7 @@ def test_multi_tap_loss_fastlog(multi_tap_model: MultiTapModel) -> None:
 
     outputs, recording = tl.fastlog.record(
         multi_tap_model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         return_output=True,
     )
@@ -285,7 +285,7 @@ def test_distillation_slow(teacher_student_pair: TeacherStudentPair) -> None:
 
     trace = tl.trace(
         teacher_student_pair,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -305,7 +305,7 @@ def test_distillation_fastlog(teacher_student_pair: TeacherStudentPair) -> None:
 
     (teacher, student), recording = tl.fastlog.record(
         teacher_student_pair,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         return_output=True,
     )
@@ -327,7 +327,7 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     with tl.fastlog.Recorder(two_layer_mlp, train_mode=True) as recorder:
         for _step in range(4):
             optimizer.zero_grad(set_to_none=True)
-            output = recorder.log(torch.randn(3, 4, has_trainable_params=True))
+            output = recorder.log(torch.randn(3, 4, requires_grad=True))
             loss = output.square().mean()
             loss.backward()
             optimizer.step()
@@ -345,24 +345,24 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     _assert_any_grad(two_layer_mlp)
 
 
-def test_train_mode_shared_module_has_trainable_params() -> None:
-    """train_mode preserves has_trainable_params on shared modules called repeatedly."""
+def test_train_mode_shared_module_requires_grad() -> None:
+    """train_mode preserves requires_grad on shared modules called repeatedly."""
 
     model = SharedFrozenModule()
     observed_shared_states: list[bool] = []
 
     def hook(_module: nn.Module, _inputs: tuple[torch.Tensor, ...]) -> None:
-        """Record shared-module has_trainable_params state during each call."""
+        """Record shared-module requires_grad state during each call."""
 
         observed_shared_states.append(
-            all(param.has_trainable_params is False for param in model.shared.parameters())
+            all(param.requires_grad is False for param in model.shared.parameters())
         )
 
     handle = model.shared.register_forward_pre_hook(hook)
     try:
         trace = tl.trace(
             model,
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
@@ -388,14 +388,14 @@ def test_save_new_outs_train_mode_inherits() -> None:
     model = SharedFrozenModule()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
 
     trace.save_new_outs(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=None,
         random_seed=0,
     )
@@ -412,7 +412,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
     model = SharedFrozenModule()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         detach_saved_tensorss=True,
         random_seed=0,
     )
@@ -420,7 +420,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
 
     trace.save_new_outs(
         model,
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
@@ -438,7 +438,7 @@ def test_fastlog_train_mode_sugar_promotes_defaults() -> None:
 
     recording = tl.fastlog.record(
         SharedFrozenModule(),
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
     )
 
@@ -455,7 +455,7 @@ def test_fastlog_train_mode_explicit_default_op_false() -> None:
 
     recording = tl.fastlog.record(
         SharedFrozenModule(),
-        torch.randn(3, 4, has_trainable_params=True),
+        torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         default_op=False,
     )
@@ -469,7 +469,7 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
     with pytest.raises(tl.TrainingModeConfigError, match="default_op=True"):
         tl.fastlog.record(
             SharedFrozenModule(),
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             default_op=True,
         )
@@ -481,7 +481,7 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
     with pytest.raises(tl.TrainingModeConfigError, match="keep_grad=False"):
         tl.fastlog.record(
             SharedFrozenModule(),
-            torch.randn(3, 4, has_trainable_params=True),
+            torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             default_op=tl.fastlog.CaptureSpec(keep_grad=False),
         )
@@ -493,7 +493,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     model = BranchMismatchModel()
     trace = tl.trace(
         model,
-        torch.ones(2, 4, has_trainable_params=True),
+        torch.ones(2, 4, requires_grad=True),
         detach_saved_tensorss=True,
         random_seed=0,
     )
@@ -510,7 +510,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     try:
         trace.save_new_outs(
             model,
-            torch.ones(2, 4, has_trainable_params=True),
+            torch.ones(2, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )

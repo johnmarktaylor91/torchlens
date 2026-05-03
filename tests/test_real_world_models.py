@@ -1336,7 +1336,7 @@ def test_qml():
     softmax = torch.nn.Softmax(dim=1)
     layers = [clayer_1, qlayer, clayer_2, softmax]
     model = torch.nn.Sequential(*layers)
-    model_inputs = torch.rand(1, 2, has_trainable_params=False)
+    model_inputs = torch.rand(1, 2, requires_grad=False)
 
     show_model_graph(
         model,

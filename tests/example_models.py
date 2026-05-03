@@ -2029,7 +2029,7 @@ class AestheticFrozenMix(nn.Module):
         self.trainable_fc = nn.Linear(8, 8)
         # Freeze the first layer
         for param in self.frozen_fc.parameters():
-            param.has_trainable_params = False
+            param.requires_grad = False
 
     def forward(self, x):
         x = self.frozen_fc(x)
@@ -4564,9 +4564,7 @@ class PartialConvModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv = nn.Conv2d(3, 16, 3, padding=1, bias=False)
-        self.mask_conv_weight = nn.Parameter(
-            torch.ones(16, 3, 3, 3) / 27.0, has_trainable_params=False
-        )
+        self.mask_conv_weight = nn.Parameter(torch.ones(16, 3, 3, 3) / 27.0, requires_grad=False)
         self.bias = nn.Parameter(torch.zeros(16))
         self.fc = nn.Linear(16, 4)
         self.pool = nn.AdaptiveAvgPool2d(1)

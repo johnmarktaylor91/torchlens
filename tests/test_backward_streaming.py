@@ -63,7 +63,7 @@ def _logged_backward_stream(
 
     torch.manual_seed(0)
     model = _TinyStreamingBackwardModel()
-    inputs = torch.randn(2, 3, has_trainable_params=True)
+    inputs = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         model,
         inputs,
@@ -138,7 +138,7 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
     """Training mode should reject grad disk streaming."""
 
     model = _TinyStreamingBackwardModel()
-    inputs = torch.randn(2, 3, has_trainable_params=True)
+    inputs = torch.randn(2, 3, requires_grad=True)
 
     with pytest.raises(ValueError, match="grad disk saves"):
         tl.trace(

@@ -39,7 +39,7 @@ class TinyResnetWithProbe(nn.Module):
         )
         self.probe = nn.Linear(8, 2)
         for param in self.backbone.parameters():
-            param.has_trainable_params = False
+            param.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the frozen backbone and trainable probe."""
@@ -57,7 +57,7 @@ class TeacherStudentPair(nn.Module):
         self.teacher = nn.Linear(4, 3)
         self.student = nn.Linear(4, 3)
         for param in self.teacher.parameters():
-            param.has_trainable_params = False
+            param.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Return teacher and student outputs."""

@@ -60,10 +60,10 @@
 | `tl.Bundle.compare_at` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.diff` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.do` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
-| `tl.Bundle.evict_all_but` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
+| `tl.Bundle.remove_all_but` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.fork` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.help` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
-| `tl.Bundle.joint_metric` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
+| `tl.Bundle.apply` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.members` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.metric` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.most_changed` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
@@ -71,11 +71,11 @@
 | `tl.Bundle.node` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.pop` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.relationship` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
-| `tl.Bundle.relationship_matrix` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
+| `tl.Bundle.relationships` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.replay` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.rerun` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.save` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
-| `tl.Bundle.set_capacity` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
+| `tl.Bundle.capacity` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.show` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.Bundle.supergraph` | class_member | 10_bundle_anatomy.ipynb | 10_bundle_anatomy.ipynb | - |
 | `tl.GradFnLog` | class | 09_other_log_types.ipynb, 25_compat_truth_table.ipynb | 09_other_log_types.ipynb, 25_compat_truth_table.ipynb | - |
@@ -550,7 +550,7 @@
 | `tl.Trace.release_param_refs` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.remove` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.render_dagua_graph` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.render_graph` | class_member | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.draw` | class_member | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.replace_run_state_from` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.replay` | class_member | 06_modellog_anatomy.ipynb, 18_intervention_verbs.ipynb | 06_modellog_anatomy.ipynb, 18_intervention_verbs.ipynb | - |
 | `tl.Trace.replay_from` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
@@ -572,7 +572,7 @@
 | `tl.Trace.saved_out_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.set` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.show` | class_member | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.show_backward_graph` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.draw_backward` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.model_class` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.model_id` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.streaming_pass_logs` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
@@ -665,8 +665,8 @@
 | `tl.ModuleLog.param_memory_str` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
 | `tl.ModuleLog.call_labels` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
 | `tl.ModuleLog.ops` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
-| `tl.ModuleLog.has_trainable_params` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
-| `tl.ModuleLog.show_graph` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
+| `tl.ModuleLog.requires_grad` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
+| `tl.ModuleLog.draw` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
 | `tl.ModuleLog.source_file` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
 | `tl.ModuleLog.source_line` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
 | `tl.ModuleLog.to_csv` | class_member | 09_other_log_types.ipynb | 09_other_log_types.ipynb | - |
@@ -1220,7 +1220,7 @@
 | `tl.user_funcs.safe_copy_args` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
 | `tl.user_funcs.safe_copy_kwargs` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
 | `tl.user_funcs.set_random_seed` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
-| `tl.user_funcs.show_backward_graph` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
+| `tl.user_funcs.draw_backward` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
 | `tl.user_funcs.show_bundle_graph` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
 | `tl.user_funcs.show_model_graph` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
 | `tl.user_funcs.summary` | submodule | 01_basic_capture.ipynb | 01_basic_capture.ipynb | - |
@@ -1308,7 +1308,7 @@
 | `tl.visualization` | submodule | 00_install_and_smoke.ipynb, 05_visualization_basics.ipynb | 00_install_and_smoke.ipynb, 05_visualization_basics.ipynb | - |
 | `tl.visualization.NodeSpec` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
 | `tl.visualization.render_lines_to_html` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
-| `tl.visualization.show_backward_graph` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
+| `tl.visualization.draw_backward` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
 | `tl.visualization.show_bundle_graph` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
 | `tl.visualization.show_model_graph` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
 | `tl.visualization.summary` | submodule | 15_visualization_options.ipynb | 15_visualization_options.ipynb | - |
