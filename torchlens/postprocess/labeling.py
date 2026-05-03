@@ -13,8 +13,8 @@ Step 10 (_log_final_info_for_all_layers): Logs operation numbers, module hierarc
     _add_lookup_keys_for_layer_entry needs module_num_passes data.
 
 Step 11 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
-    Renames all raw labels (e.g., "cos_3_raw") to final labels in both ModelLog-level
-    fields and LayerPassLog fields, then reorders ModelLog fields into canonical order.
+    Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
+    fields and OpLog fields, then reorders Trace fields into canonical order.
 
 Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (unless
     keep_unsaved_layers=True), builds lookup key mappings (integer index, label,
@@ -29,13 +29,13 @@ from typing import Any, Dict, List, TYPE_CHECKING
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef
 from ..utils.display import human_readable_size
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
-def _map_raw_labels_to_final_labels(self: "ModelLog") -> None:
+def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     """Step 9: Build the raw-to-final label mapping for all tensors.
 
     Iterates through all tensors in order and assigns each a human-readable label.
@@ -111,13 +111,13 @@ def _map_raw_labels_to_final_labels(self: "ModelLog") -> None:
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
 
-def _log_final_info_for_all_layers(self: "ModelLog") -> None:
+def _log_final_info_for_all_layers(self: "Trace") -> None:
     """Step 10: Log final metadata for all layers and build module hierarchy.
 
     Iterates through all layers (before unsaved ones are discarded in Step 12)
     and computes:
     - Operation numbers (sequential, excluding input/buffer/output).
-    - Replaces raw labels with final labels in each LayerPassLog's fields.
+    - Replaces raw labels with final labels in each OpLog's fields.
     - Module hierarchy information (_module_build_data dicts).
     - Cumulative tallies: tensor sizes, param counts, elapsed time.
     - Structural flags: branching, recurrence, conditional branching.
@@ -191,13 +191,13 @@ def _log_final_info_for_all_layers(self: "ModelLog") -> None:
     _build_module_hierarchy_dicts(self)
 
 
-def _finalize_output_operation_nums(self: "ModelLog") -> None:
+def _finalize_output_operation_nums(self: "Trace") -> None:
     """Assign operation_num to output layers (deferred until total is known)."""
     for layer in self.output_layers:
         self[layer].operation_num = self.num_operations
 
 
-def _build_module_hierarchy_dicts(self: "ModelLog") -> None:
+def _build_module_hierarchy_dicts(self: "Trace") -> None:
     """Derive top_level_modules and module_children from their pass-level counterparts."""
     mbd = self._module_build_data
     for module in mbd["top_level_module_passes"]:
@@ -213,7 +213,7 @@ def _build_module_hierarchy_dicts(self: "ModelLog") -> None:
                 mbd["module_children"][module_parent_nopass].append(module_child_nopass)
 
 
-# Fields in LayerPassLog that contain raw labels needing rename.
+# Fields in OpLog that contain raw labels needing rename.
 # These may be lists or sets — the rename logic handles both via type(orig).
 _LIST_FIELDS_TO_RENAME = [
     "parent_layers",
@@ -272,8 +272,8 @@ def _rename_children_by_cond(
     }
 
 
-def _replace_layer_names_for_layer_entry(self: "ModelLog", layer_entry: LayerPassLog) -> None:
-    """Replace all raw labels in a LayerPassLog's fields with final labels.
+def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> None:
+    """Replace all raw labels in a OpLog's fields with final labels.
 
     Handles three categories of fields:
     1. List/set fields (parent_layers, child_layers, etc.): creates NEW objects
@@ -282,7 +282,7 @@ def _replace_layer_names_for_layer_entry(self: "ModelLog", layer_entry: LayerPas
     3. children_tensor_versions dict: renames keys.
 
     Args:
-        layer_entry: LayerPassLog to rename labels for.
+        layer_entry: OpLog to rename labels for.
     """
     mapping = self._raw_to_final_layer_labels
     d = layer_entry.__dict__
@@ -410,7 +410,7 @@ def _rename_label_dataclass(value: Any, mapping: Dict[str, str]) -> Any:
 
 
 def _log_module_hierarchy_info_for_layer(
-    self: "ModelLog", layer_entry: LayerPassLog, _shadow_sets: dict[str, Any]
+    self: "Trace", layer_entry: OpLog, _shadow_sets: dict[str, Any]
 ) -> None:
     """Populate module hierarchy data for a single layer in _module_build_data.
 
@@ -475,10 +475,10 @@ def _log_module_hierarchy_info_for_layer(
             mbd["module_passes"].append(module_pass_nice_label)
 
 
-def _remove_unwanted_entries_and_log_remaining(self: "ModelLog") -> None:
+def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     """Step 12: Remove unsaved layers, build lookup keys, finalize layer lists.
 
-    Unless ``keep_unsaved_layers=True``, removes LayerPassLog entries that don't
+    Unless ``keep_unsaved_layers=True``, removes OpLog entries that don't
     have saved activations. For each retained entry:
     - Builds lookup keys (integer index, label, module path, address).
     - Adds to layer_list, layer_dict_main_keys, and label lists.
@@ -522,7 +522,7 @@ def _remove_unwanted_entries_and_log_remaining(self: "ModelLog") -> None:
             or self.keep_unsaved_layers
             or should_keep_for_replay
         ):
-            # Add the lookup keys for the layer, to itself and to ModelLog:
+            # Add the lookup keys for the layer, to itself and to Trace:
             _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
 
             # Log all information:
@@ -555,11 +555,11 @@ def _remove_unwanted_entries_and_log_remaining(self: "ModelLog") -> None:
         self._all_layers_saved = False
 
 
-def _labels_in_replay_ready_call_groups_to_retain(self: "ModelLog") -> set[str]:
+def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
     """Return labels in same-call groups that must remain replay-addressable.
 
     Args:
-        self: ModelLog being postprocessed.
+        self: Trace being postprocessed.
 
     Returns:
         Labels to keep atomically even when their activation was not saved.
@@ -568,7 +568,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "ModelLog") -> set[str]:
     if not getattr(self, "intervention_ready", False):
         return set()
 
-    call_groups: dict[int, list[LayerPassLog]] = defaultdict(list)
+    call_groups: dict[int, list[OpLog]] = defaultdict(list)
     for layer_entry in self:
         func_call_id = getattr(layer_entry, "func_call_id", None)
         if func_call_id is not None:
@@ -600,7 +600,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "ModelLog") -> set[str]:
     return labels_to_keep
 
 
-def _replay_dependency_labels(layer_entry: LayerPassLog) -> set[str]:
+def _replay_dependency_labels(layer_entry: OpLog) -> set[str]:
     """Return final labels this entry's replay metadata depends on.
 
     Args:
@@ -656,11 +656,11 @@ def _collect_parent_refs(value: Any) -> list[ParentRef]:
 
 
 def _add_lookup_keys_for_layer_entry(
-    self: "ModelLog", layer_entry: LayerPassLog, tensor_index: int, num_tensors_to_keep: int
+    self: "Trace", layer_entry: OpLog, tensor_index: int, num_tensors_to_keep: int
 ) -> None:
-    """Build user-facing lookup keys for a LayerPassLog and register them.
+    """Build user-facing lookup keys for a OpLog and register them.
 
-    Keys allow users to access layers via ModelLog[key]. Multiple key types:
+    Keys allow users to access layers via Trace[key]. Multiple key types:
     - String labels: layer_label, layer_label_short, with/without pass suffix.
     - Integer indices: positive (0-based) and negative (Python-style).
     - Module paths: module_pass labels for modules exited by this layer.
@@ -670,7 +670,7 @@ def _add_lookup_keys_for_layer_entry(
     from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
 
     Args:
-        layer_entry: LayerPassLog to build lookup keys for.
+        layer_entry: OpLog to build lookup keys for.
         tensor_index: Zero-based position in the final ordered layer list.
         num_tensors_to_keep: Total number of retained tensors (for negative indices).
     """
@@ -726,7 +726,7 @@ def _add_lookup_keys_for_layer_entry(
 
     lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
 
-    # Log in both the tensor and in the ModelLog object.
+    # Log in both the tensor and in the Trace object.
     layer_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
@@ -735,8 +735,8 @@ def _add_lookup_keys_for_layer_entry(
         self._layer_num_to_lookup_keys_dict[layer_entry.creation_order].append(lookup_key)
 
 
-def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
-    """Reorder LayerPassLog fields into canonical display order.
+def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
+    """Reorder OpLog fields into canonical display order.
 
     PRESERVES all fields — this function only reorders, it does NOT strip
     any data. Fields listed in LAYER_PASS_LOG_FIELD_ORDER come first (in that
@@ -758,8 +758,8 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: LayerPassLog) -> None:
     layer_entry.__dict__ = new_dir_dict
 
 
-def _rename_model_history_layer_names(self: "ModelLog") -> None:
-    """Step 11: Rename raw labels to final labels in all ModelLog-level fields.
+def _rename_model_history_layer_names(self: "Trace") -> None:
+    """Step 11: Rename raw labels to final labels in all Trace-level fields.
 
     Updates list fields (input_layers, output_layers, etc.), dict fields
     (layers_with_params, equivalent_operations), conditional branch
@@ -852,8 +852,8 @@ def _rename_model_history_layer_names(self: "ModelLog") -> None:
         mla[module_pass] = new_arglist
 
 
-def _trim_and_reorder_model_history_fields(self: "ModelLog") -> None:
-    """Reorder ModelLog fields into canonical display order.
+def _trim_and_reorder_model_history_fields(self: "Trace") -> None:
+    """Reorder Trace fields into canonical display order.
 
     Like ``_trim_and_reorder_layer_entry_fields``, this PRESERVES all fields.
     Public fields listed in MODEL_LOG_FIELD_ORDER come first, followed by any

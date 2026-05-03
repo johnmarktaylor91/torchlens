@@ -22,7 +22,7 @@ def test_sites_builds_structured_sweep() -> None:
 def test_sites_can_expand_to_hook_pairs() -> None:
     """Site collections should be usable as hook attachment inputs."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         torch.nn.ReLU(),
         torch.randn(2, 3),
         intervention_ready=True,

@@ -19,12 +19,12 @@ OBJECT_ALIAS_CASES = [
     ("GradientPostfunc", "torchlens.types", "GradientPostfunc"),
     ("GradFnAccessor", "torchlens.accessors", "GradFnAccessor"),
     ("GradFnLog", "torchlens.types", "GradFnLog"),
-    ("GradFnPassLog", "torchlens.types", "GradFnPassLog"),
+    ("GradFnCallLog", "torchlens.types", "GradFnCallLog"),
     ("LayerAccessor", "torchlens.accessors", "LayerAccessor"),
     ("MetadataInvariantError", "torchlens.errors", "MetadataInvariantError"),
     ("ModuleAccessor", "torchlens.accessors", "ModuleAccessor"),
     ("ModuleLog", "torchlens.types", "ModuleLog"),
-    ("ModulePassLog", "torchlens.types", "ModulePassLog"),
+    ("ModuleCallLog", "torchlens.types", "ModuleCallLog"),
     ("NodeSpec", "torchlens.experimental.dagua", "NodeSpec"),
     ("ParamLog", "torchlens.types", "ParamLog"),
     ("RunState", "torchlens.io", "RunState"),
@@ -45,11 +45,11 @@ OBJECT_ALIAS_CASES = [
     ("get_model_metadata", "torchlens.io", "get_model_metadata"),
     ("list_logs", "torchlens.io", "list_logs"),
     ("log_model_metadata", "torchlens.io", "log_model_metadata"),
-    ("model_log_to_dagua_graph", "torchlens.experimental.dagua", "model_log_to_dagua_graph"),
+    ("trace_to_dagua_graph", "torchlens.experimental.dagua", "trace_to_dagua_graph"),
     ("preview_fastlog", "torchlens.fastlog", "preview"),
     ("rehydrate_nested", "torchlens.io", "rehydrate_nested"),
     ("render_lines_to_html", "torchlens.experimental.dagua", "render_lines_to_html"),
-    ("render_model_log_with_dagua", "torchlens.experimental.dagua", "render_model_log_with_dagua"),
+    ("render_trace_with_dagua", "torchlens.experimental.dagua", "render_trace_with_dagua"),
     ("reset_naming_counter", "torchlens.io", "reset_naming_counter"),
     ("resolve_sites", "torchlens.validation", "resolve_sites"),
     ("save_intervention", "torchlens.io", "save_intervention"),
@@ -194,7 +194,7 @@ def test_show_backward_graph_legacy_kwargs(
 ) -> None:
     """Top-level backward graph helper should accept representative legacy kwargs."""
 
-    log = torchlens.log_forward_pass(small_model, small_input, layers_to_save="all")
+    log = torchlens.trace(small_model, small_input, layers_to_save="all")
     loss = log[log.output_layers[0]].activation.sum()
     log.log_backward(loss)
 

@@ -1,7 +1,7 @@
-"""Experimental Dagua-backed visualization bridge for TorchLens ModelLog objects.
+"""Experimental Dagua-backed visualization bridge for TorchLens Trace objects.
 
 This module translates TorchLens semantics into Dagua graph elements and
-documents exactly which ModelLog fields are consumed by the visualization.
+documents exactly which Trace fields are consumed by the visualization.
 """
 
 from __future__ import annotations
@@ -95,8 +95,8 @@ MODULE_FIELD_USAGE: dict[str, str] = {
 class TorchLensRenderAudit:
     """Explicit field-consumption report for TorchLens → Dagua rendering."""
 
-    model_log_used: dict[str, str]
-    model_log_unused: dict[str, str]
+    trace_used: dict[str, str]
+    trace_unused: dict[str, str]
     entry_used: dict[str, str]
     entry_unused: dict[str, str]
     module_used: dict[str, str]
@@ -111,8 +111,8 @@ class TorchLensRenderAudit:
             Used and unused field descriptions grouped by source object.
         """
         return {
-            "model_log_used": self.model_log_used,
-            "model_log_unused": self.model_log_unused,
+            "trace_used": self.trace_used,
+            "trace_unused": self.trace_unused,
             "entry_used": self.entry_used,
             "entry_unused": self.entry_unused,
             "module_used": self.module_used,
@@ -149,17 +149,17 @@ def _unused_justification(name: str) -> str:
     return "Currently not used by the visualization; retained for future overlays, interactivity, or debugging without being silently discarded."
 
 
-def build_render_audit(model_log: Any) -> TorchLensRenderAudit:
+def build_render_audit(trace: Any) -> TorchLensRenderAudit:
     """Return an explicit used/unused field audit for the bridge."""
-    model_fields = _list_public_fields(model_log)
-    entry_sample = model_log.layer_list[0] if getattr(model_log, "layer_list", None) else None
+    model_fields = _list_public_fields(trace)
+    entry_sample = trace.layer_list[0] if getattr(trace, "layer_list", None) else None
     entry_fields = _list_public_fields(entry_sample) if entry_sample is not None else []
-    module_values = list(model_log.modules) if hasattr(model_log, "modules") else []
+    module_values = list(trace.modules) if hasattr(trace, "modules") else []
     module_fields = _list_public_fields(module_values[0]) if module_values else []
 
     return TorchLensRenderAudit(
-        model_log_used=dict(MODELLOG_FIELD_USAGE),
-        model_log_unused={
+        trace_used=dict(MODELLOG_FIELD_USAGE),
+        trace_unused={
             name: _unused_justification(name)
             for name in model_fields
             if name not in MODELLOG_FIELD_USAGE
@@ -179,26 +179,26 @@ def build_render_audit(model_log: Any) -> TorchLensRenderAudit:
     )
 
 
-def build_torchlens_caption(model_log: Any) -> str:
+def build_torchlens_caption(trace: Any) -> str:
     """Build the user-facing graph caption."""
-    total_params = int(getattr(model_log, "total_params", 0) or 0)
-    trainable = int(getattr(model_log, "total_params_trainable", 0) or 0)
-    frozen = int(getattr(model_log, "total_params_frozen", 0) or 0)
+    total_params = int(getattr(trace, "total_params", 0) or 0)
+    trainable = int(getattr(trace, "total_params_trainable", 0) or 0)
+    frozen = int(getattr(trace, "total_params_frozen", 0) or 0)
     if total_params == 0:
         params_line = "0 params"
     elif frozen == 0:
-        params_line = f"{total_params:,} params (all trainable, {human_readable_size(getattr(model_log, 'total_params_memory', 0) or 0)})"
+        params_line = f"{total_params:,} params (all trainable, {human_readable_size(getattr(trace, 'total_params_memory', 0) or 0)})"
     elif trainable == 0:
-        params_line = f"{total_params:,} params (all frozen, {human_readable_size(getattr(model_log, 'total_params_memory', 0) or 0)})"
+        params_line = f"{total_params:,} params (all frozen, {human_readable_size(getattr(trace, 'total_params_memory', 0) or 0)})"
     else:
         params_line = (
             f"{total_params:,} params "
-            f"({trainable:,}/{total_params:,} trainable, {human_readable_size(getattr(model_log, 'total_params_memory', 0) or 0)})"
+            f"({trainable:,}/{total_params:,} trainable, {human_readable_size(getattr(trace, 'total_params_memory', 0) or 0)})"
         )
     return (
-        f"{getattr(model_log, 'model_name', 'TorchLens model')}\n"
-        f"{getattr(model_log, 'num_tensors_total', 0)} tensors total "
-        f"({human_readable_size(getattr(model_log, 'total_activation_memory', 0) or 0)})\n"
+        f"{getattr(trace, 'model_name', 'TorchLens model')}\n"
+        f"{getattr(trace, 'num_tensors_total', 0)} tensors total "
+        f"({human_readable_size(getattr(trace, 'total_activation_memory', 0) or 0)})\n"
         f"{params_line}"
     )
 
@@ -208,11 +208,11 @@ def _to_dagua_direction(direction: str) -> str:
     return mapping.get(direction, direction)
 
 
-def _entries_for_mode(model_log: Any, vis_mode: str) -> list[Any]:
+def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
     if vis_mode == "unrolled":
-        return list(model_log.layer_dict_main_keys.values())
+        return list(trace.layer_dict_main_keys.values())
     if vis_mode == "rolled":
-        return list(model_log.layer_logs.values())
+        return list(trace.layer_logs.values())
     raise ValueError("vis_mode must be 'unrolled' or 'rolled'")
 
 
@@ -458,27 +458,27 @@ def _torchlens_layout_config(num_nodes: int, direction: str) -> Any:
     )
 
 
-def model_log_to_dagua_graph(
-    model_log: Any,
+def trace_to_dagua_graph(
+    trace: Any,
     vis_mode: str = "unrolled",
     vis_nesting_depth: int = 1000,
     show_buffer_layers: bool = False,
     direction: str = "bottomup",
     include_gradient_edges: bool | None = None,
 ) -> Any:
-    """Translate a TorchLens ModelLog into a DaguaGraph."""
+    """Translate a TorchLens Trace into a DaguaGraph."""
     import dagua
 
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
-    entries = _entries_for_mode(model_log, vis_mode)
+    entries = _entries_for_mode(trace, vis_mode)
     if not show_buffer_layers:
         entries = [e for e in entries if not getattr(e, "is_buffer_layer", False)]
     entries_by_label = {getattr(e, "layer_label"): e for e in entries}
-    site_labels, cone_labels = intervention_site_and_cone_labels(model_log, show_cone=True)
+    site_labels, cone_labels = intervention_site_and_cone_labels(trace, show_cone=True)
     g.is_intervention_site = []
     g.is_in_cone = []
     g.intervention_log_summary = []
-    g.has_direct_writes = bool(getattr(model_log, "_has_direct_writes", False))
+    g.has_direct_writes = bool(getattr(trace, "_has_direct_writes", False))
 
     module_shape = dagua.NodeStyle(shape="roundrect", corner_radius=8.0)
     op_shape = dagua.NodeStyle(shape="ellipse")
@@ -544,7 +544,7 @@ def model_log_to_dagua_graph(
             g.add_edge(parent_label, child_id, label=edge_label, type=edge_type, style=style)
 
     if include_gradient_edges is None:
-        include_gradient_edges = bool(getattr(model_log, "has_gradients", False))
+        include_gradient_edges = bool(getattr(trace, "has_gradients", False))
 
     if include_gradient_edges and vis_mode == "unrolled":
         for child in entries:
@@ -571,10 +571,10 @@ def model_log_to_dagua_graph(
             kept_modules.setdefault(mod, []).append(node_id)
 
     module_logs = {}
-    if hasattr(model_log, "modules"):
+    if hasattr(trace, "modules"):
         try:
             module_logs = {
-                m.address: m for m in model_log.modules if getattr(m, "address", "self") != "self"
+                m.address: m for m in trace.modules if getattr(m, "address", "self") != "self"
             }
         except Exception:
             module_logs = {}
@@ -597,8 +597,8 @@ def model_log_to_dagua_graph(
     return g
 
 
-def render_model_log_with_dagua(
-    model_log: Any,
+def render_trace_with_dagua(
+    trace: Any,
     vis_mode: str = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "graph.gv",
@@ -608,11 +608,11 @@ def render_model_log_with_dagua(
     vis_direction: str = "bottomup",
     vis_theme: str = "torchlens",
 ) -> Any:
-    """Render a TorchLens ModelLog with Dagua."""
+    """Render a TorchLens Trace with Dagua."""
     import dagua
 
-    graph = model_log_to_dagua_graph(
-        model_log,
+    graph = trace_to_dagua_graph(
+        trace,
         vis_mode=vis_mode,
         vis_nesting_depth=vis_nesting_depth,
         show_buffer_layers=vis_buffer_layers,
@@ -625,6 +625,6 @@ def render_model_log_with_dagua(
         graph,
         config=config,
         output=output,
-        title=build_torchlens_caption(model_log),
+        title=build_torchlens_caption(trace),
     )
     return graph.to_json() if hasattr(graph, "to_json") else output

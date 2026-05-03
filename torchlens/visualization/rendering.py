@@ -1,4 +1,4 @@
-"""Graphviz-based computational graph rendering for ModelLog objects.
+"""Graphviz-based computational graph rendering for Trace objects.
 
 Renders the computational graph captured by TorchLens as a Graphviz Digraph,
 supporting two visualization modes:
@@ -22,11 +22,11 @@ Key mechanisms:
 
 - **Override system**: six override dicts (graph, node, nested_node, edge,
   gradient_edge, module) allow callers to customize any Graphviz attribute.
-  Values can be static strings or callables receiving ``(model_log, node)``
+  Values can be static strings or callables receiving ``(trace, node)``
   for dynamic computation.
 
 - **_all_layers_logged guard**: rendering requires all layers to be present
-  in the ModelLog (either saved or kept-unsaved).  This check prevents
+  in the Trace (either saved or kept-unsaved).  This check prevents
   IndexError crashes when ``keep_unsaved_layers=False`` was used and nodes
   reference absent layers.
 """
@@ -65,7 +65,7 @@ from .._literals import (
 )
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 from ..data_classes.layer_log import LayerLog
 from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from .node_spec import (
@@ -97,15 +97,15 @@ from ._render_utils import (
 
 if TYPE_CHECKING:
     from ..data_classes.grad_fn_log import GradFnLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
     from ..data_classes.module_log import ModuleLog
 
-BaseGraphNode = Union["LayerPassLog", "LayerLog"]
+BaseGraphNode = Union["OpLog", "LayerLog"]
 
 
 @dataclass
 class FocusNode:
-    """Mutable render proxy for a focused LayerLog or LayerPassLog.
+    """Mutable render proxy for a focused LayerLog or OpLog.
 
     Parameters
     ----------
@@ -208,7 +208,7 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 
 # Module subgraph border widths live in ._render_utils -- both this file
 # and ``multi_trace/visualization.py`` use ``compute_module_penwidth`` so
-# bundle and ModelLog clusters scale identically by depth.
+# bundle and Trace clusters scale identically by depth.
 
 # Commutative functions: argument order doesn't matter, so we skip arg-position
 # labels on their incoming edges to reduce visual clutter.
@@ -312,7 +312,7 @@ def _is_buffer_visible(node: GraphNode, show_buffer_layers: BufferVisibilityLite
 
 
 def _get_hidden_parent_buffer_addresses(
-    model_log: "ModelLog",
+    trace: "Trace",
     node: GraphNode,
     show_buffer_layers: BufferVisibilityLiteral,
 ) -> list[str]:
@@ -320,8 +320,8 @@ def _get_hidden_parent_buffer_addresses(
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     node:
         Non-buffer node to inspect.
     show_buffer_layers:
@@ -343,10 +343,10 @@ def _get_hidden_parent_buffer_addresses(
         if parent_label.startswith("__module_focus_"):
             continue
         parent_node: BaseGraphNode
-        if isinstance(source_node, LayerPassLog):
-            parent_node = model_log[parent_label]
+        if isinstance(source_node, OpLog):
+            parent_node = trace[parent_label]
         else:
-            parent_node = model_log.layer_logs[parent_label]
+            parent_node = trace.layer_logs[parent_label]
         if not parent_node.is_buffer_layer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
         buffer_address = parent_node.buffer_address
@@ -375,7 +375,7 @@ class RenderEdge:
 
 
 def render_graph(
-    self: "ModelLog",
+    self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
     vis_nesting_depth: int = 1000,
     vis_outpath: str = "modelgraph",
@@ -429,7 +429,7 @@ def render_graph(
             user callbacks run.
         node_spec_fn: Optional callback receiving ``(layer_log, default_spec)``.
             In unrolled mode, ``layer_log`` is the parent aggregate LayerLog for
-            the rendered LayerPassLog.
+            the rendered OpLog.
         collapsed_node_spec_fn: Optional callback receiving
             ``(module_log, default_spec)`` for collapsed module nodes.
         collapse_fn: Optional predicate receiving a ModuleLog. When provided,
@@ -514,9 +514,9 @@ def render_graph(
                 "dagua renderer is experimental; opt in via "
                 "`from torchlens.experimental import dagua` first"
             )
-        from ..experimental.dagua import render_model_log_with_dagua
+        from ..experimental.dagua import render_trace_with_dagua
 
-        return render_model_log_with_dagua(
+        return render_trace_with_dagua(
             self,
             vis_mode=vis_mode,
             vis_nesting_depth=vis_nesting_depth,
@@ -565,7 +565,7 @@ def render_graph(
     ]:
         vis_outpath = ".".join(split_outpath[:-1])
 
-    # Unrolled: iterate LayerPassLog objects (one node per pass).
+    # Unrolled: iterate OpLog objects (one node per pass).
     # Rolled: iterate LayerLog objects (one node per logical layer, multi-pass
     # collapsed into a single node with edge annotations).
     if vis_mode == "unrolled":
@@ -685,7 +685,7 @@ def render_graph(
 
     # Override system: callers can pass dicts of Graphviz attributes to
     # customize rendering.  Values can be static (str) or dynamic (callable
-    # receiving the ModelLog, evaluated at render time).
+    # receiving the Trace, evaluated at render time).
     for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
         if callable(arg_val):
             graph_args[arg_name] = str(arg_val(self))
@@ -828,7 +828,7 @@ def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) ->
 
 
 def render_backward_graph(
-    self: "ModelLog",
+    self: "Trace",
     vis_outpath: str = "backward_modelgraph",
     vis_graph_overrides: Optional[Dict[str, Any]] = None,
     node_spec_fn: BackwardNodeSpecFn | None = None,
@@ -848,7 +848,7 @@ def render_backward_graph(
     Parameters
     ----------
     self:
-        ModelLog containing captured backward metadata.
+        Trace containing captured backward metadata.
     vis_outpath:
         Output path for the rendered graph.
     vis_graph_overrides:
@@ -1125,7 +1125,7 @@ def _first_tensor_in_obj(value: Any) -> torch.Tensor | None:
 
 
 def _build_skip_filtered_edge_map(
-    model_log: "ModelLog",
+    trace: "Trace",
     entries_to_plot: Mapping[str, GraphNode],
     *,
     vis_mode: str,
@@ -1136,8 +1136,8 @@ def _build_skip_filtered_edge_map(
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     entries_to_plot:
         Candidate nodes for the current visualization mode.
     vis_mode:
@@ -1163,7 +1163,7 @@ def _build_skip_filtered_edge_map(
         for node in visible_entries.values():
             if isinstance(node, BoundaryNode):
                 continue
-            layer_log = _layer_log_for_node(model_log, node)
+            layer_log = _layer_log_for_node(trace, node)
             if not skip_fn(layer_log):
                 continue
             if layer_log.is_input_layer or layer_log.is_output_layer:
@@ -1177,7 +1177,7 @@ def _build_skip_filtered_edge_map(
         if node.layer_label in skipped_labels:
             continue
         edge_map[node.layer_label] = _expand_edges_through_skipped(
-            model_log,
+            trace,
             node,
             visible_entries,
             skipped_labels,
@@ -1187,14 +1187,14 @@ def _build_skip_filtered_edge_map(
 
 
 def _resolve_focus_module(
-    model_log: "ModelLog",
+    trace: "Trace",
     module: "ModuleLog | str",
 ) -> "ModuleLog":
     """Resolve and validate a module focus argument.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log being rendered.
     module:
         ModuleLog instance or module address string.
@@ -1207,15 +1207,15 @@ def _resolve_focus_module(
     Raises
     ------
     ValueError
-        If the module cannot be found or belongs to a different ModelLog.
+        If the module cannot be found or belongs to a different Trace.
     """
 
     from ..data_classes.module_log import ModuleLog
 
     if isinstance(module, str):
-        if module not in model_log.modules:
-            raise ValueError(f"Module address '{module}' was not found in this ModelLog.")
-        resolved = model_log.modules[module]
+        if module not in trace.modules:
+            raise ValueError(f"Module address '{module}' was not found in this Trace.")
+        resolved = trace.modules[module]
         if not isinstance(resolved, ModuleLog):
             raise ValueError(
                 f"Module address '{module}' resolved to a module pass, not a ModuleLog."
@@ -1223,13 +1223,13 @@ def _resolve_focus_module(
         return resolved
     if not isinstance(module, ModuleLog):
         raise ValueError("module must be a ModuleLog, module address string, or None.")
-    if module._source_model_log is not model_log:
-        raise ValueError("ModuleLog focus must belong to the ModelLog being rendered.")
+    if module._source_trace is not trace:
+        raise ValueError("ModuleLog focus must belong to the Trace being rendered.")
     return module
 
 
 def _build_module_focus_entries(
-    model_log: "ModelLog",
+    trace: "Trace",
     entries_to_plot: Mapping[str, GraphNode],
     target_module: "ModuleLog",
     *,
@@ -1239,8 +1239,8 @@ def _build_module_focus_entries(
 
     Parameters
     ----------
-    model_log:
-        ModelLog being rendered.
+    trace:
+        Trace being rendered.
     entries_to_plot:
         Original entries for the current render mode.
     target_module:
@@ -1426,7 +1426,7 @@ def _simplify_boundary_labels(
 
 
 def _expand_edges_through_skipped(
-    model_log: "ModelLog",
+    trace: "Trace",
     parent_node: GraphNode,
     visible_entries: dict[str, GraphNode],
     skipped_labels: set[str],
@@ -1436,8 +1436,8 @@ def _expand_edges_through_skipped(
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     parent_node:
         Source node whose outgoing edges should be expanded.
     visible_entries:
@@ -1459,7 +1459,7 @@ def _expand_edges_through_skipped(
         if child_node is None:
             continue
         reached = _walk_skipped_successors(
-            model_log,
+            trace,
             child_node,
             visible_entries,
             skipped_labels,
@@ -1477,7 +1477,7 @@ def _expand_edges_through_skipped(
 
 
 def _walk_skipped_successors(
-    model_log: "ModelLog",
+    trace: "Trace",
     node: GraphNode,
     visible_entries: dict[str, GraphNode],
     skipped_labels: set[str],
@@ -1488,8 +1488,8 @@ def _walk_skipped_successors(
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     node:
         Current node in the traversal.
     visible_entries:
@@ -1519,7 +1519,7 @@ def _walk_skipped_successors(
             continue
         reached.extend(
             _walk_skipped_successors(
-                model_log,
+                trace,
                 child_node,
                 visible_entries,
                 skipped_labels,
@@ -1530,18 +1530,18 @@ def _walk_skipped_successors(
     return reached
 
 
-def _get_node_by_label(model_log: "ModelLog", label: str, vis_mode: str) -> GraphNode:
+def _get_node_by_label(trace: "Trace", label: str, vis_mode: str) -> GraphNode:
     """Return a render node by label for the active visualization mode."""
 
     if vis_mode == "unrolled":
-        return model_log.layer_dict_main_keys[label]
+        return trace.layer_dict_main_keys[label]
     if vis_mode == "rolled":
-        return model_log.layer_logs[label]
+        return trace.layer_logs[label]
     raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 
 
 def _add_node_to_graphviz(
-    self: "ModelLog",
+    self: "Trace",
     node: GraphNode,
     graphviz_graph: graphviz.Digraph,
     module_edge_dict: Dict[str, Any],
@@ -1662,7 +1662,7 @@ def _should_collapse_module(
 
 
 def _collapse_module_address_for_node(
-    model_log: "ModelLog",
+    trace: "Trace",
     node: GraphNode,
     *,
     collapse_fn: CollapseFn | None,
@@ -1672,8 +1672,8 @@ def _collapse_module_address_for_node(
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     node:
         Layer node being rendered.
     collapse_fn:
@@ -1704,7 +1704,7 @@ def _collapse_module_address_for_node(
     for module_address_w_pass in containing_modules:
         module_address = module_address_w_pass.rsplit(":", 1)[0]
         if _should_collapse_module(
-            cast("ModuleLog", model_log.modules[module_address]),
+            cast("ModuleLog", trace.modules[module_address]),
             collapse_fn=collapse_fn,
             max_module_depth=max_module_depth,
         ):
@@ -1715,7 +1715,7 @@ def _collapse_module_address_for_node(
 def _is_collapsed_module(
     node: GraphNode,
     vis_nesting_depth: int,
-    model_log: Optional["ModelLog"] = None,
+    trace: Optional["Trace"] = None,
     collapse_fn: CollapseFn | None = None,
 ) -> bool:
     """THE IndexError guard for collapsed module rendering.
@@ -1735,13 +1735,13 @@ def _is_collapsed_module(
       visually "belongs" to the parent scope).
 
     Args:
-        node: The LayerPassLog or LayerLog node to check.
+        node: The OpLog or LayerLog node to check.
         vis_nesting_depth: Maximum nesting depth before collapsing into a module box.
     """
-    if model_log is not None:
+    if trace is not None:
         return (
             _collapse_module_address_for_node(
-                model_log,
+                trace,
                 node,
                 collapse_fn=collapse_fn,
                 max_module_depth=vis_nesting_depth,
@@ -1764,7 +1764,7 @@ def _is_collapsed_module(
 
 
 def _build_layer_node(
-    self: "ModelLog",
+    self: "Trace",
     node: GraphNode,
     graphviz_graph: graphviz.Digraph,
     show_buffer_layers: BufferVisibilityLiteral,
@@ -1779,7 +1779,7 @@ def _build_layer_node(
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
     Args:
-        node: The LayerPassLog or LayerLog node to render.
+        node: The OpLog or LayerLog node to render.
         graphviz_graph: The graphviz Digraph object to add the node to.
         show_buffer_layers: Buffer visibility mode.
         vis_mode: 'unrolled' or 'rolled'.
@@ -1936,7 +1936,7 @@ def _add_intervention_hook_nodes(
 
 
 def _build_collapsed_module_node(
-    self: "ModelLog",
+    self: "Trace",
     node: GraphNode,
     graphviz_graph: graphviz.Digraph,
     collapsed_modules: set[str],
@@ -1951,7 +1951,7 @@ def _build_collapsed_module_node(
     """Builds and adds a collapsed module box node to the graphviz graph.
 
     Args:
-        node: The LayerPassLog or LayerLog node triggering the collapse.
+        node: The OpLog or LayerLog node triggering the collapse.
         graphviz_graph: The graphviz Digraph object to add the node to.
         collapsed_modules: Set of collapsed module names already added; updated in place.
         vis_mode: 'unrolled' or 'rolled'.
@@ -2075,7 +2075,7 @@ def _build_collapsed_module_node(
 
 
 def _get_node_address_shape_color(
-    self: "ModelLog",
+    self: "Trace",
     node: GraphNode,
     show_buffer_layers: BufferVisibilityLiteral | bool,
 ) -> Tuple[str, str, str]:
@@ -2099,7 +2099,7 @@ def _get_node_address_shape_color(
         only_non_buffer_layer = False
 
     if (node.is_leaf_module_output or only_non_buffer_layer) and (len(node.containing_modules) > 0):
-        if isinstance(source_node, LayerPassLog):
+        if isinstance(source_node, OpLog):
             module_pass_exited = node.containing_modules[-1]
             module, _ = module_pass_exited.split(":")
             if self.modules[module].num_passes == 1:  # type: ignore[union-attr]
@@ -2137,7 +2137,7 @@ def _get_node_address_shape_color(
 
 
 def _is_only_non_buffer_in_module(
-    self: "ModelLog", node: GraphNode, show_buffer_layers: BufferVisibilityLiteral
+    self: "Trace", node: GraphNode, show_buffer_layers: BufferVisibilityLiteral
 ) -> bool:
     """Returns True if a layer is the only non-buffer layer in a leaf module.
 
@@ -2146,7 +2146,7 @@ def _is_only_non_buffer_in_module(
     ovals, not boxes (issue #48).
 
     Args:
-        node: The LayerPassLog or LayerLog node to check.
+        node: The OpLog or LayerLog node to check.
         show_buffer_layers: Buffer visibility mode.
     """
     # Check whether it leaves its module:
@@ -2169,7 +2169,7 @@ def _is_only_non_buffer_in_module(
         if parent_layer_label.startswith("__module_focus_"):
             continue
         source_node = _unwrap_focus_node(node)
-        if isinstance(source_node, LayerPassLog):
+        if isinstance(source_node, OpLog):
             parent_layer = self[parent_layer_label]
         else:
             parent_layer = self.layer_logs[parent_layer_label]
@@ -2185,7 +2185,7 @@ def _is_only_non_buffer_in_module(
     return True
 
 
-def _get_node_bg_color(self: "ModelLog", node: GraphNode) -> str:
+def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
     Maps node types to colors: input=green, output=red, boolean=orange,
@@ -2223,7 +2223,7 @@ def _get_node_bg_color(self: "ModelLog", node: GraphNode) -> str:
 
 
 def _apply_node_spec_fn(
-    model_log: "ModelLog",
+    trace: "Trace",
     node: GraphNode,
     default_spec: NodeSpec,
     node_mode: VisNodeModeLiteral,
@@ -2233,10 +2233,10 @@ def _apply_node_spec_fn(
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     node:
-        Rendered LayerPassLog or LayerLog.
+        Rendered OpLog or LayerLog.
     default_spec:
         Default node spec.
     node_mode:
@@ -2251,7 +2251,7 @@ def _apply_node_spec_fn(
         Callback result, or ``default_spec`` when the callback returns ``None``.
     """
 
-    layer_log = _layer_log_for_node(model_log, node)
+    layer_log = _layer_log_for_node(trace, node)
     mode_fn = MODE_REGISTRY[node_mode]
     mode_result = mode_fn(layer_log, default_spec)
     mode_spec = default_spec if mode_result is None else mode_result
@@ -2261,15 +2261,15 @@ def _apply_node_spec_fn(
     return mode_spec if result is None else result
 
 
-def _layer_log_for_node(model_log: "ModelLog", node: GraphNode) -> "LayerLog":
+def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "LayerLog":
     """Return the aggregate LayerLog for ``node``.
 
     Parameters
     ----------
-    model_log:
-        Owning ModelLog.
+    trace:
+        Owning Trace.
     node:
-        LayerPassLog or LayerLog.
+        OpLog or LayerLog.
 
     Returns
     -------
@@ -2284,7 +2284,7 @@ def _layer_log_for_node(model_log: "ModelLog", node: GraphNode) -> "LayerLog":
         return node
     if node.parent_layer_log is not None:
         return node.parent_layer_log
-    return model_log.layer_logs[node.layer_label_no_pass]
+    return trace.layer_logs[node.layer_label_no_pass]
 
 
 def _node_spec_to_graphviz_args(spec: NodeSpec) -> dict[str, str]:
@@ -2333,7 +2333,7 @@ def compute_default_node_lines(
     Parameters
     ----------
     layer_log:
-        LayerPassLog or LayerLog to render.
+        OpLog or LayerLog to render.
     node_address:
         Existing address suffix from TorchLens node address logic.
     vis_mode:
@@ -2411,7 +2411,7 @@ def _compute_selected_node_lines(
     Parameters
     ----------
     layer_log:
-        LayerPassLog or LayerLog to render.
+        OpLog or LayerLog to render.
     node_address:
         Existing address suffix from TorchLens node address logic.
     vis_mode:
@@ -2464,7 +2464,7 @@ def _compute_selected_node_lines(
 
 
 def _make_node_label(
-    node: Union["LayerPassLog", "LayerLog"],
+    node: Union["OpLog", "LayerLog"],
     node_address: str,
     vis_mode: str,
 ) -> str:
@@ -2526,7 +2526,7 @@ def _format_shape_str(shape: tuple[Any, ...]) -> str:
     return "x1"
 
 
-def _make_param_label(node: Union["LayerPassLog", "LayerLog"]) -> str:
+def _make_param_label(node: Union["OpLog", "LayerLog"]) -> str:
     """Makes the label for parameters of a node.
 
     Uses param names and bracket convention when ParamLog objects are available:
@@ -2722,7 +2722,7 @@ def _num_features_from_params(node: GraphNode) -> Optional[int]:
 
 
 def _add_edges_for_node(
-    self: "ModelLog",
+    self: "Trace",
     parent_node: GraphNode,
     parent_is_collapsed_module: bool,
     vis_nesting_depth: int,
@@ -2985,18 +2985,18 @@ def _add_edges_for_node(
 
 
 def _compute_edge_label(
-    parent_node: Union["LayerPassLog", "LayerLog"],
-    child_node: Union["LayerPassLog", "LayerLog"],
-    model_log: "ModelLog",
+    parent_node: Union["OpLog", "LayerLog"],
+    child_node: Union["OpLog", "LayerLog"],
+    trace: "Trace",
     vis_mode: str,
 ) -> Optional[str]:
     """Return the highest-priority semantic label for an edge.
 
     Precedence matches the Phase 7 conditional rendering spec:
 
-    1. Arm-entry labels from ``ModelLog.conditional_arm_edges`` /
-       ``ModelLog.conditional_edge_passes``.
-    2. ``IF`` labels from ``ModelLog.conditional_branch_edges``.
+    1. Arm-entry labels from ``Trace.conditional_arm_edges`` /
+       ``Trace.conditional_edge_passes``.
+    2. ``IF`` labels from ``Trace.conditional_branch_edges``.
     3. ``None`` when the edge has no branch semantics.
 
     Args:
@@ -3004,7 +3004,7 @@ def _compute_edge_label(
             Source node for the edge.
         child_node:
             Destination node for the edge.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
         vis_mode:
             ``"unrolled"`` or ``"rolled"``.
@@ -3014,20 +3014,20 @@ def _compute_edge_label(
     Optional[str]
         Graphviz HTML label string, or ``None`` if no semantic label applies.
     """
-    arm_label = _compute_arm_entry_edge_label(parent_node, child_node, model_log, vis_mode)
+    arm_label = _compute_arm_entry_edge_label(parent_node, child_node, trace, vis_mode)
     if arm_label is not None:
         return _format_branch_edge_label_html(arm_label)
 
-    if _edge_is_conditional_branch(parent_node, child_node, model_log, vis_mode):
+    if _edge_is_conditional_branch(parent_node, child_node, trace, vis_mode):
         return _format_branch_edge_label_html("IF")
 
     return None
 
 
 def _compute_arm_entry_edge_label(
-    parent_node: Union["LayerPassLog", "LayerLog"],
-    child_node: Union["LayerPassLog", "LayerLog"],
-    model_log: "ModelLog",
+    parent_node: Union["OpLog", "LayerLog"],
+    child_node: Union["OpLog", "LayerLog"],
+    trace: "Trace",
     vis_mode: str,
 ) -> Optional[str]:
     """Return the arm-entry text for an edge, without Graphviz HTML wrapping.
@@ -3037,7 +3037,7 @@ def _compute_arm_entry_edge_label(
             Source node for the edge.
         child_node:
             Destination node for the edge.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
         vis_mode:
             ``"unrolled"`` or ``"rolled"``.
@@ -3047,23 +3047,23 @@ def _compute_arm_entry_edge_label(
     Optional[str]
         Plain-text arm label, or ``None`` if the edge is not an arm-entry edge.
     """
-    arm_entries = _get_arm_edge_entries(parent_node, child_node, model_log, vis_mode)
+    arm_entries = _get_arm_edge_entries(parent_node, child_node, trace, vis_mode)
     if not arm_entries:
         return None
 
     if vis_mode == "rolled":
-        return _format_rolled_arm_entry_label(arm_entries, model_log)
+        return _format_rolled_arm_entry_label(arm_entries, trace)
 
     if len(arm_entries) == 1:
         conditional_id, branch_kind, _ = arm_entries[0]
-        return _format_arm_entry_text(conditional_id, branch_kind, model_log)
+        return _format_arm_entry_text(conditional_id, branch_kind, trace)
 
     return " · ".join(
         [
             _format_arm_entry_text(
                 conditional_id,
                 branch_kind,
-                model_log,
+                trace,
                 include_conditional_reference=True,
             )
             for conditional_id, branch_kind, _ in arm_entries
@@ -3072,9 +3072,9 @@ def _compute_arm_entry_edge_label(
 
 
 def _get_arm_edge_entries(
-    parent_node: Union["LayerPassLog", "LayerLog"],
-    child_node: Union["LayerPassLog", "LayerLog"],
-    model_log: "ModelLog",
+    parent_node: Union["OpLog", "LayerLog"],
+    child_node: Union["OpLog", "LayerLog"],
+    trace: "Trace",
     vis_mode: str,
 ) -> List[Tuple[int, str, Optional[Tuple[int, ...]]]]:
     """Collect conditional-arm metadata for one rendered edge.
@@ -3084,7 +3084,7 @@ def _get_arm_edge_entries(
             Source node for the edge.
         child_node:
             Destination node for the edge.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
         vis_mode:
             ``"unrolled"`` or ``"rolled"``.
@@ -3098,7 +3098,7 @@ def _get_arm_edge_entries(
     arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]] = []
     if vis_mode == "unrolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
-        for (conditional_id, branch_kind), edge_list in model_log.conditional_arm_edges.items():
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items():
             if edge_key in edge_list:
                 arm_entries.append((conditional_id, branch_kind, None))
     elif vis_mode == "rolled":
@@ -3109,18 +3109,18 @@ def _get_arm_edge_entries(
             edge_child,
             conditional_id,
             branch_kind,
-        ), pass_nums in model_log.conditional_edge_passes.items():
+        ), pass_nums in trace.conditional_edge_passes.items():
             if (edge_parent, edge_child) == (parent_no_pass, child_no_pass):
                 arm_entries.append((conditional_id, branch_kind, tuple(pass_nums)))
     else:
         raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 
-    return sorted(arm_entries, key=lambda entry: _arm_entry_sort_key(entry[0], entry[1], model_log))
+    return sorted(arm_entries, key=lambda entry: _arm_entry_sort_key(entry[0], entry[1], trace))
 
 
 def _format_rolled_arm_entry_label(
     arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]],
-    model_log: "ModelLog",
+    trace: "Trace",
 ) -> str:
     """Format a rolled-mode arm-entry label with pass-awareness.
 
@@ -3128,7 +3128,7 @@ def _format_rolled_arm_entry_label(
         arm_entries:
             Sorted ``(conditional_id, branch_kind, pass_nums)`` tuples for one
             rolled edge.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
 
     Returns
@@ -3138,7 +3138,7 @@ def _format_rolled_arm_entry_label(
     """
     if len(arm_entries) == 1:
         conditional_id, branch_kind, _ = arm_entries[0]
-        return _format_arm_entry_text(conditional_id, branch_kind, model_log)
+        return _format_arm_entry_text(conditional_id, branch_kind, trace)
 
     pass_sets = [set(pass_nums or ()) for _, _, pass_nums in arm_entries]
     if pass_sets and len({tuple(sorted(pass_set)) for pass_set in pass_sets}) == 1:
@@ -3147,7 +3147,7 @@ def _format_rolled_arm_entry_label(
                 _format_arm_entry_text(
                     conditional_id,
                     branch_kind,
-                    model_log,
+                    trace,
                     include_conditional_reference=True,
                 )
                 for conditional_id, branch_kind, _ in arm_entries
@@ -3166,7 +3166,7 @@ def _format_rolled_arm_entry_label(
                     conditional_id,
                     branch_kind,
                     pass_nums,
-                    model_log,
+                    trace,
                     include_conditional_reference=_rolled_labels_need_disambiguation(arm_entries),
                 )
                 for conditional_id, branch_kind, pass_nums in arm_entries
@@ -3199,7 +3199,7 @@ def _format_rolled_pass_arm_text(
     conditional_id: int,
     branch_kind: str,
     pass_nums: Optional[Tuple[int, ...]],
-    model_log: "ModelLog",
+    trace: "Trace",
     include_conditional_reference: bool,
 ) -> str:
     """Format one rolled arm label with its pass list.
@@ -3211,7 +3211,7 @@ def _format_rolled_pass_arm_text(
             Branch kind such as ``"then"`` or ``"elif_2"``.
         pass_nums:
             Sorted pass numbers for this rolled edge/arm tuple.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
         include_conditional_reference:
             Whether to append a conditional line-number reference.
@@ -3224,7 +3224,7 @@ def _format_rolled_pass_arm_text(
     branch_text = _format_arm_entry_text(
         conditional_id,
         branch_kind,
-        model_log,
+        trace,
         include_conditional_reference=include_conditional_reference,
     )
     if not pass_nums:
@@ -3235,7 +3235,7 @@ def _format_rolled_pass_arm_text(
 def _format_arm_entry_text(
     conditional_id: int,
     branch_kind: str,
-    model_log: "ModelLog",
+    trace: "Trace",
     include_conditional_reference: bool = False,
 ) -> str:
     """Format one arm-entry label as plain text.
@@ -3245,7 +3245,7 @@ def _format_arm_entry_text(
             Dense conditional id.
         branch_kind:
             Branch kind such as ``"then"`` or ``"elif_2"``.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
         include_conditional_reference:
             Whether to append ``@L...`` to identify the conditional event.
@@ -3258,7 +3258,7 @@ def _format_arm_entry_text(
     branch_text = _format_branch_kind_text(branch_kind)
     if not include_conditional_reference:
         return branch_text
-    return f"{branch_text}@{_get_conditional_reference_text(conditional_id, model_log)}"
+    return f"{branch_text}@{_get_conditional_reference_text(conditional_id, trace)}"
 
 
 def _format_branch_kind_text(branch_kind: str) -> str:
@@ -3287,13 +3287,13 @@ def _format_branch_kind_text(branch_kind: str) -> str:
     raise ValueError(f"Unrecognized branch kind: {branch_kind}")
 
 
-def _get_conditional_reference_text(conditional_id: int, model_log: "ModelLog") -> str:
+def _get_conditional_reference_text(conditional_id: int, trace: "Trace") -> str:
     """Return a readable conditional identifier for composite edge labels.
 
     Args:
         conditional_id:
             Dense conditional id.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
 
     Returns
@@ -3301,7 +3301,7 @@ def _get_conditional_reference_text(conditional_id: int, model_log: "ModelLog") 
     str
         Line-based conditional reference when available, otherwise ``"C{id}"``.
     """
-    for conditional_event in model_log.conditional_events:
+    for conditional_event in trace.conditional_events:
         if conditional_event.id == conditional_id:
             return f"L{conditional_event.if_stmt_span[0]}"
     return f"C{conditional_id}"
@@ -3310,7 +3310,7 @@ def _get_conditional_reference_text(conditional_id: int, model_log: "ModelLog") 
 def _arm_entry_sort_key(
     conditional_id: int,
     branch_kind: str,
-    model_log: "ModelLog",
+    trace: "Trace",
 ) -> Tuple[int, int, int]:
     """Return a stable sort key for multi-arm edge labels.
 
@@ -3319,7 +3319,7 @@ def _arm_entry_sort_key(
             Dense conditional id.
         branch_kind:
             Branch kind such as ``"then"`` or ``"elif_2"``.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
 
     Returns
@@ -3328,7 +3328,7 @@ def _arm_entry_sort_key(
         Sort key ordered by source line, branch rank, then conditional id.
     """
     source_line = 10**9
-    for conditional_event in model_log.conditional_events:
+    for conditional_event in trace.conditional_events:
         if conditional_event.id == conditional_id:
             source_line = conditional_event.if_stmt_span[0]
             break
@@ -3357,9 +3357,9 @@ def _branch_kind_sort_key(branch_kind: str) -> int:
 
 
 def _edge_is_conditional_branch(
-    parent_node: Union["LayerPassLog", "LayerLog"],
-    child_node: Union["LayerPassLog", "LayerLog"],
-    model_log: "ModelLog",
+    parent_node: Union["OpLog", "LayerLog"],
+    child_node: Union["OpLog", "LayerLog"],
+    trace: "Trace",
     vis_mode: str,
 ) -> bool:
     """Return True when an edge is an ``IF`` branch-entry edge.
@@ -3369,7 +3369,7 @@ def _edge_is_conditional_branch(
             Source node for the edge.
         child_node:
             Destination node for the edge.
-        model_log:
+        trace:
             Owning model log containing conditional metadata.
         vis_mode:
             ``"unrolled"`` or ``"rolled"``.
@@ -3383,12 +3383,12 @@ def _edge_is_conditional_branch(
         return (
             parent_node.layer_label,
             child_node.layer_label,
-        ) in model_log.conditional_branch_edges
+        ) in trace.conditional_branch_edges
     if vis_mode == "rolled":
         edge_key = (parent_node.layer_label_no_pass, child_node.layer_label_no_pass)
         return any(
             (branch_parent.split(":")[0], branch_child.split(":")[0]) == edge_key
-            for branch_parent, branch_child in model_log.conditional_branch_edges
+            for branch_parent, branch_child in trace.conditional_branch_edges
         )
     raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 
@@ -3409,9 +3409,9 @@ def _format_branch_edge_label_html(label_text: str) -> str:
 
 
 def _label_node_arguments_if_needed(
-    self: "ModelLog",
-    parent_node: Union["LayerPassLog", "LayerLog"],
-    child_node: Union["LayerPassLog", "LayerLog"],
+    self: "Trace",
+    parent_node: Union["OpLog", "LayerLog"],
+    child_node: Union["OpLog", "LayerLog"],
     edge_dict: Dict[str, Any],
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> None:
@@ -3471,8 +3471,8 @@ def _set_argument_edge_label(edge_dict: Dict[str, Any], arg_label: str) -> None:
 
 
 def _should_mark_arguments_on_edge(
-    self: "ModelLog",
-    child_node: Union["LayerPassLog", "LayerLog"],
+    self: "Trace",
+    child_node: Union["OpLog", "LayerLog"],
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument position labels should be shown on the edge to child_node.
@@ -3490,21 +3490,21 @@ def _should_mark_arguments_on_edge(
     if child_node.layer_type in COMMUTE_FUNCS:
         return False
 
-    if isinstance(child_node, LayerPassLog):
+    if isinstance(child_node, OpLog):
         return _should_mark_arguments_on_unrolled_edge(self, child_node, show_buffer_layers)
     elif isinstance(child_node, LayerLog):
         return _should_mark_arguments_on_rolled_edge(self, child_node, show_buffer_layers)
 
 
 def _should_mark_arguments_on_unrolled_edge(
-    self: "ModelLog",
-    child_node: "LayerPassLog",
+    self: "Trace",
+    child_node: "OpLog",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument labels should be shown on an unrolled graph edge.
 
     Args:
-        child_node: The child LayerPassLog node whose incoming edge is being considered.
+        child_node: The child OpLog node whose incoming edge is being considered.
         show_buffer_layers: Buffer visibility mode.
     """
     num_parents_shown = len(child_node.parent_layers)
@@ -3527,7 +3527,7 @@ def _should_mark_arguments_on_unrolled_edge(
 
 
 def _should_mark_arguments_on_rolled_edge(
-    self: "ModelLog",
+    self: "Trace",
     child_node: "LayerLog",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
@@ -3592,16 +3592,16 @@ def _get_lowest_containing_module_for_two_render_nodes(
     """Find the deepest module subgraph for render nodes including boundaries."""
 
     return _get_lowest_containing_module_for_two_nodes(
-        cast(Union["LayerPassLog", "LayerLog"], node1),
-        cast(Union["LayerPassLog", "LayerLog"], node2),
+        cast(Union["OpLog", "LayerLog"], node1),
+        cast(Union["OpLog", "LayerLog"], node2),
         both_nodes_collapsed_modules,
         vis_nesting_depth,
     )
 
 
 def _get_lowest_containing_module_for_two_nodes(
-    node1: Union["LayerPassLog", "LayerLog"],
-    node2: Union["LayerPassLog", "LayerLog"],
+    node1: Union["OpLog", "LayerLog"],
+    node2: Union["OpLog", "LayerLog"],
     both_nodes_collapsed_modules: bool,
     vis_nesting_depth: int,
 ) -> Union[str, int]:
@@ -3677,7 +3677,7 @@ def _get_lowest_containing_module_for_two_nodes(
 
 
 def _add_gradient_edge(
-    self: "ModelLog",
+    self: "Trace",
     parent_layer: GraphNode,
     child_layer: GraphNode,
     edge_style: str,
@@ -3694,8 +3694,8 @@ def _add_gradient_edge(
     on any pass.
 
     Args:
-        parent_layer: The parent LayerPassLog or LayerLog (gradient destination).
-        child_layer: The child LayerPassLog or LayerLog (gradient source).
+        parent_layer: The parent OpLog or LayerLog (gradient destination).
+        child_layer: The child OpLog or LayerLog (gradient source).
         edge_style: ``'solid'`` or ``'dashed'`` (matches the forward edge style).
         containing_module: Module cluster name, or -1 for top-level.
         module_edge_dict: Dict mapping each module cluster to its edges.
@@ -3730,7 +3730,7 @@ def _node_has_gradient(layer: Any) -> bool:
     Parameters
     ----------
     layer:
-        ``LayerPassLog`` or rolled ``LayerLog``.
+        ``OpLog`` or rolled ``LayerLog``.
 
     Returns
     -------
@@ -3762,7 +3762,7 @@ def _gradient_node_name(layer: Any) -> str:
 
 
 def _setup_subgraphs(
-    self: "ModelLog",
+    self: "Trace",
     graphviz_graph: graphviz.Digraph,
     vis_mode: str,
     module_edge_dict: Dict[str, Any],
@@ -3824,7 +3824,7 @@ def _setup_subgraphs(
 
 
 def _setup_subgraphs_recurse(
-    self: "ModelLog",
+    self: "Trace",
     starting_subgraph: graphviz.Digraph,
     parent_graph_list: List[str],
     module_edge_dict: Dict[str, Any],
@@ -3904,7 +3904,7 @@ def _setup_subgraphs_recurse(
                 line_style = "dashed"
 
             # ``title_already_escaped=True`` preserves the existing byte-level
-            # output: ModelLog subgraph titles never contain HTML specials, so
+            # output: Trace subgraph titles never contain HTML specials, so
             # the title is fed through verbatim, matching the legacy format.
             module_args = make_module_cluster_attrs(
                 title=subgraph_title,

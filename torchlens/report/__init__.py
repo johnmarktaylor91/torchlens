@@ -9,7 +9,7 @@ from ._explain import explain
 
 
 def log_value(name: str, value: Any) -> None:
-    """Record an arbitrary scalar-like value on the active ``ModelLog``.
+    """Record an arbitrary scalar-like value on the active ``Trace``.
 
     Parameters
     ----------
@@ -24,10 +24,10 @@ def log_value(name: str, value: Any) -> None:
         If no TorchLens capture is active.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
-        raise RuntimeError("torchlens.report.log_value() must be called during log_forward_pass.")
-    model_log.report_values[str(name)] = value
+    trace = _state._active_trace
+    if trace is None:
+        raise RuntimeError("torchlens.report.log_value() must be called during trace.")
+    trace.report_values[str(name)] = value
 
 
 __all__ = ["explain", "log_value"]

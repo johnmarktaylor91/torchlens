@@ -50,7 +50,7 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
         input_getter:
             Optional callable mapping a Lightning batch to model input.
         layers_to_save:
-            ``log_forward_pass`` layer-save policy.
+            ``trace`` layer-save policy.
         """
 
         if every_n_batches < 1:
@@ -202,14 +202,14 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
         if batch_idx % self.every_n_batches != 0:
             return
 
-        from torchlens import log_forward_pass
+        from torchlens import trace
 
         model_input = self._model_input(batch)
         was_training = bool(getattr(pl_module, "training", False))
         pl_module.eval()
         try:
             with torch.no_grad():
-                log = log_forward_pass(pl_module, model_input, layers_to_save=self.layers_to_save)
+                log = trace(pl_module, model_input, layers_to_save=self.layers_to_save)
         finally:
             if was_training:
                 pl_module.train()
@@ -237,7 +237,7 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
         Returns
         -------
         Any
-            Model input passed to ``log_forward_pass``.
+            Model input passed to ``trace``.
         """
 
         if self.input_getter is not None:

@@ -1,6 +1,6 @@
 """Human-readable formatting, print overrides, and environment detection.
 
-Formatting helpers used by the display/print paths of ModelLog and LayerLog,
+Formatting helpers used by the display/print paths of Trace and LayerLog,
 plus environment checks (Jupyter detection, parallel-processing guard).
 """
 
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Iterator, List, TypeVar, cast
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 _T = TypeVar("_T")
 
@@ -313,20 +313,20 @@ def in_notebook() -> bool:
     return True
 
 
-def _vprint(model_log: "ModelLog", message: str) -> None:
-    """Print a progress message if verbose mode is enabled on the ModelLog."""
-    if getattr(model_log, "verbose", False):
+def _vprint(trace: "Trace", message: str) -> None:
+    """Print a progress message if verbose mode is enabled on the Trace."""
+    if getattr(trace, "verbose", False):
         print(f"[torchlens] {message}")
 
 
 @contextmanager
-def _vtimed(model_log: "ModelLog", description: str) -> Iterator[None]:
+def _vtimed(trace: "Trace", description: str) -> Iterator[None]:
     """Context manager that prints a timed progress message if verbose mode is enabled.
 
     Prints ``[torchlens] description...`` on entry, then appends `` done (X.XXs)``
     on exit.
     """
-    if not getattr(model_log, "verbose", False):
+    if not getattr(trace, "verbose", False):
         yield
         return
     print(f"[torchlens] {description}...", end="", flush=True)
@@ -343,7 +343,7 @@ def warn_parallel() -> None:
 
     TorchLens is single-threaded by design — its global toggle state and
     ordered tensor counter are not safe for concurrent access.  This guard
-    is called early in ``log_forward_pass`` to fail fast rather than
+    is called early in ``trace`` to fail fast rather than
     produce silently corrupted logs.
     """
     if mp.current_process().name != "MainProcess":

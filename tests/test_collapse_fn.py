@@ -10,8 +10,8 @@ from torch import nn
 import torchlens as tl
 
 
-def _render_dot(log: tl.ModelLog, tmp_path: Any, **kwargs: Any) -> str:
-    """Render a ModelLog to DOT using a temporary SVG output path."""
+def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
+    """Render a Trace to DOT using a temporary SVG output path."""
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.render_graph(
@@ -31,7 +31,7 @@ def _nested_model() -> nn.Module:
 def test_collapse_fn_collapses_module(tmp_path: Any) -> None:
     """collapse_fn should render a matching module as one collapsed node."""
 
-    log = tl.log_forward_pass(_nested_model(), torch.randn(1, 4))
+    log = tl.trace(_nested_model(), torch.randn(1, 4))
 
     def collapse_fn(module_log: Any) -> bool:
         """Collapse the first child module."""
@@ -48,7 +48,7 @@ def test_collapse_fn_collapses_module(tmp_path: Any) -> None:
 def test_collapse_fn_overrides_nesting_depth(tmp_path: Any) -> None:
     """collapse_fn should win over a non-collapsing nesting depth."""
 
-    log = tl.log_forward_pass(_nested_model(), torch.randn(1, 4))
+    log = tl.trace(_nested_model(), torch.randn(1, 4))
 
     def collapse_fn(module_log: Any) -> bool:
         """Collapse the first child module."""
@@ -65,7 +65,7 @@ def test_collapse_fn_overrides_nesting_depth(tmp_path: Any) -> None:
 def test_nesting_depth_unchanged_when_no_collapse_fn(tmp_path: Any) -> None:
     """Legacy vis_nesting_depth collapse behavior should remain available."""
 
-    log = tl.log_forward_pass(_nested_model(), torch.randn(1, 4))
+    log = tl.trace(_nested_model(), torch.randn(1, 4))
 
     dot = _render_dot(log, tmp_path, vis_nesting_depth=1)
 

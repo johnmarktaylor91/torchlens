@@ -5,7 +5,7 @@ model activations:
 
 1. **Exhaustive pass** (``logging_mode="exhaustive"``): Runs the model once,
    capturing every tensor operation's full metadata (shapes, dtypes, FLOPs,
-   parent-child relationships, module context, etc.) into LayerPassLog entries.
+   parent-child relationships, module context, etc.) into OpLog entries.
    This builds the complete computational graph.
 
 2. **Fast pass** (``logging_mode="fast"``): Re-runs the model using the graph
@@ -43,7 +43,7 @@ from ..decoration.model_prep import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
@@ -55,7 +55,7 @@ from ..utils.display import _vprint, _vtimed
 
 
 def save_new_activations(
-    self: "ModelLog",
+    self: "Trace",
     model: nn.Module,
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
@@ -67,7 +67,7 @@ def save_new_activations(
     """Re-run the model with new inputs, saving only activations (fast pass).
 
     This is the public API for refreshing activations without rebuilding the
-    computational graph.  Much faster than ``log_forward_pass`` because all
+    computational graph.  Much faster than ``trace`` because all
     metadata (graph structure, labels, module context) was captured in the
     original exhaustive pass and is reused here.
 
@@ -205,7 +205,7 @@ def _get_input_arg_names(model: nn.Module, input_args: list[Any]) -> list[str]:
 
 
 def _get_op_nums_from_user_labels(
-    self: "ModelLog", which_layers: str | list[str | int] | None
+    self: "Trace", which_layers: str | list[str | int] | None
 ) -> list[int] | str:
     """Resolve user-provided layer identifiers to internal creation_order values.
 
@@ -382,10 +382,10 @@ def _setup_inputs_and_device(
 
 
 def _extract_and_mark_outputs(
-    self: "ModelLog",
+    self: "Trace",
     outputs: Any,
 ) -> tuple[list[torch.Tensor], list[str]]:
-    """Extract output tensors from model outputs, deduplicate, and mark in ModelLog.
+    """Extract output tensors from model outputs, deduplicate, and mark in Trace.
 
     Called AFTER the forward pass completes (outside ``active_logging``), so
     operations here don't trigger logging.  Marks each output tensor's graph
@@ -469,7 +469,7 @@ def _output_path_to_address(path: tuple[Any, ...]) -> str:
 
 
 def run_and_log_inputs_through_model(
-    self: "ModelLog",
+    self: "Trace",
     model: nn.Module,
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
@@ -477,7 +477,7 @@ def run_and_log_inputs_through_model(
     gradients_to_save: str | list[str | int] | None = "all",
     random_seed: int | None = None,
 ) -> None:
-    """Core orchestration: run a forward pass and log everything into ModelLog.
+    """Core orchestration: run a forward pass and log everything into Trace.
 
     Execution order (ordering matters for correctness):
       1. Set RNG seed (MUST happen before active_logging — see below).
@@ -589,10 +589,10 @@ def run_and_log_inputs_through_model(
         # active_logging's __exit__ already turned off the toggle.
         # Clean up model session state and strip tl_ attributes from any
         # partially-constructed tensor entries to avoid stale references (#110).
-        from ..partial import PartialModelLog
+        from ..partial import PartialTrace
 
         try:
-            e.partial_log = PartialModelLog.from_model_log(self, e)  # type: ignore[attr-defined]
+            e.partial_log = PartialTrace.from_trace(self, e)  # type: ignore[attr-defined]
         except Exception:
             pass
         _cleanup_model_session(model, input_tensors)

@@ -110,7 +110,7 @@ def _capture(
     """
 
     capture_x = torch.randn(2, 3) if x is None else x
-    log = tl.log_forward_pass(
+    log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
         vis_opt="none",

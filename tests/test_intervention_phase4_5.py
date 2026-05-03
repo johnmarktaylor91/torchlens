@@ -85,7 +85,7 @@ def _bad_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor
 def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     """Default captures populate baseline fields and skip intervention-only data."""
 
-    log = tl.log_forward_pass(_TinyShiftModel(), torch.randn(2, 3), vis_opt="none")
+    log = tl.trace(_TinyShiftModel(), torch.randn(2, 3), vis_opt="none")
 
     assert log.intervention_ready is False
     assert log.run_state is RunState.PRISTINE
@@ -115,13 +115,13 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_model = _TinyReluModel()
     ready_model = _TinyReluModel()
 
-    baseline_log = tl.log_forward_pass(
+    baseline_log = tl.trace(
         baseline_model,
         x,
         vis_opt="none",
         intervention_ready=False,
     )
-    ready_log = tl.log_forward_pass(
+    ready_log = tl.trace(
         ready_model,
         x,
         vis_opt="none",
@@ -144,7 +144,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
     model = _TinyReluModel()
 
     with pytest.raises(ValueError, match="boom"):
-        tl.log_forward_pass(
+        tl.trace(
             model,
             torch.randn(2, 3),
             vis_opt="none",
@@ -153,10 +153,10 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
         )
 
     assert _state._logging_enabled is False
-    assert _state._active_model_log is None
+    assert _state._active_trace is None
     assert _state._active_hook_plan is None
 
-    followup_log = tl.log_forward_pass(model, torch.randn(2, 3), vis_opt="none")
+    followup_log = tl.trace(model, torch.randn(2, 3), vis_opt="none")
 
     assert followup_log.intervention_ready is False
     assert followup_log.run_state is RunState.PRISTINE
@@ -168,7 +168,7 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
     """Hook-raised exceptions reset the hook reentrancy guard."""
 
     with pytest.raises(ValueError, match="boom"):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyReluModel(),
             torch.randn(2, 3),
             vis_opt="none",

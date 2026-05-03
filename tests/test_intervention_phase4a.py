@@ -58,7 +58,7 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     model = _TinyInterventionModel()
     x = torch.randn(2, 3)
 
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
     assert log.intervention_ready is True
     assert log.source_model_id == id(model)
@@ -75,7 +75,7 @@ def test_intervention_ready_rejects_nonempty_layers_to_save_list() -> None:
     """Selective two-pass intervention readiness is deferred beyond Phase 4a."""
 
     with pytest.raises(InterventionReadyConflictError):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyInterventionModel(),
             torch.randn(2, 3),
             vis_opt="none",
@@ -88,13 +88,13 @@ def test_intervention_ready_rejects_nonempty_layers_to_save_list() -> None:
 def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     """Only non-empty list selections conflict with intervention readiness."""
 
-    tl.log_forward_pass(
+    tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
-    tl.log_forward_pass(
+    tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -107,7 +107,7 @@ def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
 def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
     """All outputs of one decorated torch call share one pre-call ``func_call_id``."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _MultiOutputModel(),
         torch.randn(4, 5),
         vis_opt="none",
@@ -124,15 +124,15 @@ def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
 
 @pytest.mark.smoke
 def test_active_logging_rejects_nested_entry_while_paused() -> None:
-    """``pause_logging`` keeps ``_active_model_log`` set for nested-capture rejection."""
+    """``pause_logging`` keeps ``_active_trace`` set for nested-capture rejection."""
 
     with pytest.raises(RuntimeError, match="not re-entrant"):
         with _state.active_logging(object()):  # type: ignore[arg-type]
             with _state.pause_logging():
                 assert _state._logging_enabled is False
-                assert _state._active_model_log is not None
+                assert _state._active_trace is not None
                 with _state.active_logging(object()):  # type: ignore[arg-type]
                     pass
 
     assert _state._logging_enabled is False
-    assert _state._active_model_log is None
+    assert _state._active_trace is None

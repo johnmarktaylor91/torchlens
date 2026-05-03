@@ -1,18 +1,18 @@
-"""LayerPassLog: per-operation metadata for a single invocation of a layer.
+"""OpLog: per-operation metadata for a single invocation of a layer.
 
-Each LayerPassLog records everything about one tensor operation in the
+Each OpLog records everything about one tensor operation in the
 forward pass: the output tensor itself, the function that produced it,
 its parents/children in the computation graph, module containment,
 parameter usage, timing, RNG state, and more.
 
 For recurrent models, the same "layer" may execute multiple times; each
-execution is a separate LayerPassLog with a distinct ``pass_num``.  The
+execution is a separate OpLog with a distinct ``pass_num``.  The
 aggregate view across passes is provided by :class:`LayerLog`.
 
 Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 
 1. **General info** - raw/final labels, operation numbering, back-reference
-   to the owning ModelLog.
+   to the owning Trace.
 2. **Label info** - human-readable labels in various formats (with/without
    pass qualifier, short form, etc.).
 3. **Saved tensor info** - the tensor contents, shape, dtype, size, device
@@ -76,7 +76,7 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
     }
 )
 _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
-    "_source_model_log_ref": None,
+    "_source_trace_ref": None,
     "parent_layer_log": None,
     "activation_ref": None,
     "gradient_ref": None,
@@ -172,10 +172,10 @@ if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
     from .layer_log import LayerLog
     from .param_log import ParamLog
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
-class LayerPassLog:
+class OpLog:
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match
@@ -185,11 +185,11 @@ class LayerPassLog:
 
     Notable design points:
 
-    * ``_pass_finished`` mirrors the owning ModelLog's flag. Methods like
+    * ``_pass_finished`` mirrors the owning Trace's flag. Methods like
       ``__str__`` branch on it to show raw vs final labels.
-    * ``source_model_log`` is a direct reference to the owning ModelLog.
-      This creates a circular reference (ModelLog -> layer_list -> entry ->
-      source_model_log -> ModelLog) that is broken by ``cleanup()``.
+    * ``source_trace`` is a direct reference to the owning Trace.
+      This creates a circular reference (Trace -> layer_list -> entry ->
+      source_trace -> Trace) that is broken by ``cleanup()``.
     * ``parent_layer_log`` is a back-reference to the aggregate LayerLog
       that owns this pass.  It is set *outside* fields_dict during
       ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
@@ -200,8 +200,8 @@ class LayerPassLog:
         "layer_label_raw": FieldPolicy.KEEP,
         "operation_num": FieldPolicy.KEEP,
         "creation_order": FieldPolicy.KEEP,
-        "source_model_log": FieldPolicy.DROP,
-        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+        "source_trace": FieldPolicy.DROP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "_pass_finished": FieldPolicy.KEEP,
         "_construction_done": FieldPolicy.DROP,
         "layer_label": FieldPolicy.KEEP,
@@ -381,19 +381,19 @@ class LayerPassLog:
 
         construction_done = self.__dict__.get("_construction_done", False)
         if construction_done and name in _DIRECT_WRITE_GUARDED_FIELDS:
-            owner = self.__dict__.get("_source_model_log_ref")
-            model_log = owner() if owner is not None else None
-            if model_log is not None:
-                object.__setattr__(model_log, "_has_direct_writes", True)
-                object.__setattr__(model_log, "run_state", RunState.DIRECT_WRITE_DIRTY)
-                if not getattr(model_log, "_warned_direct_write", False):
+            owner = self.__dict__.get("_source_trace_ref")
+            trace = owner() if owner is not None else None
+            if trace is not None:
+                object.__setattr__(trace, "_has_direct_writes", True)
+                object.__setattr__(trace, "run_state", RunState.DIRECT_WRITE_DIRTY)
+                if not getattr(trace, "_warned_direct_write", False):
                     warnings.warn(
-                        "DirectActivationWriteWarning: direct LayerPassLog activation writes "
+                        "DirectActivationWriteWarning: direct OpLog activation writes "
                         "are not recipe edits; replay/rerun propagation will overlay them.",
                         DirectActivationWriteWarning,
                         stacklevel=2,
                     )
-                    object.__setattr__(model_log, "_warned_direct_write", True)
+                    object.__setattr__(trace, "_warned_direct_write", True)
         object.__setattr__(self, name, value)
 
     def _internal_set(self, attr: str, value: Any) -> None:
@@ -409,7 +409,7 @@ class LayerPassLog:
 
         object.__setattr__(self, attr, value)
 
-    def _append_tensor_from(self, other: "LayerPassLog", field_name: str) -> None:
+    def _append_tensor_from(self, other: "OpLog", field_name: str) -> None:
         """Append one tensor field from another pass along batch dimension 0.
 
         Parameters
@@ -441,7 +441,7 @@ class LayerPassLog:
             fields_dict["module_address_normalized"] = None
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
-            error_str = "Error initializing LayerPassLog:"
+            error_str = "Error initializing OpLog:"
             missing_fields = _LAYER_PASS_LOG_FIELD_ORDER_SET - fields_dict_key_set
             extra_fields = fields_dict_key_set - _LAYER_PASS_LOG_FIELD_ORDER_SET
             if len(missing_fields) > 0:
@@ -455,9 +455,9 @@ class LayerPassLog:
         self.layer_label_raw = fields_dict["layer_label_raw"]
         self.operation_num = fields_dict["operation_num"]
         self.creation_order = fields_dict["creation_order"]
-        # Store as weakref to break circular reference (ModelLog -> layer_list -> entry -> ModelLog).
-        _sml = fields_dict["source_model_log"]
-        self._source_model_log_ref = weakref.ref(_sml) if _sml is not None else None
+        # Store as weakref to break circular reference (Trace -> layer_list -> entry -> Trace).
+        _sml = fields_dict["source_trace"]
+        self._source_trace_ref = weakref.ref(_sml) if _sml is not None else None
         self._pass_finished = fields_dict["_pass_finished"]
 
         # Label info:
@@ -559,7 +559,7 @@ class LayerPassLog:
         # Loop-detection equivalence info:
         # operation_equivalence_type groups structurally identical operations
         # (same func + same param barcodes).  equivalent_operations holds a
-        # DIRECT reference to the ModelLog-level set for this type.
+        # DIRECT reference to the Trace-level set for this type.
         # recurrent_group is populated by loop_detection.py for layers
         # that are different passes of the same recurrent layer.
         self.operation_equivalence_type = fields_dict["operation_equivalence_type"]
@@ -664,7 +664,7 @@ class LayerPassLog:
     @property
     def sibling_layers(self) -> list[str]:
         """Layers sharing at least one parent (excluding output layers)."""
-        ml = self.source_model_log
+        ml = self.source_trace
         if ml is None:
             return []
         my_label = self.layer_label if self._pass_finished else self.tensor_label_raw
@@ -688,7 +688,7 @@ class LayerPassLog:
     @property
     def co_parent_layers(self) -> list[str]:
         """Layers sharing at least one child (excluding output layers)."""
-        ml = self.source_model_log
+        ml = self.source_trace
         if ml is None:
             return []
         my_label = self.layer_label if self._pass_finished else self.tensor_label_raw
@@ -763,12 +763,12 @@ class LayerPassLog:
         return self.activation
 
     @property
-    def passes(self) -> tuple["LayerPassLog", ...]:
+    def passes(self) -> tuple["OpLog", ...]:
         """Tuple containing this pass for aggregate-compatible iteration.
 
         Returns
         -------
-        tuple[LayerPassLog, ...]
+        tuple[OpLog, ...]
             Single-entry tuple containing this pass log.
         """
 
@@ -806,24 +806,24 @@ class LayerPassLog:
         return "<unknown>"
 
     @property
-    def source_model_log(self) -> "ModelLog":
-        """Back-reference to the owning ModelLog (stored as weakref)."""
-        ref = self.__dict__.get("_source_model_log_ref")
+    def source_trace(self) -> "Trace":
+        """Back-reference to the owning Trace (stored as weakref)."""
+        ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
             return None  # type: ignore[return-value]
         obj = ref()
-        return cast("ModelLog", obj)
+        return cast("Trace", obj)
 
-    @source_model_log.setter
-    def source_model_log(self, value: "ModelLog | None") -> None:
-        """Set the owning ModelLog back-reference.
+    @source_trace.setter
+    def source_trace(self, value: "Trace | None") -> None:
+        """Set the owning Trace back-reference.
 
         Parameters
         ----------
         value:
             Owning model log, or ``None`` to clear the reference.
         """
-        self._source_model_log_ref = weakref.ref(value) if value is not None else None
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     def materialize_activation(
         self,
@@ -850,8 +850,8 @@ class LayerPassLog:
         Examples
         --------
         >>> import torchlens as tl
-        >>> model_log = tl.load("demo_bundle", lazy=True)
-        >>> tensor = model_log["linear_1_1"].materialize_activation()
+        >>> trace = tl.load("demo_bundle", lazy=True)
+        >>> tensor = trace["linear_1_1"].materialize_activation()
         >>> tensor.shape
         torch.Size([2, 3])
         """
@@ -888,8 +888,8 @@ class LayerPassLog:
         Examples
         --------
         >>> import torchlens as tl
-        >>> model_log = tl.load("demo_bundle", lazy=True)
-        >>> grad = model_log["linear_1_1"].materialize_gradient()
+        >>> trace = tl.load("demo_bundle", lazy=True)
+        >>> grad = trace["linear_1_1"].materialize_gradient()
         >>> grad.shape
         torch.Size([2, 3])
         """
@@ -905,7 +905,7 @@ class LayerPassLog:
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
-        state["_source_model_log_ref"] = None
+        state["_source_trace_ref"] = None
         state["func_applied"] = None
         state["grad_fn_object"] = None
         state["corresponding_grad_fn"] = None
@@ -920,7 +920,7 @@ class LayerPassLog:
             defaults=self.DEFAULT_FILL_STATE,
         )
         object.__setattr__(self, "_construction_done", False)
-        state.pop("source_model_log", None)
+        state.pop("source_trace", None)
         self.__dict__.update(state)
         object.__setattr__(self, "_construction_done", bool(state.get("_construction_done", True)))
 
@@ -956,14 +956,14 @@ class LayerPassLog:
     # ************* Logging Functions ************
     # ********************************************
 
-    def copy(self) -> "LayerPassLog":
+    def copy(self) -> "OpLog":
         """Return a selective-depth copy of this entry.
 
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
         However, certain fields are shallow-copied (shared by reference) because:
 
         * ``func_applied``, ``grad_fn_name`` - function objects, immutable/shared.
-        * ``source_model_log`` - must point to the same ModelLog instance.
+        * ``source_trace`` - must point to the same Trace instance.
         * ``func_rng_states`` - large state dicts, not mutated after capture.
         * ``captured_args``, ``captured_kwargs`` - may contain large tensors;
           deep-copying them is expensive and unnecessary.
@@ -972,7 +972,7 @@ class LayerPassLog:
           shared references are safe since they're replaced (not mutated).
 
         Returns:
-            A new LayerPassLog (or subclass) with the same field values.
+            A new OpLog (or subclass) with the same field values.
         """
         fields_dict = {}
         fields_not_to_deepcopy = [
@@ -980,7 +980,7 @@ class LayerPassLog:
             "grad_fn_name",
             "grad_fn_object",
             "corresponding_grad_fn",
-            "source_model_log",
+            "source_trace",
             "func_rng_states",
             "captured_args",
             "captured_kwargs",
@@ -1026,8 +1026,8 @@ class LayerPassLog:
             activation_postfunc: Optional transform applied to the tensor
                 before storing (e.g. detach, to-numpy, normalize).
         """
-        model_log = self.source_model_log
-        writer = getattr(model_log, "_activation_writer", None) if model_log is not None else None
+        trace = self.source_trace
+        writer = getattr(trace, "_activation_writer", None) if trace is not None else None
         try:
             # Clone the tensor, optionally detaching from autograd graph.
             raw_activation = safe_copy(t, self.detach_saved_tensor)
@@ -1039,17 +1039,13 @@ class LayerPassLog:
             self.tensor_dtype = raw_activation.dtype
             self.tensor_memory = get_tensor_memory_amount(raw_activation)
 
-            save_raw_activation = getattr(model_log, "save_raw_activation", True)
+            save_raw_activation = getattr(trace, "save_raw_activation", True)
             store_raw = save_raw_activation or activation_postfunc is None
-            if (
-                model_log is not None
-                and store_raw
-                and not getattr(model_log, "save_function_args", False)
-            ):
-                hash_cache = getattr(model_log, "_activation_hash_cache", None)
+            if trace is not None and store_raw and not getattr(trace, "save_function_args", False):
+                hash_cache = getattr(trace, "_activation_hash_cache", None)
                 if hash_cache is None:
                     hash_cache = {}
-                    setattr(model_log, "_activation_hash_cache", hash_cache)
+                    setattr(trace, "_activation_hash_cache", hash_cache)
                 activation_hash = _tensor_content_hash(raw_activation)
                 if activation_hash in hash_cache:
                     self.extra_data["dedup_activation_hash"] = activation_hash
@@ -1099,12 +1095,12 @@ class LayerPassLog:
 
         self.has_saved_activations = True
 
-        if model_log is not None:
-            activation_sink = getattr(model_log, "_activation_sink", None)
+        if trace is not None:
+            activation_sink = getattr(trace, "_activation_sink", None)
             if activation_sink is not None and isinstance(self.activation, torch.Tensor):
                 activation_sink(self._streaming_label, self.activation)
 
-            if writer is not None and getattr(model_log, "_in_exhaustive_pass", False):
+            if writer is not None and getattr(trace, "_in_exhaustive_pass", False):
                 self._stream_tensor_blob(
                     writer,
                     tensor_field="activation",
@@ -1140,17 +1136,17 @@ class LayerPassLog:
         Args:
             grad: The gradient tensor flowing back through this operation.
         """
-        model_log = self.source_model_log
+        trace = self.source_trace
         raw_grad = grad
         self.grad_shape = tuple(raw_grad.shape)
         self.grad_dtype = raw_grad.dtype
         self.grad_memory = get_tensor_memory_amount(raw_grad)
-        gradient_postfunc = getattr(model_log, "gradient_postfunc", None)
+        gradient_postfunc = getattr(trace, "gradient_postfunc", None)
         self._internal_set("transformed_gradient", None)
         self.transformed_gradient_shape = None
         self.transformed_gradient_dtype = None
         self.transformed_gradient_memory = None
-        writer = getattr(model_log, "_activation_writer", None) if model_log is not None else None
+        writer = getattr(trace, "_activation_writer", None) if trace is not None else None
         if gradient_postfunc is not None:
             self._internal_set(
                 "transformed_gradient",
@@ -1170,11 +1166,11 @@ class LayerPassLog:
             self.transformed_gradient_dtype = _tensor_dtype_or_none(self.transformed_gradient)
             self.transformed_gradient_memory = _tensor_memory_or_none(self.transformed_gradient)
 
-        save_raw_gradient = getattr(model_log, "save_raw_gradient", True)
+        save_raw_gradient = getattr(trace, "save_raw_gradient", True)
         store_raw = save_raw_gradient or gradient_postfunc is None
         self._internal_set("gradient", raw_grad.detach().clone() if store_raw else None)
         self.has_gradient = True
-        if writer is not None and getattr(model_log, "_defer_streaming_bundle_finalization", False):
+        if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
             self._stream_tensor_blob(
                 writer,
                 tensor_field="gradient",
@@ -1235,8 +1231,8 @@ class LayerPassLog:
     ) -> None:
         """Validate differentiability requirements for train-mode postfunc outputs."""
 
-        model_log = self.source_model_log
-        if not getattr(model_log, "train_mode", False) or not raw_tensor.requires_grad:
+        trace = self.source_trace
+        if not getattr(trace, "train_mode", False) or not raw_tensor.requires_grad:
             return
         if not isinstance(output, torch.Tensor):
             raise TrainingModeConfigError(
@@ -1300,25 +1296,25 @@ class LayerPassLog:
     # ************* Fetcher Functions ************
     # ********************************************
 
-    def get_child_layers(self) -> list["LayerPassLog"]:
-        """Return child LayerPassLog objects for this pass.
+    def get_child_layers(self) -> list["OpLog"]:
+        """Return child OpLog objects for this pass.
 
         Returns
         -------
-        list[LayerPassLog]
+        list[OpLog]
             Child passes resolved through the owning model log.
         """
-        return [self.source_model_log[child_label] for child_label in self.child_layers]
+        return [self.source_trace[child_label] for child_label in self.child_layers]
 
-    def get_parent_layers(self) -> list["LayerPassLog"]:
-        """Return parent LayerPassLog objects for this pass.
+    def get_parent_layers(self) -> list["OpLog"]:
+        """Return parent OpLog objects for this pass.
 
         Returns
         -------
-        list[LayerPassLog]
+        list[OpLog]
             Parent passes resolved through the owning model log.
         """
-        return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
+        return [self.source_trace[parent_label] for parent_label in self.parent_layers]
 
     def show(
         self,
@@ -1400,7 +1396,7 @@ class LayerPassLog:
             pass_str = f" (pass {self.pass_num}/{self.num_passes}), "
         else:
             pass_str = ", "
-        sml = self.source_model_log
+        sml = self.source_trace
         num_ops = sml.num_operations if sml is not None else "?"
         s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.operation_num}/{num_ops}:"
         s += f"\n\tOutput tensor: shape={self.tensor_shape}, dype={self.tensor_dtype}, size={self.tensor_memory_str}"
@@ -1513,5 +1509,5 @@ class LayerPassLog:
 
 
 # Backward-compatible alias: TensorLog was the original name for
-# LayerPassLog before the LayerLog aggregate class was introduced in PR #92.
-TensorLog = LayerPassLog
+# OpLog before the LayerLog aggregate class was introduced in PR #92.
+TensorLog = OpLog

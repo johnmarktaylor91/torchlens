@@ -1,7 +1,7 @@
-"""ModelLog: the top-level container for a fully logged forward pass.
+"""Trace: the top-level container for a fully logged forward pass.
 
-ModelLog is the root data structure returned by ``log_forward_pass()``.
-It owns every LayerPassLog (per-operation entry), every LayerLog (per-layer
+Trace is the root data structure returned by ``trace()``.
+It owns every OpLog (per-operation entry), every LayerLog (per-layer
 aggregate), the module hierarchy, parameter metadata, and graph-level
 bookkeeping.
 
@@ -17,10 +17,10 @@ Key design patterns:
   persists across the fast pass on purpose: fast-path postprocessing
   relies on the fully-populated lookup dicts from the exhaustive pass.
 
-* **Explicit ModelLog methods** - Public methods are defined directly on
-  ``ModelLog``. Heavier implementations may delegate into subpackages
+* **Explicit Trace methods** - Public methods are defined directly on
+  ``Trace``. Heavier implementations may delegate into subpackages
   through local imports, but users still call them as
-  ``model_log.render_graph(...)`` or ``model_log.validate_forward_pass(...)``.
+  ``trace.render_graph(...)`` or ``trace.validate_forward_pass(...)``.
 
 * **_module_build_data** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
@@ -120,7 +120,7 @@ from .interface import (
 )
 from .grad_fn_log import GradFnAccessor, GradFnLog
 from .layer_log import LayerLog
-from .layer_pass_log import LayerPassLog, TensorLog
+from .op_log import OpLog, TensorLog
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
@@ -220,7 +220,7 @@ class _CallableList(list[Any]):
     """List that returns a plain list when called.
 
     This keeps rare report surfaces callable for user ergonomics without adding
-    extra callable methods to the ModelLog method ledger.
+    extra callable methods to the Trace method ledger.
     """
 
     def __call__(self) -> list[Any]:
@@ -326,7 +326,7 @@ def _legacy_conditional_else_edges(
     ]
 
 
-class ModelLog:
+class Trace:
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
@@ -517,7 +517,7 @@ class ModelLog:
         module_filter_fn: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
     ) -> None:
-        """Initialise a fresh ModelLog for a new logging session.
+        """Initialise a fresh Trace for a new logging session.
 
         Args:
             model_name: Human-readable name of the model being logged.
@@ -578,7 +578,7 @@ class ModelLog:
         self.save_raw_gradient = save_raw_gradient
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
-        self.parent_run: weakref.ReferenceType["ModelLog"] | None = None
+        self.parent_run: weakref.ReferenceType["Trace"] | None = None
         self.source_model_id: int | None = None
         self.source_model_class: str | None = None
         self.weight_fingerprint_at_capture: str | None = None
@@ -600,7 +600,7 @@ class ModelLog:
         self.capture_cache_key: str | None = None
         self.capture_cache_path: str | None = None
         self.recording_kept: bool = True
-        self.streaming_pass_logs: List["ModelLog"] = []
+        self.streaming_pass_logs: List["Trace"] = []
         self.num_streamed_passes: int = 1
         self._activation_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self.save_function_args = save_function_args
@@ -645,18 +645,16 @@ class ModelLog:
         # max_recurrent_loops, is_branching, has_conditional_branching)
 
         # Tensor Tracking - post-processed (populated after _pass_finished=True):
-        self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
-        self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()  # primary label -> entry
-        self.layer_dict_all_keys: Dict[str, LayerPassLog] = (
-            OrderedDict()
-        )  # all lookup keys -> entry
+        self.layer_list: List[OpLog] = []  # ordered list of all layer passes
+        self.layer_dict_main_keys: Dict[str, OpLog] = OrderedDict()  # primary label -> entry
+        self.layer_dict_all_keys: Dict[str, OpLog] = OrderedDict()  # all lookup keys -> entry
         self.layer_logs: Dict[str, LayerLog] = OrderedDict()  # no-pass label -> aggregate LayerLog
         self.layer_labels: List[str] = []  # primary labels in execution order
         self.layer_labels_w_pass: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels_no_pass: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self.layer_num_passes: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
         # Tensor Tracking - raw (populated during the forward pass, before postprocessing):
-        self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()  # raw barcode -> entry
+        self._raw_layer_dict: Dict[str, OpLog] = OrderedDict()  # raw barcode -> entry
         self._raw_layer_labels_list: List[str] = []
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
         self._gradient_layer_nums_to_save: List[int] | str = []
@@ -715,7 +713,7 @@ class ModelLog:
 
         # Session-scoped per-module tracking dicts (keyed by id(module)).
         # These replace the old tl_* attrs that were set directly on nn.Module
-        # instances. Lives on ModelLog so they're GC'd with the log - no cleanup
+        # instances. Lives on Trace so they're GC'd with the log - no cleanup
         # iteration over modules needed.
         self._mod_pass_num: Dict[int, int] = {}  # id(module) -> pass count
         self._mod_pass_labels: Dict[int, list[tuple[str, int]]] = {}
@@ -960,7 +958,7 @@ class ModelLog:
         *,
         strict: bool = False,
         confirm_mutation: bool = False,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Set a site activation recipe without propagating it.
 
         Parameters
@@ -978,7 +976,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, with a stale intervention recipe.
         """
 
@@ -1091,12 +1089,12 @@ class ModelLog:
             self.detach_hooks(handle=handle_id, confirm_mutation=True)
         self._last_hook_handle_ids = ()
 
-    def __enter__(self) -> "ModelLog":
+    def __enter__(self) -> "Trace":
         """Enter a legacy scoped hook attachment.
 
         Returns
         -------
-        ModelLog
+        Trace
             This log, acting as the most recent hook handle.
         """
 
@@ -1124,7 +1122,7 @@ class ModelLog:
         *,
         strict: bool = False,
         confirm_mutation: bool = False,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Detach sticky hooks by site or handle.
 
         Parameters
@@ -1142,7 +1140,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, with a stale recipe if hooks were removed.
         """
 
@@ -1181,7 +1179,7 @@ class ModelLog:
         )
         return self
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "ModelLog":
+    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
         """Clear all sticky hooks from the current intervention spec.
 
         Parameters
@@ -1192,7 +1190,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log with hook specs cleared and marked stale.
         """
 
@@ -1213,7 +1211,7 @@ class ModelLog:
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         intervention: InterventionOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only.
 
         Parameters
@@ -1236,7 +1234,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log after the selected propagation engine runs.
         """
 
@@ -1286,7 +1284,7 @@ class ModelLog:
         assert model is not None
         return self.rerun(model, x, strict=strict_value)
 
-    def fork(self, name: str | None = None) -> "ModelLog":
+    def fork(self, name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.
 
         Parameters
@@ -1296,11 +1294,11 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             Forked model log.
         """
 
-        fork = self._fork_model_log(name=name)
+        fork = self._fork_trace(name=name)
         self._record_operation("fork", source_id=id(self), name=fork.name)
         return fork
 
@@ -1346,7 +1344,7 @@ class ModelLog:
         if suppress_mutate_warnings.is_suppressed:
             return
         warnings.warn(
-            "MutateInPlaceWarning: ModelLog mutators modify root logs in place. "
+            "MutateInPlaceWarning: Trace mutators modify root logs in place. "
             "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
             MutateInPlaceWarning,
             stacklevel=3,
@@ -1480,8 +1478,8 @@ class ModelLog:
                 "Supplied model weight fingerprint does not match captured model weights."
             )
 
-    def _fork_model_log(self, *, name: str | None) -> "ModelLog":
-        """Build a forked ModelLog with policy-driven field handling.
+    def _fork_trace(self, *, name: str | None) -> "Trace":
+        """Build a forked Trace with policy-driven field handling.
 
         Parameters
         ----------
@@ -1490,7 +1488,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             Forked log whose mutable containers are independent.
         """
 
@@ -1520,7 +1518,7 @@ class ModelLog:
     def _next_fork_name(self) -> str:
         """Return a deterministic default fork name for this parent log."""
 
-        base_name = self.name or "model_log"
+        base_name = self.name or "trace"
         fork_count = sum(
             1
             for record in self.operation_history
@@ -1529,7 +1527,7 @@ class ModelLog:
         return f"{base_name}_fork_{fork_count + 1}"
 
     def _fork_model_field(self, field_name: str, value: Any) -> Any:
-        """Apply the ModelLog fork policy to a single field.
+        """Apply the Trace fork policy to a single field.
 
         Parameters
         ----------
@@ -1551,8 +1549,8 @@ class ModelLog:
             return None
         return self._copy_fork_value(value)
 
-    def _fork_layer_passes_from(self, parent: "ModelLog") -> dict[int, LayerPassLog]:
-        """Fork every LayerPassLog and return an old-object-id map.
+    def _fork_layer_passes_from(self, parent: "Trace") -> dict[int, OpLog]:
+        """Fork every OpLog and return an old-object-id map.
 
         Parameters
         ----------
@@ -1561,21 +1559,21 @@ class ModelLog:
 
         Returns
         -------
-        dict[int, LayerPassLog]
+        dict[int, OpLog]
             Mapping from ``id(parent_pass)`` to forked pass.
         """
 
-        layer_map: dict[int, LayerPassLog] = {}
+        layer_map: dict[int, OpLog] = {}
         fork_equivalent_operations = self.equivalent_operations
         for parent_pass in parent.layer_list:
-            fork_pass = object.__new__(LayerPassLog)
+            fork_pass = object.__new__(OpLog)
             fork_pass.__dict__.update(
                 {
                     field_name: self._fork_layer_pass_field(field_name, value)
                     for field_name, value in parent_pass.__dict__.items()
                 }
             )
-            fork_pass.source_model_log = self
+            fork_pass.source_trace = self
             eq_type = getattr(fork_pass, "operation_equivalence_type", None)
             if eq_type in fork_equivalent_operations:
                 fork_pass.equivalent_operations = fork_equivalent_operations[eq_type]
@@ -1584,12 +1582,12 @@ class ModelLog:
         return layer_map
 
     def _fork_layer_pass_field(self, field_name: str, value: Any) -> Any:
-        """Apply the LayerPassLog fork policy to a single field.
+        """Apply the OpLog fork policy to a single field.
 
         Parameters
         ----------
         field_name:
-            LayerPassLog field being copied.
+            OpLog field being copied.
         value:
             Current field value.
 
@@ -1599,18 +1597,16 @@ class ModelLog:
             Field value for the forked pass.
         """
 
-        if field_name in {"_source_model_log_ref", "parent_layer_log"}:
+        if field_name in {"_source_trace_ref", "parent_layer_log"}:
             return None
-        policy = LayerPassLog.FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        policy = OpLog.FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
         if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
             return None
         return self._copy_fork_value(value)
 
-    def _rebuild_fork_layer_collections(
-        self, parent: "ModelLog", layer_map: dict[int, LayerPassLog]
-    ) -> None:
+    def _rebuild_fork_layer_collections(self, parent: "Trace", layer_map: dict[int, OpLog]) -> None:
         """Rebuild layer lookup containers so they point at forked passes.
 
         Parameters
@@ -1654,7 +1650,7 @@ class ModelLog:
                 key: self._copy_fork_value(value)
                 for key, value in parent_layer_log.__dict__.items()
             }
-            fork_layer_log.source_model_log = self
+            fork_layer_log.source_trace = self
             fork_layer_log.passes = OrderedDict(
                 (pass_num, remap_pass(layer_pass))
                 for pass_num, layer_pass in parent_layer_log.passes.items()
@@ -1675,12 +1671,12 @@ class ModelLog:
         """Rebind weak owner references on forked child objects to this fork."""
 
         for layer_pass in self.layer_list:
-            layer_pass.source_model_log = self
+            layer_pass.source_trace = self
             parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
         for layer_log in self.layer_logs.values():
-            layer_log.source_model_log = self
+            layer_log.source_trace = self
 
     @staticmethod
     def _copy_fork_value(value: Any) -> Any:
@@ -1858,7 +1854,7 @@ class ModelLog:
         return (
             "<div style='border:1px solid #d0d7de;border-radius:8px;"
             "padding:10px 12px;font-family:system-ui,sans-serif;max-width:560px'>"
-            f"<div style='font-weight:700;margin-bottom:6px'>TorchLens ModelLog: {title}</div>"
+            f"<div style='font-weight:700;margin-bottom:6px'>TorchLens Trace: {title}</div>"
             "<div style='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px'>"
             f"<div><b>Layers</b>: {layers}</div>"
             f"<div><b>Ops</b>: {ops}</div>"
@@ -1890,7 +1886,7 @@ class ModelLog:
         save_bundle(self, path, **kwargs)
 
     @classmethod
-    def load(cls, path: str | Path, **kwargs: Any) -> "ModelLog":
+    def load(cls, path: str | Path, **kwargs: Any) -> "Trace":
         """Call :func:`torchlens.load` and return the loaded model log.
 
         Warning
@@ -1903,7 +1899,7 @@ class ModelLog:
 
         loaded = load_bundle(path, **kwargs)
         if not isinstance(loaded, cls):
-            raise TypeError(f"ModelLog.load expected a ModelLog, got {type(loaded).__name__}.")
+            raise TypeError(f"Trace.load expected a Trace, got {type(loaded).__name__}.")
         return loaded
 
     def __getstate__(self) -> Dict[str, Any]:
@@ -2009,12 +2005,12 @@ class ModelLog:
             self._module_build_data = _init_module_build_data()
 
         for layer_log in self.layer_logs.values():
-            layer_log.source_model_log = self
+            layer_log.source_trace = self
             for layer_pass in layer_log.passes.values():
-                layer_pass.source_model_log = self
+                layer_pass.source_trace = self
                 layer_pass.parent_layer_log = layer_log
         for layer_pass in self.layer_list:
-            layer_pass.source_model_log = self
+            layer_pass.source_trace = self
             parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
@@ -2028,8 +2024,8 @@ class ModelLog:
                         layer_pass.corresponding_grad_fn = grad_fn
         _state._register_log(self)
 
-    def replace_run_state_from(self, new_log: "ModelLog") -> None:
-        """Atomically replace this log's run-state from another ``ModelLog``.
+    def replace_run_state_from(self, new_log: "Trace") -> None:
+        """Atomically replace this log's run-state from another ``Trace``.
 
         This method is intended for intervention rerun. The rerun engine builds
         ``new_log`` off to the side and calls this only after validation passes.
@@ -2078,7 +2074,7 @@ class ModelLog:
         replacement_state.update(preserved_state)
         self.__dict__.update(replacement_state)
 
-    def append_run_state_from(self, new_log: "ModelLog") -> None:
+    def append_run_state_from(self, new_log: "Trace") -> None:
         """Merge compatible chunk activations from ``new_log`` into this log.
 
         Parameters
@@ -2381,7 +2377,7 @@ class ModelLog:
     # ************* FLOPs Properties *************
     # ********************************************
     # FLOPs are estimated per-operation during logging (flops_forward,
-    # flops_backward on each LayerPassLog).  These properties aggregate
+    # flops_backward on each OpLog).  These properties aggregate
     # across the entire model.  Layers with None FLOPs (unknown ops) are
     # skipped, so the totals may undercount.
 
@@ -2487,7 +2483,7 @@ class ModelLog:
         """Access aggregate per-layer metadata by label, index, or pass notation."""
         from .layer_log import LayerAccessor
 
-        return LayerAccessor(self.layer_logs, source_model_log=self)
+        return LayerAccessor(self.layer_logs, source_trace=self)
 
     @property
     def modules(self) -> "ModuleAccessor":
@@ -2617,7 +2613,7 @@ class ModelLog:
         scores: Mapping[str, Any],
         *,
         name: str = "overlay",
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Register external per-node overlay scores for later rendering.
 
         Parameters
@@ -2629,7 +2625,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This log, allowing chained calls before ``render_graph``.
         """
 
@@ -2972,14 +2968,14 @@ class ModelLog:
         vis_mode, vis_nesting_depth, vis_outpath, vis_save_only, vis_fileformat, \
         vis_buffer_layers, vis_direction, vis_theme:
             Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.render_model_log_with_dagua`.
+            :func:`torchlens.experimental.dagua.render_trace_with_dagua`.
 
         Returns
         -------
         str
             Serialized Dagua graph output or the rendered artifact path.
         """
-        from ..experimental.dagua import render_model_log_with_dagua as _impl
+        from ..experimental.dagua import render_trace_with_dagua as _impl
 
         return cast(
             str,
@@ -3010,14 +3006,14 @@ class ModelLog:
         ----------
         vis_mode, vis_nesting_depth, show_buffer_layers, direction, include_gradient_edges:
             Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.model_log_to_dagua_graph`.
+            :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
 
         Returns
         -------
         Any
             Dagua graph object.
         """
-        from ..experimental.dagua import model_log_to_dagua_graph as _impl
+        from ..experimental.dagua import trace_to_dagua_graph as _impl
 
         return _impl(
             self,
@@ -3056,7 +3052,7 @@ class ModelLog:
         if not self._pass_finished:
             raise RuntimeError(
                 "to_pandas() cannot be called before the forward pass is complete. "
-                "Please wait until log_forward_pass has returned."
+                "Please wait until trace has returned."
             )
         try:
             import pandas as pd
@@ -3184,7 +3180,7 @@ class ModelLog:
             Additional keyword arguments forwarded to ``DataFrame.to_csv``.
         """
         warnings.warn(
-            "ModelLog.to_csv() is deprecated; use torchlens.export.csv(log, path) instead.",
+            "Trace.to_csv() is deprecated; use torchlens.export.csv(log, path) instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3208,7 +3204,7 @@ class ModelLog:
             If ``pyarrow`` is unavailable.
         """
         warnings.warn(
-            "ModelLog.to_parquet() is deprecated; use torchlens.export.parquet(log, path) instead.",
+            "Trace.to_parquet() is deprecated; use torchlens.export.parquet(log, path) instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3240,7 +3236,7 @@ class ModelLog:
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
         warnings.warn(
-            "ModelLog.to_json() is deprecated; use torchlens.export.json(log, path) instead.",
+            "Trace.to_json() is deprecated; use torchlens.export.json(log, path) instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3269,7 +3265,7 @@ class ModelLog:
         from ..capture.trace import save_new_activations as _impl
 
         if train_mode is True:
-            reject_compiled_model(model, api_name="ModelLog.save_new_activations")
+            reject_compiled_model(model, api_name="Trace.save_new_activations")
 
         return _impl(
             self,
@@ -3301,8 +3297,8 @@ class ModelLog:
             ``True`` if validation succeeds.
         """
         warn_deprecated_alias(
-            "ModelLog.validate_saved_activations",
-            "ModelLog.validate_forward_pass",
+            "Trace.validate_saved_activations",
+            "Trace.validate_forward_pass",
         )
         return self.validate_forward_pass(
             ground_truth_output_tensors=ground_truth_output_tensors,
@@ -3343,7 +3339,7 @@ class ModelLog:
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
         replay: ReplayOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Replay the saved DAG cone affected by hooks.
 
         Parameters
@@ -3355,7 +3351,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, mutated in place.
         """
 
@@ -3370,7 +3366,7 @@ class ModelLog:
         site: Any,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Replay downstream from a pre-mutated site.
 
         Parameters
@@ -3383,7 +3379,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, mutated in place.
         """
 
@@ -3401,7 +3397,7 @@ class ModelLog:
         append: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Re-execute a model with this log's active intervention spec.
 
         Parameters
@@ -3417,7 +3413,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, mutated in place after a validated atomic swap.
         """
 
@@ -3511,7 +3507,7 @@ class ModelLog:
             random_seed=random_seed,
         )
 
-    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "ModelLog":
+    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` while capturing first-class backward metadata.
 
         Parameters
@@ -3523,12 +3519,12 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, for chaining.
         """
         from ..capture.backward import log_backward as _impl
 
-        return cast("ModelLog", _impl(self, loss, **backward_kwargs))
+        return cast("Trace", _impl(self, loss, **backward_kwargs))
 
     def recording_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls.
@@ -3544,7 +3540,7 @@ class ModelLog:
 
     def _remove_log_entry(
         self,
-        log_entry: LayerPassLog,
+        log_entry: OpLog,
         remove_references: bool = True,
     ) -> None:
         """Remove a single layer-pass entry and scrub graph references.
@@ -3563,7 +3559,7 @@ class ModelLog:
 
     def _batch_remove_log_entries(
         self,
-        entries_to_remove: Iterable[LayerPassLog],
+        entries_to_remove: Iterable[OpLog],
         remove_references: bool = True,
     ) -> None:
         """Remove multiple layer-pass entries using single-pass filtering.
@@ -3617,5 +3613,5 @@ class ModelLog:
         }
 
 
-ModelLog.FORK_POLICY = MODEL_LOG_FORK_POLICY  # type: ignore[attr-defined]
-ModelLog.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]
+Trace.FORK_POLICY = MODEL_LOG_FORK_POLICY  # type: ignore[attr-defined]
+Trace.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]

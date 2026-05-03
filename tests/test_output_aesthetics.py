@@ -30,7 +30,7 @@ from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR, VIS_OUTPUT_DIR
 import torch.nn as nn
 
 import example_models
-from torchlens import func, log_forward_pass, show_model_graph
+from torchlens import func, trace as trace_fn, show_model_graph
 
 # ---------------------------------------------------------------------------
 # Report helpers
@@ -74,7 +74,7 @@ def _capture_error(expr_str: str, callable_fn) -> str:
 def _field_dump(obj, label: str, exclude=None) -> str:
     """Dump all public non-callable fields of an object."""
     if exclude is None:
-        exclude = {"source_model_log", "func_rng_states", "_source_model_log"}
+        exclude = {"source_trace", "func_rng_states", "_source_trace"}
     lines = [f"\n  --- Field dump: {label} ---\n"]
     for field in sorted(dir(obj)):
         if field.startswith("_"):
@@ -150,10 +150,10 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section(f"Model: {name} — {description}", level=1))
 
     # Log the forward pass
-    log = log_forward_pass(model, x, random_seed=42)
+    log = trace_fn(model, x, random_seed=42)
 
-    # ===== A. ModelLog Overview =====
-    out.write(_section("A. ModelLog Overview", level=2))
+    # ===== A. Trace Overview =====
+    out.write(_section("A. Trace Overview", level=2))
 
     out.write(_capture("str(log)", str(log)))
     out.write(_capture("repr(log)", repr(log)))
@@ -195,7 +195,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if pass_key in log.modules:
         out.write(
             _capture(
-                f'repr(log.modules["{pass_key}"]) — ModulePassLog', repr(log.modules[pass_key])
+                f'repr(log.modules["{pass_key}"]) — ModuleCallLog', repr(log.modules[pass_key])
             )
         )
     else:
@@ -219,11 +219,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                         repr(ml),
                     )
                 )
-                # Show ModulePassLog for each pass
+                # Show ModuleCallLog for each pass
                 for p in sorted(ml.passes.keys()):
                     out.write(
                         _capture(
-                            f'repr(log.modules["{ml.address}"].passes[{p}]) — ModulePassLog pass {p}',
+                            f'repr(log.modules["{ml.address}"].passes[{p}]) — ModuleCallLog pass {p}',
                             repr(ml.passes[p]),
                         )
                     )
@@ -321,16 +321,14 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
         # Show that buffer is also accessible as a layer (isinstance check)
         from torchlens.data_classes.buffer_log import BufferLog
-        from torchlens.data_classes.layer_pass_log import LayerPassLog
+        from torchlens.data_classes.op_log import OpLog
 
         out.write(f"  isinstance(log.buffers[0], BufferLog): {isinstance(first_buf, BufferLog)}\n")
-        out.write(
-            f"  isinstance(log.buffers[0], LayerPassLog): {isinstance(first_buf, LayerPassLog)}\n"
-        )
+        out.write(f"  isinstance(log.buffers[0], OpLog): {isinstance(first_buf, OpLog)}\n")
         out.write("\n")
 
-    # ===== D. LayerPassLog / Layer Access =====
-    out.write(_section("D. LayerPassLog / Layer Access", level=2))
+    # ===== D. OpLog / Layer Access =====
+    out.write(_section("D. OpLog / Layer Access", level=2))
 
     out.write(_capture("repr(log[0]) — first layer", repr(log[0])))
     out.write(_capture("repr(log[-1]) — last layer", repr(log[-1])))
@@ -426,13 +424,13 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     # ===== F. Full Field Dumps =====
     out.write(_section("F. Full Field Dumps — Every Major Data Structure", level=2))
 
-    # F.1 ModelLog
-    out.write(_section("F.1 ModelLog field dump", level=3))
+    # F.1 Trace
+    out.write(_section("F.1 Trace field dump", level=3))
     out.write(_code(f"Model: {name}, input: {list(x.shape)}"))
-    out.write(_field_dump(log, "ModelLog"))
+    out.write(_field_dump(log, "Trace"))
 
-    # F.2 LayerPassLog — pick a layer with params if possible
-    out.write(_section("F.2 LayerPassLog field dump", level=3))
+    # F.2 OpLog — pick a layer with params if possible
+    out.write(_section("F.2 OpLog field dump", level=3))
     tensor_for_dump = None
     for entry in log.layer_list:
         if entry.uses_params:
@@ -441,7 +439,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if tensor_for_dump is None:
         tensor_for_dump = log[len(log) // 2]
     out.write(_code(f"Layer: {tensor_for_dump.layer_label}"))
-    out.write(_field_dump(tensor_for_dump, f"LayerPassLog: {tensor_for_dump.layer_label}"))
+    out.write(_field_dump(tensor_for_dump, f"OpLog: {tensor_for_dump.layer_label}"))
 
     # F.3 LayerLog (multi-pass)
     if log.is_recurrent and len(log.layer_logs) > 0:
@@ -462,12 +460,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_code(f"Module: {mod_for_dump.address}"))
     out.write(_field_dump(mod_for_dump, f"ModuleLog: {mod_for_dump.address}"))
 
-    # F.5 ModulePassLog
+    # F.5 ModuleCallLog
     if 1 in mod_for_dump.passes:
-        out.write(_section("F.5 ModulePassLog field dump", level=3))
+        out.write(_section("F.5 ModuleCallLog field dump", level=3))
         mpl_for_dump = mod_for_dump.passes[1]
-        out.write(_code(f"ModulePassLog: {mpl_for_dump.pass_label}"))
-        out.write(_field_dump(mpl_for_dump, f"ModulePassLog: {mpl_for_dump.pass_label}"))
+        out.write(_code(f"ModuleCallLog: {mpl_for_dump.pass_label}"))
+        out.write(_field_dump(mpl_for_dump, f"ModuleCallLog: {mpl_for_dump.pass_label}"))
 
     # F.6 ParamLog
     if len(log.params) > 0:
@@ -489,7 +487,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if len(log.params) > 0:
         out.write(_section("G. Gradient System (save_gradients=True + backward)", level=2))
         try:
-            grad_log = log_forward_pass(model, x, save_gradients=True, random_seed=42)
+            grad_log = trace_fn(model, x, save_gradients=True, random_seed=42)
             output_label = grad_log.output_layers[0]
             output_tensor = grad_log[output_label].activation
             output_tensor.sum().backward()
@@ -502,12 +500,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 )
             )
 
-            # Show gradient fields on a LayerPassLog that has saved grad
+            # Show gradient fields on a OpLog that has saved grad
             for entry in grad_log.layer_list:
                 if entry.has_gradient:
                     out.write(
                         _section(
-                            f"G.1 LayerPassLog gradient fields — {entry.layer_label}",
+                            f"G.1 OpLog gradient fields — {entry.layer_label}",
                             level=3,
                         )
                     )
@@ -519,12 +517,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("grad_memory_str", entry.grad_memory_str))
                     break
 
-            # Show a LayerPassLog WITHOUT grad for contrast
+            # Show a OpLog WITHOUT grad for contrast
             for entry in grad_log.layer_list:
                 if not entry.has_gradient:
                     out.write(
                         _section(
-                            f"G.2 LayerPassLog without grad — {entry.layer_label}",
+                            f"G.2 OpLog without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
@@ -591,8 +589,8 @@ def test_generate_aesthetic_report():
     with open(REPORT_PATH) as f:
         content = f.read()
     assert len(content) > 5000, f"Report too short ({len(content)} chars)"
-    assert "ModelLog" in content
-    assert "LayerPassLog" in content
+    assert "Trace" in content
+    assert "OpLog" in content
     assert "ParamLog" in content
 
 
@@ -1024,7 +1022,7 @@ def _build_latex_report() -> str:
 
     for name, model_cls, x, description in AESTHETIC_TEXT_MODELS:
         model = model_cls()
-        log = log_forward_pass(model, x, random_seed=42)
+        log = trace_fn(model, x, random_seed=42)
         doc.write(f"\\subsection{{{_tex_escape(name)} --- {_tex_escape(description)}}}\n\n")
 
         # A. Model Summary
@@ -1113,8 +1111,8 @@ def _build_latex_report() -> str:
         if error_text:
             doc.write(_verbatim_box("E. Convenience Error Messages", error_text))
 
-        # F. Field Dumps (just ModelLog headline fields + one LayerPassLog)
-        # ModelLog field dump
+        # F. Field Dumps (just Trace headline fields + one OpLog)
+        # Trace field dump
         model_fields = ""
         for field in sorted(dir(log)):
             if field.startswith("_"):
@@ -1126,7 +1124,7 @@ def _build_latex_report() -> str:
             if callable(attr):
                 continue
             if field in {
-                "source_model_log",
+                "source_trace",
                 "func_rng_states",
                 "layer_list",
                 "layer_dict_main_keys",
@@ -1134,9 +1132,9 @@ def _build_latex_report() -> str:
             }:
                 continue
             model_fields += f"{field}: {attr}\n"
-        doc.write(_verbatim_box("F.1 ModelLog — All Fields", model_fields))
+        doc.write(_verbatim_box("F.1 Trace — All Fields", model_fields))
 
-        # LayerPassLog field dump — pick a layer with params
+        # OpLog field dump — pick a layer with params
         tensor_for_dump = None
         for entry in log.layer_list:
             if entry.uses_params:
@@ -1154,10 +1152,10 @@ def _build_latex_report() -> str:
                 continue
             if callable(attr):
                 continue
-            if field in {"source_model_log", "func_rng_states"}:
+            if field in {"source_trace", "func_rng_states"}:
                 continue
             tensor_fields += f"{field}: {attr}\n"
-        doc.write(_verbatim_box(f"F.2 LayerPassLog — {tensor_for_dump.layer_label}", tensor_fields))
+        doc.write(_verbatim_box(f"F.2 OpLog — {tensor_for_dump.layer_label}", tensor_fields))
 
         # ModuleLog field dump
         param_module_addr = None
@@ -1377,10 +1375,10 @@ def _vis(
 def _vis_gradient(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
     """Generate a visualization PDF with gradient backward arrows.
 
-    Uses log_forward_pass(save_gradients=True) + backward() + render_graph()
+    Uses trace_fn(save_gradients=True) + backward() + render_graph()
     since show_model_graph() hardcodes save_gradients=False.
     """
-    log = log_forward_pass(model, x, save_gradients=True, random_seed=42)
+    log = trace_fn(model, x, save_gradients=True, random_seed=42)
     output = log[log.output_layers[0]].activation
     output.sum().backward()
     log.render_graph(
@@ -1518,7 +1516,7 @@ class TestVisualizationBugfixes:
     def test_vis_nesting_depth_0(self):
         """vis_nesting_depth=0 should not crash."""
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.randn(2, 10))
+        log = trace_fn(model, torch.randn(2, 10))
         try:
             from torchlens.visualization.rendering import render_graph
 
@@ -1540,7 +1538,7 @@ class TestVisualizationBugfixes:
 
                 return torch.relu(x) + 1
 
-        log = log_forward_pass(
+        log = trace_fn(
             ReluAdd(),
             torch.randn(2, 3),
             vis_opt="none",
@@ -1569,9 +1567,7 @@ class TestVisualizationBugfixes:
     def test_vis_keep_unsaved_false(self):
         """keep_unsaved_layers=False should not crash visualization."""
         model = _SimpleLinear()
-        log = log_forward_pass(
-            model, torch.randn(2, 10), layers_to_save="all", keep_unsaved_layers=False
-        )
+        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all", keep_unsaved_layers=False)
         try:
             from torchlens.visualization.rendering import render_graph
 
@@ -1583,7 +1579,7 @@ class TestVisualizationBugfixes:
 
 
 class TestVisModuleListFormat:
-    """_get_lowest_containing_module should handle mixed LayerLog/LayerPassLog nodes."""
+    """_get_lowest_containing_module should handle mixed LayerLog/OpLog nodes."""
 
     def test_vis_with_nested_modules(self):
         class Inner(nn.Module):
@@ -1603,5 +1599,5 @@ class TestVisModuleListFormat:
                 return self.inner(x)
 
         model = Outer()
-        log = log_forward_pass(model, torch.randn(2, 10))
+        log = trace_fn(model, torch.randn(2, 10))
         log.render_graph(vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))

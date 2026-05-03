@@ -45,18 +45,18 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import Trace
     from .selectors import SelectorLike
 
 
 def replay(
-    log: "ModelLog",
+    log: "Trace",
     *,
     strict: bool | MissingType = MISSING,
     hooks: dict[Any, Any] | None | MissingType = MISSING,
     replay: ReplayOptions | None = None,
-) -> "ModelLog":
+) -> "Trace":
     """Replay the saved DAG cone affected by hooks.
 
     Parameters
@@ -71,7 +71,7 @@ def replay(
 
     Returns
     -------
-    ModelLog
+    Trace
         The same model log, mutated in place.
     """
 
@@ -92,12 +92,12 @@ def replay(
 
 
 def replay_from(
-    log: "ModelLog",
-    site: "SelectorLike | str | LayerPassLog",
+    log: "Trace",
+    site: "SelectorLike | str | OpLog",
     *,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
-) -> "ModelLog":
+) -> "Trace":
     """Replay the downstream cone from a pre-mutated site.
 
     Parameters
@@ -112,7 +112,7 @@ def replay_from(
 
     Returns
     -------
-    ModelLog
+    Trace
         The same model log, mutated in place.
     """
 
@@ -127,27 +127,25 @@ def replay_from(
     )
 
 
-def cone_of_effect(
-    model_log: "ModelLog", origins: Iterable["LayerPassLog"]
-) -> list["LayerPassLog"]:
+def cone_of_effect(trace: "Trace", origins: Iterable["OpLog"]) -> list["OpLog"]:
     """Return downstream cone in topological order.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log whose saved graph should be traversed.
     origins:
         Origin layer passes whose downstream dependents are affected.
 
     Returns
     -------
-    list[LayerPassLog]
+    list[OpLog]
         Origin and downstream sites in execution order, with call-group
         siblings included.
     """
 
-    label_to_layer = {layer.layer_label: layer for layer in model_log.layer_list}
-    call_groups = _func_call_groups(model_log)
+    label_to_layer = {layer.layer_label: layer for layer in trace.layer_list}
+    call_groups = _func_call_groups(trace)
     visited: set[str] = set()
     frontier: deque[str] = deque()
     for origin in origins:
@@ -178,17 +176,17 @@ def cone_of_effect(
             if child_label not in visited:
                 frontier.append(child_label)
 
-    return [layer for layer in model_log.layer_list if layer.layer_label in visited]
+    return [layer for layer in trace.layer_list if layer.layer_label in visited]
 
 
 def _run_replay(
-    log: "ModelLog",
-    origins: Sequence["LayerPassLog"],
+    log: "Trace",
+    origins: Sequence["OpLog"],
     *,
     hook_entries: Sequence[NormalizedHookEntry],
     strict: bool,
     preserve_origins: bool,
-) -> "ModelLog":
+) -> "Trace":
     """Execute saved-DAG replay and mutate affected sites.
 
     Parameters
@@ -207,7 +205,7 @@ def _run_replay(
 
     Returns
     -------
-    ModelLog
+    Trace
         Mutated model log.
     """
 
@@ -292,7 +290,7 @@ def _run_replay(
     return log
 
 
-def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
+def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
     """Warn once that replay/rerun propagation overlays direct writes.
 
     Parameters
@@ -307,7 +305,7 @@ def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
         return
     warnings.warn(
         "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
-        "recipe and may overlay direct LayerPassLog activation writes.",
+        "recipe and may overlay direct OpLog activation writes.",
         DirectActivationWriteWarning,
         stacklevel=3,
     )
@@ -316,8 +314,8 @@ def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
 
 def _reconstruct_args_from_template(
     template: CapturedArgTemplate,
-    pass_log: "LayerPassLog",
-    model_log: "ModelLog",
+    pass_log: "OpLog",
+    trace: "Trace",
     overlay: dict[str, torch.Tensor],
     *,
     strict: bool = False,
@@ -330,7 +328,7 @@ def _reconstruct_args_from_template(
         Captured argument template.
     pass_log:
         Layer pass being replayed.
-    model_log:
+    trace:
         Owning model log.
     overlay:
         Current replay activations keyed by site label.
@@ -344,11 +342,11 @@ def _reconstruct_args_from_template(
     """
 
     args = tuple(
-        _resolve_arg_component(component, pass_log, model_log, overlay, strict=strict)
+        _resolve_arg_component(component, pass_log, trace, overlay, strict=strict)
         for component in template.args
     )
     kwargs = {
-        key: _resolve_arg_component(component, pass_log, model_log, overlay, strict=strict)
+        key: _resolve_arg_component(component, pass_log, trace, overlay, strict=strict)
         for key, component in template.kwargs
     }
     return args, kwargs
@@ -382,8 +380,8 @@ def _slice_output_by_path(output: Any, path: tuple[OutputPathComponent, ...]) ->
 
 def _resolve_arg_component(
     component: Any,
-    pass_log: "LayerPassLog",
-    model_log: "ModelLog",
+    pass_log: "OpLog",
+    trace: "Trace",
     overlay: dict[str, torch.Tensor],
     *,
     strict: bool,
@@ -396,7 +394,7 @@ def _resolve_arg_component(
         Template component to resolve.
     pass_log:
         Child pass currently being replayed.
-    model_log:
+    trace:
         Owning model log.
     overlay:
         Replay overlay of already-computed activations.
@@ -410,12 +408,12 @@ def _resolve_arg_component(
     """
 
     if isinstance(component, ParentRef):
-        parent_label = _final_label_for_ref(model_log, component.parent_label)
-        if parent_label not in model_log.layer_dict_all_keys:
+        parent_label = _final_label_for_ref(trace, component.parent_label)
+        if parent_label not in trace.layer_dict_all_keys:
             raise ReplayPreconditionError(
                 f"{pass_log.layer_label} references missing parent {component.parent_label!r}"
             )
-        parent = model_log[parent_label]
+        parent = trace[parent_label]
         _warn_if_unexpected_parent(pass_log, parent.layer_label, strict=strict)
         if parent.layer_label in overlay:
             return overlay[parent.layer_label]
@@ -440,18 +438,18 @@ def _resolve_arg_component(
     if isinstance(component, tuple):
         if _looks_like_template_dict(component):
             return {
-                key: _resolve_arg_component(value, pass_log, model_log, overlay, strict=strict)
+                key: _resolve_arg_component(value, pass_log, trace, overlay, strict=strict)
                 for key, value in component
             }
         return tuple(
-            _resolve_arg_component(value, pass_log, model_log, overlay, strict=strict)
+            _resolve_arg_component(value, pass_log, trace, overlay, strict=strict)
             for value in component
         )
     return component
 
 
 def _execute_replay_func_strict(
-    site: "LayerPassLog",
+    site: "OpLog",
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> Any:
@@ -486,7 +484,7 @@ def _execute_replay_func_strict(
 def _apply_replay_hooks(
     activation: torch.Tensor,
     *,
-    site: "LayerPassLog",
+    site: "OpLog",
     hook_entries: Sequence[NormalizedHookEntry],
     run_ctx: dict[str, Any],
 ) -> tuple[torch.Tensor, list[FireRecord]]:
@@ -532,7 +530,7 @@ def _apply_replay_hooks(
 
 
 def _commit_replay_updates(
-    log: "ModelLog",
+    log: "Trace",
     pending_updates: Mapping[str, torch.Tensor],
     pending_records: Mapping[str, Sequence[FireRecord]],
 ) -> None:
@@ -574,7 +572,7 @@ def _commit_replay_updates(
         raise
 
 
-def _apply_activation_update(site: "LayerPassLog", tensor: torch.Tensor) -> None:
+def _apply_activation_update(site: "OpLog", tensor: torch.Tensor) -> None:
     """Replace a site activation and refresh saved tensor metadata.
 
     Parameters
@@ -592,7 +590,7 @@ def _apply_activation_update(site: "LayerPassLog", tensor: torch.Tensor) -> None
     _set_saved_activation_metadata(site, tensor)
 
 
-def _preflight_log(log: "ModelLog") -> None:
+def _preflight_log(log: "Trace") -> None:
     """Validate model-log-level replay preconditions.
 
     Parameters
@@ -602,12 +600,12 @@ def _preflight_log(log: "ModelLog") -> None:
     """
 
     if not getattr(log, "_pass_finished", False):
-        raise ReplayPreconditionError("replay requires a completed ModelLog")
+        raise ReplayPreconditionError("replay requires a completed Trace")
     if not getattr(log, "intervention_ready", False):
         raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
 
 
-def _preflight_group(group: Sequence["LayerPassLog"]) -> None:
+def _preflight_group(group: Sequence["OpLog"]) -> None:
     """Validate replay preconditions for one function-call group.
 
     Parameters
@@ -622,7 +620,7 @@ def _preflight_group(group: Sequence["LayerPassLog"]) -> None:
         _template_for_site(site)
 
 
-def _template_for_site(site: "LayerPassLog") -> CapturedArgTemplate:
+def _template_for_site(site: "OpLog") -> CapturedArgTemplate:
     """Return a site's captured argument template or raise.
 
     Parameters
@@ -643,7 +641,7 @@ def _template_for_site(site: "LayerPassLog") -> CapturedArgTemplate:
     return template
 
 
-def _raise_on_unsupported_template(site: "LayerPassLog", template: CapturedArgTemplate) -> None:
+def _raise_on_unsupported_template(site: "OpLog", template: CapturedArgTemplate) -> None:
     """Reject unsupported leaves in a captured template.
 
     Parameters
@@ -689,7 +687,7 @@ def _first_unsupported(component: Any) -> Unsupported | None:
 
 
 def _normalize_replay_hooks(
-    log: "ModelLog",
+    log: "Trace",
     hooks: dict[Any, Any] | None,
 ) -> list[NormalizedHookEntry]:
     """Normalize explicit replay hook input.
@@ -713,11 +711,11 @@ def _normalize_replay_hooks(
 
 
 def _origin_sites_for_hooks(
-    log: "ModelLog",
+    log: "Trace",
     hook_entries: Sequence[NormalizedHookEntry],
     *,
     strict: bool,
-) -> list["LayerPassLog"]:
+) -> list["OpLog"]:
     """Resolve origin sites for replay hooks.
 
     Parameters
@@ -731,7 +729,7 @@ def _origin_sites_for_hooks(
 
     Returns
     -------
-    list[LayerPassLog]
+    list[OpLog]
         Unique hook target sites in execution order.
     """
 
@@ -745,7 +743,7 @@ def _origin_sites_for_hooks(
 
 
 def _hook_targets_by_label(
-    log: "ModelLog",
+    log: "Trace",
     hook_entries: Sequence[NormalizedHookEntry],
     *,
     strict: bool,
@@ -777,11 +775,11 @@ def _hook_targets_by_label(
 
 
 def _resolve_single_origin(
-    log: "ModelLog",
+    log: "Trace",
     site: Any,
     *,
     strict: bool,
-) -> "LayerPassLog":
+) -> "OpLog":
     """Resolve one replay_from origin.
 
     Parameters
@@ -795,16 +793,16 @@ def _resolve_single_origin(
 
     Returns
     -------
-    LayerPassLog
+    OpLog
         Single origin site.
     """
 
     if hasattr(site, "layer_label") and hasattr(site, "activation"):
-        return cast("LayerPassLog", site)
-    return cast("LayerPassLog", log.resolve_sites(site, strict=strict, max_fanout=1).first())
+        return cast("OpLog", site)
+    return cast("OpLog", log.resolve_sites(site, strict=strict, max_fanout=1).first())
 
 
-def _func_call_groups(log: "ModelLog") -> dict[int | None, tuple["LayerPassLog", ...]]:
+def _func_call_groups(log: "Trace") -> dict[int | None, tuple["OpLog", ...]]:
     """Return function-call groups in topological order.
 
     Parameters
@@ -814,21 +812,21 @@ def _func_call_groups(log: "ModelLog") -> dict[int | None, tuple["LayerPassLog",
 
     Returns
     -------
-    dict[int | None, tuple[LayerPassLog, ...]]
+    dict[int | None, tuple[OpLog, ...]]
         Sites grouped by ``func_call_id``.
     """
 
-    groups: dict[int | None, list["LayerPassLog"]] = {}
+    groups: dict[int | None, list["OpLog"]] = {}
     for layer in log.layer_list:
         groups.setdefault(layer.func_call_id, []).append(layer)
     return {call_id: tuple(layers) for call_id, layers in groups.items()}
 
 
 def _group_for_site(
-    site: "LayerPassLog",
-    call_groups: Mapping[int | None, Sequence["LayerPassLog"]],
-    cone: Sequence["LayerPassLog"],
-) -> tuple["LayerPassLog", ...]:
+    site: "OpLog",
+    call_groups: Mapping[int | None, Sequence["OpLog"]],
+    cone: Sequence["OpLog"],
+) -> tuple["OpLog", ...]:
     """Return same-call group members for a site.
 
     Parameters
@@ -842,7 +840,7 @@ def _group_for_site(
 
     Returns
     -------
-    tuple[LayerPassLog, ...]
+    tuple[OpLog, ...]
         Same-call members in topological order.
     """
 
@@ -856,7 +854,7 @@ def _group_for_site(
     )
 
 
-def _child_labels(site: "LayerPassLog") -> tuple[str, ...]:
+def _child_labels(site: "OpLog") -> tuple[str, ...]:
     """Return child labels from edge and tensor-version metadata.
 
     Parameters
@@ -927,7 +925,7 @@ def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
     return all(isinstance(item, tuple) and len(item) == 2 for item in component)
 
 
-def _final_label_for_ref(log: "ModelLog", label: str) -> str:
+def _final_label_for_ref(log: "Trace", label: str) -> str:
     """Resolve raw or final parent-ref label to a current lookup label.
 
     Parameters
@@ -949,7 +947,7 @@ def _final_label_for_ref(log: "ModelLog", label: str) -> str:
 
 
 def _warn_if_unexpected_parent(
-    pass_log: "LayerPassLog",
+    pass_log: "OpLog",
     parent_label: str,
     *,
     strict: bool,
@@ -977,7 +975,7 @@ def _warn_if_unexpected_parent(
     warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
 
 
-def _check_edge_expectations(site: "LayerPassLog", *, strict: bool) -> None:
+def _check_edge_expectations(site: "OpLog", *, strict: bool) -> None:
     """Check lightweight saved edge consistency after replaying a site.
 
     Parameters
@@ -996,7 +994,7 @@ def _check_edge_expectations(site: "LayerPassLog", *, strict: bool) -> None:
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
 
 
-def _is_inplace_none_return(site: "LayerPassLog") -> bool:
+def _is_inplace_none_return(site: "OpLog") -> bool:
     """Return whether a None return should be treated as mutated arg zero.
 
     Parameters
@@ -1014,7 +1012,7 @@ def _is_inplace_none_return(site: "LayerPassLog") -> bool:
     return bool(site.func_is_inplace) or func_name in {"__setitem__", "zero_", "__delitem__"}
 
 
-def _ensure_replay_run_ctx(log: "ModelLog") -> dict[str, Any]:
+def _ensure_replay_run_ctx(log: "Trace") -> dict[str, Any]:
     """Return a mutable replay run context on ``log``.
 
     Parameters
@@ -1052,7 +1050,7 @@ def _hook_name(entry: NormalizedHookEntry) -> str:
     return getattr(entry.normalized_callable, "__qualname__", "user_hook")
 
 
-def _replay_fire_record(entry: NormalizedHookEntry, site: "LayerPassLog") -> FireRecord:
+def _replay_fire_record(entry: NormalizedHookEntry, site: "OpLog") -> FireRecord:
     """Build a replay fire record.
 
     Parameters

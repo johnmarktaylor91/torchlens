@@ -1,7 +1,7 @@
 """Public API entry points for TorchLens.
 
 This module contains every user-facing function:
-  - ``log_forward_pass``  - the main entry point (runs model, returns ModelLog)
+  - ``trace``  - the main entry point (runs model, returns Trace)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
   - ``show_backward_graph`` - backward grad_fn visualization wrapper
@@ -9,12 +9,12 @@ This module contains every user-facing function:
   - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
-**Two-pass strategy** (``log_forward_pass`` with selective layers):
+**Two-pass strategy** (``trace`` with selective layers):
 When the user requests specific layers (not "all" or "none"), TorchLens must
 first run an exhaustive pass to discover the full graph structure - only then can
 it resolve user-friendly layer names/indices to internal layer numbers.  A second
 fast pass replays the model, saving only the requested activations.  This is why
-``log_forward_pass`` has two branches: the simple path (save all/none) and the
+``trace`` has two branches: the simple path (save all/none) and the
 two-pass path (save specific layers).
 """
 
@@ -49,7 +49,7 @@ from ._training_validation import TrainingModeConfigError, validate_training_com
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
 from .data_classes.model_log import (
-    ModelLog,
+    Trace,
 )
 from .options import (
     CaptureOptions,
@@ -77,12 +77,12 @@ from .intervention.hooks import normalize_hook_plan
 from ._run_state import RunState
 
 
-def list_logs() -> tuple[ModelLog, ...]:
-    """Return a snapshot of currently live ``ModelLog`` objects.
+def list_logs() -> tuple[Trace, ...]:
+    """Return a snapshot of currently live ``Trace`` objects.
 
     Returns
     -------
-    tuple[ModelLog, ...]
+    tuple[Trace, ...]
         Immutable snapshot from TorchLens' process-wide weak registry.
     """
 
@@ -90,7 +90,7 @@ def list_logs() -> tuple[ModelLog, ...]:
 
 
 def reset_naming_counter(class_name: str | None = None) -> None:
-    """Reset automatic ``ModelLog`` naming counters.
+    """Reset automatic ``Trace`` naming counters.
 
     Parameters
     ----------
@@ -114,7 +114,7 @@ def record_kpi_in_graph(name: str, value: Any) -> None:
     name:
         KPI name.
     value:
-        JSON-like value to attach to the current ``ModelLog``.
+        JSON-like value to attach to the current ``Trace``.
 
     Raises
     ------
@@ -122,10 +122,10 @@ def record_kpi_in_graph(name: str, value: Any) -> None:
         If no forward pass is being captured.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
-        raise RuntimeError("record_kpi_in_graph() must be called during log_forward_pass.")
-    model_log.capture_kpis[str(name)] = value
+    trace = _state._active_trace
+    if trace is None:
+        raise RuntimeError("record_kpi_in_graph() must be called during trace.")
+    trace.capture_kpis[str(name)] = value
 
 
 def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> None:
@@ -146,17 +146,17 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
         If either tensor has not been tagged by TorchLens.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
-        raise RuntimeError("register_tensor_connection() must be called during log_forward_pass.")
+    trace = _state._active_trace
+    if trace is None:
+        raise RuntimeError("register_tensor_connection() must be called during trace.")
     parent_label = getattr(parent, "tl_tensor_label_raw", None)
     child_label = getattr(child, "tl_tensor_label_raw", None)
     if parent_label is None or child_label is None:
         raise ValueError("Both tensors must have TorchLens labels before registering an edge.")
-    model_log.manual_tensor_connections.append((parent_label, child_label))
-    if parent_label in model_log._raw_layer_dict and child_label in model_log._raw_layer_dict:
-        parent_entry = model_log._raw_layer_dict[parent_label]
-        child_entry = model_log._raw_layer_dict[child_label]
+    trace.manual_tensor_connections.append((parent_label, child_label))
+    if parent_label in trace._raw_layer_dict and child_label in trace._raw_layer_dict:
+        parent_entry = trace._raw_layer_dict[parent_label]
+        child_entry = trace._raw_layer_dict[child_label]
         if child_label not in parent_entry.child_layers:
             parent_entry.child_layers.append(child_label)
             parent_entry.has_children = True
@@ -164,12 +164,12 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
             child_entry.parent_layers.append(parent_label)
 
 
-def decide_recording_of_batch(model_log: ModelLog, predicate: Callable[[ModelLog], bool]) -> bool:
+def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
     """Retroactively keep or discard a captured batch log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Captured log to decide on.
     predicate:
         Callable receiving the log and returning whether to keep it.
@@ -180,10 +180,10 @@ def decide_recording_of_batch(model_log: ModelLog, predicate: Callable[[ModelLog
         True when the log was kept.
     """
 
-    keep = bool(predicate(model_log))
+    keep = bool(predicate(trace))
     if not keep:
-        model_log.cleanup()
-    model_log.recording_kept = keep
+        trace.cleanup()
+    trace.recording_kept = keep
     return keep
 
 
@@ -435,16 +435,16 @@ def _capture_cache_key(
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _prepare_log_for_capture_cache(model_log: ModelLog) -> None:
+def _prepare_log_for_capture_cache(trace: Trace) -> None:
     """Detach non-leaf tensors and autograd objects before cache serialization.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log to make pickle-compatible in place.
     """
 
-    for layer in getattr(model_log, "layer_list", []):
+    for layer in getattr(trace, "layer_list", []):
         for field_name in (
             "activation",
             "transformed_activation",
@@ -458,7 +458,7 @@ def _prepare_log_for_capture_cache(model_log: ModelLog) -> None:
         layer.corresponding_grad_fn = None
         layer._internal_set("captured_args", _detach_nested_for_cache(layer.captured_args))
         layer._internal_set("captured_kwargs", _detach_nested_for_cache(layer.captured_kwargs))
-    for layer_log in getattr(model_log, "layer_logs", {}).values():
+    for layer_log in getattr(trace, "layer_logs", {}).values():
         for field_name in ("transformed_activation", "transformed_gradient"):
             value = getattr(layer_log, field_name, None)
             if isinstance(value, torch.Tensor):
@@ -508,7 +508,7 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
 
     FSDP cannot be unwrapped the same way: its parameters are sharded across
     ranks, so there is no single unsharded module to log. Users who want to
-    log an FSDP-wrapped model should ``log_forward_pass`` a rank-local
+    log an FSDP-wrapped model should ``trace`` a rank-local
     *un-wrapped* copy of the underlying module instead.
 
     The function is kept under its original name to avoid churn at call sites;
@@ -523,10 +523,10 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
     else:
         if isinstance(model, FullyShardedDataParallel):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support "
+                "torchlens.trace does not support "
                 "FullyShardedDataParallel (FSDP): parameters are sharded "
                 "across ranks and there is no unsharded module to log. "
-                "Run log_forward_pass on a rank-local copy of the underlying "
+                "Run trace on a rank-local copy of the underlying "
                 "module (before FSDP wrapping) instead."
             )
 
@@ -552,7 +552,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     TorchLens logs a model by wrapping every torch callable and running an
     ordinary Python forward pass.  The following wrappers all replace that
     Python execution with a traced / scripted / exported graph — by design,
-    our wrappers don't see the original ops, so the ModelLog would be
+    our wrappers don't see the original ops, so the Trace would be
     empty or misleading:
 
     * ``torch._dynamo.eval_frame.OptimizedModule`` (``torch.compile(model)``)
@@ -567,7 +567,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
       parameter materialization and sharding around forward execution in ways
       TorchLens cannot currently validate.
 
-    In these cases the fix is the same: call ``log_forward_pass`` on the
+    In these cases the fix is the same: call ``trace`` on the
     *un-wrapped* model before compiling, scripting, exporting, or sharding.
     """
     # FullyShardedDataParallel
@@ -578,10 +578,10 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     else:
         if isinstance(model, FullyShardedDataParallel):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support "
+                "torchlens.trace does not support "
                 "FullyShardedDataParallel models: FSDP controls parameter "
                 "materialization and sharding around forward execution in ways "
-                "TorchLens cannot validate. Call log_forward_pass on the "
+                "TorchLens cannot validate. Call trace on the "
                 "underlying unwrapped nn.Module."
             )
 
@@ -593,19 +593,19 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     else:
         if isinstance(model, OptimizedModule):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support torch.compile'd "
+                "torchlens.trace does not support torch.compile'd "
                 "models: dynamo replaces the Python forward with a compiled "
                 "graph that bypasses TorchLens' function wrappers. "
-                "Call log_forward_pass on the original (un-compiled) model."
+                "Call trace on the original (un-compiled) model."
             )
 
     # torch.jit.script / torch.jit.trace -> ScriptModule
     if isinstance(model, torch.jit.ScriptModule):
         raise RuntimeError(
-            "torchlens.log_forward_pass does not support torch.jit ScriptModule "
+            "torchlens.trace does not support torch.jit ScriptModule "
             "or traced models: the forward runs on the TorchScript interpreter "
             "rather than Python, so TorchLens' function wrappers don't fire. "
-            "Call log_forward_pass on the original (un-scripted / un-traced) "
+            "Call trace on the original (un-scripted / un-traced) "
             "model."
         )
 
@@ -617,10 +617,10 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     else:
         if isinstance(model, ExportedProgram):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support "
+                "torchlens.trace does not support "
                 "torch.export.ExportedProgram: the exported IR is not a "
                 "callable nn.Module that can be re-executed in Python. "
-                "Call log_forward_pass on the original nn.Module before "
+                "Call trace on the original nn.Module before "
                 "export."
             )
 
@@ -685,11 +685,11 @@ def _run_model_and_save_specified_activations(
     module_filter_fn: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     raise_on_nan: bool = False,
-) -> ModelLog:
-    """Run a forward pass with logging enabled, returning a populated ModelLog.
+) -> Trace:
+    """Run a forward pass with logging enabled, returning a populated Trace.
 
-    This is the single internal entry point that creates a ModelLog, configures it,
-    and delegates to ``ModelLog._run_and_log_inputs_through_model`` which handles
+    This is the single internal entry point that creates a Trace, configures it,
+    and delegates to ``Trace._run_and_log_inputs_through_model`` which handles
     model preparation, the exhaustive (and optionally fast) forward pass, and all
     postprocessing.
 
@@ -739,7 +739,7 @@ def _run_model_and_save_specified_activations(
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
+            ``Trace.attach_hooks`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
         verbose: If True, print timed progress messages at each major pipeline stage.
@@ -750,7 +750,7 @@ def _run_model_and_save_specified_activations(
             ``CaptureError`` with the offending operation metadata.
 
     Returns:
-        Fully-populated ModelLog.
+        Fully-populated Trace.
     """
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
@@ -781,7 +781,7 @@ def _run_model_and_save_specified_activations(
         input_id=input_id,
         input_shape_hash=input_shape_hash,
     )
-    model_log = ModelLog(
+    trace = Trace(
         model_name=model_name,
         output_device=output_device,
         activation_postfunc=activation_transform,
@@ -804,31 +804,31 @@ def _run_model_and_save_specified_activations(
         module_filter_fn=module_filter_fn,
         emit_nvtx=emit_nvtx,
     )
-    model_log.name = name
+    trace.name = name
     forward_code = getattr(model.forward, "__code__", None)
-    model_log.forward_lineno = getattr(forward_code, "co_firstlineno", None)
-    model_log.intervention_ready = intervention_ready
+    trace.forward_lineno = getattr(forward_code, "co_firstlineno", None)
+    trace.intervention_ready = intervention_ready
     if hook_plan:
-        model_log.run_state = RunState.LIVE_CAPTURED
-    model_log.source_model_id = source_model_id
-    model_log.source_model_class = source_model_class
-    model_log.weight_fingerprint_at_capture = weight_fingerprint
-    model_log.weight_fingerprint_full = weight_fingerprint
-    model_log.input_id_at_capture = input_id
-    model_log.input_shape_hash = input_shape_hash
-    model_log._source_code_blob = capture_model_source_code(model)
-    model_log._source_model_ref = make_weak_model_ref(model)
-    model_log._activation_sink = activation_sink
-    model_log._keep_activations_in_memory = keep_activations_in_memory
-    model_log._keep_gradients_in_memory = keep_gradients_in_memory
-    model_log._defer_streaming_bundle_finalization = save_gradients_to is not None
-    model_log._in_exhaustive_pass = True
-    model_log.raise_on_nan = raise_on_nan
+        trace.run_state = RunState.LIVE_CAPTURED
+    trace.source_model_id = source_model_id
+    trace.source_model_class = source_model_class
+    trace.weight_fingerprint_at_capture = weight_fingerprint
+    trace.weight_fingerprint_full = weight_fingerprint
+    trace.input_id_at_capture = input_id
+    trace.input_shape_hash = input_shape_hash
+    trace._source_code_blob = capture_model_source_code(model)
+    trace._source_model_ref = make_weak_model_ref(model)
+    trace._activation_sink = activation_sink
+    trace._keep_activations_in_memory = keep_activations_in_memory
+    trace._keep_gradients_in_memory = keep_gradients_in_memory
+    trace._defer_streaming_bundle_finalization = save_gradients_to is not None
+    trace._in_exhaustive_pass = True
+    trace.raise_on_nan = raise_on_nan
     bundle_path = save_gradients_to if save_gradients_to is not None else save_activations_to
     if bundle_path is not None:
-        model_log._activation_writer = BundleStreamWriter(bundle_path)
+        trace._activation_writer = BundleStreamWriter(bundle_path)
     try:
-        model_log._run_and_log_inputs_through_model(
+        trace._run_and_log_inputs_through_model(
             model,
             cast(torch.Tensor | list[Any], input_args),
             input_kwargs,
@@ -839,16 +839,16 @@ def _run_model_and_save_specified_activations(
     except (TorchLensIOError, TorchLensPostfuncError):
         raise
     except Exception as exc:
-        if model_log._activation_writer is not None:
-            model_log._activation_writer.abort(str(exc))
+        if trace._activation_writer is not None:
+            trace._activation_writer.abort(str(exc))
             raise TorchLensIOError("Streaming activation save failed during forward pass.") from exc
         raise
     finally:
         _state.reset_capture_runtime_context()
-    return model_log
+    return trace
 
 
-def log_forward_pass(
+def trace(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
@@ -917,12 +917,12 @@ def log_forward_pass(
     module_filter_fn: Callable[[Any], bool] | None | MissingType = MISSING,
     stop_after: Any | None | MissingType = MISSING,
     raise_on_nan: bool | MissingType = MISSING,
-) -> ModelLog:
-    """Run a forward pass through *model*, log every operation, and return a ModelLog.
+) -> Trace:
+    """Run a forward pass through *model*, log every operation, and return a Trace.
 
     This is the primary user-facing entry point for TorchLens.  It intercepts every
     tensor-producing operation during ``model.forward()``, records metadata and
-    (optionally) saves activations, then returns a ``ModelLog`` that provides
+    (optionally) saves activations, then returns a ``Trace`` that provides
     dict-like access to every layer's data.
 
     Torch functions are automatically wrapped on the first call and stay wrapped
@@ -951,7 +951,7 @@ def log_forward_pass(
         input_kwargs: Keyword args for ``model.forward()``.
         layers_to_save: Which layers to save activations for (see above).
         keep_unsaved_layers: If False, layers without saved activations are removed from
-            the returned ModelLog (they still exist during processing). When
+            the returned Trace (they still exist during processing). When
             ``layers_to_save`` is a specific subset, TorchLens still does an initial
             exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
             names before the fast replay. Example: use
@@ -1033,7 +1033,7 @@ def log_forward_pass(
             intervention spec persistence. This does not imply
             ``save_function_args=True``.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
+            ``Trace.attach_hooks`` and executes during this capture when supplied.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
@@ -1046,11 +1046,11 @@ def log_forward_pass(
             the expensive expansion step and only groups operations that share the same
             parameters.
         visualization: Grouped visualization options. When omitted,
-            ``log_forward_pass`` defaults to ``VisualizationOptions(mode="none")``.
+            ``trace`` defaults to ``VisualizationOptions(mode="none")``.
         streaming: Grouped streaming-save options.
         train_mode: If True, validate training-compatible settings and keep saved
             activations attached to autograd.
-        name: Optional user-facing name for the returned ``ModelLog``. When omitted,
+        name: Optional user-facing name for the returned ``Trace``. When omitted,
             TorchLens uses a process-local counter based on the model class name after
             stripping common HuggingFace suffixes. The counter is not thread-safe; it
             relies on TorchLens' single active logging session guard.
@@ -1058,7 +1058,7 @@ def log_forward_pass(
         cache_dir: Optional cache directory.
         module_filter_fn: Optional predicate receiving each op log. Returning ``False`` keeps
             metadata but skips activation saving for that op.
-        stop_after: Experimental stop-early site. Unsupported for ``log_forward_pass``.
+        stop_after: Experimental stop-early site. Unsupported for ``trace``.
 
     Postfunc behavior:
         ``activation_transform`` and ``gradient_postfunc`` both take a tensor, should return a
@@ -1074,7 +1074,7 @@ def log_forward_pass(
         requires gradients in ``train_mode=True``, the same differentiability checks apply.
 
     Returns:
-        A ``ModelLog`` containing layer activations (if requested) and full metadata.
+        A ``Trace`` containing layer activations (if requested) and full metadata.
     """
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
@@ -1289,7 +1289,7 @@ def log_forward_pass(
         cache_path = cache_root / f"{cache_key}.pkl"
         if cache_path.exists():
             with cache_path.open("rb") as file:
-                cached_log = cast(ModelLog, pickle.load(file))
+                cached_log = cast(Trace, pickle.load(file))
             cached_log.capture_cache_hit = True
             cached_log.capture_cache_key = cache_key
             cached_log.capture_cache_path = str(cache_path)
@@ -1310,7 +1310,7 @@ def log_forward_pass(
     if not uses_two_pass:
         # --- SINGLE-PASS path ---
         # "all" or "none": no name resolution needed, so one pass suffices.
-        model_log = _run_model_and_save_specified_activations(
+        trace = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -1361,7 +1361,7 @@ def log_forward_pass(
         next(capture_progress, None)
         if verbose:
             print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
-        model_log = _run_model_and_save_specified_activations(
+        trace = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -1402,11 +1402,11 @@ def log_forward_pass(
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching activations.
         next(capture_progress, None)
-        _vprint(model_log, "Two-pass mode: Pass 2 (fast, saving requested layers)")
-        model_log.keep_unsaved_layers = keep_unsaved_layers
-        model_log.save_gradients = save_gradients
-        model_log.gradients_to_save = gradients_to_save_resolved
-        model_log.save_new_activations(
+        _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
+        trace.keep_unsaved_layers = keep_unsaved_layers
+        trace.save_gradients = save_gradients
+        trace.gradients_to_save = gradients_to_save_resolved
+        trace.save_new_activations(
             model=model,
             input_args=cast(torch.Tensor | list[Any], input_args),
             input_kwargs=input_kwargs,
@@ -1418,15 +1418,15 @@ def log_forward_pass(
 
     # Print final summary.
     _vprint(
-        model_log,
-        f"Done: {len(model_log.layer_logs)} layers, "
-        f"{model_log.num_tensors_saved} saved, "
-        f"{model_log.total_activation_memory_str}",
+        trace,
+        f"Done: {len(trace.layer_logs)} layers, "
+        f"{trace.num_tensors_saved} saved, "
+        f"{trace.total_activation_memory_str}",
     )
 
     # Visualize if desired.
     if visualization_options.mode != "none":
-        model_log.render_graph(**visualization_to_render_kwargs(visualization_options))
+        trace.render_graph(**visualization_to_render_kwargs(visualization_options))
 
     if unwrap_when_done:
         from .decoration import unwrap_torch
@@ -1434,24 +1434,24 @@ def log_forward_pass(
         unwrap_torch()
 
     if cache_path is not None and cache_key is not None:
-        model_log.capture_cache_hit = False
-        model_log.capture_cache_key = cache_key
-        model_log.capture_cache_path = str(cache_path)
-        _prepare_log_for_capture_cache(model_log)
+        trace.capture_cache_hit = False
+        trace.capture_cache_key = cache_key
+        trace.capture_cache_path = str(cache_path)
+        _prepare_log_for_capture_cache(trace)
         with cache_path.open("wb") as file:
-            pickle.dump(model_log, file)
+            pickle.dump(trace, file)
 
-    return model_log
+    return trace
 
 
 def log_model_metadata(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-) -> ModelLog:
+) -> Trace:
     """Return model metadata without saving any activations.
 
-    Equivalent to ``log_forward_pass(model, input_args, input_kwargs, layers_to_save=None,
+    Equivalent to ``trace(model, input_args, input_kwargs, layers_to_save=None,
     compute_input_output_distances=True)``.
 
     Args:
@@ -1460,23 +1460,23 @@ def log_model_metadata(
         input_kwargs: Keyword args for ``model.forward()``.
 
     Returns:
-        ModelLog with full metadata but no saved activations.
+        Trace with full metadata but no saved activations.
     """
-    model_log = log_forward_pass(
+    model_trace = trace(
         model,
         input_args,
         input_kwargs,
         layers_to_save=None,
         compute_input_output_distances=True,
     )
-    return model_log
+    return model_trace
 
 
 def get_model_metadata(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-) -> ModelLog:
+) -> Trace:
     """Deprecated alias for :func:`log_model_metadata`."""
 
     warn_deprecated_alias("get_model_metadata", "log_model_metadata")
@@ -1500,7 +1500,7 @@ def summary(
     input_kwargs:
         Keyword args for ``model.forward()``.
     **summary_kwargs:
-        Forwarded to ``ModelLog.summary``.
+        Forwarded to ``Trace.summary``.
 
     Returns
     -------
@@ -1513,7 +1513,7 @@ def summary(
         input_kwargs = {}
     check_model_and_input_variants(model, input_args, input_kwargs)
 
-    model_log = _run_model_and_save_specified_activations(
+    trace = _run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -1522,9 +1522,9 @@ def summary(
         detect_loops=True,
     )
     try:
-        return model_log.summary(**summary_kwargs)
+        return trace.summary(**summary_kwargs)
     finally:
-        model_log.cleanup()
+        trace.cleanup()
 
 
 def show_model_graph(
@@ -1564,8 +1564,8 @@ def show_model_graph(
     """Convenience wrapper: visualize the computational graph without saving activations.
 
     Runs an exhaustive forward pass (no activations saved) to discover the graph
-    structure, renders the visualization, then cleans up the ModelLog.  For more
-    control, use ``log_forward_pass`` with ``vis_mode`` set and access the ModelLog
+    structure, renders the visualization, then cleans up the Trace.  For more
+    control, use ``trace`` with ``vis_mode`` set and access the Trace
     directly.
 
     Args:
@@ -1662,7 +1662,7 @@ def show_model_graph(
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    model_log = _run_model_and_save_specified_activations(
+    trace = _run_model_and_save_specified_activations(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
@@ -1685,13 +1685,13 @@ def show_model_graph(
             render_kwargs["module"] = module.address if isinstance(module, ModuleLog) else module
         if code_panel is not False:
             render_kwargs["code_panel"] = code_panel
-        model_log.render_graph(**render_kwargs)
+        trace.render_graph(**render_kwargs)
     finally:
-        model_log.cleanup()
+        trace.cleanup()
 
 
 def show_backward_graph(
-    model_log: ModelLog,
+    trace: Trace,
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
@@ -1705,13 +1705,13 @@ def show_backward_graph(
     code_panel: CodePanelOption = False,
     visualization: VisualizationOptions | None = None,
 ) -> str:
-    """Render an existing ModelLog's captured backward grad_fn graph.
+    """Render an existing Trace's captured backward grad_fn graph.
 
     Parameters
     ----------
-    model_log:
-        ModelLog with backward metadata captured by ``model_log.log_backward(loss)``
-        or ``model_log.recording_backward()``.
+    trace:
+        Trace with backward metadata captured by ``trace.log_backward(loss)``
+        or ``trace.recording_backward()``.
     vis_outpath:
         Output path for the rendered graph.
     vis_save_only:
@@ -1779,7 +1779,7 @@ def show_backward_graph(
     if node_style is not MISSING:
         node_mode = cast(VisNodeModeLiteral, node_style)
 
-    return model_log.show_backward_graph(
+    return trace.show_backward_graph(
         vis_outpath=output_path,
         vis_graph_overrides=graph_overrides,
         node_spec_fn=node_spec_fn,
@@ -2094,9 +2094,9 @@ def validate_forward_pass(
     **How it works:**
 
     1. Run model.forward() *without* TorchLens to get ground-truth output tensors.
-    2. Run ``log_forward_pass`` with ``save_function_args=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_function_args=True`` and ``layers_to_save='all'``
        to capture every activation and its creating function's arguments.
-    3. Call ``ModelLog.validate_forward_pass`` which replays the forward pass
+    3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved activations, checking that the output matches
        ground truth.  It also injects random activations and verifies the output
        changes (proving the saved activations are actually used, not just ignored).
@@ -2144,7 +2144,7 @@ def validate_forward_pass(
     # Save state_dict first because requires_grad forcing during logging can
     # alter parameter metadata; we restore it afterward.
     state_dict = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    model_log: ModelLog | None = None
+    trace: Trace | None = None
     activations_are_valid = False
     try:
         ground_truth_output_all = get_vars_of_type_from_obj(
@@ -2168,7 +2168,7 @@ def validate_forward_pass(
         # Step 2: Run the model *through* TorchLens, saving all activations.
         # save_function_args=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved activations.
-        model_log = _run_model_and_save_specified_activations(
+        trace = _run_model_and_save_specified_activations(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
@@ -2183,13 +2183,13 @@ def validate_forward_pass(
             save_rng_states=True,
         )
         # Step 3: Validate by replaying the forward pass from saved activations.
-        activations_are_valid = model_log.validate_forward_pass(
+        activations_are_valid = trace.validate_forward_pass(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
     finally:
         model.load_state_dict(state_dict)
-        if model_log is not None:
-            model_log.cleanup()
+        if trace is not None:
+            trace.cleanup()
     return activations_are_valid
 
 

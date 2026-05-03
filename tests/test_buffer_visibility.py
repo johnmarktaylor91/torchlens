@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 
 class _BatchNormOnly(nn.Module):
@@ -65,8 +65,8 @@ class _BatchNormWithArchitecturalBuffer(nn.Module):
         return self.bn(x) + self.causal_mask
 
 
-def _log_model(model: nn.Module) -> ModelLog:
-    """Return a metadata-only ModelLog for a small deterministic input.
+def _log_model(model: nn.Module) -> Trace:
+    """Return a metadata-only Trace for a small deterministic input.
 
     Parameters
     ----------
@@ -75,21 +75,21 @@ def _log_model(model: nn.Module) -> ModelLog:
 
     Returns
     -------
-    ModelLog
+    Trace
         Logged forward-pass metadata.
     """
 
     model.eval()
-    return tl.log_forward_pass(model, torch.randn(2, 4), layers_to_save="none")
+    return tl.trace(model, torch.randn(2, 4), layers_to_save="none")
 
 
-def _render_dot(log: ModelLog, tmp_path: Path, show_buffer_layers: str | bool) -> str:
+def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> str:
     """Render a Graphviz DOT source string for a buffer visibility mode.
 
     Parameters
     ----------
     log:
-        ModelLog to render.
+        Trace to render.
     tmp_path:
         Temporary directory for Graphviz output files.
     show_buffer_layers:
@@ -154,13 +154,13 @@ def _buffer_node_lines(dot_source: str) -> list[str]:
     ]
 
 
-def _child_ops_for_buffer(log: ModelLog, buffer_address: str) -> list[str]:
+def _child_ops_for_buffer(log: Trace, buffer_address: str) -> list[str]:
     """Return child op labels for a buffer address.
 
     Parameters
     ----------
     log:
-        ModelLog to inspect.
+        Trace to inspect.
     buffer_address:
         Buffer address whose child ops should be returned.
 

@@ -99,7 +99,7 @@ def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     return activation * 0
 
 
-def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.ModelLog:
+def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture an intervention-ready log for Phase 7 tests.
 
     Parameters
@@ -111,11 +111,11 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured log.
     """
 
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
 @pytest.mark.smoke

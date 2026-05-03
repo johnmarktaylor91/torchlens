@@ -1,4 +1,4 @@
-"""Minimal tensor display helpers for ``LayerLog.show`` and ``LayerPassLog.show``."""
+"""Minimal tensor display helpers for ``LayerLog.show`` and ``OpLog.show``."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _tensor_from_log(log_entry: Any) -> torch.Tensor | None:
     Parameters
     ----------
     log_entry:
-        ``LayerLog``, ``LayerPassLog``, or tensor-like object.
+        ``LayerLog``, ``OpLog``, or tensor-like object.
 
     Returns
     -------
@@ -176,7 +176,7 @@ def show_tensor(
     Parameters
     ----------
     log_entry:
-        ``LayerLog``, ``LayerPassLog``, or tensor.
+        ``LayerLog``, ``OpLog``, or tensor.
     method:
         ``"auto"``, ``"heatmap"``, ``"channels"``, ``"rgb"``, or ``"hist"``.
     signs:

@@ -12,7 +12,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 from torchlens.utils.tensor_utils import (
     get_tensor_memory_amount,
     print_override,
@@ -71,38 +71,38 @@ class TestFieldOrderSync:
         assert not dupes, f"Duplicates in {name}: {set(dupes)}"
 
     @pytest.mark.smoke
-    def test_layer_pass_log_field_order_covers_init(self):
-        """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in LayerPassLog.__init__."""
-        from torchlens.data_classes.layer_pass_log import LayerPassLog
+    def test_op_log_field_order_covers_init(self):
+        """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in OpLog.__init__."""
+        from torchlens.data_classes.op_log import OpLog
 
-        init_attrs = self._init_assigned_attrs(LayerPassLog)
+        init_attrs = self._init_assigned_attrs(OpLog)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
         # but some _ fields ARE in FIELD_ORDER (e.g. _pass_finished). Check both directions:
         # 1. Every FIELD_ORDER entry should be an init attr or a property
         for field in LAYER_PASS_LOG_FIELD_ORDER:
-            assert field in init_attrs or hasattr(LayerPassLog, field), (
-                f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in LayerPassLog"
+            assert field in init_attrs or hasattr(OpLog, field), (
+                f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in OpLog"
             )
 
-    def test_model_log_field_order_covers_init(self):
-        """MODEL_LOG_FIELD_ORDER should cover all public self.X assignments in ModelLog.__init__."""
-        from torchlens.data_classes.model_log import ModelLog
+    def test_trace_field_order_covers_init(self):
+        """MODEL_LOG_FIELD_ORDER should cover all public self.X assignments in Trace.__init__."""
+        from torchlens.data_classes.model_log import Trace
 
-        init_attrs = self._init_assigned_attrs(ModelLog)
+        init_attrs = self._init_assigned_attrs(Trace)
         order_set = set(MODEL_LOG_FIELD_ORDER)
         # Every non-private init attr should be in FIELD_ORDER
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
         missing = public_attrs - order_set
-        assert not missing, f"ModelLog public fields missing from FIELD_ORDER: {missing}"
+        assert not missing, f"Trace public fields missing from FIELD_ORDER: {missing}"
 
-    def test_module_pass_log_field_order_covers_init(self):
-        from torchlens.data_classes.module_log import ModulePassLog
+    def test_module_call_log_field_order_covers_init(self):
+        from torchlens.data_classes.module_log import ModuleCallLog
 
-        init_attrs = self._init_assigned_attrs(ModulePassLog)
+        init_attrs = self._init_assigned_attrs(ModuleCallLog)
         order_set = set(MODULE_PASS_LOG_FIELD_ORDER)
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
         missing = public_attrs - order_set
-        assert not missing, f"ModulePassLog public fields missing from FIELD_ORDER: {missing}"
+        assert not missing, f"ModuleCallLog public fields missing from FIELD_ORDER: {missing}"
 
     def test_module_log_field_order_covers_init(self):
         from torchlens.data_classes.module_log import ModuleLog
@@ -338,16 +338,16 @@ class TestModuleExceptionCleanup:
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
         with pytest.raises(RuntimeError, match="Intentional test error"):
-            log_forward_pass(model, x)
+            trace_fn(model, x)
 
     def test_failing_model_cleanup(self):
         """After a failed forward pass, subsequent calls should work."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
         with pytest.raises(RuntimeError):
-            log_forward_pass(model, x)
+            trace_fn(model, x)
         good_model = _SimpleLinear()
-        log = log_forward_pass(good_model, torch.randn(2, 10))
+        log = trace_fn(good_model, torch.randn(2, 10))
         assert log is not None
 
 
@@ -357,7 +357,7 @@ class TestEmptyModelGraph:
         model = _ConstantOutputModel()
         x = torch.randn(2, 10)
         try:
-            log_forward_pass(model, x)
+            trace_fn(model, x)
         except Exception:
             pass  # Acceptable — just shouldn't be an unguarded crash
 
@@ -367,7 +367,7 @@ class TestIdentityModel:
         """Identity model should log correctly."""
         model = _IdentityModel()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         assert log is not None
 
 
@@ -381,14 +381,14 @@ class TestBufferDuplicate:
         """Model with buffer used in multiple ops should not crash."""
         model = _SharedBufferModel()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         assert log is not None
 
     def test_shared_buffer_fast_path(self):
         """save_new_activations with shared buffer should not crash."""
         model = _SharedBufferModel()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         log.save_new_activations(model, torch.randn(2, 10))
 
 
@@ -407,7 +407,7 @@ class TestBufferMerge:
         model = BNModel()
         model.train()
         x = torch.randn(4, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         assert log is not None
 
 
@@ -454,7 +454,7 @@ class TestCleanupReleasesReferences:
         """GC-12: cleanup() should not crash."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         log.cleanup()
 
 
@@ -468,7 +468,7 @@ class TestNestedTupleArgs:
         """Nested tuples/lists in captured_args should be independent copies."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x, save_function_args=True)
+        log = trace_fn(model, x, save_function_args=True)
         found_args = False
         for label in log.layer_labels:
             entry = log[label]
@@ -483,7 +483,7 @@ class TestDisplayLargeTensor:
         """Displaying a large tensor should not clone the whole thing."""
         model = nn.Linear(100, 100)
         x = torch.randn(10, 100)
-        log = log_forward_pass(model, x, layers_to_save="all")
+        log = trace_fn(model, x, layers_to_save="all")
         for label in log.layer_labels:
             entry = log[label]
             str(entry)
@@ -494,7 +494,7 @@ class TestDisplayUsesLoggedShape:
         """tensor_shape should reflect capture-time shape."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x, layers_to_save="all")
+        log = trace_fn(model, x, layers_to_save="all")
         for label in log.layer_labels:
             entry = log[label]
             if entry.activation is not None:

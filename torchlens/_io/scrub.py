@@ -1,6 +1,6 @@
 """Portable state scrubbing for TorchLens model logs.
 
-This module converts a live ``ModelLog`` object graph into portable metadata
+This module converts a live ``Trace`` object graph into portable metadata
 plus a list of tensor blob specs. It is the save-side counterpart to
 rehydration: every class-specific ``PORTABLE_STATE_SPEC`` is applied here so
 tensor payloads become ``BlobRef`` placeholders and non-portable live objects
@@ -16,7 +16,7 @@ from typing import Any, TypeAlias
 import torch
 
 from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
-from ..data_classes.model_log import ModelLog
+from ..data_classes.model_log import Trace
 
 BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
 
@@ -34,18 +34,18 @@ class _ScrubOptions:
 
 
 def scrub_for_save(
-    model_log: ModelLog,
+    trace: Trace,
     *,
     include_activations: bool = True,
     include_gradients: bool = True,
     include_captured_args: bool = False,
     include_rng_states: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec]]:
-    """Scrub a ``ModelLog`` into portable metadata plus tensor blob specs.
+    """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Live model log to scrub.
     include_activations:
         Whether saved activations should be replaced with blob references.
@@ -75,14 +75,14 @@ def scrub_for_save(
     blob_specs: list[BlobSpec] = []
     blob_counter = [0]
 
-    scrubbed_model = _scrub_value(model_log, options, memo, blob_specs, blob_counter)
-    if not isinstance(scrubbed_model, ModelLog):
-        raise TorchLensIOError("Portable scrub expected a scrubbed ModelLog instance.")
+    scrubbed_model = _scrub_value(trace, options, memo, blob_specs, blob_counter)
+    if not isinstance(scrubbed_model, Trace):
+        raise TorchLensIOError("Portable scrub expected a scrubbed Trace instance.")
 
     scrubbed_state = dict(scrubbed_model.__dict__)
     scrubbed_state["io_format_version"] = IO_FORMAT_VERSION
 
-    module_accessor = getattr(model_log, "_module_logs", None)
+    module_accessor = getattr(trace, "_module_logs", None)
     if module_accessor is not None:
         scrubbed_state["_io_module_accessor_state"] = _scrub_value(
             module_accessor,
@@ -163,7 +163,7 @@ def _scrub_value(
             blob_counter=blob_counter,
         )
 
-    if isinstance(value, ModelLog):
+    if isinstance(value, Trace):
         scrubbed_state["activation_postfunc_repr"] = (
             repr(value.activation_postfunc) if value.activation_postfunc is not None else None
         )

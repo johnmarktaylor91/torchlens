@@ -9,12 +9,12 @@ from typing import Any
 
 
 def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
-    """Export a ModelLog graph as a lightweight SVG file.
+    """Export a Trace graph as a lightweight SVG file.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination SVG path.
     editable:
@@ -42,7 +42,7 @@ def html(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination HTML path.
 
@@ -66,7 +66,7 @@ def chrome_trace(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -123,7 +123,7 @@ def speedscope(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -169,7 +169,7 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination folded-stack text path.
 
@@ -203,7 +203,7 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -244,7 +244,7 @@ def xarray(log: Any) -> Any:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` whose saved tensor activations should be flattened
+        TorchLens ``Trace`` whose saved tensor activations should be flattened
         into ``presentation`` by ``neuroid`` form.
 
     Returns
@@ -321,7 +321,7 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to summarize.
+        TorchLens ``Trace`` to summarize.
     writer:
         Existing writer object, for example ``SummaryWriter``.
     step:
@@ -348,13 +348,13 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
     return writer
 
 
-def wandb(log: Any, run: Any | None = None, name: str = "torchlens_model_log") -> dict[str, Any]:
+def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> dict[str, Any]:
     """Create and optionally log a Weights & Biases table for a TorchLens log.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     run:
         Optional existing W&B run object. If omitted, ``wandb.run`` is used when
         present, but a new run is not created.
@@ -393,7 +393,7 @@ def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> di
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to summarize.
+        TorchLens ``Trace`` to summarize.
     client:
         Optional object exposing ``log_metric``.
     prefix:
@@ -418,7 +418,7 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to summarize.
+        TorchLens ``Trace`` to summarize.
     run:
         Optional object exposing ``track``.
     prefix:
@@ -438,12 +438,12 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
 
 
 def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
-    """Write ``ModelLog.to_pandas()`` to CSV.
+    """Write ``Trace.to_pandas()`` to CSV.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination CSV path.
     **kwargs:
@@ -462,12 +462,12 @@ def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
 
 
 def parquet(log: Any, path: str | Path, **kwargs: Any) -> Path:
-    """Write ``ModelLog.to_pandas()`` to Parquet.
+    """Write ``Trace.to_pandas()`` to Parquet.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination Parquet path.
     **kwargs:
@@ -503,12 +503,12 @@ def json(
     orient: str = "records",
     **kwargs: Any,
 ) -> Path:
-    """Write ``ModelLog.to_pandas()`` to JSON.
+    """Write ``Trace.to_pandas()`` to JSON.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
     orient:
@@ -534,7 +534,7 @@ def model_explorer(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -580,7 +580,7 @@ def netron(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -910,12 +910,12 @@ def _sanitize_flamegraph_frame(frame: str) -> str:
 
 
 def _static_graph_data(log: Any) -> dict[str, Any]:
-    """Serialize a ModelLog into static graph data.
+    """Serialize a Trace into static graph data.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to serialize.
+        TorchLens ``Trace`` to serialize.
 
     Returns
     -------

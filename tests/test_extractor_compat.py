@@ -29,7 +29,7 @@ class CompatModel(nn.Module):
 def _first_internal_label(model: nn.Module, x: torch.Tensor) -> str:
     """Return one internal layer label."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=None),

@@ -8,10 +8,11 @@ from typing import Tuple
 
 import pytest
 import torch
+import torchlens as tl
 import torch.nn as nn
 
-from torchlens import log_forward_pass
-from torchlens.data_classes.model_log import ModelLog
+from torchlens import trace as trace_fn
+from torchlens.data_classes.model_log import Trace
 
 
 class SimpleIfElseModel(nn.Module):
@@ -148,7 +149,7 @@ def _render_dot_source(
     model: nn.Module,
     x: torch.Tensor,
     vis_mode: str = "unrolled",
-) -> Tuple[str, ModelLog]:
+) -> Tuple[str, Trace]:
     """Render a model graph and return the DOT source plus model log.
 
     Parameters
@@ -162,27 +163,27 @@ def _render_dot_source(
 
     Returns
     -------
-    Tuple[str, ModelLog]
+    Tuple[str, Trace]
         Rendered DOT source and the populated model log.
     """
-    model_log = log_forward_pass(model, x, save_source_context=True)
+    trace = tl.trace_fn(model, x, save_source_context=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
-        dot_source = model_log.render_graph(
+        dot_source = trace.render_graph(
             vis_mode=vis_mode,
             vis_outpath=outpath,
             vis_save_only=True,
             vis_fileformat="dot",
         )
-    return dot_source, model_log
+    return dot_source, trace
 
 
-def _get_only_event_id(model_log: ModelLog) -> int:
+def _get_only_event_id(trace: Trace) -> int:
     """Return the lone conditional id from a model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Logged model execution.
 
     Returns
@@ -190,8 +191,8 @@ def _get_only_event_id(model_log: ModelLog) -> int:
     int
         Dense conditional id.
     """
-    assert len(model_log.conditional_events) == 1
-    return model_log.conditional_events[0].id
+    assert len(trace.conditional_events) == 1
+    return trace.conditional_events[0].id
 
 
 def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str:
@@ -259,16 +260,16 @@ def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
     ]
 
     for branch_kind, x, label_text in expected_cases:
-        dot_source, model_log = _render_dot_source(ElifLadderModel(), x)
+        dot_source, trace = _render_dot_source(ElifLadderModel(), x)
         try:
-            conditional_id = _get_only_event_id(model_log)
-            parent_label, child_label = model_log.conditional_arm_edges[
-                (conditional_id, branch_kind)
-            ][0]
+            conditional_id = _get_only_event_id(trace)
+            parent_label, child_label = trace.conditional_arm_edges[(conditional_id, branch_kind)][
+                0
+            ]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
             assert label_text in edge_line
         finally:
-            model_log.cleanup()
+            trace.cleanup()
 
 
 def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
@@ -301,11 +302,11 @@ def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
 
 def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate() -> None:
     """Branch-entry edges retain the branch label and move arg labels to the head/x label."""
-    dot_source, model_log = _render_dot_source(BranchEntryWithArgLabelModel(), torch.ones(2, 2))
+    dot_source, trace = _render_dot_source(BranchEntryWithArgLabelModel(), torch.ones(2, 2))
 
     try:
-        conditional_id = _get_only_event_id(model_log)
-        parent_label, child_label = model_log.conditional_arm_edges[(conditional_id, "then")][0]
+        conditional_id = _get_only_event_id(trace)
+        parent_label, child_label = trace.conditional_arm_edges[(conditional_id, "then")][0]
         edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
         assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
@@ -314,22 +315,22 @@ def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate
             or "xlabel=<<FONT POINT-SIZE='10'><b>arg" in edge_line
         )
     finally:
-        model_log.cleanup()
+        trace.cleanup()
 
 
 def test_rolled_mixed_arm_graphviz_shows_composite_pass_label() -> None:
     """Rolled rendering shows a composite THEN/ELSE label when passes diverge."""
-    dot_source, model_log = _render_dot_source(
+    dot_source, trace = _render_dot_source(
         RolledMixedArmModel(),
         torch.ones(1, 4),
         vis_mode="rolled",
     )
 
     try:
-        conditional_id = _get_only_event_id(model_log)
-        parent_label, child_label = model_log.conditional_arm_edges[(conditional_id, "then")][0]
+        conditional_id = _get_only_event_id(trace)
+        parent_label, child_label = trace.conditional_arm_edges[(conditional_id, "then")][0]
         edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
         assert "THEN(1,3) / ELSE(2,4)" in edge_line
     finally:
-        model_log.cleanup()
+        trace.cleanup()

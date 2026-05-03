@@ -25,20 +25,20 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 import torch
 
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 from ..utils.display import identity
 from ..utils.tensor_utils import safe_copy
 from . import ast_branches
 
 if TYPE_CHECKING:
     from ..data_classes.func_call_location import FuncCallLocation
-    from ..data_classes.model_log import ConditionalEvent, ModelLog
+    from ..data_classes.model_log import ConditionalEvent, Trace
 
 
 _BRANCH_CONTEXT_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
 
 
-def _mark_conditional_branches(self: "ModelLog") -> None:
+def _mark_conditional_branches(self: "Trace") -> None:
     """Step 5: Classify bools, materialize events, and attribute conditional edges.
 
     The public Step 5 entry point is preserved for the postprocess orchestrator,
@@ -54,8 +54,8 @@ def _mark_conditional_branches(self: "ModelLog") -> None:
     Performance fast-path: when no terminal scalar bools were captured, the
     model has no conditional branches the pipeline can attribute, so we skip
     the AST file indexing, per-bool classification, and per-op
-    ``attribute_op()`` work. All ModelLog-level conditional collections are
-    already initialized empty in :meth:`ModelLog.__init__`, and per-layer
+    ``attribute_op()`` work. All Trace-level conditional collections are
+    already initialized empty in :meth:`Trace.__init__`, and per-layer
     conditional fields are initialized to their empty defaults during
     capture (see ``capture/output_tensors.py``). The fast-path is verified
     against the slow-path defaults via ``tests/test_perf_bundle.py``.
@@ -86,20 +86,20 @@ def _mark_conditional_branches(self: "ModelLog") -> None:
     _materialize_derived_views(self)
 
 
-def _can_fast_skip_step5(self: "ModelLog") -> bool:
+def _can_fast_skip_step5(self: "Trace") -> bool:
     """Return True when Step 5 has no work to do.
 
-    The slow path's only branch-attributing inputs are the ModelLog's
+    The slow path's only branch-attributing inputs are the Trace's
     ``internally_terminated_bool_layers``: if no terminal scalar bool was
     captured, ``_iter_terminal_scalar_bool_labels`` yields nothing, so
     every downstream collection (events, edges, per-layer arm children)
     would resolve to its empty default. Skipping the slow path is then
     semantically equivalent to running it.
 
-    The function also checks the ModelLog-level conditional collections
+    The function also checks the Trace-level conditional collections
     (``conditional_events``, ``conditional_branch_edges``,
     ``conditional_arm_edges``, ``conditional_edge_passes``). They are initialized empty in
-    :meth:`ModelLog.__init__`, and the slow path resets them on entry.
+    :meth:`Trace.__init__`, and the slow path resets them on entry.
     Any caller that pre-populated these would change the user-visible
     output if we skipped, so we conservatively run the slow path in that
     (pathological) case as well.
@@ -119,7 +119,7 @@ def _can_fast_skip_step5(self: "ModelLog") -> bool:
 
 
 def _build_file_indexes(
-    self: "ModelLog",
+    self: "Trace",
 ) -> Dict[str, Optional[ast_branches.FileIndex]]:
     """Phase 5a: Build cached AST indexes for files touched by terminal bools.
 
@@ -146,7 +146,7 @@ def _build_file_indexes(
 
 
 def _classify_bool_layers(
-    self: "ModelLog",
+    self: "Trace",
 ) -> Tuple[List[ast_branches.ConditionalKey], Dict[str, ast_branches.BoolClassification]]:
     """Phase 5b: Classify terminal scalar bools and collect observed conditionals.
 
@@ -200,7 +200,7 @@ def _classify_bool_layers(
 
 
 def _materialize_conditional_events(
-    self: "ModelLog",
+    self: "Trace",
     file_indexes: Dict[str, Optional[ast_branches.FileIndex]],
     conditional_keys: List[ast_branches.ConditionalKey],
     bool_classifications: Dict[str, ast_branches.BoolClassification],
@@ -277,7 +277,7 @@ def _materialize_conditional_events(
 
 
 def _mark_conditional_branches_if_backward_flood(
-    self: "ModelLog",
+    self: "Trace",
     bool_classifications: Dict[str, ast_branches.BoolClassification],
 ) -> None:
     """Phase 5d: Backward-flood IF edges from branch-participating bools only.
@@ -326,7 +326,7 @@ def _mark_conditional_branches_if_backward_flood(
 
 
 def _attribute_branches_forward(
-    self: "ModelLog",
+    self: "Trace",
     events_by_key: Dict[ast_branches.ConditionalKey, "ConditionalEvent"],
 ) -> None:
     """Phase 5e: Attribute executed ops and forward edges to conditional arms.
@@ -379,7 +379,7 @@ def _attribute_branches_forward(
     self.conditional_edge_passes = dict(conditional_edge_passes)
 
 
-def _materialize_derived_views(self: "ModelLog") -> None:
+def _materialize_derived_views(self: "Trace") -> None:
     """Phase 5f: Rebuild compatibility views derived from primary conditional data.
 
     Parameters
@@ -425,7 +425,7 @@ def _materialize_derived_views(self: "ModelLog") -> None:
         )
 
 
-def _iter_terminal_scalar_bool_labels(self: "ModelLog") -> List[str]:
+def _iter_terminal_scalar_bool_labels(self: "Trace") -> List[str]:
     """Return terminal scalar bool labels in deterministic execution order.
 
     Parameters
@@ -625,7 +625,7 @@ def _get_gained_branch_entries(
     return child_stack[shared_prefix_len:]
 
 
-def _fix_modules_for_internal_tensors(self: "ModelLog") -> None:
+def _fix_modules_for_internal_tensors(self: "Trace") -> None:
     """Step 6: Infer module containment for internally-generated tensors.
 
     Internally-initialized tensors (constants, torch.arange results, etc.) are
@@ -686,8 +686,8 @@ def _fix_modules_for_internal_tensors(self: "ModelLog") -> None:
 
 
 def _fix_modules_for_single_internal_tensor(
-    starting_node: LayerPassLog,
-    node_to_fix: LayerPassLog,
+    starting_node: OpLog,
+    node_to_fix: OpLog,
     node_type_to_fix: str,
     node_stack: List[str],
     nodes_seen: Set[str],
@@ -740,7 +740,7 @@ def _fix_modules_for_single_internal_tensor(
     nodes_seen.add(node_to_fix_label)
 
 
-def _fix_buffer_layers(self: "ModelLog") -> None:
+def _fix_buffer_layers(self: "Trace") -> None:
     """Step 7: Connect buffer parents, merge duplicates, and assign pass numbers.
 
     Buffer tensors (nn.Module registered buffers) are logged as source tensors
@@ -814,9 +814,7 @@ def _fix_buffer_layers(self: "ModelLog") -> None:
         buffer_counter[buffer_address] += 1
 
 
-def _merge_buffer_entries(
-    self: "ModelLog", source_buffer: LayerPassLog, buffer_to_remove: LayerPassLog
-) -> None:
+def _merge_buffer_entries(self: "Trace", source_buffer: OpLog, buffer_to_remove: OpLog) -> None:
     """Merge a duplicate buffer into a source buffer, rewiring all edges.
 
     Transfers all child and parent connections from ``buffer_to_remove`` to

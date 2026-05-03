@@ -6,19 +6,20 @@ from typing import Dict, Iterator, List, Optional
 import pandas as pd
 import pytest
 import torch
+import torchlens as tl
 import torch.nn as nn
 
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 from torchlens._deprecations import _WARNED_DEPRECATIONS
 from torchlens.data_classes.cleanup import _remove_log_entry_references
-from torchlens.data_classes.model_log import ConditionalEvent, ModelLog
+from torchlens.data_classes.model_log import ConditionalEvent, Trace
 from torchlens.postprocess.labeling import (
     _rename_model_history_layer_names,
     _replace_layer_names_for_layer_entry,
 )
 
 
-class _StubModelLog:
+class _StubTrace:
     """Minimal stand-in for lifecycle helper tests."""
 
     def __init__(
@@ -69,7 +70,7 @@ class _StubModelLog:
 
 
 class _TinyModel(nn.Module):
-    """Small model used to exercise ``to_pandas()`` on a real ModelLog."""
+    """Small model used to exercise ``to_pandas()`` on a real Trace."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run a minimal forward pass.
@@ -180,26 +181,26 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
         }
     }
 
-    model_log = _StubModelLog(layer_list=[parent_layer])
-    model_log._raw_to_final_layer_labels = mapping
-    model_log.conditional_branch_edges = [("raw_bool", "raw_parent")]
-    model_log.conditional_then_edges = [("raw_parent", "raw_child_then")]
-    model_log.conditional_elif_edges = [(0, 1, "raw_parent", "raw_child_elif")]
-    model_log.conditional_else_edges = [(0, "raw_parent", "raw_child_else")]
-    model_log.conditional_arm_edges = {
+    trace = _StubTrace(layer_list=[parent_layer])
+    trace._raw_to_final_layer_labels = mapping
+    trace.conditional_branch_edges = [("raw_bool", "raw_parent")]
+    trace.conditional_then_edges = [("raw_parent", "raw_child_then")]
+    trace.conditional_elif_edges = [(0, 1, "raw_parent", "raw_child_elif")]
+    trace.conditional_else_edges = [(0, "raw_parent", "raw_child_else")]
+    trace.conditional_arm_edges = {
         (0, "then"): [("raw_parent", "raw_child_then")],
         (0, "elif_1"): [("raw_parent", "raw_child_elif")],
         (0, "else"): [("raw_parent", "raw_child_else")],
     }
-    model_log.conditional_edge_passes = {
+    trace.conditional_edge_passes = {
         ("raw_parent", "raw_child_then", 0, "then"): [1],
         ("raw_parent", "raw_child_elif", 0, "elif_1"): [1],
         ("raw_parent", "raw_child_else", 0, "else"): [1],
     }
-    model_log.conditional_events = [_make_conditional_event(["raw_bool"])]
+    trace.conditional_events = [_make_conditional_event(["raw_bool"])]
 
-    _replace_layer_names_for_layer_entry(model_log, parent_layer)
-    _rename_model_history_layer_names(model_log)
+    _replace_layer_names_for_layer_entry(trace, parent_layer)
+    _rename_model_history_layer_names(trace)
 
     assert parent_layer.cond_branch_start_children == ["gt_1_2"]
     assert parent_layer.cond_branch_then_children == ["relu_1_3"]
@@ -212,18 +213,18 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
             "else": ["add_1_5"],
         }
     }
-    assert model_log.conditional_branch_edges == [("gt_1_2", "linear_1_1")]
-    assert model_log.conditional_arm_edges == {
+    assert trace.conditional_branch_edges == [("gt_1_2", "linear_1_1")]
+    assert trace.conditional_arm_edges == {
         (0, "then"): [("linear_1_1", "relu_1_3")],
         (0, "elif_1"): [("linear_1_1", "sigmoid_1_4")],
         (0, "else"): [("linear_1_1", "add_1_5")],
     }
-    assert model_log.conditional_edge_passes == {
+    assert trace.conditional_edge_passes == {
         ("linear_1_1", "relu_1_3", 0, "then"): [1],
         ("linear_1_1", "sigmoid_1_4", 0, "elif_1"): [1],
         ("linear_1_1", "add_1_5", 0, "else"): [1],
     }
-    assert model_log.conditional_events[0].bool_layers == ["gt_1_2"]
+    assert trace.conditional_events[0].bool_layers == ["gt_1_2"]
 
 
 def test_conditional_cleanup_scrubs_removed_labels() -> None:
@@ -253,37 +254,37 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     }
     parent_layer.conditional_branch_stack_passes = {((0, "then"),): [1, 2]}
 
-    model_log = _StubModelLog(layer_list=[parent_pass], layer_logs={"parent": parent_layer})
-    model_log.conditional_branch_edges = [
+    trace = _StubTrace(layer_list=[parent_pass], layer_logs={"parent": parent_layer})
+    trace.conditional_branch_edges = [
         ("removed_child:2", "parent:1"),
         ("kept_start:1", "parent:1"),
     ]
-    model_log.conditional_then_edges = [
+    trace.conditional_then_edges = [
         ("parent:1", "removed_child:2"),
         ("parent:1", "kept_child:1"),
     ]
-    model_log.conditional_elif_edges = [(0, 1, "parent:1", "removed_child:2")]
-    model_log.conditional_else_edges = [(0, "parent:1", "removed_child:2")]
-    model_log.conditional_arm_edges = {
+    trace.conditional_elif_edges = [(0, 1, "parent:1", "removed_child:2")]
+    trace.conditional_else_edges = [(0, "parent:1", "removed_child:2")]
+    trace.conditional_arm_edges = {
         (0, "then"): [("parent:1", "removed_child:2"), ("parent:1", "kept_child:1")],
         (0, "else"): [("parent:1", "removed_child:2")],
     }
-    model_log.conditional_edge_passes = {
+    trace.conditional_edge_passes = {
         ("parent", "removed_child", 0, "then"): [2],
         ("parent", "kept_child", 0, "then"): [1],
     }
-    model_log.conditional_events = [_make_conditional_event(["removed_child:2", "kept_bool:1"])]
+    trace.conditional_events = [_make_conditional_event(["removed_child:2", "kept_bool:1"])]
 
-    _remove_log_entry_references(model_log, "removed_child:2")
+    _remove_log_entry_references(trace, "removed_child:2")
 
-    assert model_log.conditional_branch_edges == [("kept_start:1", "parent:1")]
-    assert model_log.conditional_arm_edges == {
+    assert trace.conditional_branch_edges == [("kept_start:1", "parent:1")]
+    assert trace.conditional_arm_edges == {
         (0, "then"): [("parent:1", "kept_child:1")],
     }
-    assert model_log.conditional_edge_passes == {
+    assert trace.conditional_edge_passes == {
         ("parent", "kept_child", 0, "then"): [1],
     }
-    assert model_log.conditional_events[0].bool_layers == ["kept_bool:1"]
+    assert trace.conditional_events[0].bool_layers == ["kept_bool:1"]
 
     assert parent_pass.cond_branch_start_children == ["kept_start:1"]
     assert parent_pass.cond_branch_then_children == ["kept_child:1"]
@@ -301,9 +302,9 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
 
 def test_to_pandas_exports_conditional_columns() -> None:
     """`to_pandas()` exposes the Phase 3 conditional export columns."""
-    model_log = log_forward_pass(_TinyModel(), torch.ones(1, 3), layers_to_save="all")
+    trace = tl.trace_fn(_TinyModel(), torch.ones(1, 3), layers_to_save="all")
     target_layer = next(
-        layer for layer in model_log.layer_list if layer.layer_type not in {"input", "output"}
+        layer for layer in trace.layer_list if layer.layer_type not in {"input", "output"}
     )
     target_layer.func_config = {"alpha": 1}
     target_layer.bool_is_branch = True
@@ -316,7 +317,7 @@ def test_to_pandas_exports_conditional_columns() -> None:
     target_layer.cond_branch_elif_children = {1: ["elif_child"]}
     target_layer.cond_branch_else_children = ["else_child"]
 
-    layer_df = model_log.to_pandas()
+    layer_df = trace.to_pandas()
 
     assert isinstance(layer_df, pd.DataFrame)
     for column_name in [
@@ -349,17 +350,17 @@ def test_to_pandas_exports_conditional_columns() -> None:
 def test_conditional_edge_legacy_aliases_warn() -> None:
     """Legacy conditional edge views warn while projecting canonical arm edges."""
 
-    model_log = ModelLog("Tiny")
+    trace = Trace("Tiny")
     _WARNED_DEPRECATIONS.clear()
-    model_log.conditional_arm_edges = {
+    trace.conditional_arm_edges = {
         (0, "then"): [("parent", "then_child")],
         (0, "elif_1"): [("parent", "elif_child")],
         (0, "else"): [("parent", "else_child")],
     }
 
     with pytest.warns(DeprecationWarning):
-        assert model_log.conditional_then_edges == [("parent", "then_child")]
+        assert trace.conditional_then_edges == [("parent", "then_child")]
     with pytest.warns(DeprecationWarning):
-        assert model_log.conditional_elif_edges == [(0, 1, "parent", "elif_child")]
+        assert trace.conditional_elif_edges == [(0, 1, "parent", "elif_child")]
     with pytest.warns(DeprecationWarning):
-        assert model_log.conditional_else_edges == [(0, "parent", "else_child")]
+        assert trace.conditional_else_edges == [(0, "parent", "else_child")]

@@ -9,7 +9,7 @@ from torch import nn
 
 from torchlens import _state
 from torchlens.capture.source_tensors import log_source_tensor
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 from torchlens.decoration.model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,
@@ -63,15 +63,15 @@ def _run_dispatcher_smoke(
 ) -> Recording:
     """Run a minimal predicate pass through existing dispatchers."""
 
-    model_log = ModelLog("TinyMlp")
-    model_log.logging_mode = "predicate"
-    model_log.pass_start_time = time.time()
+    trace = Trace("TinyMlp")
+    trace.logging_mode = "predicate"
+    trace.pass_start_time = time.time()
     state = RecordingState(options=options, recording=_empty_recording(options.history_size))
     _ensure_model_prepared(model)
-    _prepare_model_session(model_log, model)
+    _prepare_model_session(trace, model)
     try:
-        with active_recording_state(state), _state.active_logging(model_log):
-            log_source_tensor(model_log, x, "input", "input.x")
+        with active_recording_state(state), _state.active_logging(trace):
+            log_source_tensor(trace, x, "input", "input.x")
             model(x)
     finally:
         _cleanup_model_session(model, [x])

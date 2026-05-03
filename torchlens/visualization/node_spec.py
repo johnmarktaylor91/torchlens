@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..data_classes.layer_log import LayerLog
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import Trace
 
 INTERVENTION_SITE_COLOR = "#FF00FF"
 INTERVENTION_CONE_COLOR = "#FFB3FF"
@@ -160,21 +160,21 @@ def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str
     }
 
 
-def intervention_sites_for_log(model_log: "ModelLog") -> list["LayerPassLog"]:
+def intervention_sites_for_log(trace: "Trace") -> list["OpLog"]:
     """Resolve intervention spec targets to layer-pass records.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log whose intervention spec should be inspected.
 
     Returns
     -------
-    list[LayerPassLog]
+    list[OpLog]
         Distinct intervention sites in execution order.
     """
 
-    spec = getattr(model_log, "_intervention_spec", None)
+    spec = getattr(trace, "_intervention_spec", None)
     if spec is None:
         return []
     targets: list[Any] = []
@@ -188,19 +188,19 @@ def intervention_sites_for_log(model_log: "ModelLog") -> list["LayerPassLog"]:
 
     from ..intervention.resolver import resolve_sites
 
-    by_label: dict[str, LayerPassLog] = {}
+    by_label: dict[str, OpLog] = {}
     for target in targets:
-        table = resolve_sites(model_log, target, max_fanout=max(1, len(model_log.layer_list)))
+        table = resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
         for site in table:
             by_label.setdefault(site.layer_label, site)
     execution_order = {
-        layer.layer_label: index for index, layer in enumerate(getattr(model_log, "layer_list", ()))
+        layer.layer_label: index for index, layer in enumerate(getattr(trace, "layer_list", ()))
     }
     return sorted(by_label.values(), key=lambda site: execution_order.get(site.layer_label, 0))
 
 
 def intervention_site_and_cone_labels(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     show_cone: bool,
 ) -> tuple[set[str], set[str]]:
@@ -208,7 +208,7 @@ def intervention_site_and_cone_labels(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log whose intervention spec should be inspected.
     show_cone:
         Whether to include downstream cone members.
@@ -219,20 +219,20 @@ def intervention_site_and_cone_labels(
         Site labels and cone labels. Cone labels exclude site labels.
     """
 
-    sites = intervention_sites_for_log(model_log)
+    sites = intervention_sites_for_log(trace)
     site_labels = {site.layer_label for site in sites}
     if not sites or not show_cone:
         return site_labels, set()
 
     from ..intervention.replay import cone_of_effect
 
-    cone = cone_of_effect(model_log, sites)
+    cone = cone_of_effect(trace, sites)
     cone_labels = {site.layer_label for site in cone}
     return site_labels, cone_labels - site_labels
 
 
 def make_intervention_node_spec_fn(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     show_cone: bool,
     graph_overrides: dict[str, Any] | None,
@@ -242,7 +242,7 @@ def make_intervention_node_spec_fn(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log whose intervention spec should be visualized.
     show_cone:
         Whether downstream cone members should be styled.
@@ -258,7 +258,7 @@ def make_intervention_node_spec_fn(
         intervention overlay to apply.
     """
 
-    site_labels, cone_labels = intervention_site_and_cone_labels(model_log, show_cone=show_cone)
+    site_labels, cone_labels = intervention_site_and_cone_labels(trace, show_cone=show_cone)
     if not site_labels and not cone_labels:
         return user_node_spec_fn
 

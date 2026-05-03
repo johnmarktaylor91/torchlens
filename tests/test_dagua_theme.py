@@ -5,7 +5,7 @@ import textwrap
 
 import torch
 
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 from torchlens.experimental import dagua
 
 import example_models
@@ -24,7 +24,7 @@ class M(nn.Module):
     def forward(self, x):
         return x + 1
 
-log = tl.log_forward_pass(M(), torch.ones(1), layers_to_save=None)
+log = tl.trace_fn(M(), torch.ones(1), layers_to_save=None)
 try:
     try:
         log.render_graph(vis_renderer="dagua", vis_save_only=True, vis_fileformat="svg")
@@ -45,11 +45,11 @@ finally:
     assert result.returncode == 0, result.stderr
 
 
-def test_model_log_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
+def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
     model = example_models.AestheticFrozenMix().eval()
-    log = log_forward_pass(model, torch.rand(1, 8), layers_to_save=None)
+    log = trace_fn(model, torch.rand(1, 8), layers_to_save=None)
     try:
-        graph = dagua.model_log_to_dagua_graph(log, vis_mode="unrolled", direction="leftright")
+        graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled", direction="leftright")
         labels = [graph.node_labels[i] for i in range(graph.num_nodes)]
         assert any("trainable" in label.lower() for label in labels)
         assert any(node_type == "frozen_params" for node_type in graph.node_types)
@@ -61,7 +61,7 @@ def test_model_log_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
 
 def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     model = example_models.ResidualBlockModel().eval()
-    log = log_forward_pass(model, torch.rand(1, 16, 16, 16), layers_to_save=None)
+    log = trace_fn(model, torch.rand(1, 16, 16, 16), layers_to_save=None)
     out = tmp_path / "residual.svg"
     try:
         log.render_graph(
@@ -81,12 +81,12 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
 
 def test_render_audit_exposes_unused_fields() -> None:
     model = example_models.SimpleFF().eval()
-    log = log_forward_pass(model, torch.rand(5, 5), layers_to_save=None)
+    log = trace_fn(model, torch.rand(5, 5), layers_to_save=None)
     try:
         audit = dagua.build_render_audit(log).to_dict()
-        assert "model_log_unused" in audit
+        assert "trace_unused" in audit
         assert "entry_unused" in audit
         assert "module_unused" in audit
-        assert "time_total" in audit["model_log_unused"]
+        assert "time_total" in audit["trace_unused"]
     finally:
         log.cleanup()

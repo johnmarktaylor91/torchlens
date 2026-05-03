@@ -2,7 +2,7 @@
 
 Verifies that func_config is correctly extracted for various operation types,
 is empty for source/output nodes, survives the postprocessing pipeline, and
-is accessible on both LayerPassLog and LayerLog.
+is accessible on both OpLog and LayerLog.
 """
 
 import pytest
@@ -199,7 +199,7 @@ class TestBuildArgNameMap:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests: end-to-end with log_forward_pass
+# Integration tests: end-to-end with trace
 # ---------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ class TestFuncConfigIntegration:
                 return x
 
         model = Model()
-        log = tl.log_forward_pass(model, torch.randn(1, 3, 8, 8))
+        log = tl.trace(model, torch.randn(1, 3, 8, 8))
 
         # Find layers by type
         conv_layer = next(ly for ly in log.layers if ly.layer_type == "conv2d")
@@ -244,7 +244,7 @@ class TestFuncConfigIntegration:
     def test_source_tensors_have_empty_func_config(self):
         """Input and buffer layers should have func_config == {}."""
         model = nn.BatchNorm2d(3)
-        log = tl.log_forward_pass(model, torch.randn(1, 3, 4, 4))
+        log = tl.trace(model, torch.randn(1, 3, 4, 4))
 
         for layer in log.layers:
             if layer.is_input_layer or layer.is_buffer_layer:
@@ -256,7 +256,7 @@ class TestFuncConfigIntegration:
     def test_output_nodes_have_empty_func_config(self):
         """Synthetic output nodes should have func_config == {}."""
         model = nn.Linear(10, 5)
-        log = tl.log_forward_pass(model, torch.randn(1, 10))
+        log = tl.trace(model, torch.randn(1, 10))
 
         for layer in log.layers:
             if layer.is_output_layer:
@@ -264,10 +264,10 @@ class TestFuncConfigIntegration:
                     f"Output layer {layer.layer_label} has non-empty func_config"
                 )
 
-    def test_func_config_on_layer_pass_log(self):
-        """func_config should be accessible on LayerPassLog (per-pass) objects."""
+    def test_func_config_on_op_log(self):
+        """func_config should be accessible on OpLog (per-pass) objects."""
         model = nn.Linear(10, 5)
-        log = tl.log_forward_pass(model, torch.randn(1, 10))
+        log = tl.trace(model, torch.randn(1, 10))
 
         linear_layer = next(ly for ly in log.layers if ly.layer_type == "linear")
         # Access via pass
@@ -277,7 +277,7 @@ class TestFuncConfigIntegration:
     def test_func_config_in_str_output(self):
         """func_config should appear in the string representation when non-empty."""
         model = nn.Linear(10, 5)
-        log = tl.log_forward_pass(model, torch.randn(1, 10))
+        log = tl.trace(model, torch.randn(1, 10))
 
         linear_layer = next(ly for ly in log.layers if ly.layer_type == "linear")
         s = str(linear_layer)
@@ -287,7 +287,7 @@ class TestFuncConfigIntegration:
     def test_func_config_not_in_str_when_empty(self):
         """Layers with no func_config should not show the config line."""
         model = nn.ReLU()
-        log = tl.log_forward_pass(model, torch.randn(1, 10))
+        log = tl.trace(model, torch.randn(1, 10))
 
         relu_layer = next(ly for ly in log.layers if ly.layer_type == "relu")
         s = str(relu_layer)
@@ -305,7 +305,7 @@ class TestFuncConfigIntegration:
                 return self.drop(x)
 
         model = Model()
-        log = tl.log_forward_pass(model, torch.randn(1, 10))
+        log = tl.trace(model, torch.randn(1, 10))
 
         dropout_layer = next(ly for ly in log.layers if ly.layer_type == "dropout")
         assert dropout_layer.func_config["p"] == 0.3
@@ -317,7 +317,7 @@ class TestFuncConfigIntegration:
             def forward(self, x):
                 return x.sum(dim=1, keepdim=True)
 
-        log = tl.log_forward_pass(Model(), torch.randn(2, 3, 4))
+        log = tl.trace(Model(), torch.randn(2, 3, 4))
         sum_layer = next(ly for ly in log.layers if ly.layer_type == "sum")
         assert sum_layer.func_config["dim"] == 1
         assert sum_layer.func_config["keepdim"] is True
@@ -333,7 +333,7 @@ class TestFuncConfigIntegration:
             def forward(self, x):
                 return self.pool(x)
 
-        log = tl.log_forward_pass(Model(), torch.randn(1, 3, 8, 8))
+        log = tl.trace(Model(), torch.randn(1, 3, 8, 8))
         pool_layer = next(ly for ly in log.layers if "maxpool" in ly.layer_type)
         assert pool_layer.func_config["kernel_size"] == 2
         assert pool_layer.func_config["stride"] == 2
@@ -342,9 +342,9 @@ class TestFuncConfigIntegration:
         """func_config should survive save_new_activations (fast path)."""
         model = nn.Linear(10, 5)
         x1 = torch.randn(1, 10)
-        log = tl.log_forward_pass(model, x1, layers_to_save="all")
+        log = tl.trace(model, x1, layers_to_save="all")
 
-        # Run with new input via ModelLog method
+        # Run with new input via Trace method
         x2 = torch.randn(1, 10)
         log.save_new_activations(model, x2)
 
@@ -363,7 +363,7 @@ class TestFuncConfigIntegration:
             def forward(self, x):
                 return self.conv(x)
 
-        log = tl.log_forward_pass(Model(), torch.randn(1, 3, 8, 8))
+        log = tl.trace(Model(), torch.randn(1, 3, 8, 8))
         conv_layer = next(ly for ly in log.layers if ly.layer_type == "conv2d")
         assert "stride" not in conv_layer.func_config
         assert "padding" not in conv_layer.func_config
@@ -387,7 +387,7 @@ class TestFuncConfigIntegration:
                 x = self.fc(x)
                 return x
 
-        log = tl.log_forward_pass(Model(), torch.randn(1, 3, 8, 8))
+        log = tl.trace(Model(), torch.randn(1, 3, 8, 8))
         for layer in log.layers:
             assert hasattr(layer, "func_config"), f"Missing func_config on {layer.layer_label}"
             assert isinstance(layer.func_config, dict), (

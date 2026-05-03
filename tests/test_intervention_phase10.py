@@ -59,7 +59,7 @@ class _TanhModel(nn.Module):
         return torch.tanh(x) + 1
 
 
-def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.ModelLog:
+def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Trace:
     """Capture an intervention-ready model log.
 
     Parameters
@@ -71,13 +71,13 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Mo
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured model log.
     """
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
 @pytest.mark.smoke

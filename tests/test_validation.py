@@ -8,7 +8,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import validate_forward_pass, validate_saved_activations, ModelLog
+from torchlens import validate_forward_pass, validate_saved_activations, Trace
 from torchlens import check_metadata_invariants, MetadataInvariantError
 from torchlens.validation import validate_saved_activations as validate_from_subpkg
 from torchlens.validation.exemptions import (
@@ -48,16 +48,16 @@ def test_check_metadata_invariants_importable():
     assert issubclass(MetadataInvariantError, ValueError)
 
 
-def test_model_log_validate_method_bound():
-    """ModelLog.validate_saved_activations is callable."""
-    assert hasattr(ModelLog, "validate_saved_activations")
-    assert callable(ModelLog.validate_saved_activations)
+def test_trace_validate_method_bound():
+    """Trace.validate_saved_activations is callable."""
+    assert hasattr(Trace, "validate_saved_activations")
+    assert callable(Trace.validate_saved_activations)
 
 
-def test_model_log_check_metadata_method_bound():
-    """ModelLog.check_metadata_invariants is callable."""
-    assert hasattr(ModelLog, "check_metadata_invariants")
-    assert callable(ModelLog.check_metadata_invariants)
+def test_trace_check_metadata_method_bound():
+    """Trace.check_metadata_invariants is callable."""
+    assert hasattr(Trace, "check_metadata_invariants")
+    assert callable(Trace.check_metadata_invariants)
 
 
 def test_tensor_nanequal_uses_relative_tolerance_for_replay() -> None:
@@ -338,22 +338,22 @@ class _SimpleFF(nn.Module):
 
 
 def _make_clean_log():
-    """Return a ModelLog with all activations and metadata for a simple FF model."""
-    from torchlens import log_forward_pass
+    """Return a Trace with all activations and metadata for a simple FF model."""
+    from torchlens import trace as trace_fn
 
     model = _SimpleFF()
-    return log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    return trace_fn(model, torch.randn(2, 5), random_seed=42)
 
 
 def test_clean_log_passes_all_invariants():
-    """An uncorrupted ModelLog passes all invariant checks."""
+    """An uncorrupted Trace passes all invariant checks."""
     log = _make_clean_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
 
 def test_clean_log_passes_as_method():
-    """check_metadata_invariants works as a bound method on ModelLog."""
+    """check_metadata_invariants works as a bound method on Trace."""
     log = _make_clean_log()
     assert log.check_metadata_invariants() is True
     log.cleanup()
@@ -379,7 +379,7 @@ def test_corruption_num_operations():
     """Mismatched num_operations raises MetadataInvariantError."""
     log = _make_clean_log()
     log.num_operations = 9999
-    with pytest.raises(MetadataInvariantError, match="model_log_self_consistency"):
+    with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(log)
     log.cleanup()
 
@@ -418,7 +418,7 @@ def test_corruption_output_layers_empty():
     """Emptying output_layers raises MetadataInvariantError."""
     log = _make_clean_log()
     log.output_layers = []
-    with pytest.raises(MetadataInvariantError, match="model_log_self_consistency"):
+    with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(log)
     log.cleanup()
 
@@ -456,15 +456,15 @@ class _NestedModel(nn.Module):
 
 
 def _make_recurrent_log():
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
 
-    return log_forward_pass(_RecurrentFF(), torch.randn(2, 5), random_seed=42)
+    return trace_fn(_RecurrentFF(), torch.randn(2, 5), random_seed=42)
 
 
 def _make_nested_log():
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
 
-    return log_forward_pass(_NestedModel(), torch.randn(2, 5), random_seed=42)
+    return trace_fn(_NestedModel(), torch.randn(2, 5), random_seed=42)
 
 
 # -- M. Graph ordering corruption --
@@ -694,14 +694,14 @@ def test_corruption_raw_label_asymmetry():
 
 
 def test_clean_recurrent_log_passes_all_invariants():
-    """Recurrent model ModelLog passes all invariant checks."""
+    """Recurrent model Trace passes all invariant checks."""
     log = _make_recurrent_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
 
 def test_clean_nested_log_passes_all_invariants():
-    """Nested model ModelLog passes all invariant checks."""
+    """Nested model Trace passes all invariant checks."""
     log = _make_nested_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
@@ -774,11 +774,11 @@ class TestValidationBugfixes:
 
     def test_validation_unsaved_parent_no_crash(self):
         """Validation with layers_to_save subset should not crash on None parents."""
-        from torchlens import log_forward_pass
+        from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x, layers_to_save="all")
+        log = trace_fn(model, x, layers_to_save="all")
         assert log is not None
 
 
@@ -787,11 +787,11 @@ class TestValidationNoSavedArgs:
 
     def test_validation_no_args(self):
         """validate with save_function_args=False should not crash."""
-        from torchlens import log_forward_pass
+        from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x, save_function_args=False)
+        log = trace_fn(model, x, save_function_args=False)
         assert log is not None
 
 
@@ -825,12 +825,12 @@ class TestUnusedInputValidation:
 
     def test_unused_kwarg_input_metadata_passes(self):
         """Metadata invariants pass even with unused input layers."""
-        from torchlens import log_forward_pass
+        from torchlens import trace as trace_fn
 
         model = _UnusedInputModel()
         x = torch.randn(2, 10)
         mask = torch.ones(2, 10)
-        log = log_forward_pass(model, x, input_kwargs={"unused_mask": mask})
+        log = trace_fn(model, x, input_kwargs={"unused_mask": mask})
         check_metadata_invariants(log)
 
 
@@ -849,9 +849,9 @@ class TestSharedParamDifferentOps:
         assert validate_forward_pass(model, x)
 
     def test_shared_param_different_ops_metadata_passes(self):
-        from torchlens import log_forward_pass
+        from torchlens import trace as trace_fn
 
         model = _SharedParamDifferentOps()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         check_metadata_invariants(log)

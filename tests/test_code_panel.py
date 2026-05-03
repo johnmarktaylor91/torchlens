@@ -11,8 +11,8 @@ from torch import nn
 import torchlens as tl
 
 
-def _render_dot(log: tl.ModelLog, tmp_path: Path, **kwargs: Any) -> str:
-    """Render a ModelLog to DOT using a temporary SVG output path.
+def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
+    """Render a Trace to DOT using a temporary SVG output path.
 
     Parameters
     ----------
@@ -26,7 +26,7 @@ def _render_dot(log: tl.ModelLog, tmp_path: Path, **kwargs: Any) -> str:
     Returns
     -------
     str
-        DOT source returned by ``ModelLog.render_graph``.
+        DOT source returned by ``Trace.render_graph``.
     """
 
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -56,7 +56,7 @@ class _CodePanelModel(nn.Module):
 def test_code_panel_false_no_panel(tmp_path: Path) -> None:
     """Default rendering should not include a code-panel cluster."""
 
-    log = tl.log_forward_pass(_CodePanelModel(), torch.randn(1, 4))
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path)
 
     assert "cluster_torchlens_code_panel" not in dot
@@ -66,7 +66,7 @@ def test_code_panel_false_no_panel(tmp_path: Path) -> None:
 def test_code_panel_true_emits_forward_source(tmp_path: Path) -> None:
     """The True shorthand should render forward source."""
 
-    log = tl.log_forward_pass(_CodePanelModel(), torch.randn(1, 4))
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, code_panel=True)
 
     assert "def forward" in dot
@@ -76,7 +76,7 @@ def test_code_panel_true_emits_forward_source(tmp_path: Path) -> None:
 def test_code_panel_class_emits_class_source(tmp_path: Path) -> None:
     """The class mode should render the model class definition."""
 
-    log = tl.log_forward_pass(_CodePanelModel(), torch.randn(1, 4))
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, code_panel="class")
 
     assert "class _CodePanelModel" in dot
@@ -85,7 +85,7 @@ def test_code_panel_class_emits_class_source(tmp_path: Path) -> None:
 def test_code_panel_init_plus_forward(tmp_path: Path) -> None:
     """The init+forward mode should include both method definitions."""
 
-    log = tl.log_forward_pass(_CodePanelModel(), torch.randn(1, 4))
+    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, code_panel="init+forward")
 
     assert "def __init__" in dot
@@ -96,7 +96,7 @@ def test_code_panel_callable_overrides(tmp_path: Path) -> None:
     """Callable code-panel options should use returned text verbatim."""
 
     model = _CodePanelModel()
-    log = tl.log_forward_pass(model, torch.randn(1, 4))
+    log = tl.trace(model, torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, code_panel=lambda model: "CUSTOM_TEXT_TOKEN")
 
     assert "CUSTOM_TEXT_TOKEN" in dot
@@ -106,7 +106,7 @@ def test_code_panel_html_escape(tmp_path: Path) -> None:
     """Code-panel text should escape Graphviz HTML metacharacters."""
 
     model = _CodePanelModel()
-    log = tl.log_forward_pass(model, torch.randn(1, 4))
+    log = tl.trace(model, torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, code_panel=lambda model: "x < y > z & q")
 
     assert "x &lt; y &gt; z &amp; q" in dot
@@ -116,7 +116,7 @@ def test_code_panel_truncates_long_source(tmp_path: Path) -> None:
     """Long code-panel text should be capped with a truncation marker."""
 
     model = _CodePanelModel()
-    log = tl.log_forward_pass(model, torch.randn(1, 4))
+    log = tl.trace(model, torch.randn(1, 4))
     source_text = "\n".join(f"line {idx}" for idx in range(125))
     dot = _render_dot(log, tmp_path, code_panel=lambda model: source_text)
 

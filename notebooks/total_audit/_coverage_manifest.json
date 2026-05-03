@@ -167,7 +167,7 @@
       },
       {
         "kind": "property",
-        "name": "source_model_log"
+        "name": "source_trace"
       },
       {
         "kind": "property",
@@ -370,7 +370,7 @@
         "name": "to_pandas"
       }
     ],
-    "GradFnPassLog": [
+    "GradFnCallLog": [
       {
         "kind": "attribute",
         "name": "PORTABLE_STATE_SPEC"
@@ -819,7 +819,7 @@
       },
       {
         "kind": "property",
-        "name": "source_model_log"
+        "name": "source_trace"
       },
       {
         "kind": "property",
@@ -878,7 +878,7 @@
         "name": "uses_params"
       }
     ],
-    "LayerPassLog": [
+    "OpLog": [
       {
         "kind": "attribute",
         "name": "DEFAULT_FILL_STATE"
@@ -1529,7 +1529,7 @@
       },
       {
         "kind": "property",
-        "name": "source_model_log"
+        "name": "source_trace"
       },
       {
         "kind": "property",
@@ -1592,7 +1592,7 @@
         "name": "uses_params"
       }
     ],
-    "ModelLog": [
+    "Trace": [
       {
         "kind": "attribute",
         "name": "DEFAULT_FILL_STATE"
@@ -2668,7 +2668,7 @@
         "name": "to_parquet"
       }
     ],
-    "ModulePassLog": [
+    "ModuleCallLog": [
       {
         "kind": "attribute",
         "name": "PORTABLE_STATE_SPEC"
@@ -2881,8 +2881,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "GradFnPassLog",
-      "target": "torchlens.types.GradFnPassLog"
+      "name": "GradFnCallLog",
+      "target": "torchlens.types.GradFnCallLog"
     },
     {
       "kind": "object_alias",
@@ -2911,8 +2911,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "ModulePassLog",
-      "target": "torchlens.types.ModulePassLog"
+      "name": "ModuleCallLog",
+      "target": "torchlens.types.ModuleCallLog"
     },
     {
       "kind": "object_alias",
@@ -3021,8 +3021,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "model_log_to_dagua_graph",
-      "target": "torchlens.experimental.dagua.model_log_to_dagua_graph"
+      "name": "trace_to_dagua_graph",
+      "target": "torchlens.experimental.dagua.trace_to_dagua_graph"
     },
     {
       "kind": "object_alias",
@@ -3041,8 +3041,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "render_model_log_with_dagua",
-      "target": "torchlens.experimental.dagua.render_model_log_with_dagua"
+      "name": "render_trace_with_dagua",
+      "target": "torchlens.experimental.dagua.render_trace_with_dagua"
     },
     {
       "kind": "object_alias",
@@ -3216,10 +3216,10 @@
         "FuncExecutionContext",
         "GradFnAccessor",
         "GradFnLog",
-        "GradFnPassLog",
+        "GradFnCallLog",
         "ModuleAccessor",
         "ModuleLog",
-        "ModulePassLog",
+        "ModuleCallLog",
         "ParamAccessor",
         "ParamLog",
         "VisualizationOverrides",
@@ -3227,12 +3227,12 @@
         "cleanup",
         "func_call_location",
         "grad_fn_log",
-        "grad_fn_pass_log",
+        "grad_fn_call_log",
         "interface",
         "internal_types",
         "layer_log",
-        "layer_pass_log",
-        "model_log",
+        "op_log",
+        "trace",
         "module_log",
         "param_log"
       ],
@@ -3516,7 +3516,7 @@
     "multi_trace": {
       "names": [
         "METRIC_REGISTRY",
-        "NodeView",
+        "SuperOp",
         "Supergraph",
         "SupergraphNode",
         "TopologyDiff",
@@ -3573,7 +3573,7 @@
     },
     "partial": {
       "names": [
-        "PartialModelLog",
+        "PartialTrace",
         "from_failed_capture"
       ],
       "source": "__all__"
@@ -3623,10 +3623,10 @@
         "BufferLog",
         "FuncCallLocation",
         "GradFnLog",
-        "GradFnPassLog",
+        "GradFnCallLog",
         "GradientPostfunc",
         "ModuleLog",
-        "ModulePassLog",
+        "ModuleCallLog",
         "ParamLog",
         "SaveLevel",
         "SiteTable",
@@ -3650,7 +3650,7 @@
         "InterventionReadyConflictError",
         "MISSING",
         "MissingType",
-        "ModelLog",
+        "Trace",
         "OutputDeviceLiteral",
         "Path",
         "RunState",
@@ -3677,7 +3677,7 @@
         "hashlib",
         "json",
         "list_logs",
-        "log_forward_pass",
+        "trace",
         "log_model_metadata",
         "make_weak_model_ref",
         "merge_capture_options",
@@ -3748,7 +3748,7 @@
         "list_ops",
         "log_current_autocast_state",
         "log_current_rng_states",
-        "log_forward_pass_streaming",
+        "trace_streaming",
         "make_random_barcode",
         "make_short_barcode_from_input",
         "nested_assign",
@@ -3785,7 +3785,7 @@
         "validate_backward_pass",
         "validate_batch_of_models_and_inputs",
         "validate_forward_pass",
-        "validate_model_log_saved_activations",
+        "validate_trace_saved_activations",
         "validate_saved_activations",
         "validate_tlspec"
       ],
@@ -3829,15 +3829,15 @@
     },
     {
       "kind": "class",
-      "module": "torchlens.data_classes.layer_pass_log",
-      "name": "LayerPassLog",
-      "qualname": "LayerPassLog"
+      "module": "torchlens.data_classes.op_log",
+      "name": "OpLog",
+      "qualname": "OpLog"
     },
     {
       "kind": "class",
-      "module": "torchlens.data_classes.model_log",
-      "name": "ModelLog",
-      "qualname": "ModelLog"
+      "module": "torchlens.data_classes.trace",
+      "name": "Trace",
+      "qualname": "Trace"
     },
     {
       "kind": "function",
@@ -3926,8 +3926,8 @@
     {
       "kind": "function",
       "module": "torchlens.user_funcs",
-      "name": "log_forward_pass",
-      "qualname": "log_forward_pass"
+      "name": "trace",
+      "qualname": "trace"
     },
     {
       "kind": "function",

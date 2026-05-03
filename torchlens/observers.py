@@ -133,9 +133,9 @@ def record_span(name: str) -> Iterator[dict[str, Any]]:
 
     span = {"name": str(name), "start": time.monotonic(), "end": None}
     _state._active_record_spans.append(span)
-    model_log = _state._active_model_log
-    if model_log is not None:
-        model_log.observer_spans.append(span)
+    trace = _state._active_trace
+    if trace is not None:
+        trace.observer_spans.append(span)
     try:
         yield span
     finally:

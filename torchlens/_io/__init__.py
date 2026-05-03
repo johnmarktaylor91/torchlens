@@ -1,7 +1,7 @@
 """Portable I/O primitives for TorchLens model logs.
 
 The ``torchlens._io`` package implements TorchLens' portable save/load path:
-it scrubs a ``ModelLog`` into metadata plus tensor blobs, writes directory
+it scrubs a ``Trace`` into metadata plus tensor blobs, writes directory
 bundles backed by ``safetensors``, and rehydrates those bundles into eager or
 lazy model logs. Portable bundles are for archival and analysis, not replay:
 ``validate_forward_pass()`` is unsupported after ``torchlens.load()`` (Fork L),
@@ -107,7 +107,7 @@ def default_fill_state(state: dict[str, Any], *, defaults: dict[str, Any]) -> No
             state[field_name] = copy.deepcopy(default_value)
 
 
-def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu") -> None:
+def rehydrate_nested(trace: Any, *, map_location: str | torch.device = "cpu") -> None:
     """Replace any remaining nested portable blob refs on a loaded model log.
 
     This function is a no-op unless the model log was loaded with
@@ -116,7 +116,7 @@ def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu"
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log loaded from a portable bundle.
     map_location:
         Target device for the materialized nested tensors.
@@ -131,4 +131,4 @@ def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu"
 
     from .rehydrate import rehydrate_nested as _rehydrate_nested
 
-    _rehydrate_nested(model_log, map_location=map_location)
+    _rehydrate_nested(trace, map_location=map_location)

@@ -1,4 +1,4 @@
-"""Compare multiple ModelLogs with Bundle.
+"""Compare multiple Traces with Bundle.
 
 What this demonstrates
 ----------------------
@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(7)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    clean = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True, name="clean")
+    clean = tl.trace(model, x, vis_opt="none", intervention_ready=True, name="clean")
     zero = clean.fork("zero")
     zero.attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
 

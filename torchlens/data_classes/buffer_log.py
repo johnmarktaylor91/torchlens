@@ -1,6 +1,6 @@
 """BufferLog and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers.
 
-BufferLog extends LayerPassLog to represent a model buffer (e.g. BatchNorm's
+BufferLog extends OpLog to represent a model buffer (e.g. BatchNorm's
 ``running_mean``).  Buffers participate in the computation graph just like
 regular tensors but have additional identity: a ``buffer_address`` (e.g.
 ``"features.0.running_mean"``) and an owning module.
@@ -20,12 +20,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cas
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
-from .layer_pass_log import LayerPassLog
+from .op_log import OpLog
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
 def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
@@ -44,20 +44,20 @@ def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
     return {field: getattr(buffer_log, field) for field in BUFFER_LOG_FIELD_ORDER}
 
 
-class BufferLog(LayerPassLog):
-    """A LayerPassLog entry representing a registered model buffer.
+class BufferLog(OpLog):
+    """A OpLog entry representing a registered model buffer.
 
-    Subclasses LayerPassLog and participates in the computation graph
+    Subclasses OpLog and participates in the computation graph
     identically to regular tensor operations.  Adds ``name`` and
     ``module_address`` computed properties derived from the
-    ``buffer_address`` field (inherited from LayerPassLog).
+    ``buffer_address`` field (inherited from OpLog).
 
     No additional constructor arguments — the buffer identity comes
     from the ``buffer_address`` field in the fields_dict passed to
-    the parent ``LayerPassLog.__init__``.
+    the parent ``OpLog.__init__``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(LayerPassLog.PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(OpLog.PORTABLE_STATE_SPEC)
 
     @property
     def name(self) -> str:
@@ -112,7 +112,7 @@ class BufferAccessor:
     * **short name** (str) -- e.g. ``"running_mean"`` (must be unambiguous).
     * **ordinal position** (int) -- index into insertion-order list.
 
-    Available as ``model_log.buffers`` and ``module_log.buffers``.
+    Available as ``trace.buffers`` and ``module_log.buffers``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -124,12 +124,12 @@ class BufferAccessor:
     def __init__(
         self,
         buffer_dict: Dict[str, "BufferLog"],
-        source_model_log: "ModelLog | None" = None,
+        source_trace: "Trace | None" = None,
     ) -> None:
         self._dict = buffer_dict  # address -> BufferLog
         self._list = list(buffer_dict.values())  # insertion-order list
-        # Store as weakref to avoid preventing ModelLog GC.
-        self._source_ref = weakref.ref(source_model_log) if source_model_log is not None else None
+        # Store as weakref to avoid preventing Trace GC.
+        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
 
     def __getitem__(self, key: Union[int, str]) -> "BufferLog":
         """Retrieve a buffer by integer index, full address, or short name."""

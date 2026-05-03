@@ -233,7 +233,7 @@ def build_elk_graph_hierarchical(
     module grouping (analogous to Graphviz subgraph clusters).
 
     Args:
-        entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog
+        entries_to_plot: Dict of node_barcode -> OpLog/LayerLog
             (same as used by render_graph).
         show_buffer_layers: Whether to include buffer layers.
         edge_map: Optional skip-filtered outgoing edge map.
@@ -979,7 +979,7 @@ def _dot_id(name: str) -> str:
 
 
 def render_elk_direct(
-    model_log: Any,
+    trace: Any,
     entries_to_plot: dict[str, Any],
     vis_mode: str,
     vis_nesting_depth: int,
@@ -1011,8 +1011,8 @@ def render_elk_direct(
     Renders with ``neato -n`` (pre-positioned layout that respects clusters).
 
     Args:
-        model_log: The ModelLog instance.
-        entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog.
+        trace: The Trace instance.
+        entries_to_plot: Dict of node_barcode -> OpLog/LayerLog.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
         vis_nesting_depth: Module nesting depth for collapsed modules.
         show_buffer_layers: Whether to include buffer layers.
@@ -1097,7 +1097,7 @@ def render_elk_direct(
             continue
 
         collapse_address = _collapse_module_address_for_node(
-            model_log,
+            trace,
             node,
             collapse_fn=collapse_fn,
             max_module_depth=vis_nesting_depth,
@@ -1115,16 +1115,16 @@ def render_elk_direct(
 
             if node_name not in collapsed_set:
                 collapsed_set.add(node_name)
-                ml = model_log.modules[mod_addr]
-                mod_out = model_log[mod_w_pass]
+                ml = trace.modules[mod_addr]
+                mod_out = trace[mod_w_pass]
 
                 if vis_mode == "unrolled":
-                    mpl = model_log.modules[mod_w_pass]
+                    mpl = trace.modules[mod_w_pass]
                     n_tensors = mpl.num_layers
-                    has_anc = any(model_log[la].has_input_ancestor for la in mpl.layers)
+                    has_anc = any(trace[la].has_input_ancestor for la in mpl.layers)
                 else:
                     n_tensors = ml.num_layers
-                    has_anc = any(model_log[la].has_input_ancestor for la in ml.all_layers)
+                    has_anc = any(trace[la].has_input_ancestor for la in ml.all_layers)
 
                 np_ = ml.num_passes
                 if np_ == 1:
@@ -1203,10 +1203,8 @@ def render_elk_direct(
             node_name = node.layer_label.replace(":", "pass")
             elk_id = node.layer_label
 
-            addr, shape, node_color = _get_node_address_shape_color(
-                model_log, node, show_buffer_layers
-            )
-            bg = _get_node_bg_color(model_log, node)
+            addr, shape, node_color = _get_node_address_shape_color(trace, node, show_buffer_layers)
+            bg = _get_node_bg_color(trace, node)
             ls = "solid" if node.has_input_ancestor else "dashed"
             default_spec = NodeSpec(
                 lines=compute_default_node_lines(node, addr, vis_mode),
@@ -1217,7 +1215,7 @@ def render_elk_direct(
                 style=f"filled,{ls}",
                 extra_attrs={"ordering": "out"},
             )
-            spec = _apply_node_spec_fn(model_log, node, default_spec, node_mode, node_spec_fn)
+            spec = _apply_node_spec_fn(trace, node, default_spec, node_mode, node_spec_fn)
             attrs = _node_spec_to_graphviz_args(spec)
             if spec.fillcolor is not None and ":" in spec.fillcolor:
                 attrs["gradientangle"] = "0"
@@ -1241,7 +1239,7 @@ def render_elk_direct(
 
             # Resolve head name
             child_collapse_address = _collapse_module_address_for_node(
-                model_log,
+                trace,
                 child_node,
                 collapse_fn=collapse_fn,
                 max_module_depth=vis_nesting_depth,
@@ -1288,11 +1286,11 @@ def render_elk_direct(
                 and metadata_child is not None
                 and metadata_child.layer_type not in COMMUTE_FUNCS
             ):
-                _add_arg_label(node, metadata_child, edge, model_log, show_buffer_layers)
+                _add_arg_label(node, metadata_child, edge, trace, show_buffer_layers)
 
             for k, v in (overrides.edge or {}).items():
                 if callable(v):
-                    edge[k] = str(v(model_log, node, metadata_child or child_node))
+                    edge[k] = str(v(trace, node, metadata_child or child_node))
                 else:
                     edge[k] = str(v)
 
@@ -1428,7 +1426,7 @@ def render_elk_direct(
 
         mod_addr = mod_key.split(":")[0] if ":" in mod_key else mod_key
         try:
-            ml = model_log.modules[mod_addr]
+            ml = trace.modules[mod_addr]
         except (KeyError, IndexError):
             ml = None
         mod_type = ml.module_class_name if ml else "Module"
@@ -1455,7 +1453,7 @@ def render_elk_direct(
             "penwidth": f"{pw:.1f}",
         }
         for k, v in (overrides.module or {}).items():
-            mod_attrs[k] = str(v(model_log, mod_key)) if callable(v) else str(v)
+            mod_attrs[k] = str(v(trace, mod_key)) if callable(v) else str(v)
 
         # Inject bounding box from ELK compound node so neato uses exact size.
         elk_group_id = f"group_{mod_addr}"
@@ -1552,7 +1550,7 @@ def _add_arg_label(
     parent_node: Any,
     child_node: Any,
     edge_dict: dict[str, Any],
-    model_log: Any,
+    trace: Any,
     show_buffer_layers: bool,
 ) -> None:
     """Add argument position labels to an edge when the child has multiple parents.
@@ -1561,17 +1559,17 @@ def _add_arg_label(
     fast ELK path.
     """
     from ...data_classes.layer_log import LayerLog
-    from ...data_classes.layer_pass_log import LayerPassLog
+    from ...data_classes.op_log import OpLog
 
     # Count visible parents
     num_parents = len(child_node.parent_layers)
     if not show_buffer_layers:
         for pl in child_node.parent_layers:
-            if isinstance(child_node, LayerPassLog):
-                if model_log[pl].is_buffer_layer:
+            if isinstance(child_node, OpLog):
+                if trace[pl].is_buffer_layer:
                     num_parents -= 1
             elif isinstance(child_node, LayerLog):
-                if model_log.layer_logs[pl].is_buffer_layer:
+                if trace.layer_logs[pl].is_buffer_layer:
                     num_parents -= 1
     if num_parents <= 1:
         return

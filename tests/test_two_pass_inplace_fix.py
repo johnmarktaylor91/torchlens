@@ -7,17 +7,17 @@ import torch.nn as nn
 import torchlens as tl
 
 
-def _assert_layer_present(model_log: tl.ModelLog, layer_label: str) -> None:
+def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:
     """Assert that a model log contains a layer label.
 
     Parameters
     ----------
-    model_log
+    trace
         The TorchLens model log to inspect.
     layer_label
         The expected final layer label.
     """
-    assert layer_label in [layer.layer_label for layer in model_log.layer_list]
+    assert layer_label in [layer.layer_label for layer in trace.layer_list]
 
 
 @pytest.mark.smoke
@@ -38,10 +38,10 @@ def test_two_pass_succeeds_with_inplace_relu_module() -> None:
     )
     x = torch.randn(2, 3, 8, 8)
 
-    model_log = tl.log_forward_pass(model, x, layers_to_save=["conv2d_1_1"])
+    trace = tl.trace(model, x, layers_to_save=["conv2d_1_1"])
 
-    _assert_layer_present(model_log, "conv2d_1_1")
-    model_log.cleanup()
+    _assert_layer_present(trace, "conv2d_1_1")
+    trace.cleanup()
 
 
 def test_two_pass_succeeds_with_non_inplace_relu_module() -> None:
@@ -61,10 +61,10 @@ def test_two_pass_succeeds_with_non_inplace_relu_module() -> None:
     )
     x = torch.randn(2, 3, 8, 8)
 
-    model_log = tl.log_forward_pass(model, x, layers_to_save=["conv2d_1_1"])
+    trace = tl.trace(model, x, layers_to_save=["conv2d_1_1"])
 
-    _assert_layer_present(model_log, "conv2d_1_1")
-    model_log.cleanup()
+    _assert_layer_present(trace, "conv2d_1_1")
+    trace.cleanup()
 
 
 def test_two_pass_preserves_identity_pass_through_detection() -> None:
@@ -82,7 +82,7 @@ def test_two_pass_preserves_identity_pass_through_detection() -> None:
     )
     x = torch.randn(4, 10)
 
-    exhaustive_log = tl.log_forward_pass(model, x)
+    exhaustive_log = tl.trace(model, x)
     identity_labels = [
         layer.layer_label for layer in exhaustive_log.layer_list if layer.layer_type == "identity"
     ]
@@ -90,11 +90,11 @@ def test_two_pass_preserves_identity_pass_through_detection() -> None:
     identity_label = identity_labels[0]
     exhaustive_log.cleanup()
 
-    model_log = tl.log_forward_pass(model, x, layers_to_save=[identity_label])
+    trace = tl.trace(model, x, layers_to_save=[identity_label])
 
-    _assert_layer_present(model_log, identity_label)
-    assert model_log[identity_label].has_saved_activations
-    model_log.cleanup()
+    _assert_layer_present(trace, identity_label)
+    assert trace[identity_label].has_saved_activations
+    trace.cleanup()
 
 
 class _InplaceFunctionBlock(nn.Module):
@@ -142,10 +142,10 @@ def test_two_pass_succeeds_with_function_level_inplace_relu() -> None:
     )
     x = torch.randn(4, 10)
 
-    model_log = tl.log_forward_pass(model, x, layers_to_save=["linear_1_1"])
+    trace = tl.trace(model, x, layers_to_save=["linear_1_1"])
 
-    _assert_layer_present(model_log, "linear_1_1")
-    model_log.cleanup()
+    _assert_layer_present(trace, "linear_1_1")
+    trace.cleanup()
 
 
 def test_two_pass_succeeds_with_multiple_inplace_relu_modules() -> None:
@@ -169,9 +169,9 @@ def test_two_pass_succeeds_with_multiple_inplace_relu_modules() -> None:
     x = torch.randn(2, 3, 8, 8)
 
     for selector in (["conv2d_1_1"], ["conv2d_2_3"], [-1]):
-        model_log = tl.log_forward_pass(model, x, layers_to_save=selector)
-        assert model_log is not None
-        model_log.cleanup()
+        trace = tl.trace(model, x, layers_to_save=selector)
+        assert trace is not None
+        trace.cleanup()
 
 
 @pytest.mark.slow
@@ -188,6 +188,6 @@ def test_two_pass_succeeds_with_resnet50_inplace_relu_modules() -> None:
     x = torch.randn(2, 3, 224, 224)
 
     for selector in (["conv2d_1_1"], ["linear_1_175"], [-1]):
-        model_log = tl.log_forward_pass(model, x, layers_to_save=selector)
-        assert model_log is not None
-        model_log.cleanup()
+        trace = tl.trace(model, x, layers_to_save=selector)
+        assert trace is not None
+        trace.cleanup()

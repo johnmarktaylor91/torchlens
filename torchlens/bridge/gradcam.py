@@ -23,7 +23,7 @@ def cam(
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` with a live source model reference.
+        TorchLens ``Trace`` with a live source model reference.
     site:
         Module address, module pass label, layer selector, or layer object.
     inputs:
@@ -97,7 +97,7 @@ def layer(log: Any, site: Any) -> nn.Module:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     site:
         Site or module lookup.
 

@@ -22,38 +22,38 @@ def test_a1_save_new_activations_output_layer_keeps_grad(two_layer_mlp: TwoLayer
     """save_new_activations keeps the fast-postprocessed output attached."""
 
     x = torch.randn(3, 4, requires_grad=True)
-    model_log = tl.log_forward_pass(two_layer_mlp, x, random_seed=0)
-    output_label = model_log.output_layers[0]
+    trace = tl.trace(two_layer_mlp, x, random_seed=0)
+    output_label = trace.output_layers[0]
 
-    model_log.save_new_activations(
+    trace.save_new_activations(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         layers_to_save=[output_label],
         random_seed=0,
     )
 
-    saved = model_log[output_label].activation
+    saved = trace[output_label].activation
     assert saved.grad_fn is not None
     _assert_backward_populates_grad(two_layer_mlp, saved)
-    model_log.cleanup()
+    trace.cleanup()
 
 
 @pytest.mark.smoke
 def test_a1_two_pass_selective_save_output_layer_keeps_grad(two_layer_mlp: TwoLayerMlp) -> None:
     """Selective two-pass capture keeps the output-layer activation attached."""
 
-    probe_log = tl.log_forward_pass(two_layer_mlp, torch.randn(3, 4), random_seed=0)
+    probe_log = tl.trace(two_layer_mlp, torch.randn(3, 4), random_seed=0)
     output_label = probe_log.output_layers[0]
     probe_log.cleanup()
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         layers_to_save=[output_label],
         random_seed=0,
     )
 
-    saved = model_log[output_label].activation
+    saved = trace[output_label].activation
     assert saved.grad_fn is not None
     _assert_backward_populates_grad(two_layer_mlp, saved)
-    model_log.cleanup()
+    trace.cleanup()

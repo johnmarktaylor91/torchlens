@@ -106,7 +106,7 @@ def test_live_func_hook_replaces_returned_and_saved_activation() -> None:
     """Live post-hooks run before saving so returned and saved activations match."""
 
     model = _ReluReturnModel()
-    log = tl.log_forward_pass(
+    log = tl.trace(
         model,
         torch.randn(2, 3),
         vis_opt="none",
@@ -131,7 +131,7 @@ def test_live_label_error_for_finalized_style_label() -> None:
     """Finalized postprocess labels fail loudly in live capture."""
 
     with pytest.raises(LiveModeLabelError, match="tl.where"):
-        tl.log_forward_pass(
+        tl.trace(
             _ReluReturnModel(),
             torch.randn(2, 3),
             vis_opt="none",
@@ -144,7 +144,7 @@ def test_live_label_error_for_finalized_style_label() -> None:
 def test_module_selector_matches_capture_time_module_context() -> None:
     """Module selectors can match live capture-time module context."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _LinearModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -163,7 +163,7 @@ def test_module_selector_matches_capture_time_module_context() -> None:
 def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     """Raw labels, predicates, and module containment selectors resolve live."""
 
-    raw_log = tl.log_forward_pass(
+    raw_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -173,21 +173,21 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
         layer.layer_label_raw for layer in raw_log.layer_list if layer.func_name == "relu"
     )
 
-    label_log = tl.log_forward_pass(
+    label_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
         hooks={tl.label(raw_label): _zero_hook},
     )
-    where_log = tl.log_forward_pass(
+    where_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
         hooks={tl.where(lambda p: p.func_name == "relu"): _zero_hook},
     )
-    in_module_log = tl.log_forward_pass(
+    in_module_log = tl.trace(
         _LinearModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -204,7 +204,7 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
 def test_no_hooks_preserves_pristine_run_state() -> None:
     """Intervention-ready capture without hooks stays pristine."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -218,7 +218,7 @@ def test_no_hooks_preserves_pristine_run_state() -> None:
 def test_live_replacement_metadata_matches_saved_activation() -> None:
     """Hook replacement refreshes tensor metadata and saved-activation flags."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
         vis_opt="none",

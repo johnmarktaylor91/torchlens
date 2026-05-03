@@ -67,10 +67,10 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
 @dataclass
@@ -125,7 +125,7 @@ class IsomorphicExpansionState:
     node_stack: deque[list[str]]
 
 
-def _group_by_shared_params(self: "ModelLog") -> None:
+def _group_by_shared_params(self: "Trace") -> None:
     """Lightweight same-param grouping without full loop detection.
 
     Groups operations that share identical ``(func_name,
@@ -135,7 +135,7 @@ def _group_by_shared_params(self: "ModelLog") -> None:
 
     Operations without parameters remain as individual single-pass layers.
     Sets ``layer_label_raw``, ``recurrent_group``, ``pass_num``,
-    and ``num_passes`` on each LayerPassLog.
+    and ``num_passes`` on each OpLog.
     """
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for label in self._raw_layer_labels_list:
@@ -156,7 +156,7 @@ def _group_by_shared_params(self: "ModelLog") -> None:
     _rebuild_pass_assignments(self)
 
 
-def _detect_and_label_loops(self: "ModelLog") -> None:
+def _detect_and_label_loops(self: "Trace") -> None:
     """Phase 1: Entry point for loop detection.
 
     Iterates nodes in realtime order (earliest first) via a min-heap BFS starting
@@ -227,7 +227,7 @@ def _detect_and_label_loops(self: "ModelLog") -> None:
     _rebuild_pass_assignments(self)
 
 
-def _rebuild_pass_assignments(self: "ModelLog") -> None:
+def _rebuild_pass_assignments(self: "Trace") -> None:
     """Phase 5: Rebuild recurrent_group and pass numbers from layer_label_raw.
 
     WHY NECESSARY: Multiple rounds of ``_expand_isomorphic_subgraphs`` can reassign
@@ -258,7 +258,7 @@ def _rebuild_pass_assignments(self: "ModelLog") -> None:
             member.num_passes = len(members_sorted)
 
 
-def _expand_isomorphic_subgraphs(self: "ModelLog", node: LayerPassLog) -> None:
+def _expand_isomorphic_subgraphs(self: "Trace", node: OpLog) -> None:
     """Phase 2: BFS expansion of isomorphic subgraphs from equivalent operations.
 
     Given a node with multiple equivalent operations, creates one subgraph per
@@ -324,7 +324,7 @@ def _expand_isomorphic_subgraphs(self: "ModelLog", node: LayerPassLog) -> None:
 
 
 def _refine_iso_groups(
-    self: "ModelLog",
+    self: "Trace",
     state: IsomorphicExpansionState,
 ) -> None:
     """Phase 3: Refine iso groups by splitting structurally unrelated members.
@@ -414,7 +414,7 @@ def _refine_iso_groups(
 
 
 def _advance_bfs_frontier(
-    self: "ModelLog",
+    self: "Trace",
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
@@ -461,7 +461,7 @@ def _advance_bfs_frontier(
 
 
 def _collect_frontier_and_detect_adjacency(
-    self: "ModelLog",
+    self: "Trace",
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
@@ -586,7 +586,7 @@ def _pop_frontier_node(
 
 
 def _find_isomorphic_matches(
-    self: "ModelLog",
+    self: "Trace",
     candidate_node_label: str,
     candidate_node_neighbor_type: str,
     candidate_node_subgraph: str,
@@ -652,7 +652,7 @@ def _find_isomorphic_matches(
 
 
 def _register_isomorphic_group(
-    self: "ModelLog",
+    self: "Trace",
     new_isomorphic_nodes: List[Tuple[str, str]],
     state: IsomorphicExpansionState,
 ) -> None:
@@ -685,7 +685,7 @@ def _register_isomorphic_group(
 
 
 def _finalize_layer_assignments(
-    self: "ModelLog",
+    self: "Trace",
     state: IsomorphicExpansionState,
 ) -> None:
     """Phase 4: Assign same-layer labels based on iso groups, params, and adjacency.
@@ -733,7 +733,7 @@ def _finalize_layer_assignments(
 
 
 def _merge_iso_groups_to_layers(
-    self: "ModelLog",
+    self: "Trace",
     iso_node_groups: Dict[str, List[str]],
     node_to_subgraph: Dict[str, SubgraphInfo],
     adjacent_subgraphs: Dict[str, set[str]],

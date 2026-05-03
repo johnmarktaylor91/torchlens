@@ -10,8 +10,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._run_state import RunState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.layer_pass_log import LayerPassLog
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.model_log import Trace
 from torchlens.intervention.types import LAYER_PASS_LOG_FORK_POLICY, MODEL_LOG_FORK_POLICY
 
 
@@ -55,16 +55,16 @@ def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     return activation * 0
 
 
-def _capture_log() -> ModelLog:
+def _capture_log() -> Trace:
     """Capture an intervention-ready test log.
 
     Returns
     -------
-    ModelLog
+    Trace
         Captured model log.
     """
 
-    return tl.log_forward_pass(
+    return tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
         vis_opt="none",
@@ -73,36 +73,36 @@ def _capture_log() -> ModelLog:
 
 
 def test_field_lifecycle_matrix_modellog() -> None:
-    """Assert every ModelLog ordered field has lifecycle policy coverage."""
+    """Assert every Trace ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(MODEL_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(ModelLog.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Trace.PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(MODEL_LOG_FORK_POLICY)
-    assert ordered_fields <= set(ModelLog.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(Trace.DEFAULT_FILL_STATE)
 
 
-def test_field_lifecycle_matrix_layer_pass_log() -> None:
-    """Assert every LayerPassLog ordered field has lifecycle policy coverage."""
+def test_field_lifecycle_matrix_op_log() -> None:
+    """Assert every OpLog ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(LayerPassLog.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(OpLog.PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(LAYER_PASS_LOG_FORK_POLICY)
-    assert ordered_fields <= set(LayerPassLog.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(OpLog.DEFAULT_FILL_STATE)
 
 
 def test_construction_done_lifecycle() -> None:
-    """LayerPassLog construction starts guarded and ends with direct-write tracking enabled."""
+    """OpLog construction starts guarded and ends with direct-write tracking enabled."""
 
     log = _capture_log()
     layer = next(iter(log))
     fields_dict = {
         field_name: getattr(layer, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
-    fields_dict["source_model_log"] = log
+    fields_dict["source_trace"] = log
     fields_dict["_construction_done"] = True
 
     log._has_direct_writes = False
-    constructed = LayerPassLog(fields_dict)
+    constructed = OpLog(fields_dict)
 
     assert constructed._construction_done is True
     assert log._has_direct_writes is False
@@ -128,7 +128,7 @@ def test_run_state_transitions() -> None:
     rerun_log.rerun(_LifecycleModel(), torch.tensor([[-1.0, 2.0, 3.0]]))
     assert rerun_log.run_state is RunState.RERUN_PROPAGATED
 
-    live = tl.log_forward_pass(
+    live = tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
         vis_opt="none",

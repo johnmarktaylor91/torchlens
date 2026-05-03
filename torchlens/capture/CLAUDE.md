@@ -23,17 +23,17 @@ graph capture, and fastlog's lightweight `RecordContext` construction.
 
 Decorated wrappers in `decoration/torch_funcs.py` call this package for every logged
 operation. `trace.py` owns the forward session; `output_tensors.py` creates raw
-`LayerPassLog` entries consumed by `postprocess/`. `source_tensors.py` creates roots for
+`OpLog` entries consumed by `postprocess/`. `source_tensors.py` creates roots for
 inputs and buffers. `backward.py` runs after a forward log when backward capture is
 requested.
 
 Fastlog reuses the wrapper hot path but stores `ActivationRecord` data through
-`fastlog/_orchestrator.py` instead of building a full `ModelLog`.
+`fastlog/_orchestrator.py` instead of building a full `Trace`.
 
 ## Key Functions
 
 ### trace.py
-- `run_and_log_inputs_through_model()` - core runner used by `log_forward_pass()`.
+- `run_and_log_inputs_through_model()` - core runner used by `trace()`.
 - `save_new_activations()` - replay-like activation refresh on an existing graph.
 - `_run_model_and_save_specified_activations()` is called from `user_funcs.py` for two-pass
   selective save behavior.
@@ -44,7 +44,7 @@ cleanup model session, then postprocess.
 ### output_tensors.py
 - `log_function_output_tensors()` - dispatches to exhaustive or fast behavior and applies
   live intervention hooks.
-- `log_function_output_tensors_exhaustive()` - builds raw per-output `LayerPassLog` entries.
+- `log_function_output_tensors_exhaustive()` - builds raw per-output `OpLog` entries.
 - `log_function_output_tensors_fast()` - validates graph alignment and updates selected tensor data.
 - `apply_live_hooks_to_outputs()` - applies normalized intervention hooks during capture.
 
@@ -54,7 +54,7 @@ cleanup model session, then postprocess.
 
 ### backward.py
 - `log_backward()` - captures autograd graph and gradients for a logged forward pass.
-- `recording_backward()` - context/helper surface exposed from `ModelLog.recording_backward`.
+- `recording_backward()` - context/helper surface exposed from `Trace.recording_backward`.
 
 ## Fast vs Exhaustive
 Exhaustive capture owns metadata truth. Fast capture is allowed only when it can align with

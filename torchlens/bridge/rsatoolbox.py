@@ -17,7 +17,7 @@ def dataset(log: Any) -> Any:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` containing saved output activations.
+        TorchLens ``Trace`` containing saved output activations.
 
     Returns
     -------
@@ -55,7 +55,7 @@ def _final_output_activation(log: Any) -> torch.Tensor:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
 
     Returns
     -------

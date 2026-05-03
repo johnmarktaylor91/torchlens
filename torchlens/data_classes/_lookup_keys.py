@@ -1,14 +1,14 @@
-"""Shared lookup-key validation helpers for ``ModelLog`` access paths."""
+"""Shared lookup-key validation helpers for ``Trace`` access paths."""
 
 import random
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
 def _give_user_feedback_about_lookup_key(
-    self: "ModelLog",
+    self: "Trace",
     key: Union[int, str],
     mode: str,
 ) -> None:
@@ -65,8 +65,8 @@ def _give_user_feedback_about_lookup_key(
     raise ValueError(_get_lookup_help_str(self, key, mode))
 
 
-def _get_lookup_help_str(self: "ModelLog", layer_label: Union[int, str], mode: str) -> str:
-    """Build the standard help text for failed ModelLog lookups.
+def _get_lookup_help_str(self: "Trace", layer_label: Union[int, str], mode: str) -> str:
+    """Build the standard help text for failed Trace lookups.
 
     Parameters
     ----------

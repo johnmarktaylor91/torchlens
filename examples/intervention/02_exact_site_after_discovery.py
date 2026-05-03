@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(2)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
     table = log.find_sites(tl.func("relu"))
     exact_label = table.labels()[0]

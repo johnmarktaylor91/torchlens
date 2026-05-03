@@ -13,7 +13,7 @@ import torchlens as tl
 def test_export_html_minimal_self_contained_without_viewer(tmp_path: Path) -> None:
     """tl.export.html should write pan/zoom/hover HTML without viewer extras."""
 
-    log = tl.log_forward_pass(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
+    log = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
     output = tmp_path / "graph.html"
 
     written = tl.export.html(log, output)
@@ -29,7 +29,7 @@ def test_export_html_minimal_self_contained_without_viewer(tmp_path: Path) -> No
 def test_export_svg_editable_has_stable_ids_and_classes(tmp_path: Path) -> None:
     """tl.export.svg(editable=True) should include semantic SVG metadata."""
 
-    log = tl.log_forward_pass(nn.Linear(3, 2), torch.randn(1, 3))
+    log = tl.trace(nn.Linear(3, 2), torch.randn(1, 3))
     output = tmp_path / "graph.svg"
 
     tl.export.svg(log, output, editable=True)

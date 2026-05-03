@@ -44,8 +44,8 @@ def main() -> None:
     clean_x = torch.randn(2, 8)
     corrupted_x = clean_x + 0.75
 
-    clean = tl.log_forward_pass(model, clean_x, vis_opt="none", intervention_ready=True)
-    corrupted = tl.log_forward_pass(model, corrupted_x, vis_opt="none", intervention_ready=True)
+    clean = tl.trace(model, clean_x, vis_opt="none", intervention_ready=True)
+    corrupted = tl.trace(model, corrupted_x, vis_opt="none", intervention_ready=True)
     clean_relu = clean.find_sites(tl.func("relu")).first().activation
 
     patched = corrupted.fork("patched")

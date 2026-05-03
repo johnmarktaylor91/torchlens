@@ -31,15 +31,15 @@ def _canonical_bundle() -> tl.Bundle:
     torch.manual_seed(0)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 224, 224)
-    model_log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
-    ablated_log = model_log.fork("ablated")
+    trace = tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    ablated_log = trace.fork("ablated")
     with pytest.warns(MultiMatchWarning):
         ablated_log.do(
             tl.module("layer1.0.relu"),
             tl.zero_ablate(),
             confirm_mutation=True,
         )
-    return tl.bundle({"clean": model_log, "ablated": ablated_log}, baseline="clean")
+    return tl.bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 
 
 def _normalize_svg(svg: str) -> bytes:

@@ -9,7 +9,7 @@ small local PyTorch model unless noted otherwise.
 4. `04_sticky_hooks_multiple_engines.py` - reuse sticky hooks with replay and rerun.
 5. `05_set_vs_attach_hooks.py` - static `set` replacements versus sticky hook recipes.
 6. `06_chunked_batching.py` - append compatible chunks for memory-constrained evaluation.
-7. `07_bundle_comparison.py` - compare multiple `ModelLog` objects in a `Bundle`.
+7. `07_bundle_comparison.py` - compare multiple `Trace` objects in a `Bundle`.
 8. `08_live_post_hooks_during_capture.py` - run hooks during the original capture.
 9. `09_submodule_discover_first.py` - use `tl.in_module` for submodule-scoped discovery.
 10. `10_post_hoc_replay_generation_trace.py` - replay over a captured generation-style trace.

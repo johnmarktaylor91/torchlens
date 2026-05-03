@@ -13,9 +13,9 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, log_forward_pass, rehydrate_nested, save
+from torchlens import load, trace as trace_fn, rehydrate_nested, save
 from torchlens._io import BlobRef
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 
@@ -68,12 +68,12 @@ def _build_conv_inputs(seed: int = 0) -> tuple[_IntegrationConvModel, torch.Tens
     return _IntegrationConvModel(), torch.randn(1, 3, 8, 8)
 
 
-def _saved_layers(model_log: ModelLog) -> list[Any]:
+def _saved_layers(trace: Trace) -> list[Any]:
     """Return the saved layer-pass entries from one model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log under test.
 
     Returns
@@ -82,15 +82,15 @@ def _saved_layers(model_log: ModelLog) -> list[Any]:
         Saved layer-pass entries in log order.
     """
 
-    return [layer for layer in model_log.layer_list if layer.has_saved_activations]
+    return [layer for layer in trace.layer_list if layer.has_saved_activations]
 
 
-def _first_saved_layer(model_log: ModelLog) -> Any:
+def _first_saved_layer(trace: Trace) -> Any:
     """Return the first saved layer from one model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log under test.
 
     Returns
@@ -99,7 +99,7 @@ def _first_saved_layer(model_log: ModelLog) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in model_log.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_activations)
 
 
 def _contains_blob_ref(value: Any) -> bool:
@@ -138,7 +138,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     bundle_path = tmp_path / "streamed_bundle.tl"
     model, inputs = _build_conv_inputs()
 
-    streamed_log = log_forward_pass(
+    streamed_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
@@ -176,7 +176,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     source_path = tmp_path / "post_hoc_bundle.tl"
     resaved_path = tmp_path / "resaved_bundle.tl"
     model, inputs = _build_conv_inputs()
-    live_log = log_forward_pass(
+    live_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
@@ -222,7 +222,7 @@ def test_streaming_keep_activations_in_memory_false_materializes_from_refs(
 
     bundle_path = tmp_path / "stream_evict.tl"
     model, inputs = _build_conv_inputs()
-    streamed_log = log_forward_pass(
+    streamed_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
@@ -249,7 +249,7 @@ def test_streaming_keep_activations_in_memory_true_keeps_tensor_and_ref(tmp_path
 
     bundle_path = tmp_path / "stream_keep.tl"
     model, inputs = _build_conv_inputs()
-    streamed_log = log_forward_pass(
+    streamed_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",

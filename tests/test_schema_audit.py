@@ -10,8 +10,8 @@ import torch
 import torchlens as tl
 from torchlens._run_state import RunState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.layer_pass_log import LayerPassLog
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.model_log import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FORK_POLICY,
     MODEL_LOG_FORK_POLICY,
@@ -40,36 +40,36 @@ class _TinyModel(torch.nn.Module):
         return torch.relu(x) + 1
 
 
-def _capture_tiny_log() -> ModelLog:
-    """Capture a tiny ModelLog for schema tests.
+def _capture_tiny_log() -> Trace:
+    """Capture a tiny Trace for schema tests.
 
     Returns
     -------
-    ModelLog
+    Trace
         Captured model log.
     """
 
-    return tl.log_forward_pass(_TinyModel(), torch.randn(2, 3))
+    return tl.trace(_TinyModel(), torch.randn(2, 3))
 
 
 @pytest.mark.smoke
 def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
     """Every ordered field has portable, fork, and default-fill policy coverage."""
 
-    assert set(MODEL_LOG_FIELD_ORDER) <= set(ModelLog.PORTABLE_STATE_SPEC)
+    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.PORTABLE_STATE_SPEC)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FORK_POLICY)
-    assert set(MODEL_LOG_FIELD_ORDER) <= set(ModelLog.DEFAULT_FILL_STATE)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LayerPassLog.PORTABLE_STATE_SPEC)
+    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.DEFAULT_FILL_STATE)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(OpLog.PORTABLE_STATE_SPEC)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FORK_POLICY)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LayerPassLog.DEFAULT_FILL_STATE)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(OpLog.DEFAULT_FILL_STATE)
 
 
 @pytest.mark.smoke
 def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
     """Container defaults are per-instance and intervention_log forks by copy."""
 
-    log_a = ModelLog("a")
-    log_b = ModelLog("b")
+    log_a = Trace("a")
+    log_b = Trace("b")
     log_a.operation_history.append({"op": "sentinel"})
     assert log_b.operation_history == []
     assert log_a.run_state is RunState.PRISTINE
@@ -84,17 +84,17 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
 
 @pytest.mark.smoke
 def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
-    """Construction is internal, but user activation writes dirty the owning ModelLog."""
+    """Construction is internal, but user activation writes dirty the owning Trace."""
 
     log = _capture_tiny_log()
     layer = next(iter(log))
     fields_dict: dict[str, Any] = {
         field_name: getattr(layer, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
-    fields_dict["source_model_log"] = log
+    fields_dict["source_trace"] = log
     fields_dict["_construction_done"] = True
     log._has_direct_writes = False
-    constructed = LayerPassLog(fields_dict)
+    constructed = OpLog(fields_dict)
     assert constructed._construction_done is True
     assert log._has_direct_writes is False
 

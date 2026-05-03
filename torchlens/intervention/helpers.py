@@ -125,7 +125,7 @@ def resample_ablate(
     Parameters
     ----------
     source:
-        Source tensor or LayerPassLog-like object.
+        Source tensor or OpLog-like object.
     from_:
         Alias for ``source`` retained for the PLAN.md constructor spelling.
     seed:
@@ -533,7 +533,7 @@ def swap_with(
     Parameters
     ----------
     other_label:
-        Label string resolved at fire time by later phases, a LayerPassLog-like
+        Label string resolved at fire time by later phases, a OpLog-like
         object with ``activation``, or a tensor value.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
@@ -1028,7 +1028,7 @@ def _resolve_swap_value(other_label: Any, hook: HookContext) -> Any:
     Parameters
     ----------
     other_label:
-        String label, LayerPassLog-like object, or tensor.
+        String label, OpLog-like object, or tensor.
     hook:
         Hook context carrying optional fire-time lookup dictionaries.
 

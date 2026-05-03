@@ -20,7 +20,7 @@ def explain(
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` with a live source model reference.
+        TorchLens ``Trace`` with a live source model reference.
     background:
         Optional SHAP background data. Defaults to the first saved input tensor.
     inputs:

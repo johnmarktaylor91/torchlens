@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(14)
     model = PositionModel().eval()
     x = torch.randn(2, 3, 4)
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
     direction = torch.zeros(3, 4)
     direction[1, :] = 0.5
 

@@ -64,13 +64,13 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
     x = torch.randn(2, 3)
     baseline_model = _TinyRelu()
     changed_model = _TinyRelu(offset=offset)
-    baseline = tl.log_forward_pass(
+    baseline = tl.trace(
         baseline_model,
         x,
         vis_opt="none",
         intervention_ready=True,
     )
-    changed = tl.log_forward_pass(
+    changed = tl.trace(
         changed_model,
         x,
         vis_opt="none",

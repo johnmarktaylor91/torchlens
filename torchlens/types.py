@@ -7,9 +7,9 @@ import torch
 from .data_classes.buffer_log import BufferLog
 from .data_classes.func_call_location import FuncCallLocation
 from .data_classes.grad_fn_log import GradFnLog
-from .data_classes.grad_fn_pass_log import GradFnPassLog
-from .data_classes.layer_pass_log import TensorLog
-from .data_classes.module_log import ModuleLog, ModulePassLog
+from .data_classes.grad_fn_call_log import GradFnCallLog
+from .data_classes.op_log import TensorLog
+from .data_classes.module_log import ModuleLog, ModuleCallLog
 from .data_classes.param_log import ParamLog
 from .intervention import SaveLevel, SiteTable, SpecCompat, TargetManifestDiff, TensorSliceSpec
 
@@ -22,9 +22,9 @@ __all__ = [
     "FuncCallLocation",
     "GradientPostfunc",
     "GradFnLog",
-    "GradFnPassLog",
+    "GradFnCallLog",
     "ModuleLog",
-    "ModulePassLog",
+    "ModuleCallLog",
     "ParamLog",
     "SaveLevel",
     "SiteTable",

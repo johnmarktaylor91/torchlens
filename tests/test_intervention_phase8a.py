@@ -61,7 +61,7 @@ def _capture() -> Any:
         Intervention-ready model log.
     """
 
-    return tl.log_forward_pass(
+    return tl.trace(
         ReluAdd(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -200,7 +200,7 @@ def test_rerun_advances_activation_recipe_revision_after_set() -> None:
     """Successful rerun advances the activation recipe revision."""
 
     x = torch.randn(2, 3)
-    log = tl.log_forward_pass(ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(ReluAdd(), x, vis_opt="none", intervention_ready=True)
 
     log.set(tl.func("relu"), torch.zeros(2, 3))
     assert log._activation_recipe_revision == 0

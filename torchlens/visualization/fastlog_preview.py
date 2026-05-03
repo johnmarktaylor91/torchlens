@@ -1,4 +1,4 @@
-"""Preview fastlog predicate decisions on a full ModelLog graph."""
+"""Preview fastlog predicate decisions on a full Trace graph."""
 
 from __future__ import annotations
 
@@ -35,13 +35,13 @@ class PreviewNode:
 Predicate = Callable[[RecordContext], CaptureDecision]
 
 
-def _module_stack_from_layer(layer_pass_log: Any) -> tuple[ModuleStackFrame, ...]:
-    """Build a synthetic module stack from a ``LayerPassLog``.
+def _module_stack_from_layer(op_log: Any) -> tuple[ModuleStackFrame, ...]:
+    """Build a synthetic module stack from a ``OpLog``.
 
     Parameters
     ----------
-    layer_pass_log:
-        Layer pass object from a fully postprocessed ``ModelLog``.
+    op_log:
+        Layer pass object from a fully postprocessed ``Trace``.
 
     Returns
     -------
@@ -50,12 +50,12 @@ def _module_stack_from_layer(layer_pass_log: Any) -> tuple[ModuleStackFrame, ...
     """
 
     frames: list[ModuleStackFrame] = []
-    module_addresses = tuple(getattr(layer_pass_log, "containing_modules", ()) or ())
+    module_addresses = tuple(getattr(op_log, "containing_modules", ()) or ())
     for index, module_address in enumerate(module_addresses, start=1):
         module_type = ""
-        source_model_log = getattr(layer_pass_log, "source_model_log", None)
-        if source_model_log is not None:
-            modules = getattr(source_model_log, "_module_logs", {})
+        source_trace = getattr(op_log, "source_trace", None)
+        if source_trace is not None:
+            modules = getattr(source_trace, "_module_logs", {})
             try:
                 module_log = modules[module_address]
             except (KeyError, TypeError):
@@ -72,18 +72,18 @@ def _module_stack_from_layer(layer_pass_log: Any) -> tuple[ModuleStackFrame, ...
     return tuple(frames)
 
 
-def _kind_from_layer(layer_pass_log: Any) -> str:
+def _kind_from_layer(op_log: Any) -> str:
     """Return the fastlog event kind represented by a layer pass."""
 
-    if bool(getattr(layer_pass_log, "is_input_layer", False)):
+    if bool(getattr(op_log, "is_input_layer", False)):
         return "input"
-    if bool(getattr(layer_pass_log, "is_buffer_layer", False)):
+    if bool(getattr(op_log, "is_buffer_layer", False)):
         return "buffer"
     return "op"
 
 
 def _context_from_layer(
-    layer_pass_log: Any,
+    op_log: Any,
     *,
     history: tuple[RecordContext, ...],
     event_index: int,
@@ -91,28 +91,28 @@ def _context_from_layer(
 ) -> RecordContext:
     """Build a preview ``RecordContext`` for a layer pass."""
 
-    module_stack = _module_stack_from_layer(layer_pass_log)
+    module_stack = _module_stack_from_layer(op_log)
     module_frame = module_stack[-1] if module_stack else None
-    raw_label = getattr(layer_pass_log, "tensor_label_raw", None)
-    layer_type = getattr(layer_pass_log, "layer_type", None)
+    raw_label = getattr(op_log, "tensor_label_raw", None)
+    layer_type = getattr(op_log, "layer_type", None)
     if isinstance(layer_type, str):
         op_counts[layer_type] = op_counts.get(layer_type, 0) + 1
     return _build_record_context(
-        kind=_kind_from_layer(layer_pass_log),  # type: ignore[arg-type]
-        layer_pass_log_or_op_data={
-            "label": getattr(layer_pass_log, "layer_label", raw_label),
+        kind=_kind_from_layer(op_log),  # type: ignore[arg-type]
+        op_log_or_op_data={
+            "label": getattr(op_log, "layer_label", raw_label),
             "raw_label": raw_label,
             "tensor_label_raw": raw_label,
-            "creation_order": getattr(layer_pass_log, "creation_order", None),
+            "creation_order": getattr(op_log, "creation_order", None),
             "layer_type": layer_type,
-            "layer_type_num": getattr(layer_pass_log, "layer_type_num", None),
-            "func_name": getattr(layer_pass_log, "func_name", None),
-            "parent_labels": tuple(getattr(layer_pass_log, "parent_layers", ()) or ()),
-            "tensor_shape": getattr(layer_pass_log, "tensor_shape", None),
-            "tensor_dtype": getattr(layer_pass_log, "tensor_dtype", None),
-            "output_index": getattr(layer_pass_log, "iterable_output_index", None),
-            "is_bottom_level_func": getattr(layer_pass_log, "is_bottom_level_func", None),
-            "input_output_address": getattr(layer_pass_log, "io_role", None),
+            "layer_type_num": getattr(op_log, "layer_type_num", None),
+            "func_name": getattr(op_log, "func_name", None),
+            "parent_labels": tuple(getattr(op_log, "parent_layers", ()) or ()),
+            "tensor_shape": getattr(op_log, "tensor_shape", None),
+            "tensor_dtype": getattr(op_log, "tensor_dtype", None),
+            "output_index": getattr(op_log, "iterable_output_index", None),
+            "is_bottom_level_func": getattr(op_log, "is_bottom_level_func", None),
+            "input_output_address": getattr(op_log, "io_role", None),
             "module_address": module_frame.module_address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
             "module_pass_index": module_frame.pass_index if module_frame else None,
@@ -120,9 +120,9 @@ def _context_from_layer(
         module_stack=module_stack,
         history=history,
         op_counts=op_counts,
-        pass_index=max(int(getattr(layer_pass_log, "pass_num", 1)) - 1, 0),
+        pass_index=max(int(getattr(op_log, "pass_num", 1)) - 1, 0),
         event_index=event_index,
-        op_index=int(getattr(layer_pass_log, "operation_num", event_index)),
+        op_index=int(getattr(op_log, "operation_num", event_index)),
         time_since_pass_start=0.0,
         include_source_events=True,
     )
@@ -143,13 +143,13 @@ def _select_predicate(
 
 
 def _evaluate_preview_node(
-    layer_pass_log: Any,
+    op_log: Any,
     ctx: RecordContext,
     predicate: Predicate | None,
 ) -> PreviewNode:
     """Evaluate one preview predicate and capture display metadata."""
 
-    if not bool(getattr(layer_pass_log, "has_input_ancestor", True)):
+    if not bool(getattr(op_log, "has_input_ancestor", True)):
         return PreviewNode(ctx=ctx, decision=Decision.UNREACHABLE)
     if predicate is None:
         return PreviewNode(ctx=ctx, decision=Decision.REJECTED)
@@ -165,22 +165,22 @@ def _evaluate_preview_node(
     return PreviewNode(ctx=ctx, decision=Decision.REJECTED)
 
 
-def _build_preview_nodes(model_log: Any, predicate: Predicate | None) -> dict[str, PreviewNode]:
+def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, PreviewNode]:
     """Evaluate preview decisions for all layer passes in a model log."""
 
     history: list[RecordContext] = []
     op_counts: dict[str, int] = {}
     preview_nodes: dict[str, PreviewNode] = {}
-    for event_index, layer_pass_log in enumerate(model_log.layer_list, start=1):
+    for event_index, op_log in enumerate(trace.layer_list, start=1):
         ctx = _context_from_layer(
-            layer_pass_log,
+            op_log,
             history=tuple(history),
             event_index=event_index,
             op_counts=op_counts,
         )
-        preview_node = _evaluate_preview_node(layer_pass_log, ctx, predicate)
-        preview_nodes[getattr(layer_pass_log, "layer_label_no_pass", ctx.label)] = preview_node
-        preview_nodes[getattr(layer_pass_log, "layer_label", ctx.label)] = preview_node
+        preview_node = _evaluate_preview_node(op_log, ctx, predicate)
+        preview_nodes[getattr(op_log, "layer_label_no_pass", ctx.label)] = preview_node
+        preview_nodes[getattr(op_log, "layer_label", ctx.label)] = preview_node
         history.append(ctx)
     return preview_nodes
 
@@ -245,7 +245,7 @@ def _make_node_spec_fn(
 
 
 def preview_fastlog(
-    model_log: Any,
+    trace: Any,
     predicate: Predicate | None = None,
     keep_op: Predicate | None = None,
     keep_module: Predicate | None = None,
@@ -257,11 +257,11 @@ def preview_fastlog(
     show_module_events: bool = True,
     **render_kwargs: Any,
 ) -> str:
-    """Render a full ``ModelLog`` colored by fastlog predicate decisions.
+    """Render a full ``Trace`` colored by fastlog predicate decisions.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Fully logged model graph to preview.
     predicate, keep_op, keep_module:
         Predicate callables that receive synthesized ``RecordContext`` objects.
@@ -272,7 +272,7 @@ def preview_fastlog(
     show_module_events:
         Whether to append module entry/exit fields already present on layer logs.
     **render_kwargs:
-        Forwarded to ``ModelLog.render_graph``.
+        Forwarded to ``Trace.render_graph``.
 
     Returns
     -------
@@ -286,7 +286,7 @@ def preview_fastlog(
             "fastlog preview currently supports Graphviz only; dagua support is planned."
         )
     resolved_predicate = _select_predicate(predicate, keep_op, keep_module)
-    preview_nodes = _build_preview_nodes(model_log, resolved_predicate)
+    preview_nodes = _build_preview_nodes(trace, resolved_predicate)
     node_spec_fn = _make_node_spec_fn(
         preview_nodes,
         color_kept=color_kept,
@@ -296,4 +296,4 @@ def preview_fastlog(
         show_predicate_inputs=show_predicate_inputs,
         show_module_events=show_module_events,
     )
-    return cast(str, model_log.render_graph(node_spec_fn=node_spec_fn, **render_kwargs))
+    return cast(str, trace.render_graph(node_spec_fn=node_spec_fn, **render_kwargs))

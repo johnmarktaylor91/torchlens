@@ -3,7 +3,7 @@
 ## What This Does
 Installs toggle-gated wrappers around PyTorch functions and prepares model modules for
 logging. In 2.x, wrapping is lazy: `import torchlens` has no side effects on `torch`.
-`log_forward_pass()` calls `_ensure_model_prepared()`, which calls `wrap_torch()`,
+`trace()` calls `_ensure_model_prepared()`, which calls `wrap_torch()`,
 `_prepare_model_once()`, `patch_detached_references()`, and `patch_model_instance()`.
 
 ## Files
@@ -50,7 +50,7 @@ shims expose these through `torchlens.decoration`, not top-level `__all__`.
 ### Two-Phase Model Preparation
 - `_prepare_model_once(model)` is cached per model and installs permanent attrs and forward
   wrappers.
-- `_prepare_model_session(model, model_log, ...)` creates session attrs, discovers buffers,
+- `_prepare_model_session(model, trace, ...)` creates session attrs, discovers buffers,
   records params, and handles train-mode `requires_grad` semantics.
 
 ### Module Forward Decorator

@@ -13,7 +13,7 @@ def encode(log: Any, site: Any, sae: Any) -> Any:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` containing saved activations.
+        TorchLens ``Trace`` containing saved activations.
     site:
         Layer label, selector, or layer object to encode.
     sae:

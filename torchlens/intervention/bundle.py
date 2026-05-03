@@ -11,7 +11,7 @@ import torch
 
 from .._run_state import RunState
 from ..multi_trace.metrics import is_scalar_like, relative_l1_scalar, resolve_metric
-from ..multi_trace.node_view import NodeView
+from ..multi_trace.super_op import SuperOp
 from ..multi_trace.topology import Supergraph, build_supergraph
 from .errors import (
     BaselineUndeterminedError,
@@ -24,8 +24,8 @@ from .types import Relationship
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from torch import nn
 
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import Trace
 
 
 _RELATIONSHIP_RANK: dict[Relationship, int] = {
@@ -48,30 +48,30 @@ _REQUIRED_RELATIONSHIPS: dict[str, Relationship] = {
 
 
 class Bundle:
-    """Flat container of ModelLogs with relationship-gated operations.
+    """Flat container of Traces with relationship-gated operations.
 
     Parameters
     ----------
     members:
-        Mapping of member names to ``ModelLog`` objects, sequence of logs,
+        Mapping of member names to ``Trace`` objects, sequence of logs,
         or sequence of ``(name, log)`` tuples.
     names:
         Optional names for a sequence of logs.
     baseline:
-        Optional baseline member name or ``ModelLog`` reference.
+        Optional baseline member name or ``Trace`` reference.
     """
 
     def __init__(
         self,
-        members: Mapping[str, "ModelLog"] | Sequence["ModelLog"] | Sequence[tuple[str, "ModelLog"]],
+        members: Mapping[str, "Trace"] | Sequence["Trace"] | Sequence[tuple[str, "Trace"]],
         *,
         names: Sequence[str] | None = None,
-        baseline: str | "ModelLog" | None = None,
+        baseline: str | "Trace" | None = None,
     ) -> None:
         """Initialize a flat bundle without eagerly building a supergraph."""
 
         parsed = self._parse_members(members, names=names)
-        self._members: OrderedDict[str, ModelLog] = OrderedDict(parsed)
+        self._members: OrderedDict[str, Trace] = OrderedDict(parsed)
         self._supergraph: Supergraph | None = None
         self._capacity: int | None = None
         self._baseline_name: str | None = self._resolve_baseline_name(baseline)
@@ -87,12 +87,12 @@ class Bundle:
 
         return len(self._members)
 
-    def __iter__(self) -> Iterator["ModelLog"]:
+    def __iter__(self) -> Iterator["Trace"]:
         """Iterate member logs in insertion order.
 
         Returns
         -------
-        Iterator[ModelLog]
+        Iterator[Trace]
             Iterator over member logs.
         """
 
@@ -114,7 +114,7 @@ class Bundle:
 
         return name in self._members
 
-    def __getitem__(self, name: str) -> "ModelLog":
+    def __getitem__(self, name: str) -> "Trace":
         """Return a member by name.
 
         Parameters
@@ -124,7 +124,7 @@ class Bundle:
 
         Returns
         -------
-        ModelLog
+        Trace
             Matching member log.
         """
 
@@ -206,12 +206,12 @@ class Bundle:
         return list(self._members)
 
     @property
-    def members(self) -> dict[str, "ModelLog"]:
+    def members(self) -> dict[str, "Trace"]:
         """Return a shallow copy of the member mapping.
 
         Returns
         -------
-        dict[str, ModelLog]
+        dict[str, Trace]
             Member mapping.
         """
 
@@ -241,7 +241,7 @@ class Bundle:
 
         return self._ensure_supergraph()
 
-    def node(self, site: Any) -> NodeView:
+    def node(self, site: Any) -> SuperOp:
         """Return a view of one resolved site across all members.
 
         Parameters
@@ -251,13 +251,13 @@ class Bundle:
 
         Returns
         -------
-        NodeView
+        SuperOp
             Dict-keyed view over matching layer pass records.
         """
 
         self._require_relationship("node", _REQUIRED_RELATIONSHIPS["node"])
         self._ensure_supergraph()
-        layer_members: dict[str, LayerPassLog] = {}
+        layer_members: dict[str, OpLog] = {}
         failures: dict[str, str] = {}
         for name, log in self._members.items():
             try:
@@ -268,9 +268,9 @@ class Bundle:
         if failures:
             detail = "; ".join(f"{name}: {message}" for name, message in failures.items())
             raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
-        return NodeView.from_members(site, layer_members)
+        return SuperOp.from_members(site, layer_members)
 
-    def add(self, log: "ModelLog", name: str | None = None) -> "Bundle":
+    def add(self, log: "Trace", name: str | None = None) -> "Bundle":
         """Add one member log and invalidate the cached supergraph.
 
         Parameters
@@ -294,7 +294,7 @@ class Bundle:
         self._enforce_capacity()
         return self
 
-    def pop(self, name: str) -> "ModelLog":
+    def pop(self, name: str) -> "Trace":
         """Remove and return a member by name.
 
         Parameters
@@ -304,7 +304,7 @@ class Bundle:
 
         Returns
         -------
-        ModelLog
+        Trace
             Removed member.
         """
 
@@ -376,7 +376,7 @@ class Bundle:
         self._supergraph = None
 
     def do(self, *args: Any, **kwargs: Any) -> "Bundle":
-        """Apply ``ModelLog.do`` to every member.
+        """Apply ``Trace.do`` to every member.
 
         Returns
         -------
@@ -402,14 +402,14 @@ class Bundle:
             New bundle containing forked logs.
         """
 
-        forked: OrderedDict[str, ModelLog] = OrderedDict()
+        forked: OrderedDict[str, Trace] = OrderedDict()
         for member_name, member in self._members.items():
             fork_name = f"{name}_{member_name}" if name is not None else None
             forked[member_name] = member.fork(name=fork_name)
         return Bundle(forked, baseline=self._baseline_name)
 
     def attach_hooks(self, *args: Any, **kwargs: Any) -> "Bundle":
-        """Apply ``ModelLog.attach_hooks`` to every member.
+        """Apply ``Trace.attach_hooks`` to every member.
 
         Returns
         -------
@@ -454,7 +454,7 @@ class Bundle:
             member.rerun(model, x, **kwargs)
         return self
 
-    def metric(self, fn: Callable[["ModelLog"], Any]) -> dict[str, Any]:
+    def metric(self, fn: Callable[["Trace"], Any]) -> dict[str, Any]:
         """Apply a function independently to each member.
 
         Parameters
@@ -492,12 +492,12 @@ class Bundle:
         Parameters
         ----------
         method:
-            Display method forwarded to each member's :meth:`ModelLog.show`.
+            Display method forwarded to each member's :meth:`Trace.show`.
         **kwargs:
-            Forwarded to each member's :meth:`ModelLog.show`. When an output
+            Forwarded to each member's :meth:`Trace.show`. When an output
             path is supplied, member names are appended to produce one artifact
             per log. ``vis_opt='none'`` is accepted and returns without
-            rendering, matching ``ModelLog.show``.
+            rendering, matching ``Trace.show``.
 
         Returns
         -------
@@ -537,7 +537,7 @@ class Bundle:
 
     def most_changed(
         self,
-        baseline: str | "ModelLog" | None = None,
+        baseline: str | "Trace" | None = None,
         *,
         top_k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
@@ -601,7 +601,7 @@ class Bundle:
         Returns
         -------
         Any
-            Site-score rows for member pairs, or a NodeView diff matrix.
+            Site-score rows for member pairs, or a SuperOp diff matrix.
         """
 
         self._require_relationship("diff", _REQUIRED_RELATIONSHIPS["diff"])
@@ -721,15 +721,15 @@ class Bundle:
     @classmethod
     def _parse_members(
         cls,
-        members: Mapping[str, "ModelLog"] | Sequence["ModelLog"] | Sequence[tuple[str, "ModelLog"]],
+        members: Mapping[str, "Trace"] | Sequence["Trace"] | Sequence[tuple[str, "Trace"]],
         *,
         names: Sequence[str] | None,
-    ) -> list[tuple[str, "ModelLog"]]:
+    ) -> list[tuple[str, "Trace"]]:
         """Normalize supported construction shapes.
 
         Returns
         -------
-        list[tuple[str, ModelLog]]
+        list[tuple[str, Trace]]
             Ordered member pairs.
         """
 
@@ -742,13 +742,13 @@ class Bundle:
             if names is not None:
                 if len(names) != len(values):
                     raise ValueError("names length must match member count.")
-                named_logs = cast("Sequence[ModelLog]", values)
+                named_logs = cast("Sequence[Trace]", values)
                 pairs = [(str(name), log) for name, log in zip(names, named_logs)]
             elif values and all(cls._is_name_log_tuple(value) for value in values):
-                tuple_values = cast("Sequence[tuple[str, ModelLog]]", values)
+                tuple_values = cast("Sequence[tuple[str, Trace]]", values)
                 pairs = [(str(member_name), log) for member_name, log in tuple_values]
             else:
-                log_values = cast("Sequence[ModelLog]", values)
+                log_values = cast("Sequence[Trace]", values)
                 pairs = cls._dedupe_default_names(
                     [
                         (cls._derive_name(log, name=None, index=index), log)
@@ -756,7 +756,7 @@ class Bundle:
                     ]
                 )
         if not pairs:
-            raise ValueError("Bundle requires at least one ModelLog.")
+            raise ValueError("Bundle requires at least one Trace.")
         duplicate_names = sorted(
             {name for name, _ in pairs if [n for n, _ in pairs].count(name) > 1}
         )
@@ -765,7 +765,7 @@ class Bundle:
         return pairs
 
     @staticmethod
-    def _dedupe_default_names(pairs: list[tuple[str, "ModelLog"]]) -> list[tuple[str, "ModelLog"]]:
+    def _dedupe_default_names(pairs: list[tuple[str, "Trace"]]) -> list[tuple[str, "Trace"]]:
         """Disambiguate automatically derived member names.
 
         Parameters
@@ -775,12 +775,12 @@ class Bundle:
 
         Returns
         -------
-        list[tuple[str, ModelLog]]
+        list[tuple[str, Trace]]
             Pairs with ``_2``, ``_3`` suffixes for repeated names.
         """
 
         seen: dict[str, int] = {}
-        deduped: list[tuple[str, ModelLog]] = []
+        deduped: list[tuple[str, Trace]] = []
         for member_name, log in pairs:
             count = seen.get(member_name, 0) + 1
             seen[member_name] = count
@@ -803,7 +803,7 @@ class Bundle:
         return isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], str)
 
     @staticmethod
-    def _derive_name(log: "ModelLog", *, name: str | None, index: int) -> str:
+    def _derive_name(log: "Trace", *, name: str | None, index: int) -> str:
         """Derive a member name from an explicit value or log metadata.
 
         Returns
@@ -819,7 +819,7 @@ class Bundle:
             return str(log_name)
         return f"member_{index}"
 
-    def _resolve_baseline_name(self, baseline: str | "ModelLog" | None) -> str | None:
+    def _resolve_baseline_name(self, baseline: str | "Trace" | None) -> str | None:
         """Resolve a baseline constructor argument to a member name.
 
         Returns
@@ -837,7 +837,7 @@ class Bundle:
         for name, member in self._members.items():
             if member is baseline:
                 return name
-        raise KeyError("Baseline ModelLog is not a member of this Bundle.")
+        raise KeyError("Baseline Trace is not a member of this Bundle.")
 
     def _auto_detect_baseline(self) -> str | None:
         """Auto-detect a pristine baseline when exactly one candidate exists.
@@ -856,7 +856,7 @@ class Bundle:
         ]
         return candidates[0] if len(candidates) == 1 else None
 
-    def _baseline_or_raise(self, baseline: str | "ModelLog" | None) -> str:
+    def _baseline_or_raise(self, baseline: str | "Trace" | None) -> str:
         """Return a baseline name or raise for ambiguity.
 
         Returns
@@ -972,7 +972,7 @@ class Bundle:
         return _RELATIONSHIP_RANK[actual] >= _RELATIONSHIP_RANK[required]
 
     @classmethod
-    def _relationship_between(cls, left: "ModelLog", right: "ModelLog") -> Relationship:
+    def _relationship_between(cls, left: "Trace", right: "Trace") -> Relationship:
         """Derive relationship evidence for two model logs.
 
         Returns
@@ -1028,7 +1028,7 @@ class Bundle:
         return Relationship.UNKNOWN
 
     @staticmethod
-    def _weight_fingerprint(log: "ModelLog") -> str | None:
+    def _weight_fingerprint(log: "Trace") -> str | None:
         """Return the strongest available weight fingerprint.
 
         Returns
@@ -1044,7 +1044,7 @@ class Bundle:
         )
 
     @staticmethod
-    def _weak_model(log: "ModelLog") -> Any | None:
+    def _weak_model(log: "Trace") -> Any | None:
         """Resolve a captured weak model reference.
 
         Returns
@@ -1085,7 +1085,7 @@ def _tensor_field(layer: Any, field: Literal["activation", "gradient"]) -> torch
     Parameters
     ----------
     layer:
-        LayerLog or LayerPassLog-like object.
+        LayerLog or OpLog-like object.
     field:
         Tensor field to read.
 
@@ -1130,15 +1130,15 @@ def _distance_value(
     return float(value.detach().item())
 
 
-def _resolve_member_name(bundle: Bundle, member: str | "ModelLog" | None) -> str:
-    """Resolve a member name or ModelLog reference within a bundle.
+def _resolve_member_name(bundle: Bundle, member: str | "Trace" | None) -> str:
+    """Resolve a member name or Trace reference within a bundle.
 
     Parameters
     ----------
     bundle:
         Bundle being queried.
     member:
-        Member name, ModelLog reference, or ``None``.
+        Member name, Trace reference, or ``None``.
 
     Returns
     -------
@@ -1155,14 +1155,14 @@ def _resolve_member_name(bundle: Bundle, member: str | "ModelLog" | None) -> str
     for name, log in bundle.members.items():
         if log is member:
             return name
-    raise KeyError("ModelLog is not a member of this Bundle.")
+    raise KeyError("Trace is not a member of this Bundle.")
 
 
 def _bundle_delta_map(
     self: Bundle,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
     *,
-    baseline: str | "ModelLog" | None = None,
+    baseline: str | "Trace" | None = None,
     on: Literal["activation", "gradient"] = "activation",
 ) -> dict[str, dict[str, float]]:
     """Return per-node tensor deltas from a baseline trace.
@@ -1222,7 +1222,7 @@ def _bundle_delta_map(
 def _bundle_norm_delta(
     self: Bundle,
     *,
-    baseline: str | "ModelLog" | None = None,
+    baseline: str | "Trace" | None = None,
     on: Literal["activation", "gradient"] = "activation",
 ) -> dict[str, dict[str, float]]:
     """Return relative L2 deltas for every comparable bundle node.
@@ -1244,8 +1244,8 @@ def _bundle_norm_delta(
 
 
 def _output_layer_pairs(
-    target_log: "ModelLog",
-    candidate_log: "ModelLog",
+    target_log: "Trace",
+    candidate_log: "Trace",
 ) -> list[tuple[Any, Any]]:
     """Return paired output layers by output index.
 
@@ -1279,7 +1279,7 @@ def _output_layer_pairs(
 
 def _bundle_output_delta(
     self: Bundle,
-    target: str | "ModelLog",
+    target: str | "Trace",
     *,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
     on: Literal["activation", "gradient"] = "activation",
@@ -1289,7 +1289,7 @@ def _bundle_output_delta(
     Parameters
     ----------
     target:
-        Target member name or ``ModelLog`` reference.
+        Target member name or ``Trace`` reference.
     metric:
         Metric name or callable.
     on:
@@ -1349,7 +1349,7 @@ def _bundle_compare(
     self: Bundle,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
     *,
-    baseline: str | "ModelLog" | None = None,
+    baseline: str | "Trace" | None = None,
     on: Literal["activation", "gradient"] = "activation",
 ) -> dict[str, Any]:
     """Return a unified bundle comparison payload.
@@ -1419,8 +1419,8 @@ def _alignment_score(left: Any, right: Any, left_index: int, right_index: int) -
 
 def _bundle_aligned_pairs(
     self: Bundle,
-    left: str | "ModelLog" | None = None,
-    right: str | "ModelLog" | None = None,
+    left: str | "Trace" | None = None,
+    right: str | "Trace" | None = None,
     *,
     min_score: float = 0.45,
 ) -> list[tuple[Any, Any]]:
@@ -1481,10 +1481,10 @@ def _bundle_show_diff(
 
     Examples
     --------
-    >>> model_log = tl.log_forward_pass(model, x, intervention_ready=True)
-    >>> ablated = model_log.fork("ablated")
+    >>> trace = tl.trace(model, x, intervention_ready=True)
+    >>> ablated = trace.fork("ablated")
     >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
-    >>> bundle = tl.bundle({"clean": model_log, "ablated": ablated}, baseline="clean")
+    >>> bundle = tl.bundle({"clean": trace, "ablated": ablated}, baseline="clean")
     >>> bundle.show_diff(vis_outpath="bundle_diff_clean_vs_zero_relu")
 
     Parameters

@@ -52,7 +52,7 @@ class _HookReentrancyGuard:
     """Prevent recursive TorchLens tracing while hook code is active.
 
     Phase 3 defines the guard object only. Phase 4a will connect it to
-    ``active_logging()`` so ``log_forward_pass`` can fail before entering a
+    ``active_logging()`` so ``trace`` can fail before entering a
     nested logging context.
     """
 
@@ -312,13 +312,13 @@ def _live_run_ctx() -> dict[str, Any]:
         Mutable context shared by hooks in this live run.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
+    trace = _state._active_trace
+    if trace is None:
         return {}
-    run_ctx = getattr(model_log, "last_run_ctx", None)
+    run_ctx = getattr(trace, "last_run_ctx", None)
     if run_ctx is None:
         run_ctx = {"engine": "live", "timestamp": time.monotonic()}
-        model_log.last_run_ctx = run_ctx
+        trace.last_run_ctx = run_ctx
     else:
         run_ctx.setdefault("engine", "live")
         run_ctx.setdefault("timestamp", time.monotonic())
@@ -421,7 +421,7 @@ def do(log: Any, *args: Any, **kwargs: Any) -> Any:
     Parameters
     ----------
     log:
-        ModelLog-like object that will eventually receive the operation.
+        Trace-like object that will eventually receive the operation.
     *args:
         Positional arguments forwarded to ``log.do``.
     **kwargs:

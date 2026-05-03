@@ -1,4 +1,4 @@
-"""Backward-pass graph walking, grad_fn hooks, and ModelLog APIs."""
+"""Backward-pass graph walking, grad_fn hooks, and Trace APIs."""
 
 from __future__ import annotations
 
@@ -55,13 +55,13 @@ def _iter_next_grad_fns(grad_fn: Any) -> Iterator[Any]:
             yield next_fn
 
 
-def _selected_for_gradient_save(model_log: Any, layer_label: str | None) -> bool:
+def _selected_for_gradient_save(trace: Any, layer_label: str | None) -> bool:
     """Return whether a forward layer's gradient should be saved.
 
     Parameters
     ----------
-    model_log:
-        ModelLog being updated.
+    trace:
+        Trace being updated.
     layer_label:
         Final layer label, or ``None`` for intervening grad_fns.
 
@@ -72,12 +72,12 @@ def _selected_for_gradient_save(model_log: Any, layer_label: str | None) -> bool
     """
     if layer_label is None:
         return False
-    selection = getattr(model_log, "_gradient_layer_nums_to_save", "all")
+    selection = getattr(trace, "_gradient_layer_nums_to_save", "all")
     if selection == "all":
         return True
     if selection in [None, "none", []]:
         return False
-    return model_log[layer_label].creation_order in selection
+    return trace[layer_label].creation_order in selection
 
 
 def _normalize_grad_fn_type(grad_fn: Any) -> str:
@@ -97,7 +97,7 @@ def _normalize_grad_fn_type(grad_fn: Any) -> str:
 
 
 def _grad_fn_label_parts(
-    model_log: Any,
+    trace: Any,
     grad_fn_type: str,
     layer_label: str | None,
     type_counter: dict[str, int],
@@ -107,8 +107,8 @@ def _grad_fn_label_parts(
 
     Parameters
     ----------
-    model_log:
-        ModelLog being updated.
+    trace:
+        Trace being updated.
     grad_fn_type:
         Normalized grad_fn type.
     layer_label:
@@ -124,7 +124,7 @@ def _grad_fn_label_parts(
         GradFn type index, total index, and user-facing label.
     """
     if layer_label is not None:
-        layer = model_log.layers[layer_label]
+        layer = trace.layers[layer_label]
         type_num = layer.layer_type_num
         total_num = layer.layer_total_num
     else:
@@ -134,13 +134,13 @@ def _grad_fn_label_parts(
     return type_num, total_num, label
 
 
-def _make_grad_fn_hook(model_log: Any, grad_fn_id: int) -> Callable[..., None]:
+def _make_grad_fn_hook(trace: Any, grad_fn_id: int) -> Callable[..., None]:
     """Build a runtime hook for one autograd grad_fn.
 
     Parameters
     ----------
-    model_log:
-        ModelLog whose flat backward fields should receive runtime data.
+    trace:
+        Trace whose flat backward fields should receive runtime data.
     grad_fn_id:
         ``id()`` of the hooked grad_fn.
 
@@ -151,7 +151,7 @@ def _make_grad_fn_hook(model_log: Any, grad_fn_id: int) -> Callable[..., None]:
     """
 
     def hook(*hook_args: Any) -> None:
-        grad_fn_log = model_log.grad_fn_logs.get(grad_fn_id)
+        grad_fn_log = trace.grad_fn_logs.get(grad_fn_id)
         if grad_fn_log is None:
             return
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else None
@@ -161,7 +161,7 @@ def _make_grad_fn_hook(model_log: Any, grad_fn_id: int) -> Callable[..., None]:
             if grad_fn_log.corresponding_layer is not None
             else None
         )
-        if not _selected_for_gradient_save(model_log, layer_label):
+        if not _selected_for_gradient_save(trace, layer_label):
             grad_inputs = None
             grad_outputs = None
         with pause_logging():
@@ -212,13 +212,13 @@ def _reset_peak_memory(device: torch.device) -> tuple[str, int]:
     return _memory_snapshot(device)
 
 
-def _layer_by_grad_fn_id(model_log: Any) -> dict[int, str]:
+def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     """Build a mapping from forward grad_fn identity to final layer label.
 
     Parameters
     ----------
-    model_log:
-        ModelLog whose layers were captured during the forward pass.
+    trace:
+        Trace whose layers were captured during the forward pass.
 
     Returns
     -------
@@ -226,20 +226,20 @@ def _layer_by_grad_fn_id(model_log: Any) -> dict[int, str]:
         Mapping from ``id(grad_fn)`` to final layer label.
     """
     mapping = {}
-    for layer in model_log.layer_list:
+    for layer in trace.layer_list:
         grad_fn_id = getattr(layer, "grad_fn_id", None)
         if grad_fn_id is not None:
             mapping[grad_fn_id] = layer.layer_label
     return mapping
 
 
-def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[Any]:
+def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     """Walk ``loss.grad_fn`` and register hooks on every reachable grad_fn.
 
     Parameters
     ----------
-    model_log:
-        ModelLog that owns the flat backward fields.
+    trace:
+        Trace that owns the flat backward fields.
     loss:
         Scalar or tensor loss whose backward graph should be captured.
 
@@ -251,14 +251,14 @@ def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[An
     if loss.grad_fn is None:
         raise ValueError("log_backward requires a loss tensor with a grad_fn.")
 
-    layer_lookup = _layer_by_grad_fn_id(model_log)
+    layer_lookup = _layer_by_grad_fn_id(trace)
     queue: deque[Any] = deque([loss.grad_fn])
     seen: set[int] = set()
     handles: list[Any] = []
     type_counter: dict[str, int] = {}
-    if model_log.backward_root_grad_fn_id is None:
-        model_log.backward_root_grad_fn_id = id(loss.grad_fn)
-    model_log.has_backward_log = True
+    if trace.backward_root_grad_fn_id is None:
+        trace.backward_root_grad_fn_id = id(loss.grad_fn)
+    trace.has_backward_log = True
 
     while queue:
         grad_fn = queue.popleft()
@@ -269,18 +269,18 @@ def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[An
         next_grad_fns = list(_iter_next_grad_fns(grad_fn))
         queue.extend(next_grad_fns)
         layer_label = layer_lookup.get(grad_fn_id)
-        grad_fn_log = model_log.grad_fn_logs.get(grad_fn_id)
+        grad_fn_log = trace.grad_fn_logs.get(grad_fn_id)
         if grad_fn_log is None:
             grad_fn_type = _normalize_grad_fn_type(grad_fn)
-            grad_fn_total_num = len(model_log.grad_fn_order) + 1
+            grad_fn_total_num = len(trace.grad_fn_order) + 1
             grad_fn_type_num, grad_fn_total_num, label = _grad_fn_label_parts(
-                model_log,
+                trace,
                 grad_fn_type,
                 layer_label,
                 type_counter,
                 grad_fn_total_num,
             )
-            corresponding_layer = model_log.layers[layer_label] if layer_label is not None else None
+            corresponding_layer = trace.layers[layer_label] if layer_label is not None else None
             grad_fn_log = GradFnLog(
                 grad_fn_id=grad_fn_id,
                 name=type(grad_fn).__name__,
@@ -294,39 +294,39 @@ def _walk_and_hook_backward_graph(model_log: Any, loss: torch.Tensor) -> list[An
                 corresponding_layer=corresponding_layer,
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
             )
-            model_log.grad_fn_logs[grad_fn_id] = grad_fn_log
-            model_log.grad_fn_order.append(grad_fn_id)
+            trace.grad_fn_logs[grad_fn_id] = grad_fn_log
+            trace.grad_fn_order.append(grad_fn_id)
         else:
             grad_fn_log.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
         if layer_label is not None:
-            layer = model_log[layer_label]
+            layer = trace[layer_label]
             layer.corresponding_grad_fn = grad_fn_log
             if hasattr(layer, "parent_layer_log"):
                 layer.parent_layer_log.corresponding_grad_fn = grad_fn_log
         try:
-            handles.append(grad_fn.register_hook(_make_grad_fn_hook(model_log, grad_fn_id)))
+            handles.append(grad_fn.register_hook(_make_grad_fn_hook(trace, grad_fn_id)))
         except RuntimeError:
             continue
     return handles
 
 
-def _clear_forward_grad_fn_refs(model_log: Any) -> None:
+def _clear_forward_grad_fn_refs(trace: Any) -> None:
     """Clear strong forward references to autograd nodes after hook registration.
 
     Parameters
     ----------
-    model_log:
-        ModelLog whose LayerPassLog and LayerLog grad_fn object refs should be
+    trace:
+        Trace whose OpLog and LayerLog grad_fn object refs should be
         released.
     """
-    for layer in model_log.layer_list:
+    for layer in trace.layer_list:
         layer.grad_fn_object = None
-    for layer_log in model_log.layer_logs.values():
+    for layer_log in trace.layer_logs.values():
         layer_log.grad_fn_object = None
 
 
 def _run_backward_with_capture(
-    model_log: Any,
+    trace: Any,
     loss: torch.Tensor,
     backward_callable: Callable[[], Any],
 ) -> Any:
@@ -334,8 +334,8 @@ def _run_backward_with_capture(
 
     Parameters
     ----------
-    model_log:
-        ModelLog to mutate.
+    trace:
+        Trace to mutate.
     loss:
         Loss tensor that roots the backward graph.
     backward_callable:
@@ -346,7 +346,7 @@ def _run_backward_with_capture(
     Any
         Return value from ``backward_callable``.
     """
-    handles = _walk_and_hook_backward_graph(model_log, loss)
+    handles = _walk_and_hook_backward_graph(trace, loss)
     backend, before = _reset_peak_memory(loss.device)
     try:
         result = backward_callable()
@@ -354,35 +354,35 @@ def _run_backward_with_capture(
         for handle in handles:
             with contextlib.suppress(Exception):
                 handle.remove()
-        _clear_forward_grad_fn_refs(model_log)
+        _clear_forward_grad_fn_refs(trace)
     _backend, after = _memory_snapshot(loss.device)
-    model_log.backward_memory_backend = backend
-    model_log.backward_peak_memory_bytes += max(0, after - before)
-    model_log.backward_num_passes += 1
+    trace.backward_memory_backend = backend
+    trace.backward_peak_memory_bytes += max(0, after - before)
+    trace.backward_num_passes += 1
     return result
 
 
-def _ensure_layer_gradient_hooks(model_log: Any) -> None:
+def _ensure_layer_gradient_hooks(trace: Any) -> None:
     """Register tensor gradient hooks lazily for saved graph-connected activations.
 
     Parameters
     ----------
-    model_log:
-        ModelLog whose saved activations should receive gradient hooks.
+    trace:
+        Trace whose saved activations should receive gradient hooks.
     """
-    if getattr(model_log, "save_gradients", False):
+    if getattr(trace, "save_gradients", False):
         return
-    model_log.save_gradients = True
-    if getattr(model_log, "_gradient_layer_nums_to_save", None) in [None, [], "none"]:
-        model_log._gradient_layer_nums_to_save = "all"
-    for layer in getattr(model_log, "layer_list", []):
+    trace.save_gradients = True
+    if getattr(trace, "_gradient_layer_nums_to_save", None) in [None, [], "none"]:
+        trace._gradient_layer_nums_to_save = "all"
+    for layer in getattr(trace, "layer_list", []):
         activation = getattr(layer, "activation", None)
         if isinstance(activation, torch.Tensor):
-            _add_backward_hook(model_log, activation, layer.tensor_label_raw)
+            _add_backward_hook(trace, activation, layer.tensor_label_raw)
 
 
 def _configure_gradient_streaming(
-    model_log: Any,
+    trace: Any,
     *,
     save_gradients_to: str | None,
     keep_gradients_in_memory: bool | None,
@@ -391,8 +391,8 @@ def _configure_gradient_streaming(
 
     Parameters
     ----------
-    model_log:
-        ModelLog receiving streamed gradient blobs.
+    trace:
+        Trace receiving streamed gradient blobs.
     save_gradients_to:
         Optional bundle path for gradient streaming.
     keep_gradients_in_memory:
@@ -400,20 +400,20 @@ def _configure_gradient_streaming(
     """
 
     if keep_gradients_in_memory is not None:
-        model_log._keep_gradients_in_memory = keep_gradients_in_memory
+        trace._keep_gradients_in_memory = keep_gradients_in_memory
     if save_gradients_to is not None:
-        if getattr(model_log, "_activation_writer", None) is not None:
+        if getattr(trace, "_activation_writer", None) is not None:
             raise ValueError("Cannot set save_gradients_to after a streaming writer exists.")
-        model_log._activation_writer = BundleStreamWriter(save_gradients_to)
-        model_log._defer_streaming_bundle_finalization = True
-        model_log.save_gradients = True
+        trace._activation_writer = BundleStreamWriter(save_gradients_to)
+        trace._defer_streaming_bundle_finalization = True
+        trace.save_gradients = True
 
 
-def _finalize_gradient_streaming(model_log: Any) -> None:
+def _finalize_gradient_streaming(trace: Any) -> None:
     """Finalize a deferred gradient-streaming bundle after backward capture."""
 
-    writer = getattr(model_log, "_activation_writer", None)
-    if writer is None or not getattr(model_log, "_defer_streaming_bundle_finalization", False):
+    writer = getattr(trace, "_activation_writer", None)
+    if writer is None or not getattr(trace, "_defer_streaming_bundle_finalization", False):
         return
 
     from ..postprocess.finalization import (
@@ -422,11 +422,11 @@ def _finalize_gradient_streaming(model_log: Any) -> None:
         _finalize_streamed_bundle,
     )
 
-    _finalize_streamed_bundle(model_log)
-    if not getattr(model_log, "_keep_activations_in_memory", True):
-        _evict_streamed_activations(model_log)
-    if not getattr(model_log, "_keep_gradients_in_memory", True):
-        _evict_streamed_gradients(model_log)
+    _finalize_streamed_bundle(trace)
+    if not getattr(trace, "_keep_activations_in_memory", True):
+        _evict_streamed_activations(trace)
+    if not getattr(trace, "_keep_gradients_in_memory", True):
+        _evict_streamed_gradients(trace)
 
 
 def log_backward(
@@ -449,7 +449,7 @@ def log_backward(
     Returns
     -------
     Any
-        The same ModelLog, for chaining.
+        The same Trace, for chaining.
     """
     _configure_gradient_streaming(
         self,
@@ -472,12 +472,12 @@ class RecordingBackward:
 
     def __init__(
         self,
-        model_log: Any,
+        trace: Any,
         *,
         save_gradients_to: str | None = None,
         keep_gradients_in_memory: bool | None = None,
     ) -> None:
-        self.model_log = model_log
+        self.trace = trace
         self.save_gradients_to = save_gradients_to
         self.keep_gradients_in_memory = keep_gradients_in_memory
         self._original_backward: Callable[..., Any] | None = None
@@ -485,13 +485,13 @@ class RecordingBackward:
     def __enter__(self) -> "RecordingBackward":
         """Patch ``torch.Tensor.backward`` and return this context object."""
         _configure_gradient_streaming(
-            self.model_log,
+            self.trace,
             save_gradients_to=self.save_gradients_to,
             keep_gradients_in_memory=self.keep_gradients_in_memory,
         )
-        _ensure_layer_gradient_hooks(self.model_log)
+        _ensure_layer_gradient_hooks(self.trace)
         self._original_backward = torch.Tensor.backward
-        model_log = self.model_log
+        trace = self.trace
         original_backward = self._original_backward
 
         def wrapped_backward(tensor_self: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
@@ -501,7 +501,7 @@ class RecordingBackward:
                 """Run the original Tensor.backward implementation."""
                 return original_backward(tensor_self, *args, **kwargs)  # type: ignore[no-untyped-call]
 
-            return _run_backward_with_capture(model_log, tensor_self, run)
+            return _run_backward_with_capture(trace, tensor_self, run)
 
         torch.Tensor.backward = wrapped_backward  # type: ignore[assignment, method-assign]
         return self
@@ -511,7 +511,7 @@ class RecordingBackward:
         if self._original_backward is not None:
             torch.Tensor.backward = self._original_backward  # type: ignore[method-assign]
         if exc_type is None:
-            _finalize_gradient_streaming(self.model_log)
+            _finalize_gradient_streaming(self.trace)
 
 
 def recording_backward(

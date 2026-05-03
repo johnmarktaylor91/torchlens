@@ -2,7 +2,7 @@
 
 Portable loads intentionally avoid rebuilding every weakref-backed accessor in
 ``__setstate__``. This module centralizes the post-load repair step that
-reconnects module and buffer accessors to the owning ``ModelLog`` once the
+reconnects module and buffer accessors to the owning ``Trace`` once the
 rehydrated object graph is ready for normal user access.
 """
 
@@ -14,40 +14,40 @@ from ..data_classes.buffer_log import BufferAccessor
 from ..data_classes.module_log import ModuleAccessor
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
-    from ..data_classes.module_log import ModuleLog, ModulePassLog
+    from ..data_classes.model_log import Trace
+    from ..data_classes.module_log import ModuleLog, ModuleCallLog
 
 
-def rebuild_model_log_accessors(
-    model_log: "ModelLog",
+def rebuild_trace_accessors(
+    trace: "Trace",
     module_dict: dict[str, "ModuleLog"],
     module_order: list["ModuleLog"],
-    pass_dict: dict[str, "ModulePassLog"],
+    pass_dict: dict[str, "ModuleCallLog"],
 ) -> None:
-    """Rebuild the user-facing module and buffer accessors on a ``ModelLog``.
+    """Rebuild the user-facing module and buffer accessors on a ``Trace``.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log receiving the rebuilt accessors.
     module_dict:
         Mapping from primary module address to ``ModuleLog``.
     module_order:
         Ordered list of module logs for iteration and integer indexing.
     pass_dict:
-        Mapping from ``"address:pass"`` labels to ``ModulePassLog`` entries.
+        Mapping from ``"address:pass"`` labels to ``ModuleCallLog`` entries.
     """
 
     for module_log in module_dict.values():
-        module_log._source_model_log = model_log
+        module_log._source_trace = trace
         module_log._buffer_accessor = None
 
-    model_log._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
+    trace._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
 
     buffer_dict = {}
-    for label in model_log.buffer_layers:
-        if label in model_log.layer_dict_all_keys:
-            entry = model_log.layer_dict_all_keys[label]
+    for label in trace.buffer_layers:
+        if label in trace.layer_dict_all_keys:
+            entry = trace.layer_dict_all_keys[label]
             if entry.buffer_address is not None:
                 buffer_dict[entry.buffer_address] = entry
-    model_log._buffer_accessor = BufferAccessor(buffer_dict, source_model_log=model_log)  # type: ignore[assignment, arg-type]
+    trace._buffer_accessor = BufferAccessor(buffer_dict, source_trace=trace)  # type: ignore[assignment, arg-type]

@@ -111,7 +111,7 @@ class _BatchNormModel(nn.Module):
         return self.bn(x)
 
 
-def _capture(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
+def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture an intervention-ready log.
 
     Parameters
@@ -123,14 +123,14 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured log.
     """
 
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
-def _first_batch_activation(log: tl.ModelLog) -> torch.Tensor:
+def _first_batch_activation(log: tl.Trace) -> torch.Tensor:
     """Return the first saved activation with a batch dimension.
 
     Parameters

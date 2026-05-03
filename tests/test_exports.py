@@ -91,7 +91,7 @@ class _FakeHubApi:
 
 @pytest.fixture
 def export_log() -> Any:
-    """Build a small ModelLog for export tests.
+    """Build a small Trace for export tests.
 
     Returns
     -------
@@ -100,7 +100,7 @@ def export_log() -> Any:
     """
 
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))
-    return tl.log_forward_pass(model, torch.randn(2, 3), capture=tl.options.CaptureOptions())
+    return tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions())
 
 
 def test_trace_timeline_exports_are_parseable(export_log: Any, tmp_path: Path) -> None:
@@ -169,7 +169,7 @@ def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path
 def test_emit_nvtx_capture_option_does_not_change_capture() -> None:
     """emit_nvtx should be accepted and should not alter normal logging output."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         nn.Linear(2, 2),
         torch.randn(1, 2),
         capture=tl.options.CaptureOptions(emit_nvtx=True),
@@ -180,7 +180,7 @@ def test_emit_nvtx_capture_option_does_not_change_capture() -> None:
 
 
 def test_tabular_exports_round_trip_and_old_methods_warn(export_log: Any, tmp_path: Path) -> None:
-    """New tabular exports should round-trip and old ModelLog writers should warn."""
+    """New tabular exports should round-trip and old Trace writers should warn."""
 
     expected = export_log.to_pandas()
     assert "func_config" in expected.columns

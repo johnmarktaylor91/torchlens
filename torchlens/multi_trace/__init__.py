@@ -2,9 +2,9 @@
 
 Internal surface:
 
-* :class:`NodeView` -- per-node view returned by ``Bundle.node(...)``.
+* :class:`SuperOp` -- per-node view returned by ``Bundle.node(...)``.
 * :func:`compare_topology` / :class:`TopologyDiff` -- pairwise structural
-  diff between two ``ModelLog`` graphs.
+  diff between two ``Trace`` graphs.
 * :class:`Supergraph` / :class:`SupergraphNode` -- the union graph data
   structure produced by :func:`build_supergraph`.
 * Metric primitives (cosine_distance, relative_l2, pearson_correlation_distance,
@@ -23,7 +23,7 @@ from .metrics import (
     relative_l2,
     resolve_metric,
 )
-from .node_view import NodeView
+from .super_op import SuperOp
 from .topology import (
     Supergraph,
     SupergraphNode,
@@ -35,7 +35,7 @@ from .topology import (
 
 __all__ = [
     "METRIC_REGISTRY",
-    "NodeView",
+    "SuperOp",
     "Supergraph",
     "SupergraphNode",
     "TopologyDiff",

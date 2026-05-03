@@ -162,7 +162,7 @@ class Manifest:
     bundle_format:
         Bundle container format. S4 supports ``"directory"`` only.
     n_layers:
-        Total number of ``LayerPassLog`` entries in the saved log.
+        Total number of ``OpLog`` entries in the saved log.
     n_activation_blobs:
         Count of persisted activation tensor blobs.
     n_gradient_blobs:

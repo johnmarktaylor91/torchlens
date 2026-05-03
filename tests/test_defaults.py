@@ -14,7 +14,7 @@ from torchlens.options import VisualizationOptions
 
 
 class _DummyLog:
-    """Minimal stand-in for ``ModelLog`` used by default-behavior tests."""
+    """Minimal stand-in for ``Trace`` used by default-behavior tests."""
 
     def __init__(self) -> None:
         """Initialize a capture object with the attributes the wrappers expect."""
@@ -149,14 +149,14 @@ def stubbed_runner(
     return captured_calls, dummy_logs
 
 
-def test_log_forward_pass_defaults_are_stable(
+def test_trace_defaults_are_stable(
     stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
 ) -> None:
-    """``log_forward_pass`` should preserve the audited default behavior."""
+    """``trace`` should preserve the audited default behavior."""
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.log_forward_pass(_TinyModel(), _tiny_input(), layers_to_save=None)
+    result = tl.trace(_TinyModel(), _tiny_input(), layers_to_save=None)
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["layers_to_save"] is None
@@ -178,14 +178,14 @@ def test_log_forward_pass_defaults_are_stable(
     assert dummy_logs[-1].render_calls == []
 
 
-def test_log_forward_pass_accepts_explicit_opt_in_overrides(
+def test_trace_accepts_explicit_opt_in_overrides(
     stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
 ) -> None:
     """Callers should still be able to opt into the non-default behaviors."""
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.log_forward_pass(
+    result = tl.trace(
         _TinyModel(),
         _tiny_input(),
         layers_to_save=None,
@@ -248,7 +248,7 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
     captured_kwargs: dict[str, Any] = {}
     dummy_log = _DummyLog()
 
-    def _fake_log_forward_pass(*args: Any, **kwargs: Any) -> _DummyLog:
+    def _fake_trace(*args: Any, **kwargs: Any) -> _DummyLog:
         """Capture wrapper kwargs and return a dummy log.
 
         Parameters
@@ -268,7 +268,7 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
         captured_kwargs.update(kwargs)
         return dummy_log
 
-    monkeypatch.setattr(user_funcs, "log_forward_pass", _fake_log_forward_pass)
+    monkeypatch.setattr(user_funcs, "trace", _fake_trace)
 
     result = tl.log_model_metadata(_TinyModel(), _tiny_input())
 

@@ -1,4 +1,4 @@
-"""Tests for streaming activation save during ``log_forward_pass``."""
+"""Tests for streaming activation save during ``trace``."""
 
 from __future__ import annotations
 
@@ -8,15 +8,16 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+import torchlens as tl
 import torchlens.postprocess as postprocess_module
 from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import TorchLensPostfuncError, cleanup_tmp, log_forward_pass
+from torchlens import TorchLensPostfuncError, cleanup_tmp, trace as trace_fn
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import Manifest
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 
 class _StreamingModel(nn.Module):
@@ -62,12 +63,12 @@ def _make_streaming_model() -> tuple[_StreamingModel, torch.Tensor]:
     return _StreamingModel(), torch.randn(2, 4)
 
 
-def _saved_layers(model_log: ModelLog) -> list[Any]:
+def _saved_layers(trace: Trace) -> list[Any]:
     """Return all layers with saved activations from one model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Completed model log under test.
 
     Returns
@@ -76,7 +77,7 @@ def _saved_layers(model_log: ModelLog) -> list[Any]:
         Saved layer-pass entries.
     """
 
-    return [layer for layer in model_log.layer_list if layer.has_saved_activations]
+    return [layer for layer in trace.layer_list if layer.has_saved_activations]
 
 
 def _tmp_dirs_for(bundle_path: Path) -> list[Path]:
@@ -106,7 +107,7 @@ def test_streaming_writes_blobs_before_postprocess(
     original_add_output_layers = postprocess_module._add_output_layers
 
     def _capturing_add_output_layers(
-        self: ModelLog,
+        self: Trace,
         output_tensors: list[torch.Tensor],
         output_tensor_addresses: list[str],
     ) -> None:
@@ -119,7 +120,7 @@ def test_streaming_writes_blobs_before_postprocess(
     monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
 
     model, inputs = _make_streaming_model()
-    log_forward_pass(model, inputs, save_activations_to=bundle_path, layers_to_save="all")
+    trace_fn(model, inputs, save_activations_to=bundle_path, layers_to_save="all")
 
     assert observed["final_exists"] is False
     tmp_dirs = observed["tmp_dirs"]
@@ -136,7 +137,7 @@ def test_step_19_finalizes_bundle_and_keeps_activations_in_memory(tmp_path: Path
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    model_log = log_forward_pass(
+    trace = tl.trace_fn(
         model,
         inputs,
         save_activations_to=bundle_path,
@@ -144,7 +145,7 @@ def test_step_19_finalizes_bundle_and_keeps_activations_in_memory(tmp_path: Path
         layers_to_save="all",
     )
 
-    saved_layers = _saved_layers(model_log)
+    saved_layers = _saved_layers(trace)
     assert bundle_path.exists()
     assert not _tmp_dirs_for(bundle_path)
     assert saved_layers
@@ -163,7 +164,7 @@ def test_step_20_evicts_streamed_activations_when_requested(tmp_path: Path) -> N
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    model_log = log_forward_pass(
+    trace = tl.trace_fn(
         model,
         inputs,
         save_activations_to=bundle_path,
@@ -171,7 +172,7 @@ def test_step_20_evicts_streamed_activations_when_requested(tmp_path: Path) -> N
         layers_to_save="all",
     )
 
-    saved_layers = _saved_layers(model_log)
+    saved_layers = _saved_layers(trace)
     assert bundle_path.exists()
     assert saved_layers
     for layer in saved_layers:
@@ -190,7 +191,7 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
 
     model, inputs = _make_streaming_model()
     with pytest.raises(TorchLensPostfuncError, match="activation_postfunc raised"):
-        log_forward_pass(
+        trace_fn(
             model,
             inputs,
             save_activations_to=bundle_path,
@@ -211,7 +212,7 @@ def test_streaming_rejects_non_tensor_activation_postfunc_output(tmp_path: Path)
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
     with pytest.raises(TorchLensIOError, match="activation_postfunc outputs"):
-        log_forward_pass(
+        trace_fn(
             model,
             inputs,
             save_activations_to=bundle_path,
@@ -231,7 +232,7 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
     with pytest.raises(TorchLensIOError, match="sparse"):
-        log_forward_pass(
+        trace_fn(
             model,
             inputs,
             save_activations_to=bundle_path,
@@ -256,8 +257,8 @@ def test_activation_sink_receives_saved_tensors_and_is_mutually_exclusive(
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    model_log = log_forward_pass(model, inputs, activation_sink=_sink, layers_to_save="all")
-    capture_time_layers = [layer for layer in _saved_layers(model_log) if not layer.is_output_layer]
+    trace = tl.trace_fn(model, inputs, activation_sink=_sink, layers_to_save="all")
+    capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output_layer]
 
     assert received
     assert len(received) == len(capture_time_layers)
@@ -266,7 +267,7 @@ def test_activation_sink_receives_saved_tensors_and_is_mutually_exclusive(
 
     with pytest.raises(ValueError, match="mutually exclusive"):
         model2, inputs2 = _make_streaming_model()
-        log_forward_pass(
+        trace_fn(
             model2,
             inputs2,
             save_activations_to=tmp_path / "stream_bundle.tl",
@@ -281,7 +282,7 @@ def test_selective_streaming_save_is_rejected(tmp_path: Path) -> None:
     model, inputs = _make_streaming_model()
 
     with pytest.raises(TorchLensIOError, match='layers_to_save="all"'):
-        log_forward_pass(
+        trace_fn(
             model,
             inputs,
             layers_to_save="linear",
@@ -301,9 +302,9 @@ def test_selective_activation_sink_still_works() -> None:
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    model_log = log_forward_pass(model, inputs, activation_sink=_sink, layers_to_save="linear")
+    trace = tl.trace_fn(model, inputs, activation_sink=_sink, layers_to_save="linear")
 
-    capture_time_layers = [layer for layer in _saved_layers(model_log) if not layer.is_output_layer]
+    capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output_layer]
     assert capture_time_layers
     assert len(received) == len(capture_time_layers)
     assert all("linear" in label for label, _ in received)
@@ -335,7 +336,7 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    model_log = log_forward_pass(
+    trace = tl.trace_fn(
         model,
         inputs,
         save_activations_to=bundle_path,
@@ -343,7 +344,7 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
         layers_to_save="all",
     )
 
-    first_saved_layer = _saved_layers(model_log)[0]
+    first_saved_layer = _saved_layers(trace)[0]
     assert first_saved_layer.activation_ref is not None
     assert first_saved_layer.activation_ref.source_bundle_path == bundle_path
     assert ".tmp." not in str(first_saved_layer.activation_ref.source_bundle_path)

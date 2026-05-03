@@ -36,18 +36,18 @@ class _ReluModel(nn.Module):
         return torch.relu(x) + 1
 
 
-def _intervention_log() -> tl.ModelLog:
+def _intervention_log() -> tl.Trace:
     """Create a deterministic intervention-ready log.
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Model log with a zero-ablation recipe attached.
     """
 
     torch.manual_seed(1700)
     x = torch.randn(2, 3)
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _ReluModel(),
         x,
         capture=CaptureOptions(intervention_ready=True, random_seed=0),

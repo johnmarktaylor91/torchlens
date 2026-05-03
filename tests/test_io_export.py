@@ -12,12 +12,12 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 
 PARQUET_IMPORT_ERROR = "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
 
 SURFACE_COLUMNS: dict[str, list[str]] = {
-    "model_log": [
+    "trace": [
         "layer_label",
         "layer_type",
         "pass_num",
@@ -172,7 +172,7 @@ class _IoExportModel(nn.Module):
 
 @pytest.fixture
 def io_export_log() -> Any:
-    """Build a real ModelLog covering every DataFrame export surface.
+    """Build a real Trace covering every DataFrame export surface.
 
     Returns
     -------
@@ -182,7 +182,7 @@ def io_export_log() -> Any:
     torch.manual_seed(0)
     model = _IoExportModel()
     x = torch.randn(2, 2)
-    return log_forward_pass(model, x)
+    return trace_fn(model, x)
 
 
 def _get_surface(log: Any, surface_name: str) -> Any:
@@ -200,7 +200,7 @@ def _get_surface(log: Any, surface_name: str) -> Any:
     Any
         Surface exposing ``to_pandas()``, ``to_csv()``, ``to_json()``, and ``to_parquet()``.
     """
-    if surface_name == "model_log":
+    if surface_name == "trace":
         return log
     if surface_name == "layers":
         return log.layers

@@ -13,9 +13,9 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, log_forward_pass, rehydrate_nested, save
+from torchlens import load, trace as trace_fn, rehydrate_nested, save
 from torchlens._io import BlobRef, TorchLensIOError
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 
 class _LazyIOModel(nn.Module):
@@ -50,8 +50,8 @@ def _build_log(
     seed: int = 0,
     save_function_args: bool = False,
     save_rng_states: bool = False,
-) -> ModelLog:
-    """Build a deterministic ``ModelLog`` for lazy I/O tests.
+) -> Trace:
+    """Build a deterministic ``Trace`` for lazy I/O tests.
 
     Parameters
     ----------
@@ -64,14 +64,14 @@ def _build_log(
 
     Returns
     -------
-    ModelLog
+    Trace
         Logged forward pass with all activations saved.
     """
 
     torch.manual_seed(seed)
     model = _LazyIOModel()
     inputs = torch.randn(2, 4)
-    return log_forward_pass(
+    return trace_fn(
         model,
         inputs,
         layers_to_save="all",
@@ -90,7 +90,7 @@ def _save_bundle(
     include_captured_args: bool = False,
     include_rng_states: bool = False,
     path_name: str = "bundle.tl",
-) -> tuple[Path, ModelLog]:
+) -> tuple[Path, Trace]:
     """Save a deterministic bundle and return the path plus source log.
 
     Parameters
@@ -112,31 +112,31 @@ def _save_bundle(
 
     Returns
     -------
-    tuple[Path, ModelLog]
+    tuple[Path, Trace]
         Saved bundle path and the original live log.
     """
 
-    model_log = _build_log(
+    trace = _build_log(
         seed=seed,
         save_function_args=save_function_args,
         save_rng_states=save_rng_states,
     )
     bundle_path = tmp_path / path_name
     save(
-        model_log,
+        trace,
         bundle_path,
         include_captured_args=include_captured_args,
         include_rng_states=include_rng_states,
     )
-    return bundle_path, model_log
+    return bundle_path, trace
 
 
-def _first_saved_layer(model_log: ModelLog) -> Any:
+def _first_saved_layer(trace: Trace) -> Any:
     """Return the first saved layer entry from a model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log under test.
 
     Returns
@@ -145,7 +145,7 @@ def _first_saved_layer(model_log: ModelLog) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in model_log.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_activations)
 
 
 def _read_manifest(bundle_path: Path) -> dict[str, Any]:
@@ -363,7 +363,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     with pytest.raises(
         TorchLensIOError,
-        match="Call torchlens.rehydrate_nested\\(model_log\\) before saving",
+        match="Call torchlens.rehydrate_nested\\(trace\\) before saving",
     ):
         save(lazy_log, tmp_path / "resaved.tl", include_captured_args=True)
 

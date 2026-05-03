@@ -23,8 +23,8 @@ from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.layer_pass_log import LayerPassLog
-    from torchlens.data_classes.model_log import ModelLog
+    from torchlens.data_classes.op_log import OpLog
+    from torchlens.data_classes.model_log import Trace
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
 
@@ -115,7 +115,7 @@ def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any
 class SiteTable:
     """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
 
-    _sites: tuple["LayerPassLog", ...]
+    _sites: tuple["OpLog", ...]
     query: Any | None = None
 
     def __len__(self) -> int:
@@ -129,18 +129,18 @@ class SiteTable:
 
         return len(self._sites)
 
-    def __iter__(self) -> Iterator["LayerPassLog"]:
+    def __iter__(self) -> Iterator["OpLog"]:
         """Iterate through resolved sites in execution order.
 
         Returns
         -------
-        Iterator[LayerPassLog]
+        Iterator[OpLog]
             Iterator over layer-pass records.
         """
 
         return iter(self._sites)
 
-    def __getitem__(self, idx: int | slice) -> "LayerPassLog | SiteTable":
+    def __getitem__(self, idx: int | slice) -> "OpLog | SiteTable":
         """Return one site or a sliced site table.
 
         Parameters
@@ -150,7 +150,7 @@ class SiteTable:
 
         Returns
         -------
-        LayerPassLog | SiteTable
+        OpLog | SiteTable
             Single layer pass for integer indexes, table for slices.
         """
 
@@ -178,7 +178,7 @@ class SiteTable:
         prefix = ", ".join(labels[:3])
         return f"SiteTable({count} sites: {prefix}, ... {labels[-1]})"
 
-    def where(self, predicate: Callable[["LayerPassLog"], bool]) -> "SiteTable":
+    def where(self, predicate: Callable[["OpLog"], bool]) -> "SiteTable":
         """Filter the table with a predicate.
 
         Parameters
@@ -194,12 +194,12 @@ class SiteTable:
 
         return SiteTable(tuple(site for site in self._sites if predicate(site)), query=self.query)
 
-    def first(self) -> "LayerPassLog":
+    def first(self) -> "OpLog":
         """Return the first resolved site.
 
         Returns
         -------
-        LayerPassLog
+        OpLog
             First layer-pass record.
 
         Raises
@@ -257,7 +257,7 @@ class SiteTable:
 
 
 def resolve_sites(
-    log: "ModelLog",
+    log: "Trace",
     query: SelectorInput,
     *,
     strict: bool = False,
@@ -320,7 +320,7 @@ def resolve_sites(
 
 
 def find_sites(
-    log: "ModelLog",
+    log: "Trace",
     query: SelectorInput,
     *,
     strict: bool = False,
@@ -348,7 +348,7 @@ def find_sites(
     return resolve_sites(log, query, strict=strict, max_fanout=max_fanout)
 
 
-def _iter_layer_passes(log: "ModelLog") -> Sequence["LayerPassLog"]:
+def _iter_layer_passes(log: "Trace") -> Sequence["OpLog"]:
     """Return final layer passes from a completed model log.
 
     Parameters
@@ -358,7 +358,7 @@ def _iter_layer_passes(log: "ModelLog") -> Sequence["LayerPassLog"]:
 
     Returns
     -------
-    Sequence[LayerPassLog]
+    Sequence[OpLog]
         Execution-order layer-pass records.
 
     Raises
@@ -373,11 +373,11 @@ def _iter_layer_passes(log: "ModelLog") -> Sequence["LayerPassLog"]:
 
 
 def _resolve_unchecked(
-    sites: Sequence["LayerPassLog"],
+    sites: Sequence["OpLog"],
     query: SelectorInput,
     *,
     strict: bool,
-) -> tuple["LayerPassLog", ...]:
+) -> tuple["OpLog", ...]:
     """Resolve without zero/multi fanout validation.
 
     Parameters
@@ -391,7 +391,7 @@ def _resolve_unchecked(
 
     Returns
     -------
-    tuple[LayerPassLog, ...]
+    tuple[OpLog, ...]
         Matching sites in execution order.
     """
 
@@ -514,7 +514,7 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
     raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
 
 
-def _label_matches(site: "LayerPassLog", label: str) -> bool:
+def _label_matches(site: "OpLog", label: str) -> bool:
     """Return whether a layer-pass record has a requested label.
 
     Parameters
@@ -542,7 +542,7 @@ def _label_matches(site: "LayerPassLog", label: str) -> bool:
     return label in candidate_labels or label in site.lookup_keys
 
 
-def _module_output_matches(site: "LayerPassLog", address: str) -> bool:
+def _module_output_matches(site: "OpLog", address: str) -> bool:
     """Return whether a layer pass is the output boundary for a module.
 
     Parameters
@@ -582,7 +582,7 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
     return module_pass == address or module_address == address
 
 
-def _predicate_payload(value: Any) -> tuple[Callable[["LayerPassLog"], bool], str | None]:
+def _predicate_payload(value: Any) -> tuple[Callable[["OpLog"], bool], str | None]:
     """Validate and unpack a predicate selector payload.
 
     Parameters
@@ -592,7 +592,7 @@ def _predicate_payload(value: Any) -> tuple[Callable[["LayerPassLog"], bool], st
 
     Returns
     -------
-    tuple[Callable[[LayerPassLog], bool], str | None]
+    tuple[Callable[[OpLog], bool], str | None]
         Predicate and optional name hint.
 
     Raises

@@ -121,7 +121,7 @@ def validate_backward_pass(
         True when captured gradients match stock autograd and perturbation is
         not requested.
     """
-    from ..user_funcs import log_forward_pass
+    from ..user_funcs import trace as trace_fn
 
     if input_kwargs is None:
         input_kwargs = {}
@@ -136,24 +136,24 @@ def validate_backward_pass(
 
     logged_inputs = _clone_inputs_with_grad(input_args)
     model.zero_grad(set_to_none=True)
-    model_log = log_forward_pass(
+    trace = trace_fn(
         model,
         logged_inputs,
         input_kwargs=input_kwargs,
         layers_to_save="all",
         gradients_to_save="all",
     )
-    output_layers = [model_log[layer_label].activation for layer_label in model_log.output_layers]
+    output_layers = [trace[layer_label].activation for layer_label in trace.output_layers]
     logged_output: Any = output_layers[0] if len(output_layers) == 1 else output_layers
     logged_loss = loss_fn(logged_output)
-    model_log.log_backward(logged_loss)
+    trace.log_backward(logged_loss)
     if perturb_saved_gradients:
-        for layer in model_log.layer_list:
+        for layer in trace.layer_list:
             if layer.has_gradient and isinstance(layer.gradient, torch.Tensor):
                 layer.gradient = layer.gradient + torch.randn_like(layer.gradient)
                 break
     observed_param_grads = _param_grads(model)
-    model_log.cleanup()
+    trace.cleanup()
 
     if expected_param_grads.keys() != observed_param_grads.keys():
         return False

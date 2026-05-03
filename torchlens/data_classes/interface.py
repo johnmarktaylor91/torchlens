@@ -1,14 +1,14 @@
-"""ModelLog query and display helpers used by ``ModelLog`` methods.
+"""Trace query and display helpers used by ``Trace`` methods.
 
 **__getitem__ lookup logic** (``_getitem_after_pass``):
 
 The lookup cascade for string keys after the pass is finished:
 
 1. Exact match in ``layer_dict_all_keys`` (all lookup keys for every
-   LayerPassLog, including pass-qualified labels like ``"conv2d_1_1:1"``).
+   OpLog, including pass-qualified labels like ``"conv2d_1_1:1"``).
 2. Exact match in ``layer_logs`` (no-pass labels -> LayerLog aggregate).
 3. Exact match in ``_module_logs`` (module address or pass label ->
-   ModuleLog or ModulePassLog).
+   ModuleLog or ModuleCallLog).
 4. Case-insensitive exact match against all of the above.
 5. Substring match: if exactly one layer label contains the given string,
    return it.  If multiple match, raise ValueError listing them.
@@ -23,16 +23,16 @@ from typing import TYPE_CHECKING, Any, List, Tuple, cast
 import numpy as np
 
 if TYPE_CHECKING:
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 from ._lookup_keys import _give_user_feedback_about_lookup_key
-from .layer_pass_log import LayerPassLog
+from .op_log import OpLog
 from ..intervention.errors import SiteAmbiguityError
 from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 
 
-def _getitem_during_pass(self: "ModelLog", ix: Any) -> LayerPassLog:
+def _getitem_during_pass(self: "Trace", ix: Any) -> OpLog:
     """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
     Args:
@@ -44,17 +44,17 @@ def _getitem_during_pass(self: "ModelLog", ix: Any) -> LayerPassLog:
     if ix in self._raw_layer_dict:
         return self._raw_layer_dict[ix]
     else:
-        raise ValueError(f"{ix} not found in the ModelLog object.")
+        raise ValueError(f"{ix} not found in the Trace object.")
 
 
-def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
-    """Multi-key lookup for ModelLog entries after postprocessing.
+def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
+    """Multi-key lookup for Trace entries after postprocessing.
 
     Lookup cascade:
     1. slice -> list slice of layer_list
-    2. exact match in layer_dict_all_keys (LayerPassLog by any lookup key)
+    2. exact match in layer_dict_all_keys (OpLog by any lookup key)
     3. exact match in layer_logs (LayerLog by no-pass label)
-    4. exact match in _module_logs (ModuleLog/ModulePassLog by address)
+    4. exact match in _module_logs (ModuleLog/ModuleCallLog by address)
     5. case-insensitive exact match against all of the above
     6. substring match: unique match returns the layer; ambiguous raises ValueError
     7. fallback: KeyError with contextual help message
@@ -63,7 +63,7 @@ def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
         ix: int (ordinal), slice, or str (label/address/substring).
 
     Returns:
-        LayerPassLog, LayerLog, ModuleLog, or ModulePassLog.
+        OpLog, LayerLog, ModuleLog, or ModuleCallLog.
 
     Raises:
         KeyError: No match found.
@@ -75,7 +75,7 @@ def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
         table = resolve_sites(self, ix, max_fanout=1)
         if len(table) != 1:
             raise SiteAmbiguityError(
-                f"site {ix!r} matched {len(table)} sites, but ModelLog.__getitem__ requires one."
+                f"site {ix!r} matched {len(table)} sites, but Trace.__getitem__ requires one."
             )
         return table.first()
 
@@ -90,7 +90,7 @@ def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
     if isinstance(ix, str) and hasattr(self, "layer_logs") and ix in self.layer_logs:
         return self.layer_logs[ix]
 
-    # Step 4: module address or pass label -> ModuleLog/ModulePassLog
+    # Step 4: module address or pass label -> ModuleLog/ModuleCallLog
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
         return self._module_logs[ix]
 
@@ -138,7 +138,7 @@ def _getitem_after_pass(self: "ModelLog", ix: Any) -> Any:
     raise KeyError(ix)
 
 
-def _str_after_pass(self: "ModelLog") -> str:
+def _str_after_pass(self: "Trace") -> str:
     """Readable summary of the model history after the pass is finished.
 
     Returns:
@@ -228,7 +228,7 @@ def _str_after_pass(self: "ModelLog") -> str:
     return s
 
 
-def _str_during_pass(self: "ModelLog") -> str:
+def _str_during_pass(self: "Trace") -> str:
     """Readable summary of the model history during the pass, as a debugging aid.
 
     Returns:
@@ -264,7 +264,7 @@ def _format_list_with_line_breaks(
     return s
 
 
-def _module_hierarchy_str(self: "ModelLog") -> str:
+def _module_hierarchy_str(self: "Trace") -> str:
     """Build a tree-formatted string of the module call hierarchy.
 
     Starts from the root module ("self") pass 1 and recursively descends
@@ -285,7 +285,7 @@ def _module_hierarchy_str(self: "ModelLog") -> str:
     return s
 
 
-def _module_hierarchy_str_recursive(self: "ModelLog", module_pass: str, level: int) -> str:
+def _module_hierarchy_str_recursive(self: "Trace", module_pass: str, level: int) -> str:
     """Recursively format child modules at the given indentation level.
 
     If any child has grandchildren (deeper nesting), each child gets its
@@ -293,8 +293,8 @@ def _module_hierarchy_str_recursive(self: "ModelLog", module_pass: str, level: i
     printed compactly on one line with ``_format_list_with_line_breaks``.
     """
     s = ""
-    module_pass_log = self.modules[module_pass]
-    children = module_pass_log.call_children
+    module_call_log = self.modules[module_pass]
+    children = module_call_log.call_children
     any_grandchild_modules = any(
         [len(self.modules[child_pass_label].call_children) > 0 for child_pass_label in children]
     )

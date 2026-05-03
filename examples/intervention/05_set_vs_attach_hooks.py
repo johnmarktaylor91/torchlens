@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(5)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
     relu_shape = log.find_sites(tl.func("relu")).first().activation.shape
 
     set_log = log.fork("set")

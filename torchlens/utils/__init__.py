@@ -299,13 +299,13 @@ def list_modules(model: nn.Module) -> list[tuple[str, type[nn.Module]]]:
     return [(address or "self", type(module)) for address, module in model.named_modules()]
 
 
-def _ops_from_log(model_log: Any) -> list[tuple[str, int]]:
-    """Summarize operator counts from a ModelLog.
+def _ops_from_log(trace: Any) -> list[tuple[str, int]]:
+    """Summarize operator counts from a Trace.
 
     Parameters
     ----------
-    model_log:
-        TorchLens log produced by ``log_forward_pass``.
+    trace:
+        TorchLens log produced by ``trace``.
 
     Returns
     -------
@@ -314,7 +314,7 @@ def _ops_from_log(model_log: Any) -> list[tuple[str, int]]:
     """
 
     counts: Counter[str] = Counter()
-    for layer in model_log.layer_list:
+    for layer in trace.layer_list:
         op_name = getattr(layer, "func_name", None) or getattr(layer, "layer_type", "unknown")
         counts[str(op_name)] += 1
     return sorted(counts.items())
@@ -332,7 +332,7 @@ def _log_ops_for_mode(
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     mode:
         Module training mode to use for this one capture.
 
@@ -342,7 +342,7 @@ def _log_ops_for_mode(
         Operator names and counts.
     """
 
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
     original_mode = model.training
@@ -351,14 +351,14 @@ def _log_ops_for_mode(
     elif mode == "train":
         model.train()
     try:
-        model_log = log_forward_pass(
+        trace = trace_fn(
             model,
             x,
             capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
         )
     finally:
         model.train(original_mode)
-    return _ops_from_log(model_log)
+    return _ops_from_log(trace)
 
 
 def list_ops(
@@ -373,7 +373,7 @@ def list_ops(
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     mode:
         ``"current"``, ``"eval"``, ``"train"``, or ``"both"``. ``"both"``
         returns separate eval/train summaries.
@@ -402,7 +402,7 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     count_fma_as_two:
         FLOP/MAC convention marker. TorchLens stores counts using its capture-time
         convention; this argument records the requested display convention and is
@@ -416,15 +416,15 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     """
 
     del count_fma_as_two
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
-    model_log = log_forward_pass(
+    trace = trace_fn(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
     )
-    return int(sum(getattr(layer, "flops_forward", None) or 0 for layer in model_log.layer_list))
+    return int(sum(getattr(layer, "flops_forward", None) or 0 for layer in trace.layer_list))
 
 
 def peek_graph(
@@ -441,7 +441,7 @@ def peek_graph(
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     view:
         Visualization view vocabulary passed as ``vis_mode``.
     output_path:
@@ -455,15 +455,15 @@ def peek_graph(
         The graph renderer writes its output as a side effect.
     """
 
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
-    model_log = log_forward_pass(
+    trace = trace_fn(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
     )
-    model_log.show(
+    trace.show(
         vis_mode=view,
         vis_outpath=str(output_path),
         vis_fileformat=file_format,
@@ -599,7 +599,7 @@ def _memory_budget_to_bytes(memory_budget: int | str) -> int:
 
 
 def find_executable_save_set(
-    model_log: Any,
+    trace: Any,
     layers: Iterable[str],
     memory_budget: int | str,
 ) -> list[str]:
@@ -607,8 +607,8 @@ def find_executable_save_set(
 
     Parameters
     ----------
-    model_log:
-        ModelLog containing layer memory metadata.
+    trace:
+        Trace containing layer memory metadata.
     layers:
         Candidate layer labels or lookup strings.
     memory_budget:
@@ -624,7 +624,7 @@ def find_executable_save_set(
     budget = _memory_budget_to_bytes(memory_budget)
     candidates: list[tuple[int, str]] = []
     for layer in layers:
-        entry = model_log[layer]
+        entry = trace[layer]
         label = str(getattr(entry, "layer_label_no_pass", getattr(entry, "layer_label", layer)))
         memory = int(
             getattr(entry, "transformed_activation_memory", None)
@@ -642,7 +642,7 @@ def find_executable_save_set(
     return selected
 
 
-def log_forward_pass_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any) -> Any:
+def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any) -> Any:
     """Capture an iterable of inputs as a stacked multi-pass log.
 
     Parameters
@@ -652,18 +652,18 @@ def log_forward_pass_streaming(model: nn.Module, inputs_iter: Iterable[Any], **k
     inputs_iter:
         Iterable producing model inputs.
     **kwargs:
-        Keyword arguments forwarded to ``torchlens.log_forward_pass``.
+        Keyword arguments forwarded to ``torchlens.trace``.
 
     Returns
     -------
     Any
-        First ``ModelLog`` with ``streaming_pass_logs`` and
+        First ``Trace`` with ``streaming_pass_logs`` and
         ``num_streamed_passes`` attributes.
     """
 
     import torchlens
 
-    logs = [torchlens.log_forward_pass(model, inputs, **kwargs) for inputs in inputs_iter]
+    logs = [torchlens.trace(model, inputs, **kwargs) for inputs in inputs_iter]
     if not logs:
         raise ValueError("inputs_iter must yield at least one input.")
     root = logs[0]
@@ -703,7 +703,7 @@ __all__ = [
     "format_size",
     "list_modules",
     "list_ops",
-    "log_forward_pass_streaming",
+    "trace_streaming",
     "log_current_autocast_state",
     "log_current_rng_states",
     "make_random_barcode",

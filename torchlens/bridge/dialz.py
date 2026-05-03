@@ -20,7 +20,7 @@ def analyze(
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     sites:
         Optional sites to include. Defaults to all non-input tensor layers.
     analyzer:

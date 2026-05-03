@@ -31,7 +31,7 @@ def _compile_model(model: torch.nn.Module) -> torch.nn.Module:
     return compile_fn(model, backend="eager")
 
 
-def test_log_forward_pass_rejects_torch_compile(
+def test_trace_rejects_torch_compile(
     two_layer_mlp: TwoLayerMlp,
 ) -> None:
     """Slow train-mode capture rejects compiled model wrappers."""
@@ -39,7 +39,7 @@ def test_log_forward_pass_rejects_torch_compile(
     compiled_model = _compile_model(two_layer_mlp)
 
     with pytest.raises(RuntimeError, match="torch.compile"):
-        tl.log_forward_pass(
+        tl.trace(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
@@ -51,7 +51,7 @@ def test_save_new_activations_rejects_torch_compile(
 ) -> None:
     """Replay train-mode capture rejects compiled model wrappers."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         random_seed=0,
@@ -59,13 +59,13 @@ def test_save_new_activations_rejects_torch_compile(
     compiled_model = _compile_model(two_layer_mlp)
 
     with pytest.raises(RuntimeError, match="torch.compile"):
-        model_log.save_new_activations(
+        trace.save_new_activations(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_fastlog_record_rejects_torch_compile(

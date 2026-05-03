@@ -92,7 +92,7 @@ class BaseSelector:
         -------
         list[str]
             Standard selector attributes. Selectors are not bound to a
-            ``ModelLog``, so layer-name completion lives on log accessors.
+            ``Trace``, so layer-name completion lives on log accessors.
         """
 
         return sorted(set(super().__dir__()) | {"selector_kind", "selector_value"})
@@ -226,7 +226,7 @@ class ContainsSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class WhereSelector(BaseSelector):
-    """Predicate selector over ``LayerPassLog`` objects.
+    """Predicate selector over ``OpLog`` objects.
 
     Parameters
     ----------

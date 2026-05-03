@@ -11,7 +11,7 @@ class TorchLensLitModel:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to expose.
+        TorchLens ``Trace`` to expose.
     name:
         Display name for LIT.
     base_model_cls:
@@ -24,7 +24,7 @@ class TorchLensLitModel:
         Parameters
         ----------
         log:
-            TorchLens ``ModelLog``.
+            TorchLens ``Trace``.
         name:
             Display name.
         base_model_cls:
@@ -82,7 +82,7 @@ def model(log: Any, *, name: str = "torchlens", **kwargs: Any) -> dict[str, Any]
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     name:
         Display name for the wrapped log.
     **kwargs:

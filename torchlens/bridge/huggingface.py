@@ -26,7 +26,7 @@ def push_to_hub(
     Parameters
     ----------
     log_or_bundle_or_spec:
-        ``ModelLog``, ``Bundle``, or ``InterventionSpec``-like object to publish.
+        ``Trace``, ``Bundle``, or ``InterventionSpec``-like object to publish.
     repo_id:
         Target Hugging Face repository ID.
     token:

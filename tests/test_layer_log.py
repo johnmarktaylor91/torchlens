@@ -6,7 +6,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.layer_pass_log import LayerPassLog
+from torchlens.data_classes.op_log import OpLog
 
 
 # ---------------------------------------------------------------------------
@@ -35,13 +35,13 @@ class RecurrentModel(nn.Module):
 @pytest.fixture
 def simple_log():
     model = SimpleModel()
-    return tl.log_forward_pass(model, torch.randn(1, 5), layers_to_save="all")
+    return tl.trace(model, torch.randn(1, 5), layers_to_save="all")
 
 
 @pytest.fixture
 def recurrent_log():
     model = RecurrentModel()
-    return tl.log_forward_pass(model, torch.randn(1, 5), layers_to_save="all")
+    return tl.trace(model, torch.randn(1, 5), layers_to_save="all")
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ class TestLayerLogConstruction:
             assert 1 in layer_log.passes
 
     def test_back_reference_set(self, simple_log):
-        """parent_layer_log is set on each LayerPassLog."""
+        """parent_layer_log is set on each OpLog."""
         for layer_log in simple_log.layer_logs.values():
             for pass_log in layer_log.passes.values():
                 assert pass_log.parent_layer_log is layer_log
@@ -105,7 +105,7 @@ class TestSinglePassDelegation:
             # func_autocast_state is per-pass, not an explicit @property
             assert layer_log.func_autocast_state is pass_log.func_autocast_state
 
-    def test_pass_finished_reads_from_model_log(self, simple_log):
+    def test_pass_finished_reads_from_trace(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
             assert layer_log._pass_finished is True
 
@@ -188,12 +188,12 @@ class TestMultiPassLayerLog:
                 break
 
     def test_getitem_pass_notation_returns_pass_log(self, recurrent_log):
-        """log['label:2'] still returns LayerPassLog."""
+        """log['label:2'] still returns OpLog."""
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_passes > 1:
                 for pass_num, pass_log in layer_log.passes.items():
                     result = recurrent_log[pass_log.layer_label]
-                    assert isinstance(result, LayerPassLog)
+                    assert isinstance(result, OpLog)
                 break
 
     def test_pass_labels_populated(self, recurrent_log):
@@ -247,11 +247,11 @@ class TestConvenienceAliases:
 
 
 # ---------------------------------------------------------------------------
-# Integration: layer_logs on ModelLog
+# Integration: layer_logs on Trace
 # ---------------------------------------------------------------------------
 
 
-class TestModelLogIntegration:
+class TestTraceIntegration:
     def test_layer_logs_attr_exists(self, simple_log):
         assert hasattr(simple_log, "layer_logs")
 
@@ -290,7 +290,7 @@ class TestLayerNumPasses:
 
     def test_returns_integer(self):
         model = _SimpleLinear()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         for label in log.layer_labels_no_pass:
             passes = log.layer_num_passes.get(label)
             assert passes is not None, f"No passes for {label}"
@@ -302,7 +302,7 @@ class TestSliceIndexing:
 
     def test_slice_returns_list(self):
         model = _SimpleLinear()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         result = log[0:2]
         assert isinstance(result, list)
         assert len(result) == 2
@@ -313,7 +313,7 @@ class TestToPandasGuard:
 
     def test_works_after_pass(self):
         model = _SimpleLinear()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         try:
             import pandas
 
@@ -337,7 +337,7 @@ class TestAmbiguousSubstring:
                 return self.lin1(x) + self.lin2(x)
 
         model = TwoLinears()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         with pytest.raises(ValueError, match="Ambiguous"):
             log["linear"]
 
@@ -347,14 +347,14 @@ class TestCaseInsensitiveLookup:
 
     def test_case_insensitive_exact_match(self):
         model = _SimpleLinear()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         result = log["Linear_1_1"]
         assert result is not None
         assert result.layer_label == "linear_1_1"
 
     def test_case_insensitive_module_lookup(self):
         model = _SimpleLinear()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         result = log["FC"]
         assert result is not None
 
@@ -364,7 +364,7 @@ class TestParentLayerArgLocs:
 
     def test_arg_locs_are_strings(self):
         model = _SimpleLinear()
-        log = tl.log_forward_pass(model, torch.randn(2, 10))
+        log = tl.trace(model, torch.randn(2, 10))
         for layer in log:
             arg_locs = layer.parent_layer_arg_locs
             for arg_type in ["args", "kwargs"]:

@@ -620,7 +620,7 @@ def _data_parallel_row(model: nn.Module) -> CompatRow:
         "error" if detected else "ok",
         detected,
         details,
-        "Call torchlens.log_forward_pass(model.module, x)." if detected else "",
+        "Call torchlens.trace(model.module, x)." if detected else "",
     )
 
 

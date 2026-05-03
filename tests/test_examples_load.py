@@ -8,12 +8,12 @@ import torchlens as tl
 from torchlens.intervention.types import InterventionSpec
 
 
-def test_examples_load_returns_model_log() -> None:
+def test_examples_load_returns_trace() -> None:
     """torchlens.examples.load should return a supported TorchLens artifact."""
 
     artifact = tl.examples.load("name")
 
-    assert isinstance(artifact, (tl.ModelLog, tl.Bundle, InterventionSpec))
+    assert isinstance(artifact, (tl.Trace, tl.Bundle, InterventionSpec))
 
 
 def test_examples_load_unknown_name_errors() -> None:

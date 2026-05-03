@@ -19,8 +19,8 @@ Key concepts:
     containing module.
 
 **Backward hooks** (``_add_backward_hook``):
-    Uses ``weakref.ref(ModelLog)`` to avoid preventing garbage collection of the
-    ModelLog after the user is done with it.  The hook closure captures the weakref
+    Uses ``weakref.ref(Trace)`` to avoid preventing garbage collection of the
+    Trace after the user is done with it.  The hook closure captures the weakref
     and the raw tensor label (a string, not the tensor itself).
 
 **Parent arg position tracking** (``_locate_parent_tensors_in_args``):
@@ -36,17 +36,17 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ..utils.hashing import make_random_barcode, make_short_barcode_from_input
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
-def _add_backward_hook(self: "ModelLog", t: torch.Tensor, tensor_label: str) -> None:
-    """Register a backward hook on ``t`` that captures its gradient into ModelLog.
+def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> None:
+    """Register a backward hook on ``t`` that captures its gradient into Trace.
 
-    The hook closure captures a ``weakref`` to ModelLog (not a strong reference)
-    so that the hook doesn't prevent GC of the ModelLog after the user drops it
+    The hook closure captures a ``weakref`` to Trace (not a strong reference)
+    so that the hook doesn't prevent GC of the Trace after the user drops it
     (GC-8).  The closure also captures ``tensor_label`` (a string) rather than
     the tensor itself, avoiding circular references.
 
@@ -58,19 +58,19 @@ def _add_backward_hook(self: "ModelLog", t: torch.Tensor, tensor_label: str) -> 
         tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
             look up the corresponding log entry when the gradient arrives.
     """
-    # Weak reference prevents ModelLog → tensor → hook → ModelLog ref cycle.
+    # Weak reference prevents Trace → tensor → hook → Trace ref cycle.
     self_ref = weakref.ref(self)
 
     def log_grad_to_model_history(grad: torch.Tensor) -> None:
-        model_log = self_ref()
-        if model_log is not None:
-            _log_tensor_grad(model_log, grad, tensor_label)
+        trace = self_ref()
+        if trace is not None:
+            _log_tensor_grad(trace, grad, tensor_label)
 
     if (t.grad_fn is not None) or t.requires_grad:
         t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
 
 
-def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str) -> None:
+def _log_tensor_grad(self: "Trace", grad: torch.Tensor, tensor_label_raw: str) -> None:
     """Callback invoked during backward pass to save a tensor's gradient.
 
     Resolves the raw label to a final label, then saves the gradient on the
@@ -105,8 +105,8 @@ def _log_tensor_grad(self: "ModelLog", grad: torch.Tensor, tensor_label_raw: str
 
 
 def _locate_parent_tensors_in_args(
-    self: "ModelLog",
-    parent_log_entries: list[LayerPassLog],
+    self: "Trace",
+    parent_log_entries: list[OpLog],
     args: tuple[Any, ...],
     kwargs: dict[Any, Any],
 ) -> dict[str, dict[Any, str]]:
@@ -142,7 +142,7 @@ def _locate_parent_tensors_in_args(
 
 
 def _find_arg_positions_for_single_parent(
-    parent_entry: LayerPassLog,
+    parent_entry: OpLog,
     arg_type: str,
     arg_struct: list[Any] | tuple[Any, ...] | dict[Any, Any],
     tensor_all_arg_positions: dict[str, dict[Any, str]],
@@ -183,7 +183,7 @@ def _find_arg_positions_for_single_parent(
 
 
 def _get_ancestors_from_parents(
-    parent_entries: list[LayerPassLog],
+    parent_entries: list[OpLog],
 ) -> tuple[set[str], set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
@@ -202,7 +202,7 @@ def _get_ancestors_from_parents(
     return input_ancestors, internally_initialized_ancestors
 
 
-def _update_tensor_family_links(self: "ModelLog", entry_to_update: LayerPassLog) -> None:
+def _update_tensor_family_links(self: "Trace", entry_to_update: OpLog) -> None:
     """Update bidirectional family links for a newly created tensor.
 
     All four relationship types are updated symmetrically:
@@ -212,7 +212,7 @@ def _update_tensor_family_links(self: "ModelLog", entry_to_update: LayerPassLog)
         of the new tensor (and vice versa).
 
     Args:
-        entry_to_update: The newly created LayerPassLog entry.
+        entry_to_update: The newly created OpLog entry.
     """
     tensor_label = entry_to_update.tensor_label_raw
     parent_tensor_labels = entry_to_update.parent_layers
@@ -388,7 +388,7 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
         args_to_hash.append(f"{prefix}_{arg}")
 
 
-def _update_tensor_containing_modules(layer_entry: LayerPassLog) -> list[str]:
+def _update_tensor_containing_modules(layer_entry: OpLog) -> list[str]:
     """Compute a tensor's current module nesting by replaying entry/exit transitions.
 
     Each tensor records:

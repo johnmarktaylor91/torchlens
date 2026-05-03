@@ -11,7 +11,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import log_forward_pass, check_metadata_invariants
+from torchlens import trace as trace_fn, check_metadata_invariants
 
 
 # =============================================================================
@@ -63,7 +63,7 @@ def test_save_new_activations_basic():
     """save_new_activations replaces activations on a simple model."""
     model = _SimpleFF()
     x1 = torch.randn(2, 5)
-    log = log_forward_pass(model, x1, random_seed=42)
+    log = trace_fn(model, x1, random_seed=42)
 
     x2 = torch.randn(2, 5)
     log.save_new_activations(model, x2, random_seed=42)
@@ -80,7 +80,7 @@ def test_save_new_activations_basic():
 def test_save_new_activations_multiple_calls():
     """save_new_activations works correctly on repeated calls."""
     model = _SimpleFF()
-    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    log = trace_fn(model, torch.randn(2, 5), random_seed=42)
 
     for i in range(5):
         x = torch.randn(2, 5)
@@ -97,7 +97,7 @@ def test_save_new_activations_activations_change():
     model = _SimpleFF()
     torch.manual_seed(0)
     x1 = torch.randn(2, 5)
-    log = log_forward_pass(model, x1, random_seed=42)
+    log = trace_fn(model, x1, random_seed=42)
     act1 = log[log.output_layers[0]].activation.clone()
 
     torch.manual_seed(99)
@@ -112,7 +112,7 @@ def test_save_new_activations_activations_change():
 def test_save_new_activations_metadata_preserved():
     """Metadata invariants hold after save_new_activations."""
     model = _SimpleFF()
-    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    log = trace_fn(model, torch.randn(2, 5), random_seed=42)
     log.save_new_activations(model, torch.randn(2, 5), random_seed=42)
 
     assert check_metadata_invariants(log) is True
@@ -122,7 +122,7 @@ def test_save_new_activations_metadata_preserved():
 def test_save_new_activations_recurrent():
     """save_new_activations works on recurrent models."""
     model = _RecurrentFF()
-    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    log = trace_fn(model, torch.randn(2, 5), random_seed=42)
     assert log.is_recurrent
 
     log.save_new_activations(model, torch.randn(2, 5), random_seed=42)
@@ -133,7 +133,7 @@ def test_save_new_activations_recurrent():
 def test_save_new_activations_branching():
     """save_new_activations works on branching models."""
     model = _BranchingModel()
-    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    log = trace_fn(model, torch.randn(2, 5), random_seed=42)
 
     log.save_new_activations(model, torch.randn(2, 5), random_seed=42)
     assert log[log.output_layers[0]].has_saved_activations
@@ -143,7 +143,7 @@ def test_save_new_activations_branching():
 def test_save_new_activations_layers_to_save():
     """save_new_activations respects layers_to_save parameter."""
     model = _SimpleFF()
-    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    log = trace_fn(model, torch.randn(2, 5), random_seed=42)
 
     # Only save the first layer
     first_label = log.layer_labels[0]
@@ -157,7 +157,7 @@ def test_save_new_activations_fast_path_does_not_attach_streaming_refs() -> None
     """The fast-path re-extraction flow should not create streaming bundle refs."""
 
     model = _SimpleFF()
-    log = log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    log = trace_fn(model, torch.randn(2, 5), random_seed=42)
     output_label = log.output_layers[0]
 
     log.save_new_activations(
@@ -188,11 +188,11 @@ def _assert_save_new_activations_matches_fresh_log(
     x2:
         Replacement input for ``save_new_activations`` and the fresh log.
     """
-    log = log_forward_pass(model, x1, random_seed=42)
+    log = trace_fn(model, x1, random_seed=42)
     fresh_log = None
     try:
         log.save_new_activations(model, x2, random_seed=42)
-        fresh_log = log_forward_pass(model, x2, random_seed=42)
+        fresh_log = trace_fn(model, x2, random_seed=42)
         fresh_layers_by_label = {layer.layer_label: layer for layer in fresh_log.layer_list}
 
         compared_layers = 0
@@ -261,13 +261,13 @@ class _SharedBufferModel(nn.Module):
 
 
 class TestSaveNewActivationsRegression:
-    """Zombie LayerPassLogs on repeated calls."""
+    """Zombie OpLogs on repeated calls."""
 
     def test_save_new_activations_3x(self):
         """3+ sequential save_new_activations calls should not crash."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         for _ in range(3):
             log.save_new_activations(model, torch.randn(2, 10))
 
@@ -275,7 +275,7 @@ class TestSaveNewActivationsRegression:
         """Activations should change with new inputs."""
         model = _SimpleLinear()
         x1 = torch.randn(2, 10)
-        log = log_forward_pass(model, x1)
+        log = trace_fn(model, x1)
         first_output = log[log.output_layers[0]].activation.clone()
         x2 = torch.randn(2, 10) + 10
         log.save_new_activations(model, x2)
@@ -289,14 +289,14 @@ class TestSaveNewActivationsStateReset:
     def test_timing_reset(self):
         """time_function_calls should be fresh."""
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
+        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all")
         log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
         assert log.time_function_calls >= 0
 
     def test_lookup_keys_clean(self):
         """Lookup caches should not have stale entries."""
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
+        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all")
         labels_pass1 = set(log.layer_labels)
         log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
         labels_pass2 = set(log.layer_labels)
@@ -305,7 +305,7 @@ class TestSaveNewActivationsStateReset:
     def test_5x_stress(self):
         """Stress test: 5 sequential save_new_activations calls."""
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.randn(2, 10), layers_to_save="all")
+        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all")
         for i in range(5):
             log.save_new_activations(model, torch.randn(2, 10), layers_to_save="all")
             assert log.num_tensors_saved > 0
@@ -313,7 +313,7 @@ class TestSaveNewActivationsStateReset:
     def test_different_values(self):
         """Each pass should reflect new input values."""
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.ones(2, 10), layers_to_save="all")
+        log = trace_fn(model, torch.ones(2, 10), layers_to_save="all")
         input_val_1 = log["input_1"].activation.clone()
         log.save_new_activations(model, torch.zeros(2, 10), layers_to_save="all")
         input_val_2 = log["input_1"].activation
@@ -326,7 +326,7 @@ class TestOutputTensorIndependence:
     def test_output_independent_of_parent(self):
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         log.save_new_activations(model, torch.randn(2, 10))
         for label in log.output_layers:
             output_entry = log[label]
@@ -346,7 +346,7 @@ class TestFastPathModuleLogs:
     def test_fast_path_preserves_module_logs(self):
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         original_module_count = len(log.modules)
         original_addresses = [m.address for m in log.modules]
         assert original_module_count > 0
@@ -376,7 +376,7 @@ class TestDescriptiveValueError:
                 return x
 
         model = DynamicModel()
-        log = log_forward_pass(model, torch.randn(2, 10))
+        log = trace_fn(model, torch.randn(2, 10))
         with pytest.raises(ValueError, match="computational graph changed"):
             log.save_new_activations(model, torch.randn(2, 10))
 
@@ -386,7 +386,7 @@ class TestFastPassBufferOrphan:
 
     def test_shared_buffer_fast_path(self):
         model = _SharedBufferModel()
-        log = log_forward_pass(model, torch.randn(2, 10), random_seed=42)
+        log = trace_fn(model, torch.randn(2, 10), random_seed=42)
         # Should not raise KeyError on fast pass
         log.save_new_activations(model, torch.randn(2, 10), random_seed=42)
         assert log[log.output_layers[0]].has_saved_activations
@@ -394,7 +394,7 @@ class TestFastPassBufferOrphan:
 
     def test_shared_buffer_fast_path_3x(self):
         model = _SharedBufferModel()
-        log = log_forward_pass(model, torch.randn(2, 10), random_seed=42)
+        log = trace_fn(model, torch.randn(2, 10), random_seed=42)
         for _ in range(3):
             log.save_new_activations(model, torch.randn(2, 10), random_seed=42)
         assert log[log.output_layers[0]].has_saved_activations
@@ -406,7 +406,7 @@ class TestGraphConsistencyValidation:
 
     def test_shape_mismatch_warns(self):
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.randn(2, 10))
+        log = trace_fn(model, torch.randn(2, 10))
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             log.save_new_activations(model, torch.randn(4, 10))

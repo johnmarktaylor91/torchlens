@@ -44,7 +44,7 @@ def main() -> None:
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
     probe = nn.Linear(8, 1, bias=False).eval()
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
     def readout(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
         """Store probe scores and leave the activation unchanged."""

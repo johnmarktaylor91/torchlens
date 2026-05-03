@@ -52,7 +52,7 @@ def test_torch_compile_raises_at_entry() -> None:
     compiled = torch.compile(model)
 
     with pytest.raises(RuntimeError, match="torch.compile"):
-        tl.log_forward_pass(compiled, torch.randn(2, 4), layers_to_save="none")
+        tl.trace(compiled, torch.randn(2, 4), layers_to_save="none")
 
 
 @pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
@@ -61,7 +61,7 @@ def test_torch_compile_unwrap_suggestion_matches_reality() -> None:
     model = _Tiny()
     _ = torch.compile(model)  # must not poison the original
     # Logging the original still works.
-    log = tl.log_forward_pass(model, torch.randn(2, 4), layers_to_save="none")
+    log = tl.trace(model, torch.randn(2, 4), layers_to_save="none")
     assert len(log.layer_logs) > 0
 
 
@@ -77,7 +77,7 @@ def test_torch_jit_script_raises_at_entry() -> None:
     assert isinstance(scripted, torch.jit.ScriptModule)
 
     with pytest.raises(RuntimeError, match="ScriptModule"):
-        tl.log_forward_pass(scripted, torch.randn(2, 4), layers_to_save="none")
+        tl.trace(scripted, torch.randn(2, 4), layers_to_save="none")
 
 
 def test_torch_jit_trace_raises_at_entry() -> None:
@@ -87,14 +87,14 @@ def test_torch_jit_trace_raises_at_entry() -> None:
     assert isinstance(traced, torch.jit.ScriptModule)
 
     with pytest.raises(RuntimeError, match="ScriptModule"):
-        tl.log_forward_pass(traced, torch.randn(2, 4), layers_to_save="none")
+        tl.trace(traced, torch.randn(2, 4), layers_to_save="none")
 
 
 def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
     """Logging the un-scripted Python module still works after scripting."""
     model = _Tiny()
     _ = torch.jit.script(model)  # must not poison the original
-    log = tl.log_forward_pass(model, torch.randn(2, 4), layers_to_save="none")
+    log = tl.trace(model, torch.randn(2, 4), layers_to_save="none")
     assert len(log.layer_logs) > 0
 
 
@@ -121,7 +121,7 @@ def test_torch_export_exported_program_raises_at_entry() -> None:
     exported = export(model, example)
 
     with pytest.raises((RuntimeError, AttributeError, TypeError)) as excinfo:
-        tl.log_forward_pass(exported, torch.randn(2, 4), layers_to_save="none")
+        tl.trace(exported, torch.randn(2, 4), layers_to_save="none")
     # Our guard is the preferred failure path; other failures (e.g. exported
     # program lacking .modules()) also satisfy the 'don't silently succeed'
     # contract.

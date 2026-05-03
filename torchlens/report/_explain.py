@@ -16,7 +16,7 @@ def explain(log: Any, audience: Audience = "auto") -> str:
     Parameters
     ----------
     log:
-        Completed ``ModelLog``-like object.
+        Completed ``Trace``-like object.
     audience:
         Report style. ``"researcher"`` includes graph-pattern detail,
         ``"practitioner"`` emphasizes operational status, and ``"auto"``

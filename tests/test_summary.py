@@ -1,4 +1,4 @@
-"""Tests for the ModelLog summary feature."""
+"""Tests for the Trace summary feature."""
 
 from __future__ import annotations
 
@@ -31,18 +31,18 @@ class TinySummaryModel(nn.Module):
 
 
 @pytest.fixture()
-def tiny_summary_log() -> Generator[tl.ModelLog, None, None]:
+def tiny_summary_log() -> Generator[tl.Trace, None, None]:
     """Return a metadata-only log for the tiny summary model."""
     model = TinySummaryModel()
     x = torch.randn(1, 3, 8, 8)
-    log = tl.log_forward_pass(model, x, layers_to_save=None)
+    log = tl.trace(model, x, layers_to_save=None)
     try:
         yield log
     finally:
         log.cleanup()
 
 
-def test_small_model_default_output_golden(tiny_summary_log: tl.ModelLog) -> None:
+def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
     """Default overview output should match the expected compact golden text."""
     summary_text = tiny_summary_log.summary()
     assert "TorchLens Discoverability Summary" in summary_text
@@ -79,7 +79,7 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.ModelLog) -> Non
     ],
 )
 def test_all_level_options(
-    tiny_summary_log: tl.ModelLog,
+    tiny_summary_log: tl.Trace,
     level: str,
     expected_fragment: str,
 ) -> None:
@@ -88,14 +88,14 @@ def test_all_level_options(
     assert expected_fragment in summary_text
 
 
-def test_custom_fields_selection(tiny_summary_log: tl.ModelLog) -> None:
+def test_custom_fields_selection(tiny_summary_log: tl.Trace) -> None:
     """Custom field selection should drive the primary table columns."""
     summary_text = tiny_summary_log.summary(fields=["name", "params"])
     assert "| Layer             | Params |" in summary_text
     assert "Output Shape" not in summary_text
 
 
-def test_show_ops_true_dumps_op_level_rows(tiny_summary_log: tl.ModelLog) -> None:
+def test_show_ops_true_dumps_op_level_rows(tiny_summary_log: tl.Trace) -> None:
     """show_ops=True should append operation-level rows."""
     summary_text = tiny_summary_log.summary(show_ops=True, mode="rolled")
     assert "Operations:" in summary_text
@@ -108,7 +108,7 @@ def test_repr_remains_short_for_resnet18() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
     model = torchvision_models.resnet18()
     x = torch.randn(1, 3, 64, 64)
-    log = tl.log_forward_pass(model, x, layers_to_save=None)
+    log = tl.trace(model, x, layers_to_save=None)
     try:
         rendered = repr(log)
     finally:

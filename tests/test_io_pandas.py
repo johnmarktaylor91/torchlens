@@ -9,7 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 from torchlens.constants import (
     BUFFER_LOG_FIELD_ORDER,
     MODULE_PASS_LOG_FIELD_ORDER,
@@ -17,7 +17,7 @@ from torchlens.constants import (
 )
 from torchlens.data_classes._summary import format_call_arg
 from torchlens.data_classes.buffer_log import BufferAccessor
-from torchlens.data_classes.module_log import ModulePassLog
+from torchlens.data_classes.module_log import ModuleCallLog
 from torchlens.data_classes.param_log import ParamAccessor
 
 
@@ -123,7 +123,7 @@ class _IoPandasModel(nn.Module):
 
 @pytest.fixture
 def io_pandas_log() -> tuple[Any, _IoPandasModel, torch.Tensor]:
-    """Build a real ModelLog covering params, buffers, and module-pass summaries.
+    """Build a real Trace covering params, buffers, and module-pass summaries.
 
     Returns
     -------
@@ -132,7 +132,7 @@ def io_pandas_log() -> tuple[Any, _IoPandasModel, torch.Tensor]:
     """
     model = _IoPandasModel()
     x = torch.randn(2, 2)
-    log = log_forward_pass(model, x)
+    log = trace_fn(model, x)
     return log, model, x
 
 
@@ -190,10 +190,10 @@ def test_buffer_accessor_to_pandas_schema(
     assert len(df) == len(log.buffers)
 
 
-def test_module_pass_log_to_pandas_schema(
+def test_module_call_log_to_pandas_schema(
     io_pandas_log: tuple[Any, _IoPandasModel, torch.Tensor],
 ) -> None:
-    """ModulePassLog should export a single canonical row including summaries.
+    """ModuleCallLog should export a single canonical row including summaries.
 
     Parameters
     ----------
@@ -203,7 +203,7 @@ def test_module_pass_log_to_pandas_schema(
     log, _, _ = io_pandas_log
     pass_log = log.modules["block:1"]
     df = pass_log.to_pandas()
-    assert isinstance(pass_log, ModulePassLog)
+    assert isinstance(pass_log, ModuleCallLog)
     assert list(df.columns) == MODULE_PASS_LOG_FIELD_ORDER
     assert len(df) == 1
     assert df.loc[0, "forward_args_summary"]

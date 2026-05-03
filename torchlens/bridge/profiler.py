@@ -13,7 +13,7 @@ def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
     Parameters
     ----------
     log:
-        ``ModelLog`` to export.
+        ``Trace`` to export.
     trace_path:
         Destination JSON path.
 
@@ -47,7 +47,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     kineto_trace:
         Kineto/Chrome trace JSON path or already-loaded dictionary.
 

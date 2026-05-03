@@ -2,7 +2,7 @@
 
 This module implements the core interception mechanism for TorchLens.  Torch
 functions are wrapped **lazily** — ``import torchlens`` has no side effects.
-Wrapping happens on the first call to ``log_forward_pass()`` (or any other
+Wrapping happens on the first call to ``trace()`` (or any other
 entry point that needs logging) and stays in place afterward.  Users can
 explicitly control the lifecycle via ``wrap_torch()`` / ``unwrap_torch()`` /
 ``wrapped()``.
@@ -11,7 +11,7 @@ Every function listed in ``ORIG_TORCH_FUNCS`` is replaced with a thin wrapper
 that checks a single boolean (``_state._logging_enabled``) on each call:
 
   - **Logging off** (default): one branch check, near-zero overhead, original function called.
-  - **Logging on**: all tensor outputs are captured into the active ``ModelLog``.
+  - **Logging on**: all tensor outputs are captured into the active ``Trace``.
 
 Key design decisions:
 
@@ -64,7 +64,7 @@ from ..capture.output_tensors import (
 from ..capture.source_tensors import log_source_tensor
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
 # ---------------------------------------------------------------------------
@@ -348,10 +348,10 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
     3. Calls the original function.
     4. Detects **nested calls** via a barcode mechanism (see below).
     5. Handles **in-place ops** by copying the output and propagating the label back.
-    6. Logs all output tensors into the active ``ModelLog``.
+    6. Logs all output tensors into the active ``Trace``.
 
     **Barcode nesting detection**: Before calling the original function, a random
-    barcode is written to ``model_log.current_function_call_barcode``.  If the
+    barcode is written to ``trace.current_function_call_barcode``.  If the
     original function internally calls *other* wrapped torch functions, those
     inner calls will overwrite the barcode.  After the call returns, if the
     barcode still matches, this is a "bottom-level" function (leaf in the call
@@ -380,17 +380,17 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # When logging is off, pass through with minimal overhead.
         # DeviceContext injection is still needed even when not logging,
         # because the user's model may rely on torch.device('meta') context.
-        if not _state._logging_enabled or _state._active_model_log is None:
+        if not _state._logging_enabled or _state._active_trace is None:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             return func(*args, **kwargs)
 
-        model_log = cast(Any, _state._active_model_log)
+        trace = cast(Any, _state._active_trace)
         kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
         # Skip logging inside vmap/functorch transforms — internal TorchLens
         # operations (safe_copy, torch.equal, .item()) don't have vmap batching
         # rules and will crash. The original function is already vmap-compatible.
-        # Warn once per forward pass so the user knows their ModelLog is
+        # Warn once per forward pass so the user knows their Trace is
         # missing whatever runs inside the transform.
         if _is_inside_functorch_transform():
             if not _state._functorch_warning_emitted:
@@ -400,7 +400,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 warnings.warn(
                     "TorchLens detected a functorch/vmap/grad/jacfwd transform "
                     "during this forward pass. Operations that run inside the "
-                    "transform are not logged. The returned ModelLog will only "
+                    "transform are not logged. The returned Trace will only "
                     "contain operations that ran OUTSIDE the transform.",
                     UserWarning,
                     stacklevel=2,
@@ -417,7 +417,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        model_log.current_function_call_barcode = 0
+        trace.current_function_call_barcode = 0
         if func_name in funcs_not_to_log:
             return func(*args, **kwargs)
 
@@ -430,7 +430,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # until the first function actually uses them.
         for t in arg_tensorlike:
             if hasattr(t, "tl_buffer_address") and not hasattr(t, "tl_tensor_label_raw"):
-                log_source_tensor(model_log, t, "buffer", getattr(t, "tl_buffer_address"))
+                log_source_tensor(trace, t, "buffer", getattr(t, "tl_buffer_address"))
 
         # Intercept print functions to show TorchLens label info in repr.
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
@@ -438,7 +438,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             return out
 
         # Snapshot args before the call in case in-place ops mutate them.
-        if model_log.save_function_args:
+        if trace.save_function_args:
             arg_copies = tuple([safe_copy(arg) for arg in args])
             kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
         else:
@@ -450,15 +450,15 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # execute during this call, they will overwrite it. After the call,
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
-        model_log.current_function_call_barcode = func_call_barcode
+        trace.current_function_call_barcode = func_call_barcode
         start_time = time.time()
-        _save_rng = getattr(model_log, "save_rng_states", False)
+        _save_rng = getattr(trace, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         nvtx_pushed = (
             _nvtx_range_push(f"torchlens::{func_name}")
-            if getattr(model_log, "emit_nvtx", False)
+            if getattr(trace, "emit_nvtx", False)
             else False
         )
         try:
@@ -470,7 +470,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             rng_states=rng_states,
             autocast_state=autocast_state,
         )
-        is_bottom_level_func = model_log.current_function_call_barcode == func_call_barcode
+        is_bottom_level_func = trace.current_function_call_barcode == func_call_barcode
 
         # __setitem__, zero_, __delitem__ modify in-place and return None;
         # treat the first arg (the modified tensor) as the output.
@@ -493,7 +493,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             out_orig = safe_copy(out_orig)
 
         out_orig = apply_live_hooks_to_outputs(
-            model_log,
+            trace,
             func,
             func_name,
             args,
@@ -506,14 +506,14 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
         # Log all output tensors (excluding Parameters, which are source tensors).
         # Fast inline check for the common single-tensor output case.
-        if getattr(model_log, "intervention_ready", False):
+        if getattr(trace, "intervention_ready", False):
             output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]
         else:
             output_tensors = _collect_output_tensors(out_orig)
 
         if len(output_tensors) > 0:
             log_function_output_tensors(
-                model_log,
+                trace,
                 func,
                 func_name,
                 args,
@@ -853,12 +853,12 @@ def unwrap_torch() -> None:
 
     After calling this, ``torch.cos``, ``torch.Tensor.__add__``, etc. are the
     originals shipped by PyTorch.  TorchLens logging will not work until
-    ``wrap_torch()`` is called (or ``log_forward_pass`` auto-wraps).
+    ``wrap_torch()`` is called (or ``trace`` auto-wraps).
 
     Safe to call multiple times — no-op if already unwrapped.
     """
     _state._logging_enabled = False
-    _state._active_model_log = None
+    _state._active_trace = None
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
@@ -944,7 +944,7 @@ def wrapped() -> Iterator[None]:
     Usage::
 
         with torchlens.wrapped():
-            log = torchlens.log_forward_pass(model, x)
+            log = torchlens.trace(model, x)
         # torch is clean again here
     """
     wrap_torch()
@@ -988,11 +988,11 @@ def patch_detached_references() -> None:
        ``__defaults__`` and ``__kwdefaults__``.
 
     4. **Model instance attributes** — Handled separately by
-       ``patch_model_instance()`` at ``log_forward_pass`` time, since model
+       ``patch_model_instance()`` at ``trace`` time, since model
        instances may not exist yet when this function runs.
 
     Incremental: uses ``_state._crawled_module_keys`` to skip already-scanned
-    modules. Called on every ``log_forward_pass`` to catch lazily-imported modules.
+    modules. Called on every ``trace`` to catch lazily-imported modules.
     """
     new_keys = set(sys.modules.keys()) - _state._crawled_module_keys
     if not new_keys:

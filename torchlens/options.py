@@ -511,7 +511,7 @@ def _merge_grouped_options(
 
 @dataclass(frozen=True, init=False)
 class CaptureOptions:
-    """Grouped capture options for ``log_forward_pass``.
+    """Grouped capture options for ``trace``.
 
     Parameters
     ----------
@@ -560,7 +560,7 @@ class CaptureOptions:
     cache_dir:
         Optional directory for content-hash cache entries.
     module_filter_fn:
-        Optional predicate receiving a ``LayerPassLog`` after construction.
+        Optional predicate receiving a ``OpLog`` after construction.
         Returning ``False`` keeps metadata but skips activation saving.
     stop_after:
         Experimental stop-early site. Only supported by ``torchlens.peek``.
@@ -757,7 +757,7 @@ class CaptureOptions:
 
 @dataclass(frozen=True, init=False)
 class SaveOptions:
-    """Grouped activation-save options for ``log_forward_pass``.
+    """Grouped activation-save options for ``trace``.
 
     Parameters
     ----------
@@ -1153,7 +1153,7 @@ class VisualizationOptions:
 
 @dataclass(frozen=True, init=False)
 class ReplayOptions:
-    """Grouped replay/rerun options for ``ModelLog`` propagation APIs.
+    """Grouped replay/rerun options for ``Trace`` propagation APIs.
 
     Parameters
     ----------
@@ -1236,7 +1236,7 @@ class ReplayOptions:
 
 @dataclass(frozen=True, init=False)
 class InterventionOptions:
-    """Grouped intervention options for ``ModelLog.do``.
+    """Grouped intervention options for ``Trace.do``.
 
     Parameters
     ----------
@@ -1335,7 +1335,7 @@ class InterventionOptions:
 
 @dataclass(frozen=True, init=False)
 class StreamingOptions:
-    """Grouped streaming-save options for ``log_forward_pass``.
+    """Grouped streaming-save options for ``trace``.
 
     Parameters
     ----------
@@ -1627,7 +1627,7 @@ def merge_streaming_options(
 
 
 def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
-    """Translate grouped visualization options into ``ModelLog.render_graph`` kwargs.
+    """Translate grouped visualization options into ``Trace.render_graph`` kwargs.
 
     Parameters
     ----------
@@ -1637,7 +1637,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``ModelLog.render_graph``.
+        Keyword arguments expected by ``Trace.render_graph``.
     """
 
     kwargs: dict[str, Any] = {

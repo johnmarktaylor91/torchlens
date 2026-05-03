@@ -102,7 +102,7 @@ def save_intervention(
     Parameters
     ----------
     log:
-        ModelLog-like object whose ``_intervention_spec`` should be persisted.
+        Trace-like object whose ``_intervention_spec`` should be persisted.
     path:
         Destination ``.tlspec`` directory path.
     level:

@@ -29,7 +29,7 @@
     },
     "kind": {
       "type": "string",
-      "enum": ["intervention", "model_log", "bundle"]
+      "enum": ["intervention", "trace", "bundle"]
     },
     "created_at": {
       "type": "string",

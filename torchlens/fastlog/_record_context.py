@@ -56,7 +56,7 @@ def _recent_ops_for_event(
 def _build_record_context(
     *,
     kind: EventKind,
-    layer_pass_log_or_op_data: Any = None,
+    op_log_or_op_data: Any = None,
     module_stack: Iterable[ModuleStackFrame | Mapping[str, Any]] | None = None,
     history: Sequence[RecordContext] = (),
     op_counts: Mapping[str, int] | None = None,
@@ -73,7 +73,7 @@ def _build_record_context(
     ----------
     kind:
         Chronological event kind.
-    layer_pass_log_or_op_data:
+    op_log_or_op_data:
         Mapping or object containing operation/source/module fields.
     module_stack:
         Active module stack at event time.
@@ -100,7 +100,7 @@ def _build_record_context(
         Frozen predicate context with the canonical schema.
     """
 
-    data = layer_pass_log_or_op_data
+    data = op_log_or_op_data
     stack = _normalize_module_stack(module_stack)
     recent_events = tuple(history)
     layer_type = _read_field(data, "layer_type")

@@ -1,8 +1,8 @@
 """LayerLog and LayerAccessor: aggregate per-layer metadata and dict-like accessor.
 
-LayerLog groups one or more LayerPassLog entries that represent the same
+LayerLog groups one or more OpLog entries that represent the same
 logical layer across recurrent passes.  For non-recurrent models (the
-common case), every LayerLog wraps exactly one LayerPassLog.
+common case), every LayerLog wraps exactly one OpLog.
 
 **Delegation pattern**: For single-pass layers, per-pass fields (activation,
 gradient, operation_num, etc.) are accessible directly on the LayerLog
@@ -41,20 +41,20 @@ from ..utils.display import human_readable_size
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .layer_pass_log import LayerPassLog
-    from .model_log import ModelLog
+    from .op_log import OpLog
+    from .model_log import Trace
     from .param_log import ParamLog
 
 
 class LayerLog:
     """Aggregate per-layer metadata for a logged model operation.
 
-    Groups one or more LayerPassLog objects (one per invocation of this layer).
+    Groups one or more OpLog objects (one per invocation of this layer).
     For non-recurrent models, every LayerLog has exactly one pass.
 
     Aggregate fields (function identity, param identity, flags, module containment)
     live directly on LayerLog.  Per-pass fields (activations, graph edges,
-    execution state, gradients) live on the LayerPassLog objects in ``self.passes``.
+    execution state, gradients) live on the OpLog objects in ``self.passes``.
 
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.activation`` transparently
@@ -68,7 +68,7 @@ class LayerLog:
         "layer_type_num": FieldPolicy.KEEP,
         "layer_total_num": FieldPolicy.KEEP,
         "num_passes": FieldPolicy.KEEP,
-        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "func_applied": FieldPolicy.DROP,
         "func_name": FieldPolicy.KEEP,
         "func_is_inplace": FieldPolicy.KEEP,
@@ -143,11 +143,11 @@ class LayerLog:
         "pass_labels": FieldPolicy.KEEP,
     }
 
-    def __init__(self, first_pass: "LayerPassLog") -> None:
+    def __init__(self, first_pass: "OpLog") -> None:
         """Initialize from the first pass of this layer.
 
         Args:
-            first_pass: The LayerPassLog for pass 1 of this layer.
+            first_pass: The OpLog for pass 1 of this layer.
         """
         # Identity & labeling
         self.layer_label = first_pass.layer_label_no_pass
@@ -156,9 +156,9 @@ class LayerLog:
         self.layer_type_num = first_pass.layer_type_num
         self.layer_total_num = first_pass.layer_total_num
         self.num_passes = first_pass.num_passes
-        # Store as weakref to break circular reference (ModelLog -> layer_logs -> LayerLog -> ModelLog).
-        _sml = first_pass.source_model_log
-        self._source_model_log_ref: weakref.ReferenceType["ModelLog"] | None = (
+        # Store as weakref to break circular reference (Trace -> layer_logs -> LayerLog -> Trace).
+        _sml = first_pass.source_trace
+        self._source_trace_ref: weakref.ReferenceType["Trace"] | None = (
             weakref.ref(_sml) if _sml is not None else None
         )
 
@@ -254,7 +254,7 @@ class LayerLog:
         self.is_leaf_module_output = first_pass.is_leaf_module_output
 
         # Pass management
-        self.passes: Dict[int, "LayerPassLog"] = {}
+        self.passes: Dict[int, "OpLog"] = {}
         self.pass_labels: List[str] = []
 
     @property
@@ -334,31 +334,31 @@ class LayerLog:
         return human_readable_size(self.params_memory)
 
     @property
-    def source_model_log(self) -> "ModelLog":
-        """Back-reference to the owning ModelLog (stored as weakref)."""
-        ref = self.__dict__.get("_source_model_log_ref")
+    def source_trace(self) -> "Trace":
+        """Back-reference to the owning Trace (stored as weakref)."""
+        ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
             return None  # type: ignore[return-value]
         obj = ref()
         if obj is None:
-            raise RuntimeError("ModelLog has been garbage-collected.")
-        return cast("ModelLog", obj)
+            raise RuntimeError("Trace has been garbage-collected.")
+        return cast("Trace", obj)
 
-    @source_model_log.setter
-    def source_model_log(self, value: "ModelLog | None") -> None:
-        """Set the owning ModelLog back-reference.
+    @source_trace.setter
+    def source_trace(self, value: "Trace | None") -> None:
+        """Set the owning Trace back-reference.
 
         Parameters
         ----------
         value:
             Owning model log, or ``None`` to clear the reference.
         """
-        self._source_model_log_ref = weakref.ref(value) if value is not None else None
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
-        state["_source_model_log_ref"] = None
+        state["_source_trace_ref"] = None
         state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
@@ -368,7 +368,7 @@ class LayerLog:
         default_fill_state(
             state,
             defaults={
-                "_source_model_log_ref": None,
+                "_source_trace_ref": None,
                 "extra_data": {},
                 "autograd_saved_bytes": None,
                 "autograd_saved_tensor_count": None,
@@ -583,7 +583,7 @@ class LayerLog:
         seen = set()
         for pass_log in self.passes.values():
             for label in pass_log.child_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -596,7 +596,7 @@ class LayerLog:
         seen = set()
         for pass_log in self.passes.values():
             for label in pass_log.parent_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -631,7 +631,7 @@ class LayerLog:
         seen = set()
         for pass_log in self.passes.values():
             for label in pass_log.sibling_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -655,7 +655,7 @@ class LayerLog:
         seen = set()
         for pass_log in self.passes.values():
             for label in pass_log.co_parent_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -674,7 +674,7 @@ class LayerLog:
 
     @property
     def _pass_finished(self) -> bool:
-        sml = self.source_model_log
+        sml = self.source_trace
         if sml is None:
             return True
         return sml._pass_finished
@@ -725,7 +725,7 @@ class LayerLog:
         for pass_num, pass_log in self.passes.items():
             children = []
             for label in pass_log.child_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in children:
                     children.append(no_pass)
             result[pass_num] = children
@@ -738,7 +738,7 @@ class LayerLog:
         for pass_num, pass_log in self.passes.items():
             parents = []
             for label in pass_log.parent_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in parents:
                     parents.append(no_pass)
             result[pass_num] = parents
@@ -752,7 +752,7 @@ class LayerLog:
         result: defaultdict[str, list[int]] = defaultdict(list)
         for pass_num, pass_log in self.passes.items():
             for label in pass_log.child_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if pass_num not in result[no_pass]:
                     result[no_pass].append(pass_num)
         return dict(result)
@@ -765,7 +765,7 @@ class LayerLog:
         result: defaultdict[str, list[int]] = defaultdict(list)
         for pass_num, pass_log in self.passes.items():
             for label in pass_log.parent_layers:
-                no_pass = self.source_model_log[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label_no_pass
                 if pass_num not in result[no_pass]:
                     result[no_pass].append(pass_num)
         return dict(result)
@@ -804,7 +804,7 @@ class LayerLog:
         for pass_log in self.passes.values():
             for arg_type in ["args", "kwargs"]:
                 for arg_key, layer_label in pass_log.parent_layer_arg_locs[arg_type].items():
-                    no_pass = self.source_model_log[layer_label].layer_label_no_pass
+                    no_pass = self.source_trace[layer_label].layer_label_no_pass
                     if arg_key not in result[arg_type]:
                         result[arg_type][arg_key] = no_pass
         return result
@@ -818,7 +818,7 @@ class LayerLog:
 
         Only called when normal attribute lookup has already failed (Python's
         ``__getattr__`` protocol).  For single-pass layers, transparently
-        forwards to the underlying LayerPassLog, enabling code like
+        forwards to the underlying OpLog, enabling code like
         ``layer_log.func_rng_states`` without needing an explicit property.
 
         Private attributes (starting with '_') are never delegated — they
@@ -847,7 +847,7 @@ class LayerLog:
         list[LayerLog]
             Child layers resolved through the owning model log.
         """
-        return [self.source_model_log[child_label] for child_label in self.child_layers]
+        return [self.source_trace[child_label] for child_label in self.child_layers]
 
     def get_parent_layers(self) -> list["LayerLog"]:
         """Return parent LayerLog objects for this layer.
@@ -857,7 +857,7 @@ class LayerLog:
         list[LayerLog]
             Parent layers resolved through the owning model log.
         """
-        return [self.source_model_log[parent_label] for parent_label in self.parent_layers]
+        return [self.source_trace[parent_label] for parent_label in self.parent_layers]
 
     def show(
         self,
@@ -931,10 +931,10 @@ class LayerAccessor:
     Supports indexing by:
     * **layer label** (str) -- exact match against no-pass label.
     * **ordinal index** (int) -- position in execution order.
-    * **pass notation** (str ``"conv2d_1_1:2"``) -- returns the LayerPassLog
+    * **pass notation** (str ``"conv2d_1_1:2"``) -- returns the OpLog
       for a specific pass of a multi-pass layer.
 
-    Available as ``model_log.layers``.
+    Available as ``trace.layers``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -946,15 +946,15 @@ class LayerAccessor:
     def __init__(
         self,
         layer_logs: Dict[str, "LayerLog"],
-        source_model_log: Optional["ModelLog"] = None,
+        source_trace: Optional["Trace"] = None,
     ) -> None:
         self._dict = layer_logs  # no-pass label -> LayerLog
         self._list = list(layer_logs.values())  # execution-order list
-        # Store as weakref to avoid preventing ModelLog GC.
-        self._source_ref = weakref.ref(source_model_log) if source_model_log is not None else None
+        # Store as weakref to avoid preventing Trace GC.
+        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
 
-    def __getitem__(self, key: Union[int, str]) -> Union["LayerLog", "LayerPassLog"]:
-        """Return a LayerLog by label or index, or a LayerPassLog by pass label.
+    def __getitem__(self, key: Union[int, str]) -> Union["LayerLog", "OpLog"]:
+        """Return a LayerLog by label or index, or a OpLog by pass label.
 
         Pass notation ``"conv2d_1_1:2"`` splits on the last colon, looks up
         the base LayerLog, and returns ``layer_log.passes[2]``.

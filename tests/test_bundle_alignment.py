@@ -64,7 +64,7 @@ class _TwoHidden(nn.Module):
         return self.fc2(torch.relu(self.extra(hidden)))
 
 
-def _log(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
+def _log(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture a model log.
 
     Parameters
@@ -76,11 +76,11 @@ def _log(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured model log.
     """
 
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
 def test_aligned_pairs_returns_best_match_sites_across_architectures() -> None:

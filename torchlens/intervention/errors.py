@@ -118,11 +118,11 @@ class InterventionReadyConflictError(ConfigurationError, ValueError):
 
 
 class DirectActivationWriteWarning(TorchLensInterventionWarning):
-    """User directly wrote a LayerPassLog activation field."""
+    """User directly wrote a OpLog activation field."""
 
 
 class MutateInPlaceWarning(TorchLensInterventionWarning):
-    """First root-log mutation; ModelLog mutators operate in place."""
+    """First root-log mutation; Trace mutators operate in place."""
 
 
 class DirectWriteIgnoredWarning(TorchLensInterventionWarning):

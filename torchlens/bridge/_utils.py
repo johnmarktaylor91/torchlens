@@ -15,7 +15,7 @@ def source_model(log: Any) -> nn.Module:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` with a live ``_source_model_ref``.
+        TorchLens ``Trace`` with a live ``_source_model_ref``.
 
     Returns
     -------
@@ -32,7 +32,7 @@ def source_model(log: Any) -> nn.Module:
     model = cast(nn.Module | None, source_ref() if source_ref is not None else None)
     if model is None:
         raise ValueError(
-            "This bridge requires a live source model. Re-run log_forward_pass and keep "
+            "This bridge requires a live source model. Re-run trace and keep "
             "the model object alive while using the bridge."
         )
     return model
@@ -44,7 +44,7 @@ def resolve_one_site(log: Any, site: Any) -> Any:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     site:
         Layer label, selector, or already-resolved layer object.
 
@@ -66,7 +66,7 @@ def activation_at(log: Any, site: Any) -> torch.Tensor:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     site:
         Layer label, selector, or layer object.
 
@@ -95,7 +95,7 @@ def first_input_tensor(log: Any) -> torch.Tensor:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
 
     Returns
     -------
@@ -112,7 +112,7 @@ def first_input_tensor(log: Any) -> torch.Tensor:
         activation = getattr(layer, "activation", None)
         if getattr(layer, "is_input_layer", False) and isinstance(activation, torch.Tensor):
             return activation
-    raise ValueError("Could not find a saved tensor input in this ModelLog.")
+    raise ValueError("Could not find a saved tensor input in this Trace.")
 
 
 def tensor_layers(log: Any, sites: Iterable[Any] | None = None) -> list[Any]:
@@ -121,7 +121,7 @@ def tensor_layers(log: Any, sites: Iterable[Any] | None = None) -> list[Any]:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     sites:
         Optional iterable of site-like values. When omitted, all saved tensor
         layers except input placeholders are returned.

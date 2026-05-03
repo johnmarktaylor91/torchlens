@@ -7,14 +7,14 @@ access via ``_check_param_grad()``.
 
 **GC concern with _param_ref**: ``_param_ref`` holds a direct reference to
 the ``nn.Parameter`` object.  This prevents the parameter from being garbage
-collected as long as the ParamLog (and thus the ModelLog) is alive.  This
-is acceptable because the ModelLog's lifetime is typically shorter than or
-equal to the model's lifetime.  The ``cleanup()`` method on ModelLog
+collected as long as the ParamLog (and thus the Trace) is alive.  This
+is acceptable because the Trace's lifetime is typically shorter than or
+equal to the model's lifetime.  The ``cleanup()`` method on Trace
 deletes all ParamLog references.
 
 **Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
 grad_memory) is computed lazily on first access via ``_check_param_grad()``.
-This allows gradients computed after ``log_forward_pass()`` returns (e.g.
+This allows gradients computed after ``trace()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
@@ -108,7 +108,7 @@ class ParamLog:
 
         # Direct reference to the actual nn.Parameter for lazy gradient access.
         # Prevents GC of the parameter while this ParamLog is alive (acceptable
-        # because ModelLog lifetime <= model lifetime; cleanup() clears it).
+        # because Trace lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
 
         # Populated during postprocessing:
@@ -327,7 +327,7 @@ class ParamAccessor:
     * **short name** (str) -- e.g. ``"weight"`` (must be unambiguous).
     * **ordinal position** (int) -- index into insertion-order list.
 
-    Available as ``model_log.params``, ``layer_log.params``, ``module_log.params``.
+    Available as ``trace.params``, ``layer_log.params``, ``module_log.params``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {

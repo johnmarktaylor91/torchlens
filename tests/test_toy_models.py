@@ -13,7 +13,7 @@ from conftest import VIS_OUTPUT_DIR
 
 import example_models
 from torchlens import (
-    log_forward_pass,
+    trace,
     get_model_metadata,
     show_model_graph,
     validate_forward_pass,
@@ -1097,7 +1097,7 @@ def test_nested_param_free_loops(default_input1):
     """
     model = example_models.NestedParamFreeLoops()
     assert validate_forward_pass(model, default_input1)
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
 
     # All sin ops should be in one layer group with 12 passes
     sin_pass_counts = set()
@@ -1318,7 +1318,7 @@ def test_data_dependent_branch_loop(input_2d):
 def test_sequential_param_free_loops(default_input1):
     model = example_models.SequentialParamFreeLoops()
     assert validate_forward_pass(model, default_input1)
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     # Verify the two sequential loops produce SEPARATE groups (not merged)
     sin_groups = set()
     for label in mh.layer_labels:
@@ -1521,15 +1521,15 @@ def test_gelu_model(default_input1):
 # =============================================================================
 
 
-def test_log_forward_pass_layers_to_save(default_input1):
+def test_trace_layers_to_save(default_input1):
     """Test layers_to_save parameter selectively saves activations."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, layers_to_save="all")
+    mh = trace(model, default_input1, layers_to_save="all")
     all_labels = mh.layer_labels
     assert len(all_labels) > 0
 
     # Save only the first layer
-    mh_partial = log_forward_pass(model, default_input1, layers_to_save=[all_labels[0]])
+    mh_partial = trace(model, default_input1, layers_to_save=[all_labels[0]])
     # The layer list should still track all layers
     assert len(mh_partial.layer_labels) > 0
     # But only the requested layer should have saved activations
@@ -1537,10 +1537,10 @@ def test_log_forward_pass_layers_to_save(default_input1):
     assert saved_entry.activation is not None
 
 
-def test_log_forward_pass_save_function_args(default_input1):
+def test_trace_save_function_args(default_input1):
     """Test save_function_args=True populates captured_args on entries."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, save_function_args=True)
+    mh = trace(model, default_input1, save_function_args=True)
     assert mh.save_function_args is True
     # At least one non-input layer should have captured_args
     found = False
@@ -1552,10 +1552,10 @@ def test_log_forward_pass_save_function_args(default_input1):
     assert found, "No non-input layer had captured_args populated"
 
 
-def test_log_forward_pass_activation_postfunc(default_input1):
+def test_trace_activation_postfunc(default_input1):
     """Test activation_postfunc applies to saved tensors."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, activation_postfunc=torch.mean)
+    mh = trace(model, default_input1, activation_postfunc=torch.mean)
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]
@@ -1565,10 +1565,10 @@ def test_log_forward_pass_activation_postfunc(default_input1):
             )
 
 
-def test_log_forward_pass_mark_distances(default_input1):
+def test_trace_mark_distances(default_input1):
     """Test mark_input_output_distances=True populates distance fields."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, mark_input_output_distances=True)
+    mh = trace(model, default_input1, mark_input_output_distances=True)
     for label in mh.layer_labels:
         entry = mh[label]
         assert entry.min_distance_from_input is not None
@@ -1578,51 +1578,51 @@ def test_log_forward_pass_mark_distances(default_input1):
 
 
 def test_get_model_metadata(default_input1):
-    """Test get_model_metadata returns ModelLog without saving activations."""
+    """Test get_model_metadata returns Trace without saving activations."""
     model = example_models.SimpleFF()
     mh = get_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
     assert mh.num_tensors_total > 0
 
 
-def test_model_log_getitem_by_index(default_input1):
-    """Test ModelLog supports integer indexing."""
+def test_trace_getitem_by_index(default_input1):
+    """Test Trace supports integer indexing."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     first = mh[0]
     last = mh[-1]
     assert first.layer_label == mh.layer_labels[0]
     assert last.layer_label == mh.layer_labels[-1]
 
 
-def test_model_log_getitem_by_label(default_input1):
-    """Test ModelLog supports string label access."""
+def test_trace_getitem_by_label(default_input1):
+    """Test Trace supports string label access."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     label = mh.layer_labels[0]
     entry = mh[label]
     assert entry.layer_label == label
 
 
-def test_model_log_len(default_input1):
-    """Test len(ModelLog) matches layer count."""
+def test_trace_len(default_input1):
+    """Test len(Trace) matches layer count."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     assert len(mh) == len(mh.layer_labels)
 
 
-def test_model_log_iter(default_input1):
-    """Test iteration over ModelLog yields entries."""
+def test_trace_iter(default_input1):
+    """Test iteration over Trace yields entries."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     items = list(mh)
     assert len(items) == len(mh.layer_labels)
 
 
-def test_model_log_layer_labels(default_input1):
+def test_trace_layer_labels(default_input1):
     """Test layer_labels, layer_labels_no_pass, layer_labels_w_pass properties."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     assert isinstance(mh.layer_labels, list)
     assert all(isinstance(lbl, str) for lbl in mh.layer_labels)
     assert isinstance(mh.layer_labels_no_pass, list)
@@ -1666,7 +1666,7 @@ def test_view_mutation_unsqueeze(input_2d):
     """Mutation through unsqueeze view should be logged without error."""
     model = example_models.ViewMutationUnsqueeze()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1675,7 +1675,7 @@ def test_view_mutation_reshape(input_2d):
     """Mutation through reshape view should be logged without error."""
     model = example_models.ViewMutationReshape()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1684,7 +1684,7 @@ def test_view_mutation_transpose(input_2d):
     """Mutation through transpose view should be logged without error."""
     model = example_models.ViewMutationTranspose()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1693,7 +1693,7 @@ def test_multiple_view_mutations(input_2d):
     """Multiple views mutated independently should be logged without error."""
     model = example_models.MultipleViewMutations()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1702,7 +1702,7 @@ def test_chained_view_mutation(input_2d):
     """Mutation through chained views should be logged without error."""
     model = example_models.ChainedViewMutation()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1711,7 +1711,7 @@ def test_output_matches_parent_no_false_positive(input_2d):
     """No mutation model: verify no false-positive child tensor variations."""
     model = example_models.OutputMatchesParent()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_function_args=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # No layer should have child tensor variations since nothing is mutated
@@ -1740,7 +1740,7 @@ def test_wrapped_input_no_deepcopy_hang():
     original_data = original_tensor.clone()
     wrapper = example_models.TensorWrapper(original_tensor)
     model = example_models.WrappedInputModel()
-    mh = log_forward_pass(model, wrapper)
+    mh = trace(model, wrapper)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # Original tensor should not have been mutated (same-device case)
@@ -1760,7 +1760,7 @@ def test_tuple_input_single_arg():
     """
     model = example_models.TupleInputModel()
     input_tuple = (torch.rand(5, 5), torch.rand(5, 5))
-    mh = log_forward_pass(model, input_tuple)
+    mh = trace(model, input_tuple)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     assert validate_forward_pass(model, input_tuple)
@@ -1781,7 +1781,7 @@ def test_functional_after_submodule_not_box():
 
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)
-    mh = log_forward_pass(model, x)
+    mh = trace(model, x)
     # Find the relu layer
     relu_layers = [label for label in mh.layer_labels if "relu" in label.lower()]
     assert len(relu_layers) > 0, "No relu layer found"
@@ -1804,7 +1804,7 @@ def test_output_layer_saved_with_layers_to_save():
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)
     # Save only the relu layer (not explicitly the output)
-    mh = log_forward_pass(model, x, layers_to_save=["relu_1"])
+    mh = trace(model, x, layers_to_save=["relu_1"])
     for label in mh.output_layers:
         entry = mh[label]
         assert entry.activation is not None, f"Output layer {label} should have activation"
@@ -1823,7 +1823,7 @@ def test_stochastic_depth_layers_to_save():
     model.train()
     x = torch.rand(2, 5)
     # layers_to_save triggers the two-pass path; use substring match
-    mh = log_forward_pass(model, x, layers_to_save=["linear"])
+    mh = trace(model, x, layers_to_save=["linear"])
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # Linear layers should have saved activations

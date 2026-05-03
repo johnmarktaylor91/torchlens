@@ -12,8 +12,8 @@ from torchlens.data_classes.layer_log import LayerLog
 from torchlens.visualization.rendering import GRADIENT_ARROW_COLOR
 
 
-def _render_dot(log: tl.ModelLog, tmp_path: Any, **kwargs: Any) -> str:
-    """Render a ModelLog to DOT using a temporary SVG output path."""
+def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
+    """Render a Trace to DOT using a temporary SVG output path."""
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.render_graph(
@@ -24,7 +24,7 @@ def _render_dot(log: tl.ModelLog, tmp_path: Any, **kwargs: Any) -> str:
     )
 
 
-def _first_label(log: tl.ModelLog, layer_type: str) -> str:
+def _first_label(log: tl.Trace, layer_type: str) -> str:
     """Return the first layer label with a matching layer type."""
 
     for layer_log in log.layer_logs.values():
@@ -33,7 +33,7 @@ def _first_label(log: tl.ModelLog, layer_type: str) -> str:
     raise AssertionError(f"No layer with type {layer_type}")
 
 
-def _labels(log: tl.ModelLog, layer_type: str) -> list[str]:
+def _labels(log: tl.Trace, layer_type: str) -> list[str]:
     """Return all labels with a matching layer type."""
 
     return [
@@ -103,7 +103,7 @@ class _BranchingSkip(nn.Module):
 def test_skip_single_layer_chains_edge(tmp_path: Any) -> None:
     """Skipping one layer should connect its parent to its child."""
 
-    log = tl.log_forward_pass(_ConvReluLinear(), torch.randn(1, 3, 8, 8))
+    log = tl.trace(_ConvReluLinear(), torch.randn(1, 3, 8, 8))
     conv_label = _first_label(log, "conv2d")
     linear_label = _first_label(log, "linear")
 
@@ -121,7 +121,7 @@ def test_skip_single_layer_chains_edge(tmp_path: Any) -> None:
 def test_skip_consecutive_layers_chains_through(tmp_path: Any) -> None:
     """Skipping consecutive layers should chain to the next visible node."""
 
-    log = tl.log_forward_pass(_ConsecutiveSkip(), torch.randn(1, 3, 8, 8))
+    log = tl.trace(_ConsecutiveSkip(), torch.randn(1, 3, 8, 8))
     conv_label = _first_label(log, "conv2d")
     linear_label = _first_label(log, "linear")
 
@@ -140,7 +140,7 @@ def test_skip_consecutive_layers_chains_through(tmp_path: Any) -> None:
 def test_skip_branching(tmp_path: Any) -> None:
     """Skipping a branching node should create direct edges to both branches."""
 
-    log = tl.log_forward_pass(_BranchingSkip(), torch.randn(1, 4))
+    log = tl.trace(_BranchingSkip(), torch.randn(1, 4))
     source_label = _first_label(log, "linear")
     branch_labels = _labels(log, "linear")[1:]
 
@@ -159,7 +159,7 @@ def test_skip_branching(tmp_path: Any) -> None:
 def test_skip_input_or_output_raises(tmp_path: Any) -> None:
     """skip_fn may not elide graph input or output layers."""
 
-    log = tl.log_forward_pass(nn.Linear(4, 4), torch.randn(1, 4))
+    log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
 
     def skip_fn(layer_log: LayerLog) -> bool:
         """Try to skip the input layer."""
@@ -179,7 +179,7 @@ def test_skip_preserves_gradient_edge_kind(tmp_path: Any) -> None:
     """Skipping a forward node should preserve gradient edge styling."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 1))
-    log = tl.log_forward_pass(model, torch.randn(1, 4), save_gradients=True)
+    log = tl.trace(model, torch.randn(1, 4), save_gradients=True)
     output = log[log.output_layers[0]].activation
     output.sum().backward()
 

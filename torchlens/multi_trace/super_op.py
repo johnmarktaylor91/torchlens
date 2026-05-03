@@ -1,4 +1,4 @@
-"""NodeView accessors for bundle sites."""
+"""SuperOp accessors for bundle sites."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ import torch
 from .metrics import is_scalar_like, relative_l1_scalar, resolve_metric
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ..data_classes.layer_pass_log import LayerPassLog
+    from ..data_classes.op_log import OpLog
     from .topology import SupergraphNode
 
 _TENSOR_FIELD_LITERAL = Literal["activation", "gradient"]
 
 
-class NodeView:
+class SuperOp:
     """View of a single site across all bundle members."""
 
     def __init__(
@@ -61,8 +61,8 @@ class NodeView:
             self._bundle_member_names = []
 
     @classmethod
-    def from_members(cls, query: Any, members: dict[str, "LayerPassLog"]) -> "NodeView":
-        """Build a NodeView from resolved member layer passes.
+    def from_members(cls, query: Any, members: dict[str, "OpLog"]) -> "SuperOp":
+        """Build a SuperOp from resolved member layer passes.
 
         Parameters
         ----------
@@ -73,7 +73,7 @@ class NodeView:
 
         Returns
         -------
-        NodeView
+        SuperOp
             New node view.
         """
 
@@ -110,7 +110,7 @@ class NodeView:
 
         Returns
         -------
-        dict[str, LayerPassLog]
+        dict[str, OpLog]
             Per-member layer pass records.
         """
 
@@ -441,7 +441,7 @@ class NodeView:
             Representation.
         """
 
-        return f"NodeView(name={self._node_name!r}, members={list(self._members)!r})"
+        return f"SuperOp(name={self._node_name!r}, members={list(self._members)!r})"
 
 
-__all__ = ["NodeView"]
+__all__ = ["SuperOp"]

@@ -19,7 +19,7 @@
 ## Attribute Conventions
 - `tl_` prefix on tensor/module attributes during logging.
 - Permanent attrs: `tl_module_address`, `tl_module_type`, forward wrapper markers.
-- Session attrs: `tl_source_model_log`, `tl_module_pass_num`, buffer labels, temporary counters.
+- Session attrs: `tl_source_trace`, `tl_module_pass_num`, buffer labels, temporary counters.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state.
 
 ## Public Surface
@@ -59,7 +59,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 - Step 5 builds AST file indexes, classifies terminal bools, materializes dense
   `conditional_events`, runs backward flood, attributes forward arm edges, then derives
   legacy THEN/ELIF/ELSE views.
-- Primary structures are `ModelLog.conditional_events`, `conditional_arm_edges`,
+- Primary structures are `Trace.conditional_events`, `conditional_arm_edges`,
   `conditional_edge_passes`, and `cond_branch_children_by_cond`.
 - Graphviz renders IF/THEN/ELIF/ELSE labels; ELK and dagua conditional support remains more
   limited than Graphviz.

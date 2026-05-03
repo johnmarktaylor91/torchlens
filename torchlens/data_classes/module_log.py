@@ -1,10 +1,10 @@
-"""Structured per-module metadata: ModulePassLog, ModuleLog, ModuleAccessor.
+"""Structured per-module metadata: ModuleCallLog, ModuleLog, ModuleAccessor.
 
 Three-level hierarchy:
 
-* **ModulePassLog** -- one invocation of one module (lightweight container).
+* **ModuleCallLog** -- one invocation of one module (lightweight container).
   Stores ``layers`` as pass-qualified labels (e.g. ``"conv2d_1_1:1"``),
-  pointing to individual LayerPassLog entries.
+  pointing to individual OpLog entries.
 
 * **ModuleLog** -- aggregate metadata for one ``nn.Module`` across all its
   invocations.  Stores ``all_layers`` as no-pass labels (e.g.
@@ -12,13 +12,13 @@ Three-level hierarchy:
   For single-pass modules, per-pass fields are delegated to ``passes[1]``
   via ``_single_pass_or_error()``.
 
-* **ModuleAccessor** -- dict-like accessor returned by ``model_log.modules``.
+* **ModuleAccessor** -- dict-like accessor returned by ``trace.modules``.
   Supports lookup by module address, alias (shared modules), pass label,
   or ordinal index.
 
-ModuleLog vs ModulePassLog label convention:
+ModuleLog vs ModuleCallLog label convention:
   - ModuleLog.all_layers stores **no-pass** labels -> LayerLog
-  - ModulePassLog.layers stores **pass-qualified** labels -> LayerPassLog
+  - ModuleCallLog.layers stores **pass-qualified** labels -> OpLog
 This matches each accessor's natural granularity.
 """
 
@@ -37,16 +37,16 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from .buffer_log import BufferAccessor
-    from .model_log import ModelLog
+    from .model_log import Trace
     from .param_log import ParamAccessor
 
 
-def _module_pass_log_to_row(module_pass_log: "ModulePassLog") -> Dict[str, Any]:
-    """Convert a ModulePassLog into one DataFrame row.
+def _module_call_log_to_row(module_call_log: "ModuleCallLog") -> Dict[str, Any]:
+    """Convert a ModuleCallLog into one DataFrame row.
 
     Parameters
     ----------
-    module_pass_log:
+    module_call_log:
         Module-pass metadata entry to export.
 
     Returns
@@ -54,10 +54,10 @@ def _module_pass_log_to_row(module_pass_log: "ModulePassLog") -> Dict[str, Any]:
     Dict[str, Any]
         Mapping from canonical field name to exported value.
     """
-    return {field: getattr(module_pass_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
+    return {field: getattr(module_call_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
 
 
-class ModulePassLog:
+class ModuleCallLog:
     """Per-(module, pass_num) data for one invocation of a module.
 
     Lightweight container holding the list of layers computed during
@@ -65,7 +65,7 @@ class ModulePassLog:
     the call-graph edges (parent/children in the module invocation tree).
 
     ``layers`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
-    that resolve to individual LayerPassLog entries.
+    that resolve to individual OpLog entries.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -139,7 +139,7 @@ class ModulePassLog:
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
         lines = [
-            f"ModulePassLog: {self.pass_label}",
+            f"ModuleCallLog: {self.pass_label}",
             f"  layers: {self.num_layers}",
         ]
         if self.input_layers:
@@ -169,7 +169,7 @@ class ModulePassLog:
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        row = _module_pass_log_to_row(self)
+        row = _module_call_log_to_row(self)
         return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
 
     def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
@@ -300,7 +300,7 @@ class ModuleLog:
         "has_backward_hooks": FieldPolicy.KEEP,
         "extra_attributes": FieldPolicy.BLOB_RECURSIVE,
         "methods": FieldPolicy.KEEP,
-        "_source_model_log_ref": FieldPolicy.WEAKREF_STRIP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
     def __init__(
@@ -328,7 +328,7 @@ class ModuleLog:
         nesting_depth: int = 0,
         # Pass info
         num_passes: int = 1,
-        passes: Optional[Dict[int, "ModulePassLog"]] = None,
+        passes: Optional[Dict[int, "ModuleCallLog"]] = None,
         pass_labels: Optional[List[str]] = None,
         # Layers (aggregate)
         all_layers: Optional[List[str]] = None,
@@ -348,7 +348,7 @@ class ModuleLog:
         extra_attributes: Optional[Dict[str, Any]] = None,
         methods: Optional[List[str]] = None,
         # Back-reference
-        _source_model_log: "ModelLog | None" = None,
+        _source_trace: "Trace | None" = None,
     ) -> None:
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
@@ -376,7 +376,7 @@ class ModuleLog:
         self.pass_labels = pass_labels if pass_labels is not None else []
 
         # all_layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
-        # Contrast with ModulePassLog.layers which stores pass-qualified labels.
+        # Contrast with ModuleCallLog.layers which stores pass-qualified labels.
         self.all_layers = all_layers if all_layers is not None else []
 
         from .param_log import ParamAccessor
@@ -397,10 +397,8 @@ class ModuleLog:
         self.extra_attributes = extra_attributes if extra_attributes is not None else {}
         self.methods = methods if methods is not None else []
 
-        # Store as weakref to break circular reference (ModelLog -> _module_logs -> ModuleLog -> ModelLog).
-        self._source_model_log_ref = (
-            weakref.ref(_source_model_log) if _source_model_log is not None else None
-        )
+        # Store as weakref to break circular reference (Trace -> _module_logs -> ModuleLog -> Trace).
+        self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
 
     @property
     def is_shared(self) -> bool:
@@ -424,21 +422,21 @@ class ModuleLog:
         return human_readable_size(self.params_memory)
 
     @property
-    def _source_model_log(self) -> "ModelLog | None":
-        """Back-reference to the owning ModelLog (stored as weakref)."""
-        ref = self.__dict__.get("_source_model_log_ref")
+    def _source_trace(self) -> "Trace | None":
+        """Back-reference to the owning Trace (stored as weakref)."""
+        ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
             return None
-        return cast("ModelLog | None", ref())
+        return cast("Trace | None", ref())
 
-    @_source_model_log.setter
-    def _source_model_log(self, value: "ModelLog | None") -> None:
-        self._source_model_log_ref = weakref.ref(value) if value is not None else None
+    @_source_trace.setter
+    def _source_trace(self, value: "Trace | None") -> None:
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
-        state["_source_model_log_ref"] = None
+        state["_source_trace_ref"] = None
         state["_buffer_accessor"] = None
         state["io_format_version"] = IO_FORMAT_VERSION
         return state
@@ -446,9 +444,7 @@ class ModuleLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without touching disk."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(
-            state, defaults={"_buffer_accessor": None, "_source_model_log_ref": None}
-        )
+        default_fill_state(state, defaults={"_buffer_accessor": None, "_source_trace_ref": None})
         self.__dict__.update(state)
 
     # --- Per-call delegating properties ---
@@ -547,28 +543,28 @@ class ModuleLog:
         """Scoped BufferAccessor for buffers belonging to this module."""
         if self._buffer_accessor is not None:
             return cast("BufferAccessor", self._buffer_accessor)
-        # Build on first access from the source ModelLog
+        # Build on first access from the source Trace
         from .buffer_log import BufferAccessor
 
-        if self._source_model_log is None or self._source_model_log._buffer_accessor is None:
+        if self._source_trace is None or self._source_trace._buffer_accessor is None:
             self._buffer_accessor = BufferAccessor({})
             return cast("BufferAccessor", self._buffer_accessor)
-        parent_accessor = self._source_model_log._buffer_accessor
+        parent_accessor = self._source_trace._buffer_accessor
         scoped = {
             addr: bl
             for addr, bl in parent_accessor._dict.items()
             if bl.module_address == self.address
         }
-        self._buffer_accessor = BufferAccessor(scoped, source_model_log=self._source_model_log)
+        self._buffer_accessor = BufferAccessor(scoped, source_trace=self._source_trace)
         return cast("BufferAccessor", self._buffer_accessor)
 
     def _sum_layer_field(self, field: str) -> int:
         """Sum a numeric field across all layers in this module (skipping None)."""
-        if self._source_model_log is None:
+        if self._source_trace is None:
             return 0
         total = 0
         for label in self.all_layers:
-            entry = self._source_model_log[label]
+            entry = self._source_trace[label]
             val = getattr(entry, field, None)
             if val is not None:
                 total += val
@@ -614,12 +610,12 @@ class ModuleLog:
             A stacked tensor when layer gradient shapes match, a list when
             shapes differ, or ``None`` when no layer gradients were saved.
         """
-        if self._source_model_log is None:
+        if self._source_trace is None:
             return None
         gradients = [
-            self._source_model_log[layer_label].gradient
+            self._source_trace[layer_label].gradient
             for layer_label in self.all_layers
-            if getattr(self._source_model_log[layer_label], "has_gradient", False)
+            if getattr(self._source_trace[layer_label], "has_gradient", False)
         ]
         if not gradients:
             return None
@@ -648,33 +644,33 @@ class ModuleLog:
         return self.num_layers
 
     def __getitem__(self, ix: int | str) -> Any:
-        """Return the LayerPassLog at position ix within this module's layer list.
+        """Return the OpLog at position ix within this module's layer list.
 
         Supports int indexing and string label lookup (#120).
         """
-        if self._source_model_log is None:
-            raise RuntimeError("No source ModelLog reference; cannot index into layers.")
+        if self._source_trace is None:
+            raise RuntimeError("No source Trace reference; cannot index into layers.")
         if isinstance(ix, str):
             # String label lookup within this module's layers
             if ix in self.all_layers:
-                return self._source_model_log[ix]
+                return self._source_trace[ix]
             # Try substring match within module layers
             matches = [lbl for lbl in self.all_layers if ix in lbl]
             if len(matches) == 1:
-                return self._source_model_log[matches[0]]
+                return self._source_trace[matches[0]]
             elif len(matches) > 1:
                 raise ValueError(
                     f"Ambiguous lookup: '{ix}' matches {len(matches)} layers in module "
                     f"'{self.address}': {', '.join(matches[:5])}"
                 )
             raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
-        return self._source_model_log[self.all_layers[ix]]
+        return self._source_trace[self.all_layers[ix]]
 
     def __iter__(self) -> Iterator[Any]:
-        """Iterate over LayerPassLog entries for all layers in this module."""
-        if self._source_model_log is None:
+        """Iterate over OpLog entries for all layers in this module."""
+        if self._source_trace is None:
             return iter(self.all_layers)
-        return iter(self._source_model_log[label] for label in self.all_layers)
+        return iter(self._source_trace[label] for label in self.all_layers)
 
     def show_graph(self, **kwargs: Any) -> str:
         """Render this module's focused graph.
@@ -682,7 +678,7 @@ class ModuleLog:
         Parameters
         ----------
         **kwargs:
-            Keyword arguments forwarded to ``ModelLog.render_graph``.
+            Keyword arguments forwarded to ``Trace.render_graph``.
 
         Returns
         -------
@@ -692,13 +688,13 @@ class ModuleLog:
         Raises
         ------
         RuntimeError
-            If this ModuleLog is not bound to a ModelLog.
+            If this ModuleLog is not bound to a Trace.
         """
 
-        model_log: ModelLog | None = self._source_model_log
-        if model_log is None:
-            raise RuntimeError("ModuleLog not bound to a ModelLog")
-        return cast(str, model_log.render_graph(module=self, **kwargs))
+        trace: Trace | None = self._source_trace
+        if trace is None:
+            raise RuntimeError("ModuleLog not bound to a Trace")
+        return cast(str, trace.render_graph(module=self, **kwargs))
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.
@@ -708,8 +704,8 @@ class ModuleLog:
         pd.DataFrame
             One row per layer belonging to this module.
         """
-        if self._source_model_log is None:
-            raise RuntimeError("No source ModelLog reference; cannot build DataFrame.")
+        if self._source_trace is None:
+            raise RuntimeError("No source Trace reference; cannot build DataFrame.")
         try:
             import pandas as pd
         except ImportError as e:
@@ -719,7 +715,7 @@ class ModuleLog:
 
         rows = []
         for label in self.all_layers:
-            entry = self._source_model_log[label]
+            entry = self._source_trace[label]
             rows.append(
                 {
                     "layer_label": entry.layer_label,
@@ -797,10 +793,10 @@ class ModuleAccessor:
     * **module address** (str) -- e.g. ``"features.0"``, ``"self"``.
     * **alias** (str) -- for shared modules (same nn.Module registered at
       multiple addresses), any alias resolves to the same ModuleLog.
-    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModulePassLog.
+    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModuleCallLog.
     * **ordinal index** (int) -- position in address order.
 
-    Available as ``model_log.modules``.
+    Available as ``trace.modules``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -814,11 +810,11 @@ class ModuleAccessor:
         self,
         module_dict: Dict[str, "ModuleLog"],
         module_list: Optional[List["ModuleLog"]] = None,
-        pass_dict: Optional[Dict[str, "ModulePassLog"]] = None,
+        pass_dict: Optional[Dict[str, "ModuleCallLog"]] = None,
     ) -> None:
         self._dict = module_dict  # primary address -> ModuleLog
         self._list = module_list if module_list is not None else list(module_dict.values())
-        self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModulePassLog
+        self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModuleCallLog
         # Alias map: for shared modules (same nn.Module at multiple addresses),
         # every non-primary address also resolves to the same ModuleLog.
         self._alias_dict: Dict[str, "ModuleLog"] = {}
@@ -827,8 +823,8 @@ class ModuleAccessor:
                 if alias not in self._dict:
                     self._alias_dict[alias] = ml
 
-    def __getitem__(self, key: Union[int, str]) -> Union["ModuleLog", "ModulePassLog"]:
-        """Return a ModuleLog by address string or ordinal index, or a ModulePassLog by pass label.
+    def __getitem__(self, key: Union[int, str]) -> Union["ModuleLog", "ModuleCallLog"]:
+        """Return a ModuleLog by address string or ordinal index, or a ModuleCallLog by pass label.
 
         Shared modules (same nn.Module registered under multiple addresses) can
         be looked up by any of their aliases.

@@ -104,10 +104,10 @@ def _first_saved_label(model: nn.Module, x: torch.Tensor) -> str:
     raise AssertionError("No internal layer found.")
 
 
-def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
-    """Return a metadata-only ModelLog."""
+def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    """Return a metadata-only Trace."""
 
-    return tl.log_forward_pass(
+    return tl.trace(
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=None),
@@ -186,7 +186,7 @@ def test_list_ops_on_three_architectures(architecture: tuple[nn.Module, torch.Te
 def test_find_layers_and_suggest_on_three_architectures(
     architecture: tuple[nn.Module, torch.Tensor],
 ) -> None:
-    """``ModelLog.find_layers`` and ``suggest`` return useful labels."""
+    """``Trace.find_layers`` and ``suggest`` return useful labels."""
 
     model, x = architecture
     log = _metadata_log(model, x)
@@ -218,8 +218,8 @@ def test_layer_accessor_queries_and_completion(
     assert isinstance(log.layers.by_module_and_operator(), dict)
 
 
-def test_model_log_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> None:
-    """ModelLog site reports return lists."""
+def test_trace_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> None:
+    """Trace site reports return lists."""
 
     model, x = architecture
     log = _metadata_log(model, x)

@@ -1,8 +1,8 @@
 """Robustness sprint PR 1 — regression coverage for correctness guards.
 
 Covers:
-    - Nested ``log_forward_pass`` / ``active_logging`` must raise rather than
-      silently corrupt the outer ModelLog.
+    - Nested ``trace`` / ``active_logging`` must raise rather than
+      silently corrupt the outer Trace.
     - functorch / vmap / grad transforms emit a one-shot UserWarning so the
       user knows their log is incomplete (rather than silently empty).
     - pyproject pins ``torch>=2.4`` (matching the autocast API already in use)
@@ -34,7 +34,7 @@ class _Tiny(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Nested log_forward_pass guard
+# Nested trace guard
 # ---------------------------------------------------------------------------
 
 
@@ -42,7 +42,7 @@ class _Tiny(nn.Module):
 def test_nested_active_logging_raises_runtime_error() -> None:
     """Entering ``active_logging`` while one is already active must raise.
 
-    Previously this silently overwrote ``_active_model_log`` and cleared it on
+    Previously this silently overwrote ``_active_trace`` and cleared it on
     inner exit, corrupting the outer log mid-pass. The guard turns silent
     data corruption into a loud error.
     """
@@ -56,24 +56,24 @@ def test_nested_active_logging_raises_runtime_error() -> None:
 
 
 @pytest.mark.smoke
-def test_nested_log_forward_pass_via_forward_hook_raises() -> None:
-    """A user forward hook that calls log_forward_pass must fail loudly.
+def test_nested_trace_via_forward_hook_raises() -> None:
+    """A user forward hook that calls trace must fail loudly.
 
     This is the realistic nested-logging trigger: the hook runs during the
     outer's ``active_logging`` context (during the forward pass, inside the
-    decorated wrapper), so the inner ``log_forward_pass`` hits the guard.
+    decorated wrapper), so the inner ``trace`` hits the guard.
     """
     outer = _Tiny()
     inner_model = _Tiny()
     x = torch.randn(2, 4)
 
     def evil_hook(_module, _inputs, _output):
-        tl.log_forward_pass(inner_model, x)
+        tl.trace(inner_model, x)
 
     outer.a.register_forward_hook(evil_hook)
 
     with pytest.raises(RuntimeError, match="not re-entrant"):
-        tl.log_forward_pass(outer, x, layers_to_save="none")
+        tl.trace(outer, x, layers_to_save="none")
 
 
 def test_logging_state_cleared_after_guard_fires() -> None:
@@ -87,10 +87,10 @@ def test_logging_state_cleared_after_guard_fires() -> None:
                 pass
 
     assert _state._logging_enabled is False
-    assert _state._active_model_log is None
+    assert _state._active_trace is None
 
     # Follow-up forward pass should succeed — the outer `with` cleaned up.
-    log = tl.log_forward_pass(model, x, layers_to_save="none")
+    log = tl.trace(model, x, layers_to_save="none")
     assert len(log.layer_logs) > 0
 
 
@@ -122,7 +122,7 @@ def test_vmap_emits_userwarning_once_per_session() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.log_forward_pass(model, x, layers_to_save="none")
+        tl.trace(model, x, layers_to_save="none")
 
     vmap_warnings = [
         w
@@ -137,7 +137,7 @@ def test_vmap_emits_userwarning_once_per_session() -> None:
 
 @pytest.mark.skipif(not _HAS_FUNCTORCH_VMAP, reason="torch.func.vmap not available")
 def test_vmap_warning_flag_resets_between_sessions() -> None:
-    """Each call to log_forward_pass starts with a fresh warning flag."""
+    """Each call to trace starts with a fresh warning flag."""
 
     class VmappedSum(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -149,10 +149,10 @@ def test_vmap_warning_flag_resets_between_sessions() -> None:
 
     with warnings.catch_warnings(record=True) as first:
         warnings.simplefilter("always")
-        tl.log_forward_pass(model, x, layers_to_save="none")
+        tl.trace(model, x, layers_to_save="none")
     with warnings.catch_warnings(record=True) as second:
         warnings.simplefilter("always")
-        tl.log_forward_pass(model, x, layers_to_save="none")
+        tl.trace(model, x, layers_to_save="none")
 
     first_count = sum(1 for w in first if "functorch" in str(w.message).lower())
     second_count = sum(1 for w in second if "functorch" in str(w.message).lower())
@@ -167,7 +167,7 @@ def test_non_vmap_forward_pass_emits_no_functorch_warning() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.log_forward_pass(model, x, layers_to_save="none")
+        tl.trace(model, x, layers_to_save="none")
 
     functorch_warnings = [w for w in caught if "functorch" in str(w.message).lower()]
     assert functorch_warnings == []

@@ -16,7 +16,7 @@ def test_train_mode_save_activations_to_path_errors(tmp_path: Path) -> None:
     """Slow train_mode rejects legacy disk activation saves at construction."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="disk saves"):
-        tl.log_forward_pass(
+        tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
@@ -28,7 +28,7 @@ def test_train_mode_streaming_bundle_path_errors(tmp_path: Path) -> None:
     """Slow/replay train_mode rejects grouped streaming bundle paths."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="disk saves"):
-        tl.log_forward_pass(
+        tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
@@ -57,7 +57,7 @@ def test_train_mode_inference_mode_wrapped_forward_errors() -> None:
     inference_mode = getattr(torch, "inference_mode")
     with inference_mode():
         with pytest.raises(tl.TrainingModeConfigError, match="inference tensors"):
-            tl.log_forward_pass(
+            tl.trace(
                 nn.Linear(4, 2),
                 torch.randn(3, 4, requires_grad=True),
                 train_mode=True,
@@ -68,7 +68,7 @@ def test_train_mode_detach_saved_tensors_errors() -> None:
     """train_mode rejects explicit detaching because the options conflict."""
 
     with pytest.raises(ValueError, match="detach_saved_tensors=False"):
-        tl.log_forward_pass(
+        tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
@@ -80,7 +80,7 @@ def test_train_mode_integer_activation_postfunc_rejected() -> None:
     """Runtime dtype validation rejects non-grad activation transforms."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):
-        tl.log_forward_pass(
+        tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,

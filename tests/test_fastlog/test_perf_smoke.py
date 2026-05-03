@@ -52,8 +52,8 @@ def test_col_offset_and_qualname_called_only_on_filtered_frames(monkeypatch) -> 
     monkeypatch.setattr(introspection, "_get_col_offset", fake_col_offset)
     monkeypatch.setattr(introspection, "_get_code_qualname", fake_qualname)
 
-    model_log = tl.log_forward_pass(TenLayerMlp(), torch.randn(1, 8))
+    trace = tl.trace(TenLayerMlp(), torch.randn(1, 8))
 
-    assert len(model_log.layer_list) >= 20
+    assert len(trace.layer_list) >= 20
     assert 0 < col_offset_calls < 200
     assert 0 < qualname_calls < 200

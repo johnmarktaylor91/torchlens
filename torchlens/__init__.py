@@ -1,7 +1,7 @@
 """TorchLens - extract activations and metadata from PyTorch models.
 
 Importing torchlens has **no side effects** on the torch namespace. Torch
-functions are wrapped lazily on the first call to ``log_forward_pass()`` and
+functions are wrapped lazily on the first call to ``trace()`` and
 stay wrapped afterward. TorchLens 2.0 keeps the top-level namespace intentionally
 small; legacy names remain available through deprecation shims for one minor
 cycle.
@@ -37,8 +37,8 @@ from . import (
 from ._io.bundle import load, save
 from .stats import aggregate
 from .data_classes.layer_log import LayerLog
-from .data_classes.layer_pass_log import LayerPassLog
-from .data_classes.model_log import ModelLog
+from .data_classes.op_log import OpLog
+from .data_classes.model_log import Trace
 from .intervention import (
     Bundle,
     bwd_hook,
@@ -68,7 +68,7 @@ from .intervention import (
 )
 from .user_funcs import (
     decide_recording_of_batch,
-    log_forward_pass,
+    trace as _trace,
     record_kpi_in_graph,
     register_tensor_connection,
     show_backward_graph as _moved_show_backward_graph,
@@ -96,12 +96,12 @@ _MOVED_OBJECTS = {
     "GradientPostfunc": ("torchlens.types", "GradientPostfunc"),
     "GradFnAccessor": ("torchlens.accessors", "GradFnAccessor"),
     "GradFnLog": ("torchlens.types", "GradFnLog"),
-    "GradFnPassLog": ("torchlens.types", "GradFnPassLog"),
+    "GradFnCallLog": ("torchlens.types", "GradFnCallLog"),
     "LayerAccessor": ("torchlens.accessors", "LayerAccessor"),
     "MetadataInvariantError": ("torchlens.errors", "MetadataInvariantError"),
     "ModuleAccessor": ("torchlens.accessors", "ModuleAccessor"),
     "ModuleLog": ("torchlens.types", "ModuleLog"),
-    "ModulePassLog": ("torchlens.types", "ModulePassLog"),
+    "ModuleCallLog": ("torchlens.types", "ModuleCallLog"),
     "NodeSpec": ("torchlens.experimental.dagua", "NodeSpec"),
     "ParamLog": ("torchlens.types", "ParamLog"),
     "RunState": ("torchlens.io", "RunState"),
@@ -122,13 +122,13 @@ _MOVED_OBJECTS = {
     "get_model_metadata": ("torchlens.io", "get_model_metadata"),
     "list_logs": ("torchlens.io", "list_logs"),
     "log_model_metadata": ("torchlens.io", "log_model_metadata"),
-    "model_log_to_dagua_graph": ("torchlens.experimental.dagua", "model_log_to_dagua_graph"),
+    "trace_to_dagua_graph": ("torchlens.experimental.dagua", "trace_to_dagua_graph"),
     "preview_fastlog": ("torchlens.fastlog", "preview"),
     "rehydrate_nested": ("torchlens.io", "rehydrate_nested"),
     "render_lines_to_html": ("torchlens.experimental.dagua", "render_lines_to_html"),
-    "render_model_log_with_dagua": (
+    "render_trace_with_dagua": (
         "torchlens.experimental.dagua",
-        "render_model_log_with_dagua",
+        "render_trace_with_dagua",
     ),
     "reset_naming_counter": ("torchlens.io", "reset_naming_counter"),
     "resolve_sites": ("torchlens.validation", "resolve_sites"),
@@ -233,12 +233,12 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     return f"Layer {name!r} not found."
 
 
-def _activation_from_log(model_log: ModelLog, layer: str) -> _torch.Tensor:
+def _activation_from_log(trace: Trace, layer: str) -> _torch.Tensor:
     """Return a saved activation from a layer lookup.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log containing saved activations.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
@@ -255,9 +255,9 @@ def _activation_from_log(model_log: ModelLog, layer: str) -> _torch.Tensor:
     """
 
     try:
-        layer_log = model_log[layer]
+        layer_log = trace[layer]
     except (KeyError, ValueError) as exc:
-        suggestions = model_log.suggest(layer) if hasattr(model_log, "suggest") else []
+        suggestions = trace.suggest(layer) if hasattr(trace, "suggest") else []
         raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
 
     activation = getattr(layer_log, "activation", None)
@@ -287,12 +287,12 @@ def _normalize_extract_layers(layers: _Iterable[str] | _Mapping[str, str]) -> di
     return {str(layer): str(layer) for layer in layers}
 
 
-def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]:
+def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     """Return saved layer labels matching an extraction pattern.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log containing candidate layer labels.
     pattern:
         Exact label or substring pattern.
@@ -303,20 +303,20 @@ def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]
         Matching no-pass layer labels in execution order.
     """
 
-    if pattern in model_log.layer_dict_all_keys:
+    if pattern in trace.layer_dict_all_keys:
         return [pattern]
-    if pattern in model_log.layer_logs:
+    if pattern in trace.layer_logs:
         return [pattern]
     lower_pattern = pattern.lower()
     matches = [
         label
-        for label in model_log.layer_labels_no_pass
-        if lower_pattern in label.lower() and label in model_log.layers_with_saved_activations
+        for label in trace.layer_labels_no_pass
+        if lower_pattern in label.lower() and label in trace.layers_with_saved_activations
     ]
     if matches:
         return matches
     try:
-        resolved = model_log[pattern]
+        resolved = trace[pattern]
     except (KeyError, ValueError):
         return []
     label = getattr(resolved, "layer_label_no_pass", getattr(resolved, "layer_label", pattern))
@@ -352,12 +352,12 @@ def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -
     from .experimental import _active_stop_after_site
 
     _ = stop_after if stop_after is not None else _active_stop_after_site()
-    model_log = log_forward_pass(
+    trace = _trace(
         model,
         x,
         capture=_CaptureOptions(layers_to_save=[layer], keep_unsaved_layers=True),
     )
-    return _activation_from_log(model_log, layer)
+    return _activation_from_log(trace, layer)
 
 
 def extract(
@@ -384,7 +384,7 @@ def extract(
     """
 
     layer_plan = _normalize_extract_layers(layers)
-    model_log = log_forward_pass(
+    trace = _trace(
         model,
         x,
         capture=_CaptureOptions(
@@ -394,17 +394,17 @@ def extract(
     )
     if isinstance(layers, _Mapping):
         return {
-            label: _activation_from_log(model_log, pattern) for label, pattern in layer_plan.items()
+            label: _activation_from_log(trace, pattern) for label, pattern in layer_plan.items()
         }
 
     outputs: dict[str, _torch.Tensor] = {}
     for pattern in layer_plan.values():
-        matches = _matching_saved_layer_labels(model_log, pattern)
+        matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
-            suggestions = model_log.suggest(pattern)
+            suggestions = trace.suggest(pattern)
             raise ValueError(_did_you_mean_message(pattern, suggestions))
         for match in matches:
-            outputs[match] = _activation_from_log(model_log, match)
+            outputs[match] = _activation_from_log(trace, match)
     return outputs
 
 
@@ -765,8 +765,11 @@ def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
     return _moved_load_intervention_spec(*args, **kwargs)
 
 
+trace = _trace
+
+
 __all__ = [
-    "log_forward_pass",
+    "trace",
     "fastlog",
     "load",
     "save",
@@ -779,9 +782,9 @@ __all__ = [
     "extract",
     "batched_extract",
     "validate",
-    "ModelLog",
+    "Trace",
     "LayerLog",
-    "LayerPassLog",
+    "OpLog",
     "Bundle",
     "label",
     "func",

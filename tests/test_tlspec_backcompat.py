@@ -126,7 +126,7 @@ def _tiny_transformer_fixture(seed: int) -> tuple[TinyTransformer, torch.Tensor]
     return TinyTransformer().eval(), torch.randn(2, 3, 5, dtype=torch.float64)
 
 
-def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.ModelLog:
+def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.Trace:
     """Capture the tiny CNN counterpart for one fixture.
 
     Parameters
@@ -138,12 +138,12 @@ def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured model log.
     """
 
     model, x = _tiny_cnn_fixture(seed)
-    return tl.log_forward_pass(
+    return tl.trace(
         model,
         x,
         capture=CaptureOptions(
@@ -155,7 +155,7 @@ def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.ModelLog:
     )
 
 
-def _capture_transformer(seed: int) -> tl.ModelLog:
+def _capture_transformer(seed: int) -> tl.Trace:
     """Capture the tiny transformer counterpart for one fixture.
 
     Parameters
@@ -165,12 +165,12 @@ def _capture_transformer(seed: int) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured model log.
     """
 
     model, x = _tiny_transformer_fixture(seed)
-    return tl.log_forward_pass(
+    return tl.trace(
         model,
         x,
         capture=CaptureOptions(layers_to_save="all", random_seed=0),
@@ -178,7 +178,7 @@ def _capture_transformer(seed: int) -> tl.ModelLog:
     )
 
 
-def _build_intervention_counterpart(seed: int) -> tl.ModelLog:
+def _build_intervention_counterpart(seed: int) -> tl.Trace:
     """Build an in-memory intervention counterpart.
 
     Parameters
@@ -188,7 +188,7 @@ def _build_intervention_counterpart(seed: int) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Model log with the zero-ablation recipe attached.
     """
 
@@ -197,8 +197,8 @@ def _build_intervention_counterpart(seed: int) -> tl.ModelLog:
     return log
 
 
-def _assert_modellog_matches(live_log: tl.ModelLog, loaded_log: tl.ModelLog) -> None:
-    """Assert that loaded ModelLog state matches a fresh in-memory capture.
+def _assert_modellog_matches(live_log: tl.Trace, loaded_log: tl.Trace) -> None:
+    """Assert that loaded Trace state matches a fresh in-memory capture.
 
     Parameters
     ----------
@@ -222,7 +222,7 @@ def _assert_modellog_matches(live_log: tl.ModelLog, loaded_log: tl.ModelLog) -> 
 
 def _assert_intervention_matches(
     fixture_spec: InterventionSpec,
-    live_log: tl.ModelLog,
+    live_log: tl.Trace,
 ) -> None:
     """Assert that a loaded intervention spec matches a live counterpart.
 
@@ -258,8 +258,8 @@ def _assert_intervention_matches(
     ("fixture_name", "expected_format", "expected_type", "seed"),
     [
         ("F1_intervention_default.tlspec", "v2.16_intervention", InterventionSpec, 1101),
-        ("F2_modellog_tiny_cnn.tlspec", "v2.16_modellog_portable", tl.ModelLog, 1102),
-        ("F3_modellog_tiny_transformer.tlspec", "v2.16_modellog_portable", tl.ModelLog, 1103),
+        ("F2_modellog_tiny_cnn.tlspec", "v2.16_modellog_portable", tl.Trace, 1102),
+        ("F3_modellog_tiny_transformer.tlspec", "v2.16_modellog_portable", tl.Trace, 1103),
         ("F4_intervention_audit.tlspec", "v2.16_intervention", InterventionSpec, 1104),
         (
             "F5_intervention_executable_with_callables.tlspec",

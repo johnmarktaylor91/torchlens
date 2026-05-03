@@ -154,7 +154,7 @@ def _cnn_log() -> tuple[_TinyCnn, torch.Tensor, Any]:
     torch.manual_seed(12)
     model = _TinyCnn().eval()
     x = torch.randn(3, 1, 8, 8)
-    log = tl.log_forward_pass(model, x, layers_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all")
     return model, x, log
 
 
@@ -179,7 +179,7 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
     torch.manual_seed(13)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.log_forward_pass(model, tokens, layers_to_save="all")
+    log = tl.trace(model, tokens, layers_to_save="all")
     activation = log.resolve_sites("linear", max_fanout=1).first().activation
     sae = _TinySae(width=activation.shape[-1])
 

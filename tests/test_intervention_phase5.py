@@ -133,19 +133,19 @@ def _parent_refs(value: object) -> list[ParentRef]:
 def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     """Graph hash matches same graph/shape and changes for a different graph."""
 
-    log1 = tl.log_forward_pass(
+    log1 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
-    log2 = tl.log_forward_pass(
+    log2 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
-    log3 = tl.log_forward_pass(
+    log3 = tl.trace(
         _DifferentGraphModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -161,7 +161,7 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
 def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
     """Step 11 rewrites replay templates and edge records to final labels."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -186,7 +186,7 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
 def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> None:
     """Step 12 keeps multi-output call groups atomic when activations are pruned."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -205,7 +205,7 @@ def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> Non
 def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
     """Loop detection does not regenerate or merge per-wrapper-call ids."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _RecurrentReluModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -221,7 +221,7 @@ def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
 def test_func_call_id_invariant_catches_duplicate_output_paths() -> None:
     """Invariant S fails when same-call outputs reuse an output path."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -241,7 +241,7 @@ def test_func_call_id_invariant_catches_duplicate_output_paths() -> None:
 def test_module_address_normalized_strips_pass_qualifiers() -> None:
     """Hash preparation records pass-normalized module addresses on layers."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
         vis_opt="none",

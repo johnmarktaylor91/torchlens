@@ -62,7 +62,7 @@ class _TinyModel(nn.Module):
 
 
 class _DummyLog:
-    """Test double for ``ModelLog`` used by API-plumbing tests."""
+    """Test double for ``Trace`` used by API-plumbing tests."""
 
     def __init__(self) -> None:
         """Initialize captured state for a fake log object."""
@@ -211,13 +211,13 @@ def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPa
 
     sentinel = object()
 
-    def fake_log_forward_pass(*args: Any, **kwargs: Any) -> object:
+    def fake_trace(*args: Any, **kwargs: Any) -> object:
         """Return a stable sentinel without running real logging."""
 
         del args, kwargs
         return sentinel
 
-    monkeypatch.setattr(user_funcs, "log_forward_pass", fake_log_forward_pass)
+    monkeypatch.setattr(user_funcs, "trace", fake_trace)
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
@@ -256,12 +256,12 @@ def test_validate_saved_activations_alias_warns_and_forwards(
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_model_log_validate_saved_activations_warns_once(
+def test_trace_validate_saved_activations_warns_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The deprecated ``ModelLog`` method alias should warn once and delegate."""
+    """The deprecated ``Trace`` method alias should warn once and delegate."""
 
-    model_log = tl.ModelLog("tiny")
+    trace = tl.Trace("tiny")
 
     def fake_validate_saved_activations(*args: Any, **kwargs: Any) -> bool:
         """Return success without running the real validation path."""
@@ -277,8 +277,8 @@ def test_model_log_validate_saved_activations_warns_once(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        first = model_log.validate_saved_activations([torch.randn(1)])
-        second = model_log.validate_saved_activations([torch.randn(1)])
+        first = trace.validate_saved_activations([torch.randn(1)])
+        second = trace.validate_saved_activations([torch.randn(1)])
 
     assert first is True
     assert second is True
@@ -298,21 +298,21 @@ def test_model_log_validate_saved_activations_warns_once(
         ("detect_loops", "detect_recurrent_patterns", False, "detect_loops"),
     ],
 )
-def test_log_forward_pass_old_renamed_kwargs_warn(
+def test_trace_old_renamed_kwargs_warn(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
     old_name: str,
     new_name: str,
     value: Any,
     captured_key: str,
 ) -> None:
-    """Deprecated flat rename aliases should still work on ``log_forward_pass``."""
+    """Deprecated flat rename aliases should still work on ``trace``."""
 
     captured, _dummy_log = stubbed_runner
     kwargs = {old_name: value}
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save=None),
@@ -332,20 +332,20 @@ def test_log_forward_pass_old_renamed_kwargs_warn(
         ("detect_recurrent_patterns", False, "detect_loops"),
     ],
 )
-def test_log_forward_pass_new_renamed_kwargs_do_not_warn(
+def test_trace_new_renamed_kwargs_do_not_warn(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
     new_name: str,
     value: Any,
     captured_key: str,
 ) -> None:
-    """Canonical renamed kwargs should work on ``log_forward_pass`` without warnings."""
+    """Canonical renamed kwargs should work on ``trace`` without warnings."""
 
     captured, _dummy_log = stubbed_runner
     kwargs = {new_name: value}
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save=None),
@@ -370,7 +370,7 @@ def test_activation_transform_flat_kwarg_routes_to_runner(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
@@ -395,7 +395,7 @@ def test_activation_postfunc_flat_kwarg_warns_and_routes_to_transform(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
@@ -436,7 +436,7 @@ def test_save_options_activation_postfunc_alias_warns() -> None:
         ("detect_loops", "detect_recurrent_patterns", True, False),
     ],
 )
-def test_log_forward_pass_mixing_old_and_new_renamed_kwargs_raises(
+def test_trace_mixing_old_and_new_renamed_kwargs_raises(
     old_name: str,
     new_name: str,
     old_value: Any,
@@ -448,7 +448,7 @@ def test_log_forward_pass_mixing_old_and_new_renamed_kwargs_raises(
         TypeError,
         match=f"kwarg {old_name} deprecated, use {new_name}; do not pass both",
     ):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save=None),
@@ -464,13 +464,13 @@ def test_old_kwarg_warning_deduplicates_per_process(
     del stubbed_runner
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save=None),
             num_context_lines=3,
         )
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save=None),
@@ -550,7 +550,7 @@ def test_visualization_options_group_supports_every_field(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save=None),
@@ -642,7 +642,7 @@ def test_visualization_defaults_preserve_per_function_behavior(
 
     _captured, dummy_log = stubbed_runner
 
-    tl.log_forward_pass(
+    tl.trace(
         _TinyModel(),
         _tiny_input(),
         capture=CaptureOptions(layers_to_save=None),
@@ -672,7 +672,7 @@ def test_streaming_options_group_supports_every_field(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
@@ -701,7 +701,7 @@ def test_streaming_flat_aliases_warn_and_route(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
@@ -719,7 +719,7 @@ def test_streaming_group_and_flat_same_field_raise() -> None:
         ValueError,
         match="conflicting streaming options",
     ):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
@@ -735,7 +735,7 @@ def test_streaming_group_and_flat_same_field_raise_for_explicit_default() -> Non
         ValueError,
         match="conflicting streaming options",
     ):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),

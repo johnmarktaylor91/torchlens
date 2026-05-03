@@ -33,11 +33,11 @@ from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 from ..utils.tensor_utils import tensor_all_nan
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
 # ---------------------------------------------------------------------------
@@ -96,15 +96,13 @@ STRUCTURAL_ARG_POSITIONS: Dict[str, Set[int]] = {
 # ---------------------------------------------------------------------------
 # Custom exemption check functions
 # Signature: callable(self, layer, layers_to_perturb) -> bool
-#   self = ModelLog instance
-#   layer = LayerPassLog being validated
+#   self = Trace instance
+#   layer = OpLog being validated
 #   layers_to_perturb = list of layer labels being perturbed
 # ---------------------------------------------------------------------------
 
 
-def _check_getitem_exempt(
-    self: "ModelLog", layer: LayerPassLog, layers_to_perturb: List[str]
-) -> bool:
+def _check_getitem_exempt(self: "Trace", layer: OpLog, layers_to_perturb: List[str]) -> bool:
     """Exempt __getitem__ when the perturbed layer is a structural arg (index tensor,
     or any non-data arg)."""
     perturbed_tensor = self[layers_to_perturb[0]].activation
@@ -122,9 +120,7 @@ def _check_getitem_exempt(
     return False
 
 
-def _check_setitem_exempt(
-    self: "ModelLog", layer: LayerPassLog, layers_to_perturb: List[str]
-) -> bool:
+def _check_setitem_exempt(self: "Trace", layer: OpLog, layers_to_perturb: List[str]) -> bool:
     """Exempt __setitem__ when the perturbed layer is a bool mask arg."""
     perturbed_tensor = self[layers_to_perturb[0]].activation
     args = layer.captured_args
@@ -155,7 +151,7 @@ def _check_setitem_exempt(
     return False
 
 
-def _check_lstm_exempt(self: "ModelLog", layer: LayerPassLog, layers_to_perturb: List[str]) -> bool:
+def _check_lstm_exempt(self: "Trace", layer: OpLog, layers_to_perturb: List[str]) -> bool:
     """Exempt lstm when the perturbed layer is a hidden/cell state arg."""
     perturbed_tensor = self[layers_to_perturb[0]].activation
     args = layer.captured_args
@@ -173,9 +169,7 @@ def _check_lstm_exempt(self: "ModelLog", layer: LayerPassLog, layers_to_perturb:
     return False
 
 
-def _check_interpolate_exempt(
-    self: "ModelLog", layer: LayerPassLog, layers_to_perturb: List[str]
-) -> bool:
+def _check_interpolate_exempt(self: "Trace", layer: OpLog, layers_to_perturb: List[str]) -> bool:
     """Exempt interpolate when the perturbed layer is the scale_factor arg."""
     perturbed_tensor = self[layers_to_perturb[0]].activation
     kwargs = layer.captured_kwargs
@@ -200,9 +194,7 @@ def _check_interpolate_exempt(
     return False
 
 
-def _check_scatter_exempt(
-    self: "ModelLog", layer: LayerPassLog, layers_to_perturb: List[str]
-) -> bool:
+def _check_scatter_exempt(self: "Trace", layer: OpLog, layers_to_perturb: List[str]) -> bool:
     """Exempt scatter_ when the perturbed layer is the destination tensor and
     the index covers all positions along the scatter dimension (full overwrite)."""
     perturbed_tensor = self[layers_to_perturb[0]].activation
@@ -230,7 +222,7 @@ def _check_scatter_exempt(
 # ---------------------------------------------------------------------------
 # Registry 4: Custom exemption checks keyed by func name.
 # ---------------------------------------------------------------------------
-CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["ModelLog", LayerPassLog, List[str]], bool]] = {
+CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["Trace", OpLog, List[str]], bool]] = {
     "__getitem__": _check_getitem_exempt,
     "__setitem__": _check_setitem_exempt,
     "lstm": _check_lstm_exempt,
@@ -245,8 +237,8 @@ CUSTOM_EXEMPTION_CHECKS: Dict[str, Callable[["ModelLog", LayerPassLog, List[str]
 
 
 def perturbed_layer_at_structural_position(
-    self: "ModelLog",
-    layer: LayerPassLog,
+    self: "Trace",
+    layer: OpLog,
     layers_to_perturb: List[str],
     exempt_positions: Set[int],
 ) -> bool:
@@ -281,8 +273,8 @@ def perturbed_layer_at_structural_position(
 
 
 def posthoc_perturb_check(
-    self: "ModelLog",
-    layer_to_validate_parents_for: LayerPassLog,
+    self: "Trace",
+    layer_to_validate_parents_for: OpLog,
     layers_to_perturb: List[str],
     verbose: bool = False,
 ) -> bool:

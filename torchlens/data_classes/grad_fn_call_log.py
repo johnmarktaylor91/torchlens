@@ -13,7 +13,7 @@ from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
 
 
 @dataclass
-class GradFnPassLog:
+class GradFnCallLog:
     """Runtime data for one execution of an autograd ``grad_fn`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {

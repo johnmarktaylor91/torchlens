@@ -106,7 +106,7 @@ def test_forward_exception_cleans_recording_stack() -> None:
         tl.fastlog.record(RaisingModel(), torch.ones(1), default_module=True)
 
     assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_model_log is None
+    assert torchlens_state._active_trace is None
     assert fastlog_state._active_recording_state is None
 
 
@@ -127,5 +127,5 @@ def test_predicate_exception_cleans_stack_and_respects_fail_fast() -> None:
         )
 
     assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_model_log is None
+    assert torchlens_state._active_trace is None
     assert fastlog_state._active_recording_state is None

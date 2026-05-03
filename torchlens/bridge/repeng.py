@@ -20,7 +20,7 @@ def control_vector(
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     positive_site:
         Site containing positive activations.
     negative_site:

@@ -198,8 +198,8 @@ def profiling_collapsed_node_mode(module_log: "ModuleLog", spec: NodeSpec) -> No
         Module node spec with aggregate profiling rows when available.
     """
 
-    model_log = getattr(module_log, "_source_model_log", None)
-    if model_log is None:
+    trace = getattr(module_log, "_source_trace", None)
+    if trace is None:
         return spec
 
     runtime = 0.0
@@ -207,7 +207,7 @@ def profiling_collapsed_node_mode(module_log: "ModuleLog", spec: NodeSpec) -> No
     output_bytes = 0.0
     saw_output = False
     for layer_label in getattr(module_log, "all_layers", []):
-        layer_log = model_log[layer_label]
+        layer_log = trace[layer_label]
         layer_runtime = _get_optional_attr(layer_log, "func_time")
         if isinstance(layer_runtime, int | float):
             runtime += float(layer_runtime)
@@ -292,11 +292,11 @@ def _normalized_layer_type(layer_log: "LayerLog") -> str:
 def _first_input_shape(layer_log: "LayerLog") -> tuple[int, ...] | None:
     """Infer the first tensor input shape from parent graph metadata or captured args."""
 
-    model_log = _get_optional_attr(layer_log, "source_model_log")
+    trace = _get_optional_attr(layer_log, "source_trace")
     parent_layers = _get_optional_attr(layer_log, "parent_layers")
-    if model_log is not None and isinstance(parent_layers, list):
+    if trace is not None and isinstance(parent_layers, list):
         for parent_label in parent_layers:
-            parent = model_log[parent_label]
+            parent = trace[parent_label]
             shape = _get_optional_attr(parent, "tensor_shape")
             if isinstance(shape, tuple):
                 return shape
@@ -318,13 +318,13 @@ def _format_shape(shape: tuple[Any, ...]) -> str:
 def _is_inside_multihead_attention(layer_log: "LayerLog") -> bool:
     """Return whether the layer belongs to a recorded MultiheadAttention module."""
 
-    model_log = _get_optional_attr(layer_log, "source_model_log")
+    trace = _get_optional_attr(layer_log, "source_trace")
     containing_modules = _get_optional_attr(layer_log, "containing_modules")
-    if model_log is None or not isinstance(containing_modules, list):
+    if trace is None or not isinstance(containing_modules, list):
         return False
     for module_pass in containing_modules:
         module_address = str(module_pass).rsplit(":", 1)[0]
-        module_log = model_log.modules[module_address]
+        module_log = trace.modules[module_address]
         if module_log.module_class_name == "MultiheadAttention":
             return True
     return False

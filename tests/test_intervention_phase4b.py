@@ -150,7 +150,7 @@ def test_intervention_ready_records_unique_output_paths_for_multi_output_op() ->
             left, right = torch.split(x, 1, dim=0)
             return left + right
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -194,7 +194,7 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
 
             return self.linear(x) + 1
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         LinearShift(),
         torch.randn(4, 3),
         vis_opt="none",
@@ -236,7 +236,7 @@ def test_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
 
             return torch.relu(x) + torch.relu(x)
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         AddRelus(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -285,7 +285,7 @@ def test_non_intervention_ready_capture_leaves_templates_and_edges_empty() -> No
 
             return torch.relu(x) + 1
 
-    log = tl.log_forward_pass(TinyModel(), torch.randn(2, 3), vis_opt="none")
+    log = tl.trace(TinyModel(), torch.randn(2, 3), vis_opt="none")
 
     assert all(layer.captured_arg_template is None for layer in log.layer_list)
     assert all(layer.captured_kwarg_template is None for layer in log.layer_list)

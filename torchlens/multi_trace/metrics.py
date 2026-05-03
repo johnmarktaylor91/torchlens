@@ -5,7 +5,7 @@ a scalar tensor in the [0, ~] range -- larger means more dissimilar. The
 `METRIC_REGISTRY` and `resolve_metric` helper let callers pass either a string
 name or a callable.
 
-The fallback ``relative_l1_scalar`` is used implicitly by NodeView.diff when the
+The fallback ``relative_l1_scalar`` is used implicitly by SuperOp.diff when the
 inputs are 0-d (scalar) tensors -- cosine and pearson are meaningless on a single
 value.
 """

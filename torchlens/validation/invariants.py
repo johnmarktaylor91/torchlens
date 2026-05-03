@@ -1,17 +1,17 @@
-"""Metadata invariant checks for ``ModelLog`` and its sub-objects.
+"""Metadata invariant checks for ``Trace`` and its sub-objects.
 
-Single entry point: ``check_metadata_invariants(model_log)`` runs all checks
+Single entry point: ``check_metadata_invariants(trace)`` runs all checks
 and raises ``MetadataInvariantError`` on the first failure.
 
 **Phase 1 -- Structural invariants:**
-  A. ModelLog self-consistency (counts, timing, label uniqueness)
+  A. Trace self-consistency (counts, timing, label uniqueness)
   B. Special layer lists match per-layer boolean flags
   C. Graph topology (parent-child bidirectionality, boolean flag consistency)
-  D. LayerPassLog field consistency (shape, dtype, pass numbering, nesting)
+  D. OpLog field consistency (shape, dtype, pass numbering, nesting)
   E. Recurrence / loop invariants (is_recurrent, pass dicts)
   F. Branching invariants (is_branching)
   F2. Conditional metadata invariants (13 conditional consistency checks)
-  G. LayerPassLog <-> LayerLog cross-references (pass numbering, back-pointers)
+  G. OpLog <-> LayerLog cross-references (pass numbering, back-pointers)
   H. Module <-> Layer containment (all_layers, module pass layers, reverse check)
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
   J. Param cross-references (ParamLog -> layer, uses_params flag)
@@ -38,8 +38,8 @@ from ..errors._base import ValidationError
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import Trace
     from ..data_classes.module_log import ModuleLog
 
 
@@ -89,8 +89,8 @@ class InvariantResult:
 # ---------------------------------------------------------------------------
 
 
-def check_metadata_invariants(model_log: "ModelLog") -> bool:
-    """Run all metadata invariant checks on a completed ``ModelLog``.
+def check_metadata_invariants(trace: "Trace") -> bool:
+    """Run all metadata invariant checks on a completed ``Trace``.
 
     Checks run in dependency order: Phase 1 structural checks first, then
     Phase 2 semantic checks. Raises ``MetadataInvariantError`` on the first
@@ -98,7 +98,7 @@ def check_metadata_invariants(model_log: "ModelLog") -> bool:
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log to validate.
 
     Returns
@@ -107,32 +107,32 @@ def check_metadata_invariants(model_log: "ModelLog") -> bool:
         ``True`` if all invariants pass.
     """
     # --- Phase 1: structural invariants (A-L) ---
-    _check_model_log_self_consistency(model_log)  # A
-    _check_special_layer_lists(model_log)  # B
-    _check_graph_topology(model_log)  # C
-    _check_layer_pass_log_fields(model_log)  # D
-    _check_recurrence_invariants(model_log)  # E
-    _check_branching_invariants(model_log)  # F
-    _check_conditional_invariants(model_log)  # F2
-    _check_layer_pass_to_layer_log_xrefs(model_log)  # G
-    _check_module_layer_containment(model_log)  # H
-    _check_module_hierarchy(model_log)  # I
-    _check_param_xrefs(model_log)  # J
-    _check_buffer_xrefs(model_log)  # K
-    _check_equivalence_symmetry(model_log)  # L
+    _check_trace_self_consistency(trace)  # A
+    _check_special_layer_lists(trace)  # B
+    _check_graph_topology(trace)  # C
+    _check_op_log_fields(trace)  # D
+    _check_recurrence_invariants(trace)  # E
+    _check_branching_invariants(trace)  # F
+    _check_conditional_invariants(trace)  # F2
+    _check_layer_pass_to_layer_log_xrefs(trace)  # G
+    _check_module_layer_containment(trace)  # H
+    _check_module_hierarchy(trace)  # I
+    _check_param_xrefs(trace)  # J
+    _check_buffer_xrefs(trace)  # K
+    _check_equivalence_symmetry(trace)  # L
 
     # --- Phase 2: semantic invariants (M-R) ---
-    _check_graph_ordering(model_log)  # M
-    _check_loop_detection_invariants(model_log)  # N
-    _check_distance_invariants(model_log)  # O
-    _check_graph_connectivity(model_log)  # P
-    _check_module_containment_logic(model_log)  # Q
-    _check_lookup_key_consistency(model_log)  # R
-    check_func_call_id_invariant(model_log)  # S
+    _check_graph_ordering(trace)  # M
+    _check_loop_detection_invariants(trace)  # N
+    _check_distance_invariants(trace)  # O
+    _check_graph_connectivity(trace)  # P
+    _check_module_containment_logic(trace)  # Q
+    _check_lookup_key_consistency(trace)  # R
+    check_func_call_id_invariant(trace)  # S
     return True
 
 
-def check_func_call_id_invariant(model_log: "ModelLog") -> InvariantResult:
+def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     """Invariant S: func_call_id consistency.
 
     For intervention-ready logs, every non-synthetic function output must have a
@@ -144,7 +144,7 @@ def check_func_call_id_invariant(model_log: "ModelLog") -> InvariantResult:
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log to validate.
 
     Returns
@@ -154,11 +154,11 @@ def check_func_call_id_invariant(model_log: "ModelLog") -> InvariantResult:
     """
 
     name = "func_call_id_consistency"
-    if not getattr(model_log, "intervention_ready", False):
+    if not getattr(trace, "intervention_ready", False):
         return InvariantResult(name=name, passed=True)
 
-    groups: dict[int, list["LayerPassLog"]] = defaultdict(list)
-    for layer in model_log.layer_list:
+    groups: dict[int, list["OpLog"]] = defaultdict(list)
+    for layer in trace.layer_list:
         if _is_func_call_id_exempt(layer):
             continue
         if layer.func_call_id is None:
@@ -197,7 +197,7 @@ def check_func_call_id_invariant(model_log: "ModelLog") -> InvariantResult:
     return InvariantResult(name=name, passed=True)
 
 
-def _is_func_call_id_exempt(layer: "LayerPassLog") -> bool:
+def _is_func_call_id_exempt(layer: "OpLog") -> bool:
     """Return whether a layer is exempt from Invariant S.
 
     Parameters
@@ -223,7 +223,7 @@ def _is_func_call_id_exempt(layer: "LayerPassLog") -> bool:
     }
 
 
-def _func_call_group_signature(layer: "LayerPassLog") -> tuple[object, ...]:
+def _func_call_group_signature(layer: "OpLog") -> tuple[object, ...]:
     """Return comparable same-call metadata for Invariant S.
 
     Parameters
@@ -247,12 +247,12 @@ def _func_call_group_signature(layer: "LayerPassLog") -> tuple[object, ...]:
 
 
 # ---------------------------------------------------------------------------
-# A. ModelLog self-consistency
+# A. Trace self-consistency
 # ---------------------------------------------------------------------------
 
 
-def _check_model_log_self_consistency(ml: "ModelLog") -> None:
-    """Check A: ModelLog aggregate counts and metadata are internally consistent.
+def _check_trace_self_consistency(ml: "Trace") -> None:
+    """Check A: Trace aggregate counts and metadata are internally consistent.
 
     Validates:
     - layer_labels length matches layer_list length, no duplicates.
@@ -264,7 +264,7 @@ def _check_model_log_self_consistency(ml: "ModelLog") -> None:
     - Timing values are non-negative and ordered.
     - Tensor counts: total >= saved.
     """
-    name = "model_log_self_consistency"
+    name = "trace_self_consistency"
 
     # layer_labels vs layer_list length
     if len(ml.layer_labels) != len(ml.layer_list):
@@ -346,7 +346,7 @@ def _check_model_log_self_consistency(ml: "ModelLog") -> None:
 
 
 # ---------------------------------------------------------------------------
-# B. Special layer lists ↔ LayerPassLog flags
+# B. Special layer lists ↔ OpLog flags
 # ---------------------------------------------------------------------------
 
 _SPECIAL_LIST_FLAG_PAIRS = [
@@ -358,12 +358,12 @@ _SPECIAL_LIST_FLAG_PAIRS = [
 ]
 
 
-def _check_special_layer_lists(ml: "ModelLog") -> None:
+def _check_special_layer_lists(ml: "Trace") -> None:
     """Check B: special layer lists (input, output, buffer, etc.) match per-layer boolean flags.
 
     For each (list_attr, flag_attr) pair, verifies bidirectional consistency:
-    - Forward: every label in the list has the flag set on its LayerPassLog.
-    - Reverse: every LayerPassLog with the flag set appears in the list.
+    - Forward: every label in the list has the flag set on its OpLog.
+    - Reverse: every OpLog with the flag set appears in the list.
     """
     name = "special_layer_lists"
     label_set = set(ml.layer_labels)
@@ -402,7 +402,7 @@ def _check_special_layer_lists(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_graph_topology(ml: "ModelLog") -> None:
+def _check_graph_topology(ml: "Trace") -> None:
     """Check C: parent-child edge bidirectionality and boolean flag consistency.
 
     Validates:
@@ -494,11 +494,11 @@ def _check_graph_topology(ml: "ModelLog") -> None:
 
 
 # ---------------------------------------------------------------------------
-# D. LayerPassLog field consistency
+# D. OpLog field consistency
 # ---------------------------------------------------------------------------
 
 
-def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
+def _check_op_log_fields(ml: "Trace") -> None:
     """Check D: per-layer field consistency (shape, dtype, pass numbering, func, nesting).
 
     Validates:
@@ -509,7 +509,7 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
     - module_nesting_depth matches len(containing_modules).
     - Label format: pass-qualified label has ':' iff multi-pass; no-pass label never has ':'.
     """
-    name = "layer_pass_log_fields"
+    name = "op_log_fields"
 
     for lpl in ml.layer_list:
         label = lpl.layer_label
@@ -586,7 +586,7 @@ def _check_layer_pass_log_fields(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_recurrence_invariants(ml: "ModelLog") -> None:
+def _check_recurrence_invariants(ml: "Trace") -> None:
     """Check E: recurrence / loop invariants.
 
     Validates:
@@ -647,7 +647,7 @@ def _check_recurrence_invariants(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_branching_invariants(ml: "ModelLog") -> None:
+def _check_branching_invariants(ml: "Trace") -> None:
     """Check F: is_branching matches whether any layer has >1 child."""
     name = "branching_invariants"
     any_branching = any(len(lpl.child_layers) > 1 for lpl in ml.layer_list)
@@ -763,7 +763,7 @@ def _expected_layer_pass_child_views(
     ----------
     cond_branch_children_by_cond:
         Primary ``cond_id -> branch_kind -> child labels`` mapping on a
-        ``LayerPassLog``.
+        ``OpLog``.
 
     Returns
     -------
@@ -862,7 +862,7 @@ def _expected_layer_log_child_union(
     return expected_children_by_cond
 
 
-def _valid_conditional_child_labels(ml: "ModelLog") -> set[str]:
+def _valid_conditional_child_labels(ml: "Trace") -> set[str]:
     """Return the set of valid labels for conditional child references.
 
     Parameters
@@ -879,7 +879,7 @@ def _valid_conditional_child_labels(ml: "ModelLog") -> set[str]:
     return set(ml.layer_labels) | set(ml.layer_logs)
 
 
-def _check_conditional_invariants(ml: "ModelLog") -> None:
+def _check_conditional_invariants(ml: "Trace") -> None:
     """Check F2: conditional metadata invariants added in Phase 6.
 
     Parameters
@@ -1043,7 +1043,7 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
             _fail_conditional_invariant(
                 name,
                 3,
-                f"ModelLog.conditional_branch_edges contains missing child label {child_label!r} "
+                f"Trace.conditional_branch_edges contains missing child label {child_label!r} "
                 f"for parent {parent_label!r}",
             )
     for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items():
@@ -1052,7 +1052,7 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
                 _fail_conditional_invariant(
                     name,
                     3,
-                    f"ModelLog.conditional_arm_edges contains missing child label "
+                    f"Trace.conditional_arm_edges contains missing child label "
                     f"{child_label!r} for edge {(conditional_id, branch_kind, parent_label)}",
                 )
 
@@ -1114,7 +1114,7 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
                 name,
                 5,
                 f"Referenced cond_id {conditional_id} has no matching ConditionalEvent.id "
-                f"in ModelLog.conditional_events",
+                f"in Trace.conditional_events",
             )
 
     # Invariant 6: parent->child stacks are monotone by prefix relation.
@@ -1305,18 +1305,18 @@ def _check_conditional_invariants(ml: "ModelLog") -> None:
 
 
 # ---------------------------------------------------------------------------
-# G. LayerPassLog ↔ LayerLog cross-references
+# G. OpLog ↔ LayerLog cross-references
 # ---------------------------------------------------------------------------
 
 
-def _check_layer_pass_to_layer_log_xrefs(ml: "ModelLog") -> None:
-    """Check G: LayerPassLog <-> LayerLog cross-references.
+def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
+    """Check G: OpLog <-> LayerLog cross-references.
 
     Validates:
     - LayerLog key matches its layer_label.
     - passes dict keys are contiguous {1..N}.
-    - Each LayerPassLog's pass_num matches its dict key.
-    - Each LayerPassLog's layer_label_no_pass matches the parent LayerLog's label.
+    - Each OpLog's pass_num matches its dict key.
+    - Each OpLog's layer_label_no_pass matches the parent LayerLog's label.
     - parent_layer_log back-pointer is identity-equal to the LayerLog.
     """
     name = "layer_pass_layer_log_xrefs"
@@ -1340,20 +1340,19 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "ModelLog") -> None:
             if lpl.pass_num != pass_num:
                 raise MetadataInvariantError(
                     name,
-                    f"LayerLog '{ll_label}' pass key={pass_num} but "
-                    f"LayerPassLog.pass_num={lpl.pass_num}",
+                    f"LayerLog '{ll_label}' pass key={pass_num} but OpLog.pass_num={lpl.pass_num}",
                 )
             if lpl.layer_label_no_pass != ll.layer_label:
                 raise MetadataInvariantError(
                     name,
-                    f"LayerPassLog '{lpl.layer_label}' layer_label_no_pass="
+                    f"OpLog '{lpl.layer_label}' layer_label_no_pass="
                     f"'{lpl.layer_label_no_pass}' != "
                     f"parent LayerLog.layer_label='{ll.layer_label}'",
                 )
             if lpl.parent_layer_log is not ll:
                 raise MetadataInvariantError(
                     name,
-                    f"LayerPassLog '{lpl.layer_label}' parent_layer_log "
+                    f"OpLog '{lpl.layer_label}' parent_layer_log "
                     f"does not point to its LayerLog '{ll_label}'",
                 )
 
@@ -1363,12 +1362,12 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_module_layer_containment(ml: "ModelLog") -> None:
+def _check_module_layer_containment(ml: "Trace") -> None:
     """Check H: Module <-> Layer containment consistency.
 
     Validates forward and reverse directions:
     - Forward: ModuleLog.all_layers labels exist in layer_logs; num_layers matches.
-      ModulePassLog.layers labels exist; input/output_layers subset of layers.
+      ModuleCallLog.layers labels exist; input/output_layers subset of layers.
     - Reverse: each layer's containing_module points to a valid module
       that lists the layer in its all_layers.
     """
@@ -1385,7 +1384,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
             if lbl not in ml.layer_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"ModuleLog '{addr}' all_layers contains '{lbl}' not in model_log.layer_logs",
+                    f"ModuleLog '{addr}' all_layers contains '{lbl}' not in trace.layer_logs",
                 )
 
         if mod_log.num_layers != len(mod_log.all_layers):
@@ -1395,7 +1394,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
                 f"len(all_layers)={len(mod_log.all_layers)}",
             )
 
-        # ModulePassLog checks
+        # ModuleCallLog checks
         # mpl.layers may contain pass-qualified labels OR no-pass labels
         # (e.g., root module in recurrent models uses no-pass labels).
         for pass_num, mpl in mod_log.passes.items():
@@ -1403,14 +1402,14 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
                 if lbl not in label_set and lbl not in no_pass_set:
                     raise MetadataInvariantError(
                         name,
-                        f"ModulePassLog '{addr}:{pass_num}' layers contains "
+                        f"ModuleCallLog '{addr}:{pass_num}' layers contains "
                         f"'{lbl}' not in layer_labels or layer_labels_no_pass",
                     )
 
             if mpl.num_layers != len(mpl.layers):
                 raise MetadataInvariantError(
                     name,
-                    f"ModulePassLog '{addr}:{pass_num}': "
+                    f"ModuleCallLog '{addr}:{pass_num}': "
                     f"num_layers={mpl.num_layers} != len(layers)={len(mpl.layers)}",
                 )
 
@@ -1425,7 +1424,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
                 if extra:
                     raise MetadataInvariantError(
                         name,
-                        f"ModulePassLog '{addr}:{pass_num}' "
+                        f"ModuleCallLog '{addr}:{pass_num}' "
                         f"{sub_attr} has labels not in layers: {extra}",
                     )
 
@@ -1456,7 +1455,7 @@ def _check_module_layer_containment(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_module_hierarchy(ml: "ModelLog") -> None:
+def _check_module_hierarchy(ml: "Trace") -> None:
     """Check I: module address tree consistency and pass structure.
 
     Validates:
@@ -1544,7 +1543,7 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
                 except (KeyError, IndexError):
                     raise MetadataInvariantError(
                         name,
-                        f"ModulePassLog '{addr}:{pass_num}' call_parent="
+                        f"ModuleCallLog '{addr}:{pass_num}' call_parent="
                         f"'{mpl.call_parent}' not in module accessor",
                     )
             for cc in mpl.call_children:
@@ -1553,7 +1552,7 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
                 except (KeyError, IndexError):
                     raise MetadataInvariantError(
                         name,
-                        f"ModulePassLog '{addr}:{pass_num}' call_children "
+                        f"ModuleCallLog '{addr}:{pass_num}' call_children "
                         f"contains '{cc}' not in module accessor",
                     )
 
@@ -1563,7 +1562,7 @@ def _check_module_hierarchy(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_param_xrefs(ml: "ModelLog") -> None:
+def _check_param_xrefs(ml: "Trace") -> None:
     """Check J: Param <-> Layer <-> Module cross-references.
 
     Validates:
@@ -1617,7 +1616,7 @@ def _check_param_xrefs(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_buffer_xrefs(ml: "ModelLog") -> None:
+def _check_buffer_xrefs(ml: "Trace") -> None:
     """Check K: buffer layer and BufferLog cross-references.
 
     Validates:
@@ -1666,7 +1665,7 @@ def _check_buffer_xrefs(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_equivalence_symmetry(ml: "ModelLog") -> None:
+def _check_equivalence_symmetry(ml: "Trace") -> None:
     """Check L: equivalent_operations groups reference valid layer labels.
 
     Validates:
@@ -1717,7 +1716,7 @@ def _check_equivalence_symmetry(ml: "ModelLog") -> None:
 _RAW_LABEL_PATTERN = re.compile(r"^l_\d+$")
 
 
-def _check_graph_ordering(ml: "ModelLog") -> None:
+def _check_graph_ordering(ml: "Trace") -> None:
     """Check M: graph ordering invariants.
 
     Validates:
@@ -1789,7 +1788,7 @@ def _check_graph_ordering(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_loop_detection_invariants(ml: "ModelLog") -> None:
+def _check_loop_detection_invariants(ml: "Trace") -> None:
     """Check N: loop detection / recurrent_group invariants.
 
     Validates per-layer:
@@ -1804,7 +1803,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
     - Parameter sharing rule: layers with same (func_name,
       sorted(parent_param_barcodes)) must share layer_label_no_pass.
     - Equivalence group consistency: all members of a recurrent_group
-      group belong to the same ModelLog.equivalent_operations set.
+      group belong to the same Trace.equivalent_operations set.
 
     Note: subgraph-level adjacency (Rule 3 from loop_detection.py) cannot
     be verified post-hoc from metadata alone.
@@ -1813,7 +1812,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
     label_set = set(ml.layer_labels)
 
     # Build same-layer groups from the authoritative recurrent_group lists
-    # Key: frozenset of labels, Value: list of LayerPassLogs in the group
+    # Key: frozenset of labels, Value: list of OpLogs in the group
     groups_seen: dict[frozenset[str], list[str]] = {}
 
     for lpl in ml.layer_list:
@@ -1915,7 +1914,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
     # different passes).  The func_name is included in the grouping key
     # because different operations (e.g., isinf, expand, nantonum) can consume
     # the same parameter tensor without being the same logical layer.
-    param_groups: dict[tuple[str, tuple[str, ...]], list[LayerPassLog]] = defaultdict(list)
+    param_groups: dict[tuple[str, tuple[str, ...]], list[OpLog]] = defaultdict(list)
     for lpl in ml.layer_list:
         if lpl.uses_params and lpl.parent_param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl.parent_param_barcodes)))
@@ -1933,7 +1932,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
 
     # Equivalence group ↔ same_layer consistency: all members of a
     # recurrent_group group must belong to the same equivalence set.
-    # Note: ModelLog.equivalent_operations keys use the pre-module-suffix type
+    # Note: Trace.equivalent_operations keys use the pre-module-suffix type
     # (from loop_detection), while per-layer operation_equivalence_type has
     # a module suffix appended by control_flow.py. So we check group membership
     # consistency, not exact key matching.
@@ -1973,7 +1972,7 @@ def _check_loop_detection_invariants(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_distance_invariants(ml: "ModelLog") -> None:
+def _check_distance_invariants(ml: "Trace") -> None:
     """Check O: distance and reachability invariants.
 
     Only runs when ``mark_input_output_distances`` was enabled during logging.
@@ -2075,7 +2074,7 @@ def _check_distance_invariants(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_graph_connectivity(ml: "ModelLog") -> None:
+def _check_graph_connectivity(ml: "Trace") -> None:
     """Check P: graph connectivity invariants.
 
     Validates:
@@ -2122,7 +2121,7 @@ def _check_graph_connectivity(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_module_containment_logic(ml: "ModelLog") -> None:
+def _check_module_containment_logic(ml: "Trace") -> None:
     """Check Q: module containment logical consistency.
 
     Validates:
@@ -2226,7 +2225,7 @@ def _check_module_containment_logic(ml: "ModelLog") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _check_lookup_key_consistency(ml: "ModelLog") -> None:
+def _check_lookup_key_consistency(ml: "Trace") -> None:
     """Check R: lookup key bidirectional consistency.
 
     Validates:

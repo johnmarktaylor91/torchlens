@@ -341,7 +341,7 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
                         # Last resort: return shape-preserving zero tensor
                         vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
             # Preserve the raw label so postprocessing can map this tensor
-            # back to its ModelLog entry.
+            # back to its Trace entry.
             if hasattr(x, "tl_tensor_label_raw"):
                 setattr(vals_tensor, "tl_tensor_label_raw", getattr(x, "tl_tensor_label_raw"))
             if isinstance(x, torch.nn.Parameter):

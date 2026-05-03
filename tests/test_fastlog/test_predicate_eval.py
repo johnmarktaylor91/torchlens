@@ -23,7 +23,7 @@ def _ctx() -> object:
 
     return _build_record_context(
         kind="op",
-        layer_pass_log_or_op_data={
+        op_log_or_op_data={
             "label": "linear_1_1_raw",
             "func_name": "linear",
             "tensor": torch.ones(2, 3),
@@ -115,7 +115,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
 
     real_ctx = _build_record_context(
         kind="op",
-        layer_pass_log_or_op_data=op_data,
+        op_log_or_op_data=op_data,
         module_stack=module_stack,
         event_index=2,
         op_index=1,
@@ -123,7 +123,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
     )
     synth_ctx = _build_record_context(
         kind="op",
-        layer_pass_log_or_op_data=op_data,
+        op_log_or_op_data=op_data,
         module_stack=tuple(frame for frame in module_stack),
         event_index=2,
         op_index=1,

@@ -1,9 +1,9 @@
 """Topology comparison + supergraph construction for multi-trace bundles.
 
-Given N ``ModelLog`` instances of the same architecture (or close variants)
+Given N ``Trace`` instances of the same architecture (or close variants)
 this module produces:
 
-* :func:`compare_topology` -- a pairwise structural diff between two ModelLogs.
+* :func:`compare_topology` -- a pairwise structural diff between two Traces.
 * :class:`TopologyDiff` -- the result type for the pairwise comparison.
 * :class:`Supergraph` (and :class:`SupergraphNode`) -- the union of N graphs,
   with each node carrying which traces traversed it plus per-trace LayerLog
@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from ..data_classes.layer_log import LayerLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
 # A fingerprint is (containing_module, func_name).  Both fields normalize to
@@ -73,7 +73,7 @@ def _shape_excluding_batch(layer: "LayerLog") -> Optional[Tuple[int, ...]]:
 
 @dataclass(frozen=True)
 class TopologyDiff:
-    """Result of :func:`compare_topology` for two ModelLogs.
+    """Result of :func:`compare_topology` for two Traces.
 
     Attributes
     ----------
@@ -94,8 +94,8 @@ class TopologyDiff:
     is_identical: bool
 
 
-def compare_topology(a: "ModelLog", b: "ModelLog") -> TopologyDiff:
-    """Compare two ModelLogs structurally.
+def compare_topology(a: "Trace", b: "Trace") -> TopologyDiff:
+    """Compare two Traces structurally.
 
     Two nodes match when their :func:`_fingerprint` values agree -- i.e.
     they are inside the same module pass and run the same torch function.
@@ -188,7 +188,7 @@ class SupergraphNode:
     module_path:
         Representative ``containing_module`` (or ``None`` if not in a module).
     module_type:
-        Representative module class name when available from ``ModelLog.modules``.
+        Representative module class name when available from ``Trace.modules``.
     """
 
     name: str
@@ -202,7 +202,7 @@ class SupergraphNode:
 
 @dataclass
 class Supergraph:
-    """Union of N ModelLog graphs.
+    """Union of N Trace graphs.
 
     Attributes
     ----------
@@ -225,7 +225,7 @@ class Supergraph:
     topological_order: List[str] = field(default_factory=list)
 
 
-def _module_type_for_layer(trace: "ModelLog", layer: "LayerLog") -> Optional[str]:
+def _module_type_for_layer(trace: "Trace", layer: "LayerLog") -> Optional[str]:
     """Return the module class name for a layer's containing module.
 
     Parameters
@@ -277,8 +277,8 @@ def _per_trace_fingerprint_to_canonical(
     return canonical_assignments[key]
 
 
-def build_supergraph(traces: List["ModelLog"], names: List[str]) -> Supergraph:
-    """Build the union supergraph from N ModelLogs.
+def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
+    """Build the union supergraph from N Traces.
 
     The construction proceeds in three passes:
 
@@ -376,7 +376,7 @@ def build_supergraph(traces: List["ModelLog"], names: List[str]) -> Supergraph:
                 parent_layer = trace.layer_logs.get(parent_label)
                 if parent_layer is None:
                     # parent_layers are typically pass-qualified strings; map
-                    # back to no_pass labels via the source ModelLog index.
+                    # back to no_pass labels via the source Trace index.
                     try:
                         ref = trace[parent_label]
                     except (KeyError, IndexError):

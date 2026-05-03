@@ -17,14 +17,14 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file
 
 from . import BlobRef, FieldPolicy, TorchLensIOError
-from .accessor_rebuild import rebuild_model_log_accessors
+from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import resolve_bundle_blob_path
-from ..data_classes.model_log import ModelLog
+from ..data_classes.model_log import Trace
 
 
-def rehydrate_model_log(
+def rehydrate_trace(
     scrubbed_state: dict[str, Any],
     manifest: Manifest | dict[str, Any],
     bundle_path: str | Path,
@@ -32,8 +32,8 @@ def rehydrate_model_log(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
-) -> ModelLog:
-    """Restore a scrubbed portable ``ModelLog`` state.
+) -> Trace:
+    """Restore a scrubbed portable ``Trace`` state.
 
     Parameters
     ----------
@@ -53,19 +53,19 @@ def rehydrate_model_log(
 
     Returns
     -------
-    ModelLog
+    Trace
         Rehydrated model log.
     """
 
     state_for_load = dict(scrubbed_state)
     module_accessor_state = state_for_load.pop("_io_module_accessor_state", None)
 
-    model_log = ModelLog.__new__(ModelLog)
-    model_log.__setstate__(state_for_load)
+    trace = Trace.__new__(Trace)
+    trace.__setstate__(state_for_load)
 
     if module_accessor_state is not None:
-        rebuild_model_log_accessors(
-            model_log,
+        rebuild_trace_accessors(
+            trace,
             module_accessor_state._dict,
             module_accessor_state._list,
             module_accessor_state._pass_dict,
@@ -73,7 +73,7 @@ def rehydrate_model_log(
 
     manifest_index = _build_manifest_index(manifest)
     _rehydrate_object(
-        model_log,
+        trace,
         manifest_index=manifest_index,
         bundle_path=Path(bundle_path),
         lazy=lazy,
@@ -81,7 +81,7 @@ def rehydrate_model_log(
         materialize_nested=materialize_nested,
         seen=set(),
     )
-    return model_log
+    return trace
 
 
 def _build_manifest_index(
@@ -618,13 +618,13 @@ def _load_safetensors_tensor(
 
 
 def rehydrate_nested(
-    model_log: ModelLog,
+    trace: Trace,
     *,
     map_location: str | torch.device = "cpu",
 ) -> None:
     """Replace any remaining nested ``BlobRef`` objects with materialized tensors.
 
-    This function is a no-op unless the ``ModelLog`` was loaded with
+    This function is a no-op unless the ``Trace`` was loaded with
     ``lazy=True, materialize_nested=False``. In the default load mode, nested
     tensors are already materialized.
 
@@ -636,7 +636,7 @@ def rehydrate_nested(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log loaded from a portable bundle.
     map_location:
         Target device for the materialized tensors.
@@ -647,12 +647,12 @@ def rehydrate_nested(
         If the source bundle is unavailable or has drifted since load.
     """
 
-    bundle_path = _source_bundle_path_for_model_log(model_log)
+    bundle_path = _source_bundle_path_for_trace(trace)
     manifest_path = bundle_path / "manifest.json"
     if not manifest_path.exists():
         raise TorchLensIOError(f"Source bundle manifest not found at {manifest_path}.")
 
-    expected_manifest_sha256 = getattr(model_log, "_source_bundle_manifest_sha256", None)
+    expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if expected_manifest_sha256 is not None:
         observed_manifest_sha256 = sha256_of_file(manifest_path)
         if observed_manifest_sha256 != expected_manifest_sha256:
@@ -663,7 +663,7 @@ def rehydrate_nested(
     manifest = Manifest.read(manifest_path)
     manifest_index = _build_manifest_index(manifest)
     _rehydrate_nested_object(
-        model_log,
+        trace,
         manifest_index=manifest_index,
         bundle_path=bundle_path,
         map_location=map_location,
@@ -804,12 +804,12 @@ def _rehydrate_nested_object(
     return value
 
 
-def _source_bundle_path_for_model_log(model_log: ModelLog) -> Path:
-    """Resolve the source bundle path recorded on a portable-loaded ``ModelLog``.
+def _source_bundle_path_for_trace(trace: Trace) -> Path:
+    """Resolve the source bundle path recorded on a portable-loaded ``Trace``.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log whose source bundle should be resolved.
 
     Returns
@@ -823,11 +823,11 @@ def _source_bundle_path_for_model_log(model_log: ModelLog) -> Path:
         If the model log does not retain a source bundle reference.
     """
 
-    bundle_path = getattr(model_log, "_source_bundle_path", None)
+    bundle_path = getattr(trace, "_source_bundle_path", None)
     if isinstance(bundle_path, Path):
         return bundle_path
 
-    for layer in getattr(model_log, "layer_list", []):
+    for layer in getattr(trace, "layer_list", []):
         activation_ref = getattr(layer, "activation_ref", None)
         if isinstance(activation_ref, LazyActivationRef):
             return activation_ref.source_bundle_path
@@ -836,5 +836,5 @@ def _source_bundle_path_for_model_log(model_log: ModelLog) -> Path:
             return gradient_ref.source_bundle_path
 
     raise TorchLensIOError(
-        "ModelLog does not retain a source bundle path for nested blob rehydration."
+        "Trace does not retain a source bundle path for nested blob rehydration."
     )

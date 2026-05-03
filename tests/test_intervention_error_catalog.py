@@ -169,7 +169,7 @@ def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     return torch.zeros_like(activation)
 
 
-def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None) -> tl.ModelLog:
+def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Trace:
     """Capture an intervention-ready test log.
 
     Parameters
@@ -181,12 +181,12 @@ def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured intervention-ready log.
     """
 
     torch.manual_seed(14)
-    return tl.log_forward_pass(
+    return tl.trace(
         _ReluAdd() if model is None else model,
         torch.tensor([[-1.0, 2.0, 3.0]]) if x is None else x,
         vis_opt="none",
@@ -351,7 +351,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     ),
 )
 def test_axis_a_public_verbs_failure_paths(
-    verb: str, operation: Callable[[tl.ModelLog], object]
+    verb: str, operation: Callable[[tl.Trace], object]
 ) -> None:
     """Each public propagation verb has at least one cataloged or stable failure path."""
 
@@ -384,7 +384,7 @@ def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
     """``tl.list_logs()`` returns valid snapshots while logs are created concurrently."""
 
     errors: list[BaseException] = []
-    snapshots: list[tuple[tl.ModelLog, ...]] = []
+    snapshots: list[tuple[tl.Trace, ...]] = []
     capture_lock = threading.Lock()
 
     def worker(seed: int) -> None:
@@ -417,12 +417,12 @@ def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
     assert all(hasattr(log, "layer_list") for snapshot in snapshots for log in snapshot)
 
 
-def _weak_log_reference() -> tuple[int, weakref.ReferenceType[tl.ModelLog]]:
+def _weak_log_reference() -> tuple[int, weakref.ReferenceType[tl.Trace]]:
     """Create a log and return only weak identity information.
 
     Returns
     -------
-    tuple[int, weakref.ReferenceType[tl.ModelLog]]
+    tuple[int, weakref.ReferenceType[tl.Trace]]
         Object id and weak reference for cleanup assertions.
     """
 

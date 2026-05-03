@@ -20,23 +20,23 @@ class _ReluAdd(nn.Module):
         return torch.relu(x) + 1
 
 
-def _intervention_log() -> tl.ModelLog:
+def _intervention_log() -> tl.Trace:
     """Build an intervention-ready log with a relu replacement recipe.
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Model log with one ``set`` intervention at the relu site.
     """
 
     x = torch.randn(2, 3)
-    log = tl.log_forward_pass(_ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(_ReluAdd(), x, vis_opt="none", intervention_ready=True)
     log.set(tl.func("relu"), torch.zeros(2, 3))
     return log
 
 
-def test_model_log_show_accepts_intervention_options() -> None:
-    """``ModelLog.show`` accepts Phase 11 intervention visualization kwargs."""
+def test_trace_show_accepts_intervention_options() -> None:
+    """``Trace.show`` accepts Phase 11 intervention visualization kwargs."""
 
     log = _intervention_log()
     try:
@@ -102,7 +102,7 @@ def test_bundle_show_accepts_vis_opt_none() -> None:
     """``Bundle.show`` accepts render kwargs and skips on ``vis_opt='none'``."""
 
     log = _intervention_log()
-    clean = tl.log_forward_pass(_ReluAdd(), torch.randn(2, 3), vis_opt="none")
+    clean = tl.trace(_ReluAdd(), torch.randn(2, 3), vis_opt="none")
     try:
         bundle = tl.bundle({"intervened": log, "clean": clean})
         assert bundle.show(vis_opt="none") == {"intervened": None, "clean": None}
@@ -116,7 +116,7 @@ def test_dagua_bridge_exposes_intervention_metadata() -> None:
 
     log = _intervention_log()
     try:
-        graph = dagua.model_log_to_dagua_graph(log, vis_mode="unrolled")
+        graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled")
         assert hasattr(graph, "is_intervention_site")
         assert hasattr(graph, "is_in_cone")
         assert hasattr(graph, "intervention_log_summary")

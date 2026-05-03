@@ -8,7 +8,7 @@ import warnings
 import torchlens
 
 TARGET_ALL = [
-    "log_forward_pass",
+    "trace",
     "fastlog",
     "load",
     "save",
@@ -21,9 +21,9 @@ TARGET_ALL = [
     "extract",
     "batched_extract",
     "validate",
-    "ModelLog",
+    "Trace",
     "LayerLog",
-    "LayerPassLog",
+    "OpLog",
     "Bundle",
     "label",
     "func",

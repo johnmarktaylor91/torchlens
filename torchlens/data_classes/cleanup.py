@@ -1,16 +1,16 @@
-"""ModelLog cleanup helpers and post-session teardown.
+"""Trace cleanup helpers and post-session teardown.
 
-This module provides the helper stack behind ModelLog cleanup operations:
+This module provides the helper stack behind Trace cleanup operations:
 
-1. **cleanup()** — full teardown: deletes all LayerPassLog attributes, then
-   deletes all ModelLog attributes (both FIELD_ORDER and internal containers).
-   Breaks circular references (ModelLog <-> LayerPassLog.source_model_log,
-   LayerLog <-> LayerPassLog.parent_layer_log, ModuleLog <-> _source_model_log).
+1. **cleanup()** — full teardown: deletes all OpLog attributes, then
+   deletes all Trace attributes (both FIELD_ORDER and internal containers).
+   Breaks circular references (Trace <-> OpLog.source_trace,
+   LayerLog <-> OpLog.parent_layer_log, ModuleLog <-> _source_trace).
    Also frees GPU memory via ``torch.cuda.empty_cache()`` when CUDA is
    available (gated to avoid CUDA driver probe cost on CPU-only runs).
 
 2. **_remove_log_entry_references()** — removes a single layer label from all
-   ModelLog list/dict fields that hold graph references.
+   Trace list/dict fields that hold graph references.
 
 3. **_scrub_conditional_fields_after_removal()** — repairs conditional metadata
    after one or more labels are removed.
@@ -28,17 +28,17 @@ from ..constants import MODEL_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef, Unsupported
 from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
-from .layer_pass_log import LayerPassLog
+from .op_log import OpLog
 
 if TYPE_CHECKING:
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
-def cleanup(self: "ModelLog") -> None:
+def cleanup(self: "Trace") -> None:
     """Delete all log entries, break circular references, and free GPU memory.
 
     Called explicitly by the user or automatically at the end of a logging
-    session. After cleanup, the ModelLog is effectively empty and should
+    session. After cleanup, the Trace is effectively empty and should
     not be used further. No long-lived safetensors handles need to be
     closed here because lazy materialization opens and closes files per call.
     """
@@ -46,17 +46,17 @@ def cleanup(self: "ModelLog") -> None:
     if hasattr(self, "param_logs"):
         for pl in self.param_logs:
             pl.release_param_ref()
-    # First, clear all attributes from each LayerPassLog entry.
-    # This breaks the LayerPassLog -> ModelLog circular reference
-    # (via source_model_log) without needing per-entry reference removal.
+    # First, clear all attributes from each OpLog entry.
+    # This breaks the OpLog -> Trace circular reference
+    # (via source_trace) without needing per-entry reference removal.
     for tensor_log_entry in self:
         _clear_entry_attributes(tensor_log_entry)
-    # Then delete all ModelLog attributes listed in the canonical FIELD_ORDER.
+    # Then delete all Trace attributes listed in the canonical FIELD_ORDER.
     for attr in MODEL_LOG_FIELD_ORDER:
         if hasattr(self, attr):
             delattr(self, attr)
     # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
-    # These hold back-references (e.g. _module_logs -> ModuleLog -> _source_model_log)
+    # These hold back-references (e.g. _module_logs -> ModuleLog -> _source_trace)
     # and large data structures (layer_logs, layer_dict_all_keys).
     for attr in [
         "_raw_layer_dict",
@@ -85,8 +85,8 @@ def cleanup(self: "ModelLog") -> None:
         torch.cuda.empty_cache()
 
 
-def _clear_entry_attributes(log_entry: LayerPassLog) -> None:
-    """Clear all instance attributes from a LayerPassLog entry."""
+def _clear_entry_attributes(log_entry: OpLog) -> None:
+    """Clear all instance attributes from a OpLog entry."""
     if hasattr(log_entry, "activation_ref"):
         log_entry.activation_ref = None
     if hasattr(log_entry, "gradient_ref"):
@@ -107,7 +107,7 @@ def _strip_pass_suffix(layer_label: str) -> str:
     return layer_label.split(":", 1)[0]
 
 
-def _label_for_reference_removal(log_entry: LayerPassLog, pass_finished: bool) -> str:
+def _label_for_reference_removal(log_entry: OpLog, pass_finished: bool) -> str:
     """Return the label namespace currently used by graph-level references.
 
     Parameters
@@ -228,10 +228,10 @@ def _filter_conditional_edge_passes(
 
 
 def _scrub_layer_entry_conditional_fields(
-    layer_entry: LayerPassLog,
+    layer_entry: OpLog,
     labels_to_remove: Set[str],
 ) -> None:
-    """Remove deleted labels from conditional fields on a surviving LayerPassLog.
+    """Remove deleted labels from conditional fields on a surviving OpLog.
 
     Args:
         layer_entry: Surviving layer entry to scrub.
@@ -262,13 +262,11 @@ def _scrub_layer_entry_conditional_fields(
     ]
 
 
-def _scrub_layer_log_conditional_fields(
-    self: "ModelLog", labels_to_remove_no_pass: Set[str]
-) -> None:
+def _scrub_layer_log_conditional_fields(self: "Trace", labels_to_remove_no_pass: Set[str]) -> None:
     """Remove deleted labels from aggregate LayerLog conditional fields.
 
     Args:
-        self: ModelLog owning the LayerLogs.
+        self: Trace owning the LayerLogs.
         labels_to_remove_no_pass: Pass-stripped labels that were removed.
     """
     for layer_log in getattr(self, "layer_logs", {}).values():
@@ -298,17 +296,17 @@ def _scrub_layer_log_conditional_fields(
 
 
 def _scrub_conditional_fields_after_removal(
-    self: "ModelLog",
+    self: "Trace",
     labels_to_remove: Set[str],
-    surviving_entries: Iterable[LayerPassLog],
+    surviving_entries: Iterable[OpLog],
 ) -> None:
     """Scrub conditional references after one or more layer labels are removed.
 
     Args:
-        self: ModelLog being updated.
+        self: Trace being updated.
         labels_to_remove: Removed layer labels using the same qualification as the
             current removal pass.
-        surviving_entries: Surviving LayerPassLog entries to scrub in-place.
+        surviving_entries: Surviving OpLog entries to scrub in-place.
     """
     labels_to_remove_no_pass = {_strip_pass_suffix(layer_label) for layer_label in labels_to_remove}
 
@@ -338,12 +336,12 @@ def _scrub_conditional_fields_after_removal(
 def _scrub_intervention_fields_after_removal(
     self: Any,
     labels_to_remove: Set[str],
-    surviving_entries: Iterable[LayerPassLog],
+    surviving_entries: Iterable[OpLog],
 ) -> None:
     """Scrub replay/intervention metadata that carries layer labels.
 
     Args:
-        self: ModelLog being updated.
+        self: Trace being updated.
         labels_to_remove: Removed labels in the active label namespace.
         surviving_entries: Surviving entries to scrub in-place.
     """
@@ -452,10 +450,10 @@ def _record_mentions_removed_label(record: Any, labels_to_remove: Set[str]) -> b
     return False
 
 
-# List fields on ModelLog that hold tensor labels and need filtering during
+# List fields on Trace that hold tensor labels and need filtering during
 # entry removal.  Must stay in sync between _batch_remove_log_entries and
 # _remove_log_entry_references — if you add a new label-holding list field
-# to ModelLog, add it here AND to _remove_log_entry_references.
+# to Trace, add it here AND to _remove_log_entry_references.
 _LIST_FIELDS_TO_CLEAN = [
     "input_layers",
     "output_layers",
@@ -469,8 +467,8 @@ _LIST_FIELDS_TO_CLEAN = [
 ]
 
 
-def _remove_log_entry_references(self: "ModelLog", layer_to_remove: str) -> None:
-    """Removes all references to a single LayerPassLog from the ModelLog's list/dict fields.
+def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
+    """Removes all references to a single OpLog from the Trace's list/dict fields.
 
     This is the single-entry counterpart to the reference-cleaning logic in
     ``_batch_remove_log_entries``. Both must clean the same set of fields —
@@ -479,7 +477,7 @@ def _remove_log_entry_references(self: "ModelLog", layer_to_remove: str) -> None
     Args:
         layer_to_remove: The label of the log entry to remove.
     """
-    # Clear any fields in ModelLog referring to the entry.
+    # Clear any fields in Trace referring to the entry.
 
     remove_entry_from_list(self.input_layers, layer_to_remove)
     remove_entry_from_list(self.output_layers, layer_to_remove)

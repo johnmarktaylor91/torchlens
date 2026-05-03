@@ -47,7 +47,7 @@ def main() -> None:
     torch.manual_seed(10)
     model = TinyGenerator().eval()
     x = torch.randn(2, 4)
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
     first_relu = log.find_sites(tl.func("relu"), max_fanout=3).labels()[0]
 
     edited = log.fork("generation_patch")

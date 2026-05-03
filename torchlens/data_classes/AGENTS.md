@@ -4,8 +4,8 @@
 
 ```python
 log["conv2d_1_5"]      # LayerLog aggregate
-log["conv2d_1_5:2"]    # LayerPassLog for a specific pass
-log[3]                 # LayerPassLog by ordinal
+log["conv2d_1_5:2"]    # OpLog for a specific pass
+log[3]                 # OpLog by ordinal
 log.layers             # LayerAccessor
 log.modules            # ModuleAccessor
 log.params             # ParamAccessor
@@ -18,7 +18,7 @@ Single-pass `LayerLog` values delegate per-pass attributes:
 layer = log.layers["linear_1_1"]
 layer.activation
 layer.child_layers       # union across passes
-layer.passes             # dict[int, LayerPassLog]
+layer.passes             # dict[int, OpLog]
 ```
 
 ## Field Management
@@ -26,7 +26,7 @@ layer.passes             # dict[int, LayerPassLog]
 - Add tests for user-facing fields and update `to_pandas()` when the field should export.
 - Avoid ad hoc state that is not scrubbed by save/load, cleanup, and postprocess trimming.
 
-## ModelLog Gotchas
+## Trace Gotchas
 - `_pass_finished` changes `__len__`, `__getitem__`, iteration, and display behavior.
 - Fast-pass postprocess relies on `_pass_finished` staying true between passes.
 - Methods such as `save`, `load`, `find_sites`, `fork`, `replay`, `rerun`, and
@@ -34,13 +34,13 @@ layer.passes             # dict[int, LayerPassLog]
   creates cycles.
 - `graph_shape_hash` is computed before `_set_pass_finished`.
 
-## LayerPassLog Gotchas
+## OpLog Gotchas
 - `copy()` shallow-copies selected graph/conditional fields and deep-copies the rest.
 - `activation` for some output/getitem cases may reference parent saved data directly.
 - `gradient` is a bare reference; do not mutate it in-place.
 - `save_tensor_data()` must route through `safe_copy()` and respect `train_mode`.
-- `TensorLog` is a compatibility alias from `layer_pass_log.py`; new docs should prefer
-  `LayerPassLog` unless referring to the alias itself.
+- `TensorLog` is a compatibility alias from `op_log.py`; new docs should prefer
+  `OpLog` unless referring to the alias itself.
 
 ## LayerLog Gotchas
 - `__getattr__` delegation must raise `ValueError` for ambiguous multi-pass access.
@@ -49,11 +49,11 @@ layer.passes             # dict[int, LayerPassLog]
   views as canonical.
 
 ## Module/Param/Buffer/Grad Logs
-- `ModuleLog` and `ModulePassLog` are built in postprocess Step 17 from `_module_build_data`.
+- `ModuleLog` and `ModuleCallLog` are built in postprocess Step 17 from `_module_build_data`.
 - `ParamLog` keeps `_param_ref` for lazy gradient access; call `release_param_ref()` when
   breaking model references.
-- `BufferLog` extends `LayerPassLog` but owns buffer-specific `name` and `module_address`.
-- `GradFnLog` and `GradFnPassLog` are populated by backward capture and rendered separately.
+- `BufferLog` extends `OpLog` but owns buffer-specific `name` and `module_address`.
+- `GradFnLog` and `GradFnCallLog` are populated by backward capture and rendered separately.
 
 ## Cleanup
 `cleanup.py` removes backrefs, parameter refs, saved activations, conditional edges, and

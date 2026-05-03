@@ -25,20 +25,20 @@ class _TinyModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
-def _first_transformed_layer(model_log: tl.ModelLog) -> Any:
+def _first_transformed_layer(trace: tl.Trace) -> Any:
     """Return the first layer with a transformed activation."""
 
-    for label in model_log.layer_labels:
-        layer = model_log[label]
+    for label in trace.layer_labels:
+        layer = trace[label]
         if layer.transformed_activation is not None:
             return layer
     raise AssertionError("No transformed activation found.")
 
 
-def _output_loss(model_log: tl.ModelLog) -> torch.Tensor:
+def _output_loss(trace: tl.Trace) -> torch.Tensor:
     """Return scalar loss from the logged output activation."""
 
-    return model_log[model_log.output_layers[0]].activation.sum()
+    return trace[trace.output_layers[0]].activation.sum()
 
 
 @pytest.mark.smoke
@@ -46,8 +46,8 @@ def test_activation_postfunc_keeps_raw_tensor_and_transformed_metadata() -> None
     """Activation postfunc stores raw and transformed tensors separately."""
 
     x = torch.randn(2, 4)
-    model_log = tl.log_forward_pass(_TinyModel(), x, activation_postfunc=lambda t: t.mean())
-    layer = _first_transformed_layer(model_log)
+    trace = tl.trace(_TinyModel(), x, activation_postfunc=lambda t: t.mean())
+    layer = _first_transformed_layer(trace)
 
     assert layer.tensor is layer.activation
     assert layer.activation.shape == layer.tensor_shape
@@ -64,21 +64,21 @@ def test_activation_postfunc_keeps_raw_tensor_and_transformed_metadata() -> None
 def test_transformed_activation_absent_without_postfunc() -> None:
     """No activation postfunc leaves transformed activation fields empty."""
 
-    model_log = tl.log_forward_pass(_TinyModel(), torch.randn(2, 4))
+    trace = tl.trace(_TinyModel(), torch.randn(2, 4))
 
-    assert all(model_log[label].transformed_activation is None for label in model_log.layer_labels)
+    assert all(trace[label].transformed_activation is None for label in trace.layer_labels)
 
 
 def test_save_raw_activation_false_keeps_raw_metadata_only() -> None:
     """save_raw_activation=False drops raw tensor storage but preserves raw metadata."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
         activation_postfunc=lambda t: t.mean(),
         save_raw_activation=False,
     )
-    layer = _first_transformed_layer(model_log)
+    layer = _first_transformed_layer(trace)
 
     assert layer.activation is None
     assert layer.tensor is None
@@ -91,14 +91,14 @@ def test_save_raw_activation_false_keeps_raw_metadata_only() -> None:
 def test_gradient_postfunc_keeps_raw_gradient_and_transformed_metadata() -> None:
     """Gradient postfunc stores raw and transformed gradients separately."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
         gradients_to_save="all",
         gradient_postfunc=lambda t: t.mean(),
     )
-    model_log.log_backward(_output_loss(model_log))
-    layer = next(model_log[label] for label in model_log.layers_with_saved_gradients)
+    trace.log_backward(_output_loss(trace))
+    layer = next(trace[label] for label in trace.layers_with_saved_gradients)
 
     assert layer.gradient is not None
     assert layer.grad_shape == tuple(layer.gradient.shape)
@@ -113,15 +113,15 @@ def test_gradient_postfunc_keeps_raw_gradient_and_transformed_metadata() -> None
 def test_save_raw_gradient_false_keeps_raw_metadata_only() -> None:
     """save_raw_gradient=False drops raw gradient storage but preserves raw metadata."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
         gradients_to_save="all",
         gradient_postfunc=lambda t: t.mean(),
         save_raw_gradient=False,
     )
-    model_log.log_backward(_output_loss(model_log))
-    layer = next(model_log[label] for label in model_log.layers_with_saved_gradients)
+    trace.log_backward(_output_loss(trace))
+    layer = next(trace[label] for label in trace.layers_with_saved_gradients)
 
     assert layer.gradient is None
     assert layer.grad_shape is not None
@@ -134,7 +134,7 @@ def test_train_mode_activation_postfunc_detach_rejected() -> None:
     """Detached train-mode activation transforms are rejected."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="disconnected from the autograd graph"):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
             train_mode=True,
@@ -146,7 +146,7 @@ def test_train_mode_activation_postfunc_int_rejected() -> None:
     """Integer train-mode activation transforms are rejected."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
             train_mode=True,
@@ -157,14 +157,14 @@ def test_train_mode_activation_postfunc_int_rejected() -> None:
 def test_train_mode_activation_postfunc_connected_passes() -> None:
     """Differentiable train-mode activation transforms are accepted."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
         train_mode=True,
         activation_postfunc=lambda t: t * 2,
     )
 
-    assert _first_transformed_layer(model_log).transformed_activation.grad_fn is not None
+    assert _first_transformed_layer(trace).transformed_activation.grad_fn is not None
 
 
 def test_postfunc_error_has_context_and_cause() -> None:
@@ -176,7 +176,7 @@ def test_postfunc_error_has_context_and_cause() -> None:
         raise ValueError("sentinel")
 
     with pytest.raises(tl.TorchLensPostfuncError) as exc_info:
-        tl.log_forward_pass(_TinyModel(), torch.randn(2, 4), activation_postfunc=_raise)
+        tl.trace(_TinyModel(), torch.randn(2, 4), activation_postfunc=_raise)
 
     message = str(exc_info.value)
     assert "activation_postfunc raised" in message
@@ -191,10 +191,10 @@ def test_portable_save_roundtrip_preserves_transformed_activation(tmp_path: Path
     """Portable save/load preserves transformed activation fields."""
 
     bundle_path = tmp_path / "postfunc_bundle.tl"
-    model_log = tl.log_forward_pass(_TinyModel(), torch.randn(2, 4), activation_postfunc=torch.mean)
-    layer = _first_transformed_layer(model_log)
+    trace = tl.trace(_TinyModel(), torch.randn(2, 4), activation_postfunc=torch.mean)
+    layer = _first_transformed_layer(trace)
 
-    tl.save(model_log, bundle_path)
+    tl.save(trace, bundle_path)
     restored = tl.load(bundle_path)
     restored_layer = restored[layer.layer_label]
 
@@ -217,14 +217,14 @@ def test_streaming_preserves_transformed_activation(tmp_path: Path) -> None:
     """Streaming bundles write transformed activation fields."""
 
     bundle_path = tmp_path / "streamed_postfunc.tl"
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
         activation_postfunc=torch.mean,
         save_activations_to=bundle_path,
         layers_to_save="all",
     )
-    layer = _first_transformed_layer(model_log)
+    layer = _first_transformed_layer(trace)
     restored = tl.load(bundle_path)
     restored_layer = restored[layer.layer_label]
 

@@ -38,16 +38,16 @@ class TinyReportModel(nn.Module):
         return torch.relu(self.proj(x))
 
 
-def _captured_log() -> tl.ModelLog:
+def _captured_log() -> tl.Trace:
     """Return a deterministic captured log.
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured log for ``TinyReportModel``.
     """
 
-    return tl.log_forward_pass(TinyReportModel(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
+    return tl.trace(TinyReportModel(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
 
 
 def test_report_namespace_is_not_top_level_all() -> None:

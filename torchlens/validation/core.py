@@ -19,10 +19,10 @@ from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.collections import assign_to_sequence_or_dict
@@ -157,12 +157,12 @@ def _ground_truth_output_matches_saved(
 
 
 def validate_saved_activations(
-    self: "ModelLog",
+    self: "Trace",
     ground_truth_output_tensors: List[torch.Tensor],
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
-    """Run the full validation pipeline on a completed ModelLog.
+    """Run the full validation pipeline on a completed Trace.
 
     The BFS traversal starts from two kinds of seed layers:
     - **output layers** -- whose values are verified against ``ground_truth_output_tensors``.
@@ -175,7 +175,7 @@ def validate_saved_activations(
 
     After activation validation passes, optional metadata invariant checks
     (checks A-R in ``invariants.py``) run to verify structural/semantic
-    consistency of the entire ModelLog.
+    consistency of the entire Trace.
 
     Args:
         ground_truth_output_tensors: Output tensors from a fresh forward pass,
@@ -241,7 +241,7 @@ def validate_saved_activations(
 
 
 def validate_parents_of_saved_layer(
-    self: "ModelLog",
+    self: "Trace",
     layer_to_validate_parents_for_label: str,
     validated_layers: Set[str],
     validated_child_edges_for_each_layer: Dict[str, Set[str]],
@@ -333,7 +333,7 @@ def validate_parents_of_saved_layer(
     return True
 
 
-def _check_layer_arguments_logged_correctly(self: "ModelLog", target_layer_label: str) -> bool:
+def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: str) -> bool:
     """Check whether the activations of the parent layers match the saved arguments of
     the target layer, and that the argument locations have been logged correctly.
 
@@ -374,9 +374,9 @@ def _check_layer_arguments_logged_correctly(self: "ModelLog", target_layer_label
 
 
 def _validate_layer_against_arg(
-    self: "ModelLog",
-    target_layer: LayerPassLog,
-    parent_layer: LayerPassLog,
+    self: "Trace",
+    target_layer: OpLog,
+    parent_layer: OpLog,
     arg_type: str,
     key: Any,
     val: Any,
@@ -425,7 +425,7 @@ def _validate_layer_against_arg(
     return True
 
 
-def _parent_logged_for_any_arg(target_layer: LayerPassLog, parent_layer_label: str) -> bool:
+def _parent_logged_for_any_arg(target_layer: OpLog, parent_layer_label: str) -> bool:
     """Return whether ``parent_layer_label`` is logged at any arg location.
 
     Parameters
@@ -448,9 +448,9 @@ def _parent_logged_for_any_arg(target_layer: LayerPassLog, parent_layer_label: s
 
 
 def _check_arglocs_correct_for_arg(
-    self: "ModelLog",
-    target_layer: LayerPassLog,
-    parent_layer: LayerPassLog,
+    self: "Trace",
+    target_layer: OpLog,
+    parent_layer: OpLog,
     arg_type: str,
     argloc_key: str | tuple[Any, ...],
     saved_arg_val: Any,
@@ -550,8 +550,8 @@ def _check_arglocs_correct_for_arg(
 
 
 def _check_perturbation_exemptions(
-    self: "ModelLog",
-    layer: LayerPassLog,
+    self: "Trace",
+    layer: OpLog,
     layers_to_perturb: List[str],
 ) -> bool:
     """Check whether a perturbation check should be skipped for registry-based reasons.
@@ -590,7 +590,7 @@ def _check_perturbation_exemptions(
 
 
 def _execute_func_with_restored_state(
-    layer: LayerPassLog,
+    layer: OpLog,
     input_args: dict[str, Any],
     layers_to_perturb: List[str],
     layer_label: str,
@@ -647,7 +647,7 @@ def _execute_func_with_restored_state(
 
 
 def _deep_numeric_replay_matches_saved(
-    layer: LayerPassLog,
+    layer: OpLog,
     recomputed_output: torch.Tensor,
 ) -> bool:
     """Return whether a deep numeric replay matches within local relaxed tolerance.
@@ -724,7 +724,7 @@ def _deep_numeric_replay_matches_saved(
 
 
 def _check_whether_func_on_saved_parents_yields_saved_tensor(
-    self: "ModelLog",
+    self: "Trace",
     layer_to_validate_parents_for_label: str,
     perturb: bool = False,
     layers_to_perturb: Optional[List[str]] = None,
@@ -813,8 +813,8 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
 
 def _prepare_input_args_for_validating_layer(
-    self: "ModelLog",
-    layer_to_validate_parents_for: LayerPassLog,
+    self: "Trace",
+    layer_to_validate_parents_for: OpLog,
     layers_to_perturb: List[str],
 ) -> dict[str, Any] | None:
     """Build the input argument dict for replaying a layer's function.

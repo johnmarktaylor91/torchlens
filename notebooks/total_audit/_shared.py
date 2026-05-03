@@ -413,7 +413,7 @@ def audit_touch_items(
     label:
         Label printed for the demonstrated cluster.
     items:
-        Coverage item names such as ``"tl.ModelLog.layer_list"``.
+        Coverage item names such as ``"tl.Trace.layer_list"``.
     namespace:
         Mapping containing ``tl`` and representative instances keyed by class name.
     examples:

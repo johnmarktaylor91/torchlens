@@ -17,7 +17,7 @@ from torchlens.options import VisualizationOptions
 def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
     """Each public theme preset should render a Graphviz graph."""
 
-    log = tl.log_forward_pass(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
+    log = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
 
     dot = log.render_graph(
         vis_save_only=True,
@@ -34,7 +34,7 @@ def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
 def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) -> None:
     """Grouped convenience knobs should forward to render_graph."""
 
-    log = tl.log_forward_pass(nn.Linear(2, 2), torch.randn(1, 2))
+    log = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))
     options = VisualizationOptions(
         view="unrolled",
         output_path=str(tmp_path / "paper.svg"),

@@ -51,7 +51,7 @@ class HookContext:
     direction:
         ``"forward"`` for activations or ``"backward"`` for gradients.
     layer_log:
-        Mapping proxy over selected layer metadata, never a live LayerPassLog.
+        Mapping proxy over selected layer metadata, never a live OpLog.
     ctx:
         Per resolved ``(site, hook instance)`` scratch dictionary.
     run_ctx:
@@ -112,7 +112,7 @@ def make_hook_context(
     direction:
         Hook direction.
     layer_log:
-        Optional LayerPassLog-like object or mapping to snapshot.
+        Optional OpLog-like object or mapping to snapshot.
     ctx:
         Per-hook scratch dictionary. A new dictionary is created when omitted.
     run_ctx:
@@ -228,7 +228,7 @@ def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedH
     Parameters
     ----------
     spec:
-        Mutable intervention spec attached to a ``ModelLog``. ``None`` or an
+        Mutable intervention spec attached to a ``Trace``. ``None`` or an
         empty spec produces no hook entries.
 
     Returns
@@ -664,7 +664,7 @@ def make_live_site_proxy(
     output_path: tuple[Any, ...],
     fields: Mapping[str, Any],
 ) -> Any:
-    """Build a minimal LayerPassLog-like object for live hook matching.
+    """Build a minimal OpLog-like object for live hook matching.
 
     Parameters
     ----------
@@ -873,12 +873,12 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
 
 
 def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
-    """Snapshot selected LayerPassLog metadata.
+    """Snapshot selected OpLog metadata.
 
     Parameters
     ----------
     layer_log:
-        LayerPassLog-like object or mapping.
+        OpLog-like object or mapping.
 
     Returns
     -------

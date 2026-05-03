@@ -1,7 +1,7 @@
 """Shared constants: field-order tuples and function discovery for TorchLens.
 
 **FIELD_ORDER lists** define the *canonical* set of fields for each data class
-(ModelLog, LayerPassLog, LayerLog, etc.).  They serve two purposes:
+(Trace, OpLog, LayerLog, etc.).  They serve two purposes:
 
 1. **Canonical ordering** — __repr__, iteration, and serialization use these lists
    to present fields in a consistent, human-readable order.
@@ -176,7 +176,7 @@ MODEL_LOG_FIELD_ORDER = [
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [
-    # Per-pass data for a single layer execution.  One LayerPassLog exists for
+    # Per-pass data for a single layer execution.  One OpLog exists for
     # each (layer, pass_num) pair.  Fields capture the tensor produced, the
     # function that created it, graph connectivity, module context, and more.
     #
@@ -186,7 +186,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "layer_label_raw",
     "operation_num",
     "creation_order",
-    "source_model_log",
+    "source_trace",
     "_pass_finished",
     "_construction_done",
     # Other labeling info
@@ -342,12 +342,12 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "func_config",
 ]
 
-# Backward-compatible alias — LayerPassLog was formerly called TensorLog.
+# Backward-compatible alias — OpLog was formerly called TensorLog.
 TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
 
 LAYER_LOG_FIELD_ORDER = [
     # Aggregate view of a layer across all its passes.  One LayerLog per
-    # unique layer; it delegates per-pass queries to its child LayerPassLogs.
+    # unique layer; it delegates per-pass queries to its child OpLogs.
     #
     # Identity & labeling
     "layer_label",
@@ -356,7 +356,7 @@ LAYER_LOG_FIELD_ORDER = [
     "layer_type_num",
     "layer_total_num",
     "num_passes",
-    "source_model_log",
+    "source_trace",
     # Function identity
     "func_applied",
     "func_name",
@@ -501,7 +501,7 @@ BUFFER_LOG_FIELD_ORDER = [
     "containing_modules",
 ]
 
-# Per-pass module execution data (one ModulePassLog per forward call to a module).
+# Per-pass module execution data (one ModuleCallLog per forward call to a module).
 MODULE_PASS_LOG_FIELD_ORDER = [
     "module_address",
     "all_module_addresses",

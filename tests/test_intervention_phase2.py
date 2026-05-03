@@ -73,18 +73,18 @@ class _Phase2Model(torch.nn.Module):
 
 
 @pytest.fixture()
-def phase2_log() -> tl.ModelLog:
+def phase2_log() -> tl.Trace:
     """Return a model log with repeated functions and nested modules.
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Completed model log.
     """
 
     torch.manual_seed(0)
     model = _Phase2Model()
-    return tl.log_forward_pass(model, torch.randn(2, 3), vis_opt="none")
+    return tl.trace(model, torch.randn(2, 3), vis_opt="none")
 
 
 @pytest.mark.smoke
@@ -103,7 +103,7 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
 
 
 @pytest.mark.smoke
-def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.ModelLog) -> None:
+def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> None:
     """Selectors resolve labels, functions, modules, containment, and predicates."""
 
     relu_sites = phase2_log.resolve_sites(tl.func("relu"), max_fanout=4)
@@ -128,7 +128,7 @@ def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.ModelLog) 
 
 
 @pytest.mark.smoke
-def test_site_table_methods_and_getitem_singleton(phase2_log: tl.ModelLog) -> None:
+def test_site_table_methods_and_getitem_singleton(phase2_log: tl.Trace) -> None:
     """SiteTable exposes sequence, filtering, first, labels, and DataFrame helpers."""
 
     table = phase2_log.find_sites(tl.func("relu"), max_fanout=4)
@@ -147,7 +147,7 @@ def test_site_table_methods_and_getitem_singleton(phase2_log: tl.ModelLog) -> No
 
 
 @pytest.mark.smoke
-def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.ModelLog) -> None:
+def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.Trace) -> None:
     """Resolver fails closed for strict strings, empty matches, and excess fanout."""
 
     with pytest.raises(SiteResolutionError, match="Bare strings"):
@@ -170,7 +170,7 @@ def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.ModelLog) -> 
 
 
 @pytest.mark.smoke
-def test_selector_composition_intersection_and_union(phase2_log: tl.ModelLog) -> None:
+def test_selector_composition_intersection_and_union(phase2_log: tl.Trace) -> None:
     """Only ``&`` and ``|`` composition are supported in Phase 2."""
 
     intersection = tl.func("relu") & tl.in_module("block")
@@ -184,7 +184,7 @@ def test_selector_composition_intersection_and_union(phase2_log: tl.ModelLog) ->
 
 
 @pytest.mark.smoke
-def test_target_specs_and_empty_site_table_behave_clearly(phase2_log: tl.ModelLog) -> None:
+def test_target_specs_and_empty_site_table_behave_clearly(phase2_log: tl.Trace) -> None:
     """Selectors convert to target specs and empty tables reject ``first``."""
 
     target_spec = tl.func("relu").to_target_spec()

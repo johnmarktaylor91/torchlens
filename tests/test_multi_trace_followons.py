@@ -48,8 +48,8 @@ def _bundle() -> tl.Bundle:
 
     torch.manual_seed(20)
     x = torch.randn(2, 3)
-    first = tl.log_forward_pass(_ModuleModel(), x, vis_opt="none", intervention_ready=True)
-    second = tl.log_forward_pass(_ModuleModel(), x, vis_opt="none", intervention_ready=True)
+    first = tl.trace(_ModuleModel(), x, vis_opt="none", intervention_ready=True)
+    second = tl.trace(_ModuleModel(), x, vis_opt="none", intervention_ready=True)
     return tl.bundle({"first": first, "second": second})
 
 

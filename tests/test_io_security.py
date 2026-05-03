@@ -10,11 +10,12 @@ from typing import Any
 
 import pytest
 import torch
+import torchlens as tl
 from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, log_forward_pass, save
+from torchlens import load, trace as trace_fn, save
 from torchlens._io import TorchLensIOError
 
 
@@ -64,9 +65,9 @@ def _build_bundle(tmp_path: Path, *, name: str = "bundle.tl") -> Path:
     torch.manual_seed(0)
     model = _SecurityIOModel()
     inputs = torch.randn(2, 4)
-    model_log = log_forward_pass(model, inputs, layers_to_save="all", random_seed=0)
+    trace = tl.trace_fn(model, inputs, layers_to_save="all", random_seed=0)
     bundle_path = tmp_path / name
-    save(model_log, bundle_path)
+    save(trace, bundle_path)
     return bundle_path
 
 

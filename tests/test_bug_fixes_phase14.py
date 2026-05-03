@@ -237,16 +237,16 @@ def test_arg_specs_extract_common_keyword_tensor_arguments() -> None:
 def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
     """Rolled LayerLogs expose THEN and ELSE child views from all passes."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
         layers_to_save="all",
         save_source_context=True,
     )
-    conditional_id = model_log.conditional_events[0].id
+    conditional_id = trace.conditional_events[0].id
     parent_layer = next(
         layer
-        for layer in model_log.layer_logs.values()
+        for layer in trace.layer_logs.values()
         if conditional_id in layer.cond_branch_children_by_cond
         and "then" in layer.cond_branch_children_by_cond[conditional_id]
         and "else" in layer.cond_branch_children_by_cond[conditional_id]
@@ -254,25 +254,25 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
 
     assert parent_layer.cond_branch_then_children
     assert parent_layer.cond_branch_else_children
-    assert check_metadata_invariants(model_log) is True
+    assert check_metadata_invariants(trace) is True
 
 
 def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
     """Metadata invariants reject stale THEN child projections."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
         layers_to_save="all",
         save_source_context=True,
     )
     parent_layer = next(
-        layer for layer in model_log.layer_logs.values() if layer.cond_branch_then_children
+        layer for layer in trace.layer_logs.values() if layer.cond_branch_then_children
     )
     parent_layer.cond_branch_then_children = []
 
     with pytest.raises(MetadataInvariantError, match="cond_branch_then_children"):
-        check_metadata_invariants(model_log)
+        check_metadata_invariants(trace)
 
 
 def test_short_barcode_uses_stable_sha256_prefix() -> None:
@@ -309,10 +309,10 @@ def test_validation_arglocs_allow_same_parent_tensor_in_multiple_slots() -> None
         parent_layers=["input_1"],
         parent_layer_arg_locs={"args": {0: "input_1"}, "kwargs": {}},
     )
-    model_log = {"input_1": parent}
+    trace = {"input_1": parent}
 
     assert _check_arglocs_correct_for_arg(
-        model_log,
+        trace,
         target,  # type: ignore[arg-type]
         parent,  # type: ignore[arg-type]
         "args",
@@ -345,13 +345,13 @@ def test_validate_forward_pass_handles_identity_output_layer() -> None:
 def test_rolled_forward_graph_supports_gradient_arrows(tmp_path: Path) -> None:
     """Rolled forward graphs render gradient arrows after backward capture."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _ResidualRecurrentModel(),
         torch.randn(2, 3, requires_grad=True),
         gradients_to_save="all",
     )
-    model_log[model_log.output_layers[0]].activation.backward()
-    dot = model_log.render_graph(
+    trace[trace.output_layers[0]].activation.backward()
+    dot = trace.render_graph(
         vis_mode="rolled",
         vis_outpath=str(tmp_path / "rolled_grad"),
         vis_fileformat="dot",

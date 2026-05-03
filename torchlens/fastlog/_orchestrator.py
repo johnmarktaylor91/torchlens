@@ -11,7 +11,7 @@ from torch import nn
 
 from .. import _state
 from ..capture.source_tensors import log_source_tensor
-from ..data_classes.model_log import ModelLog
+from ..data_classes.model_log import Trace
 from ..decoration.model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,
@@ -83,7 +83,7 @@ def _reset_state_for_pass(
 
 def _emit_root_module_event(
     *,
-    model_log: ModelLog,
+    trace: Trace,
     state: RecordingState,
     model: nn.Module,
     kind: str,
@@ -94,7 +94,7 @@ def _emit_root_module_event(
     state.event_index += 1
     ctx = _build_record_context(
         kind="module_enter" if kind == "enter" else "module_exit",
-        layer_pass_log_or_op_data={
+        op_log_or_op_data={
             "label": f"root:{kind}:1",
             "module_address": "",
             "module_type": type(model).__name__,
@@ -106,7 +106,7 @@ def _emit_root_module_event(
         pass_index=state.pass_index,
         event_index=state.event_index,
         op_index=None,
-        time_since_pass_start=time.time() - model_log.pass_start_time,
+        time_since_pass_start=time.time() - trace.pass_start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
@@ -137,19 +137,19 @@ def _run_predicate_pass(
         set_random_seed(options.random_seed)
     args = _normalize_input_args(input_args)
     kwargs = input_kwargs or {}
-    model_log = ModelLog(str(type(model).__name__))
-    model_log.logging_mode = "predicate"
-    model_log.pass_start_time = time.time()
+    trace = Trace(str(type(model).__name__))
+    trace.logging_mode = "predicate"
+    trace.pass_start_time = time.time()
     if state is None:
         recording = _empty_recording(options)
         state = RecordingState(options=options, recording=recording)
     else:
         recording = state.recording
     _reset_state_for_pass(state, pass_index=pass_index, sample_id=sample_id)
-    recording.pass_start_times.append(model_log.pass_start_time)
+    recording.pass_start_times.append(trace.pass_start_time)
     input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor, [torch.nn.Parameter])
     _ensure_model_prepared(model)
-    _prepare_model_session(model_log, model)
+    _prepare_model_session(trace, model)
     model_output = None
     root_frame = ModuleStackFrame(
         module_address="",
@@ -159,12 +159,12 @@ def _run_predicate_pass(
     )
     pass_failed = False
     try:
-        with active_recording_state(state), _state.active_logging(model_log):
+        with active_recording_state(state), _state.active_logging(trace):
             for index, tensor in enumerate(input_tensors):
-                log_source_tensor(model_log, tensor, "input", f"input.{index}")
+                log_source_tensor(trace, tensor, "input", f"input.{index}")
             state.module_stack.append(root_frame)
             _emit_root_module_event(
-                model_log=model_log,
+                trace=trace,
                 state=state,
                 model=model,
                 kind="enter",
@@ -174,7 +174,7 @@ def _run_predicate_pass(
                 model_output = model(*args, **kwargs)
             finally:
                 _emit_root_module_event(
-                    model_log=model_log,
+                    trace=trace,
                     state=state,
                     model=model,
                     kind="exit",

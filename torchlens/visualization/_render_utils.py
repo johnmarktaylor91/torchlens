@@ -6,10 +6,10 @@ we have one canonical implementation of file-format dispatch, direction
 translation, module cluster styling, and HTML label escaping.
 
 Keep this module narrow on purpose -- only primitives that take no
-ModelLog/Bundle context and can be reasoned about as pure utilities.
+Trace/Bundle context and can be reasoned about as pure utilities.
 The orchestration that knows WHICH nodes / edges / module paths to use
 lives in the per-input-shape callers, such as ``rendering.render_graph`` for
-ModelLog.
+Trace.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ _KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff")
 # legacy literal that lived inside ``rendering.render_graph``.
 RENDER_TIMEOUT_SECONDS = 120
 
-# -- Module subgraph border widths (shared between ModelLog and bundle paths)
+# -- Module subgraph border widths (shared between Trace and bundle paths)
 # Outermost modules get the thickest border; deeper modules thin out by depth
 # fraction so visual hierarchy reads at a glance.  These constants are the
 # canonical source for both ``rendering.py`` and the bundle renderer.
@@ -132,7 +132,7 @@ def make_module_cluster_label(
     (which is the case for bundle clusters because the supergraph stores
     the module path string but not the underlying module class).
 
-    ``title_already_escaped`` lets the ModelLog path keep its existing
+    ``title_already_escaped`` lets the Trace path keep its existing
     raw-title behaviour (where the title may itself contain ``:`` and is
     fed verbatim) while the bundle path can opt-in to escaping arbitrary
     user-provided strings.
@@ -157,11 +157,11 @@ def make_module_cluster_attrs(
 ) -> dict[str, str]:
     """Return the standard cluster attribute dict used by both renderers.
 
-    Centralises the Graphviz attrs that ModelLog and bundle clusters share:
+    Centralises the Graphviz attrs that Trace and bundle clusters share:
     HTML label, bottom labelloc, ``filled,<line_style>`` style, fill colour,
     and depth-aware penwidth.  Module-type information is optional: bundle
     clusters omit it because the supergraph doesn't preserve the module
-    class, while ModelLog clusters always pass it through.
+    class, while Trace clusters always pass it through.
     """
 
     return {

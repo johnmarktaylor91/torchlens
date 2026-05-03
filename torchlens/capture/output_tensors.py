@@ -1,6 +1,6 @@
 """Functions for logging output tensors produced by decorated torch operations.
 
-This module handles the creation and population of LayerPassLog entries for every
+This module handles the creation and population of OpLog entries for every
 tensor produced during a forward pass.  It covers both *exhaustive* mode (full
 metadata collection) and *fast* mode (re-use of a previously logged graph with
 new activations).
@@ -10,14 +10,14 @@ Architecture overview:
     after executing the original function.  This dispatcher routes to either:
 
     - ``log_function_output_tensors_exhaustive``: builds a complete
-      ``fields_dict`` of ~80 fields per tensor, creates a LayerPassLog entry,
+      ``fields_dict`` of ~80 fields per tensor, creates a OpLog entry,
       updates family links (parent/child/sibling/spouse), and optionally
       saves the activation value.
 
     - ``log_function_output_tensors_fast``: skips metadata collection entirely.
       Increments counters to maintain alignment with the exhaustive pass,
       verifies the graph hasn't changed, and saves new activation values into
-      the existing LayerPassLog entries.
+      the existing OpLog entries.
 
 Label format convention:
     Raw labels follow ``{layer_type}_{type_num}_{realtime_num}_raw``, e.g.
@@ -55,7 +55,7 @@ from ..utils.tensor_utils import get_tensor_memory_amount, safe_copy, tensor_nan
 from ..utils.collections import index_nested, ensure_iterable
 from .flops import compute_backward_flops, compute_forward_flops
 from ..data_classes.buffer_log import BufferLog
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 from ..intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -104,7 +104,7 @@ from .salient_args import extract_salient_args
 from .source_tensors import _get_input_module_info
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
@@ -551,7 +551,7 @@ def _arg_location_to_path(location: Any) -> tuple[OutputPathComponent, ...]:
 
 
 def _build_edge_use_records(
-    self: "ModelLog",
+    self: "Trace",
     parent_layer_arg_locs: dict[str, dict[Any, str]],
     child_label: str,
     child_func_call_id: int,
@@ -604,7 +604,7 @@ def _build_edge_use_records(
 
 
 def log_function_output_tensors(
-    self: "ModelLog",
+    self: "Trace",
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -620,7 +620,7 @@ def log_function_output_tensors(
 
     Called by every decorated torch function wrapper after executing the
     original function.  The mode was set in ``save_new_activations`` (fast)
-    or ``log_forward_pass`` (exhaustive).
+    or ``trace`` (exhaustive).
     """
     if self.logging_mode == "exhaustive":
         log_function_output_tensors_exhaustive(
@@ -660,7 +660,7 @@ def log_function_output_tensors(
 
 
 def apply_live_hooks_to_outputs(
-    self: "ModelLog",
+    self: "Trace",
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -844,7 +844,7 @@ def _replace_output_value(
     return value
 
 
-def _apply_live_fire_records_to_entry(entry: LayerPassLog) -> None:
+def _apply_live_fire_records_to_entry(entry: OpLog) -> None:
     """Attach pending live fire records and refresh saved tensor metadata.
 
     Parameters
@@ -867,7 +867,7 @@ def _apply_live_fire_records_to_entry(entry: LayerPassLog) -> None:
         _set_saved_activation_metadata(entry, tensor)
 
 
-def _set_saved_activation_metadata(entry: LayerPassLog, tensor: torch.Tensor) -> None:
+def _set_saved_activation_metadata(entry: OpLog, tensor: torch.Tensor) -> None:
     """Refresh activation metadata through internal setters.
 
     Parameters
@@ -935,7 +935,7 @@ def _record_predicate_output(
 
 
 def log_function_output_tensors_predicate(
-    self: "ModelLog",
+    self: "Trace",
     func_name: str,
     args: tuple[Any, ...],
     out_orig: Any,
@@ -964,7 +964,7 @@ def log_function_output_tensors_predicate(
         module_frame = state.module_stack[-1] if state.module_stack else None
         ctx = _build_record_context(
             kind="op",
-            layer_pass_log_or_op_data={
+            op_log_or_op_data={
                 "label": tensor_label_raw,
                 "raw_label": tensor_label_raw,
                 "tensor_label_raw": tensor_label_raw,
@@ -1007,10 +1007,10 @@ def log_function_output_tensors_predicate(
 
 
 def _build_graph_relationship_fields(
-    self: "ModelLog",
+    self: "Trace",
     fields_dict: dict[str, Any],
     parent_layer_labels: list[str],
-    parent_layer_entries: list[LayerPassLog],
+    parent_layer_entries: list[OpLog],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     out_orig: Any,
@@ -1091,7 +1091,7 @@ def _extract_arg_tensors_and_params(
 
 
 def _build_param_fields(
-    self: "ModelLog",
+    self: "Trace",
     fields_dict: dict[str, Any],
     arg_parameters: list[torch.nn.Parameter],
 ) -> dict[str, int]:
@@ -1125,10 +1125,10 @@ def _build_param_fields(
 
 
 def _build_module_context_fields(
-    self: "ModelLog",
+    self: "Trace",
     fields_dict: dict[str, Any],
     arg_tensors: list[torch.Tensor],
-    parent_layer_entries: list[LayerPassLog],
+    parent_layer_entries: list[OpLog],
 ) -> None:
     """Populate module nesting, address, and input/output status fields."""
     containing_modules = _get_input_module_info(self, arg_tensors)
@@ -1151,7 +1151,7 @@ def _build_module_context_fields(
 
 
 def _build_shared_fields_dict(
-    self: "ModelLog",
+    self: "Trace",
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -1159,7 +1159,7 @@ def _build_shared_fields_dict(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     func_call_id: int,
-) -> tuple[dict[str, Any], list[LayerPassLog], list[torch.Tensor], dict[str, int]]:
+) -> tuple[dict[str, Any], list[OpLog], list[torch.Tensor], dict[str, int]]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
     When a function produces multiple output tensors (e.g. ``torch.split``),
@@ -1256,13 +1256,13 @@ def _build_shared_fields_dict(
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_passes
 
 
-def _classify_new_tensor_in_model_log(
-    self: "ModelLog",
+def _classify_new_tensor_in_trace(
+    self: "Trace",
     fields_dict: dict[str, Any],
     fields_dict_onetensor: dict[str, Any],
     new_tensor_label: str,
 ) -> None:
-    """Update ModelLog categories (internally_initialized, merge points) for a new tensor."""
+    """Update Trace categories (internally_initialized, merge points) for a new tensor."""
     if fields_dict["is_internally_initialized"]:
         self.internally_initialized_layers.append(new_tensor_label)
     if fields_dict["has_input_ancestor"] and any(
@@ -1276,9 +1276,9 @@ def _classify_new_tensor_in_model_log(
 
 
 def _tag_tensor_and_track_variations(
-    self: "ModelLog",
+    self: "Trace",
     out: torch.Tensor,
-    new_layer_entry: LayerPassLog,
+    new_layer_entry: OpLog,
     fields_dict_onetensor: dict[str, Any],
     arg_copies: tuple[Any, ...],
     kwarg_copies: dict[str, Any],
@@ -1312,7 +1312,7 @@ def _tag_tensor_and_track_variations(
 
 
 def log_function_output_tensors_exhaustive(
-    self: "ModelLog",
+    self: "Trace",
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -1328,7 +1328,7 @@ def log_function_output_tensors_exhaustive(
 
     For each loggable output tensor:
       1. Build per-tensor fields (label, shape, equivalence type, FLOPs).
-      2. Create a LayerPassLog entry and optionally save activation data.
+      2. Create a OpLog entry and optionally save activation data.
       3. Update bidirectional family links (parent→child, sibling, spouse).
       4. Tag the output tensor with ``tl_tensor_label_raw`` so downstream
          operations can identify it as a parent.
@@ -1417,9 +1417,7 @@ def log_function_output_tensors_exhaustive(
         new_tensor_label = new_layer_entry.tensor_label_raw
         _update_tensor_family_links(self, new_layer_entry)
 
-        _classify_new_tensor_in_model_log(
-            self, fields_dict, fields_dict_onetensor, new_tensor_label
-        )
+        _classify_new_tensor_in_trace(self, fields_dict, fields_dict_onetensor, new_tensor_label)
         _tag_tensor_and_track_variations(
             self,
             out,
@@ -1452,7 +1450,7 @@ def _get_parent_contents(
 
 
 def log_function_output_tensors_fast(
-    self: "ModelLog",
+    self: "Trace",
     func_name: str,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
@@ -1472,7 +1470,7 @@ def log_function_output_tensors_fast(
       3. Save activation data and update shape/dtype/timing metadata.
 
     If any counter, label, or parent mismatch is detected, raises ValueError
-    telling the user to re-run ``log_forward_pass``.
+    telling the user to re-run ``trace``.
     """
     # Minimal info collection — only what's needed for counter alignment and saving.
     layer_type = func_name.lower().replace("_", "")
@@ -1514,9 +1512,9 @@ def log_function_output_tensors_fast(
         if tensor_label_raw not in self._raw_to_final_layer_labels:
             raise ValueError(
                 "The computational graph changed for this forward pass compared to the original "
-                "call to log_forward_pass (either due to different inputs or a different "
+                "call to trace (either due to different inputs or a different "
                 "random seed), so save_new_activations failed. Please re-run "
-                "log_forward_pass with the desired inputs."
+                "trace with the desired inputs."
             )
         orig_tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
         if orig_tensor_label in self.unlogged_layers:
@@ -1538,9 +1536,9 @@ def log_function_output_tensors_fast(
         ):
             raise ValueError(
                 "The computational graph changed for this forward pass compared to the original "
-                "call to log_forward_pass (either due to different inputs or a different "
+                "call to trace (either due to different inputs or a different "
                 "random seed), so save_new_activations failed. Please re-run "
-                "log_forward_pass with the desired inputs."
+                "trace with the desired inputs."
             )
 
         # Save activation data if this layer is in the save list.
@@ -1864,7 +1862,7 @@ def _get_autograd_saved_stats_for_tensor(
 
 
 def _log_output_tensor_info(
-    self: "ModelLog",
+    self: "Trace",
     t: torch.Tensor,
     i: int,
     args: tuple[Any, ...],
@@ -1923,7 +1921,7 @@ def _log_output_tensor_info(
         fields_dict["operation_equivalence_type"] = operation_equivalence_type
         fields_dict["pass_num"] = 1
 
-    # equivalent_operations is a DIRECT reference to the ModelLog-level set —
+    # equivalent_operations is a DIRECT reference to the Trace-level set —
     # all entries sharing this equivalence type point to the same set object.
     self.equivalent_operations[operation_equivalence_type].add(tensor_label_raw)
     fields_dict["equivalent_operations"] = self.equivalent_operations[operation_equivalence_type]
@@ -1960,7 +1958,7 @@ def _log_output_tensor_info(
     fields_dict["recurrent_group"] = []
     fields_dict["creation_order"] = creation_order
     fields_dict["operation_num"] = None
-    fields_dict["source_model_log"] = self
+    fields_dict["source_trace"] = self
     fields_dict["_pass_finished"] = False
 
     # Other labeling info
@@ -2025,14 +2023,14 @@ def _log_output_tensor_info(
 
 
 def _make_layer_log_entry(
-    self: "ModelLog",
+    self: "Trace",
     t: torch.Tensor,
     fields_dict: dict[str, Any],
     t_args: tuple[Any, ...] | None = None,
     t_kwargs: dict[str, Any] | None = None,
     activation_postfunc: Callable[..., Any] | None = None,
-) -> LayerPassLog:
-    """Create a LayerPassLog (or BufferLog) entry and register it in ModelLog.
+) -> OpLog:
+    """Create a OpLog (or BufferLog) entry and register it in Trace.
 
     Instantiates the appropriate log class from ``fields_dict``, conditionally
     saves activation data (if this layer is in ``_layer_nums_to_save``), and
@@ -2053,7 +2051,7 @@ def _make_layer_log_entry(
     if fields_dict.get("is_buffer_layer"):
         new_entry = BufferLog(fields_dict)
     else:
-        new_entry = LayerPassLog(fields_dict)  # type: ignore[assignment]
+        new_entry = OpLog(fields_dict)  # type: ignore[assignment]
     keep_by_predicate = True
     module_filter_fn = getattr(self, "module_filter_fn", None)
     if module_filter_fn is not None:
@@ -2078,13 +2076,13 @@ def _make_layer_log_entry(
     return new_entry
 
 
-def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: LayerPassLog) -> None:
+def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: OpLog) -> None:
     """Raise a structured capture error if ``raise_on_nan`` finds a non-finite tensor.
 
     Parameters
     ----------
     self:
-        Active ``ModelLog`` instance.
+        Active ``Trace`` instance.
     tensor:
         Tensor output produced by the just-logged operation.
     entry:

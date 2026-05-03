@@ -5,7 +5,7 @@ import os
 import pytest
 import torch
 
-from torchlens import log_forward_pass, show_model_graph
+from torchlens import trace as trace_fn, show_model_graph
 from torchlens.user_funcs import validate_forward_pass
 from torchlens.visualization._elk_internal.layout import (
     elk_available,
@@ -28,7 +28,7 @@ def _ensure_output_dir():
 
 def _count_nodes(model, x):
     """Log forward pass and return node count."""
-    ml = log_forward_pass(model, x)
+    ml = trace_fn(model, x)
     count = len(ml.layer_labels)
     ml.cleanup()
     return count
@@ -126,7 +126,7 @@ class TestRandomGraphModel:
     def test_nesting_depth(self):
         """Module nesting creates expected hierarchy."""
         model = RandomGraphModel(target_nodes=500, nesting_depth=4, seed=42)
-        ml = log_forward_pass(model, torch.randn(2, 64))
+        ml = trace_fn(model, torch.randn(2, 64))
         max_depth = max(len(ml[label].containing_modules) for label in ml.layer_labels)
         assert max_depth >= 3
         ml.cleanup()
@@ -280,7 +280,7 @@ class TestElkUtilities:
     def test_build_hierarchical_has_groups(self):
         """Hierarchical builder creates compound nodes for module nesting."""
         model = RandomGraphModel(target_nodes=500, nesting_depth=3, seed=42)
-        ml = log_forward_pass(model, torch.randn(2, 64))
+        ml = trace_fn(model, torch.randn(2, 64))
         entries = ml.layer_dict_main_keys
         elk = build_elk_graph_hierarchical(entries)
         # Should have at least one group_ compound node at top level.
@@ -455,7 +455,7 @@ class TestLargeGraphRendering:
     def test_vis_node_placement_forwarded(self):
         """vis_node_placement parameter reaches render_graph."""
         model = RandomGraphModel(target_nodes=200, seed=42)
-        ml = log_forward_pass(model, torch.randn(2, 64))
+        ml = trace_fn(model, torch.randn(2, 64))
         ml.render_graph(
             vis_mode="unrolled",
             vis_save_only=True,
@@ -552,7 +552,7 @@ class TestDotThresholdBenchmark:
         for target in [500, 1000, 2000, 3000, 3500, 4000]:
             model = RandomGraphModel(target_nodes=target, seed=42)
             x = torch.randn(2, 64)
-            ml = log_forward_pass(model, x)
+            ml = trace_fn(model, x)
             actual_nodes = len(ml.layer_labels)
             start = time.time()
             try:

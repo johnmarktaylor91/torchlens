@@ -9,7 +9,7 @@ import torch.nn as nn
 
 import example_models
 from conftest import VIS_OUTPUT_DIR
-from torchlens import ParamLog, log_forward_pass, show_model_graph
+from torchlens import ParamLog, trace as trace_fn, show_model_graph
 from torchlens.data_classes import ParamAccessor
 
 
@@ -61,7 +61,7 @@ def _simple_input():
 
 class TestParamLogFields:
     def test_fields_populated(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params[0]
         assert isinstance(pl, ParamLog)
         assert isinstance(pl.address, str)
@@ -80,7 +80,7 @@ class TestParamLogFields:
         assert isinstance(pl.linked_params, list)
 
     def test_repr_contains_key_info(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params[0]
         r = repr(pl)
         assert pl.address in r
@@ -90,76 +90,76 @@ class TestParamLogFields:
         assert "has_grad" in r
 
     def test_len_equals_num_params(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
         assert len(pl) == pl.num_params == 50  # 5 * 10
 
     def test_is_quantized_false_for_float(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert pl.is_quantized is False
 
 
 # ---------------------------------------------------------------------------
-# ParamAccessor on ModelLog
+# ParamAccessor on Trace
 # ---------------------------------------------------------------------------
 
 
 class TestParamAccessorMH:
     def test_access_by_address(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
         assert pl.address == "0.weight"
 
     def test_access_by_index(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params[0]
         assert isinstance(pl, ParamLog)
 
     def test_iterable(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         params = list(mh.params)
         assert len(params) == 4  # weight+bias for each Linear
 
     def test_len(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         assert len(mh.params) == 4
 
     def test_contains(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         assert "0.weight" in mh.params
         assert "nonexistent" not in mh.params
 
     def test_short_name_ambiguous_raises(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         with pytest.raises(KeyError, match="Ambiguous"):
             mh.params["weight"]  # Both 0.weight and 2.weight
 
     def test_repr_dict_like(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         r = repr(mh.params)
         assert "0.weight" in r
         assert "ParamLog" in r
 
     def test_params_property_same_as_param_logs(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         assert mh.params is mh.param_logs
 
 
 # ---------------------------------------------------------------------------
-# ParamAccessor on LayerPassLog
+# ParamAccessor on OpLog
 # ---------------------------------------------------------------------------
 
 
 class TestParamAccessorTLE:
     def test_access_by_address(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
         pl = entry.params[entry.parent_param_logs[0].address]
         assert isinstance(pl, ParamLog)
 
     def test_access_by_short_name(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
         w = entry.params["weight"]
         b = entry.params["bias"]
@@ -167,23 +167,23 @@ class TestParamAccessorTLE:
         assert "bias" in b.name
 
     def test_access_by_index(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
         assert isinstance(entry.params[0], ParamLog)
 
     def test_len(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
         assert len(entry.params) == 2  # weight + bias
 
     def test_iterable(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
         params = list(entry.params)
         assert len(params) == 2
 
     def test_no_params_for_non_param_layer(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         input_entry = mh["input_1"]
         assert len(input_entry.params) == 0
 
@@ -195,7 +195,7 @@ class TestParamAccessorTLE:
 
 class TestParamMetadata:
     def test_address_and_name(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
         assert pl.address == "0.weight"
         assert pl.name == "weight"
@@ -203,31 +203,31 @@ class TestParamMetadata:
 
     def test_shape_and_dtype(self):
         model = _make_simple_model()
-        mh = log_forward_pass(model, _simple_input())
+        mh = trace_fn(model, _simple_input())
         pl = mh.params["0.weight"]
         assert pl.shape == (5, 10)
         assert pl.dtype == torch.float32
 
     def test_trainable_flag_true(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert pl.trainable is True
 
     def test_trainable_flag_frozen(self):
-        mh = log_forward_pass(_make_frozen_first_layer(), _simple_input())
+        mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         assert mh.params["0.weight"].trainable is False
         assert mh.params["0.bias"].trainable is False
         assert mh.params["2.weight"].trainable is True
         assert mh.params["2.bias"].trainable is True
 
     def test_module_info(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
         assert pl.module_address == "0"
         assert pl.module_type == "Linear"
 
     def test_fsize_positive(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert pl.memory > 0
             assert len(pl.memory_str) > 0
@@ -240,25 +240,25 @@ class TestParamMetadata:
 
 class TestTrainableFrozenTallies:
     def test_mh_all_trainable(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         assert mh.total_params == mh.total_params_trainable
         assert mh.total_params_frozen == 0
         assert mh.total_params == 67  # 50+5+10+2
 
     def test_mh_mixed(self):
-        mh = log_forward_pass(_make_frozen_first_layer(), _simple_input())
+        mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         assert mh.total_params_frozen == 55  # 50+5
         assert mh.total_params_trainable == 12  # 10+2
         assert mh.total_params == 67
         assert mh.total_params == mh.total_params_trainable + mh.total_params_frozen
 
     def test_mh_all_frozen(self):
-        mh = log_forward_pass(_make_all_frozen(), _simple_input())
+        mh = trace_fn(_make_all_frozen(), _simple_input())
         assert mh.total_params_trainable == 0
         assert mh.total_params_frozen == 67
 
     def test_tle_tallies(self):
-        mh = log_forward_pass(_make_frozen_first_layer(), _simple_input())
+        mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         for entry in mh:
             if entry.uses_params:
                 assert (
@@ -274,7 +274,7 @@ class TestTrainableFrozenTallies:
         assert linear2.num_params_frozen == 0
 
     def test_output_layer_no_params(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         output = mh["output_1"]
         assert output.num_params_total == 0
         assert output.num_params_trainable == 0
@@ -289,14 +289,14 @@ class TestTrainableFrozenTallies:
 
 class TestLinkedParams:
     def test_weight_bias_linked(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         w = mh.params["0.weight"]
         b = mh.params["0.bias"]
         assert b.address in w.linked_params
         assert w.address in b.linked_params
 
     def test_linked_symmetric(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             for other_addr in pl.linked_params:
                 other = mh.params[other_addr]
@@ -310,12 +310,12 @@ class TestLinkedParams:
 
 class TestTensorLogEntries:
     def test_populated(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert len(pl.used_by_layers) > 0
 
     def test_points_to_correct_layers(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             for label in pl.used_by_layers:
                 entry = mh[label]
@@ -329,13 +329,13 @@ class TestTensorLogEntries:
 
 class TestRecurrentParams:
     def test_num_passes_non_recurrent(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert pl.num_passes == 1
 
     def test_num_passes_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = log_forward_pass(model, input_2d)
+        mh = trace_fn(model, input_2d)
         # fc1 is used 4 times
         pl = mh.params["fc1.weight"]
         assert pl.num_passes >= 2  # should be 4
@@ -343,7 +343,7 @@ class TestRecurrentParams:
 
     def test_layer_log_entries_multi_pass(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = log_forward_pass(model, input_2d)
+        mh = trace_fn(model, input_2d)
         pl = mh.params["fc1.weight"]
         # num_passes equals the number of used_by_layers
         assert pl.num_passes == len(pl.used_by_layers)
@@ -357,13 +357,13 @@ class TestRecurrentParams:
 
 class TestGradientTracking:
     def test_no_grad_by_default(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert pl.has_grad is False
             assert pl.grad_shape is None
 
     def test_no_grad_without_save_gradients(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input(), save_gradients=False)
+        mh = trace_fn(_make_simple_model(), _simple_input(), save_gradients=False)
         # Even if we could call backward, save_gradients=False means no hooks
         for pl in mh.params:
             assert pl.has_grad is False
@@ -371,7 +371,7 @@ class TestGradientTracking:
     def test_grad_after_backward(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = log_forward_pass(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].activation
         output.sum().backward()
 
@@ -386,7 +386,7 @@ class TestGradientTracking:
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
         x = _simple_input()
-        mh = log_forward_pass(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].activation
         output.sum().backward()
 
@@ -400,7 +400,7 @@ class TestGradientTracking:
     def test_tle_grad_saved(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = log_forward_pass(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].activation
         output.sum().backward()
 
@@ -414,7 +414,7 @@ class TestGradientTracking:
     def test_layers_with_saved_gradients_populated(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = log_forward_pass(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].activation
         output.sum().backward()
 
@@ -425,7 +425,7 @@ class TestGradientTracking:
     def test_grad_shape_matches_param_shape(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = log_forward_pass(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].activation
         output.sum().backward()
 
@@ -443,14 +443,14 @@ class TestGradientTracking:
 
 class TestOptimizerSupport:
     def test_has_optimizer_none_by_default(self):
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
             assert pl.has_optimizer is None
 
     def test_has_optimizer_true(self):
         model = _make_simple_model()
         optimizer = torch.optim.Adam(model.parameters())
-        mh = log_forward_pass(model, _simple_input(), optimizer=optimizer)
+        mh = trace_fn(model, _simple_input(), optimizer=optimizer)
         for pl in mh.params:
             assert pl.has_optimizer is True
 
@@ -458,7 +458,7 @@ class TestOptimizerSupport:
         model = _make_simple_model()
         # Only optimize second linear layer
         optimizer = torch.optim.Adam(model[2].parameters())
-        mh = log_forward_pass(model, _simple_input(), optimizer=optimizer)
+        mh = trace_fn(model, _simple_input(), optimizer=optimizer)
         assert mh.params["0.weight"].has_optimizer is False
         assert mh.params["0.bias"].has_optimizer is False
         assert mh.params["2.weight"].has_optimizer is True
@@ -473,7 +473,7 @@ class TestOptimizerSupport:
 class TestVisualizationParams:
     def _get_dot_source(self, model, x, vis_mode="unrolled", vis_nesting_depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
-        mh = log_forward_pass(model, x)
+        mh = trace_fn(model, x)
         dot_source = mh.render_graph(
             vis_mode=vis_mode,
             vis_outpath=outpath,
@@ -574,14 +574,14 @@ class TestVisualizationParams:
 class TestIntegration:
     def test_recurrent_model(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = log_forward_pass(model, input_2d)
+        mh = trace_fn(model, input_2d)
         assert len(mh.params) == 2  # fc1.weight, fc1.bias
         assert mh.params["fc1.weight"].num_passes >= 2
 
     def test_model_with_no_params(self):
         model = nn.Sequential(nn.ReLU(), nn.Sigmoid())
         x = torch.randn(1, 5)
-        mh = log_forward_pass(model, x)
+        mh = trace_fn(model, x)
         assert len(mh.params) == 0
         assert mh.total_params == 0
         assert mh.total_params_trainable == 0
@@ -589,7 +589,7 @@ class TestIntegration:
 
     def test_recurrent_params_complex(self, input_2d):
         model = example_models.RecurrentParamsComplex()
-        mh = log_forward_pass(model, input_2d)
+        mh = trace_fn(model, input_2d)
         assert len(mh.params) == 4  # fc1 weight+bias, fc2 weight+bias
         # Both fc1 and fc2 are used multiple times (as used_by_layers)
         assert mh.params["fc1.weight"].num_passes >= 2
@@ -601,7 +601,7 @@ class TestIntegration:
 
     def test_gradient_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = log_forward_pass(model, input_2d, save_gradients=True)
+        mh = trace_fn(model, input_2d, save_gradients=True)
         output = mh["output_1"].activation
         output.sum().backward()
 
@@ -612,7 +612,7 @@ class TestIntegration:
 
     def test_parent_params_cleared_from_tle(self):
         """After postprocessing, parent_params references should be cleared."""
-        mh = log_forward_pass(_make_simple_model(), _simple_input())
+        mh = trace_fn(_make_simple_model(), _simple_input())
         for entry in mh:
             assert entry.parent_params == []
 
@@ -682,7 +682,7 @@ class TestParamContains:
 
     def test_int_contains(self):
         model = _SimpleLinear()
-        mh = log_forward_pass(model, torch.randn(2, 10))
+        mh = trace_fn(model, torch.randn(2, 10))
         if mh.param_logs:
             assert 0 in mh.params
 
@@ -692,7 +692,7 @@ class TestParamRefCleared:
 
     def test_param_ref_cleared_after_cleanup(self):
         model = _SimpleLinear()
-        mh = log_forward_pass(model, torch.randn(2, 10))
+        mh = trace_fn(model, torch.randn(2, 10))
         for pl in mh.param_logs:
             assert pl._param_ref is not None
         mh.cleanup()

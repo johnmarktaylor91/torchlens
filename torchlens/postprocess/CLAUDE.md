@@ -1,7 +1,7 @@
 # postprocess/ - Graph Cleanup and Finalization
 
 ## What This Does
-Transforms raw capture records into user-facing `ModelLog` state. The current full pipeline
+Transforms raw capture records into user-facing `Trace` state. The current full pipeline
 has 20 ordered steps: graph traversal, conditional attribution, module/buffer fixes, loop
 detection, labeling, finalization, streaming bundle finalization, and optional activation
 eviction. Step order is load-bearing.
@@ -42,7 +42,7 @@ eviction. Step order is load-bearing.
 | 16.5 | `_build_layer_logs` | Build aggregate LayerLogs |
 | 17 | `_build_module_logs` | Build ModuleLogs |
 | 17.5 | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
-| 18 | `_set_pass_finished` | Switch ModelLog to user-facing behavior |
+| 18 | `_set_pass_finished` | Switch Trace to user-facing behavior |
 | 19 | `_finalize_streamed_bundle` | Finalize streamed activation bundle |
 | 20 | `_evict_streamed_activations` | Optional in-memory activation eviction |
 
@@ -50,10 +50,10 @@ eviction. Step order is load-bearing.
 Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense
 `conditional_events`, runs a backward flood from branch bools, attributes forward arm edges,
 then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
-- `ModelLog.conditional_events`
-- `ModelLog.conditional_arm_edges`
-- `ModelLog.conditional_edge_passes`
-- `cond_branch_children_by_cond` on `LayerPassLog` and `LayerLog`
+- `Trace.conditional_events`
+- `Trace.conditional_arm_edges`
+- `Trace.conditional_edge_passes`
+- `cond_branch_children_by_cond` on `OpLog` and `LayerLog`
 
 ## Loop Detection
 Loop detection groups repeated operations by operation equivalence, expands isomorphic

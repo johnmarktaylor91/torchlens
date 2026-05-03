@@ -1,7 +1,7 @@
 """Portable directory-bundle save/load helpers for TorchLens model logs.
 
 This module owns the high-level bundle lifecycle for TorchLens portable I/O:
-save a completed ``ModelLog`` into a directory bundle, load that bundle back
+save a completed ``Trace`` into a directory bundle, load that bundle back
 eagerly or lazily, and clean up interrupted ``.tmp.*`` directories left behind
 by partial saves. The bundle format is intentionally a plain directory with
 ``manifest.json``, ``metadata.pkl``, and one ``safetensors`` file per blob.
@@ -31,12 +31,12 @@ from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
 from .paths import resolve_bundle_blob_path
-from .rehydrate import rehydrate_model_log
+from .rehydrate import rehydrate_trace
 from .scrub import scrub_for_save
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
-from ..data_classes.model_log import ModelLog
+from ..data_classes.model_log import Trace
 
 if TYPE_CHECKING:
     from ..intervention.bundle import Bundle
@@ -60,7 +60,7 @@ class _FastCopySpec:
     label:
         Human-readable label stored alongside the destination manifest entry.
     source_ref:
-        Lazy source blob reference from the current in-memory ``ModelLog``.
+        Lazy source blob reference from the current in-memory ``Trace``.
     """
 
     blob_id: str
@@ -70,7 +70,7 @@ class _FastCopySpec:
 
 
 def save(
-    model_log: ModelLog,
+    trace: Trace,
     path: str | Path,
     *,
     level: str = "portable",
@@ -81,11 +81,11 @@ def save(
     strict: bool = True,
     overwrite: bool = False,
 ) -> None:
-    """Persist a ``ModelLog`` into a portable TorchLens directory bundle.
+    """Persist a ``Trace`` into a portable TorchLens directory bundle.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Completed model log to save.
     path:
         Output bundle directory path.
@@ -117,8 +117,8 @@ def save(
     >>> import torchlens as tl
     >>> model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     >>> x = torch.randn(2, 4)
-    >>> model_log = tl.log_forward_pass(model, x, layers_to_save="all")
-    >>> tl.save(model_log, "demo_bundle", overwrite=True)
+    >>> trace = tl.trace(model, x, layers_to_save="all")
+    >>> tl.save(trace, "demo_bundle", overwrite=True)
     >>> loaded = tl.load("demo_bundle")
     >>> loaded["linear_1_1"].activation.shape
     torch.Size([2, 3])
@@ -141,7 +141,7 @@ def save(
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
-    _validate_activation_postfunc_outputs(model_log, include_activations=include_activations)
+    _validate_activation_postfunc_outputs(trace, include_activations=include_activations)
 
     backup_path: Path | None = None
     tmp_path = _make_tmp_bundle_path(bundle_path)
@@ -156,8 +156,8 @@ def save(
         tmp_path.mkdir()
         (tmp_path / "blobs").mkdir()
 
-        scrubbed_state, blob_specs = _scrub_model_log_for_bundle(
-            model_log,
+        scrubbed_state, blob_specs = _scrub_trace_for_bundle(
+            trace,
             include_activations=include_activations,
             include_gradients=include_gradients,
             include_captured_args=include_captured_args,
@@ -168,7 +168,7 @@ def save(
             allowed_blob_ids={blob_id for blob_id, _, _, _ in blob_specs},
         )
         fast_copy_specs = _attach_fast_copy_specs(
-            model_log,
+            trace,
             scrubbed_state=scrubbed_state,
             blob_specs=blob_specs,
             include_activations=include_activations,
@@ -198,7 +198,7 @@ def save(
         source_manifest_cache: dict[Path, dict[str, TensorEntry]] = {}
         for fast_copy_spec in fast_copy_specs:
             manifest_index = _load_and_verify_fast_copy_source(
-                model_log,
+                trace,
                 fast_copy_spec.source_ref.source_bundle_path,
                 cache=source_manifest_cache,
             )
@@ -214,13 +214,13 @@ def save(
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
 
         manifest = _build_manifest(
-            model_log=model_log,
+            trace=trace,
             tensor_entries=tensor_entries,
             unsupported_tensors=unsupported_tensors,
         )
-        _TlSpecWriter.write_model_log_manifest(
+        _TlSpecWriter.write_trace_manifest(
             path=tmp_path / "manifest.json",
-            model_log=model_log,
+            trace=trace,
             legacy_manifest=manifest,
             save_level=save_level,
         )
@@ -249,7 +249,7 @@ def load(
     lazy: Literal[False] = False,
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
-) -> "ModelLog | Bundle | InterventionSpec":
+) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object with eager tensor materialization.
 
     Parameters
@@ -265,7 +265,7 @@ def load(
 
     Returns
     -------
-    ModelLog | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -278,7 +278,7 @@ def load(
     lazy: Literal[True],
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
-) -> "ModelLog | Bundle | InterventionSpec":
+) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
     Parameters
@@ -294,7 +294,7 @@ def load(
 
     Returns
     -------
-    ModelLog | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -306,7 +306,7 @@ def load(
     lazy: bool = False,
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
-) -> "ModelLog | Bundle | InterventionSpec":
+) -> "Trace | Bundle | InterventionSpec":
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
     Parameters
@@ -323,7 +323,7 @@ def load(
 
     Returns
     -------
-    ModelLog | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec
         Rehydrated object selected by ``manifest.kind`` for unified Phase 11
         files, or by legacy format detection for older files.
 
@@ -335,8 +335,8 @@ def load(
     Examples
     --------
     >>> import torchlens as tl
-    >>> model_log = tl.load("demo_model_log.tlspec", lazy=True)
-    >>> layer = model_log["linear_1_1"]
+    >>> trace = tl.load("demo_trace.tlspec", lazy=True)
+    >>> layer = trace["linear_1_1"]
     >>> layer.activation is None
     True
     >>> activation = layer.materialize_activation()
@@ -383,7 +383,7 @@ def load(
         manifest = Manifest.read(manifest_path)
     except TorchLensIOError:
         raise
-    return _load_model_log_payload(
+    return _load_trace_payload(
         bundle_path,
         manifest,
         lazy=lazy,
@@ -392,15 +392,15 @@ def load(
     )
 
 
-def _load_model_log_payload(
+def _load_trace_payload(
     bundle_path: Path,
     manifest: Manifest,
     *,
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
-) -> "ModelLog | Bundle | InterventionSpec":
-    """Load a portable ModelLog payload after manifest dispatch.
+) -> "Trace | Bundle | InterventionSpec":
+    """Load a portable Trace payload after manifest dispatch.
 
     Parameters
     ----------
@@ -417,7 +417,7 @@ def _load_model_log_payload(
 
     Returns
     -------
-    ModelLog
+    Trace
         Rehydrated model log.
     """
 
@@ -450,7 +450,7 @@ def _load_model_log_payload(
     except (OSError, AttributeError, EOFError, ImportError, ValueError) as exc:
         raise TorchLensIOError(f"Failed to load bundle at {bundle_path}.") from exc
 
-    model_log = rehydrate_model_log(
+    trace = rehydrate_trace(
         scrubbed_state,
         manifest,
         bundle_path,
@@ -458,10 +458,10 @@ def _load_model_log_payload(
         map_location=map_location,
         materialize_nested=materialize_nested,
     )
-    setattr(model_log, "_loaded_from_bundle", True)
-    setattr(model_log, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
-    setattr(model_log, "_source_bundle_path", bundle_path)
-    return model_log
+    setattr(trace, "_loaded_from_bundle", True)
+    setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
+    setattr(trace, "_source_bundle_path", bundle_path)
+    return trace
 
 
 def _load_unified_tlspec(
@@ -470,7 +470,7 @@ def _load_unified_tlspec(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
-) -> "ModelLog | Bundle | InterventionSpec":
+) -> "Trace | Bundle | InterventionSpec":
     """Load a Phase-11 unified ``.tlspec`` bundle by manifest kind.
 
     Parameters
@@ -486,7 +486,7 @@ def _load_unified_tlspec(
 
     Returns
     -------
-    ModelLog | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec
         Loaded object selected by unified manifest kind.
 
     Raises
@@ -501,8 +501,8 @@ def _load_unified_tlspec(
         from ..intervention.save import load_intervention_spec
 
         return load_intervention_spec(bundle_path)
-    if kind == "model_log":
-        return _load_model_log_payload(
+    if kind == "trace":
+        return _load_trace_payload(
             bundle_path,
             Manifest.from_dict(manifest),
             lazy=lazy,
@@ -594,7 +594,7 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
     if not isinstance(raw_members, list):
         raise TorchLensIOError("Unified bundle metadata must include a members list.")
 
-    members: dict[str, ModelLog] = {}
+    members: dict[str, Trace] = {}
     for index, entry in enumerate(raw_members):
         if not isinstance(entry, dict):
             raise TorchLensIOError(f"Unified bundle member {index} must be an object.")
@@ -604,8 +604,8 @@ def _load_unified_bundle_directory(bundle_path: Path, metadata_path: Path) -> "B
             raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
         member_path = bundle_path / relative_path
         loaded = load(member_path)
-        if not isinstance(loaded, ModelLog):
-            raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a ModelLog.")
+        if not isinstance(loaded, Trace):
+            raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
         members[name] = loaded
 
     from ..intervention.bundle import Bundle
@@ -697,8 +697,8 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     return removed
 
 
-def _scrub_model_log_for_bundle(
-    model_log: ModelLog,
+def _scrub_trace_for_bundle(
+    trace: Trace,
     *,
     include_activations: bool,
     include_gradients: bool,
@@ -709,7 +709,7 @@ def _scrub_model_log_for_bundle(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log being saved.
     include_activations:
         Whether activations should be blobified.
@@ -732,12 +732,12 @@ def _scrub_model_log_for_bundle(
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
     ):
-        if hasattr(model_log, attr_name):
-            transient_attrs[attr_name] = getattr(model_log, attr_name)
-            delattr(model_log, attr_name)
+        if hasattr(trace, attr_name):
+            transient_attrs[attr_name] = getattr(trace, attr_name)
+            delattr(trace, attr_name)
     try:
         return scrub_for_save(
-            model_log,
+            trace,
             include_activations=include_activations,
             include_gradients=include_gradients,
             include_captured_args=include_captured_args,
@@ -745,7 +745,7 @@ def _scrub_model_log_for_bundle(
         )
     finally:
         for attr_name, attr_value in transient_attrs.items():
-            setattr(model_log, attr_name, attr_value)
+            setattr(trace, attr_name, attr_value)
 
 
 def _write_tensor_blob(
@@ -797,7 +797,7 @@ def _write_tensor_blob(
 
 
 def _attach_fast_copy_specs(
-    model_log: ModelLog,
+    trace: Trace,
     *,
     scrubbed_state: dict[str, Any],
     blob_specs: list[tuple[str, torch.Tensor, str, str]],
@@ -808,7 +808,7 @@ def _attach_fast_copy_specs(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Live model log being saved.
     scrubbed_state:
         Scrubbed metadata state returned by ``scrub_for_save``.
@@ -832,7 +832,7 @@ def _attach_fast_copy_specs(
 
     used_blob_ids = {blob_id for blob_id, _, _, _ in blob_specs}
     fast_copy_specs: list[_FastCopySpec] = []
-    for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
+    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers):
         if include_activations:
             fast_copy_spec = _maybe_make_fast_copy_spec(
                 live_layer=live_layer,
@@ -875,9 +875,9 @@ def _maybe_make_fast_copy_spec(
     Parameters
     ----------
     live_layer:
-        Live ``LayerPassLog`` instance being saved.
+        Live ``OpLog`` instance being saved.
     scrubbed_layer:
-        Scrubbed ``LayerPassLog`` counterpart that will be pickled.
+        Scrubbed ``OpLog`` counterpart that will be pickled.
     tensor_field:
         Direct tensor field name, for example ``"activation"``.
     ref_field:
@@ -938,7 +938,7 @@ def _next_bundle_blob_id(used_blob_ids: set[str]) -> str:
 
 
 def _load_and_verify_fast_copy_source(
-    model_log: ModelLog,
+    trace: Trace,
     source_bundle_path: Path,
     *,
     cache: dict[Path, dict[str, TensorEntry]],
@@ -947,7 +947,7 @@ def _load_and_verify_fast_copy_source(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log being resaved.
     source_bundle_path:
         Source bundle directory referenced by one lazy tensor ref.
@@ -973,7 +973,7 @@ def _load_and_verify_fast_copy_source(
     if not manifest_path.exists():
         raise TorchLensIOError(f"Source bundle manifest not found at {manifest_path}.")
 
-    expected_manifest_sha256 = getattr(model_log, "_source_bundle_manifest_sha256", None)
+    expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if not isinstance(expected_manifest_sha256, str):
         raise TorchLensIOError(
             "source bundle manifest fingerprint is unavailable; materialize refs and retry"
@@ -1052,7 +1052,7 @@ def _fast_copy_tensor_blob(
 
 def _build_manifest(
     *,
-    model_log: ModelLog,
+    trace: Trace,
     tensor_entries: list[TensorEntry],
     unsupported_tensors: list[dict[str, str]],
 ) -> Manifest:
@@ -1060,7 +1060,7 @@ def _build_manifest(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Source model log.
     tensor_entries:
         Persisted tensor entries.
@@ -1092,7 +1092,7 @@ def _build_manifest(
             "Z",
         ),
         bundle_format="directory",
-        n_layers=len(model_log.layer_list),
+        n_layers=len(trace.layer_list),
         n_activation_blobs=n_activation_blobs,
         n_gradient_blobs=n_gradient_blobs,
         n_auxiliary_blobs=n_auxiliary_blobs,
@@ -1102,7 +1102,7 @@ def _build_manifest(
 
 
 def _validate_activation_postfunc_outputs(
-    model_log: ModelLog,
+    trace: Trace,
     *,
     include_activations: bool,
 ) -> None:
@@ -1110,7 +1110,7 @@ def _validate_activation_postfunc_outputs(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log being saved.
     include_activations:
         Whether activation fields will be saved.
@@ -1121,9 +1121,9 @@ def _validate_activation_postfunc_outputs(
         If a saved activation is not a plain tensor.
     """
 
-    if not include_activations or getattr(model_log, "activation_postfunc", None) is None:
+    if not include_activations or getattr(trace, "activation_postfunc", None) is None:
         return
-    for layer in model_log.layer_list:
+    for layer in trace.layer_list:
         if not getattr(layer, "has_saved_activations", False):
             continue
         transformed_activation = getattr(layer, "transformed_activation", None)
@@ -1248,8 +1248,8 @@ def _raise_for_unmaterialized_nested_blob_refs(
 
     if _contains_nested_blob_refs(value, seen=set(), allowed_blob_ids=allowed_blob_ids):
         raise TorchLensIOError(
-            "ModelLog contains unmaterialized nested blob references. "
-            "Call torchlens.rehydrate_nested(model_log) before saving."
+            "Trace contains unmaterialized nested blob references. "
+            "Call torchlens.rehydrate_nested(trace) before saving."
         )
 
 

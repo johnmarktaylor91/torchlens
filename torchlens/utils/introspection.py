@@ -503,7 +503,7 @@ def _get_func_call_stack(
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
-    user-visible frames starting from the ``log_forward_pass`` call site
+    user-visible frames starting from the ``trace`` call site
     through the model's ``forward`` method and any deeper user calls.
 
     Uses ``sys._getframe()`` instead of ``inspect.stack()`` to avoid
@@ -552,7 +552,7 @@ def _get_func_call_stack(
     # Walk bottom-up (deepest caller last → first in output) and collect
     # non-internal frames.  Start tracking once we hit a ``forward`` frame,
     # but also include the frame *before* the first ``forward`` (the user's
-    # script that called ``log_forward_pass``).
+    # script that called ``trace``).
     tracking = False
     pre_forward_frame_idx = None
     filtered_indices = []
@@ -568,7 +568,7 @@ def _get_func_call_stack(
 
         if func_name == "forward" and not tracking:
             tracking = True
-            # Look for the user-script frame that called log_forward_pass
+            # Look for the user-script frame that called trace
             for j in range(idx + 1, len(raw_frames)):
                 j_filename, j_func_name, _, _, _ = raw_frames[j]
                 if not _is_torchlens_internal(j_filename) and "_call_impl" not in j_func_name:
@@ -578,7 +578,7 @@ def _get_func_call_stack(
         if tracking:
             filtered_indices.append(idx)
 
-    # Prepend the log_forward_pass call-site frame if found and not already included
+    # Prepend the trace call-site frame if found and not already included
     if pre_forward_frame_idx is not None and pre_forward_frame_idx not in filtered_indices:
         filtered_indices.append(pre_forward_frame_idx)
 

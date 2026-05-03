@@ -122,7 +122,7 @@ def resolve_code_panel_source(
     code_panel:
         User-facing code-panel option.
     source_code_blob:
-        Captured source snippets stored on the ModelLog.
+        Captured source snippets stored on the Trace.
     model_ref:
         Optional weak reference to the live model for callable options.
 
@@ -148,7 +148,7 @@ def resolve_code_panel_source(
         if model is None:
             raise RuntimeError(
                 "Callable code_panel options require the original model object to "
-                "still be alive. Use a built-in code_panel mode for saved ModelLog "
+                "still be alive. Use a built-in code_panel mode for saved Trace "
                 "rendering."
             )
         source_text = code_panel(model)

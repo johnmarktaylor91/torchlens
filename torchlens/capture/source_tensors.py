@@ -1,7 +1,7 @@
 """Functions for logging source tensors (inputs and buffers) during model tracing.
 
 Source tensors are the starting points of the computational graph: model inputs
-and module buffers.  This module handles creating LayerPassLog entries for these
+and module buffers.  This module handles creating OpLog entries for these
 tensors in both exhaustive and fast logging modes.
 
 Source tensors differ from function-output tensors in several ways:
@@ -12,7 +12,7 @@ Source tensors differ from function-output tensors in several ways:
   - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
   - Buffers may carry a ``tl_buffer_parent`` attribute (set during model prep)
     identifying the module that owns them.
-  - Buffer entries are instantiated as ``BufferLog`` (a LayerPassLog subclass
+  - Buffer entries are instantiated as ``BufferLog`` (a OpLog subclass
     that adds ``name`` and ``module_address`` fields).
 
 The ``operation_equivalence_type`` for inputs encodes shape+dtype (so inputs
@@ -34,7 +34,7 @@ from ..utils.introspection import _get_func_call_stack, get_attr_values_from_ten
 from ..utils.tensor_utils import get_tensor_memory_amount
 from ..utils.rng import log_current_rng_states
 from ..data_classes.buffer_log import BufferLog
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 from ..fastlog._predicate import _evaluate_keep_op
 from ..fastlog._record_context import _build_record_context
 from ..fastlog._state import get_active_recording_state
@@ -43,11 +43,11 @@ from ..fastlog.types import ActivationRecord
 from .tensor_tracking import _add_backward_hook, _update_tensor_containing_modules
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
 def log_source_tensor(
-    self: "ModelLog", t: torch.Tensor, source: str, extra_address: str | None = None
+    self: "Trace", t: torch.Tensor, source: str, extra_address: str | None = None
 ) -> None:
     """Dispatch source tensor logging to exhaustive or fast mode.
 
@@ -69,7 +69,7 @@ def log_source_tensor(
 
 
 def log_source_tensor_predicate(
-    self: "ModelLog",
+    self: "Trace",
     t: torch.Tensor,
     source: str,
     extra_addr: str | None = None,
@@ -93,7 +93,7 @@ def log_source_tensor_predicate(
     module_frame = state.module_stack[-1] if state.module_stack else None
     ctx = _build_record_context(
         kind="input" if source == "input" else "buffer",
-        layer_pass_log_or_op_data={
+        op_log_or_op_data={
             "label": tensor_label,
             "raw_label": tensor_label,
             "tensor_label_raw": tensor_label,
@@ -156,7 +156,7 @@ def log_source_tensor_predicate(
 
 
 def log_source_tensor_exhaustive(
-    self: "ModelLog", t: torch.Tensor, source: str, extra_addr: str | None = None
+    self: "Trace", t: torch.Tensor, source: str, extra_addr: str | None = None
 ) -> None:
     """Takes in an input or buffer tensor, marks it in-place with relevant information, and
     adds it to the log.
@@ -224,7 +224,7 @@ def log_source_tensor_exhaustive(
         "layer_label_raw": tensor_label,
         "creation_order": creation_order,
         "operation_num": None,
-        "source_model_log": self,
+        "source_trace": self,
         "_pass_finished": False,
         "_construction_done": False,
         # Label Info:
@@ -388,13 +388,13 @@ def log_source_tensor_exhaustive(
     # Imported here (not at module level) to avoid circular imports.
     from .output_tensors import _make_layer_log_entry
 
-    # Creates a BufferLog if is_buffer_layer=True, else LayerPassLog.
+    # Creates a BufferLog if is_buffer_layer=True, else OpLog.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_postfunc)
 
     # Tag the live tensor so downstream operations can find this tensor's label.
     t.tl_tensor_label_raw = tensor_label  # type: ignore[attr-defined]
 
-    # Register in ModelLog-level tracking structures.
+    # Register in Trace-level tracking structures.
     self.equivalent_operations[operation_equivalence_type].add(t.tl_tensor_label_raw)  # type: ignore[attr-defined]
     if source == "input":
         self.input_layers.append(tensor_label)
@@ -407,7 +407,7 @@ def log_source_tensor_exhaustive(
         _add_backward_hook(self, t, t.tl_tensor_label_raw)  # type: ignore[attr-defined]
 
 
-def log_source_tensor_fast(self: "ModelLog", t: torch.Tensor, source: str) -> None:
+def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     """Fast-path source tensor logging: save new activation into existing entry.
 
     Mirrors the exhaustive pass's counter increments for alignment, then
@@ -432,7 +432,7 @@ def log_source_tensor_fast(self: "ModelLog", t: torch.Tensor, source: str) -> No
         raise ValueError(
             f"Fast-path label '{tensor_label_raw}' has no mapping in _raw_to_final_layer_labels. "
             f"This usually means the computational graph changed between the exhaustive pass "
-            f"and this fast pass (e.g., dynamic control flow). Use log_forward_pass() instead."
+            f"and this fast pass (e.g., dynamic control flow). Use trace() instead."
         )
     if orig_tensor_label in self.unlogged_layers:
         return
@@ -461,7 +461,7 @@ def log_source_tensor_fast(self: "ModelLog", t: torch.Tensor, source: str) -> No
     orig_layer_entry.tensor_memory = memory
 
 
-def _get_input_module_info(self: "ModelLog", arg_tensors: list[torch.Tensor]) -> list[str]:
+def _get_input_module_info(self: "Trace", arg_tensors: list[torch.Tensor]) -> list[str]:
     """Determine the module nesting context for a new tensor from its parents.
 
     Finds the most deeply nested parent tensor and returns its current

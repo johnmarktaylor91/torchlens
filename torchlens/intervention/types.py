@@ -569,7 +569,7 @@ class Relationship(str, Enum):
 
 
 class ForkFieldPolicy(str, Enum):
-    """Copy policy for fields when a ModelLog is forked."""
+    """Copy policy for fields when a Trace is forked."""
 
     FORK_SHARE = "fork_share"
     FORK_COPY = "fork_copy"
@@ -612,13 +612,13 @@ def _fork_policy_table(
     return table
 
 
-def _build_model_log_fork_policy() -> dict[str, ForkFieldPolicy]:
-    """Build the ModelLog fork policy table.
+def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
+    """Build the Trace fork policy table.
 
     Returns
     -------
     dict[str, ForkFieldPolicy]
-        Fork policies for ModelLog fields.
+        Fork policies for Trace fields.
     """
 
     from ..constants import MODEL_LOG_FIELD_ORDER
@@ -636,13 +636,13 @@ def _build_model_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     )
 
 
-def _build_layer_pass_log_fork_policy() -> dict[str, ForkFieldPolicy]:
-    """Build the LayerPassLog fork policy table.
+def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
+    """Build the OpLog fork policy table.
 
     Returns
     -------
     dict[str, ForkFieldPolicy]
-        Fork policies for LayerPassLog fields.
+        Fork policies for OpLog fields.
     """
 
     from ..constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -657,14 +657,14 @@ def _build_layer_pass_log_fork_policy() -> dict[str, ForkFieldPolicy]:
             "func_applied",
             "grad_fn_object",
             "corresponding_grad_fn",
-            "source_model_log",
+            "source_trace",
         },
-        reconstruct={"source_model_log", "_construction_done"},
+        reconstruct={"source_trace", "_construction_done"},
     )
 
 
-MODEL_LOG_FORK_POLICY = _build_model_log_fork_policy()
-LAYER_PASS_LOG_FORK_POLICY = _build_layer_pass_log_fork_policy()
+MODEL_LOG_FORK_POLICY = _build_trace_fork_policy()
+LAYER_PASS_LOG_FORK_POLICY = _build_op_log_fork_policy()
 
 __all__ = [
     "CapturedArgTemplate",

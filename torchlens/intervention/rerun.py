@@ -24,30 +24,30 @@ from .hooks import normalize_hooks_from_spec
 from .runtime import active_intervention_context
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
     from .hooks import NormalizedHookEntry
 
 
 def rerun(
-    log: "ModelLog",
+    log: "Trace",
     model: nn.Module,
     x: Any = None,
     *,
     append: bool | MissingType = MISSING,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
-) -> "ModelLog":
+) -> "Trace":
     """Full-forward rerun with the active intervention spec from ``log``.
 
     Re-executes ``model`` through TorchLens decorated wrappers with the current
-    intervention spec installed in runtime context. A fresh ``ModelLog`` is
+    intervention spec installed in runtime context. A fresh ``Trace`` is
     built off to the side, validated, then atomically swapped into ``log``.
     Concurrent reads during rerun are unsupported; no lock is taken.
 
     Parameters
     ----------
     log:
-        ModelLog to update in place after the fresh run validates.
+        Trace to update in place after the fresh run validates.
     model:
         Model to execute through the rerun engine.
     x:
@@ -63,7 +63,7 @@ def rerun(
 
     Returns
     -------
-    ModelLog
+    Trace
         The same ``log`` object after atomic run-state replacement.
     """
 
@@ -120,12 +120,12 @@ def rerun(
 
 
 def _append_rerun(
-    log: "ModelLog",
+    log: "Trace",
     model: nn.Module,
     x: Any,
     *,
     strict: bool,
-) -> "ModelLog":
+) -> "Trace":
     """Append a compatible fresh rerun chunk into ``log``.
 
     Parameters
@@ -141,7 +141,7 @@ def _append_rerun(
 
     Returns
     -------
-    ModelLog
+    Trace
         The same log after compatible tensors have been concatenated.
     """
 
@@ -207,7 +207,7 @@ def _append_rerun(
     return log
 
 
-def _preflight_append(log: "ModelLog", model: nn.Module) -> None:
+def _preflight_append(log: "Trace", model: nn.Module) -> None:
     """Validate append preconditions that do not require a fresh capture.
 
     Parameters
@@ -257,7 +257,7 @@ def _warn_if_batch_sensitive_train_modules(model: nn.Module) -> None:
 
 
 def _validate_append_hook_plan(
-    log: "ModelLog",
+    log: "Trace",
     hook_plan: list["NormalizedHookEntry"],
 ) -> None:
     """Reject append when active helpers are not explicitly batch-independent.
@@ -297,7 +297,7 @@ def _validate_append_hook_plan(
             )
 
 
-def _warn_unknown_append_helper_once(log: "ModelLog", helper_name: str) -> None:
+def _warn_unknown_append_helper_once(log: "Trace", helper_name: str) -> None:
     """Emit a one-time warning for helpers without append-safety metadata.
 
     Parameters
@@ -322,8 +322,8 @@ def _warn_unknown_append_helper_once(log: "ModelLog", helper_name: str) -> None:
 
 
 def _validate_append_candidate(
-    old_log: "ModelLog",
-    new_log: "ModelLog",
+    old_log: "Trace",
+    new_log: "Trace",
     *,
     hook_plan: list["NormalizedHookEntry"],
 ) -> None:
@@ -490,7 +490,7 @@ def _batch_size_from_input(x: Any) -> int | None:
     return None
 
 
-def _first_saved_batch_size(log: "ModelLog") -> int | None:
+def _first_saved_batch_size(log: "Trace") -> int | None:
     """Return the first saved activation's leading dimension.
 
     Parameters
@@ -511,7 +511,7 @@ def _first_saved_batch_size(log: "ModelLog") -> int | None:
     return None
 
 
-def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
+def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
     """Warn once that rerun propagation overlays direct writes.
 
     Parameters
@@ -526,20 +526,20 @@ def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
         return
     warnings.warn(
         "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
-        "recipe and may overlay direct LayerPassLog activation writes.",
+        "recipe and may overlay direct OpLog activation writes.",
         DirectActivationWriteWarning,
         stacklevel=3,
     )
     setattr(log, "_warned_direct_write_propagation", True)
 
 
-def _preflight(log: "ModelLog", model: nn.Module, x: Any) -> None:
+def _preflight(log: "Trace", model: nn.Module, x: Any) -> None:
     """Validate rerun preconditions before any fresh capture starts.
 
     Parameters
     ----------
     log:
-        ModelLog that will be updated.
+        Trace that will be updated.
     model:
         Model to execute.
     x:
@@ -562,14 +562,14 @@ def _preflight(log: "ModelLog", model: nn.Module, x: Any) -> None:
 
 
 def _capture_with_active_spec(
-    log: "ModelLog",
+    log: "Trace",
     model: nn.Module,
     x: Any,
     *,
     intervention_spec: Any | None,
     hook_plan: list["NormalizedHookEntry"],
-) -> "ModelLog":
-    """Build a fresh rerun ``ModelLog`` with active hooks installed.
+) -> "Trace":
+    """Build a fresh rerun ``Trace`` with active hooks installed.
 
     Parameters
     ----------
@@ -586,7 +586,7 @@ def _capture_with_active_spec(
 
     Returns
     -------
-    ModelLog
+    Trace
         Fresh log built off to the side.
     """
 
@@ -628,7 +628,7 @@ def _capture_with_active_spec(
     )
 
 
-def _validate_rerun_result(new_log: "ModelLog", old_log: "ModelLog", *, strict: bool) -> int:
+def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) -> int:
     """Validate a fresh rerun log before atomic state replacement.
 
     Parameters
@@ -663,7 +663,7 @@ def _validate_rerun_result(new_log: "ModelLog", old_log: "ModelLog", *, strict: 
 
 
 def _build_operation_history_record(
-    log: "ModelLog",
+    log: "Trace",
     *,
     started_at: float,
     old_hash: str | None,
@@ -677,7 +677,7 @@ def _build_operation_history_record(
     Parameters
     ----------
     log:
-        ModelLog after state replacement.
+        Trace after state replacement.
     started_at:
         Monotonic start time for the rerun.
     old_hash:

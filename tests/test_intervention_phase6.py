@@ -141,7 +141,7 @@ def _intervention_log(model: torch.nn.Module, x: torch.Tensor) -> Any:
         TorchLens model log.
     """
 
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
 def _first_func(log: Any, func_name: str) -> Any:
@@ -324,7 +324,7 @@ def test_replay_warns_on_saved_edge_divergence() -> None:
 def test_replay_rejects_non_intervention_ready_logs() -> None:
     """Replay requires intervention-ready metadata."""
 
-    log = tl.log_forward_pass(ResidualRelu(), torch.randn(2, 3), vis_opt="none")
+    log = tl.trace(ResidualRelu(), torch.randn(2, 3), vis_opt="none")
 
     with pytest.raises(ReplayPreconditionError):
         log.replay(hooks={tl.func("relu"): _identity_hook})

@@ -122,7 +122,7 @@ def test_forward_exception_cleans_logging_state() -> None:
         _run_predicate_pass(RaisingModel(), torch.ones(1), None, _options())
 
     assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_model_log is None
+    assert torchlens_state._active_trace is None
     assert fastlog_state._active_recording_state is None
 
 
@@ -143,5 +143,5 @@ def test_predicate_exception_cleans_logging_state() -> None:
         )
 
     assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_model_log is None
+    assert torchlens_state._active_trace is None
     assert fastlog_state._active_recording_state is None

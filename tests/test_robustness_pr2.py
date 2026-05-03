@@ -55,7 +55,7 @@ def test_meta_tensor_input_raises_with_clear_message() -> None:
     meta_x = torch.zeros(2, 4, device="meta")
 
     with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
-        tl.log_forward_pass(model, meta_x, layers_to_save="none")
+        tl.trace(model, meta_x, layers_to_save="none")
 
 
 def test_meta_tensor_parameter_raises() -> None:
@@ -65,7 +65,7 @@ def test_meta_tensor_parameter_raises() -> None:
     x = torch.randn(2, 4)
 
     with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
-        tl.log_forward_pass(meta_model, x, layers_to_save="none")
+        tl.trace(meta_model, x, layers_to_save="none")
 
 
 def test_meta_tensor_detector_helper() -> None:
@@ -87,7 +87,7 @@ def test_sparse_tensor_input_raises() -> None:
     sparse_x = torch.sparse_coo_tensor(indices, values, (4, 4))
 
     with pytest.raises(UnsupportedTensorVariantError, match="sparse"):
-        tl.log_forward_pass(model, sparse_x, layers_to_save="none")
+        tl.trace(model, sparse_x, layers_to_save="none")
 
 
 def test_sparse_csr_tensor_input_raises() -> None:
@@ -99,7 +99,7 @@ def test_sparse_csr_tensor_input_raises() -> None:
     sparse_csr = torch.sparse_csr_tensor(crow, col, vals, size=(2, 4))
 
     with pytest.raises(UnsupportedTensorVariantError, match="sparse"):
-        tl.log_forward_pass(model, sparse_csr, layers_to_save="none")
+        tl.trace(model, sparse_csr, layers_to_save="none")
 
 
 def test_sparse_detector_helper() -> None:
@@ -192,7 +192,7 @@ def test_quantized_model_emits_warning_but_still_logs() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
-            tl.log_forward_pass(model, x, layers_to_save="none")
+            tl.trace(model, x, layers_to_save="none")
         except Exception:  # noqa: BLE001 — quantized support is partial
             pass
 
@@ -258,7 +258,7 @@ def test_standard_model_still_logs_cleanly() -> None:
     """Nothing in PR 2 should regress the golden path."""
     model = _Tiny()
     x = torch.randn(2, 4)
-    log = tl.log_forward_pass(model, x, layers_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all")
     assert len(log.layer_logs) > 0
 
 
@@ -293,5 +293,5 @@ def test_cuda_forward_pass_still_logs() -> None:
     """Regression: standard CUDA model logging is unaffected."""
     model = _Tiny().cuda()
     x = torch.randn(2, 4, device="cuda")
-    log = tl.log_forward_pass(model, x, layers_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all")
     assert len(log.layer_logs) > 0

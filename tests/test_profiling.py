@@ -2,7 +2,7 @@
 
 Generates tests/test_outputs/profiling_report.txt with timing data for:
   - Raw forward pass (baseline)
-  - log_forward_pass (initial logging)
+  - trace (initial logging)
   - save_new_activations (fast re-logging with new input)
   - validate_forward_pass (perturbation validation)
 
@@ -20,7 +20,7 @@ import torch.nn as nn
 from conftest import REPORTS_DIR, TEST_OUTPUTS_DIR
 
 import example_models
-from torchlens import log_forward_pass, validate_forward_pass
+from torchlens import trace as trace_fn, validate_forward_pass
 from torchlens.validation.invariants import MetadataInvariantError
 
 
@@ -157,10 +157,10 @@ def _profile_model(name, model, input_tensor, description):
     """Profile a single model. Returns a results dict."""
     raw_time = _time_raw_forward(model, input_tensor)
 
-    log, lfp_time = _time_fn(log_forward_pass, model, input_tensor, random_seed=42)
+    log, lfp_time = _time_fn(trace_fn, model, input_tensor, random_seed=42)
 
     # save_new_activations requires the computational graph to match the
-    # original log_forward_pass exactly.  For some models (e.g. AlexNet) this
+    # original trace exactly.  For some models (e.g. AlexNet) this
     # can fail even with identical inputs due to counter-alignment issues in
     # the fast path.  Gracefully degrade to N/A when that happens.
     try:
@@ -278,7 +278,7 @@ def _generate_report(results):
         lines.append(f"  Layers logged: {r['num_layers']}")
         lines.append(f"  Raw forward pass           : {_fmt_time(r['raw_time']):>10}")
         lines.append(
-            f"  log_forward_pass           : {_fmt_time(r['lfp_time']):>10}  "
+            f"  trace           : {_fmt_time(r['lfp_time']):>10}  "
             f"({_fmt_ratio(r['lfp_ratio'])} overhead)"
         )
         lines.append(

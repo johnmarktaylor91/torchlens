@@ -26,9 +26,9 @@ def test_stop_after_context_on_peek_is_accepted() -> None:
     assert isinstance(value, torch.Tensor)
 
 
-def test_stop_after_raises_on_log_forward_pass() -> None:
+def test_stop_after_raises_on_trace() -> None:
     """stop_after is intentionally unsupported for full capture."""
 
     model = torch.nn.ReLU()
     with pytest.raises(NotImplementedError):
-        tl.log_forward_pass(model, torch.ones(1, 2), capture=CaptureOptions(stop_after="relu"))
+        tl.trace(model, torch.ones(1, 2), capture=CaptureOptions(stop_after="relu"))

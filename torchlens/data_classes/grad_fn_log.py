@@ -9,7 +9,7 @@ import torch
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
-from .grad_fn_pass_log import GradFnPassLog
+from .grad_fn_call_log import GradFnCallLog
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -71,7 +71,7 @@ class GradFnLog:
     is_intervening: bool = True
     corresponding_layer: "LayerLog | None" = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
-    passes: dict[int, GradFnPassLog] = field(default_factory=dict)
+    passes: dict[int, GradFnCallLog] = field(default_factory=dict)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -116,7 +116,7 @@ class GradFnLog:
             Wall-clock time when the hook fired.
         """
         pass_num = len(self.passes) + 1
-        self.passes[pass_num] = GradFnPassLog(
+        self.passes[pass_num] = GradFnCallLog(
             pass_num=pass_num,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
@@ -151,7 +151,7 @@ class GradFnAccessor:
     """
 
     def __init__(self, grad_fn_logs: Dict[int, GradFnLog], grad_fn_order: list[int]) -> None:
-        """Initialize an accessor from ModelLog's flat grad_fn fields.
+        """Initialize an accessor from Trace's flat grad_fn fields.
 
         Parameters
         ----------
@@ -163,7 +163,7 @@ class GradFnAccessor:
         self._dict = {grad_fn.label: grad_fn for grad_fn in grad_fn_logs.values()}
         self._list = [grad_fn_logs[grad_fn_id] for grad_fn_id in grad_fn_order]
 
-    def __getitem__(self, key: Union[int, str]) -> Union[GradFnLog, GradFnPassLog]:
+    def __getitem__(self, key: Union[int, str]) -> Union[GradFnLog, GradFnCallLog]:
         """Return a grad_fn by index, label, pass label, or first substring match.
 
         Parameters
@@ -173,7 +173,7 @@ class GradFnAccessor:
 
         Returns
         -------
-        Union[GradFnLog, GradFnPassLog]
+        Union[GradFnLog, GradFnCallLog]
             Matching grad_fn log or grad_fn pass log.
         """
         if isinstance(key, int):

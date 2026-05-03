@@ -23,7 +23,7 @@ def per_layer(
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` containing saved activations.
+        TorchLens ``Trace`` containing saved activations.
     benchmark:
         Callable benchmark accepting ``(activation, layer=..., **kwargs)``.
     sites:

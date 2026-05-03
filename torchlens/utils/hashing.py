@@ -30,7 +30,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
     """Generate a random alphanumeric identifier for internal tensor tracking.
 
     These barcodes are invisible to the user and are used as unique
-    internal keys for tensor entries in ``ModelLog``.
+    internal keys for tensor entries in ``Trace``.
 
     Args:
         barcode_len: Length of the identifier string.
@@ -143,7 +143,7 @@ def _container_cardinality(container_spec: Any) -> Any:
     }
 
 
-def compute_graph_shape_hash(model_log: Any) -> str:
+def compute_graph_shape_hash(trace: Any) -> str:
     """Compute a deterministic shape hash for a postprocessed graph.
 
     The hash intentionally excludes run-specific activation values and raw/final
@@ -153,8 +153,8 @@ def compute_graph_shape_hash(model_log: Any) -> str:
 
     Parameters
     ----------
-    model_log:
-        Postprocessed ``ModelLog`` with populated ``layer_list``.
+    trace:
+        Postprocessed ``Trace`` with populated ``layer_list``.
 
     Returns
     -------
@@ -162,9 +162,9 @@ def compute_graph_shape_hash(model_log: Any) -> str:
         SHA-256 hex digest over the canonical graph-shape payload.
     """
 
-    order_by_label = {layer.layer_label: index for index, layer in enumerate(model_log.layer_list)}
+    order_by_label = {layer.layer_label: index for index, layer in enumerate(trace.layer_list)}
     records = []
-    for index, layer in enumerate(model_log.layer_list):
+    for index, layer in enumerate(trace.layer_list):
         module_address = normalize_module_address_for_hash(
             getattr(layer, "containing_module", None)
         )

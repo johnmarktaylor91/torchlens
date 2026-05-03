@@ -1,6 +1,6 @@
 """Postprocessing pipeline for cleaning up the model log after the forward pass.
 
-After the forward pass captures raw tensor metadata into a ModelLog, this pipeline
+After the forward pass captures raw tensor metadata into a Trace, this pipeline
 transforms the raw graph into its user-facing form. The full pipeline has 20 steps,
 split into thematic submodules:
 
@@ -72,17 +72,17 @@ from .labeling import (
 from .loop_detection import _detect_and_label_loops, _group_by_shared_params
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 from ..utils.display import _vprint, _vtimed
 
 
 def postprocess(
-    self: "ModelLog", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
+    self: "Trace", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
 ) -> None:
     """Run the full 18-step postprocessing pipeline (exhaustive mode).
 
-    Transforms the raw ModelLog captured during the forward pass into its
+    Transforms the raw Trace captured during the forward pass into its
     final user-facing form. In fast mode, delegates to ``postprocess_fast``
     which skips most steps (graph traversal, loop detection, module annotation)
     and only copies activations, trims fields, and builds LayerLogs.
@@ -188,7 +188,7 @@ def postprocess(
     with _vtimed(self, "  Step 16: Finalize params"):
         _finalize_param_logs(self)
 
-    # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+    # Step 16.5: Build aggregate LayerLog objects from per-pass OpLog entries.
     with _vtimed(self, "  Step 16.5: Build layer logs"):
         _build_layer_logs(self)
 
@@ -200,7 +200,7 @@ def postprocess(
     with _vtimed(self, "  Step 17.5: Graph shape hash"):
         self.graph_shape_hash = compute_graph_shape_hash(self)
 
-    # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
+    # Step 18: log the pass as finished, changing the Trace behavior to its user-facing version.
     with _vtimed(self, "  Step 18: Mark pass finished"):
         _set_pass_finished(self)
 
@@ -219,7 +219,7 @@ def postprocess(
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
 
 
-def postprocess_fast(self: "ModelLog") -> None:
+def postprocess_fast(self: "Trace") -> None:
     """Lightweight postprocessing for fast (second-pass) logging mode.
 
     The fast pass reuses the exhaustive pass's graph structure, loop groupings,
@@ -240,7 +240,7 @@ def postprocess_fast(self: "ModelLog") -> None:
       passes and _module_build_data isn't repopulated in fast mode (#108).
     """
     _vprint(self, "Fast-pass postprocessing...")
-    # Use layer_dict_main_keys to get LayerPassLog directly (not LayerLog)
+    # Use layer_dict_main_keys to get OpLog directly (not LayerLog)
     for output_layer_label in self.output_layers:
         output_layer = self.layer_dict_main_keys[output_layer_label]
         if not output_layer.parent_layers:
