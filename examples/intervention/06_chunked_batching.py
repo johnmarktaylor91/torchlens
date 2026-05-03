@@ -52,7 +52,7 @@ def main() -> None:
 
     output = log.layer_list[-1].out
     assert output.shape[0] == first.shape[0] + second.shape[0]
-    assert log.operation_history[-1]["op"] == "append"
+    assert log.ledger[-1]["op"] == "append"
     assert log.is_appended is True
 
 

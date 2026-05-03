@@ -52,8 +52,8 @@ def main() -> None:
     hook_log.attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
 
     assert torch.allclose(set_log.layer_list[-1].out, hook_log.layer_list[-1].out)
-    assert set_log.operation_history[-2]["op"] == "set"
-    assert hook_log.operation_history[-2]["op"] == "attach_hooks"
+    assert set_log.ledger[-2]["op"] == "set"
+    assert hook_log.ledger[-2]["op"] == "attach_hooks"
 
 
 if __name__ == "__main__":
